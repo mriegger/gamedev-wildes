@@ -1,0 +1,14 @@
+name = "Scaffold for Wildes"
+instruction = "./instruction.md"
+
+[game]
+# Controlled vocabularies — see the "Tag reference" tables in this task's README.md.
+tags = ["sandbox", "building", "exploration"]   # voxel mine-and-build sandbox
+tech-stack-tags = ["godot", "gdscript"]          # Godot 4.7 + GDScript
+assets-used = ["primitives"]                      # all cube/box meshes + shaders, procedural — no imported art
+avocado-model = "avocado-code-latest" 
+harness = "Metacode"                        
+screenshots = ["./screenshots/claude/spawn.png", "./screenshots/avocado/spawn.png", "./screenshots/avocado/normals.png"]
+videos = ["https://pxl.cl/bNjf0"]                 # gold-solution gameplay (PixelCloud)
+teaser = "https://pxl.cl/bNjf0"                    # gold-solution highlight (PixelCloud)
+commit-hash = "HEAD"

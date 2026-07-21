@@ -1,0 +1,11 @@
+target/
+node_modules/
+dist/
+build/
+.env
+.env.local
+.DS_Store
+
+# Godot 4 — editor-generated import/cache; regenerated on first open
+.godot/
+export_presets.cfg

@@ -1,0 +1,14 @@
+[gd_resource type="Environment" format=3 uid="uid://b0l9c8y8g5x0e"]
+
+[resource]
+background_mode=1
+background_color=Color(0.72, 0.86, 0.93, 1)
+ambient_light_source=1
+ambient_light_color=Color(1, 1, 1, 1)
+ambient_light_energy=1.2
+ambient_light_sky_contribution=0.35
+ambient_light_sun_energy_contribution=0.4
+tonemap_mode=0
+glow_enabled=false
+ssao_enabled=false
+fog_enabled=false
