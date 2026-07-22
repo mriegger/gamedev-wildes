@@ -141,4 +141,8 @@ common/enable_pause_aware_picking=true
 [rendering]
 
 renderer/rendering_method="gl_compatibility"
+lights_and_shadows/directional_shadow/soft_shadow_quality=2
 renderer/environment/defaults/default_environment="res://default_env.tres"
+shadows/directional_shadow/size=4096
+shadows/directional_shadow/size.mobile=2048
+shadows/directional_shadow/soft_shadow_quality=2

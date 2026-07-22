@@ -112,6 +112,8 @@ func _on_world_block_changed(pos: Vector3i, _old_type, _new_type, _rev: int):
 	# also neighbors may need? No, only this column's top.
 	# For ground detection we also check 4-wide footprint, but that will be re-cached on demand.
 
+var contact_shadow: MeshInstance3D
+
 func _create_model():
 	model_root = Node3D.new()
 	model_root.name = "ModelRoot"
@@ -123,6 +125,7 @@ func _create_model():
 	box.size = Vector3(0.6, 0.7, 0.35)
 	torso.mesh = box
 	torso.position = Vector3(0, 0.95, 0)
+	torso.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	var mat = StandardMaterial3D.new()
 	mat.albedo_color = Color(0.32, 0.49, 0.78) # blue shirt
 	mat.roughness = 0.9
@@ -135,6 +138,7 @@ func _create_model():
 	head_box.size = Vector3(0.5, 0.5, 0.5)
 	head.mesh = head_box
 	head.position = Vector3(0, 1.55, 0)
+	head.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	var hmat = StandardMaterial3D.new()
 	hmat.albedo_color = Color(0.92, 0.80, 0.62) # skin
 	hmat.roughness = 0.9
@@ -148,6 +152,7 @@ func _create_model():
 		leg_box.size = Vector3(0.22, 0.6, 0.24)
 		leg.mesh = leg_box
 		leg.position = Vector3(side*0.15, 0.3, 0)
+		leg.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 		var lmat = StandardMaterial3D.new()
 		lmat.albedo_color = Color(0.28, 0.28, 0.32)
 		leg.material_override = lmat
@@ -160,10 +165,37 @@ func _create_model():
 		arm_box.size = Vector3(0.2, 0.55, 0.2)
 		arm.mesh = arm_box
 		arm.position = Vector3(side*0.4, 0.95, 0)
+		arm.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 		var amat = StandardMaterial3D.new()
 		amat.albedo_color = Color(0.92, 0.80, 0.62)
 		arm.material_override = amat
 		model_root.add_child(arm)
+
+	# Contact blob shadow - soft radial AO under feet (smooth, not blocky)
+	contact_shadow = MeshInstance3D.new()
+	contact_shadow.name = "ContactShadow"
+	var plane = PlaneMesh.new()
+	plane.size = Vector2(1.4, 1.4)
+	plane.subdivide_width = 1
+	plane.subdivide_depth = 1
+	contact_shadow.mesh = plane
+	contact_shadow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var blob_shader = load("res://shaders/blob_shadow.gdshader")
+	var smat: Material
+	if blob_shader != null:
+		var sh_mat = ShaderMaterial.new()
+		sh_mat.shader = blob_shader
+		sh_mat.set_shader_parameter("shadow_color", Color(0.06, 0.06, 0.06, 0.55))
+		smat = sh_mat
+	else:
+		var stdm = StandardMaterial3D.new()
+		stdm.albedo_color = Color(0.08, 0.08, 0.08, 0.55)
+		stdm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		stdm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		stdm.cull_mode = BaseMaterial3D.CULL_DISABLED
+		smat = stdm
+	contact_shadow.material_override = smat
+	add_child(contact_shadow)
 
 var crack_box: MeshInstance3D
 var chip_container: Node3D
@@ -291,6 +323,30 @@ func _physics_process(delta):
 	_handle_raycast()
 	_handle_mining_placing(delta)
 	_update_selection_visuals()
+	_update_contact_shadow()
+
+func _update_contact_shadow():
+	if contact_shadow == null:
+		return
+	var g = _get_ground_y(global_position)
+	if g == -9999.0:
+		contact_shadow.visible = false
+		return
+	contact_shadow.visible = true
+	# place slightly above ground to avoid z-fighting
+	contact_shadow.global_position = Vector3(global_position.x, g + 0.02, global_position.z)
+	# scale opacity based on distance to ground (fade when jumping)
+	var dist = global_position.y - g
+	var alpha = clamp(1.0 - dist * 0.8, 0.0, 0.55)
+	var plane_mesh = contact_shadow.mesh as PlaneMesh
+	if plane_mesh:
+		var size_factor = clamp(1.4 - dist * 0.18, 0.5, 1.4)
+		plane_mesh.size = Vector2(size_factor, size_factor)
+	var mat = contact_shadow.material_override
+	if mat is ShaderMaterial:
+		mat.set_shader_parameter("shadow_color", Color(0.06, 0.06, 0.06, alpha))
+	elif mat is StandardMaterial3D:
+		mat.albedo_color = Color(0.08, 0.08, 0.08, alpha)
 
 func _handle_movement(delta):
 	# gravity

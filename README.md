@@ -96,3 +96,4 @@ godot --path src
 | Task | Description | Completed |
 | --- | --- | --- |
 | [justinsoberano-scaffolding_game](./tasks/justinsoberano-scaffolding_game/) | Scaffold the Wildes isometric voxel sandbox (world gen, camera, player, mining/placing, hotbar) | 2026-07-21 |
+| [justinsoberano-ao_and_shadows](./tasks/justinsoberano-ao_and_shadows/) | Add real-time ambient occlusion + soft cast shadows (baked voxel AO, sun shadows) in the Compatibility renderer | 2026-07-22 |

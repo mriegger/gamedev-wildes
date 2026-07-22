@@ -1,5 +1,5 @@
 shader_type spatial;
-render_mode cull_disabled, unshaded;
+render_mode cull_disabled, diffuse_lambert_wrap, specular_disabled;
 
 varying vec3 v_world_normal;
 varying vec3 v_world_pos;
@@ -13,18 +13,24 @@ void vertex() {
 }
 
 void fragment() {
+    // Deeper look: directional, but wrap prevents pure black away sides
+    // AO and soft drop-shadows are baked into COLOR.rgb (0.58..1.0)
     float top = clamp(v_world_normal.y, 0.0, 1.0);
-    float crisp_shade = mix(0.82, 1.0, top); // one shade deeper sides
-    vec3 base = COLOR.rgb * 1.28;
+    float crisp_shade = mix(0.72, 1.0, top); // deeper: 0.72 side, 1.0 top
+
+    vec3 base = COLOR.rgb * 1.22;
     base = clamp(base, vec3(0.0), vec3(1.0));
     vec3 albedo = base * crisp_shade;
-    
-    // edge haze only at very border, not playable interior
+
+    // border haze
     vec2 center = vec2(world_size * 0.5);
     float dist_center = length(v_world_pos.xz - center);
     float half = world_size * 0.5;
     float h = smoothstep(half * 0.92, half * 1.08, dist_center);
     albedo = mix(albedo, haze_color, h * 0.38);
-    
+
     ALBEDO = albedo;
+    ROUGHNESS = 0.96;
+    // lambert_wrap gives light to backfaces, so away sides are darker but not black
+    // real-time shadows from Sun still apply via shadow map, softened by blur
 }

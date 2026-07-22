@@ -12,6 +12,11 @@ extends Node3D
 @export var seed_value: int = 1337
 @export var tree_density: float = 0.012
 @export var show_water: bool = true
+@export_group("Ambient Occlusion & Shadows")
+@export var enable_ao: bool = true
+@export var ao_darkness: float = 0.22 # per-level darkening (0.18-0.28)
+@export var enable_shadows: bool = true
+@export var shadow_cast_distance: float = 220.0
 
 enum BlockType { GRASS, SAND, STONE, DIRT, LOG, LEAVES }
 
@@ -55,6 +60,7 @@ var water_shader: Shader
 var terrain_material: ShaderMaterial
 
 var max_build_y: int = 0
+var sun_shadow_map: Array = [] # [x][z] -> float 0.55 shadowed, 1.0 lit
 
 signal block_changed(pos: Vector3i, old_type, new_type, revision: int)
 
@@ -66,11 +72,62 @@ func _ready():
 	_setup_noises()
 	_generate_height_and_type()
 	_generate_tree_blocks()
+	# Static sun shadow map disabled per feedback - using only AO + real-time drop shadows
+	# _generate_sun_shadow_map()
+	# Keep sun_shadow_map empty to avoid accidental use
+	sun_shadow_map.clear()
 	_prepare_materials()
 	_generate_chunks()
 	_create_water_plane()
 	_create_bounds_floor()
 	print("[Wildes] World ready: %d chunks, %d tree blocks" % [chunk_instances.size(), tree_blocks.size()])
+
+func _generate_sun_shadow_map():
+	# Precompute large-scale terrain self-shadowing from sun direction (NE high)
+	# Sun from NE (hx ~0.809, hz~-0.587) casting shadows to SW, slope 0.34 up towards sun
+	sun_shadow_map.resize(world_size)
+	for x in range(world_size):
+		sun_shadow_map[x] = []
+		sun_shadow_map[x].resize(world_size)
+		# init lit
+		for z in range(world_size):
+			sun_shadow_map[x][z] = 1.0
+	# tree max height per column
+	var tree_max: Dictionary = {}
+	for tb in tree_blocks:
+		var p = tb["pos"] as Vector3i
+		var key = Vector2i(p.x, p.z)
+		if tree_max.has(key):
+			if p.y > tree_max[key]:
+				tree_max[key] = p.y
+		else:
+			tree_max[key] = p.y
+	var sun_hx = 0.809
+	var sun_hz = -0.587
+	var slope = 0.34
+	var max_dist = 28
+	for x in range(world_size):
+		for z in range(world_size):
+			var y0 = height_map[x][z]
+			var tk = Vector2i(x, z)
+			if tree_max.has(tk):
+				y0 = max(y0, tree_max[tk])
+			var ray_y = float(y0) + 1.0
+			var shadowed = false
+			for s in range(1, max_dist+1):
+				var sx = int(round(x + sun_hx * float(s)))
+				var sz = int(round(z + sun_hz * float(s)))
+				if sx <0 or sx >= world_size or sz <0 or sz >= world_size:
+					continue
+				var bh = height_map[sx][sz]
+				var bkey = Vector2i(sx, sz)
+				if tree_max.has(bkey):
+					bh = max(bh, tree_max[bkey])
+				var r_y = ray_y + float(s) * slope
+				if float(bh) >= r_y - 0.4:
+					shadowed = true
+					break
+			sun_shadow_map[x][z] = 0.52 if shadowed else 1.0
 
 var noise_forest: FastNoiseLite
 var noise_ridges: FastNoiseLite
@@ -577,13 +634,13 @@ func _rebuild_chunk_immediate(cx: int, cz: int):
 		var mi = MeshInstance3D.new()
 		mi.mesh = mesh
 		mi.material_override = terrain_material
-		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 		mi.name = "Chunk_%d_%d" % [cx, cz]
 		add_child(mi)
 		chunk_instances[key] = mi
 
 func _build_chunk_mesh_generic(origin_x: int, origin_z: int) -> ArrayMesh:
-	# Full voxel iteration but with dynamic height per chunk for speed (fixes blank due to heavy upfront)
+	# Full voxel iteration with per-vertex ambient occlusion and shadow-friendly meshes
 	var end_x = min(origin_x + chunk_size, world_size)
 	var end_z = min(origin_z + chunk_size, world_size)
 	var size_x = chunk_size
@@ -595,7 +652,6 @@ func _build_chunk_mesh_generic(origin_x: int, origin_z: int) -> ArrayMesh:
 			var h = height_map[x][z]
 			if h > local_max_y:
 				local_max_y = h
-	# include some extra for trees and player builds above base, avoid scanning all placed keys (was causing freeze)
 	var size_y = clamp(local_max_y + 12, 6, max_build_y)
 	
 	var cache_x = size_x + 2
@@ -614,13 +670,47 @@ func _build_chunk_mesh_generic(origin_x: int, origin_z: int) -> ArrayMesh:
 					cache[idx] = -1
 				else:
 					cache[idx] = v
-	# helper to get cache
 	var get_cached = func(lx:int, ly:int, lz:int) -> int:
 		if lx <0 or lx>=cache_x or lz<0 or lz>=cache_z or ly<0 or ly>=size_y:
 			return -1
 		var ii = (lx * size_y * cache_z) + (ly * cache_z) + lz
 		return cache[ii]
-	
+
+	# World-space solidity check with cache fallback for AO sampling
+	var is_solid_world = func(wx:int, wy:int, wz:int) -> bool:
+		if wx <0 or wx >= world_size or wz <0 or wz >= world_size or wy <0 or wy >= max_build_y:
+			return false
+		var clx = wx - origin_x + 1
+		var clz = wz - origin_z + 1
+		var cly = wy
+		if clx >=0 and clx < cache_x and clz >=0 and clz < cache_z and cly >=0 and cly < size_y:
+			var idx2 = (clx * size_y * cache_z) + (cly * cache_z) + clz
+			return cache[idx2] != -1
+		else:
+			return get_block_at(Vector3i(wx, wy, wz)) != null
+
+	# AO helper: side1, side2, corner bools -> occlusion 0..3
+	var calc_ao = func(s1: bool, s2: bool, c: bool) -> int:
+		if s1 and s2:
+			return 3
+		var occ = 0
+		if s1: occ += 1
+		if s2: occ += 1
+		if c: occ += 1
+		return occ
+
+	# AO brightness mapping: subtle, not black - preserves corner AO visibility, sides stay bright
+	var _ao_enabled = enable_ao
+	var ao_brightness = func(ao: int) -> float:
+		if not _ao_enabled:
+			return 1.0
+		match ao:
+			0: return 1.0
+			1: return 0.86
+			2: return 0.72
+			3: return 0.58
+			_: return 1.0
+
 	var vertices := PackedVector3Array()
 	var normals := PackedVector3Array()
 	var colors := PackedColorArray()
@@ -656,13 +746,47 @@ func _build_chunk_mesh_generic(origin_x: int, origin_z: int) -> ArrayMesh:
 			BlockType.LEAVES: return Color(COL_LEAVES_DARK.r + var_off*0.5, COL_LEAVES_DARK.g + var_off*0.5, COL_LEAVES_DARK.b + var_off*0.5)
 			_: return Color(1,0,1)
 	
-	var add_quad = func(v0: Vector3, v1: Vector3, v2: Vector3, v3: Vector3, normal: Vector3, col: Color):
+	# Quad builder with per-vertex AO + optional per-vertex smooth drop-shadow
+	var add_quad_ao = func(v0: Vector3, v1: Vector3, v2: Vector3, v3: Vector3, normal: Vector3, base_col: Color, ao_arr: Array, shadow_arr = null):
 		var idx = vertices.size()
 		vertices.append(v0); vertices.append(v1); vertices.append(v2); vertices.append(v3)
 		normals.append(normal); normals.append(normal); normals.append(normal); normals.append(normal)
-		colors.append(col); colors.append(col); colors.append(col); colors.append(col)
+		for i in range(4):
+			var ao = ao_arr[i] as int
+			var b = ao_brightness.call(ao)
+			var sh = 1.0
+			if shadow_arr != null and shadow_arr.size() > i:
+				sh = shadow_arr[i]
+			# combine AO and soft drop-shadow
+			var c = Color(base_col.r * b * sh, base_col.g * b * sh, base_col.b * b * sh, base_col.a)
+			colors.append(c)
 		indices.append(idx+0); indices.append(idx+1); indices.append(idx+2)
 		indices.append(idx+0); indices.append(idx+2); indices.append(idx+3)
+
+	# Soft real-time drop shadow under floating blocks (per-vertex, smooth penumbra)
+	var get_soft_drop_shadow = func(vx: int, vy: int, vz: int) -> float:
+		# Scan 3x3 columns above for overhang, creating soft 1-block penumbra
+		# vy = block y (ground), scan y+2..y+7
+		var best = 1.0
+		var max_drop = 6
+		# Precompute horizontal distances for 3x3
+		for ox in range(-1, 2):
+			for oz in range(-1, 2):
+				var horiz = sqrt(float(ox*ox + oz*oz)) # 0,1,1.414
+				for dy in range(2, max_drop+2):
+					if is_solid_world.call(vx + ox, vy + dy, vz + oz):
+						var vert = dy - 1
+						# 0.72 closest directly above, softer with distance and horizontal offset
+						var f = 0.72 + float(vert - 1) * 0.06 + horiz * 0.10
+						if f > 0.97:
+							f = 0.97
+						if f < best:
+							best = f
+						# Early exit for darkest directly above
+						if best <= 0.72 and ox == 0 and oz == 0 and dy == 2:
+							return best
+						break # only closest solid in this column matters
+		return best
 	
 	for x in range(origin_x, end_x):
 		var lx = x - origin_x +1
@@ -676,29 +800,89 @@ func _build_chunk_mesh_generic(origin_x: int, origin_z: int) -> ArrayMesh:
 					continue
 				var top_col = get_top_color.call(block_type, var_off if block_type != BlockType.LOG and block_type != BlockType.LEAVES else var_off*0.5)
 				var side_col = get_side_color.call(block_type, var_off if block_type != BlockType.LOG and block_type != BlockType.LEAVES else var_off*0.5)
-				# check 6 neighbors via cache
-				# +Y top
+				# +Y top - AO + smooth real-time drop shadow under floating blocks (per-vertex soft)
 				if get_cached.call(lx, ly+1, lz) == -1:
 					var col = top_col
 					if block_type == BlockType.LOG:
 						col = COL_LOG_TOP + Color(var_off, var_off, var_off)
-					add_quad.call(Vector3(x, y+1, z), Vector3(x+1, y+1, z), Vector3(x+1, y+1, z+1), Vector3(x, y+1, z+1), Vector3(0,1,0), col)
-				# -Y bottom
+					var du = [-1, 1, 1, -1]
+					var dv = [-1, -1, 1, 1]
+					var ao_arr = []
+					ao_arr.resize(4)
+					var shadow_arr = []
+					shadow_arr.resize(4)
+					for i in range(4):
+						var s1 = is_solid_world.call(x + du[i], y+1, z)
+						var s2 = is_solid_world.call(x, y+1, z + dv[i])
+						var cc = is_solid_world.call(x + du[i], y+1, z + dv[i])
+						ao_arr[i] = calc_ao.call(s1, s2, cc)
+						# per-vertex soft drop shadow: vx/vz at corner
+						var vx = x + (1 if i==1 or i==2 else 0)
+						var vz = z + (1 if i==2 or i==3 else 0)
+						shadow_arr[i] = get_soft_drop_shadow.call(vx, y, vz)
+					add_quad_ao.call(Vector3(x, y+1, z), Vector3(x+1, y+1, z), Vector3(x+1, y+1, z+1), Vector3(x, y+1, z+1), Vector3(0,1,0), col, ao_arr, shadow_arr)
+				# -Y bottom - AO only, no blackening
 				if get_cached.call(lx, ly-1, lz) == -1:
 					if y > 0:
-						add_quad.call(Vector3(x, y, z+1), Vector3(x+1, y, z+1), Vector3(x+1, y, z), Vector3(x, y, z), Vector3(0,-1,0), side_col * 0.92)
-				# +X east
+						var bcol = side_col * 0.92
+						var du2 = [-1, 1, 1, -1]
+						var dv2 = [1, 1, -1, -1]
+						var ao2 = []
+						ao2.resize(4)
+						for i in range(4):
+							var s1 = is_solid_world.call(x + du2[i], y-1, z)
+							var s2 = is_solid_world.call(x, y-1, z + dv2[i])
+							var cc = is_solid_world.call(x + du2[i], y-1, z + dv2[i])
+							ao2[i] = calc_ao.call(s1, s2, cc)
+						add_quad_ao.call(Vector3(x, y, z+1), Vector3(x+1, y, z+1), Vector3(x+1, y, z), Vector3(x, y, z), Vector3(0,-1,0), bcol, ao2)
+				# +X east - AO only, keep it bright
 				if get_cached.call(lx+1, ly, lz) == -1:
-					add_quad.call(Vector3(x+1, y, z), Vector3(x+1, y+1, z), Vector3(x+1, y+1, z+1), Vector3(x+1, y, z+1), Vector3(1,0,0), side_col)
-				# -X west
+					var dux = [-1, 1, 1, -1]
+					var dvx = [-1, -1, 1, 1]
+					var aox = []
+					aox.resize(4)
+					for i in range(4):
+						var s1 = is_solid_world.call(x+1, y + dux[i], z)
+						var s2 = is_solid_world.call(x+1, y, z + dvx[i])
+						var cc = is_solid_world.call(x+1, y + dux[i], z + dvx[i])
+						aox[i] = calc_ao.call(s1, s2, cc)
+					add_quad_ao.call(Vector3(x+1, y, z), Vector3(x+1, y+1, z), Vector3(x+1, y+1, z+1), Vector3(x+1, y, z+1), Vector3(1,0,0), side_col, aox)
+				# -X west - AO only
 				if get_cached.call(lx-1, ly, lz) == -1:
-					add_quad.call(Vector3(x, y, z+1), Vector3(x, y+1, z+1), Vector3(x, y+1, z), Vector3(x, y, z), Vector3(-1,0,0), side_col)
-				# +Z south
+					var duw = [-1, 1, 1, -1]
+					var dvw = [1, 1, -1, -1]
+					var aow = []
+					aow.resize(4)
+					for i in range(4):
+						var s1 = is_solid_world.call(x-1, y + duw[i], z)
+						var s2 = is_solid_world.call(x-1, y, z + dvw[i])
+						var cc = is_solid_world.call(x-1, y + duw[i], z + dvw[i])
+						aow[i] = calc_ao.call(s1, s2, cc)
+					add_quad_ao.call(Vector3(x, y, z+1), Vector3(x, y+1, z+1), Vector3(x, y+1, z), Vector3(x, y, z), Vector3(-1,0,0), side_col, aow)
+				# +Z south - AO only
 				if get_cached.call(lx, ly, lz+1) == -1:
-					add_quad.call(Vector3(x, y, z+1), Vector3(x+1, y, z+1), Vector3(x+1, y+1, z+1), Vector3(x, y+1, z+1), Vector3(0,0,1), side_col)
-				# -Z north
+					var duz = [-1, 1, 1, -1]
+					var dvz = [-1, -1, 1, 1]
+					var aoz = []
+					aoz.resize(4)
+					for i in range(4):
+						var s1 = is_solid_world.call(x + duz[i], y, z+1)
+						var s2 = is_solid_world.call(x, y + dvz[i], z+1)
+						var cc = is_solid_world.call(x + duz[i], y + dvz[i], z+1)
+						aoz[i] = calc_ao.call(s1, s2, cc)
+					add_quad_ao.call(Vector3(x, y, z+1), Vector3(x+1, y, z+1), Vector3(x+1, y+1, z+1), Vector3(x, y+1, z+1), Vector3(0,0,1), side_col, aoz)
+				# -Z north - AO only
 				if get_cached.call(lx, ly, lz-1) == -1:
-					add_quad.call(Vector3(x, y, z), Vector3(x+1, y, z), Vector3(x+1, y+1, z), Vector3(x, y+1, z), Vector3(0,0,-1), side_col)
+					var dun = [-1, 1, 1, -1]
+					var dvn = [-1, -1, 1, 1]
+					var aon = []
+					aon.resize(4)
+					for i in range(4):
+						var s1 = is_solid_world.call(x + dun[i], y, z-1)
+						var s2 = is_solid_world.call(x, y + dvn[i], z-1)
+						var cc = is_solid_world.call(x + dun[i], y + dvn[i], z-1)
+						aon[i] = calc_ao.call(s1, s2, cc)
+					add_quad_ao.call(Vector3(x, y, z), Vector3(x+1, y, z), Vector3(x+1, y+1, z), Vector3(x, y+1, z), Vector3(0,0,-1), side_col, aon)
 	
 	if vertices.is_empty():
 		return null
