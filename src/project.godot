@@ -14,6 +14,7 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 
 [application]
 
+config/name="Wildes"
 run/main_scene="res://main.tscn"
 config/features=PackedStringArray("4.7")
 boot_splash/bg_color=Color(0.27451, 0.560784, 0.486275, 1)

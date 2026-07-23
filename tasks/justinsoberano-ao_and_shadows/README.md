@@ -131,9 +131,7 @@ technique** (a cel-safe `light()`, an AO floor, an anisotropy fix) over raw code
 
 Gameplay recordings (uploaded to PixelCloud — do not commit video files):
 
-- **Golden solution (author reference):** [pxl.cl/bP5ZR](https://pxl.cl/bP5ZR) — gameplay of the shipped reference build.
-- **Avocado (Muse Spark):** _optional — not recorded._ <!-- add pxl.cl link if a clip is captured -->
-- **Claude (Opus 4.8):** _optional — not recorded._ <!-- add pxl.cl link if a clip is captured -->
+- **Golden solution (author reference):** [pxl.cl/bP5ZR](https://www.internalfb.com/intern/px/p/bQ1PB) — gameplay of the shipped reference build.
 
 ## Trajectories
 
@@ -141,7 +139,7 @@ Agent run logs:
 
 - **Avocado (Muse Spark):** [P2430815124](https://www.internalfb.com/phabricator/paste/view/P2430815124) — ran Godot **headless only**; baked RGB voxel AO + engine shadows + a standalone contact-shadow shader; self-fixed the water-shader error; ~11m25s; **never rendered a pixel**.
 - **Claude (Opus 4.8):** [P2430815501](https://www.internalfb.com/phabricator/paste/view/P2430815501) — ran Godot **windowed ~13×**, rendered and **inspected ~10 frames** across rotation/zoom/mining; AO in `COLOR.a` + cel-preserving `light()` + 4096 shadow map; lifted the AO floor after looking; ~18–22 min.
-- **Golden (author reference):** [P2430814606](https://www.internalfb.com/phabricator/paste/view/P2430814606) — reference; not compared.
+- **Golden (author reference):** [P2430814606](https://www.internalfb.com/phabricator/paste/view/P2430814606) and [P2432253878](https://www.internalfb.com/phabricator/paste/view/P2432253878) — reference; not compared.
 
 ## Artifacts
 

@@ -846,7 +846,7 @@ func _build_chunk_mesh_generic(origin_x: int, origin_z: int) -> ArrayMesh:
 						var s2 = is_solid_world.call(x+1, y, z + dvx[i])
 						var cc = is_solid_world.call(x+1, y + dux[i], z + dvx[i])
 						aox[i] = calc_ao.call(s1, s2, cc)
-					add_quad_ao.call(Vector3(x+1, y, z), Vector3(x+1, y+1, z), Vector3(x+1, y+1, z+1), Vector3(x+1, y, z+1), Vector3(1,0,0), side_col, aox)
+					add_quad_ao.call(Vector3(x+1, y, z+1), Vector3(x+1, y+1, z+1), Vector3(x+1, y+1, z), Vector3(x+1, y, z), Vector3(1,0,0), side_col, [aox[3], aox[2], aox[1], aox[0]])
 				# -X west - AO only
 				if get_cached.call(lx-1, ly, lz) == -1:
 					var duw = [-1, 1, 1, -1]
@@ -858,7 +858,7 @@ func _build_chunk_mesh_generic(origin_x: int, origin_z: int) -> ArrayMesh:
 						var s2 = is_solid_world.call(x-1, y, z + dvw[i])
 						var cc = is_solid_world.call(x-1, y + duw[i], z + dvw[i])
 						aow[i] = calc_ao.call(s1, s2, cc)
-					add_quad_ao.call(Vector3(x, y, z+1), Vector3(x, y+1, z+1), Vector3(x, y+1, z), Vector3(x, y, z), Vector3(-1,0,0), side_col, aow)
+					add_quad_ao.call(Vector3(x, y, z), Vector3(x, y+1, z), Vector3(x, y+1, z+1), Vector3(x, y, z+1), Vector3(-1,0,0), side_col, [aow[3], aow[2], aow[1], aow[0]])
 				# +Z south - AO only
 				if get_cached.call(lx, ly, lz+1) == -1:
 					var duz = [-1, 1, 1, -1]
@@ -870,7 +870,7 @@ func _build_chunk_mesh_generic(origin_x: int, origin_z: int) -> ArrayMesh:
 						var s2 = is_solid_world.call(x, y + dvz[i], z+1)
 						var cc = is_solid_world.call(x + duz[i], y + dvz[i], z+1)
 						aoz[i] = calc_ao.call(s1, s2, cc)
-					add_quad_ao.call(Vector3(x, y, z+1), Vector3(x+1, y, z+1), Vector3(x+1, y+1, z+1), Vector3(x, y+1, z+1), Vector3(0,0,1), side_col, aoz)
+					add_quad_ao.call(Vector3(x, y+1, z+1), Vector3(x+1, y+1, z+1), Vector3(x+1, y, z+1), Vector3(x, y, z+1), Vector3(0,0,1), side_col, [aoz[3], aoz[2], aoz[1], aoz[0]])
 				# -Z north - AO only
 				if get_cached.call(lx, ly, lz-1) == -1:
 					var dun = [-1, 1, 1, -1]
