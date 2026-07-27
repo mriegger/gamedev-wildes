@@ -15,6 +15,7 @@ var block_colors: Dictionary = {
 	3: Color(0.46,0.38,0.30), # DIRT
 	4: Color(0.38,0.29,0.21), # LOG/Wood
 	5: Color(0.36,0.52,0.30), # LEAVES
+	6: Color(0.94,0.75,0.28), # TORCH
 }
 
 func _ready():

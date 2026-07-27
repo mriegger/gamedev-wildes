@@ -18,7 +18,7 @@ extends Node3D
 @export var enable_shadows: bool = true
 @export var shadow_cast_distance: float = 220.0
 
-enum BlockType { GRASS, SAND, STONE, DIRT, LOG, LEAVES }
+enum BlockType { GRASS, SAND, STONE, DIRT, LOG, LEAVES, TORCH }
 
 const COL_GRASS_TOP: Color = Color(0.52, 0.67, 0.40)
 const COL_GRASS_SIDE: Color = Color(0.42, 0.36, 0.28)
@@ -29,6 +29,8 @@ const COL_LOG: Color = Color(0.38, 0.29, 0.21)
 const COL_LOG_TOP: Color = Color(0.42, 0.33, 0.24)
 const COL_LEAVES: Color = Color(0.36, 0.52, 0.30)
 const COL_LEAVES_DARK: Color = Color(0.32, 0.46, 0.27)
+const COL_TORCH: Color = Color(0.78, 0.62, 0.42)
+const COL_TORCH_FLAME: Color = Color(1.0, 0.92, 0.68) # less orange, warm white
 
 var noise_hills: FastNoiseLite
 var noise_detail: FastNoiseLite
@@ -62,6 +64,22 @@ var terrain_material: ShaderMaterial
 var max_build_y: int = 0
 var sun_shadow_map: Array = [] # [x][z] -> float 0.55 shadowed, 1.0 lit
 
+# --- Torch system - per-light OmniLight3D creation ---
+# Each torch spawns its own cheap visual + OmniLight. No voxel BFS, lighting via shadows.
+const TORCH_OMNI_RANGE: float = 9.0
+var _torches: Dictionary = {}
+var torch_attachments: Dictionary = {}
+var torch_container: Node3D
+var torch_instances: Dictionary = {} # Vector3i -> Node3D (visual + light)
+var torch_light_nodes: Dictionary = {} # Vector3i -> OmniLight3D (per torch)
+var torch_base_material: StandardMaterial3D
+var torch_flame_material: StandardMaterial3D
+var torch_stem_mesh: BoxMesh
+var torch_flame_mesh: BoxMesh
+var _shadow_update_timer: float = 0.5
+const MAX_SHADOW_TORCHES: int = 4 # of all torches, closest 4 cast soft shadows for quality
+const TORCH_SHADOW_UPDATE_INTERVAL: float = 0.6
+
 signal block_changed(pos: Vector3i, old_type, new_type, revision: int)
 
 func _ready():
@@ -77,6 +95,7 @@ func _ready():
 	# Keep sun_shadow_map empty to avoid accidental use
 	sun_shadow_map.clear()
 	_prepare_materials()
+	_setup_torch_system()
 	_generate_chunks()
 	_create_water_plane()
 	_create_bounds_floor()
@@ -433,9 +452,59 @@ func _prepare_materials():
 		terrain_material.set_shader_parameter("haze_color", Vector3(0.75, 0.87, 0.94))
 	water_shader = load("res://shaders/water.gdshader")
 
+func _setup_torch_system():
+	torch_container = Node3D.new()
+	torch_container.name = "TorchContainer"
+	add_child(torch_container)
+	
+	torch_base_material = StandardMaterial3D.new()
+	torch_base_material.albedo_color = COL_TORCH
+	torch_base_material.roughness = 0.9
+	torch_base_material.emission_enabled = false
+	
+	torch_flame_material = StandardMaterial3D.new()
+	torch_flame_material.albedo_color = COL_TORCH_FLAME
+	torch_flame_material.emission_enabled = true
+	torch_flame_material.emission = COL_TORCH_FLAME
+	torch_flame_material.emission_energy_multiplier = 1.2
+	torch_flame_material.roughness = 0.6
+	
+	# Shared meshes for cheap visuals
+	torch_stem_mesh = BoxMesh.new()
+	torch_stem_mesh.size = Vector3(0.08, 0.45, 0.08)
+	torch_flame_mesh = BoxMesh.new()
+	torch_flame_mesh.size = Vector3(0.14, 0.14, 0.14)
+	
+	print("[Wildes] Torch system ready - per-light Omni creation")
+
 func _process(_delta):
 	if dirty_chunks.size() > 0:
 		_flush_dirty_chunks()
+	
+	_shadow_update_timer -= _delta
+	if _shadow_update_timer <= 0.0:
+		_shadow_update_timer = TORCH_SHADOW_UPDATE_INTERVAL
+		_update_torch_shadows_per_light()
+
+func _update_torch_shadows_per_light():
+	# Per spec: each OmniLight should have shadows enabled with DUAL_PARABOLOID and soft settings
+	if _torches.is_empty():
+		return
+	# In headless tests, skip enabling shadows to avoid render device allocation hangs
+	if DisplayServer.get_name() == "headless":
+		return
+	for tpos in torch_light_nodes.keys():
+		var light = torch_light_nodes[tpos] as OmniLight3D
+		if not light or not is_instance_valid(light):
+			continue
+		# Ensure spec values are applied even if previously culled
+		light.omni_shadow_mode = OmniLight3D.SHADOW_DUAL_PARABOLOID
+		light.shadow_enabled = true
+		light.shadow_reverse_cull_face = false
+		light.shadow_bias = 0.03
+		light.shadow_normal_bias = 0.2
+		light.shadow_opacity = 0.5
+		light.shadow_blur = 1.0
 
 func _queue_chunk_rebuild(cx: int, cz: int):
 	var chunks_x = int(ceil(float(world_size) / float(chunk_size)))
@@ -447,11 +516,12 @@ func _queue_chunk_rebuild(cx: int, cz: int):
 	# rebuild will happen next _process to avoid hitch during mine
 
 func _flush_dirty_chunks():
-	# rebuild up to 2 chunks per frame to keep responsive, prevents freeze choppiness
+	# Rebuild up to 2 chunks per frame to keep responsive, no light job now
+	var max_per_frame = 2
 	var rebuilt = 0
 	var keys = dirty_chunks.keys()
 	for k in keys:
-		if rebuilt >= 2:
+		if rebuilt >= max_per_frame:
 			break
 		var v = dirty_chunks[k] as Vector2i
 		dirty_chunks.erase(k)
@@ -506,7 +576,32 @@ func get_block_at(p: Vector3i):
 		return tree_block_fast[p]
 	return _base_terrain_type_at(p.x, p.y, p.z)
 
+# --- Block queries for torch system ---
 func is_solid(p: Vector3i) -> bool:
+	# Torch is not solid for physics / AO / collision, but is occupado for placement logic elsewhere
+	var bt = get_block_at(p)
+	if bt == null:
+		return false
+	if bt == BlockType.TORCH:
+		return false
+	return true
+
+func is_occupied(p: Vector3i) -> bool:
+	# Any block including torch occupies the cell for placement blocking and raycast
+	return get_block_at(p) != null
+
+func is_opaque(p: Vector3i) -> bool:
+	# For torch light propagation - blocks that block light
+	var bt = get_block_at(p)
+	if bt == null:
+		return false
+	if bt == BlockType.TORCH:
+		return false
+	# Leaves could be semi-transparent but for simplicity treat as opaque to satisfy "blocked by blocks"
+	return true
+
+func is_raycast_solid(p: Vector3i) -> bool:
+	# For selection raycast: torch is targetable
 	return get_block_at(p) != null
 
 func is_world_edge(p: Vector3i) -> bool:
@@ -530,7 +625,8 @@ func is_breakable(p: Vector3i) -> bool:
 		return false
 	if is_world_edge(p):
 		return false
-	return is_solid(p)
+	# breakable includes torch (even though not solid)
+	return get_block_at(p) != null
 
 # --- highest cache for freeze fix ---
 func _invalidate_highest_cache(x: int, z: int):
@@ -538,6 +634,7 @@ func _invalidate_highest_cache(x: int, z: int):
 
 func get_highest_solid_y(x: int, z: int) -> int:
 	# cached top y lookup, Vector3i dict only, no String formatting (freeze fix)
+	# Torch ignored for ground detection
 	if x < 0 or x >= world_size or z < 0 or z >= world_size:
 		return -1
 	var key = Vector2i(x, z)
@@ -545,7 +642,8 @@ func get_highest_solid_y(x: int, z: int) -> int:
 		return _highest_cache[key]
 	for y in range(max_build_y - 1, -1, -1):
 		var p = Vector3i(x, y, z)
-		if get_block_at(p) != null:
+		var bt = get_block_at(p)
+		if bt != null and bt != BlockType.TORCH:
 			_highest_cache[key] = y
 			return y
 	_highest_cache[key] = -1
@@ -558,7 +656,6 @@ func get_highest_top(x: int, z: int) -> float:
 	return float(y) + 1.0
 
 func try_mine_block(p: Vector3i):
-	# returns dict {type, revision} or null if failed - revision prevents stale restore
 	if is_world_edge(p):
 		return null
 	if not is_breakable(p):
@@ -573,44 +670,76 @@ func try_mine_block(p: Vector3i):
 		if tree_block_fast.has(p):
 			tree_block_fast.erase(p)
 	_invalidate_highest_cache(p.x, p.z)
+	
 	var rev = _increment_revision(p)
-	# rebuild from current committed cells (not stale)
 	_rebuild_chunks_affected_by(p)
+	
+	if old_type == BlockType.TORCH:
+		_torches.erase(p)
+		torch_attachments.erase(p)
+		_remove_torch_visual(p)
+	
 	block_changed.emit(p, old_type, null, rev)
 	return {"type": old_type, "revision": rev}
 
-func try_place_block(p: Vector3i, block_type: int) -> bool:
+func try_place_block(p: Vector3i, block_type: int, attach_dir: Vector3i = Vector3i.ZERO) -> bool:
 	if p.y < 0 or p.y >= max_build_y:
 		return false
 	if p.x <0 or p.x >= world_size or p.z <0 or p.z >= world_size:
 		return false
 	if is_world_edge(p):
 		return false
-	if is_solid(p):
+	if is_occupied(p):
 		return false
+	# Torch placement rule: require adjacent opaque block for support
+	if block_type == BlockType.TORCH:
+		var has_support = false
+		for d in [Vector3i.UP, Vector3i.DOWN, Vector3i(1,0,0), Vector3i(-1,0,0), Vector3i(0,0,1), Vector3i(0,0,-1)]:
+			if is_opaque(p + d) or is_solid(p + d):
+				# also check if support is any solid terrain (including below)
+				has_support = true
+				break
+		# allow placement on ground if y==0? but we already check adjacency, for floating torch we still require support
+		if not has_support:
+			# fallback: allow if directly on top of solid below (common case)
+			if not is_opaque(p + Vector3i.DOWN):
+				return false
 	# commit placement
 	if removed_blocks.has(p):
 		removed_blocks.erase(p)
 	placed_blocks[p] = block_type
 	_invalidate_highest_cache(p.x, p.z)
+	
 	var rev = _increment_revision(p)
-	_rebuild_chunks_affected_by(p)
+	
+	if block_type == BlockType.TORCH:
+		_torches[p] = true
+		torch_attachments[p] = attach_dir
+		_spawn_torch_visual(p, attach_dir)
+		# Cheap: no terrain rebuild at all for torch (visual only)
+	else:
+		_rebuild_chunks_affected_by(p)
+	
 	block_changed.emit(p, null, block_type, rev)
 	return true
 
+func try_place_torch(p: Vector3i, attach_dir: Vector3i) -> bool:
+	return try_place_block(p, BlockType.TORCH, attach_dir)
+
 func _rebuild_chunks_affected_by(p: Vector3i):
+	# Optimized: queue instead of immediate to spread hitch (was causing 119ms spike)
 	var cx = int(floor(float(p.x) / float(chunk_size)))
 	var cz = int(floor(float(p.z) / float(chunk_size)))
-	_rebuild_chunk_immediate(cx, cz)
-	# neighbor chunks if on border
+	_queue_chunk_rebuild(cx, cz)
+	# neighbor chunks if on border - also queued
 	if p.x % chunk_size == 0:
-		_rebuild_chunk_immediate(cx-1, cz)
+		_queue_chunk_rebuild(cx-1, cz)
 	if (p.x+1) % chunk_size == 0:
-		_rebuild_chunk_immediate(cx+1, cz)
+		_queue_chunk_rebuild(cx+1, cz)
 	if p.z % chunk_size == 0:
-		_rebuild_chunk_immediate(cx, cz-1)
+		_queue_chunk_rebuild(cx, cz-1)
 	if (p.z+1) % chunk_size == 0:
-		_rebuild_chunk_immediate(cx, cz+1)
+		_queue_chunk_rebuild(cx, cz+1)
 
 func _rebuild_chunk(cx: int, cz: int):
 	_queue_chunk_rebuild(cx, cz)
@@ -639,8 +768,73 @@ func _rebuild_chunk_immediate(cx: int, cz: int):
 		add_child(mi)
 		chunk_instances[key] = mi
 
+# ---------------- Torch lighting propagation with occlusion (optimized) ----------------
+# Torch lighting BFS removed - torches are cheap visual data only, lighting via OmniLight shadows
+func get_torch_light_at(_p: Vector3i) -> int:
+	return 0
+
+# ---------------- Torch visuals - per-light Omni creation (cheap meshes) ----------------
+func _spawn_torch_visual(pos: Vector3i, attach_dir: Vector3i):
+	if torch_container == null:
+		return
+	_remove_torch_visual(pos)
+	var root = Node3D.new()
+	root.name = "Torch_%d_%d_%d" % [pos.x, pos.y, pos.z]
+	var base_pos = Vector3(pos.x + 0.5, pos.y + 0.5, pos.z + 0.5)
+	if attach_dir != Vector3i.ZERO:
+		var off = Vector3(attach_dir.x, attach_dir.y, attach_dir.z) * 0.32
+		base_pos += off
+		if attach_dir == Vector3i.DOWN:
+			base_pos.y = pos.y + 0.15
+	root.position = base_pos
+	torch_container.add_child(root)
+	
+	# Stem - shared mesh
+	var stem = MeshInstance3D.new()
+	stem.mesh = torch_stem_mesh
+	stem.position = Vector3(0, 0.05, 0)
+	stem.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	stem.material_override = torch_base_material
+	root.add_child(stem)
+	
+	# Flame - shared mesh
+	var flame = MeshInstance3D.new()
+	flame.mesh = torch_flame_mesh
+	flame.position = Vector3(0, 0.38, 0)
+	flame.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	flame.material_override = torch_flame_material
+	root.add_child(flame)
+	
+	# Per-torch OmniLight - reimplemented per request, shadows enabled as spec
+	var light = OmniLight3D.new()
+	light.name = "TorchLight"
+	light.light_color = Color(1.0, 0.96, 0.88)
+	light.light_energy = 0.72
+	light.omni_range = TORCH_OMNI_RANGE
+	light.omni_attenuation = 0.75
+	light.omni_shadow_mode = OmniLight3D.SHADOW_DUAL_PARABOLOID
+	light.shadow_enabled = true
+	light.shadow_reverse_cull_face = false
+	light.shadow_bias = 0.03
+	light.shadow_normal_bias = 0.2
+	light.shadow_opacity = 0.5
+	light.shadow_blur = 1.0
+	light.position = Vector3(0, 0.32, 0)
+	root.add_child(light)
+	
+	torch_instances[pos] = root
+	torch_light_nodes[pos] = light
+
+func _remove_torch_visual(pos: Vector3i):
+	if torch_instances.has(pos):
+		var n = torch_instances[pos] as Node3D
+		if n and is_instance_valid(n):
+			n.queue_free()
+		torch_instances.erase(pos)
+	torch_light_nodes.erase(pos)
+	torch_attachments.erase(pos)
+
 func _build_chunk_mesh_generic(origin_x: int, origin_z: int) -> ArrayMesh:
-	# Full voxel iteration with per-vertex ambient occlusion and shadow-friendly meshes
 	var end_x = min(origin_x + chunk_size, world_size)
 	var end_z = min(origin_z + chunk_size, world_size)
 	var size_x = chunk_size
@@ -657,7 +851,8 @@ func _build_chunk_mesh_generic(origin_x: int, origin_z: int) -> ArrayMesh:
 	var cache_x = size_x + 2
 	var cache_z = size_z + 2
 	var cache = []
-	cache.resize(cache_x * size_y * cache_z)
+	var total_cache = cache_x * size_y * cache_z
+	cache.resize(total_cache)
 	for lx in range(cache_x):
 		for lz in range(cache_z):
 			for ly in range(size_y):
@@ -670,46 +865,7 @@ func _build_chunk_mesh_generic(origin_x: int, origin_z: int) -> ArrayMesh:
 					cache[idx] = -1
 				else:
 					cache[idx] = v
-	var get_cached = func(lx:int, ly:int, lz:int) -> int:
-		if lx <0 or lx>=cache_x or lz<0 or lz>=cache_z or ly<0 or ly>=size_y:
-			return -1
-		var ii = (lx * size_y * cache_z) + (ly * cache_z) + lz
-		return cache[ii]
-
-	# World-space solidity check with cache fallback for AO sampling
-	var is_solid_world = func(wx:int, wy:int, wz:int) -> bool:
-		if wx <0 or wx >= world_size or wz <0 or wz >= world_size or wy <0 or wy >= max_build_y:
-			return false
-		var clx = wx - origin_x + 1
-		var clz = wz - origin_z + 1
-		var cly = wy
-		if clx >=0 and clx < cache_x and clz >=0 and clz < cache_z and cly >=0 and cly < size_y:
-			var idx2 = (clx * size_y * cache_z) + (cly * cache_z) + clz
-			return cache[idx2] != -1
-		else:
-			return get_block_at(Vector3i(wx, wy, wz)) != null
-
-	# AO helper: side1, side2, corner bools -> occlusion 0..3
-	var calc_ao = func(s1: bool, s2: bool, c: bool) -> int:
-		if s1 and s2:
-			return 3
-		var occ = 0
-		if s1: occ += 1
-		if s2: occ += 1
-		if c: occ += 1
-		return occ
-
-	# AO brightness mapping: subtle, not black - preserves corner AO visibility, sides stay bright
-	var _ao_enabled = enable_ao
-	var ao_brightness = func(ao: int) -> float:
-		if not _ao_enabled:
-			return 1.0
-		match ao:
-			0: return 1.0
-			1: return 0.86
-			2: return 0.72
-			3: return 0.58
-			_: return 1.0
+	var ao_table = [1.0, 0.86, 0.72, 0.58]
 
 	var vertices := PackedVector3Array()
 	var normals := PackedVector3Array()
@@ -745,144 +901,220 @@ func _build_chunk_mesh_generic(origin_x: int, origin_z: int) -> ArrayMesh:
 			BlockType.LOG: return Color(COL_LOG.r * 0.95, COL_LOG.g * 0.95, COL_LOG.b * 0.95)
 			BlockType.LEAVES: return Color(COL_LEAVES_DARK.r + var_off*0.5, COL_LEAVES_DARK.g + var_off*0.5, COL_LEAVES_DARK.b + var_off*0.5)
 			_: return Color(1,0,1)
-	
-	# Quad builder with per-vertex AO + optional per-vertex smooth drop-shadow
-	var add_quad_ao = func(v0: Vector3, v1: Vector3, v2: Vector3, v3: Vector3, normal: Vector3, base_col: Color, ao_arr: Array, shadow_arr = null):
-		var idx = vertices.size()
-		vertices.append(v0); vertices.append(v1); vertices.append(v2); vertices.append(v3)
-		normals.append(normal); normals.append(normal); normals.append(normal); normals.append(normal)
-		for i in range(4):
-			var ao = ao_arr[i] as int
-			var b = ao_brightness.call(ao)
-			var sh = 1.0
-			if shadow_arr != null and shadow_arr.size() > i:
-				sh = shadow_arr[i]
-			# combine AO and soft drop-shadow
-			var c = Color(base_col.r * b * sh, base_col.g * b * sh, base_col.b * b * sh, base_col.a)
-			colors.append(c)
-		indices.append(idx+0); indices.append(idx+1); indices.append(idx+2)
-		indices.append(idx+0); indices.append(idx+2); indices.append(idx+3)
 
-	# Soft real-time drop shadow under floating blocks (per-vertex, smooth penumbra)
-	var get_soft_drop_shadow = func(vx: int, vy: int, vz: int) -> float:
-		# Scan 3x3 columns above for overhang, creating soft 1-block penumbra
-		# vy = block y (ground), scan y+2..y+7
-		var best = 1.0
-		var max_drop = 6
-		# Precompute horizontal distances for 3x3
-		for ox in range(-1, 2):
-			for oz in range(-1, 2):
-				var horiz = sqrt(float(ox*ox + oz*oz)) # 0,1,1.414
-				for dy in range(2, max_drop+2):
-					if is_solid_world.call(vx + ox, vy + dy, vz + oz):
-						var vert = dy - 1
-						# 0.72 closest directly above, softer with distance and horizontal offset
-						var f = 0.72 + float(vert - 1) * 0.06 + horiz * 0.10
-						if f > 0.97:
-							f = 0.97
-						if f < best:
-							best = f
-						# Early exit for darkest directly above
-						if best <= 0.72 and ox == 0 and oz == 0 and dy == 2:
-							return best
-						break # only closest solid in this column matters
-		return best
-	
 	for x in range(origin_x, end_x):
-		var lx = x - origin_x +1
+		var lx = x - origin_x + 1
 		for z in range(origin_z, end_z):
-			var lz = z - origin_z +1
+			var lz = z - origin_z + 1
 			var var_off = get_variation.call(x, z)
 			for y in range(size_y):
 				var ly = y
-				var block_type = get_cached.call(lx, ly, lz)
+				var cache_idx = (lx * size_y * cache_z) + (ly * cache_z) + lz
+				var block_type = cache[cache_idx]
 				if block_type == -1:
+					continue
+				if block_type == BlockType.TORCH:
 					continue
 				var top_col = get_top_color.call(block_type, var_off if block_type != BlockType.LOG and block_type != BlockType.LEAVES else var_off*0.5)
 				var side_col = get_side_color.call(block_type, var_off if block_type != BlockType.LOG and block_type != BlockType.LEAVES else var_off*0.5)
-				# +Y top - AO + smooth real-time drop shadow under floating blocks (per-vertex soft)
-				if get_cached.call(lx, ly+1, lz) == -1:
+
+				# +Y top
+				var n_top = -1
+				if ly+1 < size_y:
+					n_top = cache[(lx * size_y * cache_z) + ((ly+1) * cache_z) + lz]
+				if n_top == -1 or n_top == BlockType.TORCH:
 					var col = top_col
 					if block_type == BlockType.LOG:
 						col = COL_LOG_TOP + Color(var_off, var_off, var_off)
+					var v0 = Vector3(x, y+1, z)
+					var v1 = Vector3(x+1, y+1, z)
+					var v2 = Vector3(x+1, y+1, z+1)
+					var v3 = Vector3(x, y+1, z+1)
 					var du = [-1, 1, 1, -1]
 					var dv = [-1, -1, 1, 1]
-					var ao_arr = []
-					ao_arr.resize(4)
-					var shadow_arr = []
-					shadow_arr.resize(4)
+					var ao_vals = [0,0,0,0]
+					var sh_vals = [1.0,1.0,1.0,1.0]
 					for i in range(4):
-						var s1 = is_solid_world.call(x + du[i], y+1, z)
-						var s2 = is_solid_world.call(x, y+1, z + dv[i])
-						var cc = is_solid_world.call(x + du[i], y+1, z + dv[i])
-						ao_arr[i] = calc_ao.call(s1, s2, cc)
-						# per-vertex soft drop shadow: vx/vz at corner
+						var sx = x + du[i]
+						var sz_ = z + dv[i]
+						var s1=false
+						var s2=false
+						var cs=false
+						var clx1 = sx - origin_x + 1
+						if clx1>=0 and clx1<cache_x and y+1>=0 and y+1<size_y:
+							var vv = cache[(clx1*size_y*cache_z)+((y+1)*cache_z)+lz]
+							if vv!=-1 and vv!=BlockType.TORCH: s1=true
+						var clz2 = sz_ - origin_z +1
+						if clz2>=0 and clz2<cache_z and y+1>=0 and y+1<size_y:
+							var vv2 = cache[(lx*size_y*cache_z)+((y+1)*cache_z)+clz2]
+							if vv2!=-1 and vv2!=BlockType.TORCH: s2=true
+						var clx_c = sx - origin_x +1
+						var clz_c = sz_ - origin_z +1
+						if clx_c>=0 and clx_c<cache_x and clz_c>=0 and clz_c<cache_z and y+1>=0 and y+1<size_y:
+							var vvc = cache[(clx_c*size_y*cache_z)+((y+1)*cache_z)+clz_c]
+							if vvc!=-1 and vvc!=BlockType.TORCH: cs=true
+						var ao=0
+						if s1 and s2: ao=3
+						else:
+							if s1: ao+=1
+							if s2: ao+=1
+							if cs: ao+=1
+						ao_vals[i]=ao
 						var vx = x + (1 if i==1 or i==2 else 0)
-						var vz = z + (1 if i==2 or i==3 else 0)
-						shadow_arr[i] = get_soft_drop_shadow.call(vx, y, vz)
-					add_quad_ao.call(Vector3(x, y+1, z), Vector3(x+1, y+1, z), Vector3(x+1, y+1, z+1), Vector3(x, y+1, z+1), Vector3(0,1,0), col, ao_arr, shadow_arr)
-				# -Y bottom - AO only, no blackening
-				if get_cached.call(lx, ly-1, lz) == -1:
-					if y > 0:
-						var bcol = side_col * 0.92
-						var du2 = [-1, 1, 1, -1]
-						var dv2 = [1, 1, -1, -1]
-						var ao2 = []
-						ao2.resize(4)
+						var vz_ = z + (1 if i==2 or i==3 else 0)
+						var best_sh = 1.0
+						for ox in range(-1,2):
+							for oz in range(-1,2):
+								var horiz = sqrt(float(ox*ox+oz*oz))
+								for dy in range(2,8):
+									var wy2 = y+dy
+									if wy2>=max_build_y: break
+									var wwx = vx+ox
+									var wwz = vz_+oz
+									var clx_s = wwx - origin_x +1
+									var clz_s = wwz - origin_z +1
+									var solid=false
+									if clx_s>=0 and clx_s<cache_x and clz_s>=0 and clz_s<cache_z and wy2>=0 and wy2<size_y:
+										var vvs = cache[(clx_s*size_y*cache_z)+(wy2*cache_z)+clz_s]
+										if vvs!=-1 and vvs!=BlockType.TORCH: solid=true
+									if solid:
+										var vert = dy-1
+										var f = 0.72 + float(vert-1)*0.06 + horiz*0.10
+										if f>0.97: f=0.97
+										if f<best_sh: best_sh=f
+										break
+						sh_vals[i]=best_sh
+					var base_idx = vertices.size()
+					vertices.append(v0); vertices.append(v1); vertices.append(v2); vertices.append(v3)
+					normals.append(Vector3(0,1,0)); normals.append(Vector3(0,1,0)); normals.append(Vector3(0,1,0)); normals.append(Vector3(0,1,0))
+					for i in range(4):
+						var b = ao_table[ao_vals[i]] if enable_ao else 1.0
+						var sh = sh_vals[i]
+						colors.append(Color(col.r*b*sh, col.g*b*sh, col.b*b*sh, col.a))
+					indices.append(base_idx+0); indices.append(base_idx+1); indices.append(base_idx+2)
+					indices.append(base_idx+0); indices.append(base_idx+2); indices.append(base_idx+3)
+
+				# -Y
+				var n_bot = -1
+				if ly-1>=0:
+					n_bot = cache[(lx*size_y*cache_z)+((ly-1)*cache_z)+lz]
+				if n_bot==-1 or n_bot==BlockType.TORCH:
+					if y>0:
+						var bcol = side_col*0.92
+						var du2 = [-1,1,1,-1]
+						var dv2 = [1,1,-1,-1]
+						var ao2 = [0,0,0,0]
 						for i in range(4):
-							var s1 = is_solid_world.call(x + du2[i], y-1, z)
-							var s2 = is_solid_world.call(x, y-1, z + dv2[i])
-							var cc = is_solid_world.call(x + du2[i], y-1, z + dv2[i])
-							ao2[i] = calc_ao.call(s1, s2, cc)
-						add_quad_ao.call(Vector3(x, y, z+1), Vector3(x+1, y, z+1), Vector3(x+1, y, z), Vector3(x, y, z), Vector3(0,-1,0), bcol, ao2)
-				# +X east - AO only, keep it bright
-				if get_cached.call(lx+1, ly, lz) == -1:
-					var dux = [-1, 1, 1, -1]
-					var dvx = [-1, -1, 1, 1]
-					var aox = []
-					aox.resize(4)
+							var sx = x+du2[i]
+							var sz_ = z+dv2[i]
+							var s1=false
+							var s2=false
+							var cs=false
+							var clx1 = sx - origin_x +1
+							if clx1>=0 and clx1<cache_x and y-1>=0 and y-1<size_y:
+								var vv=cache[(clx1*size_y*cache_z)+((y-1)*cache_z)+lz]
+								if vv!=-1 and vv!=BlockType.TORCH: s1=true
+							var clz2 = sz_ - origin_z +1
+							if clz2>=0 and clz2<cache_z and y-1>=0 and y-1<size_y:
+								var vv2=cache[(lx*size_y*cache_z)+((y-1)*cache_z)+clz2]
+								if vv2!=-1 and vv2!=BlockType.TORCH: s2=true
+							var clx_c = sx - origin_x +1
+							var clz_c = sz_ - origin_z +1
+							if clx_c>=0 and clx_c<cache_x and clz_c>=0 and clz_c<cache_z and y-1>=0 and y-1<size_y:
+								var vvc=cache[(clx_c*size_y*cache_z)+((y-1)*cache_z)+clz_c]
+								if vvc!=-1 and vvc!=BlockType.TORCH: cs=true
+							var ao=0
+							if s1 and s2: ao=3
+							else:
+								if s1: ao+=1
+								if s2: ao+=1
+								if cs: ao+=1
+							ao2[i]=ao
+						var base_idx2 = vertices.size()
+						vertices.append(Vector3(x, y, z+1)); vertices.append(Vector3(x+1, y, z+1)); vertices.append(Vector3(x+1, y, z)); vertices.append(Vector3(x, y, z))
+						normals.append(Vector3(0,-1,0)); normals.append(Vector3(0,-1,0)); normals.append(Vector3(0,-1,0)); normals.append(Vector3(0,-1,0))
+						for i in range(4):
+							var b = ao_table[ao2[i]] if enable_ao else 1.0
+							colors.append(Color(bcol.r*b, bcol.g*b, bcol.b*b, bcol.a))
+						indices.append(base_idx2+0); indices.append(base_idx2+1); indices.append(base_idx2+2)
+						indices.append(base_idx2+0); indices.append(base_idx2+2); indices.append(base_idx2+3)
+
+				# +X
+				var n_east = -1
+				if lx+1<cache_x:
+					n_east = cache[((lx+1)*size_y*cache_z)+(ly*cache_z)+lz]
+				if n_east==-1 or n_east==BlockType.TORCH:
+					var aox=[0,0,0,0]
 					for i in range(4):
-						var s1 = is_solid_world.call(x+1, y + dux[i], z)
-						var s2 = is_solid_world.call(x+1, y, z + dvx[i])
-						var cc = is_solid_world.call(x+1, y + dux[i], z + dvx[i])
-						aox[i] = calc_ao.call(s1, s2, cc)
-					add_quad_ao.call(Vector3(x+1, y, z+1), Vector3(x+1, y+1, z+1), Vector3(x+1, y+1, z), Vector3(x+1, y, z), Vector3(1,0,0), side_col, [aox[3], aox[2], aox[1], aox[0]])
-				# -X west - AO only
-				if get_cached.call(lx-1, ly, lz) == -1:
-					var duw = [-1, 1, 1, -1]
-					var dvw = [1, 1, -1, -1]
-					var aow = []
-					aow.resize(4)
+						var dy = [-1,1,1,-1][i]
+						var dz_ = [-1,-1,1,1][i]
+						var s1=false
+						var s2=false
+						var cs=false
+						var wy = y+dy
+						if wy>=0 and wy<size_y:
+							var vv=cache[((lx+1)*size_y*cache_z)+(wy*cache_z)+lz]
+							if vv!=-1 and vv!=BlockType.TORCH: s1=true
+						var wz_ = z+dz_
+						var clz = wz_ - origin_z +1
+						if clz>=0 and clz<cache_z:
+							var vv2=cache[((lx+1)*size_y*cache_z)+(ly*cache_z)+clz]
+							if vv2!=-1 and vv2!=BlockType.TORCH: s2=true
+						if wy>=0 and wy<size_y and clz>=0 and clz<cache_z:
+							var vvc=cache[((lx+1)*size_y*cache_z)+(wy*cache_z)+clz]
+							if vvc!=-1 and vvc!=BlockType.TORCH: cs=true
+						var ao=0
+						if s1 and s2: ao=3
+						else:
+							if s1: ao+=1
+							if s2: ao+=1
+							if cs: ao+=1
+						aox[i]=ao
+					var base_idx3 = vertices.size()
+					vertices.append(Vector3(x+1, y, z+1)); vertices.append(Vector3(x+1, y+1, z+1)); vertices.append(Vector3(x+1, y+1, z)); vertices.append(Vector3(x+1, y, z))
+					normals.append(Vector3(1,0,0)); normals.append(Vector3(1,0,0)); normals.append(Vector3(1,0,0)); normals.append(Vector3(1,0,0))
 					for i in range(4):
-						var s1 = is_solid_world.call(x-1, y + duw[i], z)
-						var s2 = is_solid_world.call(x-1, y, z + dvw[i])
-						var cc = is_solid_world.call(x-1, y + duw[i], z + dvw[i])
-						aow[i] = calc_ao.call(s1, s2, cc)
-					add_quad_ao.call(Vector3(x, y, z), Vector3(x, y+1, z), Vector3(x, y+1, z+1), Vector3(x, y, z+1), Vector3(-1,0,0), side_col, [aow[3], aow[2], aow[1], aow[0]])
-				# +Z south - AO only
-				if get_cached.call(lx, ly, lz+1) == -1:
-					var duz = [-1, 1, 1, -1]
-					var dvz = [-1, -1, 1, 1]
-					var aoz = []
-					aoz.resize(4)
+						var b = ao_table[aox[3-i]] if enable_ao else 1.0
+						colors.append(Color(side_col.r*b, side_col.g*b, side_col.b*b, side_col.a))
+					indices.append(base_idx3+0); indices.append(base_idx3+1); indices.append(base_idx3+2)
+					indices.append(base_idx3+0); indices.append(base_idx3+2); indices.append(base_idx3+3)
+
+				# -X, +Z, -Z
+				var n_west = -1
+				if lx-1>=0:
+					n_west = cache[((lx-1)*size_y*cache_z)+(ly*cache_z)+lz]
+				if n_west==-1 or n_west==BlockType.TORCH:
+					var base_idx4 = vertices.size()
+					vertices.append(Vector3(x, y, z)); vertices.append(Vector3(x, y+1, z)); vertices.append(Vector3(x, y+1, z+1)); vertices.append(Vector3(x, y, z+1))
+					normals.append(Vector3(-1,0,0)); normals.append(Vector3(-1,0,0)); normals.append(Vector3(-1,0,0)); normals.append(Vector3(-1,0,0))
 					for i in range(4):
-						var s1 = is_solid_world.call(x + duz[i], y, z+1)
-						var s2 = is_solid_world.call(x, y + dvz[i], z+1)
-						var cc = is_solid_world.call(x + duz[i], y + dvz[i], z+1)
-						aoz[i] = calc_ao.call(s1, s2, cc)
-					add_quad_ao.call(Vector3(x, y+1, z+1), Vector3(x+1, y+1, z+1), Vector3(x+1, y, z+1), Vector3(x, y, z+1), Vector3(0,0,1), side_col, [aoz[3], aoz[2], aoz[1], aoz[0]])
-				# -Z north - AO only
-				if get_cached.call(lx, ly, lz-1) == -1:
-					var dun = [-1, 1, 1, -1]
-					var dvn = [-1, -1, 1, 1]
-					var aon = []
-					aon.resize(4)
+						colors.append(side_col)
+					indices.append(base_idx4+0); indices.append(base_idx4+1); indices.append(base_idx4+2)
+					indices.append(base_idx4+0); indices.append(base_idx4+2); indices.append(base_idx4+3)
+
+				var n_south = -1
+				if lz+1<cache_z:
+					n_south = cache[(lx*size_y*cache_z)+(ly*cache_z)+(lz+1)]
+				if n_south==-1 or n_south==BlockType.TORCH:
+					var base_idx5 = vertices.size()
+					vertices.append(Vector3(x, y+1, z+1)); vertices.append(Vector3(x+1, y+1, z+1)); vertices.append(Vector3(x+1, y, z+1)); vertices.append(Vector3(x, y, z+1))
+					normals.append(Vector3(0,0,1)); normals.append(Vector3(0,0,1)); normals.append(Vector3(0,0,1)); normals.append(Vector3(0,0,1))
 					for i in range(4):
-						var s1 = is_solid_world.call(x + dun[i], y, z-1)
-						var s2 = is_solid_world.call(x, y + dvn[i], z-1)
-						var cc = is_solid_world.call(x + dun[i], y + dvn[i], z-1)
-						aon[i] = calc_ao.call(s1, s2, cc)
-					add_quad_ao.call(Vector3(x, y, z), Vector3(x+1, y, z), Vector3(x+1, y+1, z), Vector3(x, y+1, z), Vector3(0,0,-1), side_col, aon)
+						colors.append(side_col)
+					indices.append(base_idx5+0); indices.append(base_idx5+1); indices.append(base_idx5+2)
+					indices.append(base_idx5+0); indices.append(base_idx5+2); indices.append(base_idx5+3)
+
+				var n_north = -1
+				if lz-1>=0:
+					n_north = cache[(lx*size_y*cache_z)+(ly*cache_z)+(lz-1)]
+				if n_north==-1 or n_north==BlockType.TORCH:
+					var base_idx6 = vertices.size()
+					vertices.append(Vector3(x, y, z)); vertices.append(Vector3(x+1, y, z)); vertices.append(Vector3(x+1, y+1, z)); vertices.append(Vector3(x, y+1, z))
+					normals.append(Vector3(0,0,-1)); normals.append(Vector3(0,0,-1)); normals.append(Vector3(0,0,-1)); normals.append(Vector3(0,0,-1))
+					for i in range(4):
+						colors.append(side_col)
+					indices.append(base_idx6+0); indices.append(base_idx6+1); indices.append(base_idx6+2)
+					indices.append(base_idx6+0); indices.append(base_idx6+2); indices.append(base_idx6+3)
 	
 	if vertices.is_empty():
 		return null

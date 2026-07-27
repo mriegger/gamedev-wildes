@@ -87,7 +87,7 @@ func _ready():
 	shared_chip_mesh.size = Vector3(0.12, 0.12, 0.06)
 	shared_pop_mesh = BoxMesh.new()
 	shared_pop_mesh.size = Vector3(0.9,0.9,0.9)
-	for t in [0,1,2,3,4,5]:
+	for t in [0,1,2,3,4,5,6]:
 		var mat = StandardMaterial3D.new()
 		mat.albedo_color = _color_for_type(t)
 		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -97,6 +97,11 @@ func _ready():
 	_create_model()
 	_create_selection()
 	_create_ghost()
+	
+	# give starter torches in hotbar slot 7 (index 6) and some WOOD
+	hotbar[6] = {"type": 6, "count": 16} # TORCH x16
+	hotbar[0] = {"type": 0, "count": 12}
+	hotbar[1] = {"type": 2, "count": 8}
 	
 	# connect to world edits to invalidate top cache
 	if world and world.has_signal("block_changed"):
@@ -663,8 +668,13 @@ func _handle_raycast():
 	var d_hit = global_position.distance_to(Vector3(best_hit.x+0.5, best_hit.y+0.5, best_hit.z+0.5))
 	can_mine_target = d_hit <= 6.0
 	
-	if not world.is_solid(best_place) and world.get_block_at(best_place) == null:
-		if not _placement_collides_player(best_place):
+	if world.get_block_at(best_place) == null:
+		# for torch, allow placement even if player collides? torch is walk-through, so ignore player collision for torches
+		var placing_torch = false
+		var sel = get_selected_block_type()
+		if sel != null and sel == 6:
+			placing_torch = true
+		if placing_torch or not _placement_collides_player(best_place):
 			placement_has = true
 			can_place_target = global_position.distance_to(Vector3(best_place.x+0.5, best_place.y+0.5, best_place.z+0.5)) <= 6.0
 		else:
@@ -675,14 +685,20 @@ func _handle_raycast():
 		can_place_target = false
 
 func _voxel_raycast(origin: Vector3, dir: Vector3, max_dist: float):
-	# Amanatides & Woo
+	# Amanatides & Woo - uses raycast solid that includes torches
 	dir = dir.normalized()
 	if dir.length_squared() < 0.0001:
 		return null
 	var current = Vector3i(floor(origin.x), floor(origin.y), floor(origin.z))
 	
 	# If origin inside solid, nudge forward a bit
-	if world and world.is_solid(current):
+	if world and world.has_method("is_raycast_solid") and world.is_raycast_solid(current):
+		if not (world.has_method("is_solid") and not world.is_solid(current) and world.get_block_at(current) != null):
+			# inside torch? still nudge
+			pass
+		origin = origin + dir * 0.6
+		current = Vector3i(floor(origin.x), floor(origin.y), floor(origin.z))
+	elif world and world.is_solid(current):
 		origin = origin + dir * 0.6
 		current = Vector3i(floor(origin.x), floor(origin.y), floor(origin.z))
 	
@@ -735,7 +751,13 @@ func _voxel_raycast(origin: Vector3, dir: Vector3, max_dist: float):
 	var last_pos = current
 	
 	for i in range(int(max_dist*3 + 10)): # max steps
-		if world and world.is_solid(current):
+		var is_hit = false
+		if world:
+			if world.has_method("is_raycast_solid"):
+				is_hit = world.is_raycast_solid(current)
+			else:
+				is_hit = world.is_solid(current)
+		if is_hit:
 			# hit
 			var face_normal: Vector3i
 			if last_pos.x != current.x:
@@ -747,7 +769,13 @@ func _voxel_raycast(origin: Vector3, dir: Vector3, max_dist: float):
 			# place pos is last empty
 			var place_pos = last_pos
 			# if origin started inside, we might have last_pos also solid? Check
-			if world.is_solid(place_pos):
+			var place_is_solid = false
+			if world:
+				if world.has_method("is_raycast_solid"):
+					place_is_solid = world.is_raycast_solid(place_pos)
+				else:
+					place_is_solid = world.is_solid(place_pos)
+			if place_is_solid:
 				place_pos = current + face_normal # adjacent
 			return {"hit_pos": current, "place_pos": place_pos, "face_normal": face_normal}
 		
@@ -879,24 +907,36 @@ func _commit_mine(pos: Vector3i):
 	is_mining = false
 	mine_target_rev = -1
 func _commit_place(pos: Vector3i):
-	if world == null:
-		return
-	if world.has_method("is_world_edge") and world.is_world_edge(pos):
-		print("[Place] Rejected world edge at %s" % pos)
-		return
-	var slot = hotbar[selected_slot]
-	if slot == null:
-		return
-	var type_to_place = slot["type"]
-	if world.try_place_block(pos, type_to_place):
-		slot["count"] -= 1
-		if slot["count"] <= 0:
-			hotbar[selected_slot] = null
-		print("[Place] %s at %s" % [block_type_to_name(type_to_place), pos])
-		get_tree().call_group("hotbar_ui", "refresh")
-		_handle_raycast()
-	else:
-		print("[Place] Failed at %s" % pos)
+		if world == null:
+			return
+		if world.has_method("is_world_edge") and world.is_world_edge(pos):
+			print("[Place] Rejected world edge at %s" % pos)
+			return
+		var slot = hotbar[selected_slot]
+		if slot == null:
+			return
+		var type_to_place = slot["type"]
+		var placed_ok = false
+		# Torch requires attachment dir
+		if type_to_place == 6: # TORCH
+			# last_ray_normal is direction from hit to placement (outward). Support dir is opposite = last_ray_normal * -1? Actually support is hit block, which is -last_ray_normal direction from placement
+			var support_dir = -last_ray_normal
+			# store attach as support_dir (where torch attaches to)
+			if world.has_method("try_place_torch"):
+				placed_ok = world.try_place_torch(pos, support_dir)
+			else:
+				placed_ok = world.try_place_block(pos, type_to_place, support_dir)
+		else:
+			placed_ok = world.try_place_block(pos, type_to_place)
+		if placed_ok:
+			slot["count"] -= 1
+			if slot["count"] <= 0:
+				hotbar[selected_slot] = null
+			print("[Place] %s at %s attach %s" % [block_type_to_name(type_to_place), pos, last_ray_normal if type_to_place==6 else ""])
+			get_tree().call_group("hotbar_ui", "refresh")
+			_handle_raycast()
+		else:
+			print("[Place] Failed at %s type %s" % [pos, block_type_to_name(type_to_place)])
 
 # Inventory
 
@@ -918,14 +958,15 @@ func _add_to_inventory(block_type: int):
 	print("[Inventory] Full, cannot collect %s" % block_type_to_name(block_type))
 
 func block_type_to_name(t: int) -> String:
-	match t:
-		0: return "Grass"
-		1: return "Sand"
-		2: return "Stone"
-		3: return "Dirt"
-		4: return "Wood"
-		5: return "Leaves"
-		_: return "Unknown"
+		match t:
+			0: return "Grass"
+			1: return "Sand"
+			2: return "Stone"
+			3: return "Dirt"
+			4: return "Wood"
+			5: return "Leaves"
+			6: return "Torch"
+			_: return "Unknown"
 
 func get_selected_block_type():
 	var s = hotbar[selected_slot]
@@ -941,14 +982,15 @@ func _unhandled_input(event):
 			get_tree().call_group("hotbar_ui", "refresh")
 
 func _color_for_type(t: int) -> Color:
-	match t:
-		0: return Color(0.52,0.67,0.40)
-		1: return Color(0.86,0.80,0.62)
-		2: return Color(0.66,0.66,0.63)
-		3: return Color(0.46,0.38,0.30)
-		4: return Color(0.38,0.29,0.21)
-		5: return Color(0.36,0.52,0.30)
-		_: return Color(0.8,0.2,0.8)
+		match t:
+			0: return Color(0.52,0.67,0.40)
+			1: return Color(0.86,0.80,0.62)
+			2: return Color(0.66,0.66,0.63)
+			3: return Color(0.46,0.38,0.30)
+			4: return Color(0.38,0.29,0.21)
+			5: return Color(0.36,0.52,0.30)
+			6: return Color(0.94,0.75,0.28) # Torch
+			_: return Color(0.8,0.2,0.8)
 
 # Removed particles and crack breaking effect - now using expand/contract animation
 
@@ -1021,14 +1063,25 @@ func _update_selection_visuals():
 		if crack_box:
 			crack_box.visible = false
 	
-	# Ghost: translucent preview of actual block type
+	# Ghost: translucent preview of actual block type - torch gets small preview
 	if show_ghost and ghost_block and placement_has:
 		var sel_type = get_selected_block_type()
 		if sel_type == null:
 			ghost_block.visible = false
 		else:
 			ghost_block.visible = true
-			ghost_block.global_position = Vector3(float(placement_block.x)+0.5, float(placement_block.y)+0.5, float(placement_block.z)+0.5)
+			var base_center = Vector3(float(placement_block.x)+0.5, float(placement_block.y)+0.5, float(placement_block.z)+0.5)
+			# offset ghost slightly towards support if torch
+			if sel_type == 6:
+				var support_dir = -last_ray_normal
+				base_center += Vector3(support_dir.x, support_dir.y, support_dir.z) * 0.32
+				if support_dir == Vector3i.DOWN:
+					base_center.y = placement_block.y + 0.15
+				# small torch shape for ghost
+				(ghost_block.mesh as BoxMesh).size = Vector3(0.12, 0.55, 0.12)
+			else:
+				(ghost_block.mesh as BoxMesh).size = Vector3(1.0, 1.0, 1.0)
+			ghost_block.global_position = base_center
 			var gmat = ghost_block.material_override
 			var c = _color_for_type(sel_type)
 			if gmat is StandardMaterial3D:
@@ -1038,4 +1091,5 @@ func _update_selection_visuals():
 					gmat.albedo_color = Color(c.r, c.g, c.b, 0.18)
 	else:
 		if ghost_block:
+			ghost_block.visible = false
 			ghost_block.visible = false

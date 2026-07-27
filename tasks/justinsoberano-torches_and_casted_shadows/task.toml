@@ -1,0 +1,19 @@
+name = "Torches and Casted Shadows"
+instruction = "./instruction.md"
+
+[game]
+# Controlled vocabularies — see the game-level README.md.
+tags = ["sandbox", "building", "exploration"]   # same voxel sandbox; this task is a lighting/render pass (forward_plus + placeable torch lights)
+tech-stack-tags = ["godot", "gdscript"]          # Godot 4.7 + GDScript, renderer switched gl_compatibility -> forward_plus
+assets-used = ["primitives"]                      # all cube/box meshes + shaders, procedural — no imported art
+avocado-model = "avocado-code-latest"
+harness = "Metacode"
+screenshots = [
+  "./screenshots/claude/night_torches.png",
+  "./screenshots/avocado/night_torches.png",
+  "./screenshots/claude/many_torches.png",
+  "./screenshots/avocado/many_torches.png",
+]
+videos = ["https://pxl.cl/bSNr3"]                 # gold-solution gameplay (PixelCloud)
+teaser = "https://pxl.cl/bSNr3"                    # gold-solution highlight (PixelCloud)
+commit-hash = "899f8ff61230d74df6dd49c6e8ff89f1becac8e2"   # Task-002 (day/night) HEAD — the build baseline (on origin/main)

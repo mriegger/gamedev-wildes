@@ -204,7 +204,7 @@ func _apply_initial_light_setup():
 	_find_nodes_if_needed()
 	if sun_light:
 		sun_light.shadow_enabled = true
-		sun_light.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
+		sun_light.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
 		sun_light.directional_shadow_split_1 = 0.15
 		sun_light.directional_shadow_split_2 = 0.35
 		sun_light.directional_shadow_split_3 = 0.70
