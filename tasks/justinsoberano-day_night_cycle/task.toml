@@ -18,5 +18,4 @@ screenshots = [
 ]
 videos = ["https://pxl.cl/bSKRZ"]                 # gold-solution gameplay (PixelCloud)
 teaser = "https://pxl.cl/bSKRZ"                    # gold-solution highlight (PixelCloud)
-commit-hash = "863b15d48d10e60d11937d7ea0db760da15e851e"   # Task-001 (AO & shadows) HEAD — the build baseline (remote unverifiable: origin behind SAML SSO)
-</content>
+commit-hash = "863b15d48d10e60d11937d7ea0db760da15e851e"   # Task-001 (AO & shadows) HEAD — the build baseline

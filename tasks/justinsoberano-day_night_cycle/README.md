@@ -160,4 +160,3 @@ Agent run logs:
 
 - Screenshots: [`./screenshots/`](./screenshots) — `avocado/` and `claude/`, each with `sunrise_sunset.png` (golden hour), `noon.png`, and `midnight.png`. All captured by launching each workspace in Godot 4.7 (`4.7.stable`) on the GL Compatibility renderer via a throwaway autoload harness that set each controller's time and saved the viewport; the harness was not committed. (Claude rendered and inspected its own frames in-trajectory; Avocado never rendered any.)
 - Binaries: none. **Neither agent exported a build in its trajectory** (no `--export` step in either transcript, and no build artifact in either workspace). Run from source — `godot --path src` (or open `src/` in the Godot 4.7 editor and press Play).
-</content>
