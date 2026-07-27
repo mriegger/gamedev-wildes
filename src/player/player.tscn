@@ -1,0 +1,33 @@
+[gd_scene load_steps=5 format=3 uid="uid://p1a2y3r0m0t0r"]
+
+[ext_resource type="Script" path="res://player/player_motor.gd" id="1_motor"]
+[ext_resource type="Script" path="res://player/player_interactor.gd" id="2_interactor"]
+[ext_resource type="Script" path="res://player/targeting_view.gd" id="3_target"]
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_1"]
+radius = 0.3
+height = 1.8
+
+[node name="Player" type="CharacterBody3D" groups=["player"]]
+script = ExtResource("1_motor")
+move_speed = 5.5
+jump_velocity = 9.0
+gravity = 20.0
+player_width = 0.6
+player_height = 1.8
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 100, 10, 100)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("CapsuleShape3D_1")
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+
+[node name="ModelRoot" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+
+[node name="Interactor" type="Node3D" parent="." groups=["player_interactor"]]
+script = ExtResource("2_interactor")
+reach = 6.0
+mine_hold_time = 0.35
+place_cooldown = 0.18
+
+[node name="TargetingView" type="Node3D" parent="."]
+script = ExtResource("3_target")

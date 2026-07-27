@@ -1,0 +1,14 @@
+[gd_scene load_steps=2 format=3 uid="uid://d3bugc10ckp4n3l"]
+
+[ext_resource type="Script" path="res://environment/debug_clock_panel.gd" id="1_panel"]
+
+[node name="DebugClockPanel" type="CanvasLayer"]
+script = ExtResource("1_panel")
+layer = 20
+visible = false
+
+# UI is built programmatically in _build_ui() to match old DayNightCycle debug panel
+# This scene can be instanced as child of GameClock or DayNightValues or Game root
+# Toggle visibility with "=" key
+# Optional nodes (if you want to design in editor, they will be found):
+# - Panel containing VBox with Labels, HSlider, Buttons

@@ -1,0 +1,337 @@
+extends Node3D
+class_name PlayerInteractor
+
+## PlayerInteractor - targeting, mining, placement, typed DI, one setup pass, no wrappers
+
+@export var reach: float = 6.0
+@export var mine_hold_time: float = 0.35
+@export var place_cooldown: float = 0.18
+
+var world: WorldController = null
+var voxel_world: VoxelWorld = null
+var camera: Camera3D = null
+var camera_rig: CameraRig = null
+var motor: PlayerMotor = null
+var inventory_model: InventoryModel = null
+
+var target_block: Vector3i = Vector3i(-999, -999, -999)
+var target_has: bool = false
+var placement_block: Vector3i = Vector3i(-999, -999, -999)
+var placement_has: bool = false
+var last_ray_normal: Vector3i = Vector3i.UP
+var can_mine_target: bool = false
+var can_place_target: bool = false
+
+var is_mining: bool = false
+var mine_timer: float = 0.0
+var mine_target: Vector3i = Vector3i(-999, -999, -999)
+var mine_target_rev: int = -1
+var place_timer: float = 0.0
+
+
+func setup(p_voxel_world: VoxelWorld, p_camera: Camera3D, p_camera_rig: CameraRig, p_motor: PlayerMotor, p_inventory: InventoryModel):
+	voxel_world = p_voxel_world
+	camera = p_camera
+	camera_rig = p_camera_rig
+	motor = p_motor
+	inventory_model = p_inventory
+	if p_motor and p_motor is PlayerMotor:
+		world = p_motor.world as WorldController
+	print("[PlayerInteractor] Ready model=%s cam=%s motor=%s inv=%s" % [voxel_world != null, camera != null, motor != null, inventory_model != null])
+
+
+func _ready():
+	# Injection happens via setup() after world ready, so _ready does not require model
+	if voxel_world == null:
+		print("[PlayerInteractor] _ready waiting for setup()")
+
+func _physics_process(delta):
+	if voxel_world == null or motor == null or camera == null or inventory_model == null:
+		return
+	_handle_raycast()
+	_handle_mining_placing(delta)
+
+func _handle_raycast():
+	target_has = false
+	placement_has = false
+	can_mine_target = false
+	can_place_target = false
+
+	var mouse_pos = get_viewport().get_mouse_position()
+	var ray_origin = camera.project_ray_origin(mouse_pos)
+	var ray_dir = camera.project_ray_normal(mouse_pos)
+
+	var vres = _voxel_raycast(ray_origin, ray_dir, 120.0)
+	if vres == null:
+		return
+
+	var best_hit = vres["hit_pos"] as Vector3i
+	var best_place = vres["place_pos"] as Vector3i
+	var best_normal = vres["face_normal"] as Vector3i
+
+	target_block = best_hit
+	target_has = true
+	last_ray_normal = best_normal
+	placement_block = best_place
+
+	var motor_pos = motor.global_position
+	var d_hit = motor_pos.distance_to(Vector3(best_hit.x + 0.5, best_hit.y + 0.5, best_hit.z + 0.5))
+	can_mine_target = d_hit <= reach
+
+	if voxel_world.get_block_at(best_place) == null:
+		if not _placement_collides_player(best_place):
+			placement_has = true
+			can_place_target = motor_pos.distance_to(Vector3(best_place.x + 0.5, best_place.y + 0.5, best_place.z + 0.5)) <= reach
+	else:
+		placement_has = false
+		can_place_target = false
+
+func _voxel_raycast(origin: Vector3, dir: Vector3, max_dist: float):
+	dir = dir.normalized()
+	if dir.length_squared() < 0.0001:
+		return null
+	var current = Vector3i(floor(origin.x), floor(origin.y), floor(origin.z))
+
+	if voxel_world.is_raycast_solid(current):
+		origin = origin + dir * 0.6
+		current = Vector3i(floor(origin.x), floor(origin.y), floor(origin.z))
+
+	var step_x = 1 if dir.x >= 0 else -1
+	var step_y = 1 if dir.y >= 0 else -1
+	var step_z = 1 if dir.z >= 0 else -1
+
+	var t_max_x: float
+	var t_max_y: float
+	var t_max_z: float
+	var t_delta_x: float
+	var t_delta_y: float
+	var t_delta_z: float
+
+	var frac_x = origin.x - floor(origin.x)
+	var frac_y = origin.y - floor(origin.y)
+	var frac_z = origin.z - floor(origin.z)
+
+	if dir.x != 0:
+		t_delta_x = abs(1.0 / dir.x)
+		t_max_x = (1.0 - frac_x) * t_delta_x if step_x > 0 else frac_x * t_delta_x
+	else:
+		t_max_x = 999999.0
+		t_delta_x = 999999.0
+
+	if dir.y != 0:
+		t_delta_y = abs(1.0 / dir.y)
+		t_max_y = (1.0 - frac_y) * t_delta_y if step_y > 0 else frac_y * t_delta_y
+	else:
+		t_max_y = 999999.0
+		t_delta_y = 999999.0
+
+	if dir.z != 0:
+		t_delta_z = abs(1.0 / dir.z)
+		t_max_z = (1.0 - frac_z) * t_delta_z if step_z > 0 else frac_z * t_delta_z
+	else:
+		t_max_z = 999999.0
+		t_delta_z = 999999.0
+
+	var traveled = 0.0
+	var last_pos = current
+
+	for _i in range(int(max_dist * 3 + 10)):
+		if voxel_world.is_raycast_solid(current):
+			var face_normal: Vector3i
+			if last_pos.x != current.x:
+				face_normal = Vector3i(-step_x, 0, 0)
+			elif last_pos.y != current.y:
+				face_normal = Vector3i(0, -step_y, 0)
+			else:
+				face_normal = Vector3i(0, 0, -step_z)
+			var place_pos = last_pos
+			if voxel_world.is_raycast_solid(place_pos):
+				place_pos = current + face_normal
+			return {"hit_pos": current, "place_pos": place_pos, "face_normal": face_normal}
+
+		if t_max_x < t_max_y:
+			if t_max_x < t_max_z:
+				last_pos = current
+				current.x += step_x
+				traveled = t_max_x
+				t_max_x += t_delta_x
+			else:
+				last_pos = current
+				current.z += step_z
+				traveled = t_max_z
+				t_max_z += t_delta_z
+		else:
+			if t_max_y < t_max_z:
+				last_pos = current
+				current.y += step_y
+				traveled = t_max_y
+				t_max_y += t_delta_y
+			else:
+				last_pos = current
+				current.z += step_z
+				traveled = t_max_z
+				t_max_z += t_delta_z
+
+		if traveled > max_dist:
+			break
+	return null
+
+func _placement_collides_player(p: Vector3i) -> bool:
+	if motor == null:
+		return false
+	var pw = motor.player_width
+	var ph = motor.player_height
+	var min_a = Vector3(motor.global_position.x - pw * 0.5, motor.global_position.y, motor.global_position.z - pw * 0.5)
+	var max_a = Vector3(motor.global_position.x + pw * 0.5, motor.global_position.y + ph, motor.global_position.z + pw * 0.5)
+	var bmin = Vector3(float(p.x), float(p.y), float(p.z))
+	var bmax = bmin + Vector3(1, 1, 1)
+	if max_a.x <= bmin.x or min_a.x >= bmax.x:
+		return false
+	if max_a.y <= bmin.y or min_a.y >= bmax.y:
+		return false
+	if max_a.z <= bmin.z or min_a.z >= bmax.z:
+		return false
+	return true
+
+func _handle_mining_placing(delta):
+	place_timer -= delta
+	var left_pressed = Input.is_action_pressed("mine") or Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
+	if left_pressed and target_has and can_mine_target:
+		if not is_mining:
+			mine_target = target_block
+			mine_target_rev = voxel_world.get_revision(mine_target)
+			mine_timer = 0.0
+			is_mining = true
+		else:
+			if mine_target != target_block:
+				mine_target = target_block
+				mine_target_rev = voxel_world.get_revision(mine_target)
+				mine_timer = 0.0
+			else:
+				var cur_rev = voxel_world.get_revision(mine_target)
+				if cur_rev != mine_target_rev:
+					is_mining = false
+					mine_timer = 0.0
+					mine_target = Vector3i(-999, -999, -999)
+					mine_target_rev = -1
+				else:
+					mine_timer += delta
+					if mine_timer >= mine_hold_time:
+						_commit_mine(mine_target)
+						mine_timer = 0.0
+						is_mining = false
+						mine_target = Vector3i(-999, -999, -999)
+						mine_target_rev = -1
+	else:
+		if is_mining:
+			is_mining = false
+			mine_timer = 0.0
+			mine_target = Vector3i(-999, -999, -999)
+			mine_target_rev = -1
+
+	if Input.is_action_just_pressed("place") or Input.is_action_just_pressed("place_click") or (Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT) and place_timer <= 0.0):
+		if placement_has and can_place_target and _can_place():
+			_commit_place(placement_block)
+			place_timer = place_cooldown
+
+func _can_place() -> bool:
+	if not placement_has or not can_place_target:
+		return false
+	if inventory_model == null:
+		return false
+	return inventory_model.can_consume_selected()
+
+func _commit_mine(pos: Vector3i):
+	if voxel_world == null or inventory_model == null:
+		return
+	if mine_target_rev != -1:
+		var cur = voxel_world.get_revision(pos)
+		if cur != mine_target_rev:
+			mine_target = Vector3i(-999, -999, -999)
+			mine_timer = 0.0
+			is_mining = false
+			mine_target_rev = -1
+			return
+
+	# Pre-collect batch to guarantee atomic capacity (two types can share same empty slot check via batch)
+	var preview_id = voxel_world.get_block_id_at(pos)
+	if preview_id == BlockId.Type.AIR:
+		return
+
+	var ids_to_collect: Array[int] = [preview_id]
+	for torch_pos in voxel_world.torch_attachments.keys():
+		var attach = voxel_world.torch_attachments[torch_pos] as Vector3i
+		if torch_pos + attach == pos:
+			var tid = voxel_world.get_block_id_at(torch_pos)
+			if tid != BlockId.Type.AIR:
+				ids_to_collect.append(tid)
+
+	if not inventory_model.can_add_batch(ids_to_collect):
+		print("[Inventory] Full, cannot collect batch at %s" % pos)
+		return
+
+	var batch = voxel_world.try_mine_block(pos) # Array[BlockEdit]
+	if batch is Array and batch.size() > 0 and batch[0] is BlockEdit:
+		if not (batch[0] as BlockEdit).is_success():
+			return
+		var collected_ids: Array[int] = []
+		for edit in batch:
+			var be = edit as BlockEdit
+			if be.is_success() and be.is_mine():
+				collected_ids.append(be.old_id)
+				print("[Mine] %s rev %s at %s" % [BlockId.get_display_name(be.old_id as BlockId.Type), be.revision, be.pos])
+		# Atomic batch insertion so every removed block is collected
+		inventory_model.add_batch(collected_ids)
+	# batch handles presentation via block_edit_committed listener in WorldController
+	mine_target = Vector3i(-999, -999, -999)
+	mine_timer = 0.0
+	is_mining = false
+	mine_target_rev = -1
+	_handle_raycast()
+
+func _commit_place(pos: Vector3i):
+	if voxel_world == null or inventory_model == null:
+		return
+	if voxel_world.is_world_edge(pos):
+		return
+
+	var sel_data = inventory_model.get_selected_data()
+	if sel_data == null:
+		return
+	var type_to_place = sel_data["type"]
+
+	var attach_dir = -last_ray_normal if type_to_place == BlockId.Type.TORCH else Vector3i.ZERO
+	var edit: BlockEdit = voxel_world.try_place_block(pos, type_to_place, attach_dir)
+
+	if edit.is_success():
+		inventory_model.consume_selected(1)
+		print("[Place] %s at %s attach %s" % [BlockId.get_display_name(type_to_place as BlockId.Type), pos, attach_dir])
+		_handle_raycast()
+	else:
+		print("[Place] Failed at %s type %s reason %s" % [pos, BlockId.get_display_name(type_to_place as BlockId.Type), edit.get_result_message()])
+
+func get_selected_block_type():
+	if inventory_model == null:
+		return null
+	return inventory_model.get_selected_block_type()
+
+func _unhandled_input(event):
+	if event is InputEventKey and event.pressed:
+		if event.keycode >= KEY_1 and event.keycode <= KEY_9:
+			var idx = event.keycode - KEY_1
+			if inventory_model:
+				inventory_model.select_slot(idx)
+
+func get_target_state() -> Dictionary:
+	return {
+		"has_target": target_has,
+		"target_block": target_block,
+		"can_mine": can_mine_target,
+		"has_placement": placement_has,
+		"placement_block": placement_block,
+		"can_place": can_place_target,
+		"ray_normal": last_ray_normal,
+		"is_mining": is_mining,
+		"mine_timer": mine_timer,
+		"mine_progress": clamp(mine_timer / mine_hold_time, 0.0, 1.0) if mine_hold_time > 0 else 0.0,
+	}

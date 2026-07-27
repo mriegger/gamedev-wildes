@@ -22,20 +22,34 @@ This repo follows the ADO **GameDev track** task structure: one repo per game
 
 ```text
 gamedev-wildes/
-├── src/                  Gold game source — the single, shared, buildable Godot 4.7
-│                         project (scripts, scenes, shaders, project.godot).
-├── tasks/                One folder per task.
-│   └── justinsoberano-scaffolding_game/
-│       ├── instruction.md    The task prompt used to reproduce this task's feature.
-│       ├── task.toml         Task metadata.
-│       ├── screenshots/      Captured game states (avocado/ and claude/).
-│       └── README.md         Task description + Avocado vs Claude comparison + trajectories.
-└── README.md             This file — the game-level overview.
+├── src/                     Gold game source — the single, shared, buildable Godot 4.7
+│   │                        project, organized by feature. Entry scene: game/game.tscn.
+│   ├── game/                Root scene + top-level system wiring (game.tscn, game.gd).
+│   ├── world/               Voxel world — generation/, model/ (voxel data + edits),
+│   │                        rendering/ (chunk mesher, chunk + torch render systems).
+│   ├── blocks/              Data-driven block catalog (block ids, definitions, catalog).
+│   ├── player/              Player motor, interactor, camera rig, and targeting.
+│   ├── environment/         Day/night cycle — game clock, profile/values, debug clock panel.
+│   ├── inventory/           Inventory model.
+│   ├── ui/                  HUD + hotbar (and hotbar slots).
+│   ├── shaders/             terrain, water, ghost, selection, cracks, blob-shadow.
+│   ├── tests/               Test scaffold.
+│   └── project.godot        Godot project settings.
+├── tasks/                   One folder per task (see the Tasks table). Each contains:
+│   └── justinsoberano-scaffolding_game/    (example)
+│       ├── instruction.md   The task prompt used to reproduce this task's feature.
+│       ├── task.toml        Task metadata.
+│       ├── screenshots/     Captured game states (avocado/ and claude/).
+│       └── README.md        Task description + Avocado vs Claude comparison + trajectories.
+└── README.md                This file — the game-level overview.
 ```
 
 Notes:
 
 - **`src/`** holds the complete, buildable gold game — tasks reference it, they do not copy it.
+  It is organized into feature modules (`game`, `world`, `blocks`, `player`, `environment`,
+  `inventory`, `ui`, `shaders`) whose systems are wired together via dependency injection from
+  the root `game/game.tscn` scene.
 - **Videos** are not stored in the repo; they are uploaded to **PixelCloud** and referenced
   from each task's `task.toml` and README.
 

@@ -1,0 +1,6 @@
+[gd_resource type="Resource" script_class="DayNightProfile" load_steps=2 format=3 uid="uid://d4ypr0f1l3x9z"]
+
+[ext_resource type="Script" path="res://environment/day_night_profile.gd" id="1_profile"]
+
+[resource]
+script = ExtResource("1_profile")

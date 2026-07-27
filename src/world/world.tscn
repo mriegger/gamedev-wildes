@@ -1,0 +1,16 @@
+[gd_scene load_steps=3 format=3 uid="uid://c9w0rld0x2m4p"]
+
+[ext_resource type="Script" path="res://world/world_controller.gd" id="1_world"]
+[ext_resource type="Resource" path="res://world/generation/world_config.tres" id="2_config"]
+
+[node name="World" type="Node3D"]
+script = ExtResource("1_world")
+config = ExtResource("2_config")
+
+[node name="Chunks" type="Node3D" parent="."]
+
+[node name="Water" type="Node3D" parent="."]
+
+[node name="SpecialBlocks" type="Node3D" parent="."]
+
+[node name="TorchContainer" type="Node3D" parent="SpecialBlocks"]
