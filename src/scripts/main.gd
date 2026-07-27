@@ -10,3 +10,4 @@ func _ready():
 	print("  Mouse Left Hold - mine reachable block (one block per commit)")
 	print("  Mouse Right Click - place from hotbar (one per commit)")
 	print("  1..9 - select hotbar slot")
+	print("  = - debug day/night time slider")

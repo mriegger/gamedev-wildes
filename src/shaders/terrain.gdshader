@@ -13,21 +13,20 @@ void vertex() {
 }
 
 void fragment() {
-    // Deeper look: directional, but wrap prevents pure black away sides
-    // AO and soft drop-shadows are baked into COLOR.rgb (0.58..1.0)
+    // AO and drop-shadows baked into COLOR.rgb (0.58..1.0)
+    // FIX blown out: was *1.22 + 0.72-1.0 top -> white clamp washed. Now 0.88 * 0.60-0.85 keeps saturation.
     float top = clamp(v_world_normal.y, 0.0, 1.0);
-    float crisp_shade = mix(0.72, 1.0, top); // deeper: 0.72 side, 1.0 top
-
-    vec3 base = COLOR.rgb * 1.22;
+    float crisp_shade = mix(0.60, 0.85, top);
+    vec3 base = COLOR.rgb * 0.88;
     base = clamp(base, vec3(0.0), vec3(1.0));
     vec3 albedo = base * crisp_shade;
 
-    // border haze
+    // border haze - reduced from 0.38 to avoid washout at edges
     vec2 center = vec2(world_size * 0.5);
     float dist_center = length(v_world_pos.xz - center);
     float half = world_size * 0.5;
     float h = smoothstep(half * 0.92, half * 1.08, dist_center);
-    albedo = mix(albedo, haze_color, h * 0.38);
+    albedo = mix(albedo, haze_color, h * 0.18);
 
     ALBEDO = albedo;
     ROUGHNESS = 0.96;
