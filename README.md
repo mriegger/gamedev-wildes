@@ -10,6 +10,9 @@ camera — mining terrain and building freely from six collectible block types (
 stone, sand, wood, leaves). The core loop is explore → mine → build: hold left-mouse to mine
 the targeted block (per-block hold time + pulse feedback), right-mouse to place from a
 nine-slot hotbar, with a 6-block reach, yellow reach outlines, and a ghost placement preview.
+Successive tasks layer real-time lighting onto that base: baked ambient occlusion and soft cast
+shadows, a continuous day/night cycle with a moving sun/moon, and placeable walk-through torches
+that cast their own light and shadows on the **forward_plus** renderer.
 
 This repo follows the ADO **GameDev track** task structure: one repo per game
 (`gamedev-{game-name}`), a single shared gold source in `src/`, and one folder per task under
@@ -85,6 +88,12 @@ godot --path src
   zoom, smooth follow.
 - Mining & building: 6-block reach, per-block mining hold times, reach outline, ghost preview,
   and a nine-slot hotbar (keys 1–9) with counts.
+- Real-time lighting: baked per-vertex ambient occlusion and soft cast shadows on terrain,
+  trees, the explorer, and placed blocks.
+- A repeating ~20-minute day/night cycle (10 min day / 10 min night) with a moving sun and moon,
+  real-time directional shadows, and a cool, playable night.
+- Placeable, walk-through **torches** that light a 9-block radius and cast soft shadows, on the
+  **forward_plus** renderer with saturation/contrast color-grading.
 
 ## Gold Version
 
@@ -97,3 +106,5 @@ godot --path src
 | --- | --- | --- |
 | [justinsoberano-scaffolding_game](./tasks/justinsoberano-scaffolding_game/) | Scaffold the Wildes isometric voxel sandbox (world gen, camera, player, mining/placing, hotbar) | 2026-07-21 |
 | [justinsoberano-ao_and_shadows](./tasks/justinsoberano-ao_and_shadows/) | Add real-time ambient occlusion + soft cast shadows (baked voxel AO, sun shadows) in the Compatibility renderer | 2026-07-22 |
+| [justinsoberano-day_night_cycle](./tasks/justinsoberano-day_night_cycle/) | Add a repeating ~20-min day/night cycle (10 min day / 10 min night) with a moving sun/moon and real-time directional shadows on the player and blocks; nights stay playable | 2026-07-27 |
+| [justinsoberano-torches_and_casted_shadows](./tasks/justinsoberano-torches_and_casted_shadows/) | Switch the renderer to forward_plus with color-grade compensation and add walk-through torch light-blocks that light a 9-block radius and cast soft shadows | 2026-07-27 |
