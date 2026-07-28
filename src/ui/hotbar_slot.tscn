@@ -1,9 +1,11 @@
-[gd_scene load_steps=2 format=3 uid="uid://h0tb4rsl0t1c0n"]
+[gd_scene load_steps=3 format=3 uid="uid://h0tb4rsl0t1c0n"]
 
 [ext_resource type="Script" path="res://ui/hotbar_slot.gd" id="1_slot"]
+[ext_resource type="Material" path="res://shaders/frosted_button_material.tres" id="2_blur"]
 
 [node name="HotbarSlot" type="Panel"]
 custom_minimum_size = Vector2(64, 64)
+material = ExtResource("2_blur")
 script = ExtResource("1_slot")
 
 [node name="Color" type="ColorRect" parent="."]

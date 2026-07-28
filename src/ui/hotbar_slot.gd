@@ -65,24 +65,24 @@ func _ensure_styles():
 		_normal_style = cur.duplicate() as StyleBoxFlat
 	else:
 		_normal_style = StyleBoxFlat.new()
-		_normal_style.bg_color = Color(0.12, 0.12, 0.14, 0.75)
-		_normal_style.corner_radius_top_left = 6
-		_normal_style.corner_radius_top_right = 6
-		_normal_style.corner_radius_bottom_left = 6
-		_normal_style.corner_radius_bottom_right = 6
-		_normal_style.border_width_left = 2
-		_normal_style.border_width_right = 2
-		_normal_style.border_width_top = 2
-		_normal_style.border_width_bottom = 2
-		_normal_style.border_color = Color(0.3, 0.3, 0.33, 0.9)
+		_normal_style.bg_color = Color(0.14, 0.16, 0.18, 0.38)
+		_normal_style.corner_radius_top_left = 8
+		_normal_style.corner_radius_top_right = 8
+		_normal_style.corner_radius_bottom_left = 8
+		_normal_style.corner_radius_bottom_right = 8
+		_normal_style.border_width_left = 1
+		_normal_style.border_width_right = 1
+		_normal_style.border_width_top = 1
+		_normal_style.border_width_bottom = 1
+		_normal_style.border_color = Color(1, 1, 1, 0.18)
 
 	_selected_style = _normal_style.duplicate() as StyleBoxFlat
-	_selected_style.border_color = Color(1, 1, 0.55, 1.0)
-	_selected_style.bg_color = Color(0.22, 0.22, 0.18, 0.9)
-	_selected_style.border_width_left = 3
-	_selected_style.border_width_right = 3
-	_selected_style.border_width_top = 3
-	_selected_style.border_width_bottom = 3
+	_selected_style.border_color = Color(1, 1, 0.55, 0.85)
+	_selected_style.bg_color = Color(0.20, 0.20, 0.16, 0.48)
+	_selected_style.border_width_left = 2
+	_selected_style.border_width_right = 2
+	_selected_style.border_width_top = 2
+	_selected_style.border_width_bottom = 2
 
 	if not has_theme_stylebox_override("panel"):
 		add_theme_stylebox_override("panel", _normal_style)

@@ -1,0 +1,44 @@
+[gd_scene load_steps=3 format=3 uid="uid://bwildesbtn01"]
+
+[ext_resource type="Script" path="res://ui/main_menu/wildes_button.gd" id="1_script"]
+[ext_resource type="Material" path="res://shaders/frosted_button_material.tres" id="2_mat"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_frosted_bg"]
+bg_color = Color(0.20, 0.22, 0.24, 0.38)
+corner_radius_top_left = 14
+corner_radius_top_right = 14
+corner_radius_bottom_left = 14
+corner_radius_bottom_right = 14
+border_width_left = 0
+border_width_right = 0
+border_width_top = 0
+border_width_bottom = 0
+
+[node name="WildesButton" type="Control"]
+custom_minimum_size = Vector2(333, 93)
+size_flags_horizontal = 0
+size_flags_vertical = 0
+focus_mode = 2
+script = ExtResource("1_script")
+button_text = "PLAY"
+
+[node name="FrostedGlass" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+material = ExtResource("2_mat")
+theme_override_styles/panel = SubResource("StyleBoxFlat_frosted_bg")
+
+[node name="Button" type="Button" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+text = "PLAY"
+alignment = 1

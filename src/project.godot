@@ -15,7 +15,7 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 [application]
 
 config/name="Wildes"
-run/main_scene="res://game/game.tscn"
+run/main_scene="res://ui/main_menu/main_menu.tscn"
 config/features=PackedStringArray("4.7")
 boot_splash/bg_color=Color(0.27451, 0.560784, 0.486275, 1)
 config/icon="res://icon.svg"
@@ -31,6 +31,10 @@ window/stretch/mode="canvas_items"
 [environment]
 
 defaults/default_clear_color=Color(0.627451, 0.819608, 0.921569, 1)
+
+[gui]
+
+theme/custom="res://ui/theme/wildes_theme.tres"
 
 [input]
 

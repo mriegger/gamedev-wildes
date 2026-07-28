@@ -1,0 +1,207 @@
+[gd_scene load_steps=5 format=3 uid="uid://saveslot_scn"]
+
+[ext_resource type="Script" path="res://ui/main_menu/save_slot_screen.gd" id="1_script"]
+[ext_resource type="PackedScene" path="res://ui/main_menu/wildes_button.tscn" id="2_btn"]
+[ext_resource type="Material" path="res://shaders/frosted_panel_material.tres" id="3_mat"]
+[ext_resource type="PackedScene" path="res://ui/main_menu/delete_hold_screen.tscn" id="4_del"]
+
+[node name="SaveSlotScreen" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_script")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.11, 0.13, 0.16, 1)
+
+[node name="DimOverlay" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0, 0, 0, 0.22)
+
+[node name="TopBar" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+grow_horizontal = 2
+custom_minimum_size = Vector2(0, 52)
+
+[node name="BackButton" parent="TopBar" instance=ExtResource("2_btn")]
+layout_mode = 1
+anchors_preset = 0
+offset_left = 16.0
+offset_top = 10.0
+offset_right = 126.0
+offset_bottom = 44.0
+custom_minimum_size = Vector2(110, 34)
+button_text = "< BACK"
+
+[node name="CenterContainer" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+offset_top = 52.0
+
+[node name="Panel" type="Panel" parent="CenterContainer"]
+custom_minimum_size = Vector2(480, 540)
+layout_mode = 2
+size_flags_horizontal = 0
+size_flags_vertical = 0
+mouse_filter = 2
+material = ExtResource("3_mat")
+
+[node name="VBox" type="VBoxContainer" parent="CenterContainer/Panel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+alignment = 1
+theme_override_constants/separation = 16
+offset_left = 22.0
+offset_top = 20.0
+offset_right = -22.0
+offset_bottom = -20.0
+
+[node name="Title" type="Label" parent="CenterContainer/Panel/VBox"]
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+size_flags_vertical = 0
+text = "SELECT WORLD"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 28
+theme_override_colors/font_color = Color(0.96, 0.95, 0.9, 1)
+
+[node name="SlotsContainer" type="VBoxContainer" parent="CenterContainer/Panel/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 14
+
+[node name="CreateDialog" type="Control" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+
+[node name="BackgroundDim" type="ColorRect" parent="CreateDialog"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+color = Color(0, 0, 0, 0.6)
+
+[node name="CenterContainer" type="CenterContainer" parent="CreateDialog"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Panel" type="Panel" parent="CreateDialog/CenterContainer"]
+custom_minimum_size = Vector2(440, 300)
+layout_mode = 2
+size_flags_horizontal = 0
+size_flags_vertical = 0
+material = ExtResource("3_mat")
+
+[node name="VBox" type="VBoxContainer" parent="CreateDialog/CenterContainer/Panel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+offset_left = 20.0
+offset_top = 20.0
+offset_right = -20.0
+offset_bottom = -20.0
+theme_override_constants/separation = 14
+
+[node name="Title" type="Label" parent="CreateDialog/CenterContainer/Panel/VBox"]
+layout_mode = 2
+text = "Create New World"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 20
+theme_override_colors/font_color = Color(0.96, 0.95, 0.9, 1)
+
+[node name="NameEdit" type="LineEdit" parent="CreateDialog/CenterContainer/Panel/VBox"]
+custom_minimum_size = Vector2(0, 38)
+layout_mode = 2
+placeholder_text = "World Name"
+theme_override_font_sizes/font_size = 14
+
+[node name="HBoxSeed" type="HBoxContainer" parent="CreateDialog/CenterContainer/Panel/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="SeedLabel" type="Label" parent="CreateDialog/CenterContainer/Panel/VBox/HBoxSeed"]
+custom_minimum_size = Vector2(50, 0)
+layout_mode = 2
+text = "Seed:"
+theme_override_font_sizes/font_size = 13
+theme_override_colors/font_color = Color(0.85, 0.85, 0.82, 1)
+
+[node name="SeedEdit" type="LineEdit" parent="CreateDialog/CenterContainer/Panel/VBox/HBoxSeed"]
+custom_minimum_size = Vector2(180, 34)
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Leave empty for random"
+theme_override_font_sizes/font_size = 13
+
+[node name="RandomizeButton" parent="CreateDialog/CenterContainer/Panel/VBox/HBoxSeed" instance=ExtResource("2_btn")]
+custom_minimum_size = Vector2(140, 36)
+layout_mode = 2
+button_text = "Randomize"
+
+[node name="HBoxActions" type="HBoxContainer" parent="CreateDialog/CenterContainer/Panel/VBox"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 16
+
+[node name="CancelButton" parent="CreateDialog/CenterContainer/Panel/VBox/HBoxActions" instance=ExtResource("2_btn")]
+custom_minimum_size = Vector2(110, 40)
+layout_mode = 2
+button_text = "Cancel"
+
+[node name="ConfirmButton" parent="CreateDialog/CenterContainer/Panel/VBox/HBoxActions" instance=ExtResource("2_btn")]
+custom_minimum_size = Vector2(170, 44)
+layout_mode = 2
+button_text = "CREATE"
+
+[node name="DeleteHoldScreen" parent="." instance=ExtResource("4_del")]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+visible = false
