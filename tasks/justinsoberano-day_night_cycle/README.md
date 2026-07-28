@@ -3,8 +3,8 @@
 <!-- Task overview. See instruction.md for the full spec. -->
 
 This task adds a **repeating ~20-minute day/night cycle** — **10 minutes of daylight, 10
-minutes of night** — to the Wildes voxel sandbox, on top of the Task-001 foundation (which
-already provides the baked ambient occlusion and soft shadows). Sun and moon lighting, sky,
+minutes of night** — to the Wildes voxel sandbox, on top of the existing Wildes source (which
+already provides baked ambient occlusion and soft shadows). Sun and moon lighting, sky,
 ambient color, brightness, and **real-time directional shadow direction** must move
 continuously through **sunrise (6–8 AM), daytime (8 AM–5 PM), sundown (5–7 PM), and night
 (7 PM–6 AM)**. Shadows are cast by the **sun and the moon**, must be **soft and smooth with no
@@ -18,41 +18,39 @@ time-of-day slider. **"Done"** = the game runs with no errors or warnings and th
 reads correctly through the whole cycle.
 
 Two agents implemented the same `instruction.md` independently — **Avocado (Muse Spark)** and
-**Claude Opus 4.8** — each starting from the **Task-001 source** (AO + soft shadows already in
+**Claude Opus 4.8** — each starting from the **existing Wildes source** (AO + soft shadows already in
 place), and this task compares them (see _Trajectories_ below). This comparison is drawn from
 the two run transcripts, the two working source trees, and the [`./screenshots/`](./screenshots)
 I captured by launching **both** projects in Godot 4.7 (`4.7.stable`) on the GL Compatibility
 renderer and rendering matched frames at the golden hour (a low-sun sunrise/sundown frame),
 noon, and midnight via each controller's time API. (The author's golden day/night reference
 solution exists as a paste and a gameplay video — see below — but is intentionally **not** used
-as a comparison baseline; the shared gold `src/` committed in the repo is still the Task-001
-source, so the head-to-head is strictly Avocado vs Claude.)
+as a comparison baseline; the shared gold `src/` committed in the repo is still the
+baseline Wildes source, so the head-to-head is strictly Avocado vs Claude.)
 
 Both delivered a working day/night cycle on the same 24-hour float clock, both matched the
 spec's schedule exactly, both keep the AO and gameplay untouched, both give night a **cool blue
 low light** (not black), both drive **smoothstep-interpolated keyframe color tables** that wrap
 `0 == 24` (no seam), both **start a new world at sunrise** and advance the clock **only during
 active play**, and both add a code-built **debug panel toggled with the raw `=` keycode**
-carrying an `HSlider`. Both run Godot 4.7 and finish with no errors or warnings. But this time
+carrying an `HSlider`. Both run Godot 4.7 and finish with no errors or warnings. But
 the two **diverge sharply on approach** — Avocado adds a second `Moon` light and toggles which
 of two lights casts; Claude reuses a **single key light** as sun-by-day / moon-by-night so a
-second shadow can never exist — and, once again, on **whether the agent looked at the rendered
+second shadow can never exist — and on **whether the agent looked at the rendered
 result**: Claude rendered the whole cycle and tuned it against pixels; Avocado ran only
 headless and shipped a blown-out noon.
 
 ## Observations
 
-### The headline change from the previous task
+### Where the two agents diverge
 
-For the first two tasks the story was convergence — both agents landing on nearly the same
-architecture. This task **breaks that pattern**: given the same Task-001 base, the two now
-pick **materially different shadow architectures**. Avocado adds a **second `Moon`
+The two agents pick **materially different shadow architectures**. Avocado adds a **second `Moon`
 `DirectionalLight3D`** and flips `shadow_enabled` between the two lights each frame; Claude uses
 **one key light** that becomes the sun by day and the moon by night, so there is only ever a
 single caster and **double shadows are structurally impossible**. Claude also turns on **real
 cast shadows for the player and blocks** (`cast_shadow = ON`), so the player's own shadow
-rotates with the light through the day. What still separates the results, for the third task
-running, is the render-path check: Claude **rendered the cycle and looked at it**, catching and
+rotates with the light through the day. What separates the results is the render-path check:
+Claude **rendered the cycle and looked at it**, catching and
 fixing its own overexposed noon; Avocado **never rendered a pixel** and shipped a near-total
 white-out at noon where colour *and* shadows vanish.
 
@@ -68,7 +66,7 @@ white-out at noon where colour *and* shadows vanish.
 
 ### Implementation & architecture (from the source + transcripts)
 
-Both inherit the Task-001 foundation (baked AO, lit terrain that receives shadows) **unchanged**
+Both inherit the existing foundation (baked AO, lit terrain that receives shadows) **unchanged**
 and add a single day/night controller node. From there they diverge on the **shadow
 architecture, the pacing, and — decisively — whether noon was tuned against a rendered frame**.
 
@@ -86,7 +84,7 @@ architecture, the pacing, and — decisively — whether noon was tuned against 
 | Debug panel (`=`) | Inline `_build_debug_panel` (`CanvasLayer` `layer 128`); `HSlider` 0–24 step 0.02, live `HH:MM AM/PM — Phase` label, "Freeze time" checkbox; toggle via `_unhandled_input` `KEY_EQUAL` (raw keycode); `set_debug_time` freezes + applies immediately | Inline `_create_debug_ui` (`CanvasLayer` `layer 100`), `Panel` 380×260; `HSlider` 0–24 **plus** an "Auto Advance" checkbox, a "Reset to Sunrise" button, and sun-degrees/cycle-seconds readouts; toggle via `_input` `KEY_EQUAL`/`KEY_PLUS` |
 | Minor issues | `project.godot` editor re-save dropped the pinned shadow-map size (`4096`) and `config/name` — reverts to Godot defaults (harmless, but no longer pinned) | `main.tscn` `load_steps` left at `6` despite an added `ext_resource` (harmless latent inconsistency; Godot tolerates it) |
 
-The Task-001 paradox recurs on process, but the architecture flips: this time **Claude wrote
+On process and architecture the split is clear: **Claude wrote
 less code (328 vs 549 lines)** with the cleaner design — one light that can never double-shadow,
 real rotating player/block shadows, exact pacing — **and rendered, inspected, and re-tuned** it.
 Avocado wrote **more** code with a two-light toggle and a richer debug panel, and verified
@@ -126,7 +124,7 @@ hazards it had enumerated but never saw.
 
 ### Bottom line
 
-Given the same Task-001 base, both agents produced a working ~20-minute day/night cycle on a
+Starting from the same base, both agents produced a working ~20-minute day/night cycle on a
 24-hour clock, matched the spec's schedule exactly, kept AO and gameplay untouched, gave night a
 **cool playable low light** (not black), and finished with **no errors or warnings**. From
 there Claude is the stronger solution on nearly every axis that matters for this task: a cleaner
@@ -136,8 +134,8 @@ toggle with a discrete hand-off), **real rotating cast shadows on the player and
 cycle, caught its own overexposed noon, and fixed it**, shipping visible long soft shadows at
 dawn/dusk and a colour-correct noon. Avocado was **~5× faster** but **never rendered a frame**,
 and shipped a **noon white-out where colour and shadows both vanish**, plus little visible
-directional shadow at the low-sun frames. The open track opportunity is unchanged and now
-three-for-three: keep rewarding autonomous engine-in-the-loop verification that **inspects
+directional shadow at the low-sun frames. The open track opportunity here is
+clear: keep rewarding autonomous engine-in-the-loop verification that **inspects
 rendered output across the whole cycle** (not just the headless error log), and reward
 **render-tuned exposure, exact pacing, and shadow designs that can't double** over raw code
 volume.

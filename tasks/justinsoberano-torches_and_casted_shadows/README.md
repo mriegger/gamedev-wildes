@@ -13,7 +13,7 @@ place **arbitrarily many torches** in view, torch visuals and storage must stay 
 = the game runs headless with **no errors or warnings**, and **no features beyond the spec** are added.
 
 Two agents implemented the same `instruction.md` independently — **Avocado (Muse Spark)** and
-**Claude Opus 4.8** — each starting from the **Task-002 golden source** (the committed day/night
+**Claude Opus 4.8** — each starting from the **existing Wildes source** (the committed day/night
 cycle, baseline `899f8ff`), and this task compares them (see _Trajectories_ below). This comparison
 is drawn from the two run transcripts, the two working source trees, and the
 [`./screenshots/`](./screenshots) I captured by launching **both** projects in Godot 4.7
@@ -22,7 +22,7 @@ time of day, placed matched torch clusters, and saved the viewport at two night 
 torch cluster** and **a 60-torch field**. (The author's
 golden torch solution exists as a paste and a gameplay video — see below — but is intentionally
 **not** used as a comparison baseline; the shared gold `src/` committed in the repo is still the
-Task-002 source, so the head-to-head is strictly Avocado vs Claude.)
+existing Wildes source, so the head-to-head is strictly Avocado vs Claude.)
 
 Both delivered a working torch pass on the same foundation: both switch the renderer to
 **`forward_plus`**, both apply the spec's color-grade values **exactly** (env saturation `1.2` /
@@ -32,19 +32,17 @@ contrast `1.3`; terrain `terrain_saturation 1.1` / `terrain_contrast 1.3`, the l
 uses a **9.0** range and **cube shadows**, both wire it into the hotbar, both run Godot 4.7
 **headless clean with no errors or warnings**, and **neither exported a build**. Both also keep the
 spec's stated target — **torch visuals and storage** — cheap. Where they diverge is a genuine
-**performance-vs-lighting-fidelity tradeoff** in how the torch *light* scales, and — for the first
-time in this series — on a shared *weakness*: **neither agent rendered a single frame.**
+**performance-vs-lighting-fidelity tradeoff** in how the torch *light* scales, and on a shared
+*weakness*: **neither agent rendered a single frame.**
 
 ## Observations
 
-### The headline change from the previous task
+### The headline: neither agent rendered a frame
 
-For Tasks 000–002 the story was always the **render-path check**: Claude looked at the rendered
-pixels and Avocado didn't, and that gap is what let real visual defects through. **This task breaks
-that pattern — from the other side.** Given the same Task-002 base, **neither agent rendered a
-frame**: both verified **headless only**. So the differentiator that separated them for three tasks
-running **collapses here — both fail the render bar equally.** What separates them now is
-**torch-light architecture** — and it's a genuine tradeoff, not a clean win. The spec's cheapness
+The defining feature of this task's verification is what **both** agents skipped: the
+**render-path check**. **Neither agent rendered a frame** — both verified **headless only**. With
+the render bar unmet on both sides, what separates them is **torch-light architecture** — and it's a
+genuine tradeoff, not a clean win. The spec's cheapness
 clause targets *"torch visuals and storage"*, and **both satisfy it** (shared meshes/materials +
 lightweight dictionary storage). The two differ on how the *light* scales: Claude uses **two
 MultiMeshes plus a fixed pool of 12 shadow-casting lights** reassigned to the nearest torches — so
@@ -66,7 +64,7 @@ tradeoff is visible the moment you place a crowd of torches (see _Visual compari
 
 ### Implementation & architecture (from the source + transcripts)
 
-Both inherit the Task-002 foundation (day/night cycle, lit terrain, baked AO) **unchanged** and
+Both inherit the existing foundation (day/night cycle, lit terrain, baked AO) **unchanged** and
 concentrate the new work in `world_generator.gd`. From there they diverge on **how a torch is
 represented, how its light scales, and whether the renderer switch survived in the file.**
 
@@ -83,8 +81,7 @@ represented, how its light scales, and whether the renderer switch survived in t
 | Hotbar / usability | Player starts with **slot 9 = 999 torches** (torches don't occur naturally) | Player starts with **slot 1 = 20 torches** (a small unrequested convenience) |
 | Minor issues | `project.godot` carries **no explicit renderer line** (relies on the `forward_plus` default) — works headless, but fragile as documentation-of-intent / for a non-desktop export; and the 12-light pool means **distant torches in a crowd don't light their radius** | **Stale `"Compatibility"` startup log**; unrequested `max_distance` bump; per-torch cube shadows mean **light/shadow cost climbs with the torch count** |
 
-The Task-001/002 pattern shifts. There the split was *render vs no-render* and Claude won on looking;
-here **both** skip the render, so that axis is a wash. What's left is a real engineering **tradeoff**:
+**Both** skip the render, so the render-path axis is a wash. What's left is a real engineering **tradeoff**:
 Claude wrote **more** code for the more sophisticated design (MultiMesh + a bounded 12-light pool) and
 read its real bug past a misleading symptom — but its pooling leaves distant torches unlit under
 crowding; Avocado wrote **less** code, ran clean on the first try, and keeps every torch lighting its
@@ -121,7 +118,7 @@ night look **unrendered**.
 
 ### Bottom line
 
-Given the same Task-002 base, both agents produced a working torch pass: renderer on
+Both agents produced a working torch pass: renderer on
 **`forward_plus`**, the spec's **exact** color-grade values, **`SHADOW_ORTHOGONAL`** shadows, a
 **walk-through 9-radius torch** that casts cube shadows on blocks and the player, **cheap torch
 visuals + storage** (the spec's explicit ask), hotbar integration, and a **headless-clean** run with
@@ -133,7 +130,7 @@ price is that under a dense crowd only the nearest 12 torches light their radius
 **~2.5× faster**, clean on the first run, and keeps **every torch lit** (radius-faithful), but its
 per-torch shadow-casting lights make cost climb with the count, and it left a stale `"Compatibility"`
 log and an unrequested `max_distance` bump. Neither is strictly "correct" — they sit at opposite
-ends of the same tradeoff. And for the first time in this series the two share a **weakness**:
+ends of the same tradeoff. And the two share a **weakness**:
 **neither rendered a frame**, so the visible night differences above were invisible to both. The open
 track opportunity is now sharpest on process: keep rewarding autonomous engine-in-the-loop
 verification that **inspects rendered output** — this task shows *both* agents skipping it — and

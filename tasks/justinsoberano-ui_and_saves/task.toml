@@ -19,8 +19,8 @@ screenshots = [
 ]
 videos = ["https://pxl.cl/bVn9B"]                 # gold-solution gameplay (PixelCloud)
 teaser = "https://pxl.cl/bVn9B"                    # gold-solution highlight (PixelCloud)
-base-commit-hash = "34c8dc722f22cdfd62a63cef461365700a3fb15a"  # repo state before this task (Task-003 modular refactor; == origin/main)
-commit-hash = "fd77b5cba5876576e75646ecb7dc3fe27d05d551"       # Task-004 golden solution (base..commit = the task diff)
+base-commit-hash = "34c8dc722f22cdfd62a63cef461365700a3fb15a"  # repo state the models start from (== origin/main before this task)
+commit-hash = "ef2c9a57c655de8fa7816e22a2f0218d52d318a4"       # this task's golden solution + macOS export config (base..commit = the task diff)
 
 # Committed review builds — one entry per platform in ./binaries/. None committed
 # (run from source); build-macos-release builds the macOS one from commit-hash on push.

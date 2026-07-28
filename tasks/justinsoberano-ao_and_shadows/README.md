@@ -13,14 +13,14 @@ shadows, crushed colors, halos, or obvious performance loss**. **"Done"** = the 
 launches with no errors or warnings and the lighting reads correctly.
 
 Two agents implemented the same `instruction.md` independently — **Avocado (Muse Spark)**
-and **Claude Opus 4.8** — starting from the same committed foundation (the Task-000
-scaffold, commit `0e4bdf6`), and this task compares them (see _Trajectories_ below). This
+and **Claude Opus 4.8** — starting from the same committed foundation (the scaffolded
+Wildes sandbox, commit `0e4bdf6`), and this task compares them (see _Trajectories_ below). This
 comparison is drawn from the two run transcripts, the two working source trees, and the
 [`./screenshots/`](./screenshots) I captured by launching **both** projects in Godot 4.7
 (`4.7.stable`) and rendering matched frames. (The author's golden reference solution exists
 as a paste and a gameplay video — see below — but is intentionally **not** used as a
-comparison baseline; the shared gold `src/` committed in the repo is still the Task-000
-scaffold, so the head-to-head is strictly Avocado vs Claude.)
+comparison baseline; the shared gold `src/` committed in the repo is still the scaffolded
+sandbox, so the head-to-head is strictly Avocado vs Claude.)
 
 Both delivered the **same core technique**, correctly reasoned: because SSAO is not
 available in the Compatibility renderer, both **bake per-vertex, 4-level Minecraft-style
@@ -35,23 +35,20 @@ verified the rendered result** — and that gap shows up directly in the pixels.
 
 ## Observations
 
-### The headline change from the previous task
+### The headline difference
 
-In **Task 000** the split was stark: one agent ran Godot relentlessly, the other **never
-ran it once** and shipped a visible inverted-normals bug. This task narrows that gap on
-both ends. The two agents now **converge on nearly the same AO + shadow architecture**
-(baked voxel AO + real sun shadows + a fading feet contact patch), and Avocado has
-**closed Task 000's "never ran the engine" gap** — here it *did* run Godot (headless) and
-used it to catch and fix a real shader-compile error. What still separates them collapses
-to a single thing: **whether the agent looked at the rendered output.** Claude did;
-Avocado couldn't. And once again that is exactly what let a real, visible defect through —
-this time crushed, near-black AO seams (see _Visual comparison_).
+The two agents **converge on nearly the same AO + shadow architecture** (baked voxel AO +
+real sun shadows + a fading feet contact patch), and **both ran Godot to verify** — Avocado
+headless, where it caught and fixed a real shader-compile error. What still separates them
+collapses to a single thing: **whether the agent looked at the rendered output.** Claude
+did; Avocado couldn't. And that is exactly what let a real, visible defect through —
+crushed, near-black AO seams (see _Visual comparison_).
 
 ### Process (how the work got verified)
 
 | Evaluation | Claude (Opus 4.8) | Avocado (Muse Spark) | Track opportunity |
 | --- | --- | --- | --- |
-| **Engine in the loop** | Ran Godot 4.7 **~13 times**, **windowed** (`--rendering-driver opengl3`, forcing the Compatibility/GL path). Error curve was monotonic **1 → 0**; final full-log run: "the game runs completely clean — no errors or warnings." | Ran Godot 4.7 **~5 times, headless only** (`--headless --quit`). Located it via `/Applications/Godot.app` after `which godot` failed; confirmed `4.7.stable`. Final headless run: "no shader errors/warnings, world generates 100 chunks." | Reward autonomous engine-in-the-loop verification — and note that *both* now clear the bar Task 000 exposed. |
+| **Engine in the loop** | Ran Godot 4.7 **~13 times**, **windowed** (`--rendering-driver opengl3`, forcing the Compatibility/GL path). Error curve was monotonic **1 → 0**; final full-log run: "the game runs completely clean — no errors or warnings." | Ran Godot 4.7 **~5 times, headless only** (`--headless --quit`). Located it via `/Applications/Godot.app` after `which godot` failed; confirmed `4.7.stable`. Final headless run: "no shader errors/warnings, world generates 100 chunks." | Reward autonomous engine-in-the-loop verification — and note that *both* agents clear this bar. |
 | **Durability of the tests** | No committed suite (project ships none). Built a throwaway screenshot harness (`_shot/`), then **deleted it** and `grep`-verified no dangling `.godot` refs. | No committed suite and **no harness**; all edits went through the structured edit tool (no probe scripts). | Neither shipped durable tests — an open slot to reward a committed check the next agent can re-run. |
 | **Render-path check** | **Yes — looked at pixels.** Rendered **~10 PNG frames** across default / zoom / multiple camera rotations / a scripted mine-a-pit + build-a-tower edit, `Read` them, and checked each spec hazard against the image ("no acne, no detached shadows, no halos, no crushed colors"). | **None.** Explicitly "we should test visually, but can't run graphical" / "not possible" to screenshot. Verified **stdout logs only** — every claim about AO darkness, crushed colors, acne, and art-direction shift was reasoned in the abstract, never observed. | Reward verification that inspects **rendered output**, not just the error log — this is where the defect below hides. |
 | **Debugging under failure** | Fixed in **code**. Hit the shared `water.gdshader` error and **renamed** the mode to the correct `depth_prepass_alpha` (preserving the alpha prepass). Probed an isolated `/tmp` project to learn `AMBIENT_LIGHT` can't be written in `fragment()` under Compatibility (steering the design), and **lifted the AO floor after looking at the first render** to avoid crushed colors. | Fixed in **code**. Hit the same `water.gdshader` error and **removed** the invalid mode (added `shadows_disabled`); proactively removed `depth_test_disabled` from its contact-shadow shader to avoid a halo. All reasoning-driven — no bug was ever *seen*. | Reward finding/fixing render bugs that are invisible without rendering (Claude's AO-floor lift is exactly this). |
@@ -77,7 +74,7 @@ result was tuned against pixels**.
 | Water-shader fix | Renamed to correct `depth_prepass_alpha` | Removed the mode + added `shadows_disabled` |
 | Docs | Added a "Lighting: Ambient Occlusion & Soft Shadows" section to `src/README.md` | None |
 
-The paradox mirrors Task 000: Avocado wrote **more** code and **more** bespoke tech (a
+The paradox here: Avocado wrote **more** code and **more** bespoke tech (a
 standalone contact-shadow shader, denser AO), reasoned about every named hazard — and
 verified **none** of it against a rendered frame. Claude wrote leaner, more tunable code
 (AO in the alpha channel behind a uniform, a cel-preserving `light()`, an anisotropy flip)
@@ -109,16 +106,15 @@ spec-faithful, art-direction-preserving image. Avocado — which reasoned carefu
 "avoid acne, crushed colors, halos" but **never rendered a pixel** — ships exactly the
 crushed-colors/acne-like artifact it worried about: multiplying AO straight into vertex RGB
 down to `0.58`, combined with default Lambert relighting and no anisotropy flip, crushes
-seams to near-black and stipples open ground with a diagonal AO hatch. It is the Task-000
-lesson recurring: a single glance at a rendered frame would have caught it.
+seams to near-black and stipples open ground with a diagonal AO hatch. The lesson: a
+single glance at a rendered frame would have caught it.
 
 ### Bottom line
 
 Both agents correctly identified the Compatibility → bake-AO constraint and delivered the
 same architecture (per-vertex voxel AO + real `DirectionalLight3D` soft shadows + a fading
-feet contact patch), both launch with **no errors or warnings**, and Avocado meaningfully
-**closed Task 000's "never ran the engine" gap** by running Godot headless and self-fixing
-a real shader error. The separation is, again, the render-path check: Claude rendered
+feet contact patch), both launch with **no errors or warnings**, and Avocado **ran Godot
+headless and self-fixed a real shader error.** The separation is the render-path check: Claude rendered
 ~10 frames and **looked at them**, tuning AO and shadows against pixels — soft brown seams,
 clean open ground, the flat art direction intact — and shipped a clean result; Avocado
 verified only console logs and shipped **visibly crushed, near-black AO seams and a

@@ -36,10 +36,10 @@ its own work — and secondarily in architecture and polish.
 
 ## Observations
 
-### The headline change from the previous task
+### The headline finding
 
-This is **Task 000** — the inaugural scaffold for Wildes, so there is no prior task in this
-series to diff against; it sets the baseline. The interesting split is not *what* got built
+This is **Task 000** — the inaugural scaffold for Wildes; it sets the baseline. The
+interesting split is not *what* got built
 (the two agents converge on nearly the same spec-shaped feature set and constants) but *how
 it was validated*. One agent had the Godot engine and used it relentlessly; the other never
 ran it at all. That single fact drives most of what follows.

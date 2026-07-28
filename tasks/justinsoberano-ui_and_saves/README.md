@@ -3,8 +3,7 @@
 <!-- Task overview. See instruction.md for the full spec. -->
 
 This task adds the **whole front-end and persistence layer** to the Wildes voxel
-sandbox, on top of the Task-003 source (the modular refactor that split the gold
-`src/` into feature modules). It requires a **frosted/blur ("frosted glass")
+sandbox. It requires a **frosted/blur ("frosted glass")
 material on ALL UI**, built from a custom shader, plus a **Roboto Slab** font, and
 a set of screens with exact colors: a **Main Menu** (title left, medium Play
 button right, deep-navy bg), a **World Select** modal with **3 save slots**
@@ -20,7 +19,7 @@ position, timers, and world time — so the World Select slots round-trip. **"Do
 
 Two agents implemented the same `instruction.md` independently — **Avocado
 (avocado-code-latest)** and **Claude Opus 4.8** — each starting from the same
-committed Task-003 foundation, and this task compares them (see _Trajectories_
+committed source, and this task compares them (see _Trajectories_
 below). This comparison is drawn from the two run transcripts, the two working
 source trees, and the [`./screenshots/`](./screenshots) I captured by launching
 **both** one-shots in Godot 4.7 (`4.7.stable`) on the OpenGL (Compatibility)
@@ -40,16 +39,15 @@ Randomize, a hold-to-delete timer that reads exactly `"HOLDING... X.X/3s"`, and
 **modal/button colors and radii that match the spec constants exactly**
 (`Color(0.14,0.16,0.18,0.32)` / radius 18; `Color(0.20,0.22,0.24,0.38)` /
 radius 14). Both ran Godot 4.7 headless and both **hit the same corrupt-font
-trap** while fetching Roboto Slab. But the real difference is the same one that
-separated the last task — **did the agent look at the rendered result** — and this
-time it decided two of the spec's core visual requirements.
+trap** while fetching Roboto Slab. The real difference is **whether the agent
+looked at the rendered result** — and here it decided two of the spec's core
+visual requirements.
 
 ## Observations
 
-### The headline change from the previous task
+### Where the two agents diverge
 
-Last task the split was subtle (a blown-out noon only a rendered frame would
-catch). This task it is **stark**: the Avocado one-shot **ships two of the spec's
+The divergence is **stark**: the Avocado one-shot **ships two of the spec's
 headline visual requirements broken**, and neither is visible from a headless log.
 (1) The **frosted-glass shader** is written against `SCREEN_TEXTURE` — a Godot-3
 builtin **removed in Godot 4** — with no `BackBufferCopy` and no
@@ -80,7 +78,7 @@ sound** — the divergence is entirely on the render-path.
 
 ### Implementation & architecture (from the source + transcripts)
 
-Both inherit the Task-003 modular `src/` unchanged and add a menu layer + a save
+Both inherit the existing modular `src/` unchanged and add a menu layer + a save
 system + a pause flow. They diverge on **how the front-end is structured**, on the
 **save format**, on **test depth**, and — decisively — on whether the visual layer
 was ever rendered.
@@ -99,9 +97,9 @@ was ever rendered.
 | "Timers" vs "World Time" | Game has no discrete `Timer` nodes; both map to the day/night clock (`time_of_day`), which is persisted + frozen — slightly conflates two spec bullets | Persists an explicit `timers` dict **and** `time_of_day`/`play_time` separately |
 | Build/binary | **None** — no `--export` in the trajectory | **None** — no `--export` in the trajectory |
 
-The pattern flips on code volume: this time **Avocado wrote more code (2,035 vs
-1,679)** and a larger central orchestrator, and did the harder *headless*
-debugging (the null-`world` seed-timing bug). **Claude wrote less, spread it into
+On code volume, **Avocado wrote more (2,035 vs 1,679)** and a larger central
+orchestrator, and did the harder *headless* debugging (the null-`world`
+seed-timing bug). **Claude wrote less, spread it into
 small single-responsibility files + an autoload, invested far more in the
 committed test suite, and — decisively — rendered the UI and fixed what it saw.**
 
@@ -149,12 +147,12 @@ there Claude is the stronger one-shot on the axes that decide this task: it **wr
 a real frosted-glass shader** (`hint_screen_texture` + `BackBufferCopy`) that
 visibly blurs, **shipped a working Roboto Slab font** (catching the same corrupt
 download Avocado missed), invested in a **66-assert committed suite** with a genuine
-save round-trip, and — the throughline for three tasks running — **rendered the UI,
-inspected it, and fixed the two layout bugs it saw**. Avocado was **~1.8× faster**,
+save round-trip, and — decisively — **rendered the UI, inspected it, and fixed the
+two layout bugs it saw**. Avocado was **~1.8× faster**,
 wrote more code, and did the harder headless root-cause (the null-`world` seed
 bug), but it **never rendered a frame** and so shipped **two broken headline visual
 requirements** — a dead blur shader and blank UI text — that a single screenshot
-would have exposed. The open track opportunity is unchanged and now four-for-four:
+would have exposed. The track opportunity for this task:
 reward autonomous **engine-in-the-loop verification that renders and inspects UI**,
 reward **asset-integrity checks** (validate downloaded bytes, not just file size),
 and reward **durable tests that exercise real input and data round-trips** over raw
