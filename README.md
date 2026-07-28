@@ -23,7 +23,7 @@ This repo follows the ADO **GameDev track** task structure: one repo per game
 ```text
 gamedev-wildes/
 ├── src/                     Gold game source — the single, shared, buildable Godot 4.7
-│   │                        project, organized by feature. Entry scene: game/game.tscn.
+│   │                        project, organized by feature. Entry scene: ui/main_menu/main_menu.tscn.
 │   ├── game/                Root scene + top-level system wiring (game.tscn, game.gd).
 │   ├── world/               Voxel world — generation/, model/ (voxel data + edits),
 │   │                        rendering/ (chunk mesher, chunk + torch render systems).
@@ -31,9 +31,12 @@ gamedev-wildes/
 │   ├── player/              Player motor, interactor, camera rig, and targeting.
 │   ├── environment/         Day/night cycle — game clock, profile/values, debug clock panel.
 │   ├── inventory/           Inventory model.
-│   ├── ui/                  HUD + hotbar (and hotbar slots).
-│   ├── shaders/             terrain, water, ghost, selection, cracks, blob-shadow.
-│   ├── tests/               Test scaffold.
+│   ├── ui/                  HUD + hotbar, plus main_menu/ (menu, world select, create/
+│   │                        delete-world, loading, pause) and theme/ (frosted-glass theme).
+│   ├── save/                Local save system — up to 3 world slots.
+│   ├── assets/fonts/        Roboto Slab UI font (Apache-2.0 — see Assets & Attribution).
+│   ├── shaders/             terrain, water, ghost, selection, cracks, blob-shadow, frosted-glass.
+│   ├── tests/               Headless test scripts (menu flow, saves, pause, delete-hold, …).
 │   └── project.godot        Godot project settings.
 ├── tasks/                   One folder per task (see the Tasks table). Each contains:
 │   └── justinsoberano-scaffolding_game/    (example)
@@ -75,12 +78,17 @@ None beyond the Godot engine. The game uses only built-in Godot APIs.
 
 ## Assets & Attribution
 
-All assets are original primitives — the world, blocks, and the explorer are built from
-code-generated cube/box meshes and hand-written GDScript shaders (`src/shaders/`). No
-third-party or Meta-internal art, audio, fonts, or models are shipped.
+The world, blocks, and the explorer are original primitives — code-generated cube/box
+meshes and hand-written GDScript shaders (`src/shaders/`). The only third-party asset is
+the UI font imported for the Task-004 front-end:
 
-No third-party tokens, proprietary code, or IP appear in the code, assets, or the
-model-visible environment.
+| Asset | Type | Source | License / Attribution |
+| --- | --- | --- | --- |
+| `src/assets/fonts/RobotoSlab-*.ttf` (Regular, SemiBold, Bold) | font | [Roboto Slab](https://fonts.google.com/specimen/Roboto+Slab) — Christian Robertson, via Google Fonts | Apache-2.0 |
+
+No other third-party or Meta-internal art, audio, or models are shipped. No third-party
+tokens, proprietary code, or IP appear in the code, assets, or the model-visible
+environment; the font above is attributed here.
 
 ## Building & Running
 
@@ -108,6 +116,10 @@ godot --path src
   real-time directional shadows, and a cool, playable night.
 - Placeable, walk-through **torches** that light a 9-block radius and cast soft shadows, on the
   **forward_plus** renderer with saturation/contrast color-grading.
+- A **frosted-glass front-end and save system**: a main menu, a world-select screen with three
+  save slots, create/delete-world modals (hold-to-delete), a chunk-progress loading screen, and
+  a pause menu that freezes all state; worlds persist seed + block edits + player state + world
+  time to disk.
 
 ## Gold Version
 
@@ -122,3 +134,4 @@ godot --path src
 | [justinsoberano-ao_and_shadows](./tasks/justinsoberano-ao_and_shadows/) | Add real-time ambient occlusion + soft cast shadows (baked voxel AO, sun shadows) in the Compatibility renderer | 2026-07-22 |
 | [justinsoberano-day_night_cycle](./tasks/justinsoberano-day_night_cycle/) | Add a repeating ~20-min day/night cycle (10 min day / 10 min night) with a moving sun/moon and real-time directional shadows on the player and blocks; nights stay playable | 2026-07-27 |
 | [justinsoberano-torches_and_casted_shadows](./tasks/justinsoberano-torches_and_casted_shadows/) | Switch the renderer to forward_plus with color-grade compensation and add walk-through torch light-blocks that light a 9-block radius and cast soft shadows | 2026-07-27 |
+| [justinsoberano-ui_and_saves](./tasks/justinsoberano-ui_and_saves/) | Add the frosted-glass front-end + persistence: main menu, world select (3 save slots), create/delete-world modals (hold-to-delete), a chunk-progress loading screen, and a pause menu that freezes all state; local saves persist seed + block edits + player state + world time | 2026-07-28 |

@@ -6,7 +6,6 @@ instruction = "./instruction.md"
 tags = ["sandbox", "building", "exploration"]   # same voxel sandbox; this task is a lighting/render pass (day/night + real-time shadows)
 tech-stack-tags = ["godot", "gdscript"]          # Godot 4.7 + GDScript, GL Compatibility renderer
 assets-used = ["primitives"]                      # all cube/box meshes + shaders, procedural — no imported art
-avocado-model = "avocado-code-latest"
 harness = "Metacode"
 screenshots = [
   "./screenshots/claude/sunrise_sunset.png",
@@ -18,4 +17,10 @@ screenshots = [
 ]
 videos = ["https://pxl.cl/bSKRZ"]                 # gold-solution gameplay (PixelCloud)
 teaser = "https://pxl.cl/bSKRZ"                    # gold-solution highlight (PixelCloud)
-commit-hash = "863b15d48d10e60d11937d7ea0db760da15e851e"   # Task-001 (AO & shadows) HEAD — the build baseline
+base-commit-hash = "863b15d48d10e60d11937d7ea0db760da15e851e"  # Task-001 HEAD — the src the models start from
+commit-hash = "899f8ff61230d74df6dd49c6e8ff89f1becac8e2"       # Task-002 golden solution (base..commit = the task diff)
+
+# Committed review builds — one entry per platform in ./binaries/. None committed
+# (run from source); build-macos-release builds the macOS one from commit-hash.
+[binaries]
+# macos = "./binaries/Wildes-macos.zip"

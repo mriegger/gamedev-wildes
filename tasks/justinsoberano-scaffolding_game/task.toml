@@ -6,9 +6,15 @@ instruction = "./instruction.md"
 tags = ["sandbox", "building", "exploration"]   # voxel mine-and-build sandbox
 tech-stack-tags = ["godot", "gdscript"]          # Godot 4.7 + GDScript
 assets-used = ["primitives"]                      # all cube/box meshes + shaders, procedural — no imported art
-avocado-model = "avocado-code-latest" 
 harness = "Metacode"                        
 screenshots = ["./screenshots/claude/spawn.png", "./screenshots/avocado/spawn.png", "./screenshots/avocado/normals.png"]
 videos = ["https://pxl.cl/bNjf0"]                 # gold-solution gameplay (PixelCloud)
 teaser = "https://pxl.cl/bNjf0"                    # gold-solution highlight (PixelCloud)
-commit-hash = "HEAD"
+base-commit-hash = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"  # git empty tree — Task 000 is the initial scaffold (no prior commit)
+commit-hash = "0e4bdf6b202bed0e4ac9bd4aaeee881048bad5f4"       # Task-000 scaffold commit (base..commit = the task diff)
+
+# Committed review builds — one entry per platform in ./binaries/. None committed
+# (run from source: `godot --path src`); build-macos-release builds the macOS one
+# from commit-hash on push.
+[binaries]
+# macos = "./binaries/Wildes-macos.zip"
