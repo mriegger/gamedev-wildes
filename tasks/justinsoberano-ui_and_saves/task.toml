@@ -1,0 +1,28 @@
+name = "User Interface and Saves"
+instruction = "./instruction.md"
+
+[game]
+# Controlled vocabularies — see the game-level README.md.
+tags = ["sandbox", "building", "exploration"]   # same voxel sandbox; this task adds the front-end + save system
+tech-stack-tags = ["godot", "gdscript"]          # Godot 4.7 + GDScript, OpenGL (Compatibility) driver
+assets-used = ["primitives", "imported"]          # cube/box meshes + shaders (procedural) + one imported font (Roboto Slab, Apache-2.0)
+harness = "Metacode"
+screenshots = [
+  "./screenshots/claude/01_main_menu.png",
+  "./screenshots/avocado/01_main_menu.png",
+  "./screenshots/claude/02_world_select.png",
+  "./screenshots/avocado/02_world_select.png",
+  "./screenshots/claude/03_create_world.png",
+  "./screenshots/avocado/03_create_world.png",
+  "./screenshots/claude/04_pause.png",
+  "./screenshots/avocado/04_pause.png",
+]
+videos = ["https://pxl.cl/bVn9B"]                 # gold-solution gameplay (PixelCloud)
+teaser = "https://pxl.cl/bVn9B"                    # gold-solution highlight (PixelCloud)
+base-commit-hash = "34c8dc722f22cdfd62a63cef461365700a3fb15a"  # repo state before this task (Task-003 modular refactor; == origin/main)
+commit-hash = "fd77b5cba5876576e75646ecb7dc3fe27d05d551"       # Task-004 golden solution (base..commit = the task diff)
+
+# Committed review builds — one entry per platform in ./binaries/. None committed
+# (run from source); build-macos-release builds the macOS one from commit-hash on push.
+[binaries]
+# macos = "./binaries/Wildes-macos.zip"
