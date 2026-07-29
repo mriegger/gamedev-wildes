@@ -162,9 +162,14 @@ func _handle_movement(delta):
 	else:
 		on_ground = false
 
-	# Clamp world bounds
-	global_position.x = clamp(global_position.x, 0.5, world.world_size - 0.5)
-	global_position.z = clamp(global_position.z, 0.5, world.world_size - 0.5)
+	# Clamp world bounds unless infinite
+	if world and world.config and world.config.infinite_world:
+		# No clamping for infinite
+		pass
+	else:
+		if world:
+			global_position.x = clamp(global_position.x, 0.5, world.world_size - 0.5)
+			global_position.z = clamp(global_position.z, 0.5, world.world_size - 0.5)
 
 	if global_position.y < -10:
 		global_position = voxel_world.get_spawn_position()

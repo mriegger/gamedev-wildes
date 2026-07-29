@@ -130,6 +130,38 @@ func has_torch(pos: Vector3i) -> bool:
 func get_torch_count() -> int:
 	return torch_instances.size()
 
+func unload_torches_in_chunk(cx: int, cz: int, p_chunk_size: int) -> int:
+	var removed = 0
+	var to_remove: Array[Vector3i] = []
+	for pos in torch_instances.keys():
+		var torch_cx = int(floor(float(pos.x) / float(p_chunk_size)))
+		var torch_cz = int(floor(float(pos.z) / float(p_chunk_size)))
+		if torch_cx == cx and torch_cz == cz:
+			to_remove.append(pos)
+	for pos in to_remove:
+		remove_torch(pos)
+		removed += 1
+	if removed > 0:
+		print("[TorchRender] Unloaded %d torches in chunk %d_%d" % [removed, cx, cz])
+	return removed
+
+func load_torches_for_chunk(cx: int, cz: int, p_chunk_size: int, torch_attachments: Dictionary) -> int:
+	if torch_container == null:
+		return 0
+	var loaded = 0
+	var origin_x = cx * p_chunk_size
+	var origin_z = cz * p_chunk_size
+	for torch_pos in torch_attachments.keys():
+		if torch_pos.x >= origin_x and torch_pos.x < origin_x + p_chunk_size and torch_pos.z >= origin_z and torch_pos.z < origin_z + p_chunk_size:
+			if has_torch(torch_pos):
+				continue
+			var dir = torch_attachments[torch_pos] as Vector3i
+			spawn_torch(torch_pos, dir)
+			loaded += 1
+	if loaded > 0:
+		print("[TorchRender] Loaded %d torches for chunk %d_%d" % [loaded, cx, cz])
+	return loaded
+
 func update_shadow_culling(_delta: float) -> void:
 	_shadow_update_timer -= _delta
 	if _shadow_update_timer > 0:

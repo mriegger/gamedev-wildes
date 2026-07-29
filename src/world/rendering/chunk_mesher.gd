@@ -2,7 +2,7 @@ extends RefCounted
 class_name ChunkMesher
 
 ## ChunkMesher - converts chunk snapshots into optimized terrain geometry
-## Uses BlockCatalog cache, no duplicate COL_ constants, no collision helpers
+## Now supports seamless async: build_cache (main thread quick) + build_mesh_data_from_cache (threadable heavy) + create mesh on main thread
 
 var world_size: int = 200
 var chunk_size: int = 20
@@ -23,20 +23,22 @@ func _init(p_world_size: int = 200, p_chunk_size: int = 20, p_max_y: int = 36, p
 	catalog = BlockCatalog.shared()
 
 func configure_from_config(config: WorldConfig):
-	world_size = config.world_size
+	if config.infinite_world:
+		world_size = config.get_effective_world_size()
+	else:
+		world_size = config.world_size
 	chunk_size = config.chunk_size
 	max_build_y = config.max_build_y
 	seed_value = config.seed_value
 	enable_ao = config.enable_ao
 
-func build_mesh(origin_x: int, origin_z: int, get_block_fn: Callable, height_map: Array = []) -> ArrayMesh:
-	var end_x = min(origin_x + chunk_size, world_size)
-	var end_z = min(origin_z + chunk_size, world_size)
+# ------------------------------------------------------------------
+# Cache building - quick, runs on main thread to snapshot voxel data
+# ------------------------------------------------------------------
+func build_cache(origin_x: int, origin_z: int, get_block_fn: Callable) -> Dictionary:
 	var size_x = chunk_size
 	var size_z = chunk_size
-
 	var size_y = clamp(max_build_y, 6, 128)
-
 	var cache_x = size_x + 2
 	var cache_z = size_z + 2
 	var cache: Array = []
@@ -55,36 +57,72 @@ func build_mesh(origin_x: int, origin_z: int, get_block_fn: Callable, height_map
 				else:
 					cache[idx] = v
 
+	return {
+		"cache": cache,
+		"origin_x": origin_x,
+		"origin_z": origin_z,
+		"size_x": size_x,
+		"size_z": size_z,
+		"size_y": size_y,
+		"cache_x": cache_x,
+		"cache_z": cache_z,
+	}
+
+# ------------------------------------------------------------------
+# Heavy geometry generation - thread-safe if cache dict is passed, no Node API, no Resource creation
+# Returns Dictionary {vertices, normals, colors, indices} or null if empty
+# ------------------------------------------------------------------
+func build_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
+	var cache: Array = cache_dict.get("cache", [])
+	var origin_x: int = cache_dict.get("origin_x", 0)
+	var origin_z: int = cache_dict.get("origin_z", 0)
+	var size_x: int = cache_dict.get("size_x", chunk_size)
+	var size_z: int = cache_dict.get("size_z", chunk_size)
+	var size_y: int = cache_dict.get("size_y", clamp(max_build_y, 6, 128))
+	var cache_x: int = cache_dict.get("cache_x", size_x + 2)
+	var cache_z: int = cache_dict.get("cache_z", size_z + 2)
+
+	if cache.is_empty():
+		return null
+
+	var end_x = min(origin_x + size_x, world_size)
+	var end_z = min(origin_z + size_z, world_size)
+
 	var vertices := PackedVector3Array()
 	var normals := PackedVector3Array()
 	var colors := PackedColorArray()
 	var indices := PackedInt32Array()
 
-	var get_variation = func(x: int, z: int) -> float:
-		var h = (x * 73856093) ^ (z * 19349663) ^ seed_value
-		h = abs(h) % 1000
-		return (float(h) / 1000.0 - 0.5) * 0.08
+	# Local copies for thread safety
+	var local_seed = seed_value
+	var local_enable_ao = enable_ao
+	var local_ao_table = ao_table
+	var local_catalog = catalog # BlockCatalog.shared() is read-only
 
 	for x in range(origin_x, end_x):
 		var lx = x - origin_x + 1
 		for z in range(origin_z, end_z):
 			var lz = z - origin_z + 1
-			var var_off = get_variation.call(x, z)
+			# variation per column
+			var h = (x * 73856093) ^ (z * 19349663) ^ local_seed
+			h = abs(h) % 1000
+			var var_off = (float(h) / 1000.0 - 0.5) * 0.08
 			for y in range(size_y):
 				var ly = y
 				var cache_idx = (lx * size_y * cache_z) + (ly * cache_z) + lz
+				if cache_idx < 0 or cache_idx >= cache.size():
+					continue
 				var block_type = cache[cache_idx]
 				if block_type == -1:
 					continue
 				if block_type == BlockId.Type.AIR or block_type == BlockId.Type.TORCH:
 					continue
-				var def = catalog.get_definition(block_type)
+				var def = local_catalog.get_definition(block_type)
 				if def == null:
 					continue
 				var top_col = def.top_color + Color(var_off, var_off, var_off) if block_type != BlockId.Type.LOG and block_type != BlockId.Type.LEAVES else def.top_color + Color(var_off * 0.5, var_off * 0.5, var_off * 0.5)
 				var side_col = def.side_color + Color(var_off * 0.6, var_off * 0.6, var_off * 0.6) if block_type != BlockId.Type.LOG and block_type != BlockId.Type.LEAVES else def.side_color
 				if block_type == BlockId.Type.GRASS:
-					# Grass uses side color for sides, top for top already
 					side_col = def.side_color + Color(var_off * 0.6, var_off * 0.6, var_off * 0.6)
 
 				# +Y
@@ -160,13 +198,13 @@ func build_mesh(origin_x: int, origin_z: int, get_block_fn: Callable, height_map
 					vertices.append(v0); vertices.append(v1); vertices.append(v2); vertices.append(v3)
 					normals.append(Vector3(0,1,0)); normals.append(Vector3(0,1,0)); normals.append(Vector3(0,1,0)); normals.append(Vector3(0,1,0))
 					for i in range(4):
-						var b = ao_table[ao_vals[i]] if enable_ao else 1.0
+						var b = local_ao_table[ao_vals[i]] if local_enable_ao else 1.0
 						var sh = sh_vals[i]
 						colors.append(Color(top_col.r * b * sh, top_col.g * b * sh, top_col.b * b * sh, top_col.a))
 					indices.append(base_idx+0); indices.append(base_idx+1); indices.append(base_idx+2)
 					indices.append(base_idx+0); indices.append(base_idx+2); indices.append(base_idx+3)
 
-				# -Y bottom
+				# -Y
 				var n_bot = -1
 				if ly - 1 >= 0:
 					n_bot = cache[(lx * size_y * cache_z) + ((ly - 1) * cache_z) + lz]
@@ -209,7 +247,7 @@ func build_mesh(origin_x: int, origin_z: int, get_block_fn: Callable, height_map
 						vertices.append(Vector3(x, y, z+1)); vertices.append(Vector3(x+1, y, z+1)); vertices.append(Vector3(x+1, y, z)); vertices.append(Vector3(x, y, z))
 						normals.append(Vector3(0,-1,0)); normals.append(Vector3(0,-1,0)); normals.append(Vector3(0,-1,0)); normals.append(Vector3(0,-1,0))
 						for i in range(4):
-							var b = ao_table[ao2[i]] if enable_ao else 1.0
+							var b = local_ao_table[ao2[i]] if local_enable_ao else 1.0
 							colors.append(Color(bcol.r * b, bcol.g * b, bcol.b * b, bcol.a))
 						indices.append(base_idx2+0); indices.append(base_idx2+1); indices.append(base_idx2+2)
 						indices.append(base_idx2+0); indices.append(base_idx2+2); indices.append(base_idx2+3)
@@ -269,6 +307,27 @@ func build_mesh(origin_x: int, origin_z: int, get_block_fn: Callable, height_map
 	if vertices.is_empty():
 		return null
 
+	return {
+		"vertices": vertices,
+		"normals": normals,
+		"colors": colors,
+		"indices": indices,
+		"origin_x": origin_x,
+		"origin_z": origin_z,
+	}
+
+func create_mesh_from_data(data) -> ArrayMesh:
+	if data == null:
+		return null
+	if not data is Dictionary:
+		return null
+	var vertices = data.get("vertices", PackedVector3Array())
+	if vertices.is_empty():
+		return null
+	var normals = data.get("normals", PackedVector3Array())
+	var colors = data.get("colors", PackedColorArray())
+	var indices = data.get("indices", PackedInt32Array())
+
 	var arrays = []
 	arrays.resize(Mesh.ARRAY_MAX)
 	arrays[Mesh.ARRAY_VERTEX] = vertices
@@ -279,3 +338,9 @@ func build_mesh(origin_x: int, origin_z: int, get_block_fn: Callable, height_map
 	var mesh = ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 	return mesh
+
+# Legacy sync path - used for edits (still main thread but okay for single chunk)
+func build_mesh(origin_x: int, origin_z: int, get_block_fn: Callable, height_map: Array = []) -> ArrayMesh:
+	var cache_dict = build_cache(origin_x, origin_z, get_block_fn)
+	var data = build_mesh_data_from_cache(cache_dict)
+	return create_mesh_from_data(data)

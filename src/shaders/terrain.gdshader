@@ -2,16 +2,12 @@ shader_type spatial;
 render_mode cull_disabled, diffuse_lambert_wrap, specular_disabled;
 
 varying vec3 v_world_normal;
-varying vec3 v_world_pos;
 
-uniform vec3 haze_color: source_color = vec3(0.75, 0.87, 0.94);
-uniform float world_size: hint_range(10, 500) = 200.0;
 uniform float terrain_saturation: hint_range(0.0, 2.0) = 1.1;
 uniform float terrain_contrast: hint_range(0.0, 2.0) = 1.3;
 
 void vertex() {
     v_world_normal = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
-    v_world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 }
 
 void fragment() {
@@ -29,13 +25,6 @@ void fragment() {
     // Contrast grading
     albedo = (albedo - vec3(0.5)) * terrain_contrast + vec3(0.5);
     albedo = clamp(albedo, vec3(0.0), vec3(1.0));
-
-    // border haze - reduced from 0.38 to avoid washout at edges
-    vec2 center = vec2(world_size * 0.5);
-    float dist_center = length(v_world_pos.xz - center);
-    float half = world_size * 0.5;
-    float h = smoothstep(half * 0.92, half * 1.08, dist_center);
-    albedo = mix(albedo, haze_color, h * 0.18);
 
     ALBEDO = albedo;
     ROUGHNESS = 0.96;

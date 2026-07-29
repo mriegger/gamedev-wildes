@@ -13,6 +13,10 @@ class_name WorldConfig
 @export var water_level: int = 5
 @export var show_water: bool = true
 
+@export_group("Infinite World")
+@export var infinite_world: bool = true
+@export var infinite_water_size: int = 1000
+
 var max_build_y: int:
 	get:
 		return max_height + build_extra + 8
@@ -67,9 +71,24 @@ var max_build_y: int:
 @export var enable_shadows: bool = true
 @export var shadow_cast_distance: float = 220.0
 
+@export_group("Chunk Streaming")
+@export var chunk_streaming_enabled: bool = true
+@export var render_distance: int = 4
+@export var unload_padding: int = 2
+@export var max_chunk_loads_per_frame: int = 2 # 1-2 keeps main thread <8ms, mesh built in thread
+@export var max_chunk_unloads_per_frame: int = 4
+@export var chunk_update_interval: float = 0.1
+
 
 func get_meadow_center() -> Vector2:
+	if infinite_world:
+		return Vector2.ZERO
 	return Vector2(world_size * 0.5, world_size * 0.5)
+
+func get_effective_world_size() -> int:
+	if infinite_world:
+		return 1000000 # effectively infinite for clamping bypass
+	return world_size
 
 func to_dict() -> Dictionary:
 	return {
@@ -82,18 +101,26 @@ func to_dict() -> Dictionary:
 		"water_level": water_level,
 		"tree_density": tree_density,
 		"meadow_radius": meadow_radius,
+		"chunk_streaming_enabled": chunk_streaming_enabled,
+		"render_distance": render_distance,
+		"unload_padding": unload_padding,
 	}
 
 func validate() -> bool:
-	if world_size <= 0 or world_size > 500:
-		push_error("[WorldConfig] world_size %d invalid, must be 1..500" % world_size)
-		return false
-	if chunk_size <= 0 or chunk_size > world_size:
-		push_error("[WorldConfig] chunk_size %d invalid, must be 1..world_size" % chunk_size)
-		return false
-	if world_size % chunk_size != 0:
-		push_error("[WorldConfig] world_size %d must be multiple of chunk_size %d (breaks generator ranges)" % [world_size, chunk_size])
-		return false
+	if not infinite_world:
+		if world_size <= 0 or world_size > 500:
+			push_error("[WorldConfig] world_size %d invalid, must be 1..500" % world_size)
+			return false
+		if chunk_size <= 0 or chunk_size > world_size:
+			push_error("[WorldConfig] chunk_size %d invalid, must be 1..world_size" % chunk_size)
+			return false
+		if world_size % chunk_size != 0:
+			push_error("[WorldConfig] world_size %d must be multiple of chunk_size %d (breaks generator ranges)" % [world_size, chunk_size])
+			return false
+	else:
+		if chunk_size <= 0 or chunk_size > 100:
+			push_error("[WorldConfig] chunk_size %d invalid for infinite" % chunk_size)
+			return false
 	if max_height <= 0 or max_height > 128:
 		push_error("[WorldConfig] max_height %d invalid, must be 1..128" % max_height)
 		return false
@@ -109,10 +136,30 @@ func validate() -> bool:
 	if tree_density < 0.0 or tree_density > 1.0:
 		push_error("[WorldConfig] tree_density %f must be 0..1" % tree_density)
 		return false
-	if meadow_radius < 0.0 or meadow_radius > world_size * 0.5:
-		push_error("[WorldConfig] meadow_radius %f invalid" % meadow_radius)
-		return false
+	if not infinite_world:
+		if meadow_radius < 0.0 or meadow_radius > world_size * 0.5:
+			push_error("[WorldConfig] meadow_radius %f invalid" % meadow_radius)
+			return false
+	else:
+		if meadow_radius < 0.0 or meadow_radius > 100.0:
+			push_error("[WorldConfig] meadow_radius %f invalid for infinite" % meadow_radius)
+			return false
 	if tree_spacing < 0.1:
 		push_error("[WorldConfig] tree_spacing too small")
+		return false
+	if render_distance < 1 or render_distance > 20:
+		push_error("[WorldConfig] render_distance %d invalid, must be 1..20" % render_distance)
+		return false
+	if unload_padding < 0 or unload_padding > 10:
+		push_error("[WorldConfig] unload_padding %d invalid, must be 0..10" % unload_padding)
+		return false
+	if max_chunk_loads_per_frame < 1 or max_chunk_loads_per_frame > 10:
+		push_error("[WorldConfig] max_chunk_loads_per_frame %d invalid, must be 1..10" % max_chunk_loads_per_frame)
+		return false
+	if max_chunk_unloads_per_frame < 1 or max_chunk_unloads_per_frame > 20:
+		push_error("[WorldConfig] max_chunk_unloads_per_frame %d invalid" % max_chunk_unloads_per_frame)
+		return false
+	if chunk_update_interval < 0.05 or chunk_update_interval > 2.0:
+		push_error("[WorldConfig] chunk_update_interval %.2f invalid" % chunk_update_interval)
 		return false
 	return true

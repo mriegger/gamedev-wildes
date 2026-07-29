@@ -3,8 +3,12 @@ class_name WorldController
 
 ## WorldController - coordinates generation, model, rendering
 ## Supports sync (direct launch) and async (loading screen with progress bar)
+## Now with chunk streaming: only nearby chunks loaded, far chunks deloaded
 
 signal generation_progress(stage: String, percent: float, details: String)
+
+const ChunkCoord = preload("res://world/streaming/chunk_coord.gd")
+const ChunkManager = preload("res://world/streaming/chunk_manager.gd")
 
 @export var config: WorldConfig
 
@@ -41,8 +45,10 @@ var voxel_model: VoxelWorld
 var chunk_mesher: ChunkMesher
 var chunk_renderer: ChunkRenderSystem
 var torch_renderer: TorchRenderSystem
+var chunk_manager: ChunkManager
 
 var _has_generated: bool = false
+var _player_ref: Node3D = null
 
 
 func _ready():
@@ -125,12 +131,22 @@ func _prepare_config():
 
 
 func _generate_world_sync():
-	print("[Wildes] Generating %dx%d world (seed %d) ..." % [world_size, world_size, seed_value])
+	var effective_ws = config.get_effective_world_size() if config else world_size
+	var infinite_str = "INFINITE" if config and config.infinite_world else "%dx%d" % [world_size, world_size]
+	print("[Wildes] Generating %s world (seed %d) streaming=%s render_dist=%d ..." % [infinite_str, seed_value, config.chunk_streaming_enabled if config else true, config.render_distance if config else 4])
 	terrain_generator = TerrainGenerator.new(config)
 	var gen = terrain_generator.generate_all()
 
-	voxel_model = VoxelWorld.new(world_size, chunk_size, max_build_y)
-	voxel_model.setup(world_size, chunk_size, max_build_y, gen["height_map"], gen["type_map"], gen["tree_block_fast"], gen["tree_blocks"])
+	if config and config.infinite_world:
+		# Infinite: setup infinite voxel model, apply initial gen dicts
+		voxel_model = VoxelWorld.new(effective_ws, chunk_size, max_build_y)
+		voxel_model.setup_infinite(chunk_size, max_build_y)
+		voxel_model.set_generator_ref(terrain_generator)
+		voxel_model.apply_chunk_gen(gen)
+		voxel_model.apply_tree_chunk(gen)
+	else:
+		voxel_model = VoxelWorld.new(world_size, chunk_size, max_build_y)
+		voxel_model.setup(world_size, chunk_size, max_build_y, gen["height_map"], gen["type_map"], gen["tree_block_fast"], gen["tree_blocks"])
 
 	if not pending_save_data.is_empty():
 		_apply_save_data_to_model(pending_save_data)
@@ -139,10 +155,36 @@ func _generate_world_sync():
 
 	_prepare_materials()
 	_setup_rendering_systems()
-	chunk_renderer.generate_all_chunks()
+
+	if config and config.chunk_streaming_enabled:
+		var initial_pos = voxel_model.get_spawn_position()
+		if not pending_save_data.is_empty() and pending_save_data.has("player_position"):
+			var arr = pending_save_data["player_position"]
+			if arr is Array and arr.size() == 3:
+				var p = Vector3(float(arr[0]), float(arr[1]), float(arr[2]))
+				if p != Vector3.ZERO and p.length() > 1.0:
+					initial_pos = p
+					print("[WorldController] Using saved player pos %s for initial streaming load" % initial_pos)
+		var loaded = chunk_manager.ensure_chunks_around(initial_pos)
+		print("[Wildes] Streaming initial load around %s -> %d chunks" % [initial_pos, loaded])
+		# Load torches for initial chunks
+		if torch_renderer and voxel_model:
+			for coord in chunk_manager.loaded_chunks.keys():
+				torch_renderer.load_torches_for_chunk(coord.x, coord.y, chunk_size, voxel_model.torch_attachments)
+		if _player_ref:
+			chunk_manager.set_player_ref(_player_ref)
+	else:
+		chunk_renderer.generate_all_chunks()
+		# Load all torches when not streaming
+		if torch_renderer and voxel_model:
+			for torch_pos in voxel_model.torch_attachments.keys():
+				var dir = voxel_model.torch_attachments[torch_pos] as Vector3i
+				torch_renderer.spawn_torch(torch_pos, dir)
+		print("[Wildes] Non-streaming fallback generated all chunks")
+
 	_create_water_plane()
 
-	print("[Wildes] World ready: %d chunks gen=%s model=%s" % [chunk_renderer.chunk_instances.size(), terrain_generator.get_stats(), voxel_model.get_stats()])
+	print("[Wildes] World ready: %d chunks gen=%s model=%s streaming=%s infinite=%s" % [chunk_renderer.chunk_instances.size(), terrain_generator.get_stats(), voxel_model.get_stats(), chunk_manager.get_stats() if chunk_manager else {}, config.infinite_world if config else false])
 
 
 func initialize_world_async() -> void:
@@ -160,8 +202,9 @@ func initialize_world_async() -> void:
 	generation_progress.emit("config", 0.05, "Preparing config (seed %d)" % seed_value)
 	await get_tree().process_frame
 
-	print("[Wildes] Async generating %dx%d world (seed %d)" % [world_size, world_size, seed_value])
-	generation_progress.emit("terrain", 0.1, "Generating heightmap...")
+	var infinite_str = "INFINITE" if config and config.infinite_world else "%dx%d" % [world_size, world_size]
+	print("[Wildes] Async generating %s world (seed %d) infinite=%s" % [infinite_str, seed_value, config.infinite_world if config else false])
+	generation_progress.emit("terrain", 0.1, "Generating terrain (%s)..." % infinite_str)
 
 	terrain_generator = TerrainGenerator.new(config)
 	var gen = terrain_generator.generate_all()
@@ -170,8 +213,16 @@ func initialize_world_async() -> void:
 	await get_tree().process_frame
 
 	generation_progress.emit("model", 0.4, "Building voxel model...")
-	voxel_model = VoxelWorld.new(world_size, chunk_size, max_build_y)
-	voxel_model.setup(world_size, chunk_size, max_build_y, gen["height_map"], gen["type_map"], gen["tree_block_fast"], gen["tree_blocks"])
+	if config and config.infinite_world:
+		var effective_ws = config.get_effective_world_size()
+		voxel_model = VoxelWorld.new(effective_ws, chunk_size, max_build_y)
+		voxel_model.setup_infinite(chunk_size, max_build_y)
+		voxel_model.set_generator_ref(terrain_generator)
+		voxel_model.apply_chunk_gen(gen)
+		voxel_model.apply_tree_chunk(gen)
+	else:
+		voxel_model = VoxelWorld.new(world_size, chunk_size, max_build_y)
+		voxel_model.setup(world_size, chunk_size, max_build_y, gen["height_map"], gen["type_map"], gen["tree_block_fast"], gen["tree_blocks"])
 
 	if not pending_save_data.is_empty():
 		_apply_save_data_to_model(pending_save_data)
@@ -186,21 +237,31 @@ func initialize_world_async() -> void:
 
 	# Chunk generation with progress 0.55 -> 0.95
 	generation_progress.emit("chunks", 0.55, "Generating chunks...")
-	await _generate_chunks_async()
+	if config and config.chunk_streaming_enabled:
+		await _generate_chunks_async_streaming()
+	else:
+		await _generate_chunks_async()
 
 	generation_progress.emit("water", 0.95, "Creating water plane...")
 	_create_water_plane()
 	await get_tree().process_frame
 
 	generation_progress.emit("done", 1.0, "%d chunks ready" % chunk_renderer.chunk_instances.size())
-	print("[Wildes] World ready async: %d chunks gen=%s model=%s" % [chunk_renderer.chunk_instances.size(), terrain_generator.get_stats(), voxel_model.get_stats()])
+	print("[Wildes] World ready async: %d chunks gen=%s model=%s streaming=%s" % [chunk_renderer.chunk_instances.size(), terrain_generator.get_stats(), voxel_model.get_stats(), chunk_manager.get_stats() if chunk_manager else {}])
 	_has_generated = true
 
 
 func _generate_chunks_async() -> void:
+	# Full world generation (fallback when streaming disabled)
 	if chunk_renderer == null:
 		return
 	chunk_renderer.clear()
+	if chunk_manager:
+		chunk_manager.clear()
+	if config and config.infinite_world:
+		# For infinite non-streaming doesn't make sense, but generate around spawn only
+		await _generate_chunks_async_streaming()
+		return
 	var chunks_x = int(ceil(float(world_size) / float(chunk_size)))
 	var chunks_z = int(ceil(float(world_size) / float(chunk_size)))
 	var total = chunks_x * chunks_z
@@ -209,13 +270,66 @@ func _generate_chunks_async() -> void:
 		for cz in range(chunks_z):
 			chunk_renderer.rebuild_immediate(cx, cz)
 			done += 1
-			var prog = 0.55 + (float(done) / float(total)) * 0.4 # 0.55->0.95
+			var prog = 0.55 + (float(done) / float(total)) * 0.4
 			if done % 3 == 0 or done == total:
 				generation_progress.emit("chunks", prog, "Chunks %d/%d" % [done, total])
 				await get_tree().process_frame
-			# Also yield every chunk for smoother bar on low-end
 			if done % 10 == 0:
 				await get_tree().process_frame
+
+func _generate_chunks_async_streaming() -> void:
+	if chunk_renderer == null:
+		return
+	chunk_renderer.clear()
+	if chunk_manager:
+		chunk_manager.clear()
+	var initial_pos = voxel_model.get_spawn_position() if voxel_model else Vector3(0,10,0)
+	if not pending_save_data.is_empty() and pending_save_data.has("player_position"):
+		var arr = pending_save_data["player_position"]
+		if arr is Array and arr.size() == 3:
+			var p = Vector3(float(arr[0]), float(arr[1]), float(arr[2]))
+			if p != Vector3.ZERO and p.length() > 1.0:
+				initial_pos = p
+				print("[WorldController] Async streaming using saved player pos %s" % initial_pos)
+	var center_chunk = ChunkCoord.world_to_chunk(initial_pos, chunk_size)
+	var desired: Array[Vector2i]
+	if config and config.infinite_world:
+		desired = ChunkCoord.get_chunks_in_radius_infinite(center_chunk, config.render_distance)
+	else:
+		desired = ChunkCoord.get_chunks_in_radius(center_chunk, config.render_distance, world_size, chunk_size)
+	desired = ChunkCoord.sort_by_distance(desired, center_chunk)
+	var total = desired.size()
+	var done = 0
+	print("[WorldController] Streaming async gen around %s center chunk %s desired %d infinite=%s" % [initial_pos, center_chunk, total, config.infinite_world if config else false])
+	for coord in desired:
+		# Ensure terrain data exists before meshing (critical for infinite)
+		if config and config.infinite_world and chunk_manager:
+			chunk_manager.ensure_terrain_for_chunk(coord)
+		elif config and config.infinite_world and terrain_generator and voxel_model:
+			# Fallback if manager not ready
+			var ox = coord.x * chunk_size
+			var oz = coord.y * chunk_size
+			var cd = terrain_generator.generate_chunk_region(ox-1, oz-1, chunk_size+2, chunk_size+2)
+			voxel_model.apply_chunk_gen(cd)
+			var td = terrain_generator.generate_trees_for_chunk(ox, oz, chunk_size, chunk_size)
+			voxel_model.apply_tree_chunk(td)
+
+		chunk_renderer.rebuild_immediate(coord.x, coord.y)
+		if chunk_manager:
+			chunk_manager.loaded_chunks[coord] = true
+			chunk_manager.total_loads += 1
+		# Load torches for this chunk
+		if torch_renderer and voxel_model:
+			torch_renderer.load_torches_for_chunk(coord.x, coord.y, chunk_size, voxel_model.torch_attachments)
+		done += 1
+		var prog = 0.55 + (float(done) / float(max(total,1))) * 0.4
+		if done % 2 == 0 or done == total:
+			generation_progress.emit("chunks", prog, "Chunks %d/%d (streaming radius %d)" % [done, total, config.render_distance])
+			await get_tree().process_frame
+		if done % 5 == 0:
+			await get_tree().process_frame
+	if chunk_manager:
+		chunk_manager.last_player_chunk = center_chunk
 
 
 func set_seed_override(s: int):
@@ -252,16 +366,41 @@ func _apply_save_data_to_model(save_dict: Dictionary):
 	print("[WorldController] Applied save: %d placed, %d removed, %d torches" % [placed.size(), removed.size(), torches.size()])
 
 
+func _on_chunk_loaded(coord: Vector2i):
+	if torch_renderer and voxel_model:
+		torch_renderer.load_torches_for_chunk(coord.x, coord.y, chunk_size, voxel_model.torch_attachments)
+
+func _on_chunk_unloaded(coord: Vector2i):
+	if torch_renderer:
+		torch_renderer.unload_torches_in_chunk(coord.x, coord.y, chunk_size)
+
 func _on_block_edit_committed(edit: BlockEdit):
-	if edit.is_mine():
-		chunk_renderer.queue_rebuild_for_world_pos(edit.pos)
-		if edit.old_id == BlockId.Type.TORCH:
-			torch_renderer.remove_torch(edit.pos)
-	else:
-		if edit.new_id == BlockId.Type.TORCH:
-			torch_renderer.spawn_torch(edit.pos, edit.attach_dir)
-		else:
+	if chunk_renderer == null:
+		return
+	# Only queue rebuild if chunk is currently loaded (or if streaming disabled)
+	var should_queue = true
+	var edit_chunk = ChunkCoord.world_to_chunk_vec3i(edit.pos, chunk_size)
+	if config and config.chunk_streaming_enabled and chunk_manager:
+		if not chunk_manager.is_chunk_loaded(edit_chunk) and not chunk_renderer.is_chunk_loaded(edit_chunk.x, edit_chunk.y):
+			should_queue = false
+
+	if should_queue:
+		if edit.is_mine():
 			chunk_renderer.queue_rebuild_for_world_pos(edit.pos)
+			if edit.old_id == BlockId.Type.TORCH:
+				torch_renderer.remove_torch(edit.pos)
+		else:
+			if edit.new_id == BlockId.Type.TORCH:
+				# Only spawn torch visually if its chunk is currently loaded
+				if (not config or not config.chunk_streaming_enabled) or chunk_manager.is_chunk_loaded(edit_chunk) or chunk_renderer.is_chunk_loaded(edit_chunk.x, edit_chunk.y):
+					torch_renderer.spawn_torch(edit.pos, edit.attach_dir)
+			else:
+				chunk_renderer.queue_rebuild_for_world_pos(edit.pos)
+	else:
+		# Chunk not loaded: don't spawn torch mesh now, it will appear when chunk loads via _on_chunk_loaded
+		# For removal, if torch instance exists (shouldn't when chunk unloaded) remove it
+		if edit.is_mine() and edit.old_id == BlockId.Type.TORCH:
+			torch_renderer.remove_torch(edit.pos)
 
 func _get_chunk_container() -> Node3D:
 	return $Chunks as Node3D
@@ -270,40 +409,90 @@ func _get_water_container() -> Node3D:
 func _get_torch_container() -> Node3D:
 	return $SpecialBlocks/TorchContainer as Node3D
 
+func set_player_ref(p: Node3D):
+	_player_ref = p
+	if chunk_manager:
+		chunk_manager.set_player_ref(p)
+	if torch_renderer:
+		torch_renderer.set_player_ref(p)
+	print("[WorldController] Player ref set %s" % (p.global_position if p else "null"))
+
+func get_chunk_manager() -> ChunkManager:
+	return chunk_manager
+
 func _setup_rendering_systems():
 	chunk_mesher = ChunkMesher.new(world_size, chunk_size, max_build_y, seed_value, enable_ao)
 	chunk_mesher.configure_from_config(config)
 	var c_container = _get_chunk_container()
 	chunk_renderer = ChunkRenderSystem.new()
-	chunk_renderer.setup(c_container, chunk_mesher, terrain_material, world_size, chunk_size, max_build_y, seed_value, voxel_model)
+	# For infinite, world_size is huge, but renderer needs effective size for clamping check - pass large if infinite
+	var effective_ws = config.get_effective_world_size() if config else world_size
+	chunk_renderer.setup(c_container, chunk_mesher, terrain_material, effective_ws, chunk_size, max_build_y, seed_value, voxel_model)
 	var t_container = _get_torch_container()
 	torch_renderer = TorchRenderSystem.new(t_container)
+	# Chunk streaming manager with terrain generator ref for infinite on-demand gen
+	chunk_manager = ChunkManager.new()
+	chunk_manager.setup(config, voxel_model, chunk_renderer, terrain_generator)
+	if not chunk_manager.chunk_loaded.is_connected(_on_chunk_loaded):
+		chunk_manager.chunk_loaded.connect(_on_chunk_loaded)
+	if not chunk_manager.chunk_unloaded.is_connected(_on_chunk_unloaded):
+		chunk_manager.chunk_unloaded.connect(_on_chunk_unloaded)
+	if _player_ref:
+		chunk_manager.set_player_ref(_player_ref)
 
 func _prepare_materials():
 	var terrain_shader = load("res://shaders/terrain.gdshader")
 	terrain_material = ShaderMaterial.new()
 	if terrain_shader:
 		terrain_material.shader = terrain_shader
-		terrain_material.set_shader_parameter("world_size", float(world_size))
 		terrain_material.set_shader_parameter("terrain_saturation", 1.1)
 		terrain_material.set_shader_parameter("terrain_contrast", 1.3)
-		terrain_material.set_shader_parameter("haze_color", Vector3(0.75, 0.87, 0.94))
 
 func _process(delta):
+	# Handle chunk streaming - continuous, seamless async
+	if chunk_manager and config and config.chunk_streaming_enabled:
+		var player_pos: Vector3 = Vector3.INF
+		if _player_ref and is_instance_valid(_player_ref):
+			player_pos = _player_ref.global_position
+		elif voxel_model:
+			player_pos = voxel_model.get_spawn_position()
+		chunk_manager.tick(delta, player_pos if player_pos != Vector3.INF else voxel_model.get_spawn_position())
+
 	if chunk_renderer:
+		chunk_renderer.poll_async(4)
 		chunk_renderer.flush_dirty(chunk_renderer.max_per_frame)
 	if torch_renderer:
 		torch_renderer.update_shadow_culling(delta)
+
+	# Infinite water plane follows player
+	if config and config.infinite_world and config.show_water:
+		var water_cont = _get_water_container()
+		if water_cont and water_cont.get_child_count() > 0 and _player_ref and is_instance_valid(_player_ref):
+			var wp = water_cont.get_child(0) as Node3D
+			if wp:
+				wp.global_position.x = _player_ref.global_position.x
+				wp.global_position.z = _player_ref.global_position.z
 
 func _create_water_plane():
 	if not show_water:
 		return
 	var water_mesh = PlaneMesh.new()
-	water_mesh.size = Vector2(world_size, world_size)
+	var plane_size: float
+	var plane_pos: Vector3
+	if config and config.infinite_world:
+		plane_size = float(config.infinite_water_size)
+		plane_pos = Vector3(0, float(water_level) + 0.45, 0)
+		if _player_ref and is_instance_valid(_player_ref):
+			plane_pos.x = _player_ref.global_position.x
+			plane_pos.z = _player_ref.global_position.z
+	else:
+		plane_size = float(world_size)
+		plane_pos = Vector3(world_size * 0.5, float(water_level) + 0.45, world_size * 0.5)
+	water_mesh.size = Vector2(plane_size, plane_size)
 	var mi = MeshInstance3D.new()
 	mi.mesh = water_mesh
 	mi.name = "WaterPlane"
-	mi.position = Vector3(world_size * 0.5, float(water_level) + 0.45, world_size * 0.5)
+	mi.position = plane_pos
 	var water_shader = load("res://shaders/water.gdshader")
 	var mat: Material
 	if water_shader:
@@ -336,5 +525,8 @@ func get_world_stats() -> Dictionary:
 		"torch_render": torch_renderer.get_stats() if torch_renderer else {},
 		"model": voxel_model.get_stats() if voxel_model else {},
 		"generation": terrain_generator.get_stats() if terrain_generator else {},
+		"streaming": chunk_manager.get_stats() if chunk_manager else {},
 		"config_path": config.resource_path if config else "",
+		"streaming_enabled": config.chunk_streaming_enabled if config else false,
+		"render_distance": config.render_distance if config else 0,
 	}

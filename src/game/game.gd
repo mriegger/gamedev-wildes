@@ -165,7 +165,7 @@ func _setup_all(saved_pos: Vector3 = Vector3.ZERO, has_saved: bool = false, save
 	targeting_view.setup(world, world.voxel_model, player, interactor, camera_3d)
 	camera_rig.setup(player)
 
-	world.torch_renderer.set_player_ref(player)
+	world.set_player_ref(player)
 
 	# Restore time of day before day-night setup so sky starts correctly
 	if has_saved_time:

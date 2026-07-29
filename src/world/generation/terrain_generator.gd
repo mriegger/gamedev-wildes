@@ -74,6 +74,120 @@ func setup_noises():
 	noise_ridges.frequency = config.ridges_frequency
 	noise_ridges.fractal_octaves = config.ridges_octaves
 
+# --- Infinite-aware per-coordinate helpers ---
+func compute_height_at_world(x: int, z: int) -> int:
+	if noise_hills == null:
+		setup_noises()
+	var meadow_center = config.get_meadow_center()
+	var meadow_radius = config.meadow_radius
+	var meadow_target_h = config.meadow_target_height
+
+	var n_hills = noise_hills.get_noise_2d(float(x), float(z))
+	var n_detail = noise_detail.get_noise_2d(float(x), float(z)) * 0.6
+	var n_biome_n = noise_biome.get_noise_2d(float(x) * 0.5, float(z) * 0.5) * 0.8
+	var n_ridge_raw = noise_ridges.get_noise_2d(float(x), float(z))
+	var ridge = 1.0 - abs(n_ridge_raw)
+
+	var h = config.base_height + n_hills * 6.5 + n_detail * 1.8 + n_biome_n * 2.2
+	if ridge > 0.72:
+		h += (ridge - 0.72) * 8.0
+
+	if not config.infinite_world:
+		var cx = (float(x) - config.world_size * 0.5) / float(config.world_size)
+		var cz = (float(z) - config.world_size * 0.5) / float(config.world_size)
+		var dist_edge = sqrt(cx * cx + cz * cz)
+		h -= dist_edge * 2.2
+
+	var d_center = Vector2(x, z).distance_to(meadow_center)
+	if d_center < meadow_radius:
+		var t = 1.0 - d_center / meadow_radius
+		h = lerp(h, meadow_target_h, t * 0.75)
+
+	var ih = int(round(h))
+	ih = clamp(ih, 2, config.max_height)
+	return ih
+
+func compute_type_and_biome_at_world(x: int, z: int, h: int) -> Dictionary:
+	if noise_forest == null or noise_ridges == null:
+		setup_noises()
+	var meadow_center = config.get_meadow_center()
+	var meadow_radius = config.meadow_radius
+
+	var n_forest = noise_forest.get_noise_2d(float(x), float(z))
+	var n_ridge_raw = noise_ridges.get_noise_2d(float(x), float(z))
+	var ridge = 1.0 - abs(n_ridge_raw)
+	var d_center = Vector2(x, z).distance_to(meadow_center)
+
+	var max_diff = 0
+	# For infinite, compute neighbor heights on the fly for slope
+	for d in [Vector2i(1,0), Vector2i(-1,0), Vector2i(0,1), Vector2i(0,-1)]:
+		var nx = x + d.x
+		var nz = z + d.y
+		var nh = compute_height_at_world(nx, nz)
+		var dh = abs(nh - h)
+		if dh > max_diff:
+			max_diff = dh
+
+	var t: int
+	var b: Biome
+
+	if d_center < meadow_radius - 2.0:
+		t = BlockId.Type.GRASS
+		b = Biome.MEADOW
+	elif h <= config.water_level + 1:
+		t = BlockId.Type.SAND
+		b = Biome.LOWLAND
+	elif h <= config.water_level + 2:
+		var lowland = noise_biome.get_noise_2d(float(x) * 0.3, float(z) * 0.3)
+		if lowland < 0.0 or d_center < meadow_radius + 8.0:
+			if h <= config.water_level + 2 and lowland < -0.15:
+				t = BlockId.Type.SAND
+				b = Biome.LOWLAND
+			else:
+				if lowland > -0.1:
+					t = BlockId.Type.GRASS
+					b = Biome.MEADOW
+				else:
+					t = BlockId.Type.SAND
+					b = Biome.LOWLAND
+		else:
+			t = BlockId.Type.SAND
+			b = Biome.LOWLAND
+	else:
+		if ridge > config.stone_ridge_threshold and h >= 11:
+			t = BlockId.Type.STONE
+			b = Biome.RIDGE
+		elif ridge > config.stone_ridge_soft_threshold and h >= 13 and n_forest < 0.2:
+			t = BlockId.Type.STONE
+			b = Biome.RIDGE
+		elif h >= 15:
+			var stone_chance = (h - 14) * 0.26
+			# Use deterministic random based on coord for infinite
+			var rc = float((abs(x * 73856093 ^ z * 19349663) % 1000)) / 1000.0
+			if rc < stone_chance or max_diff >= 3:
+				t = BlockId.Type.STONE
+				b = Biome.RIDGE
+			else:
+				t = BlockId.Type.GRASS
+				b = Biome.FOREST if n_forest > 0.0 else Biome.MEADOW
+		elif max_diff >= 3:
+			t = BlockId.Type.STONE
+			b = Biome.RIDGE
+		elif max_diff == 2:
+			var rc2 = float((abs(x * 83492791 ^ z * 234899) % 1000)) / 1000.0
+			if rc2 < 0.5:
+				t = BlockId.Type.STONE
+				b = Biome.RIDGE
+			else:
+				t = BlockId.Type.GRASS
+				b = Biome.FOREST if n_forest > -0.1 else Biome.MEADOW
+		else:
+			t = BlockId.Type.GRASS
+			b = Biome.FOREST if n_forest > -0.1 else Biome.MEADOW
+
+	return {"type": t, "biome": b, "max_diff": max_diff}
+
+
 
 func generate_height_map() -> Array:
 	if noise_hills == null:
@@ -449,23 +563,56 @@ func get_type_at(x: int, z: int) -> int:
 
 func generate_all() -> Dictionary:
 	setup_noises()
-	generate_height_map()
-	generate_type_and_biome_maps()
-	generate_trees()
-	var spawn = get_spawn_position()
-	var spawn_candidates = get_spawn_candidates()
+	if config.infinite_world:
+		# Infinite: don't generate whole world, just prepare for on-demand
+		# Generate height/type/biome dict for initial area around meadow for spawn finding
+		var init_radius = int(config.meadow_radius + 20)
+		var gen = generate_chunk_region(-init_radius, -init_radius, init_radius*2, init_radius*2)
+		# Convert dict to temporary arrays for spawn logic? For infinite we keep dict but also build small temp maps for spawn
+		# For compatibility, keep height_map empty and use dict cache
+		# Build small tree set around origin for initial trees
+		var tree_gen = generate_trees_for_chunk(-init_radius, -init_radius, init_radius*2, init_radius*2)
+		tree_blocks = tree_gen["tree_blocks"]
+		tree_block_fast = tree_gen["tree_block_fast"]
+		var spawn = Vector3(0.5, float(compute_height_at_world(0,0)) + 1.0, 0.5)
+		var candidates: Array[Vector3] = []
+		for dx in range(-int(config.meadow_radius), int(config.meadow_radius)+1):
+			for dz in range(-int(config.meadow_radius), int(config.meadow_radius)+1):
+				if Vector2(dx, dz).length() > config.meadow_radius:
+					continue
+				var h = compute_height_at_world(dx, dz)
+				candidates.append(Vector3(dx+0.5, float(h)+1.0, dz+0.5))
+		return {
+			"config": config,
+			"height_map": gen["height"], # dict for infinite
+			"type_map": gen["type"],
+			"biome_map": gen["biome"],
+			"tree_blocks": tree_blocks,
+			"tree_block_fast": tree_block_fast,
+			"spawn_position": spawn,
+			"spawn_candidates": candidates,
+			"seed": config.seed_value,
+			"infinite": true,
+		}
+	else:
+		generate_height_map()
+		generate_type_and_biome_maps()
+		generate_trees()
+		var spawn = get_spawn_position()
+		var spawn_candidates = get_spawn_candidates()
 
-	return {
-		"config": config,
-		"height_map": height_map,
-		"type_map": type_map,
-		"biome_map": biome_map,
-		"tree_blocks": tree_blocks,
-		"tree_block_fast": tree_block_fast,
-		"spawn_position": spawn,
-		"spawn_candidates": spawn_candidates,
-		"seed": config.seed_value,
-	}
+		return {
+			"config": config,
+			"height_map": height_map,
+			"type_map": type_map,
+			"biome_map": biome_map,
+			"tree_blocks": tree_blocks,
+			"tree_block_fast": tree_block_fast,
+			"spawn_position": spawn,
+			"spawn_candidates": spawn_candidates,
+			"seed": config.seed_value,
+			"infinite": false,
+		}
 
 func get_stats() -> Dictionary:
 	return {
@@ -492,3 +639,169 @@ func _count_biome(b: Biome) -> int:
 			if biome_map[x][z] == b:
 				c += 1
 	return c
+
+# ------------------------------------------------------------------
+# Chunk streaming helpers - on-demand per-chunk generation (infinite ready)
+# ------------------------------------------------------------------
+
+func generate_chunk_region(origin_x: int, origin_z: int, size_x: int, size_z: int) -> Dictionary:
+	if noise_hills == null:
+		setup_noises()
+
+	# For finite world we keep array cache for backward compat, for infinite we use compute_* helpers
+	var out_h: Dictionary = {}
+	var out_t: Dictionary = {}
+	var out_b: Dictionary = {}
+
+	if config.infinite_world:
+		for x in range(origin_x, origin_x + size_x):
+			for z in range(origin_z, origin_z + size_z):
+				var h = compute_height_at_world(x, z)
+				var tb = compute_type_and_biome_at_world(x, z, h)
+				out_h[Vector2i(x,z)] = h
+				out_t[Vector2i(x,z)] = tb["type"]
+				out_b[Vector2i(x,z)] = tb["biome"]
+		return {"height": out_h, "type": out_t, "biome": out_b}
+
+	# Finite path - old behavior with bounds checks
+	if height_map.is_empty():
+		height_map.resize(config.world_size)
+		for x in range(config.world_size):
+			if x >= height_map.size(): continue
+			if height_map[x] == null or height_map[x].is_empty():
+				height_map[x] = []
+				height_map[x].resize(config.world_size)
+
+	for x in range(origin_x, origin_x + size_x):
+		if x < 0 or x >= config.world_size:
+			continue
+		for z in range(origin_z, origin_z + size_z):
+			if z < 0 or z >= config.world_size:
+				continue
+			var h: int
+			if x < height_map.size() and z < height_map[x].size() and height_map[x][z] is int:
+				h = height_map[x][z]
+			else:
+				h = compute_height_at_world(x, z)
+				if x < height_map.size() and z < height_map[x].size():
+					height_map[x][z] = h
+
+			if not type_map.is_empty() and x < type_map.size() and type_map[x] and z < type_map[x].size() and type_map[x][z] != null:
+				out_h[Vector2i(x,z)] = h
+				out_t[Vector2i(x,z)] = type_map[x][z]
+				if not biome_map.is_empty() and x < biome_map.size() and biome_map[x] and z < biome_map[x].size():
+					out_b[Vector2i(x,z)] = biome_map[x][z]
+				continue
+
+			var tb = compute_type_and_biome_at_world(x, z, h)
+			out_h[Vector2i(x,z)] = h
+			out_t[Vector2i(x,z)] = tb["type"]
+			out_b[Vector2i(x,z)] = tb["biome"]
+
+	return {"height": out_h, "type": out_t, "biome": out_b}
+
+func generate_for_chunk(cx: int, cz: int, p_chunk_size: int) -> Dictionary:
+	var origin_x = cx * p_chunk_size
+	var origin_z = cz * p_chunk_size
+	return generate_chunk_region(origin_x, origin_z, p_chunk_size, p_chunk_size)
+
+func ensure_region_generated(origin_x: int, origin_z: int, size_x: int, size_z: int):
+	if config.infinite_world:
+		# For infinite we don't prefill global arrays, just ensure region dict exists via generate_chunk_region
+		generate_chunk_region(origin_x, origin_z, size_x, size_z)
+		return
+	if height_map.is_empty():
+		generate_height_map()
+	if type_map.is_empty() or biome_map.is_empty():
+		generate_type_and_biome_maps()
+	generate_chunk_region(origin_x, origin_z, size_x, size_z)
+
+func generate_trees_for_chunk(origin_x: int, origin_z: int, size_x: int, size_z: int, existing_positions: Array = []) -> Dictionary:
+	# Deterministic per-chunk tree generation for infinite world
+	if noise_forest == null:
+		setup_noises()
+	var meadow_center = config.get_meadow_center()
+	var meadow_radius = config.meadow_radius
+	var out_blocks: Array = []
+	var out_fast: Dictionary = {}
+
+	# Seed rng based on chunk origin + world seed for determinism
+	var chunk_rng = RandomNumberGenerator.new()
+	chunk_rng.seed = config.seed_value + origin_x * 73856093 + origin_z * 19349663
+
+	var positions: Array = existing_positions.duplicate()
+
+	for x in range(origin_x, origin_x + size_x):
+		for z in range(origin_z, origin_z + size_z):
+			if config.infinite_world == false and (x < 0 or x >= config.world_size or z < 0 or z >= config.world_size):
+				continue
+			var h = compute_height_at_world(x, z)
+			if h <= config.water_level + 2:
+				continue
+			# Trees should only spawn on GRASS (not stone/sand)
+			var type_info = compute_type_and_biome_at_world(x, z, h)
+			if type_info["type"] != BlockId.Type.GRASS:
+				continue
+			var d_center = Vector2(x, z).distance_to(meadow_center)
+			if d_center < meadow_radius - 2.0:
+				continue
+
+			# quick slope check via neighbor heights
+			var max_diff = 0
+			for d in [Vector2i(1,0), Vector2i(-1,0), Vector2i(0,1), Vector2i(0,-1)]:
+				var nh = compute_height_at_world(x + d.x, z + d.y)
+				max_diff = max(max_diff, abs(nh - h))
+			if max_diff > 1:
+				continue
+
+			var n_forest = noise_forest.get_noise_2d(float(x), float(z))
+			var forest_factor = clamp((n_forest + 0.2) * 1.2, 0.0, 1.2)
+			var height_factor = clamp((h - config.base_height) / 6.0, 0.2, 1.0)
+			var effective_density = config.tree_density * (0.6 + forest_factor * 0.9 + height_factor * 0.5)
+
+			if chunk_rng.randf() > effective_density:
+				continue
+
+			var too_close = false
+			for p in positions:
+				if abs(p.x - x) < 4 and abs(p.y - z) < 4:
+					if Vector2i(x, z).distance_to(p) < config.tree_spacing:
+						too_close = true
+						break
+			if too_close:
+				continue
+			positions.append(Vector2i(x, z))
+
+			# Add tree
+			var trunk_h = config.tree_trunk_min + (chunk_rng.randi() % (config.tree_trunk_max - config.tree_trunk_min + 1))
+			for y in range(h + 1, h + 1 + trunk_h):
+				var pos = Vector3i(x, y, z)
+				if not out_fast.has(pos):
+					out_fast[pos] = BlockId.Type.LOG
+					out_blocks.append({"pos": pos, "type": BlockId.Type.LOG})
+			var leaves_base_y = h + trunk_h + 1
+			for dx in range(-1, 2):
+				for dz in range(-1, 2):
+					var nx = x + dx
+					var nz = z + dz
+					var p = Vector3i(nx, leaves_base_y, nz)
+					if not out_fast.has(p):
+						out_fast[p] = BlockId.Type.LEAVES
+						out_blocks.append({"pos": p, "type": BlockId.Type.LEAVES})
+			for dx in range(-1, 2):
+				for dz in range(-1, 2):
+					if abs(dx) == 1 and abs(dz) == 1 and chunk_rng.randf() < 0.5:
+						continue
+					var nx = x + dx
+					var nz = z + dz
+					var p = Vector3i(nx, leaves_base_y + 1, nz)
+					if not out_fast.has(p):
+						out_fast[p] = BlockId.Type.LEAVES
+						out_blocks.append({"pos": p, "type": BlockId.Type.LEAVES})
+			var top = Vector3i(x, leaves_base_y + 2, z)
+			if not out_fast.has(top):
+				out_fast[top] = BlockId.Type.LEAVES
+				out_blocks.append({"pos": top, "type": BlockId.Type.LEAVES})
+
+	return {"tree_blocks": out_blocks, "tree_block_fast": out_fast, "positions": positions}
+
