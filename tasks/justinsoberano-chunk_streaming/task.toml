@@ -1,0 +1,22 @@
+name = "Chunk Streaming"
+instruction = "./instruction.md"
+
+[game]
+# Controlled vocabularies — see the game-level README.md.
+tags = ["sandbox", "building", "exploration"]   # same voxel sandbox; this task makes the world infinite + streamed around the player
+tech-stack-tags = ["godot", "gdscript"]          # Godot 4.7 + GDScript, GL Compatibility renderer
+assets-used = ["primitives"]                      # all cube/box meshes + shaders, procedural — no imported art (spec forbids new assets)
+harness = "tbh"
+# No static screenshots: terrain is deterministic, so both builds render a near-identical
+# still frame — the difference (Avocado stutters, Claude is smooth) is temporal and lives
+# in the gameplay videos below. Add frame-time/motion captures here if produced later.
+screenshots = []
+videos = ["https://pxl.cl/bWNS2"]                 # gold-solution gameplay (PixelCloud) — smooth continuous streaming, no edge
+teaser = "https://pxl.cl/bWNS2"                    # gold-solution highlight (PixelCloud)
+base-commit-hash = "5d2f615aa57b0a761c2e85134f045d8164b840eb"  # main tip = Task-004 UI/saves gold — the src the models start from
+commit-hash = "353a7505dc57951ccc571a87d5d0b86e57c55358"       # Task-005 golden solution (base..commit = the task diff)
+
+# Committed review builds — one entry per platform in ./binaries/. None committed
+# (run from source: `godot --path src`); build-macos-release builds the macOS one from commit-hash.
+[binaries]
+# macos = "./binaries/Wildes-macos.zip"
