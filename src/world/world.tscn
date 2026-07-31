@@ -9,8 +9,6 @@ config = ExtResource("2_config")
 
 [node name="Chunks" type="Node3D" parent="."]
 
-[node name="Water" type="Node3D" parent="."]
-
 [node name="SpecialBlocks" type="Node3D" parent="."]
 
 [node name="TorchContainer" type="Node3D" parent="SpecialBlocks"]

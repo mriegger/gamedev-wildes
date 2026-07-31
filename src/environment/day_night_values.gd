@@ -147,6 +147,23 @@ func apply(time_of_day: float):
 		fill_light.light_energy = state["fill_energy"]
 		fill_light.shadow_enabled = false
 
+	# Update water with sky, sun color and sun direction for proper specular
+	_update_water_reflection(state["sky"], state["sun_col"], sun_pos.normalized())
+
+
+func _update_water_reflection(sky_col: Color, sun_col: Color, sun_dir: Vector3 = Vector3(0.35, 0.72, 0.28)):
+	var world: Node = null
+	var parent = get_parent()
+	if parent:
+		world = parent.get_node_or_null("World")
+		if world == null:
+			var tree = get_tree()
+			if tree:
+				var root = tree.current_scene
+				if root:
+					world = root.get_node_or_null("World")
+		if world and world.has_method("update_water_environment"):
+			world.update_water_environment(sky_col, sun_col, sun_dir)
 
 func _set_light_direction(light: DirectionalLight3D, dir: Vector3):
 	if light == null:

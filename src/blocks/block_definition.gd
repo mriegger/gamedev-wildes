@@ -172,6 +172,22 @@ func _apply_defaults():
 			light_range = 9.0 # TORCH_OMNI_RANGE
 			light_color = Color(1.0, 0.96, 0.88)
 
+		BlockId.Type.WATER:
+			is_solid = false # player can swim through, not collide
+			is_opaque = false # light passes, transparent
+			is_occupying = true # occupies voxel, but replaceable
+			is_raycast_solid = false # not targeted by raycast for mining (optional)
+			is_breakable = true
+			is_replaceable = true
+			hardness = 100.0 
+			# Deeper blue - synced with WaterProfile.tint_color Vector4(0.08, 0.35, 0.65, 0.88)
+			top_color = Color(0.08, 0.35, 0.65, 0.65) # translucent blue
+			side_color = Color(0.06, 0.28, 0.56, 0.60)
+			bottom_color = Color(0.05, 0.24, 0.50, 0.65)
+			transparency = 0.55
+			color_variation = 0.02
+			flammable = false
+
 func get_effective_top_color(var_offset: float = 0.0) -> Color:
 	if is_air():
 		return Color(0, 0, 0, 0)

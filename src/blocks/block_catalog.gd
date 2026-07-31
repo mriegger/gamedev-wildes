@@ -62,6 +62,12 @@ func is_breakable(id: int) -> bool:
 	var def = get_definition(id)
 	return def.is_breakable if def else false
 
+func is_replaceable(id: int) -> bool:
+	if id == BlockId.Type.AIR:
+		return true
+	var def = get_definition(id)
+	return def.is_replaceable if def else false
+
 func get_display_name(id: int) -> String:
 	return BlockId.get_display_name(id as BlockId.Type)
 

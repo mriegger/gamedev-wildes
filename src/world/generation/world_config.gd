@@ -11,11 +11,9 @@ class_name WorldConfig
 @export var max_height: int = 20
 @export var build_extra: int = 8
 @export var water_level: int = 5
-@export var show_water: bool = true
 
 @export_group("Infinite World")
 @export var infinite_world: bool = true
-@export var infinite_water_size: int = 1000
 
 var max_build_y: int:
 	get:
@@ -65,6 +63,32 @@ var max_build_y: int:
 @export var ridges_octaves: int = 2
 @export var ridges_seed_offset: int = 404
 
+@export_group("Lakes")
+@export var lake_enabled: bool = true
+@export var lake_count: int = 5 # finite: more lakes
+@export var lake_radius_min: int = 16
+@export var lake_radius_max: int = 42
+@export var lake_depth: int = 6
+@export var lake_min_dist_from_meadow: float = 28.0
+@export var lake_grid_size: int = 180 # infinite: smaller cell = more lakes
+@export var lake_chance_per_cell: float = 0.68 # more common
+@export var lake_rim_blend: float = 0.80
+
+@export_group("Rivers")
+@export var river_enabled: bool = true
+@export var river_count: int = 4 # finite worlds
+@export var river_width_min: int = 2 # less narrow than 1-3
+@export var river_width_max: int = 4
+@export var river_depth: int = 3
+@export var river_min_length: int = 70
+@export var river_max_length: int = 200
+@export var river_grid_size: int = 350
+@export var river_chance_per_cell: float = 0.55
+@export var river_min_dist_from_meadow: float = 22.0
+@export var river_carve_blend: float = 0.55 # gradual slope, not sharp drop
+@export var river_frequency: float = 0.006 # slightly less twisty for wider feel
+@export var river_seed_offset: int = 505
+
 @export_group("Lighting / Rendering")
 @export var enable_ao: bool = true
 @export var ao_darkness: float = 0.22
@@ -75,9 +99,9 @@ var max_build_y: int:
 @export var chunk_streaming_enabled: bool = true
 @export var render_distance: int = 4
 @export var unload_padding: int = 2
-@export var max_chunk_loads_per_frame: int = 2 # 1-2 keeps main thread <8ms, mesh built in thread
+@export var max_chunk_loads_per_frame: int = 1 # 1 keeps main thread <10ms with lakes, mesh in thread
 @export var max_chunk_unloads_per_frame: int = 4
-@export var chunk_update_interval: float = 0.1
+@export var chunk_update_interval: float = 0.15
 
 
 func get_meadow_center() -> Vector2:
@@ -161,5 +185,58 @@ func validate() -> bool:
 		return false
 	if chunk_update_interval < 0.05 or chunk_update_interval > 2.0:
 		push_error("[WorldConfig] chunk_update_interval %.2f invalid" % chunk_update_interval)
+		return false
+	# Lakes validation
+	if lake_count < 0 or lake_count > 20:
+		push_error("[WorldConfig] lake_count %d invalid, must be 0..20" % lake_count)
+		return false
+	if lake_radius_min < 5 or lake_radius_min > 200:
+		push_error("[WorldConfig] lake_radius_min %d invalid" % lake_radius_min)
+		return false
+	if lake_radius_max < lake_radius_min or lake_radius_max > 300:
+		push_error("[WorldConfig] lake_radius_max %d invalid, must be >= min and <=300" % lake_radius_max)
+		return false
+	if lake_depth < 1 or lake_depth > 20:
+		push_error("[WorldConfig] lake_depth %d invalid, must be 1..20" % lake_depth)
+		return false
+	if lake_grid_size < 50 or lake_grid_size > 1000:
+		push_error("[WorldConfig] lake_grid_size %d invalid, must be 50..1000" % lake_grid_size)
+		return false
+	if lake_chance_per_cell < 0.0 or lake_chance_per_cell > 1.0:
+		push_error("[WorldConfig] lake_chance_per_cell %f invalid" % lake_chance_per_cell)
+		return false
+	if lake_rim_blend < 0.0 or lake_rim_blend > 1.0:
+		push_error("[WorldConfig] lake_rim_blend %f invalid" % lake_rim_blend)
+		return false
+	# Rivers validation
+	if river_count < 0 or river_count > 20:
+		push_error("[WorldConfig] river_count %d invalid" % river_count)
+		return false
+	if river_width_min < 1 or river_width_min > 20:
+		push_error("[WorldConfig] river_width_min %d invalid" % river_width_min)
+		return false
+	if river_width_max < river_width_min or river_width_max > 40:
+		push_error("[WorldConfig] river_width_max %d invalid" % river_width_max)
+		return false
+	if river_depth < 1 or river_depth > 10:
+		push_error("[WorldConfig] river_depth %d invalid" % river_depth)
+		return false
+	if river_min_length < 10 or river_min_length > 500:
+		push_error("[WorldConfig] river_min_length %d invalid" % river_min_length)
+		return false
+	if river_max_length < river_min_length or river_max_length > 1000:
+		push_error("[WorldConfig] river_max_length %d invalid" % river_max_length)
+		return false
+	if river_grid_size < 50 or river_grid_size > 2000:
+		push_error("[WorldConfig] river_grid_size %d invalid" % river_grid_size)
+		return false
+	if river_chance_per_cell < 0.0 or river_chance_per_cell > 1.0:
+		push_error("[WorldConfig] river_chance_per_cell %f invalid" % river_chance_per_cell)
+		return false
+	if river_carve_blend < 0.0 or river_carve_blend > 1.0:
+		push_error("[WorldConfig] river_carve_blend %f invalid" % river_carve_blend)
+		return false
+	if river_frequency <= 0.0 or river_frequency > 0.05:
+		push_error("[WorldConfig] river_frequency %f invalid" % river_frequency)
 		return false
 	return true

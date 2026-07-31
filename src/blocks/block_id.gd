@@ -22,13 +22,17 @@ enum Type {
 	# Light / Decor
 	TORCH = 7,    # wall/ground attachable light
 
-	COUNT = 8,
+	# Liquid
+	WATER = 8,  
+
+	COUNT = 9,
 }
 
 # Category groups - identity only, no physical duplication (SOLID_TERRAIN removed, use catalog for solidity)
 const TERRAIN: Array[Type] = [Type.GRASS, Type.DIRT, Type.SAND, Type.STONE]
 const VEGETATION: Array[Type] = [Type.LOG, Type.LEAVES]
 const LIGHTS: Array[Type] = [Type.TORCH]
+const LIQUIDS: Array[Type] = [Type.WATER]
 
 # Display names for UI / debugging
 const DISPLAY_NAMES: Dictionary = {
@@ -40,6 +44,7 @@ const DISPLAY_NAMES: Dictionary = {
 	Type.LOG: "Wood",
 	Type.LEAVES: "Leaves",
 	Type.TORCH: "Torch",
+	Type.WATER: "Water",
 }
 
 # Internal short names
@@ -52,6 +57,7 @@ const INTERNAL_NAMES: Dictionary = {
 	Type.LOG: "log",
 	Type.LEAVES: "leaves",
 	Type.TORCH: "torch",
+	Type.WATER: "water",
 }
 
 
@@ -72,6 +78,12 @@ static func is_vegetation(id: Type) -> bool:
 
 static func is_light(id: Type) -> bool:
 	return id in LIGHTS
+
+static func is_water(id: Type) -> bool:
+	return id in LIQUIDS
+
+static func is_liquid(id: Type) -> bool:
+	return id in LIQUIDS
 
 static func is_valid(id: int) -> bool:
 	return id >= Type.AIR and id < Type.COUNT

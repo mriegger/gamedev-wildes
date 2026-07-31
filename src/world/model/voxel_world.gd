@@ -2,9 +2,10 @@ extends RefCounted
 class_name VoxelWorld
 
 ## VoxelWorld - owns voxel state, canonical AIR=0, no ChunkData duplication
-## Height cache owned here and invalidated on edits, no second cache in controller/motor
+## Optimized: per-chunk tree tracking, chunk-level LRU, no scanning
 
 signal block_edit_committed(edit: BlockEdit)
+signal terrain_chunk_evicted(coord: Vector2i)
 
 var world_size: int = 200
 var chunk_size: int = 20
@@ -12,15 +13,29 @@ var max_build_y: int = 36
 var water_level: int = 5
 var infinite_world: bool = false
 
-var height_map: Variant = [] # Array for finite, Dictionary for infinite
+var height_map: Variant = [] # Array for finite, Dictionary for infinite (legacy)
 var type_map: Variant = []
-var type_map_dict: Dictionary = {} # used for infinite when type_map is dict
-var height_map_dict: Dictionary = {} # used for infinite
+var type_map_dict: Dictionary = {} # infinite: Vector2i(x,z) -> top type
+var height_map_dict: Dictionary = {} # infinite: Vector2i(x,z) -> height
 
-var _generator_ref: TerrainGenerator = null # optional for infinite on-demand generation
+var _generator_ref: TerrainGenerator = null
 
+# Global tree storage (for get_block_at)
 var tree_blocks: Array = []
 var tree_block_fast: Dictionary = {}
+
+# Per-chunk indexed tree storage to avoid scanning and allow O(k) removal
+var tree_chunks_fast: Dictionary = {}
+var tree_chunks_blocks: Dictionary = {}
+var generated_tree_chunks: Dictionary = {}
+
+# Terrain data tracking - complete generation marker rather than single column test
+var generated_terrain_chunks: Dictionary = {} # Vector2i(chunk) -> true
+
+# Terrain chunk LRU for bounding memory - ChunkManager is sole eviction owner
+var _terrain_chunk_lru: Array[Vector2i] = []
+var max_terrain_cache_chunks: int = 200
+var _terrain_lru_mutex: Mutex = Mutex.new()
 
 var placed_blocks: Dictionary = {}
 var removed_blocks: Dictionary = {}
@@ -53,6 +68,32 @@ func setup(p_world_size: int, p_chunk_size: int, p_max_y: int, p_height_map: Var
 		type_map_dict.clear()
 	tree_block_fast = p_tree_fast
 	tree_blocks = p_tree_blocks
+	# Rebuild per-chunk index if we have tree data (finite load)
+	tree_chunks_fast.clear()
+	tree_chunks_blocks.clear()
+	generated_tree_chunks.clear()
+	generated_terrain_chunks.clear()
+	_terrain_chunk_lru.clear()
+	if infinite_world:
+		# For dict based height, populate LRU based on existing columns
+		var chunk_set: Dictionary = {}
+		for k in height_map_dict.keys():
+			if k is Vector2i:
+				var cc = Vector2i(int(floor(float(k.x) / float(chunk_size))), int(floor(float(k.y) / float(chunk_size))))
+				chunk_set[cc] = true
+		for cc in chunk_set.keys():
+			_terrain_chunk_lru.append(cc)
+	# Index existing tree blocks by chunk
+	if not tree_block_fast.is_empty():
+		for pos in tree_block_fast.keys():
+			if pos is Vector3i:
+				var cc = Vector2i(int(floor(float(pos.x) / float(chunk_size))), int(floor(float(pos.z) / float(chunk_size))))
+				if not tree_chunks_fast.has(cc):
+					tree_chunks_fast[cc] = {}
+					tree_chunks_blocks[cc] = []
+				tree_chunks_fast[cc][pos] = tree_block_fast[pos]
+				tree_chunks_blocks[cc].append({"pos": pos, "type": tree_block_fast[pos]})
+				generated_tree_chunks[cc] = true
 	_highest_cache.clear()
 	cell_revisions.clear()
 	placed_blocks.clear()
@@ -70,6 +111,11 @@ func setup_infinite(p_chunk_size: int, p_max_y: int):
 	type_map_dict.clear()
 	tree_block_fast.clear()
 	tree_blocks.clear()
+	tree_chunks_fast.clear()
+	tree_chunks_blocks.clear()
+	generated_tree_chunks.clear()
+	generated_terrain_chunks.clear()
+	_terrain_chunk_lru.clear()
 	_highest_cache.clear()
 	cell_revisions.clear()
 	placed_blocks.clear()
@@ -79,6 +125,108 @@ func setup_infinite(p_chunk_size: int, p_max_y: int):
 func set_generator_ref(gen: TerrainGenerator):
 	_generator_ref = gen
 
+func configure_terrain_cache(render_dist: int, unload_padding: int):
+	# Keep cache big enough for keep area plus 1 border for cache overlap + slack
+	# Each chunk generation touches neighbors (origin-1 .. origin+cs), so touched area = (keep+1)*2+1
+	var keep = render_dist + unload_padding
+	var keep_area = (keep * 2 + 1) * (keep * 2 + 1)
+	var touched_area = ((keep + 1) * 2 + 1) * ((keep + 1) * 2 + 1)
+	max_terrain_cache_chunks = touched_area + 32
+	print("[VoxelWorld] Configured max terrain cache chunks = %d (keep area %d touched %d)" % [max_terrain_cache_chunks, keep_area, touched_area])
+
+func _touch_terrain_chunk(coord: Vector2i):
+	if not infinite_world:
+		return
+	_terrain_lru_mutex.lock()
+	if _terrain_chunk_lru.has(coord):
+		_terrain_chunk_lru.erase(coord)
+	_terrain_chunk_lru.append(coord)
+	_terrain_lru_mutex.unlock()
+	generated_terrain_chunks[coord] = true
+	# Bounded cleanup: if LRU exceeds max, evict oldest and emit signal so manager stays consistent
+	# This keeps cache bounded even for border columns, with explicit ownership
+	_prune_terrain_cache_if_needed()
+
+func _prune_terrain_cache_if_needed():
+	# Safety only - should not auto-evict during normal streaming since
+	# ChunkManager owns eviction. This is called explicitly if needed.
+	if not infinite_world:
+		return
+	_terrain_lru_mutex.lock()
+	var over = _terrain_chunk_lru.size() - max_terrain_cache_chunks
+	_terrain_lru_mutex.unlock()
+	if over <= 0:
+		return
+	for _i in range(over):
+		_terrain_lru_mutex.lock()
+		if _terrain_chunk_lru.is_empty():
+			_terrain_lru_mutex.unlock()
+			break
+		var oldest = _terrain_chunk_lru[0]
+		_terrain_chunk_lru.remove_at(0)
+		_terrain_lru_mutex.unlock()
+		_evict_chunk_data(oldest.x, oldest.y, false)
+
+func _evict_chunk_data(cx: int, cz: int, remove_from_lru: bool = true):
+	if not infinite_world:
+		return
+	var coord = Vector2i(cx, cz)
+	if remove_from_lru:
+		_terrain_lru_mutex.lock()
+		_terrain_chunk_lru.erase(coord)
+		_terrain_lru_mutex.unlock()
+	var ox = cx * chunk_size
+	var oz = cz * chunk_size
+	var cs = chunk_size
+	# Remove own columns (explicit ownership)
+	for x in range(ox, ox + cs):
+		for z in range(oz, oz + cs):
+			var k = Vector2i(x, z)
+			height_map_dict.erase(k)
+			type_map_dict.erase(k)
+			_highest_cache.erase(k)
+	generated_terrain_chunks.erase(coord)
+	# Bounded cleanup for border columns: only keep border if its owning chunk is still generated
+	# This prevents extended cache from growing beyond limit
+	for x in range(ox - 1, ox + cs + 1):
+		for z in range(oz - 1, oz + cs + 1):
+			# Skip inner already removed
+			if x >= ox and x < ox + cs and z >= oz and z < oz + cs:
+				continue
+			var k = Vector2i(x, z)
+			var owner = Vector2i(int(floor(float(x) / float(chunk_size))), int(floor(float(z) / float(chunk_size))))
+			if not generated_terrain_chunks.has(owner):
+				# No owner chunk generated, safe to remove border cache
+				height_map_dict.erase(k)
+				type_map_dict.erase(k)
+				_highest_cache.erase(k)
+	# Remove trees for this chunk O(k)
+	_remove_tree_chunk(cx, cz)
+	terrain_chunk_evicted.emit(coord)
+
+func _remove_tree_chunk(cx: int, cz: int):
+	var coord = Vector2i(cx, cz)
+	if not tree_chunks_fast.has(coord):
+		# Still erase from generated set
+		generated_tree_chunks.erase(coord)
+		return
+	var fast = tree_chunks_fast[coord] as Dictionary
+	if fast == null:
+		fast = {}
+	# Remove from global fast dict
+	for pos in fast.keys():
+		tree_block_fast.erase(pos)
+	# Remove per-chunk storage
+	tree_chunks_fast.erase(coord)
+	tree_chunks_blocks.erase(coord)
+	generated_tree_chunks.erase(coord)
+	# Rebuild global tree_blocks array from remaining per-chunk blocks to avoid O(N^2) filtering and ensure no duplicates
+	# This is O(total tree blocks) but only on eviction (rare, 4 per frame max)
+	var new_global_blocks: Array = []
+	for blocks in tree_chunks_blocks.values():
+		new_global_blocks.append_array(blocks)
+	tree_blocks = new_global_blocks
+
 func ensure_column_generated(x: int, z: int):
 	if not infinite_world:
 		return
@@ -87,13 +235,15 @@ func ensure_column_generated(x: int, z: int):
 	var key = Vector2i(x, z)
 	if height_map_dict.has(key) and type_map_dict.has(key):
 		return
-	# Generate height/type for this column on demand
 	if _generator_ref.has_method("compute_height_at_world"):
 		var h = _generator_ref.compute_height_at_world(x, z)
 		height_map_dict[key] = h
 		if _generator_ref.has_method("compute_type_and_biome_at_world"):
 			var tb = _generator_ref.compute_type_and_biome_at_world(x, z, h)
 			type_map_dict[key] = tb["type"]
+		# Touch chunk for LRU
+		var cc = Vector2i(int(floor(float(x) / float(chunk_size))), int(floor(float(z) / float(chunk_size))))
+		_touch_terrain_chunk(cc)
 
 func ensure_region_generated(origin_x: int, origin_z: int, size_x: int, size_z: int):
 	if not infinite_world or _generator_ref == null:
@@ -103,16 +253,14 @@ func ensure_region_generated(origin_x: int, origin_z: int, size_x: int, size_z: 
 			ensure_column_generated(x, z)
 
 func apply_chunk_gen(chunk_data: Dictionary):
+	# Legacy: marks all touched chunks - kept for compat but now delegates to owning-only logic
+	# For complete marker we try to find main chunk via most frequent chunk in dict
 	var h_dict = {}
 	var t_dict = {}
-	# Support both generate_all format (height_map/type_map) and generate_chunk_region format (height/type)
 	if chunk_data.has("height_map"):
 		var hm = chunk_data["height_map"]
 		if hm is Dictionary:
 			h_dict = hm
-		elif hm is Array:
-			# convert array to dict for finite? Not needed for infinite
-			pass
 	elif chunk_data.has("height"):
 		h_dict = chunk_data.get("height", {})
 
@@ -128,24 +276,168 @@ func apply_chunk_gen(chunk_data: Dictionary):
 	for k in t_dict.keys():
 		type_map_dict[k] = t_dict[k]
 
+	# For legacy, count columns per chunk and only mark chunks with full ownership
+	var counts: Dictionary = {}
+	for k in h_dict.keys():
+		if k is Vector2i:
+			var cc = Vector2i(int(floor(float(k.x) / float(chunk_size))), int(floor(float(k.y) / float(chunk_size))))
+			counts[cc] = counts.get(cc, 0) + 1
+	var threshold = int(float(chunk_size * chunk_size) * 0.9) # 90% of chunk area counts as complete
+	for cc in counts.keys():
+		if counts[cc] >= threshold:
+			_touch_terrain_chunk(cc)
+
+func apply_chunk_gen_for_coord(coord: Vector2i, chunk_data: Dictionary):
+	# Only owning chunk receives complete generation marker and LRU entry
+	# Border columns still stored for meshing but with explicit ownership cleanup
+	var h_dict = {}
+	var t_dict = {}
+	if chunk_data.has("height"):
+		h_dict = chunk_data.get("height", {})
+	elif chunk_data.has("height_map"):
+		h_dict = chunk_data.get("height_map", {})
+	if chunk_data.has("type"):
+		t_dict = chunk_data.get("type", {})
+	elif chunk_data.has("type_map"):
+		t_dict = chunk_data.get("type_map", {})
+
+	# Store all columns (including border) for meshing - needed for seamless
+	for k in h_dict.keys():
+		height_map_dict[k] = h_dict[k]
+	for k in t_dict.keys():
+		type_map_dict[k] = t_dict[k]
+
+	# Only owning chunk gets LRU and generation marker
+	_touch_terrain_chunk(coord)
+
 func apply_tree_chunk(tree_data: Dictionary):
+	# Legacy path without coord - for finite world bulk load, index by chunk
 	var fast = tree_data.get("tree_block_fast", {})
-	for k in fast.keys():
-		tree_block_fast[k] = fast[k]
+	if fast.is_empty():
+		return
 	var blocks = tree_data.get("tree_blocks", [])
+	# If we have no per-chunk info, just merge but also index
+	for k in fast.keys():
+		if k is Vector3i:
+			tree_block_fast[k] = fast[k]
+			var cc = Vector2i(int(floor(float(k.x) / float(chunk_size))), int(floor(float(k.z) / float(chunk_size))))
+			if not tree_chunks_fast.has(cc):
+				tree_chunks_fast[cc] = {}
+				tree_chunks_blocks[cc] = []
+			if not tree_chunks_fast[cc].has(k):
+				tree_chunks_fast[cc][k] = fast[k]
+			generated_tree_chunks[cc] = true
+			_touch_terrain_chunk(cc)
+	# Deduplicate global array: rebuild from per-chunk if infinite, else append
+	if infinite_world:
+		# Rebuild global from per-chunk to prevent duplicates
+		var new_global: Array = []
+		for b_arr in tree_chunks_blocks.values():
+			new_global.append_array(b_arr)
+		# Also need to add current blocks that may not be in per-chunk blocks yet (if blocks array provided)
+		# For simplicity if blocks provided, ensure per-chunk blocks contain them
+		for b in blocks:
+			var pos = b["pos"] as Vector3i
+			var cc = Vector2i(int(floor(float(pos.x) / float(chunk_size))), int(floor(float(pos.z) / float(chunk_size))))
+			if not tree_chunks_blocks.has(cc):
+				tree_chunks_blocks[cc] = []
+			var already = false
+			for existing in tree_chunks_blocks[cc]:
+				if existing["pos"] == pos:
+					already = true
+					break
+			if not already:
+				tree_chunks_blocks[cc].append(b)
+				new_global.append(b)
+		tree_blocks = new_global
+	else:
+		# Finite: just append but avoid duplicates via fast check already
+		for b in blocks:
+			var exists = tree_block_fast.has(b["pos"]) and tree_blocks.any(func(item): return item["pos"] == b["pos"])
+			# Actually fast already merged, just need to avoid duplicate in array
+			var dup = false
+			for existing in tree_blocks:
+				if existing["pos"] == b["pos"]:
+					dup = true
+					break
+			if not dup:
+				tree_blocks.append(b)
+
+func apply_tree_chunk_for_coord(coord: Vector2i, tree_data: Dictionary):
+	if generated_tree_chunks.has(coord):
+		return # dedup: already generated
+	var fast = tree_data.get("tree_block_fast", {}) as Dictionary
+	var blocks = tree_data.get("tree_blocks", []) as Array
+	if fast.is_empty() and blocks.is_empty():
+		generated_tree_chunks[coord] = true
+		_touch_terrain_chunk(coord)
+		return
+	# Deduplicate against existing global trees to prevent cross-chunk leaf overlap duplicates
+	var filtered_fast: Dictionary = {}
+	var filtered_blocks: Array = []
+	var seen_pos: Dictionary = {}
 	for b in blocks:
-		tree_blocks.append(b)
+		var pos = b.get("pos", null)
+		if pos == null:
+			continue
+		if seen_pos.has(pos):
+			continue
+		if tree_block_fast.has(pos):
+			continue
+		seen_pos[pos] = true
+		filtered_blocks.append(b)
+	# Build filtered fast from filtered blocks to ensure consistency, or use provided fast filtered
+	for b in filtered_blocks:
+		var p = b["pos"] as Vector3i
+		var t = b["type"]
+		filtered_fast[p] = t
+	# If fast contained entries not in blocks (should not), include those that are not duplicate
+	for k in fast.keys():
+		if filtered_fast.has(k):
+			continue
+		if tree_block_fast.has(k):
+			continue
+		if seen_pos.has(k):
+			continue
+		filtered_fast[k] = fast[k]
+		# Also add to blocks if not already
+		filtered_blocks.append({"pos": k, "type": fast[k]})
+
+	tree_chunks_fast[coord] = filtered_fast
+	tree_chunks_blocks[coord] = filtered_blocks
+	for k in filtered_fast.keys():
+		tree_block_fast[k] = filtered_fast[k]
+	tree_blocks.append_array(filtered_blocks)
+	generated_tree_chunks[coord] = true
+	_touch_terrain_chunk(coord)
+	# No auto-prune - ChunkManager is sole eviction owner
 
 func _base_terrain_type_at(x: int, y: int, z: int):
 	if infinite_world:
 		var key = Vector2i(x, z)
 		if not height_map_dict.has(key) or not type_map_dict.has(key):
-			# Try on-demand generation before giving up (for torch placement etc)
 			ensure_column_generated(x, z)
 			if not height_map_dict.has(key) or not type_map_dict.has(key):
 				return null
 		var h = height_map_dict[key]
-		if y > h or y < 0:
+		if y < 0:
+			return null
+		# Water layer: only inside lake/river areas to avoid global ocean
+		if y > h:
+			if y <= water_level and h < water_level:
+				if _generator_ref:
+					var has_water = false
+					if _generator_ref.has_method("_get_lake_factor_fast"):
+						if _generator_ref._get_lake_factor_fast(x, z) > 0.01:
+							has_water = true
+					if not has_water and _generator_ref.has_method("_get_river_factor_fast"):
+						if _generator_ref._get_river_factor_fast(x, z) > 0.01:
+							has_water = true
+					if has_water:
+						return BlockId.Type.WATER
+				else:
+					if type_map_dict.get(key, -1) == BlockId.Type.SAND:
+						return BlockId.Type.WATER
 			return null
 		var top_t = type_map_dict[key]
 		if top_t == BlockId.Type.SAND:
@@ -167,11 +459,17 @@ func _base_terrain_type_at(x: int, y: int, z: int):
 			return null
 		if height_map.is_empty() or type_map.is_empty():
 			return null
-		# height_map may be Array or empty
 		if x >= height_map.size() or z >= height_map[x].size():
 			return null
 		var h = height_map[x][z]
-		if y > h or y < 0:
+		if y < 0:
+			return null
+		if y > h:
+			if y <= water_level and h < water_level:
+				# Finite: water only if type is SAND (lake/lowland) to avoid flooding everything
+				if x < type_map.size() and z < type_map[x].size():
+					if type_map[x][z] == BlockId.Type.SAND:
+						return BlockId.Type.WATER
 			return null
 		if x >= type_map.size() or z >= type_map[x].size():
 			return null
@@ -193,8 +491,6 @@ func _base_terrain_type_at(x: int, y: int, z: int):
 
 func get_block_at(p: Vector3i):
 	if p.y < 0:
-		if infinite_world:
-			return BlockId.Type.STONE
 		return BlockId.Type.STONE
 	if p.y >= max_build_y:
 		return null
@@ -294,7 +590,6 @@ func get_highest_top(x: int, z: int) -> float:
 	return float(y) + 1.0
 
 func try_mine_block(p: Vector3i) -> Array:
-	# Returns Array[BlockEdit] batch - primary + any auto-removed attached torches, so every removed block is collected
 	if is_world_edge(p):
 		return [BlockEdit.fail(p, BlockEdit.Operation.MINE, BlockEdit.Result.FAIL_WORLD_EDGE)]
 	if not is_breakable(p):
@@ -312,19 +607,33 @@ func try_mine_block(p: Vector3i) -> Array:
 		removed_blocks[p] = true
 		if tree_block_fast.has(p):
 			tree_block_fast.erase(p)
+			# Also remove from per-chunk index
+			var cc = Vector2i(int(floor(float(p.x) / float(chunk_size))), int(floor(float(p.z) / float(chunk_size))))
+			if tree_chunks_fast.has(cc):
+				tree_chunks_fast[cc].erase(p)
+				# Remove from blocks array for that chunk
+				if tree_chunks_blocks.has(cc):
+					var arr = tree_chunks_blocks[cc] as Array
+					var new_arr: Array = []
+					for b in arr:
+						if b["pos"] != p:
+							new_arr.append(b)
+					tree_chunks_blocks[cc] = new_arr
+			# Rebuild global blocks array
+			var new_global: Array = []
+			for b_arr in tree_chunks_blocks.values():
+				new_global.append_array(b_arr)
+			tree_blocks = new_global
 
 	if torch_attachments.has(p):
 		torch_attachments.erase(p)
 
 	_invalidate_highest_cache(p.x, p.z)
 	var rev = _increment_revision(p)
-
 	var edit = BlockEdit.success_mine(p, old_id, rev, prev_rev)
 	block_edit_committed.emit(edit)
 
 	var batch: Array[BlockEdit] = [edit]
-
-	# Floating torches attached to this block also removed
 	var floating: Array[Vector3i] = []
 	for torch_pos in torch_attachments.keys():
 		var attach = torch_attachments[torch_pos] as Vector3i
@@ -345,12 +654,10 @@ func try_mine_block(p: Vector3i) -> Array:
 
 func try_place_block(p: Vector3i, block_type: int, attach_dir: Vector3i = Vector3i.ZERO) -> BlockEdit:
 	var canonical_id: int = block_type
-
 	if canonical_id == BlockId.Type.AIR:
 		return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_INVALID_POS, "AIR not placeable")
 	if not BlockId.is_valid(canonical_id):
 		return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_INVALID_POS, "Invalid block id")
-
 	if p.y < 0 or p.y >= max_build_y:
 		return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_Y_OUT_OF_RANGE)
 	if not infinite_world:
@@ -359,7 +666,16 @@ func try_place_block(p: Vector3i, block_type: int, attach_dir: Vector3i = Vector
 	if is_world_edge(p):
 		return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_WORLD_EDGE)
 	if is_occupied(p):
-		return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_OCCUPIED)
+		# Allow replacing water or other replaceable blocks (e.g., water can be replaced by solid)
+		var existing_id = get_block_id_at(p)
+		if existing_id != BlockId.Type.AIR:
+			var existing_def = BlockCatalog.shared().get_definition(existing_id)
+			if existing_def == null or not existing_def.is_replaceable:
+				# Special case: water is replaceable, allow solid to replace it
+				if existing_id != BlockId.Type.WATER:
+					return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_OCCUPIED)
+		else:
+			return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_OCCUPIED)
 
 	if canonical_id == BlockId.Type.TORCH:
 		if attach_dir == Vector3i.ZERO:
@@ -377,12 +693,9 @@ func try_place_block(p: Vector3i, block_type: int, attach_dir: Vector3i = Vector
 		if not infinite_world:
 			if support_pos.x < 0 or support_pos.x >= world_size or support_pos.z < 0 or support_pos.z >= world_size:
 				return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_NO_TORCH_SUPPORT, "Support out of bounds")
-
-		# For infinite, ensure support column exists before checking opacity
 		if infinite_world:
 			ensure_column_generated(support_pos.x, support_pos.z)
 			ensure_region_generated(support_pos.x -1, support_pos.z -1, 3, 3)
-
 		if not is_opaque(support_pos) and not is_solid(support_pos):
 			return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_NO_TORCH_SUPPORT)
 
@@ -392,10 +705,8 @@ func try_place_block(p: Vector3i, block_type: int, attach_dir: Vector3i = Vector
 	if canonical_id == BlockId.Type.TORCH:
 		torch_attachments[p] = attach_dir
 	_invalidate_highest_cache(p.x, p.z)
-
 	var prev_rev = get_revision(p)
 	var rev = _increment_revision(p)
-
 	var edit = BlockEdit.success_place(p, canonical_id, rev, attach_dir, prev_rev)
 	block_edit_committed.emit(edit)
 	return edit
@@ -405,7 +716,6 @@ func try_place_torch(p: Vector3i, attach_dir: Vector3i) -> BlockEdit:
 
 func get_spawn_position() -> Vector3:
 	if infinite_world:
-		# For infinite, spawn at origin meadow
 		var meadow_radius = 24.0
 		var best = Vector3(0.5, 10.5, 0.5)
 		var best_score = 9999.0
@@ -538,7 +848,25 @@ func build_cache_for_chunk(origin_x: int, origin_z: int, p_chunk_size: int, p_ma
 					cache[idx] = -1
 					continue
 				if wy > base_h:
-					cache[idx] = -1
+					if wy <= water_level and base_h < water_level:
+						# Only fill water if column is sand or lake/river influence
+						var has_water = false
+						if base_top_t == BlockId.Type.SAND:
+							has_water = true
+						else:
+							if _generator_ref:
+								if _generator_ref.has_method("_get_lake_factor_fast"):
+									if _generator_ref._get_lake_factor_fast(wx, wz) > 0.01:
+										has_water = true
+								if not has_water and _generator_ref.has_method("_get_river_factor_fast"):
+									if _generator_ref._get_river_factor_fast(wx, wz) > 0.01:
+										has_water = true
+						if has_water:
+							cache[idx] = BlockId.Type.WATER
+						else:
+							cache[idx] = -1
+					else:
+						cache[idx] = -1
 					continue
 				if base_top_t == -1:
 					cache[idx] = -1
@@ -570,59 +898,80 @@ func build_cache_for_chunk(origin_x: int, origin_z: int, p_chunk_size: int, p_ma
 		"cache_z": cache_z,
 	}
 
-func unload_chunk_terrain(cx: int, cz: int):
-	# For fast reload (avoid lag when returning), keep height/type/tree caches.
-	# Only clear highest cache which is recalculated cheaply. This makes chunk reload
-	# reuse existing terrain data and mesh cache for instant display.
+# Optimized snapshot using per-chunk indexing to avoid scanning all tree blocks
+func snapshot_edits_for_chunk(origin_x: int, origin_z: int, p_chunk_size: int) -> Dictionary:
+	var ox_min = origin_x - 2
+	var ox_max = origin_x + p_chunk_size + 1
+	var oz_min = origin_z - 2
+	var oz_max = origin_z + p_chunk_size + 1
+	var placed_snap: Dictionary = {}
+	var removed_snap: Dictionary = {}
+	for pos in placed_blocks.keys():
+		if pos is Vector3i:
+			if pos.x >= ox_min and pos.x <= ox_max and pos.z >= oz_min and pos.z <= oz_max and pos.y < max_build_y:
+				placed_snap[pos] = placed_blocks[pos]
+	for pos in removed_blocks.keys():
+		if pos is Vector3i:
+			if pos.x >= ox_min and pos.x <= ox_max and pos.z >= oz_min and pos.z <= oz_max:
+				removed_snap[pos] = true
+	# Use per-chunk index for trees: O(k) where k is trees in nearby chunks, not O(total trees)
+	var tree_snap: Dictionary = {}
+	var c_min_x = int(floor(float(ox_min) / float(chunk_size)))
+	var c_max_x = int(floor(float(ox_max) / float(chunk_size)))
+	var c_min_z = int(floor(float(oz_min) / float(chunk_size)))
+	var c_max_z = int(floor(float(oz_max) / float(chunk_size)))
+	for cx in range(c_min_x - 1, c_max_x + 2):
+		for cz in range(c_min_z - 1, c_max_z + 2):
+			var chunk_coord = Vector2i(cx, cz)
+			if not tree_chunks_fast.has(chunk_coord):
+				continue
+			var fast = tree_chunks_fast[chunk_coord] as Dictionary
+			for pos in fast.keys():
+				if pos is Vector3i:
+					if pos.x >= ox_min and pos.x <= ox_max and pos.z >= oz_min and pos.z <= oz_max:
+						tree_snap[pos] = fast[pos]
+	return {"placed": placed_snap, "removed": removed_snap, "trees": tree_snap}
+
+func unload_chunk_data(cx: int, cz: int):
 	if not infinite_world:
 		return
-	var ox = cx * chunk_size
-	var oz = cz * chunk_size
-	var cs = chunk_size
-	for x in range(ox - 1, ox + cs + 1):
-		for z in range(oz - 1, oz + cs + 1):
-			_highest_cache.erase(Vector2i(x, z))
-	# Optional bounded pruning: if dict grows huge (>200k columns ≈ 400 chunks), prune oldest.
-	# Keep it simple: only prune when exceeding 200k, remove this chunk's terrain then.
-	if height_map_dict.size() > 200000:
-		for x in range(ox - 1, ox + cs + 1):
-			for z in range(oz - 1, oz + cs + 1):
-				var k = Vector2i(x, z)
-				height_map_dict.erase(k)
-				type_map_dict.erase(k)
-		var to_erase_tree: Array[Vector3i] = []
-		for p in tree_block_fast.keys():
-			if p is Vector3i:
-				if p.x >= ox and p.x < ox + cs and p.z >= oz and p.z < oz + cs:
-					to_erase_tree.append(p)
-		for p in to_erase_tree:
-			tree_block_fast.erase(p)
+	_evict_chunk_data(cx, cz, true)
 
 func has_trees_in_chunk(cx: int, cz: int) -> bool:
 	if not infinite_world:
-		return true # for finite assume ok
+		return true
+	var coord = Vector2i(cx, cz)
+	if generated_tree_chunks.has(coord):
+		return true
 	var ox = cx * chunk_size
 	var oz = cz * chunk_size
 	var cs = chunk_size
-	# If inside meadow core, zero trees is expected → treat as having data to avoid re-gen
 	var meadow_radius = 24.0
 	if Vector2(ox + cs*0.5, oz + cs*0.5).length() < meadow_radius - 2.0:
 		return true
-	for p in tree_block_fast.keys():
-		if p is Vector3i:
-			if p.x >= ox and p.x < ox + cs and p.z >= oz and p.z < oz + cs:
-				return true
 	return false
 
 func is_chunk_data_available(cx: int, cz: int) -> bool:
-	var origin_x = cx * chunk_size
-	var origin_z = cz * chunk_size
+	# Use complete generation marker rather than single origin column test
+	var coord = Vector2i(cx, cz)
+	if generated_terrain_chunks.has(coord):
+		return true
+	# Fallback: check LRU contains chunk (chunk-level tracking) and at least one column present
 	if infinite_world:
+		_terrain_lru_mutex.lock()
+		var in_lru = _terrain_chunk_lru.has(coord)
+		_terrain_lru_mutex.unlock()
+		if in_lru:
+			return true
+		var origin_x = cx * chunk_size
+		var origin_z = cz * chunk_size
 		var key = Vector2i(origin_x, origin_z)
 		return height_map_dict.has(key)
 	else:
 		if height_map.is_empty():
 			return false
+		var origin_x = cx * chunk_size
+		var origin_z = cz * chunk_size
 		if origin_x < 0 or origin_z < 0 or origin_x >= world_size or origin_z >= world_size:
 			return false
 		if origin_x < height_map.size() and origin_z < height_map[origin_x].size():
@@ -638,8 +987,14 @@ func get_stats() -> Dictionary:
 		"removed": removed_blocks.size(),
 		"torches": torch_attachments.size(),
 		"tree_fast": tree_block_fast.size(),
+		"tree_chunks": tree_chunks_fast.size(),
+		"generated_tree_chunks": generated_tree_chunks.size(),
+		"generated_terrain_chunks": generated_terrain_chunks.size(),
 		"revisions": cell_revisions.size(),
 		"height_cache": _highest_cache.size(),
+		"height_columns": height_map_dict.size(),
+		"terrain_lru": _terrain_chunk_lru.size(),
+		"max_cache": max_terrain_cache_chunks,
 	}
 
 func clear_edits():
