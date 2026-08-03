@@ -1,137 +1,97 @@
 # Wildes
 
-<!-- One-paragraph description of the game as a whole and its core loop. This is
-     the game-level README — it describes the complete game that lives in src/.
-     Each task under tasks/ has its own README describing that task specifically. -->
+**Wildes** is an isometric voxel sandbox built in **Godot 4.7** (GDScript). You explore an
+endless procedurally generated world under an orthographic isometric camera, mine blocks into
+a nine-slot hotbar, and build with them. The loop is explore → mine → build, on terrain that
+streams in around you as you walk, under a running day/night cycle.
 
-**Wildes** is a polished isometric 3D voxel sandbox built in **Godot 4.7**. The player
-explores one continuous, session-local **200×200** world under an orthographic isometric
-camera — mining terrain and building freely from six collectible block types (grass, dirt,
-stone, sand, wood, leaves). The core loop is explore → mine → build: hold left-mouse to mine
-the targeted block (per-block hold time + pulse feedback), right-mouse to place from a
-nine-slot hotbar, with a 6-block reach, yellow reach outlines, and a ghost placement preview.
-Successive tasks layer real-time lighting onto that base: baked ambient occlusion and soft cast
-shadows, a continuous day/night cycle with a moving sun/moon, and placeable walk-through torches
-that cast their own light and shadows on the **forward_plus** renderer.
+Worlds are saved to three local slots and persist your seed, edits, inventory, position, and
+world time.
 
-This repo follows the ADO **GameDev track** task structure: one repo per game
-(`gamedev-{game-name}`), a single shared gold source in `src/`, and one folder per task under
-`tasks/`.
+## Controls
+
+| Input | Action |
+| --- | --- |
+| `WASD` / arrows | Move (camera-relative) |
+| `Space` | Hop — needed to get up any ledge |
+| `Q` / `E` | Rotate the camera 45° |
+| Mouse wheel / pinch | Zoom |
+| Hold left-click | Mine the targeted block (0.35 s) |
+| Right-click | Place the selected block |
+| `1`–`9` | Select hotbar slot |
+| `Esc` | Pause |
+
+Reach is 6 blocks. The block under the cursor is outlined, and a ghost block previews where a
+placement would land; placements that would overlap you are rejected.
+
+## Features
+
+**World.** Endless terrain generated from layered noise (hills, detail, biome, forest, ridges)
+in 20×20 chunk columns, 36 blocks tall. You spawn in a grass meadow clearing; beyond it are
+sandy lowlands, forests, and stone ridges. Lakes (16–42 blocks wide, 6 deep) and rivers carve
+into the terrain and fill with water up to level 5.
+
+**Streaming.** Chunks load in a radius of 4 around you (9×9 = 81 chunks) and unload two chunks
+further out. Meshing runs on background threads so movement doesn't hitch; edits are stored
+globally and survive unload/reload.
+
+**Blocks.** Grass, dirt, sand, stone, wood, and leaves are minable and placeable. Torches are
+a seventh placeable that you can walk through — each is an omni light with a 9-block radius;
+the four nearest to you cast real shadows.
+
+**Lighting.** Per-vertex ambient occlusion is baked into chunk meshes. A directional sun plus a
+fill light drive real-time shadows, and a keyframed day/night profile interpolates sky, ambient,
+sun color/energy, and shadow opacity across the cycle.
+
+**Day/night.** A full 24-hour cycle runs every 20 real minutes, starting at 6:00. Day is
+06:00–19:00; sunrise and sundown get their own warm color keys, and nights stay bright enough
+to play.
+
+**UI & saves.** A frosted-glass front-end: main menu, world select over three save slots,
+create-world and hold-3-seconds-to-delete modals, a chunk-progress loading screen, and a pause
+menu that freezes the game. Saves live in `user://saves/` and autosave every 30 seconds, plus
+shortly after any block edit.
 
 ## Project Structure
 
 ```text
-gamedev-wildes/
-├── src/                     Gold game source — the single, shared, buildable Godot 4.7
-│   │                        project, organized by feature. Entry scene: ui/main_menu/main_menu.tscn.
-│   ├── game/                Root scene + top-level system wiring (game.tscn, game.gd).
-│   ├── world/               Voxel world — generation/, model/ (voxel data + edits),
-│   │                        rendering/ (chunk mesher, chunk + torch render systems).
-│   ├── blocks/              Data-driven block catalog (block ids, definitions, catalog).
-│   ├── player/              Player motor, interactor, camera rig, and targeting.
-│   ├── environment/         Day/night cycle — game clock, profile/values, debug clock panel.
-│   ├── inventory/           Inventory model.
-│   ├── ui/                  HUD + hotbar, plus main_menu/ (menu, world select, create/
-│   │                        delete-world, loading, pause) and theme/ (frosted-glass theme).
-│   ├── save/                Local save system — up to 3 world slots.
-│   ├── assets/fonts/        Roboto Slab UI font (Apache-2.0 — see Assets & Attribution).
-│   ├── shaders/             terrain, water, ghost, selection, cracks, blob-shadow, frosted-glass.
-│   ├── tests/               Headless test scripts (menu flow, saves, pause, delete-hold, …).
-│   └── project.godot        Godot project settings.
-├── tasks/                   One folder per task (see the Tasks table). Each contains:
-│   └── justinsoberano-scaffolding_game/    (example)
-│       ├── instruction.md   The task prompt used to reproduce this task's feature.
-│       ├── task.toml        Task metadata.
-│       ├── screenshots/     Captured game states (avocado/ and claude/).
-│       └── README.md        Task description + Avocado vs Claude comparison + trajectories.
-└── README.md                This file — the game-level overview.
+src/                    Godot project (src/project.godot). Entry scene: ui/main_menu/main_menu.tscn
+├── game/               Root gameplay scene; wires every system together and owns save/load
+├── world/              generation/ (noise terrain, lakes, rivers), model/ (voxel data + edits),
+│                       rendering/ (chunk mesher, chunk + torch renderers), streaming/ (chunk manager)
+├── blocks/             Block ids, per-block definitions, catalog, torch placement
+├── player/             Motor, interactor (raycast + mine/place), camera rig, targeting, input buffer
+├── environment/        Game clock, day/night profile + values, water profile, debug clock panel
+├── inventory/          9-slot inventory model
+├── ui/                 HUD + hotbar, main_menu/ (menu, world select, create/delete, loading,
+│                       pause), theme/
+├── save/               Three-slot JSON save manager
+├── shaders/            terrain, water, blob_shadow, frosted_glass
+└── assets/             Roboto Slab UI font, logo images
 ```
 
-Notes:
-
-- **`src/`** holds the complete, buildable gold game — tasks reference it, they do not copy it.
-  It is organized into feature modules (`game`, `world`, `blocks`, `player`, `environment`,
-  `inventory`, `ui`, `shaders`) whose systems are wired together via dependency injection from
-  the root `game/game.tscn` scene.
-- **Videos** are not stored in the repo; they are uploaded to **PixelCloud** and referenced
-  from each task's `task.toml` and README.
-
-## Constraints
-
-- **Engine** — Godot 4.7 (MIT license; permits commercial/internal use).
-- **Model** — always use the latest model.
-- **1P / 3P models** — the gold solution and in-game assets are 1P/hand-authored, not from 3P
-  models. `README.md` and `task.toml` may reference 3P; `instruction.md` does not.
-
-## Engine & Framework
-
-- **Engine / framework:** Godot 4.7 (GDScript)
-- **License:** MIT
-
-## Dependencies
-
-None beyond the Godot engine. The game uses only built-in Godot APIs.
-
-| Library | Version | Source | License |
-| --- | --- | --- | --- |
-| None | — | — | — |
-
-## Assets & Attribution
-
-The world, blocks, and the explorer are original primitives — code-generated cube/box
-meshes and hand-written GDScript shaders (`src/shaders/`). The only third-party asset is
-the UI font imported for the Task-004 front-end:
-
-| Asset | Type | Source | License / Attribution |
-| --- | --- | --- | --- |
-| `src/assets/fonts/RobotoSlab-*.ttf` (Regular, SemiBold, Bold) | font | [Roboto Slab](https://fonts.google.com/specimen/Roboto+Slab) — Christian Robertson, via Google Fonts | Apache-2.0 |
-
-No other third-party or Meta-internal art, audio, or models are shipped. No third-party
-tokens, proprietary code, or IP appear in the code, assets, or the model-visible
-environment; the font above is attributed here.
+Systems are constructed in `game/game.tscn` and injected into each other via `setup()` calls
+rather than autoloads or singletons.
 
 ## Building & Running
 
-**Prerequisites:** Godot **4.7** (stable). No other SDKs required.
+**Prerequisites:** Godot **4.7**. No other SDKs or dependencies — the game uses only built-in
+Godot APIs.
 
 ```text
-# From the repo root — the project lives in src/ (src/project.godot):
 godot --path src
-
-# Or open the src/ folder in the Godot 4.7 editor and press Play.
 ```
 
-## Core Features
+Or open `src/` in the Godot 4.7 editor and press Play. Window is a fixed 1280×720. macOS
+(universal) and Web export presets are committed in `src/export_presets.cfg`.
 
-- Seeded, session-local 200×200 voxel world: open-meadow spawn near trees and exposed stone,
-  grading into sandy lowlands, wooded rises, and stone ridges.
-- Crisp cubes with readable face shading and world-edge haze.
-- Orthographic isometric camera: camera-relative WASD, space to hop, Q/E 45° turns, scroll
-  zoom, smooth follow.
-- Mining & building: 6-block reach, per-block mining hold times, reach outline, ghost preview,
-  and a nine-slot hotbar (keys 1–9) with counts.
-- Real-time lighting: baked per-vertex ambient occlusion and soft cast shadows on terrain,
-  trees, the explorer, and placed blocks.
-- A repeating ~20-minute day/night cycle (10 min day / 10 min night) with a moving sun and moon,
-  real-time directional shadows, and a cool, playable night.
-- Placeable, walk-through **torches** that light a 9-block radius and cast soft shadows, on the
-  **forward_plus** renderer with saturation/contrast color-grading.
-- A **frosted-glass front-end and save system**: a main menu, a world-select screen with three
-  save slots, create/delete-world modals (hold-to-delete), a chunk-progress loading screen, and
-  a pause menu that freezes all state; worlds persist seed + block edits + player state + world
-  time to disk.
+## Assets & Attribution
 
-## Gold Version
+The world, blocks, and player are code-generated meshes with hand-written GDScript shaders. The
+only third-party asset is the UI font:
 
-- See each task's `task.toml` for the exact `avocado-model` and `harness` used to build the
-  gold solution.
-
-## Tasks
-
-| Task | Description | Completed |
+| Asset | Source | License |
 | --- | --- | --- |
-| [justinsoberano-scaffolding_game](./tasks/justinsoberano-scaffolding_game/) | Scaffold the Wildes isometric voxel sandbox (world gen, camera, player, mining/placing, hotbar) | 2026-07-21 |
-| [justinsoberano-ao_and_shadows](./tasks/justinsoberano-ao_and_shadows/) | Add real-time ambient occlusion + soft cast shadows (baked voxel AO, sun shadows) in the Compatibility renderer | 2026-07-22 |
-| [justinsoberano-day_night_cycle](./tasks/justinsoberano-day_night_cycle/) | Add a repeating ~20-min day/night cycle (10 min day / 10 min night) with a moving sun/moon and real-time directional shadows on the player and blocks; nights stay playable | 2026-07-27 |
-| [justinsoberano-torches_and_casted_shadows](./tasks/justinsoberano-torches_and_casted_shadows/) | Switch the renderer to forward_plus with color-grade compensation and add walk-through torch light-blocks that light a 9-block radius and cast soft shadows | 2026-07-27 |
-| [justinsoberano-ui_and_saves](./tasks/justinsoberano-ui_and_saves/) | Add the frosted-glass front-end + persistence: main menu, world select (3 save slots), create/delete-world modals (hold-to-delete), a chunk-progress loading screen, and a pause menu that freezes all state; local saves persist seed + block edits + player state + world time | 2026-07-28 |
+| `src/assets/fonts/RobotoSlab-{Regular,SemiBold,Bold}.ttf` | [Roboto Slab](https://fonts.google.com/specimen/Roboto+Slab) — Christian Robertson, via Google Fonts | Apache-2.0 |
+
+Godot itself is MIT licensed.
