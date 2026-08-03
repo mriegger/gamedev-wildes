@@ -1,8 +1,6 @@
 extends Control
 class_name Hotbar
 
-## Hotbar - presents inventory slots, reacts to inventory model signals, no forwarders
-
 @export var slot_scene: PackedScene
 
 var _inv_model: InventoryModel = null
@@ -14,11 +12,9 @@ var inventory_model: InventoryModel:
 		_connect_inventory_signals()
 		refresh()
 
-var container: HBoxContainer
 var slot_nodes: Array[HotbarSlot] = []
 
 @onready var hbox: HBoxContainer = $MarginContainer/HBoxContainer
-
 
 func _ready():
 	if slot_scene == null:
@@ -35,7 +31,7 @@ func _build_slots():
 	for c in hbox.get_children():
 		c.queue_free()
 	slot_nodes.clear()
-	for i in range(9):
+	for i in range(InventoryModel.DEFAULT_SIZE):
 		var slot_node: HotbarSlot
 		if slot_scene != null:
 			var inst = slot_scene.instantiate()
@@ -50,9 +46,6 @@ func _build_slots():
 func _connect_inventory_signals():
 	if _inv_model == null:
 		return
-	# Only subscribe to inventory_changed per spec - Game only assigns model, Hotbar subscribes
-	# Using lambda to avoid argument count mismatch (selection_changed emits 2 args)
-	# Disconnect any existing to avoid double subscription
 	for conn in _inv_model.inventory_changed.get_connections():
 		if conn["callable"].get_object() == self:
 			_inv_model.inventory_changed.disconnect(conn["callable"])
@@ -61,7 +54,7 @@ func _connect_inventory_signals():
 func refresh():
 	if _inv_model == null or slot_nodes.is_empty():
 		return
-	for i in range(9):
+	for i in range(InventoryModel.DEFAULT_SIZE):
 		if i >= slot_nodes.size():
 			continue
 		var data = _inv_model.get_slot(i)
@@ -72,18 +65,3 @@ func refresh():
 			ui.set_item(data["type"], data["count"])
 		ui.set_selected(i == _inv_model.selected_slot)
 
-func refresh_slot(idx: int):
-	if _inv_model == null or idx < 0 or idx >= slot_nodes.size():
-		return
-	var data = _inv_model.get_slot(idx)
-	var ui = slot_nodes[idx]
-	if data == null:
-		ui.set_item(null, 0)
-	else:
-		ui.set_item(data["type"], data["count"])
-	ui.set_selected(idx == _inv_model.selected_slot)
-
-func pop_slot(idx: int):
-	if idx < 0 or idx >= slot_nodes.size():
-		return
-	slot_nodes[idx].pop_anim()

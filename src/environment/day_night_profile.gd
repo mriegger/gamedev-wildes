@@ -1,12 +1,8 @@
 extends Resource
 class_name DayNightProfile
 
-## DayNightProfile - stores color gradients and energy curves for each time of day
-## Data-driven resource used by DayNightValues + GameClock
-## Saved as day_night_profile.tres
-
 class ProfileKey extends Resource:
-	@export var time: float = 0.0 # 0..24 hour
+	@export var time: float = 0.0
 	@export var sky: Color = Color(0, 0, 0)
 	@export var ambient_col: Color = Color(0.5, 0.5, 0.5)
 	@export var ambient_energy: float = 0.3
@@ -15,30 +11,15 @@ class ProfileKey extends Resource:
 	@export var shadow_opacity: float = 0.5
 	@export var fill_energy: float = 0.05
 
-	func to_dict() -> Dictionary:
-		return {
-			"time": time,
-			"sky": sky,
-			"ambient_col": ambient_col,
-			"ambient_energy": ambient_energy,
-			"sun_col": sun_col,
-			"sun_energy": sun_energy,
-			"shadow_opacity": shadow_opacity,
-			"fill_energy": fill_energy,
-		}
-
 @export var keys: Array[ProfileKey] = []
 
 var _sorted: bool = false
-
 
 func _init():
 	if keys.is_empty():
 		_build_defaults()
 
-
 func _build_defaults():
-	# Mirrors old DayNightCycle._setup_keys() - reduced blown noon 0.32 ambient +0.38 sun =0.70 total vs 2.9
 	keys = []
 	keys.append(_mk(0.0, Color(0.008, 0.010, 0.032), Color(0.56, 0.64, 0.84), 0.13, Color(0.58, 0.66, 0.84), 0.05, 0.52, 0.015))
 	keys.append(_mk(5.0, Color(0.014, 0.022, 0.055), Color(0.58, 0.64, 0.84), 0.15, Color(0.60, 0.68, 0.86), 0.07, 0.50, 0.018))
@@ -50,9 +31,8 @@ func _build_defaults():
 	keys.append(_mk(18.0, Color(0.32, 0.22, 0.16), Color(0.80, 0.66, 0.54), 0.28, Color(1.0, 0.56, 0.30), 0.28, 0.46, 0.04))
 	keys.append(_mk(19.0, Color(0.028, 0.036, 0.08), Color(0.58, 0.64, 0.84), 0.17, Color(0.60, 0.68, 0.84), 0.09, 0.50, 0.02))
 	keys.append(_mk(22.0, Color(0.010, 0.014, 0.035), Color(0.54, 0.60, 0.78), 0.14, Color(0.58, 0.64, 0.82), 0.06, 0.52, 0.015))
-	keys.append(_mk(24.0, Color(0.008, 0.010, 0.032), Color(0.56, 0.64, 0.84), 0.13, Color(0.58, 0.66, 0.84), 0.05, 0.52, 0.015))
+	keys.append(_mk(GameClock.HOURS_PER_DAY, Color(0.008, 0.010, 0.032), Color(0.56, 0.64, 0.84), 0.13, Color(0.58, 0.66, 0.84), 0.05, 0.52, 0.015))
 	_sort_keys()
-
 
 func _mk(t: float, sky: Color, amb_col: Color, amb_e: float, sun_col: Color, sun_e: float, sh: float, fill_e: float) -> ProfileKey:
 	var k = ProfileKey.new()
@@ -66,16 +46,14 @@ func _mk(t: float, sky: Color, amb_col: Color, amb_e: float, sun_col: Color, sun
 	k.fill_energy = fill_e
 	return k
 
-
 func _sort_keys():
 	keys.sort_custom(func(a, b): return a.time < b.time)
 	_sorted = true
 
-
 func get_interpolated(t: float) -> Dictionary:
-	t = fmod(t, 24.0)
+	t = fmod(t, GameClock.HOURS_PER_DAY)
 	if t < 0:
-		t += 24.0
+		t += GameClock.HOURS_PER_DAY
 	if not _sorted:
 		_sort_keys()
 	if keys.is_empty():
@@ -92,9 +70,8 @@ func get_interpolated(t: float) -> Dictionary:
 			return _lerp_keys(k0, k1, f)
 	return _lerp_keys(keys[0], keys[0], 0.0)
 
-
 func _lerp_keys(a: ProfileKey, b: ProfileKey, f: float) -> Dictionary:
-	var sf = f * f * (3.0 - 2.0 * f) # smoothstep
+	var sf = f * f * (3.0 - 2.0 * f)
 	return {
 		"sky": a.sky.lerp(b.sky, sf),
 		"ambient_col": a.ambient_col.lerp(b.ambient_col, sf),
@@ -105,21 +82,11 @@ func _lerp_keys(a: ProfileKey, b: ProfileKey, f: float) -> Dictionary:
 		"fill_energy": lerp(a.fill_energy, b.fill_energy, sf),
 	}
 
-func get_phase_name(t: float) -> String:
-	t = fmod(t, 24.0)
+static func is_day_time(t: float) -> bool:
+	t = fmod(t, GameClock.HOURS_PER_DAY)
 	if t < 0:
-		t += 24.0
-	if t >= 19.0 or t < 6.0:
-		return "Night (7PM-6AM)"
-	elif t >= 6.0 and t < 8.0:
-		return "Sunrise (6AM-8AM)"
-	elif t >= 8.0 and t < 17.0:
-		return "Daytime (8AM-5PM)"
-	else:
-		return "Sundown (5PM-7PM)"
+		t += GameClock.HOURS_PER_DAY
+	return t >= 6.0 and t < 19.0
 
 func is_day(t: float) -> bool:
-	t = fmod(t, 24.0)
-	if t < 0:
-		t += 24.0
-	return t >= 6.0 and t < 19.0
+	return is_day_time(t)

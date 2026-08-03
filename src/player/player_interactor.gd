@@ -1,16 +1,12 @@
 extends Node3D
 class_name PlayerInteractor
 
-## PlayerInteractor - targeting, mining, placement, typed DI, one setup pass, no wrappers
-
 @export var reach: float = 6.0
 @export var mine_hold_time: float = 0.35
 @export var place_cooldown: float = 0.18
 
-var world: WorldController = null
 var voxel_world: VoxelWorld = null
 var camera: Camera3D = null
-var camera_rig: CameraRig = null
 var motor: PlayerMotor = null
 var inventory_model: InventoryModel = null
 
@@ -28,22 +24,11 @@ var mine_target: Vector3i = Vector3i(-999, -999, -999)
 var mine_target_rev: int = -1
 var place_timer: float = 0.0
 
-
-func setup(p_voxel_world: VoxelWorld, p_camera: Camera3D, p_camera_rig: CameraRig, p_motor: PlayerMotor, p_inventory: InventoryModel):
+func setup(p_voxel_world: VoxelWorld, p_camera: Camera3D, p_motor: PlayerMotor, p_inventory: InventoryModel):
 	voxel_world = p_voxel_world
 	camera = p_camera
-	camera_rig = p_camera_rig
 	motor = p_motor
 	inventory_model = p_inventory
-	if p_motor and p_motor is PlayerMotor:
-		world = p_motor.world as WorldController
-	print("[PlayerInteractor] Ready model=%s cam=%s motor=%s inv=%s" % [voxel_world != null, camera != null, motor != null, inventory_model != null])
-
-
-func _ready():
-	# Injection happens via setup() after world ready, so _ready does not require model
-	if voxel_world == null:
-		print("[PlayerInteractor] _ready waiting for setup()")
 
 func _physics_process(delta):
 	if voxel_world == null or motor == null or camera == null or inventory_model == null:
@@ -195,7 +180,8 @@ func _placement_collides_player(p: Vector3i) -> bool:
 
 func _handle_mining_placing(delta):
 	place_timer -= delta
-	var left_pressed = Input.is_action_pressed("mine") or Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
+	var ib = InputBuffer.shared()
+	var left_pressed = ib.mine_pressed or ib.mouse_left_pressed
 	if left_pressed and target_has and can_mine_target:
 		if not is_mining:
 			mine_target = target_block
@@ -229,7 +215,8 @@ func _handle_mining_placing(delta):
 			mine_target = Vector3i(-999, -999, -999)
 			mine_target_rev = -1
 
-	if Input.is_action_just_pressed("place") or Input.is_action_just_pressed("place_click") or (Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT) and place_timer <= 0.0):
+	if (ib.place_just or ib.mouse_right_pressed) and place_timer <= 0.0:
+		ib.place_just = false
 		if placement_has and can_place_target and _can_place():
 			_commit_place(placement_block)
 			place_timer = place_cooldown
@@ -253,7 +240,6 @@ func _commit_mine(pos: Vector3i):
 			mine_target_rev = -1
 			return
 
-	# Pre-collect batch to guarantee atomic capacity (two types can share same empty slot check via batch)
 	var preview_id = voxel_world.get_block_id_at(pos)
 	if preview_id == BlockId.Type.AIR:
 		return
@@ -267,10 +253,9 @@ func _commit_mine(pos: Vector3i):
 				ids_to_collect.append(tid)
 
 	if not inventory_model.can_add_batch(ids_to_collect):
-		print("[Inventory] Full, cannot collect batch at %s" % pos)
 		return
 
-	var batch = voxel_world.try_mine_block(pos) # Array[BlockEdit]
+	var batch = voxel_world.try_mine_block(pos)
 	if batch is Array and batch.size() > 0 and batch[0] is BlockEdit:
 		if not (batch[0] as BlockEdit).is_success():
 			return
@@ -279,10 +264,7 @@ func _commit_mine(pos: Vector3i):
 			var be = edit as BlockEdit
 			if be.is_success() and be.is_mine():
 				collected_ids.append(be.old_id)
-				print("[Mine] %s rev %s at %s" % [BlockId.get_display_name(be.old_id as BlockId.Type), be.revision, be.pos])
-		# Atomic batch insertion so every removed block is collected
 		inventory_model.add_batch(collected_ids)
-	# batch handles presentation via block_edit_committed listener in WorldController
 	mine_target = Vector3i(-999, -999, -999)
 	mine_timer = 0.0
 	is_mining = false
@@ -291,8 +273,6 @@ func _commit_mine(pos: Vector3i):
 
 func _commit_place(pos: Vector3i):
 	if voxel_world == null or inventory_model == null:
-		return
-	if voxel_world.is_world_edge(pos):
 		return
 
 	var sel_data = inventory_model.get_selected_data()
@@ -305,10 +285,7 @@ func _commit_place(pos: Vector3i):
 
 	if edit.is_success():
 		inventory_model.consume_selected(1)
-		print("[Place] %s at %s attach %s" % [BlockId.get_display_name(type_to_place as BlockId.Type), pos, attach_dir])
 		_handle_raycast()
-	else:
-		print("[Place] Failed at %s type %s reason %s" % [pos, BlockId.get_display_name(type_to_place as BlockId.Type), edit.get_result_message()])
 
 func get_selected_block_type():
 	if inventory_model == null:
@@ -317,21 +294,7 @@ func get_selected_block_type():
 
 func _unhandled_input(event):
 	if event is InputEventKey and event.pressed:
-		if event.keycode >= KEY_1 and event.keycode <= KEY_9:
+		if event.keycode >= KEY_1 and event.keycode < KEY_1 + InventoryModel.DEFAULT_SIZE:
 			var idx = event.keycode - KEY_1
 			if inventory_model:
 				inventory_model.select_slot(idx)
-
-func get_target_state() -> Dictionary:
-	return {
-		"has_target": target_has,
-		"target_block": target_block,
-		"can_mine": can_mine_target,
-		"has_placement": placement_has,
-		"placement_block": placement_block,
-		"can_place": can_place_target,
-		"ray_normal": last_ray_normal,
-		"is_mining": is_mining,
-		"mine_timer": mine_timer,
-		"mine_progress": clamp(mine_timer / mine_hold_time, 0.0, 1.0) if mine_hold_time > 0 else 0.0,
-	}

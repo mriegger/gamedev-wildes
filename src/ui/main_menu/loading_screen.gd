@@ -1,12 +1,6 @@
 extends CanvasLayer
 class_name LoadingScreen
 
-## LoadingScreen - Shows progress bar while world loads with random terrain
-## Used between SaveSlotScreen and Game
-
-@onready var background: ColorRect = $Control/Background
-@onready var dim_overlay: ColorRect = $Control/DimOverlay
-@onready var logo: Label = $Control/CenterContainer/FrostedPanel/VBox/LogoLabel
 @onready var world_name_label: Label = $Control/CenterContainer/FrostedPanel/VBox/WorldNameLabel
 @onready var progress_bar: ProgressBar = $Control/CenterContainer/FrostedPanel/VBox/ProgressBar
 @onready var status_label: Label = $Control/CenterContainer/FrostedPanel/VBox/StatusLabel
@@ -30,7 +24,6 @@ func _ready():
 func start_loading(p_slot_id: int, p_save_data: Dictionary):
 	slot_id = p_slot_id
 	save_data = p_save_data
-	print("[LoadingScreen] Start loading slot %d seed %s name=%s" % [slot_id, str(save_data.get("seed", "random")), save_data.get("world_name", "")])
 
 	if world_name_label:
 		world_name_label.text = "Loading %s" % save_data.get("world_name", "World %d" % (slot_id + 1))
@@ -39,7 +32,6 @@ func start_loading(p_slot_id: int, p_save_data: Dictionary):
 	if progress_bar:
 		progress_bar.value = 5
 
-	# Defer heavy work to next frame so UI appears
 	call_deferred("_begin_load_async")
 
 func _begin_load_async() -> void:
@@ -72,7 +64,6 @@ func _begin_load_async() -> void:
 
 	await get_tree().process_frame
 
-	# Instantiate Game with deferred generation
 	game_instance = _game_scene.instantiate() as Game
 	game_instance.current_slot_id = slot_id
 	game_instance.current_save_data = save_data
@@ -81,7 +72,6 @@ func _begin_load_async() -> void:
 	if world_node:
 		world_node.auto_generate_on_ready = false
 		world_node.set_pending_save_data(save_data)
-		# Connect progress
 		if not world_node.generation_progress.is_connected(_on_world_generation_progress):
 			world_node.generation_progress.connect(_on_world_generation_progress)
 
@@ -90,12 +80,9 @@ func _begin_load_async() -> void:
 		parent = get_tree().root
 	parent.add_child(game_instance)
 
-	# Ensure loading screen stays on top
 	if parent:
 		parent.move_child(self, parent.get_child_count() - 1)
 
-	# Hide game camera until ready? Game's camera will be current, but loading screen covers it (CanvasLayer 200)
-	# Now async generate world
 	if status_label:
 		status_label.text = "Generating terrain..."
 
@@ -110,7 +97,6 @@ func _begin_load_async() -> void:
 
 	await get_tree().process_frame
 
-	# Finalize game setup after world ready
 	if game_instance.has_method("finalize_deferred_setup"):
 		game_instance.finalize_deferred_setup()
 
@@ -119,22 +105,15 @@ func _begin_load_async() -> void:
 	if status_label:
 		status_label.text = "Ready! Entering world..."
 
-	print("[LoadingScreen] World loaded, entering game slot %d seed %d" % [slot_id, save_data.get("seed", 0)])
-
 	await get_tree().create_timer(0.4).timeout
 
-	# Set as current scene and free loading screen
 	get_tree().current_scene = game_instance
 	queue_free()
 
 func _on_world_generation_progress(stage: String, percent: float, details: String):
 	if progress_bar:
-		# Map 0-1 to 20-90 for chunks, but we already handle
 		var p = percent * 100.0
-		# Clamp to avoid going back
 		if p > progress_bar.value:
 			progress_bar.value = p
 	if status_label:
 		status_label.text = "%s: %s" % [stage.capitalize(), details]
-	# Allow UI update
-	# No await here - signal is synchronous, but process_frame in generator allows UI refresh

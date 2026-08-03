@@ -1,10 +1,6 @@
 extends RefCounted
 class_name ChunkMesher
 
-## ChunkMesher - converts chunk snapshots into optimized terrain + water geometry
-## Supports water blocks as separate translucent mesh with wave shader
-
-var world_size: int = 200
 var chunk_size: int = 20
 var max_build_y: int = 36
 var seed_value: int = 1337
@@ -15,8 +11,7 @@ var catalog: BlockCatalog
 var _color_cache: Dictionary = {}
 var _color_cache_mutex: Mutex = Mutex.new()
 
-func _init(p_world_size: int = 200, p_chunk_size: int = 20, p_max_y: int = 36, p_seed: int = 1337, p_ao: bool = true):
-	world_size = p_world_size
+func _init(p_chunk_size: int = 20, p_max_y: int = 36, p_seed: int = 1337, p_ao: bool = true):
 	chunk_size = p_chunk_size
 	max_build_y = p_max_y
 	seed_value = p_seed
@@ -35,77 +30,12 @@ func _rebuild_color_cache():
 	_color_cache_mutex.unlock()
 
 func configure_from_config(config: WorldConfig):
-	if config.infinite_world:
-		world_size = config.get_effective_world_size()
-	else:
-		world_size = config.world_size
 	chunk_size = config.chunk_size
 	max_build_y = config.max_build_y
 	seed_value = config.seed_value
 	enable_ao = config.enable_ao
 	_rebuild_color_cache()
 
-# ------------------------------------------------------------------
-# Cache building
-# ------------------------------------------------------------------
-func build_cache(origin_x: int, origin_z: int, get_block_fn: Callable) -> Dictionary:
-	var size_x = chunk_size
-	var size_z = chunk_size
-	var size_y = clamp(max_build_y, 6, 128)
-	var cache_x = size_x + 2
-	var cache_z = size_z + 2
-	var cache: Array = []
-	cache.resize(cache_x * size_y * cache_z)
-
-	for lx in range(cache_x):
-		for lz in range(cache_z):
-			for ly in range(size_y):
-				var wx = origin_x + lx - 1
-				var wz = origin_z + lz - 1
-				var wy = ly
-				var v = get_block_fn.call(Vector3i(wx, wy, wz))
-				var idx = (lx * size_y * cache_z) + (ly * cache_z) + lz
-				if v == null or v == BlockId.Type.AIR:
-					cache[idx] = -1
-				else:
-					cache[idx] = v
-
-	return {
-		"cache": cache,
-		"origin_x": origin_x,
-		"origin_z": origin_z,
-		"size_x": size_x,
-		"size_z": size_z,
-		"size_y": size_y,
-		"cache_x": cache_x,
-		"cache_z": cache_z,
-	}
-
-func _is_terrain_solid(block_type: int) -> bool:
-	if block_type == -1:
-		return false
-	if block_type == BlockId.Type.AIR:
-		return false
-	if block_type == BlockId.Type.TORCH:
-		return false
-	if block_type == BlockId.Type.WATER:
-		return false
-	return true
-
-func _is_solid_for_ao(block_type: int) -> bool:
-	if block_type == -1:
-		return false
-	if block_type == BlockId.Type.AIR:
-		return false
-	if block_type == BlockId.Type.TORCH:
-		return false
-	if block_type == BlockId.Type.WATER:
-		return false
-	return true
-
-# ------------------------------------------------------------------
-# Terrain mesh (excludes water)
-# ------------------------------------------------------------------
 func build_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 	var cache: Array = cache_dict.get("cache", [])
 	var origin_x: int = cache_dict.get("origin_x", 0)
@@ -119,8 +49,8 @@ func build_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 	if cache.is_empty():
 		return null
 
-	var end_x = min(origin_x + size_x, world_size)
-	var end_z = min(origin_z + size_z, world_size)
+	var end_x = origin_x + size_x
+	var end_z = origin_z + size_z
 
 	var vertices := PackedVector3Array()
 	var normals := PackedVector3Array()
@@ -134,16 +64,51 @@ func build_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 	var local_color_cache = _color_cache.duplicate()
 	_color_cache_mutex.unlock()
 
+	var size_y_local = size_y
+	var cache_z_local = cache_z
+	var cache_x_local = cache_x
+	var origin_x_local = origin_x
+	var origin_z_local = origin_z
+	var sy_cz = size_y_local * cache_z_local
+
+	var sqrt2 = sqrt(2.0)
+	var horiz_table: Array = [
+		sqrt2, 1.0, sqrt2,
+		1.0, 0.0, 1.0,
+		sqrt2, 1.0, sqrt2
+	]
+
+	var du_top = [-1, 1, 1, -1]
+	var dv_top = [-1, -1, 1, 1]
+	var cx_off_top = [0, 1, 1, 0]
+	var cz_off_top = [0, 0, 1, 1]
+
+	var du_bot = [-1, 1, 1, -1]
+	var dv_bot = [1, 1, -1, -1]
+
+	var shadow_cache: Dictionary = {}
+
 	for x in range(origin_x, end_x):
-		var lx = x - origin_x + 1
+		var lx = x - origin_x_local + 1
+		var lx_sycz = lx * sy_cz
+		var lx_p1_sycz = -1
+		var lx_m1_sycz = -1
+		if lx + 1 < cache_x_local:
+			lx_p1_sycz = (lx + 1) * sy_cz
+		if lx - 1 >= 0:
+			lx_m1_sycz = (lx - 1) * sy_cz
+
 		for z in range(origin_z, end_z):
-			var lz = z - origin_z + 1
+			var lz = z - origin_z_local + 1
 			var h = (x * 73856093) ^ (z * 19349663) ^ local_seed
 			h = abs(h) % 1000
 			var var_off = (float(h) / 1000.0 - 0.5) * 0.08
-			for y in range(size_y):
+			var var_off_half = var_off * 0.5
+			var var_off_side = var_off * 0.6
+
+			for y in range(size_y_local):
 				var ly = y
-				var cache_idx = (lx * size_y * cache_z) + (ly * cache_z) + lz
+				var cache_idx = lx_sycz + ly * cache_z_local + lz
 				if cache_idx < 0 or cache_idx >= cache.size():
 					continue
 				var block_type = cache[cache_idx]
@@ -156,46 +121,57 @@ func build_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 					continue
 				var def_top = cached["top"] as Color
 				var def_side = cached["side"] as Color
-				var top_col = def_top + Color(var_off, var_off, var_off) if block_type != BlockId.Type.LOG and block_type != BlockId.Type.LEAVES else def_top + Color(var_off * 0.5, var_off * 0.5, var_off * 0.5)
-				var side_col = def_side + Color(var_off * 0.6, var_off * 0.6, var_off * 0.6) if block_type != BlockId.Type.LOG and block_type != BlockId.Type.LEAVES else def_side
-				if block_type == BlockId.Type.GRASS:
-					side_col = def_side + Color(var_off * 0.6, var_off * 0.6, var_off * 0.6)
+				var top_col: Color
+				var side_col: Color
+				if block_type == BlockId.Type.LOG or block_type == BlockId.Type.LEAVES:
+					top_col = def_top + Color(var_off_half, var_off_half, var_off_half)
+					side_col = def_side
+				else:
+					top_col = def_top + Color(var_off, var_off, var_off)
+					side_col = def_side + Color(var_off_side, var_off_side, var_off_side)
 
-				# +Y
 				var n_top = -1
-				if ly + 1 < size_y:
-					n_top = cache[(lx * size_y * cache_z) + ((ly + 1) * cache_z) + lz]
-				if not _is_terrain_solid(n_top):
+				var yp1_in_range = ly + 1 < size_y_local
+				var y_plus = y + 1
+				if yp1_in_range:
+					var idx_top = lx_sycz + (ly + 1) * cache_z_local + lz
+					if idx_top >= 0 and idx_top < cache.size():
+						n_top = cache[idx_top]
+				var top_visible = (n_top == -1 or n_top == BlockId.Type.AIR or n_top == BlockId.Type.TORCH or n_top == BlockId.Type.WATER)
+				if top_visible:
 					var v0 = Vector3(x, y + 1, z)
 					var v1 = Vector3(x + 1, y + 1, z)
 					var v2 = Vector3(x + 1, y + 1, z + 1)
 					var v3 = Vector3(x, y + 1, z + 1)
-					var du = [-1, 1, 1, -1]
-					var dv = [-1, -1, 1, 1]
 					var ao_vals = [0, 0, 0, 0]
 					var sh_vals = [1.0, 1.0, 1.0, 1.0]
 					for i in range(4):
-						var sx = x + du[i]
-						var sz_ = z + dv[i]
+						var sx = x + du_top[i]
+						var sz_ = z + dv_top[i]
 						var s1 = false
 						var s2 = false
 						var cs = false
-						var clx1 = sx - origin_x + 1
-						if clx1 >= 0 and clx1 < cache_x and y + 1 >= 0 and y + 1 < size_y:
-							var vv = cache[(clx1 * size_y * cache_z) + ((y + 1) * cache_z) + lz]
-							if _is_solid_for_ao(vv):
-								s1 = true
-						var clz2 = sz_ - origin_z + 1
-						if clz2 >= 0 and clz2 < cache_z and y + 1 >= 0 and y + 1 < size_y:
-							var vv2 = cache[(lx * size_y * cache_z) + ((y + 1) * cache_z) + clz2]
-							if _is_solid_for_ao(vv2):
-								s2 = true
-						var clx_c = sx - origin_x + 1
-						var clz_c = sz_ - origin_z + 1
-						if clx_c >= 0 and clx_c < cache_x and clz_c >= 0 and clz_c < cache_z and y + 1 >= 0 and y + 1 < size_y:
-							var vvc = cache[(clx_c * size_y * cache_z) + ((y + 1) * cache_z) + clz_c]
-							if _is_solid_for_ao(vvc):
-								cs = true
+						if yp1_in_range and y_plus >= 0 and y_plus < size_y_local:
+							var clx1 = sx - origin_x_local + 1
+							var clz2 = sz_ - origin_z_local + 1
+							if clx1 >= 0 and clx1 < cache_x_local:
+								var idx1 = clx1 * sy_cz + y_plus * cache_z_local + lz
+								if idx1 >= 0 and idx1 < cache.size():
+									var vv = cache[idx1]
+									if vv != -1 and vv != BlockId.Type.AIR and vv != BlockId.Type.TORCH and vv != BlockId.Type.WATER:
+										s1 = true
+							if clz2 >= 0 and clz2 < cache_z_local:
+								var idx2 = lx_sycz + y_plus * cache_z_local + clz2
+								if idx2 >= 0 and idx2 < cache.size():
+									var vv2 = cache[idx2]
+									if vv2 != -1 and vv2 != BlockId.Type.AIR and vv2 != BlockId.Type.TORCH and vv2 != BlockId.Type.WATER:
+										s2 = true
+							if clx1 >= 0 and clx1 < cache_x_local and clz2 >= 0 and clz2 < cache_z_local:
+								var idxc = clx1 * sy_cz + y_plus * cache_z_local + clz2
+								if idxc >= 0 and idxc < cache.size():
+									var vvc = cache[idxc]
+									if vvc != -1 and vvc != BlockId.Type.AIR and vvc != BlockId.Type.TORCH and vvc != BlockId.Type.WATER:
+										cs = true
 						var ao = 0
 						if s1 and s2:
 							ao = 3
@@ -204,138 +180,171 @@ func build_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 							if s2: ao += 1
 							if cs: ao += 1
 						ao_vals[i] = ao
-						var vx = x + (1 if i == 1 or i == 2 else 0)
-						var vz_ = z + (1 if i == 2 or i == 3 else 0)
-						var best_sh = 1.0
-						for ox in range(-1, 2):
-							for oz in range(-1, 2):
-								var horiz = sqrt(float(ox * ox + oz * oz))
-								for dy in range(2, 8):
-									var wy2 = y + dy
-									if wy2 >= 128:
+
+						var vx = x + cx_off_top[i]
+						var vz_ = z + cz_off_top[i]
+						var skey = Vector3i(vx, y, vz_)
+						var cached_sh = shadow_cache.get(skey, null)
+						if cached_sh != null:
+							sh_vals[i] = cached_sh
+						else:
+							var best_sh = 1.0
+							for ox_idx in range(3):
+								var ox = ox_idx - 1
+								var wwx = vx + ox
+								var clx_s = wwx - origin_x_local + 1
+								if clx_s < 0 or clx_s >= cache_x_local:
+									continue
+								var clx_s_sycz = clx_s * sy_cz
+								for oz_idx in range(3):
+									if best_sh <= 0.721:
 										break
-									var wwx = vx + ox
+									var oz = oz_idx - 1
+									var horiz = horiz_table[ox_idx * 3 + oz_idx]
 									var wwz = vz_ + oz
-									var clx_s = wwx - origin_x + 1
-									var clz_s = wwz - origin_z + 1
-									var solid = false
-									if clx_s >= 0 and clx_s < cache_x and clz_s >= 0 and clz_s < cache_z and wy2 >= 0 and wy2 < size_y:
-										var vvs = cache[(clx_s * size_y * cache_z) + (wy2 * cache_z) + clz_s]
-										if _is_solid_for_ao(vvs):
-											solid = true
-									if solid:
-										var vert = dy - 1
-										var f = 0.72 + float(vert - 1) * 0.06 + horiz * 0.10
-										if f > 0.97: f = 0.97
-										if f < best_sh: best_sh = f
-										break
-						sh_vals[i] = best_sh
+									var clz_s = wwz - origin_z_local + 1
+									if clz_s < 0 or clz_s >= cache_z_local:
+										continue
+									var base_no_y = clx_s_sycz + clz_s
+									for dy in range(2, 8):
+										var wy2 = y + dy
+										if wy2 >= 128:
+											break
+										if wy2 < 0 or wy2 >= size_y_local:
+											continue
+										var idx_s = base_no_y + wy2 * cache_z_local
+										if idx_s < 0 or idx_s >= cache.size():
+											continue
+										var vvs = cache[idx_s]
+										if vvs != -1 and vvs != BlockId.Type.AIR and vvs != BlockId.Type.TORCH and vvs != BlockId.Type.WATER:
+											var vert = dy - 1
+											var f = 0.72 + float(vert - 1) * 0.06 + horiz * 0.10
+											if f > 0.97:
+												f = 0.97
+											if f < best_sh:
+												best_sh = f
+											break
+								if best_sh <= 0.721:
+									break
+							shadow_cache[skey] = best_sh
+							sh_vals[i] = best_sh
 					var base_idx = vertices.size()
 					vertices.append(v0); vertices.append(v1); vertices.append(v2); vertices.append(v3)
 					normals.append(Vector3(0,1,0)); normals.append(Vector3(0,1,0)); normals.append(Vector3(0,1,0)); normals.append(Vector3(0,1,0))
-					for i in range(4):
-						var b = local_ao_table[ao_vals[i]] if local_enable_ao else 1.0
-						var sh = sh_vals[i]
+					for ci in range(4):
+						var b = local_ao_table[ao_vals[ci]] if local_enable_ao else 1.0
+						var sh = sh_vals[ci]
 						colors.append(Color(top_col.r * b * sh, top_col.g * b * sh, top_col.b * b * sh, top_col.a))
 					indices.append(base_idx+0); indices.append(base_idx+1); indices.append(base_idx+2)
 					indices.append(base_idx+0); indices.append(base_idx+2); indices.append(base_idx+3)
 
-				# -Y
 				var n_bot = -1
-				if ly - 1 >= 0:
-					n_bot = cache[(lx * size_y * cache_z) + ((ly - 1) * cache_z) + lz]
-				if not _is_terrain_solid(n_bot):
-					if y > 0:
-						var bcol = side_col * 0.92
-						var du2 = [-1, 1, 1, -1]
-						var dv2 = [1, 1, -1, -1]
-						var ao2 = [0, 0, 0, 0]
-						for i in range(4):
-							var sx = x + du2[i]
-							var sz_ = z + dv2[i]
-							var s1 = false
-							var s2 = false
-							var cs = false
-							var clx1 = sx - origin_x + 1
-							if clx1 >= 0 and clx1 < cache_x and y - 1 >= 0 and y - 1 < size_y:
-								var vv = cache[(clx1 * size_y * cache_z) + ((y - 1) * cache_z) + lz]
-								if _is_solid_for_ao(vv):
-									s1 = true
-							var clz2 = sz_ - origin_z + 1
-							if clz2 >= 0 and clz2 < cache_z and y - 1 >= 0 and y - 1 < size_y:
-								var vv2 = cache[(lx * size_y * cache_z) + ((y - 1) * cache_z) + clz2]
-								if _is_solid_for_ao(vv2):
-									s2 = true
-							var clx_c = sx - origin_x + 1
-							var clz_c = sz_ - origin_z + 1
-							if clx_c >= 0 and clx_c < cache_x and clz_c >= 0 and clz_c < cache_z and y - 1 >= 0 and y - 1 < size_y:
-								var vvc = cache[(clx_c * size_y * cache_z) + ((y - 1) * cache_z) + clz_c]
-								if _is_solid_for_ao(vvc):
-									cs = true
-							var ao = 0
-							if s1 and s2: ao = 3
-							else:
-								if s1: ao += 1
-								if s2: ao += 1
-								if cs: ao += 1
-							ao2[i] = ao
-						var base_idx2 = vertices.size()
-						vertices.append(Vector3(x, y, z+1)); vertices.append(Vector3(x+1, y, z+1)); vertices.append(Vector3(x+1, y, z)); vertices.append(Vector3(x, y, z))
-						normals.append(Vector3(0,-1,0)); normals.append(Vector3(0,-1,0)); normals.append(Vector3(0,-1,0)); normals.append(Vector3(0,-1,0))
-						for i in range(4):
-							var b = local_ao_table[ao2[i]] if local_enable_ao else 1.0
-							colors.append(Color(bcol.r * b, bcol.g * b, bcol.b * b, bcol.a))
-						indices.append(base_idx2+0); indices.append(base_idx2+1); indices.append(base_idx2+2)
-						indices.append(base_idx2+0); indices.append(base_idx2+2); indices.append(base_idx2+3)
+				var ym1_in_range = ly - 1 >= 0
+				var y_minus = y - 1
+				if ym1_in_range:
+					var idx_bot = lx_sycz + (ly - 1) * cache_z_local + lz
+					if idx_bot >= 0 and idx_bot < cache.size():
+						n_bot = cache[idx_bot]
+				var bot_visible = (n_bot == -1 or n_bot == BlockId.Type.AIR or n_bot == BlockId.Type.TORCH or n_bot == BlockId.Type.WATER)
+				if bot_visible and y > 0:
+					var bcol = side_col * 0.92
+					var ao2 = [0, 0, 0, 0]
+					for i in range(4):
+						var sx = x + du_bot[i]
+						var sz_ = z + dv_bot[i]
+						var s1 = false
+						var s2 = false
+						var cs = false
+						if ym1_in_range and y_minus >= 0 and y_minus < size_y_local:
+							var clx1 = sx - origin_x_local + 1
+							var clz2 = sz_ - origin_z_local + 1
+							if clx1 >= 0 and clx1 < cache_x_local:
+								var idx1 = clx1 * sy_cz + y_minus * cache_z_local + lz
+								if idx1 >= 0 and idx1 < cache.size():
+									var vv = cache[idx1]
+									if vv != -1 and vv != BlockId.Type.AIR and vv != BlockId.Type.TORCH and vv != BlockId.Type.WATER:
+										s1 = true
+							if clz2 >= 0 and clz2 < cache_z_local:
+								var idx2 = lx_sycz + y_minus * cache_z_local + clz2
+								if idx2 >= 0 and idx2 < cache.size():
+									var vv2 = cache[idx2]
+									if vv2 != -1 and vv2 != BlockId.Type.AIR and vv2 != BlockId.Type.TORCH and vv2 != BlockId.Type.WATER:
+										s2 = true
+							if clx1 >= 0 and clx1 < cache_x_local and clz2 >= 0 and clz2 < cache_z_local:
+								var idxc = clx1 * sy_cz + y_minus * cache_z_local + clz2
+								if idxc >= 0 and idxc < cache.size():
+									var vvc = cache[idxc]
+									if vvc != -1 and vvc != BlockId.Type.AIR and vvc != BlockId.Type.TORCH and vvc != BlockId.Type.WATER:
+										cs = true
+						var ao = 0
+						if s1 and s2:
+							ao = 3
+						else:
+							if s1: ao += 1
+							if s2: ao += 1
+							if cs: ao += 1
+						ao2[i] = ao
+					var base_idx2 = vertices.size()
+					vertices.append(Vector3(x, y, z+1)); vertices.append(Vector3(x+1, y, z+1)); vertices.append(Vector3(x+1, y, z)); vertices.append(Vector3(x, y, z))
+					normals.append(Vector3(0,-1,0)); normals.append(Vector3(0,-1,0)); normals.append(Vector3(0,-1,0)); normals.append(Vector3(0,-1,0))
+					for ci in range(4):
+						var b = local_ao_table[ao2[ci]] if local_enable_ao else 1.0
+						colors.append(Color(bcol.r * b, bcol.g * b, bcol.b * b, bcol.a))
+					indices.append(base_idx2+0); indices.append(base_idx2+1); indices.append(base_idx2+2)
+					indices.append(base_idx2+0); indices.append(base_idx2+2); indices.append(base_idx2+3)
 
-				# +X
 				var n_east = -1
-				if lx + 1 < cache_x:
-					n_east = cache[((lx + 1) * size_y * cache_z) + (ly * cache_z) + lz]
-				if not _is_terrain_solid(n_east):
+				if lx_p1_sycz != -1:
+					var idx_e = lx_p1_sycz + ly * cache_z_local + lz
+					if idx_e >= 0 and idx_e < cache.size():
+						n_east = cache[idx_e]
+				if n_east == -1 or n_east == BlockId.Type.AIR or n_east == BlockId.Type.TORCH or n_east == BlockId.Type.WATER:
 					var base_idx3 = vertices.size()
 					vertices.append(Vector3(x+1, y, z+1)); vertices.append(Vector3(x+1, y+1, z+1)); vertices.append(Vector3(x+1, y+1, z)); vertices.append(Vector3(x+1, y, z))
 					normals.append(Vector3(1,0,0)); normals.append(Vector3(1,0,0)); normals.append(Vector3(1,0,0)); normals.append(Vector3(1,0,0))
-					for i in range(4):
+					for ci in range(4):
 						colors.append(side_col)
 					indices.append(base_idx3+0); indices.append(base_idx3+1); indices.append(base_idx3+2)
 					indices.append(base_idx3+0); indices.append(base_idx3+2); indices.append(base_idx3+3)
 
-				# -X
 				var n_west = -1
-				if lx - 1 >= 0:
-					n_west = cache[((lx - 1) * size_y * cache_z) + (ly * cache_z) + lz]
-				if not _is_terrain_solid(n_west):
+				if lx_m1_sycz != -1:
+					var idx_w = lx_m1_sycz + ly * cache_z_local + lz
+					if idx_w >= 0 and idx_w < cache.size():
+						n_west = cache[idx_w]
+				if n_west == -1 or n_west == BlockId.Type.AIR or n_west == BlockId.Type.TORCH or n_west == BlockId.Type.WATER:
 					var base_idx4 = vertices.size()
 					vertices.append(Vector3(x, y, z)); vertices.append(Vector3(x, y+1, z)); vertices.append(Vector3(x, y+1, z+1)); vertices.append(Vector3(x, y, z+1))
 					normals.append(Vector3(-1,0,0)); normals.append(Vector3(-1,0,0)); normals.append(Vector3(-1,0,0)); normals.append(Vector3(-1,0,0))
-					for i in range(4):
+					for ci in range(4):
 						colors.append(side_col)
 					indices.append(base_idx4+0); indices.append(base_idx4+1); indices.append(base_idx4+2)
 					indices.append(base_idx4+0); indices.append(base_idx4+2); indices.append(base_idx4+3)
 
-				# +Z
 				var n_south = -1
-				if lz + 1 < cache_z:
-					n_south = cache[(lx * size_y * cache_z) + (ly * cache_z) + (lz + 1)]
-				if not _is_terrain_solid(n_south):
+				if lz + 1 < cache_z_local:
+					var idx_s = lx_sycz + ly * cache_z_local + (lz + 1)
+					if idx_s >= 0 and idx_s < cache.size():
+						n_south = cache[idx_s]
+				if n_south == -1 or n_south == BlockId.Type.AIR or n_south == BlockId.Type.TORCH or n_south == BlockId.Type.WATER:
 					var base_idx5 = vertices.size()
 					vertices.append(Vector3(x, y+1, z+1)); vertices.append(Vector3(x+1, y+1, z+1)); vertices.append(Vector3(x+1, y, z+1)); vertices.append(Vector3(x, y, z+1))
 					normals.append(Vector3(0,0,1)); normals.append(Vector3(0,0,1)); normals.append(Vector3(0,0,1)); normals.append(Vector3(0,0,1))
-					for i in range(4):
+					for ci in range(4):
 						colors.append(side_col)
 					indices.append(base_idx5+0); indices.append(base_idx5+1); indices.append(base_idx5+2)
 					indices.append(base_idx5+0); indices.append(base_idx5+2); indices.append(base_idx5+3)
 
-				# -Z
 				var n_north = -1
 				if lz - 1 >= 0:
-					n_north = cache[(lx * size_y * cache_z) + (ly * cache_z) + (lz - 1)]
-				if not _is_terrain_solid(n_north):
+					var idx_n = lx_sycz + ly * cache_z_local + (lz - 1)
+					if idx_n >= 0 and idx_n < cache.size():
+						n_north = cache[idx_n]
+				if n_north == -1 or n_north == BlockId.Type.AIR or n_north == BlockId.Type.TORCH or n_north == BlockId.Type.WATER:
 					var base_idx6 = vertices.size()
 					vertices.append(Vector3(x, y, z)); vertices.append(Vector3(x+1, y, z)); vertices.append(Vector3(x+1, y+1, z)); vertices.append(Vector3(x, y+1, z))
 					normals.append(Vector3(0,0,-1)); normals.append(Vector3(0,0,-1)); normals.append(Vector3(0,0,-1)); normals.append(Vector3(0,0,-1))
-					for i in range(4):
+					for ci in range(4):
 						colors.append(side_col)
 					indices.append(base_idx6+0); indices.append(base_idx6+1); indices.append(base_idx6+2)
 					indices.append(base_idx6+0); indices.append(base_idx6+2); indices.append(base_idx6+3)
@@ -352,7 +361,6 @@ func build_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 		"origin_z": origin_z,
 	}
 
-# Water mesh - no foam, no dead plumbing (no colors/uv2s for foam)
 func build_water_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 	var cache: Array = cache_dict.get("cache", [])
 	var origin_x: int = cache_dict.get("origin_x", 0)
@@ -366,8 +374,8 @@ func build_water_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 	if cache.is_empty():
 		return null
 
-	var end_x = min(origin_x + size_x, world_size)
-	var end_z = min(origin_z + size_z, world_size)
+	var end_x = origin_x + size_x
+	var end_z = origin_z + size_z
 
 	var vertices := PackedVector3Array()
 	var normals := PackedVector3Array()
@@ -378,13 +386,15 @@ func build_water_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 	const WATER_SURFACE_HEIGHT: float = 0.75
 	const WATER_UV_SCALE: float = 0.12
 
+	var sy_cz = size_y * cache_z
 	for x in range(origin_x, end_x):
 		var lx = x - origin_x + 1
+		var lx_sycz = lx * sy_cz
 		for z in range(origin_z, end_z):
 			var lz = z - origin_z + 1
 			for y in range(size_y):
 				var ly = y
-				var cache_idx = (lx * size_y * cache_z) + (ly * cache_z) + lz
+				var cache_idx = lx_sycz + ly * cache_z + lz
 				if cache_idx < 0 or cache_idx >= cache.size():
 					continue
 				if cache[cache_idx] != BlockId.Type.WATER:
@@ -392,7 +402,7 @@ func build_water_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 
 				var n_top = -1
 				if ly + 1 < size_y:
-					n_top = cache[(lx * size_y * cache_z) + ((ly + 1) * cache_z) + lz]
+					n_top = cache[lx_sycz + (ly + 1) * cache_z + lz]
 				var is_top_surface = n_top != BlockId.Type.WATER
 				var vis_top_h = WATER_SURFACE_HEIGHT if is_top_surface else 1.0
 
@@ -418,7 +428,7 @@ func build_water_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 
 				var n_bot = -1
 				if ly - 1 >= 0:
-					n_bot = cache[(lx * size_y * cache_z) + ((ly - 1) * cache_z) + lz]
+					n_bot = cache[lx_sycz + (ly - 1) * cache_z + lz]
 				if n_bot == -1 or n_bot == BlockId.Type.AIR or n_bot == BlockId.Type.TORCH:
 					var base_idx2 = vertices.size()
 					vertices.append(Vector3(x, y, z+1)); vertices.append(Vector3(x+1, y, z+1)); vertices.append(Vector3(x+1, y, z)); vertices.append(Vector3(x, y, z))
@@ -472,7 +482,7 @@ func build_water_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 				if n_south == -1 or n_south == BlockId.Type.AIR or n_south == BlockId.Type.TORCH:
 					var base_idx5 = vertices.size()
 					var yt = y + vis_top_h
-					vertices.append(Vector3(x, y+1, z+1)); vertices.append(Vector3(x+1, y+1, z+1)); vertices.append(Vector3(x+1, y, z+1)); vertices.append(Vector3(x, y, z+1))
+					vertices.append(Vector3(x, yt, z+1)); vertices.append(Vector3(x+1, yt, z+1)); vertices.append(Vector3(x+1, y, z+1)); vertices.append(Vector3(x, y, z+1))
 					normals.append(Vector3(0,0,1)); normals.append(Vector3(0,0,1)); normals.append(Vector3(0,0,1)); normals.append(Vector3(0,0,1))
 					uvs.append(Vector2(x * WATER_UV_SCALE, yt * WATER_UV_SCALE))
 					uvs.append(Vector2((x + 1) * WATER_UV_SCALE, yt * WATER_UV_SCALE))
@@ -489,7 +499,7 @@ func build_water_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 				if n_north == -1 or n_north == BlockId.Type.AIR or n_north == BlockId.Type.TORCH:
 					var base_idx6 = vertices.size()
 					var yt = y + vis_top_h
-					vertices.append(Vector3(x, y, z)); vertices.append(Vector3(x+1, y, z)); vertices.append(Vector3(x+1, yt, z)); vertices.append(Vector3(x, y+1, z))
+					vertices.append(Vector3(x, y, z)); vertices.append(Vector3(x+1, y, z)); vertices.append(Vector3(x+1, yt, z)); vertices.append(Vector3(x, yt, z))
 					normals.append(Vector3(0,0,-1)); normals.append(Vector3(0,0,-1)); normals.append(Vector3(0,0,-1)); normals.append(Vector3(0,0,-1))
 					uvs.append(Vector2(x * WATER_UV_SCALE, y * WATER_UV_SCALE))
 					uvs.append(Vector2((x + 1) * WATER_UV_SCALE, y * WATER_UV_SCALE))
@@ -523,10 +533,6 @@ func create_mesh_from_data(data) -> ArrayMesh:
 		return null
 	if not data is Dictionary:
 		return null
-	if data.has("terrain"):
-		data = data.get("terrain")
-		if data == null:
-			return null
 	var vertices = data.get("vertices", PackedVector3Array())
 	if vertices.is_empty():
 		return null
@@ -550,10 +556,6 @@ func create_water_mesh_from_data(data) -> ArrayMesh:
 		return null
 	if not data is Dictionary:
 		return null
-	if data.has("water"):
-		data = data.get("water")
-		if data == null:
-			return null
 	var vertices = data.get("vertices", PackedVector3Array())
 	if vertices.is_empty():
 		return null
@@ -575,8 +577,3 @@ func create_water_mesh_from_data(data) -> ArrayMesh:
 	var mesh = ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 	return mesh
-
-func build_mesh(origin_x: int, origin_z: int, get_block_fn: Callable, height_map: Array = []) -> ArrayMesh:
-	var cache_dict = build_cache(origin_x, origin_z, get_block_fn)
-	var data = build_mesh_data_from_cache(cache_dict)
-	return create_mesh_from_data(data)

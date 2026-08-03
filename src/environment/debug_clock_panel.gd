@@ -1,8 +1,6 @@
 extends CanvasLayer
 class_name DebugClockPanel
 
-## DebugClockPanel - dev controls for game time, canonical, no compatibility wrappers
-
 var clock: GameClock = null
 var values: DayNightValues = null
 
@@ -15,13 +13,11 @@ var panel: Panel
 var _dragging: bool = false
 var _visible_debug: bool = false
 
-
 func _ready():
 	layer = 20
 	visible = false
 	_build_ui()
 	_update_ui()
-
 
 func _build_ui():
 	if panel != null:
@@ -31,17 +27,7 @@ func _build_ui():
 	panel.custom_minimum_size = Vector2(380, 200)
 	panel.size = Vector2(380, 210)
 	panel.position = Vector2(12, 12)
-	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.08, 0.08, 0.10, 0.88)
-	style.corner_radius_top_left = 8
-	style.corner_radius_top_right = 8
-	style.corner_radius_bottom_left = 8
-	style.corner_radius_bottom_right = 8
-	style.border_width_left = 1
-	style.border_width_right = 1
-	style.border_width_top = 1
-	style.border_width_bottom = 1
-	style.border_color = Color(0.4, 0.4, 0.5, 0.6)
+	var style = WildesStyle.make_panel(Color(0.08, 0.08, 0.10, 0.88), 8, Color(0.4, 0.4, 0.5, 0.6), 1)
 	panel.add_theme_stylebox_override("panel", style)
 	add_child(panel)
 
@@ -70,7 +56,7 @@ func _build_ui():
 
 	time_slider = HSlider.new()
 	time_slider.min_value = 0.0
-	time_slider.max_value = 24.0
+	time_slider.max_value = GameClock.HOURS_PER_DAY
 	time_slider.step = 0.01
 	time_slider.value = clock.time_of_day if clock else 6.0
 	time_slider.custom_minimum_size = Vector2(0, 22)
@@ -110,7 +96,6 @@ func _build_ui():
 	reset_btn.pressed.connect(_on_reset_sunrise)
 	midnight_btn.pressed.connect(_on_reset_midnight)
 
-
 func _on_slider_value_changed(v: float):
 	if clock:
 		clock.set_time_of_day(v)
@@ -146,9 +131,13 @@ func _on_clock_time_changed(_t: float):
 	_update_ui()
 
 func _process(_delta):
+	if not visible or not _visible_debug:
+		return
 	_update_ui()
 
 func _update_ui():
+	if not visible:
+		return
 	if time_slider == null or clock == null:
 		return
 	if not _dragging:

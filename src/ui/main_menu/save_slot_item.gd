@@ -1,9 +1,6 @@
 extends Control
 class_name SaveSlotItem
 
-## SaveSlotItem - click anywhere to play/create, no PLAY/CREATE buttons visible
-## Center aligned: Empty -> only "Empty Slot X", Existing -> World name + Seed + Last played
-
 signal slot_play_requested(slot_id: int)
 signal slot_delete_requested(slot_id: int)
 signal slot_create_requested(slot_id: int)
@@ -27,23 +24,12 @@ func _ready():
 	if click_area and not click_area.pressed.is_connected(_on_click_area_pressed):
 		click_area.pressed.connect(_on_click_area_pressed)
 
-	# Apply very dim low opacity border but also slightly visible outline for SELECT WORLD
 	_apply_borders()
 
 func _apply_borders():
 	if panel:
-		var sb = StyleBoxFlat.new()
-		sb.bg_color = Color(0.14, 0.15, 0.19, 0.26)
-		sb.corner_radius_top_left = 12
-		sb.corner_radius_top_right = 12
-		sb.corner_radius_bottom_left = 12
-		sb.corner_radius_bottom_right = 12
-		sb.border_width_left = 1
-		sb.border_width_right = 1
-		sb.border_width_top = 1
-		sb.border_width_bottom = 1
-		sb.border_color = Color(1, 1, 1, 0.22) # more visible outline for SELECT WORLD slots
-		panel.add_theme_stylebox_override("panel", sb)
+		var sb = WildesStyle.make_modal()
+		WildesStyle.apply_frosted_panel(panel, sb, 4.5, false)
 
 func setup(p_slot_id: int, data: Dictionary):
 	slot_id = p_slot_id
@@ -51,7 +37,6 @@ func setup(p_slot_id: int, data: Dictionary):
 
 	var exists = data.get("exists", false)
 
-	# Center align all labels
 	for lbl in [name_label, detail_label, status_label]:
 		if lbl:
 			lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -78,9 +63,8 @@ func setup(p_slot_id: int, data: Dictionary):
 
 		if delete_button:
 			delete_button.visible = true
-			delete_button.text = "Delete"
+			delete_button.button_text = "Delete"
 	else:
-		# Empty slot - only keep Empty Slot X, center aligned, no random terrain text
 		if name_label:
 			name_label.text = "Empty Slot %d" % (slot_id + 1)
 			name_label.visible = true
@@ -94,12 +78,9 @@ func setup(p_slot_id: int, data: Dictionary):
 
 func _on_click_area_pressed():
 	if slot_data.get("exists", false):
-		print("[SaveSlotItem] Click existing %d -> PLAY" % slot_id)
 		slot_play_requested.emit(slot_id)
 	else:
-		print("[SaveSlotItem] Click empty %d -> CREATE" % slot_id)
 		slot_create_requested.emit(slot_id)
 
 func _on_delete_pressed():
-	print("[SaveSlotItem] Delete slot %d" % slot_id)
 	slot_delete_requested.emit(slot_id)

@@ -1,7 +1,5 @@
-extends CharacterBody3D
+extends Node3D
 class_name PlayerMotor
-
-## PlayerMotor - typed DI, uses move_and_slide, swept collision, no step_height, no auto-repeat jump
 
 @export var move_speed: float = 5.5
 @export var jump_velocity: float = 9.0
@@ -13,50 +11,33 @@ var world: WorldController = null
 var voxel_world: VoxelWorld = null
 var camera_rig: CameraRig = null
 var camera_3d: Camera3D = null
-var inventory_model: InventoryModel = null
 
 var on_ground: bool = false
+var velocity: Vector3 = Vector3.ZERO
 var model_root: Node3D
-@onready var collision_shape: CollisionShape3D = $CollisionShape3D
 
-func setup(p_world: WorldController, p_voxel_world: VoxelWorld, p_camera_rig: CameraRig, p_camera_3d: Camera3D, p_inventory: InventoryModel):
+func setup(p_world: WorldController, p_voxel_world: VoxelWorld, p_camera_rig: CameraRig, p_camera_3d: Camera3D):
 	world = p_world
 	voxel_world = p_voxel_world
 	camera_rig = p_camera_rig
 	camera_3d = p_camera_3d
-	inventory_model = p_inventory
 	if voxel_world and (global_position == Vector3.ZERO or global_position.length() < 1.0):
 		var sp = voxel_world.get_spawn_position()
 		global_position = sp + Vector3(0, 0.1, 0)
-	_ensure_collision_shape()
 	_ensure_model()
-	print("[PlayerMotor] Ready at %s world=%s model=%s cam_rig=%s inv=%s" % [global_position, world != null, voxel_world != null, camera_rig != null, inventory_model != null])
 
 func _ready():
-	_ensure_collision_shape()
 	_ensure_model()
-	if voxel_world == null:
-		print("[PlayerMotor] _ready waiting for injection")
-
-func _ensure_collision_shape():
-	if collision_shape == null:
-		collision_shape = CollisionShape3D.new()
-		collision_shape.name = "CollisionShape3D"
-		add_child(collision_shape)
-	if collision_shape.shape == null:
-		var shape = CapsuleShape3D.new()
-		shape.radius = player_width * 0.5
-		shape.height = player_height
-		collision_shape.shape = shape
-		collision_shape.position = Vector3(0, player_height * 0.5, 0)
 
 func _ensure_model():
 	if model_root == null:
-		model_root = get_node_or_null("ModelRoot") as Node3D
-	if model_root == null:
-		model_root = Node3D.new()
-		model_root.name = "ModelRoot"
-		add_child(model_root)
+		var existing = get_node_or_null("ModelRoot") as Node3D
+		if existing != null:
+			model_root = existing
+		else:
+			model_root = Node3D.new()
+			model_root.name = "ModelRoot"
+			add_child(model_root)
 	_create_blocky_model()
 
 func _create_blocky_model():
@@ -107,7 +88,6 @@ func _create_blocky_model():
 
 func _physics_process(delta):
 	if voxel_world == null:
-		# attempt late injection via world if available
 		if world and world.voxel_model:
 			voxel_world = world.voxel_model
 		else:
@@ -147,13 +127,12 @@ func _handle_movement(delta):
 	velocity.x = move_vec.x
 	velocity.z = move_vec.z
 
-	# Remove KEY_SPACE auto-repeat, use just pressed only
-	if Input.is_action_just_pressed("jump"):
+	var ib = InputBuffer.shared()
+	if ib.consume_jump():
 		if on_ground:
 			velocity.y = jump_velocity
 			on_ground = false
 
-	# Swept collision to prevent tunneling (substeps), includes ceiling handling
 	_swept_collision(velocity * delta)
 
 	if velocity.y <= 0.0 and _is_on_ground():
@@ -162,41 +141,17 @@ func _handle_movement(delta):
 	else:
 		on_ground = false
 
-	# Clamp world bounds unless infinite
-	if world and world.config and world.config.infinite_world:
-		# No clamping for infinite
-		pass
-	else:
-		if world:
-			global_position.x = clamp(global_position.x, 0.5, world.world_size - 0.5)
-			global_position.z = clamp(global_position.z, 0.5, world.world_size - 0.5)
-
 	if global_position.y < -10:
 		global_position = voxel_world.get_spawn_position()
 		velocity = Vector3.ZERO
 		on_ground = false
 
 func _get_input_dir() -> Vector2:
-	var x = 0.0
-	var y = 0.0
-	if Input.is_action_pressed("move_right") or Input.is_key_pressed(KEY_D):
-		x += 1.0
-	if Input.is_action_pressed("move_left") or Input.is_key_pressed(KEY_A):
-		x -= 1.0
-	if Input.is_action_pressed("move_forward") or Input.is_key_pressed(KEY_W):
-		y += 1.0
-	if Input.is_action_pressed("move_back") or Input.is_key_pressed(KEY_S):
-		y -= 1.0
-	var v = Vector2(x, y)
-	if v.length() > 1.0:
-		v = v.normalized()
-	return v
+	return InputBuffer.shared().move_dir
 
 func _swept_collision(motion: Vector3):
-	# Substeps for each axis to avoid tunneling, especially vertical fast fall
 	var pos = global_position
 
-	# X axis substeps
 	if motion.x != 0:
 		var steps_x = int(ceil(abs(motion.x) / 0.4)) + 1
 		var step_x = motion.x / float(steps_x)
@@ -208,7 +163,6 @@ func _swept_collision(motion: Vector3):
 			pos.x = test.x
 		global_position.x = pos.x
 
-	# Z axis substeps
 	if motion.z != 0:
 		var steps_z = int(ceil(abs(motion.z) / 0.4)) + 1
 		var step_z = motion.z / float(steps_z)
@@ -221,7 +175,6 @@ func _swept_collision(motion: Vector3):
 		global_position.z = pos.z
 		pos = global_position
 
-	# Y swept with tight tolerance so feet hit ground
 	if motion.y != 0:
 		if motion.y < 0:
 			var steps_y = int(ceil(abs(motion.y) / 0.25)) + 1
@@ -275,7 +228,6 @@ func _collides_at(pos: Vector3, ignore_ground: bool = true) -> bool:
 func _get_ground_y(pos: Vector3) -> float:
 	if voxel_world == null:
 		return -9999.0
-	# Tighter tolerances so feet actually hit ground
 	var min_x = floor(pos.x - player_width * 0.5 + 0.04)
 	var max_x = floor(pos.x + player_width * 0.5 - 0.04)
 	var min_z = floor(pos.z - player_width * 0.5 + 0.04)
@@ -302,5 +254,4 @@ func _is_on_ground() -> bool:
 	var g = _get_ground_y(global_position)
 	if g == -9999.0:
 		return false
-	# Tight tolerance for feet hitting ground
 	return abs(g - global_position.y) < 0.12

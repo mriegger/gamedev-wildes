@@ -1,4 +1,4 @@
-[gd_scene load_steps=3 format=3 uid="uid://h0tb4r1c0n"]
+[gd_scene format=3 uid="uid://h0tb4r1c0n"]
 
 [ext_resource type="Script" path="res://ui/hotbar.gd" id="1_hotbar"]
 [ext_resource type="PackedScene" path="res://ui/hotbar_slot.tscn" id="2_slot"]

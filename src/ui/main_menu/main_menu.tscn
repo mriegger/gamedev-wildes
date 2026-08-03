@@ -1,9 +1,10 @@
-[gd_scene load_steps=2 format=3 uid="uid://mainmenu_scn"]
+[gd_scene format=3 uid="uid://dbky24qcjb3wy"]
 
-[ext_resource type="Script" path="res://ui/main_menu/main_menu.gd" id="1_script"]
-[ext_resource type="PackedScene" path="res://ui/main_menu/wildes_button.tscn" id="2_btn"]
+[ext_resource type="Script" uid="uid://w523kj2j4utk" path="res://ui/main_menu/main_menu.gd" id="1_script"]
+[ext_resource type="PackedScene" uid="uid://bwildesbtn01" path="res://ui/main_menu/wildes_button.tscn" id="2_btn"]
+[ext_resource type="Texture2D" uid="uid://7lrpeacnbbgg" path="res://assets/images/logo/wildes_white.png" id="3_logo"]
 
-[node name="MainMenu" type="Control"]
+[node name="MainMenu" type="Control" unique_id=1996100347]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -13,7 +14,7 @@ grow_vertical = 2
 mouse_filter = 2
 script = ExtResource("1_script")
 
-[node name="Background" type="ColorRect" parent="."]
+[node name="Background" type="ColorRect" parent="." unique_id=515035912]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -23,7 +24,7 @@ grow_vertical = 2
 mouse_filter = 2
 color = Color(0.11, 0.13, 0.16, 1)
 
-[node name="DimOverlay" type="ColorRect" parent="."]
+[node name="DimOverlay" type="ColorRect" parent="." unique_id=273094164]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -33,7 +34,7 @@ grow_vertical = 2
 mouse_filter = 2
 color = Color(0, 0, 0, 0.22)
 
-[node name="SplitContainer" type="HBoxContainer" parent="."]
+[node name="SplitContainer" type="HBoxContainer" parent="." unique_id=1737213607]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -43,14 +44,14 @@ grow_vertical = 2
 mouse_filter = 2
 alignment = 1
 
-[node name="LeftSide" type="Control" parent="SplitContainer"]
+[node name="LeftSide" type="Control" parent="SplitContainer" unique_id=77122180]
 custom_minimum_size = Vector2(640, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 mouse_filter = 2
 
-[node name="CenterContainer" type="CenterContainer" parent="SplitContainer/LeftSide"]
+[node name="CenterContainer" type="CenterContainer" parent="SplitContainer/LeftSide" unique_id=85921638]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -58,28 +59,28 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
+offset_left = 10.0
+offset_top = -20.0
+offset_right = 10.0
+offset_bottom = -20.0
 
-[node name="LogoLabel" type="Label" parent="SplitContainer/LeftSide/CenterContainer"]
-custom_minimum_size = Vector2(0, 0)
+[node name="Logo" type="TextureRect" parent="SplitContainer/LeftSide/CenterContainer" unique_id=1479520348]
+custom_minimum_size = Vector2(520, 203)
 layout_mode = 2
 size_flags_horizontal = 4
 size_flags_vertical = 4
-text = "WILDES"
-horizontal_alignment = 1
-vertical_alignment = 1
-theme_override_font_sizes/font_size = 121
-theme_override_colors/font_color = Color(0.96, 0.95, 0.9, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 0.55)
-theme_override_constants/outline_size = 9
+texture = ExtResource("3_logo")
+expand_mode = 1
+stretch_mode = 6
 
-[node name="RightSide" type="Control" parent="SplitContainer"]
+[node name="RightSide" type="Control" parent="SplitContainer" unique_id=414487334]
 custom_minimum_size = Vector2(640, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 mouse_filter = 2
 
-[node name="CenterContainer" type="CenterContainer" parent="SplitContainer/RightSide"]
+[node name="CenterContainer" type="CenterContainer" parent="SplitContainer/RightSide" unique_id=1291827847]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -88,9 +89,6 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 
-[node name="PlayButton" parent="SplitContainer/RightSide/CenterContainer" instance=ExtResource("2_btn")]
+[node name="PlayButton" parent="SplitContainer/RightSide/CenterContainer" unique_id=287007183 instance=ExtResource("2_btn")]
 custom_minimum_size = Vector2(250, 70)
 layout_mode = 2
-size_flags_horizontal = 0
-size_flags_vertical = 0
-button_text = "PLAY"

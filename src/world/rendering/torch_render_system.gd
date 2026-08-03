@@ -1,16 +1,18 @@
 extends RefCounted
 class_name TorchRenderSystem
 
-## TorchRenderSystem - displays torches, uses BlockCatalog cache, no duplicate opacity rules
-
 const TORCH_OMNI_RANGE: float = 9.0
 const MAX_SHADOW_TORCHES: int = 4
 const TORCH_SHADOW_UPDATE_INTERVAL: float = 0.6
+# Light Y is flame base, independent of wall offset.
+# Stem: size 0.45 centered at 0.05 => spans -0.175 to 0.275
+# Flame: size 0.14 centered at 0.38 => spans 0.31 to 0.45
+const TORCH_LIGHT_Y: float = 0.32
 
 var torch_container: Node3D
 
-var torch_instances: Dictionary = {} # Vector3i -> Node3D visual
-var torch_light_nodes: Dictionary = {} # Vector3i -> OmniLight3D
+var torch_instances: Dictionary = {}
+var torch_light_nodes: Dictionary = {}
 
 var torch_base_material: StandardMaterial3D
 var torch_flame_material: StandardMaterial3D
@@ -26,12 +28,6 @@ func _init(p_container: Node3D = null):
 	torch_container = p_container
 	catalog = BlockCatalog.shared()
 	_setup_materials_and_meshes()
-
-func setup(p_container: Node3D, p_player: Node3D = null):
-	torch_container = p_container
-	player_ref = p_player
-	if torch_base_material == null:
-		_setup_materials_and_meshes()
 
 func _setup_materials_and_meshes():
 	var def = catalog.get_definition(BlockId.Type.TORCH)
@@ -54,14 +50,6 @@ func _setup_materials_and_meshes():
 	torch_flame_mesh = BoxMesh.new()
 	torch_flame_mesh.size = Vector3(0.14, 0.14, 0.14)
 
-func clear():
-	for pos in torch_instances.keys():
-		var n = torch_instances[pos] as Node3D
-		if n and is_instance_valid(n):
-			n.queue_free()
-	torch_instances.clear()
-	torch_light_nodes.clear()
-
 func spawn_torch(pos: Vector3i, attach_dir: Vector3i = Vector3i.ZERO) -> Node3D:
 	if torch_container == null:
 		return null
@@ -69,13 +57,7 @@ func spawn_torch(pos: Vector3i, attach_dir: Vector3i = Vector3i.ZERO) -> Node3D:
 
 	var root = Node3D.new()
 	root.name = "Torch_%d_%d_%d" % [pos.x, pos.y, pos.z]
-	var base_pos = Vector3(pos.x + 0.5, pos.y + 0.5, pos.z + 0.5)
-	if attach_dir != Vector3i.ZERO:
-		var off = Vector3(attach_dir.x, attach_dir.y, attach_dir.z) * 0.32
-		base_pos += off
-		if attach_dir == Vector3i.DOWN:
-			base_pos.y = pos.y + 0.15
-	root.position = base_pos
+	root.position = TorchPlacement.world_position(pos, attach_dir)
 	torch_container.add_child(root)
 
 	var stem = MeshInstance3D.new()
@@ -106,7 +88,7 @@ func spawn_torch(pos: Vector3i, attach_dir: Vector3i = Vector3i.ZERO) -> Node3D:
 	light.shadow_normal_bias = 0.2
 	light.shadow_opacity = 0.5
 	light.shadow_blur = 1.0
-	light.position = Vector3(0, 0.32, 0)
+	light.position = Vector3(0, TORCH_LIGHT_Y, 0)
 	root.add_child(light)
 
 	torch_instances[pos] = root
@@ -127,9 +109,6 @@ func remove_torch(pos: Vector3i) -> bool:
 func has_torch(pos: Vector3i) -> bool:
 	return torch_instances.has(pos)
 
-func get_torch_count() -> int:
-	return torch_instances.size()
-
 func unload_torches_in_chunk(cx: int, cz: int, p_chunk_size: int) -> int:
 	var removed = 0
 	var to_remove: Array[Vector3i] = []
@@ -141,8 +120,6 @@ func unload_torches_in_chunk(cx: int, cz: int, p_chunk_size: int) -> int:
 	for pos in to_remove:
 		remove_torch(pos)
 		removed += 1
-	if removed > 0:
-		print("[TorchRender] Unloaded %d torches in chunk %d_%d" % [removed, cx, cz])
 	return removed
 
 func load_torches_for_chunk(cx: int, cz: int, p_chunk_size: int, torch_attachments: Dictionary) -> int:
@@ -158,8 +135,6 @@ func load_torches_for_chunk(cx: int, cz: int, p_chunk_size: int, torch_attachmen
 			var dir = torch_attachments[torch_pos] as Vector3i
 			spawn_torch(torch_pos, dir)
 			loaded += 1
-	if loaded > 0:
-		print("[TorchRender] Loaded %d torches for chunk %d_%d" % [loaded, cx, cz])
 	return loaded
 
 func update_shadow_culling(_delta: float) -> void:
@@ -206,11 +181,3 @@ func _apply_shadow_pool_limit():
 
 func set_player_ref(p: Node3D):
 	player_ref = p
-
-func get_stats() -> Dictionary:
-	return {
-		"torches": torch_instances.size(),
-		"lights": torch_light_nodes.size(),
-		"max_shadow": MAX_SHADOW_TORCHES,
-		"range": TORCH_OMNI_RANGE,
-	}

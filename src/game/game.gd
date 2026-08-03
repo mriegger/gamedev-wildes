@@ -1,9 +1,6 @@
 extends Node3D
 class_name Game
 
-## Game - root, typed DI, one setup pass after WorldController initializes
-## Enhanced with full save-state pipeline: 3 slots, random seed, auto-save on edit, ESC save & quit
-
 @onready var world_env_node: WorldEnvironment = $WorldEnvironment
 @onready var world: WorldController = $World as WorldController
 @onready var player: PlayerMotor = $Player as PlayerMotor
@@ -17,11 +14,9 @@ class_name Game
 @onready var day_night_values: DayNightValues = $DayNightValues as DayNightValues
 @onready var debug_clock_panel: DebugClockPanel = $DebugClockPanel as DebugClockPanel
 @onready var hud: HUD = $HUD as HUD
-@onready var hotbar: Hotbar = $HUD/Hotbar as Hotbar
 
 var inventory_model: InventoryModel = null
 
-# --- Save slot handling ---
 var current_slot_id: int = -1
 var current_save_data: Dictionary = {}
 
@@ -31,23 +26,19 @@ var _pending_edit_save: bool = false
 const AUTO_SAVE_INTERVAL: float = 30.0
 const EDIT_SAVE_DEBOUNCE: float = 2.0
 
-var _has_loaded_player_pos: bool = false
 var _save_status_timer: float = 0.0
 var _save_label: Label = null
-
 
 func _enter_tree():
 	if current_save_data.is_empty():
 		current_save_data = _load_current_session_file()
 		if not current_save_data.is_empty():
 			current_slot_id = int(current_save_data.get("slot_id", -1))
-			print("[Game] _enter_tree loaded slot %d seed %s" % [current_slot_id, current_save_data.get("seed", "random")])
 
 	if not current_save_data.is_empty():
 		var world_node = get_node_or_null("World") as WorldController
 		if world_node:
 			world_node.set_pending_save_data(current_save_data)
-
 
 func _load_current_session_file() -> Dictionary:
 	var path = "user://current_session.json"
@@ -68,9 +59,6 @@ func _load_current_session_file() -> Dictionary:
 			return full
 	return parsed
 
-
-signal game_fully_ready
-
 var _defer_setup: bool = false
 var _deferred_saved_pos: Vector3 = Vector3.ZERO
 var _deferred_has_saved_pos: bool = false
@@ -78,20 +66,16 @@ var _deferred_saved_time: float = 6.0
 var _deferred_has_saved_time: bool = false
 
 func _ready():
-	print("[Wildes] Game ready - 1280x720 Compatibility")
-	print("Controls: WASD move, Space jump, Q/E rotate, Wheel zoom, Left mine, Right place, 1-9 hotbar, ESC save&quit")
-	print("[Wildes] Save system: %s slots=%d random terrain enabled" % [SaveManager.SAVE_DIR, SaveManager.SLOT_COUNT])
 
 	SaveManager.ensure_save_dir()
 	_create_save_status_ui()
 
-	inventory_model = InventoryModel.new(9, 99)
+	inventory_model = InventoryModel.new(InventoryModel.DEFAULT_SIZE, InventoryModel.DEFAULT_MAX_STACK)
 
 	if not current_save_data.is_empty() and current_save_data.has("inventory") and current_save_data["inventory"] != null:
 		var inv_dict = current_save_data["inventory"] as Dictionary
 		if not inv_dict.is_empty():
 			inventory_model.from_dict(inv_dict)
-			print("[Game] Restored inventory from save slot %d" % current_slot_id)
 		else:
 			inventory_model.setup_starter()
 	else:
@@ -108,15 +92,11 @@ func _ready():
 			if p != Vector3.ZERO and p.length() > 1.0:
 				saved_player_pos = p
 				has_saved_pos = true
-				_has_loaded_player_pos = true
 		if current_save_data.has("time_of_day"):
 			saved_time_of_day = float(current_save_data["time_of_day"])
 			has_saved_time = true
-			print("[Game] Found saved time_of_day %.2f from slot %d" % [saved_time_of_day, current_slot_id])
 
-	# Check if world generation is deferred to LoadingScreen
 	if world and not world.auto_generate_on_ready:
-		print("[Game] Deferring world setup to LoadingScreen (async)")
 		_defer_setup = true
 		_deferred_saved_pos = saved_player_pos
 		_deferred_has_saved_pos = has_saved_pos
@@ -130,63 +110,42 @@ func _ready():
 		if not world.voxel_model.block_edit_committed.is_connected(_on_world_edit):
 			world.voxel_model.block_edit_committed.connect(_on_world_edit)
 
-	print("[Game] Systems ready: World=%s Player=%s Slot=%d Seed=%s SaveDir=%s" % [
-		world != null, player != null,
-		current_slot_id, str(world.seed_value) if world else "?",
-		SaveManager.SAVE_DIR
-	])
-	if current_slot_id == -1:
-		print("[Game] WARNING: No slot selected - saves will not persist! Launch via Main Menu.")
-	else:
-		game_fully_ready.emit()
-
 func finalize_deferred_setup():
 	if not _defer_setup:
 		return
-	print("[Game] Finalizing deferred setup after world async generation - time %.2f" % _deferred_saved_time)
 	_defer_setup = false
 	_setup_all(_deferred_saved_pos, _deferred_has_saved_pos, _deferred_saved_time, _deferred_has_saved_time)
 	if world and world.voxel_model:
 		if not world.voxel_model.block_edit_committed.is_connected(_on_world_edit):
 			world.voxel_model.block_edit_committed.connect(_on_world_edit)
-	print("[Game] Systems ready (deferred): Slot=%d Seed=%s" % [current_slot_id, str(world.seed_value) if world else "?"])
-	game_fully_ready.emit()
-
 
 func _setup_all(saved_pos: Vector3 = Vector3.ZERO, has_saved: bool = false, saved_time: float = 6.0, has_saved_time: bool = false):
 	if world.voxel_model == null and not current_save_data.is_empty():
-		print("[Game] World model null, re-injecting save data")
 		world.set_pending_save_data(current_save_data)
 		if world.voxel_model == null:
 			world._ready()
 
-	player.setup(world, world.voxel_model, camera_rig, camera_3d, inventory_model)
-	interactor.setup(world.voxel_model, camera_3d, camera_rig, player, inventory_model)
-	targeting_view.setup(world, world.voxel_model, player, interactor, camera_3d)
+	player.setup(world, world.voxel_model, camera_rig, camera_3d)
+	interactor.setup(world.voxel_model, camera_3d, player, inventory_model)
+	targeting_view.setup(world, world.voxel_model, player, interactor)
 	camera_rig.setup(player)
 
 	world.set_player_ref(player)
 
-	# Restore time of day before day-night setup so sky starts correctly
 	if has_saved_time:
 		game_clock.set_time_of_day(saved_time)
-		print("[Game] Restored time_of_day %.2f (%s) from save" % [saved_time, game_clock.get_formatted()])
 	else:
-		# Ensure we start at configured start_hour (6am) if no save
 		game_clock.set_time_of_day(game_clock.start_hour)
 
 	day_night_values.setup(game_clock, sun, sun_fill, world_env_node, world.config)
+	day_night_values.world_controller = world
 	debug_clock_panel.inject(game_clock, day_night_values)
 
-	hud.setup(player, inventory_model)
-	hotbar.inventory_model = inventory_model
+	hud.setup(inventory_model)
 
 	var spawn_pos = world.voxel_model.get_spawn_position()
 	if has_saved and saved_pos != Vector3.ZERO:
 		player.global_position = saved_pos + Vector3(0, 0.2, 0)
-		print("[Game] Restored player pos %s from save" % saved_pos)
-	elif player.global_position == Vector3.ZERO or player.global_position.distance_to(spawn_pos) < 0.01:
-		player.global_position = spawn_pos + Vector3(0, 0.1, 0)
 	else:
 		player.global_position = spawn_pos + Vector3(0, 0.1, 0)
 
@@ -202,7 +161,7 @@ func _create_save_status_ui():
 	canvas.name = "SaveStatusLayer"
 	canvas.layer = 100
 	canvas.process_mode = Node.PROCESS_MODE_WHEN_PAUSED
-	canvas.visible = false # Only visible when paused per request
+	canvas.visible = false
 	add_child(canvas)
 	_save_canvas = canvas
 	var lbl = Label.new()
@@ -214,17 +173,13 @@ func _create_save_status_ui():
 	lbl.position = Vector2(10, 10)
 	lbl.add_theme_font_size_override("font_size", 14)
 	lbl.add_theme_color_override("font_color", Color(1,1,1,0.85))
-	# No blurred background — user requested text only, no frosted bg
-	# Ensure no material or bg
 	lbl.material = null
 	canvas.add_child(lbl)
 	_save_label = lbl
-	print("[Game] Save status UI created text-only, no blur (hidden, only visible when paused)")
 
 func _update_save_label(text: String = ""):
 	if _save_label == null:
 		return
-	# Only update text, visibility handled by pause
 	if text != "":
 		_save_label.text = text
 		_save_status_timer = 2.5
@@ -239,8 +194,6 @@ func _update_save_label(text: String = ""):
 func _on_world_edit(_edit: BlockEdit):
 	_pending_edit_save = true
 	_save_timer = 0.0
-	# Don't show pending save text during gameplay, only when paused we show data
-	# But we still keep internal label updated for when pause opens
 	if _save_label:
 		var time_str = game_clock.get_formatted() if game_clock else "06:00"
 		_save_label.text = "Slot %d | Seed %d | %s | Pending save..." % [current_slot_id, world.seed_value if world else 0, time_str]
@@ -266,6 +219,9 @@ func _process(delta):
 		_save_timer = 0.0
 		_perform_save("auto")
 
+func _physics_process(_delta):
+	InputBuffer.shared().poll()
+
 var _pause_menu: PauseMenu = null
 var pause_menu_scene: PackedScene = preload("res://ui/main_menu/pause_menu.tscn")
 
@@ -273,23 +229,22 @@ func _unhandled_input(event):
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_ESCAPE:
 			if get_tree().paused and _pause_menu:
-				print("[Game] ESC while paused -> resume")
 				_resume_from_pause()
 			else:
-				print("[Game] ESC -> pause menu (pauses whole game state)")
 				_show_pause_menu()
+			get_viewport().set_input_as_handled()
 			return
 	if event.is_action_pressed("ui_cancel"):
 		if get_tree().paused and _pause_menu:
 			_resume_from_pause()
 		else:
 			_show_pause_menu()
+		get_viewport().set_input_as_handled()
 		return
 
 func _show_pause_menu():
 	if _pause_menu and is_instance_valid(_pause_menu):
 		return
-	print("[Game] Showing pause menu - pausing: clock=%s player=%s world=%s" % [game_clock.get_formatted() if game_clock else "?", str(player != null), str(world != null)])
 	_pause_menu = pause_menu_scene.instantiate() as PauseMenu
 	_pause_menu.process_mode = Node.PROCESS_MODE_WHEN_PAUSED
 	if not _pause_menu.resume_requested.is_connected(_on_pause_resume):
@@ -297,29 +252,23 @@ func _show_pause_menu():
 	if not _pause_menu.main_menu_requested.is_connected(_on_pause_main_menu):
 		_pause_menu.main_menu_requested.connect(_on_pause_main_menu)
 	add_child(_pause_menu)
-	# Show save data only when paused
 	if _save_canvas:
 		_save_canvas.visible = true
 		_update_save_label()
 	get_tree().paused = true
-	print("[Game] Tree paused=%s - save data now visible: %s" % [get_tree().paused, _save_label.text if _save_label else ""])
 
 func _resume_from_pause():
 	if _pause_menu and is_instance_valid(_pause_menu):
 		_pause_menu.queue_free()
 		_pause_menu = null
-	# Hide save data when resuming
 	if _save_canvas:
 		_save_canvas.visible = false
 	get_tree().paused = false
-	print("[Game] Resumed - tree paused=%s - save data hidden" % get_tree().paused)
 
 func _on_pause_resume():
 	_resume_from_pause()
 
 func _on_pause_main_menu():
-	print("[Game] Pause menu -> Main Menu (save first)")
-	# Unpause before changing scene
 	get_tree().paused = false
 	if _pause_menu:
 		_pause_menu.queue_free()
@@ -330,7 +279,10 @@ func _notification(what):
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
 		if current_slot_id != -1:
 			_perform_save("close")
-			print("[Game] Window close - saved slot %d" % current_slot_id)
+		if world and world.chunk_renderer:
+			world.chunk_renderer.clear()
+		if world and world.chunk_manager:
+			world.chunk_manager.clear()
 
 func _perform_save(reason: String = "manual") -> bool:
 	if current_slot_id == -1:
@@ -344,13 +296,6 @@ func _perform_save(reason: String = "manual") -> bool:
 	var success = SaveManager.save_world_state(current_slot_id, world.voxel_model, player, inventory_model, _playtime_accum, time_to_save)
 	_playtime_accum = 0.0
 	if success:
-		print("[Game] Saved slot %d (%s) seed %d time %.2f (%s) placed=%d removed=%d torches=%d | user://saves/slot_%d.json" % [
-			current_slot_id, reason, world.seed_value, time_to_save, game_clock.get_formatted() if game_clock else "",
-			world.voxel_model.placed_blocks.size(),
-			world.voxel_model.removed_blocks.size(),
-			world.voxel_model.torch_attachments.size(),
-			current_slot_id
-		])
 		_update_save_label("Saved slot %d! (%s) %s Seed %d | %d edits" % [
 			current_slot_id, reason, game_clock.get_formatted() if game_clock else "",
 			world.seed_value,
@@ -365,8 +310,12 @@ func _perform_save(reason: String = "manual") -> bool:
 func _save_and_return_to_menu():
 	get_tree().paused = false
 	_perform_save("quit_to_menu")
+	if world:
+		if world.chunk_renderer:
+			world.chunk_renderer.clear()
+		if world.chunk_manager:
+			world.chunk_manager.clear()
 	
-	# Hide all game UI immediately to avoid MainMenu + hotbar glitch screenshot
 	if _pause_menu and is_instance_valid(_pause_menu):
 		_pause_menu.visible = false
 		_pause_menu.queue_free()
@@ -384,34 +333,25 @@ func _save_and_return_to_menu():
 				hb.queue_free()
 		hud.queue_free()
 		hud = null
-		hotbar = null
 	if debug_clock_panel and is_instance_valid(debug_clock_panel):
 		debug_clock_panel.visible = false
 		debug_clock_panel.queue_free()
 	
 	var root = get_tree().root
-	# Aggressive cleanup: free any leftover CanvasLayers / HUD / Game nodes at root that could cause MainMenu+hotbar screenshot
+	UiCleanup.free_stray_canvas_layers(root, self)
 	for child in root.get_children():
 		if child == self:
 			continue
-		# Free any previous MainMenu/ SaveSlotScreen / LoadingScreen / Game instances that might still be queued
 		if child is Game or child is MainMenu or child is SaveSlotScreen or child is LoadingScreen:
 			if is_instance_valid(child):
-				child.visible = false
-				child.queue_free()
-		elif child is CanvasLayer:
-			# Any stray HUD layer (layer 1, 20, 100, 200)
-			if child.name in ["HUD", "DebugClockPanel", "SaveStatusLayer", "LoadingScreen", "Hotbar"] or child.layer in [1, 20, 100, 200]:
 				child.visible = false
 				child.queue_free()
 	
 	var main_menu_scene = load("res://ui/main_menu/main_menu.tscn") as PackedScene
 	if main_menu_scene:
 		var menu = main_menu_scene.instantiate()
-		# Use call_deferred to ensure old Game is freed before MainMenu is added, avoiding one-frame overlap
 		root.add_child(menu)
 		get_tree().current_scene = menu
-		print("[Game] Returned to Main Menu - saved time %s - all HUD layers forcibly freed, root cleaned" % [game_clock.get_formatted() if game_clock else ""])
 		queue_free()
 	else:
 		get_tree().quit()

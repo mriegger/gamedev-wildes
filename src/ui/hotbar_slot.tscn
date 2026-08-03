@@ -1,4 +1,4 @@
-[gd_scene load_steps=3 format=3 uid="uid://h0tb4rsl0t1c0n"]
+[gd_scene format=3 uid="uid://0kxnx3vgathn"]
 
 [ext_resource type="Script" path="res://ui/hotbar_slot.gd" id="1_slot"]
 [ext_resource type="Material" path="res://shaders/frosted_button_material.tres" id="2_blur"]

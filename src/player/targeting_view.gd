@@ -1,36 +1,28 @@
 extends Node3D
 class_name TargetingView
 
-## TargetingView - selection, ghost, breaking, shadow, typed DI, one setup pass
-
 var world: WorldController = null
 var voxel_world: VoxelWorld = null
 var motor: PlayerMotor = null
 var interactor: PlayerInteractor = null
-var camera: Camera3D = null
 
 var selection_box: Node3D
 var ghost_block: MeshInstance3D
 var breaking_block: MeshInstance3D
-var crack_box: MeshInstance3D
-var chip_container: Node3D
 var contact_shadow: MeshInstance3D
 
 var _selection_edge_mats: Array = []
 var _world_visuals_queued: bool = false
 var _shadow_queued: bool = false
 
-
-func setup(p_world: WorldController, p_voxel_world: VoxelWorld, p_motor: PlayerMotor, p_interactor: PlayerInteractor, p_camera: Camera3D):
+func setup(p_world: WorldController, p_voxel_world: VoxelWorld, p_motor: PlayerMotor, p_interactor: PlayerInteractor):
 	world = p_world
 	voxel_world = p_voxel_world
 	motor = p_motor
 	interactor = p_interactor
-	camera = p_camera
 	_ensure_visuals()
 	_reparent_visuals_to_world_deferred()
 	_reparent_shadow_to_motor_deferred()
-	print("[TargetingView] Ready world=%s model=%s motor=%s inter=%s" % [world != null, voxel_world != null, motor != null, interactor != null])
 
 func _ensure_visuals():
 	if selection_box == null:
@@ -44,7 +36,7 @@ func _reparent_visuals_to_world_deferred():
 	if world == null or _world_visuals_queued:
 		return
 	_world_visuals_queued = true
-	for n in [selection_box, ghost_block, breaking_block, crack_box, chip_container]:
+	for n in [selection_box, ghost_block, breaking_block]:
 		if n == null:
 			continue
 		if n.get_parent() == world:
@@ -74,7 +66,6 @@ func _clear_shadow_queue_flag():
 	_shadow_queued = false
 
 func _ready():
-	# Visuals created here will be reparented in setup() after world ready - no false-model print
 	_ensure_visuals()
 
 func _physics_process(_delta):
@@ -134,24 +125,6 @@ func _create_selection():
 	breaking_block.visible = false
 	add_child(breaking_block)
 
-	crack_box = MeshInstance3D.new()
-	crack_box.name = "CrackBox"
-	var cb = BoxMesh.new()
-	cb.size = Vector3(1.01, 1.01, 1.01)
-	crack_box.mesh = cb
-	crack_box.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	crack_box.visible = false
-	var cstd = StandardMaterial3D.new()
-	cstd.albedo_color = Color(0, 0, 0, 0.0)
-	cstd.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	cstd.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	crack_box.material_override = cstd
-	add_child(crack_box)
-
-	chip_container = Node3D.new()
-	chip_container.name = "ChipContainer"
-	add_child(chip_container)
-
 func _create_ghost():
 	ghost_block = MeshInstance3D.new()
 	ghost_block.name = "GhostBlock"
@@ -193,7 +166,6 @@ func _create_contact_shadow():
 	add_child(contact_shadow)
 
 func _color_for_type(t: int) -> Color:
-	# Use cached catalog, not constructing BlockDefinition each frame
 	if BlockId.is_valid(t):
 		return BlockCatalog.shared().get_side_color(t)
 	return Color(0, 0, 0, 0)
@@ -259,25 +231,22 @@ func _update_selection_visuals():
 		if breaking_block and breaking_block.is_inside_tree():
 			breaking_block.visible = false
 			breaking_block.scale = Vector3.ONE
-		if crack_box and crack_box.is_inside_tree():
-			crack_box.visible = false
 
 	if show_ghost and ghost_block and interactor.placement_has:
-		if ghost_block == null or not ghost_block.is_inside_tree():
+		if not ghost_block.is_inside_tree():
 			return
 		var sel_type = interactor.get_selected_block_type()
 		if sel_type == null or sel_type == BlockId.Type.AIR:
 			ghost_block.visible = false
 		else:
 			ghost_block.visible = true
-			var base_center = Vector3(float(interactor.placement_block.x) + 0.5, float(interactor.placement_block.y) + 0.5, float(interactor.placement_block.z) + 0.5)
+			var base_center: Vector3
 			if sel_type == BlockId.Type.TORCH:
 				var support_dir = -interactor.last_ray_normal
-				base_center += Vector3(support_dir.x, support_dir.y, support_dir.z) * 0.32
-				if support_dir == Vector3i.DOWN:
-					base_center.y = interactor.placement_block.y + 0.15
+				base_center = TorchPlacement.world_position(interactor.placement_block, support_dir)
 				(ghost_block.mesh as BoxMesh).size = Vector3(0.12, 0.55, 0.12)
 			else:
+				base_center = Vector3(float(interactor.placement_block.x) + 0.5, float(interactor.placement_block.y) + 0.5, float(interactor.placement_block.z) + 0.5)
 				(ghost_block.mesh as BoxMesh).size = Vector3(1.0, 1.0, 1.0)
 			ghost_block.global_position = base_center
 			var gmat = ghost_block.material_override

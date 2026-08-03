@@ -1,9 +1,6 @@
 extends Node3D
 class_name CameraRig
 
-## CameraRig - isometric orthographic camera that orbits around player
-## New refactored: no compatibility wrappers, requires injected _player
-
 @export var min_ortho_size: float = 18.0
 @export var max_ortho_size: float = 90.0
 @export var zoom_speed: float = 10.0
@@ -19,13 +16,11 @@ var target_yaw_deg: float = 225.0
 var current_yaw_deg: float = 225.0
 var target_position: Vector3 = Vector3(100, 0, 100)
 
-# Injected by Game - required, no fallback searching
 var _player: PlayerMotor = null
 
 func setup(p_player: PlayerMotor):
 	_player = p_player
 	target_position = p_player.global_position
-	print("[CameraRig] Setup player=%s" % (p_player != null))
 
 func _ready():
 	current_yaw_deg = target_yaw_deg
@@ -39,30 +34,32 @@ func _ready():
 		camera.near = 0.1
 		camera.far = 1000.0
 		camera.current = true
-	if _player == null:
-		print("[CameraRig] _ready waiting for setup()")
-	else:
-		print("[CameraRig] Ready pitch %.1f yaw %.1f dist %.1f" % [pitch_deg, current_yaw_deg, orbit_distance])
-
 
 func _unhandled_input(event):
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
-			_zoom(-2.5)
+			InputBuffer.shared().set_wheel(true)
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			_zoom(2.5)
+			InputBuffer.shared().set_wheel(false)
 	elif event is InputEventMagnifyGesture:
 		_zoom((1.0 - event.factor) * 35.0)
 	elif event is InputEventPanGesture:
 		if abs(event.delta.y) > 0.001:
 			_zoom(event.delta.y * 4.0)
 
-
 func _process(delta):
-	if Input.is_action_just_pressed("rotate_left"):
+	var ib = InputBuffer.shared()
+	if ib.consume_rotate_left():
 		target_yaw_deg -= 45.0
-	if Input.is_action_just_pressed("rotate_right"):
+	if ib.consume_rotate_right():
 		target_yaw_deg += 45.0
+
+	if ib.wheel_up:
+		_zoom(-2.5)
+		ib.clear_wheel()
+	if ib.wheel_down:
+		_zoom(2.5)
+		ib.clear_wheel()
 
 	current_yaw_deg = _lerp_angle_deg(current_yaw_deg, target_yaw_deg, delta * yaw_lerp_speed)
 	rotation_degrees.y = current_yaw_deg
@@ -76,11 +73,10 @@ func _process(delta):
 		target_position = _player.global_position
 	global_position = global_position.lerp(target_position, delta * follow_lerp)
 
-	if Input.is_action_pressed("zoom_in"):
+	if ib.zoom_in_pressed:
 		_zoom(-zoom_speed * delta)
-	if Input.is_action_pressed("zoom_out"):
+	if ib.zoom_out_pressed:
 		_zoom(zoom_speed * delta)
-
 
 func _zoom(amount: float):
 	if camera == null:

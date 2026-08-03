@@ -11,23 +11,17 @@ void vertex() {
 }
 
 void fragment() {
-    // AO and drop-shadows baked into COLOR.rgb (0.58..1.0)
-    // FIX blown out: was *1.22 + 0.72-1.0 top -> white clamp washed. Now 0.88 * 0.60-0.85 keeps saturation.
     float top = clamp(v_world_normal.y, 0.0, 1.0);
     float crisp_shade = mix(0.60, 0.85, top);
     vec3 base = COLOR.rgb * 0.88;
     base = clamp(base, vec3(0.0), vec3(1.0));
     vec3 albedo = base * crisp_shade;
-    // Saturation grading - luminance preserved, then clamped
     float luminance = dot(albedo, vec3(0.2126, 0.7152, 0.0722));
     albedo = mix(vec3(luminance), albedo, terrain_saturation);
     albedo = clamp(albedo, vec3(0.0), vec3(1.0));
-    // Contrast grading
     albedo = (albedo - vec3(0.5)) * terrain_contrast + vec3(0.5);
     albedo = clamp(albedo, vec3(0.0), vec3(1.0));
 
     ALBEDO = albedo;
     ROUGHNESS = 0.96;
-    // lambert_wrap gives light to backfaces, so away sides are darker but not black
-    // real-time shadows from Sun still apply via shadow map, softened by blur
 }

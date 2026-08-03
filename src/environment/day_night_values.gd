@@ -1,8 +1,6 @@
 extends Node3D
 class_name DayNightValues
 
-## DayNightValues - applies clock and profile to lights/environment, canonical, no wrappers
-
 var clock: GameClock = null
 var profile: DayNightProfile = null
 var config: WorldConfig = null
@@ -11,6 +9,7 @@ var sun_light: DirectionalLight3D = null
 var fill_light: DirectionalLight3D = null
 var world_env_node: WorldEnvironment = null
 var env: Environment = null
+var world_controller: WorldController = null
 
 func setup(p_clock: GameClock, p_sun: DirectionalLight3D, p_fill: DirectionalLight3D, p_env_node: WorldEnvironment, p_config: WorldConfig = null):
 	clock = p_clock
@@ -28,18 +27,15 @@ func setup(p_clock: GameClock, p_sun: DirectionalLight3D, p_fill: DirectionalLig
 			profile = DayNightProfile.new()
 	_duplicate_environment()
 	_apply_initial_light_setup()
-	print("[DayNightValues] Setup clock=%s sun=%s fill=%s env=%s" % [clock != null, sun_light != null, fill_light != null, world_env_node != null])
 
 func _ready():
 	if profile == null:
 		profile = load("res://environment/day_night_profile.tres") as DayNightProfile
 		if profile == null:
 			profile = DayNightProfile.new()
-	# If not injected via setup(), try to ensure at least env duplicate
 	if env == null:
 		_duplicate_environment()
 		_apply_initial_light_setup()
-
 
 func _duplicate_environment():
 	if world_env_node and world_env_node.environment:
@@ -70,12 +66,10 @@ func _apply_initial_light_setup():
 		fill_light.shadow_enabled = false
 		fill_light.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
 
-
 func _process(_delta):
 	if clock == null or profile == null:
 		return
 	apply(clock.time_of_day)
-
 
 func apply(time_of_day: float):
 	if sun_light == null or env == null or profile == null:
@@ -93,7 +87,7 @@ func apply(time_of_day: float):
 	else:
 		var nt = time_of_day
 		if nt < 6.0:
-			nt += 24.0
+			nt += GameClock.HOURS_PER_DAY
 		var night_progress = (nt - 19.0) / 11.0
 		night_progress = clamp(night_progress, 0.0, 1.0)
 		azimuth_rad = PI + night_progress * PI
@@ -147,23 +141,8 @@ func apply(time_of_day: float):
 		fill_light.light_energy = state["fill_energy"]
 		fill_light.shadow_enabled = false
 
-	# Update water with sky, sun color and sun direction for proper specular
-	_update_water_reflection(state["sky"], state["sun_col"], sun_pos.normalized())
-
-
-func _update_water_reflection(sky_col: Color, sun_col: Color, sun_dir: Vector3 = Vector3(0.35, 0.72, 0.28)):
-	var world: Node = null
-	var parent = get_parent()
-	if parent:
-		world = parent.get_node_or_null("World")
-		if world == null:
-			var tree = get_tree()
-			if tree:
-				var root = tree.current_scene
-				if root:
-					world = root.get_node_or_null("World")
-		if world and world.has_method("update_water_environment"):
-			world.update_water_environment(sky_col, sun_col, sun_dir)
+	if world_controller and is_instance_valid(world_controller):
+		world_controller.update_water_tint(state["sky"])
 
 func _set_light_direction(light: DirectionalLight3D, dir: Vector3):
 	if light == null:
