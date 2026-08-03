@@ -112,7 +112,10 @@ func _prepare_config():
 	config.base_height = 8.5 + jitter_rng.randf_range(-0.8, 1.5)
 	config.meadow_radius = 22.0 + jitter_rng.randf_range(-2.0, 6.0)
 	config.tree_density = 0.01 + jitter_rng.randf_range(-0.003, 0.008)
-	config.hills_frequency = 0.012 + jitter_rng.randf_range(-0.002, 0.004)
+	# Jitter new parameter fields slightly per seed for variety, keep within valid ranges.
+	config.continentalness_frequency = clamp(0.0018 + jitter_rng.randf_range(-0.0004, 0.0006), 0.0005, 0.01)
+	config.erosion_frequency = clamp(0.0045 + jitter_rng.randf_range(-0.001, 0.0015), 0.001, 0.015)
+	config.peaks_valleys_frequency = clamp(0.018 + jitter_rng.randf_range(-0.003, 0.004), 0.005, 0.04)
 
 func _generate_world_sync():
 	terrain_generator = TerrainGenerator.new(config)

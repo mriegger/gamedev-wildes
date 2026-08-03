@@ -122,8 +122,7 @@ func ensure_column_generated(x: int, z: int):
 	height_map_dict[key] = h
 	var lf = res.get("lake_factor", 0.0) as float
 	var rf = res.get("river_factor", 0.0) as float
-	var max_diff = _generator_ref._calc_max_diff(x, z, h, lf, rf)
-	var tb = _generator_ref._compute_type_from_cached(x, z, h, max_diff, lf, rf)
+	var tb = _generator_ref._compute_type_from_cached(x, z, h, lf, rf)
 	type_map_dict[key] = tb.get("type", BlockId.Type.GRASS) as int
 	var cc = Vector2i(int(floor(float(x) / float(chunk_size))), int(floor(float(z) / float(chunk_size))))
 	_touch_terrain_chunk(cc)

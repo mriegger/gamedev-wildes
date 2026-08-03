@@ -18,8 +18,7 @@ var max_build_y: int:
 @export var meadow_radius: float = DEFAULT_MEADOW_RADIUS
 @export var meadow_target_height: float = 9.5
 @export var base_height: float = 9.0
-@export var stone_ridge_threshold: float = 0.78
-@export var stone_ridge_soft_threshold: float = 0.70
+@export var subsurface_depth_default: int = 3
 
 @export_group("Vegetation")
 @export var tree_density: float = 0.012
@@ -27,33 +26,55 @@ var max_build_y: int:
 @export var tree_trunk_max: int = 4
 @export var tree_spacing: float = 4.5
 
-@export_group("Noise - Hills")
-@export var hills_frequency: float = 0.012
-@export var hills_octaves: int = 4
-@export var hills_lacunarity: float = 2.0
-@export var hills_gain: float = 0.45
-@export var hills_seed_offset: int = 0
+@export_group("Noise - Continentalness")
+@export var continentalness_frequency: float = 0.0018
+@export var continentalness_octaves: int = 4
+@export var continentalness_seed_offset: int = 11
 
-@export_group("Noise - Detail")
-@export var detail_frequency: float = 0.045
-@export var detail_octaves: int = 2
-@export var detail_gain: float = 0.5
-@export var detail_seed_offset: int = 101
+@export_group("Noise - Erosion")
+@export var erosion_frequency: float = 0.0045
+@export var erosion_octaves: int = 3
+@export var erosion_seed_offset: int = 23
 
-@export_group("Noise - Biome")
-@export var biome_frequency: float = 0.006
-@export var biome_octaves: int = 3
-@export var biome_seed_offset: int = 202
+@export_group("Noise - PeaksValleys")
+@export var peaks_valleys_frequency: float = 0.018
+@export var peaks_valleys_octaves: int = 2
+@export var peaks_valleys_seed_offset: int = 37
 
-@export_group("Noise - Forest")
-@export var forest_frequency: float = 0.022
-@export var forest_octaves: int = 3
-@export var forest_seed_offset: int = 303
+@export_group("Noise - Temperature")
+@export var temperature_frequency: float = 0.0048
+@export var temperature_octaves: int = 3
+@export var temperature_seed_offset: int = 51
 
-@export_group("Noise - Ridges")
-@export var ridges_frequency: float = 0.018
-@export var ridges_octaves: int = 2
-@export var ridges_seed_offset: int = 404
+@export_group("Noise - Humidity")
+@export var humidity_frequency: float = 0.0048
+@export var humidity_octaves: int = 3
+@export var humidity_seed_offset: int = 67
+
+@export_group("Splines")
+# Continentalness 0..1 -> elevation offset (blocks). Piecewise linear.
+@export var continentalness_curve: PackedVector2Array = PackedVector2Array([
+	Vector2(0.0, -4.0), Vector2(0.25, -1.0), Vector2(0.5, 2.0), Vector2(0.75, 5.2), Vector2(1.0, 9.0)
+])
+# Erosion 0..1 -> amplitude multiplier 0..1. High erosion = flat.
+@export var erosion_amplitude_curve: PackedVector2Array = PackedVector2Array([
+	Vector2(0.0, 1.0), Vector2(0.3, 0.82), Vector2(0.6, 0.38), Vector2(1.0, 0.1)
+])
+# Relief scale: how much peaks_valleys * amplitude contributes to height.
+@export var relief_scale: float = 9.0
+# PeaksValleys scaling is via amplitude * pv; no extra curve needed.
+
+@export_group("Generation")
+@export_range(1, 8) var param_lattice_step: int = 4
+
+@export_group("Shore")
+@export var shore_influence_min: float = 0.12
+@export var shore_influence_strong: float = 0.25
+@export var shore_height_margin: int = 3
+@export var shore_waterline_margin: int = 1
+
+@export_group("Biomes")
+@export var biome_collection_path: String = "res://world/generation/biomes"
 
 @export_group("Lakes")
 @export var lake_enabled: bool = true
@@ -84,6 +105,25 @@ var max_build_y: int:
 
 func get_meadow_center() -> Vector2:
 	return Vector2.ZERO
+
+func sample_spline(value: float, curve: PackedVector2Array) -> float:
+	if curve.is_empty():
+		return 0.0
+	if curve.size() == 1:
+		return curve[0].y
+	if value <= curve[0].x:
+		return curve[0].y
+	if value >= curve[curve.size() - 1].x:
+		return curve[curve.size() - 1].y
+	for i in range(curve.size() - 1):
+		var a: Vector2 = curve[i]
+		var b: Vector2 = curve[i + 1]
+		if value >= a.x and value <= b.x:
+			if b.x == a.x:
+				return a.y
+			var t: float = (value - a.x) / (b.x - a.x)
+			return lerp(a.y, b.y, t)
+	return curve[curve.size() - 1].y
 
 func validate() -> bool:
 	if chunk_size <= 0 or chunk_size > 100:
@@ -145,5 +185,41 @@ func validate() -> bool:
 		return false
 	if river_frequency <= 0.0 or river_frequency > 0.05:
 		push_error("[WorldConfig] river_frequency %f invalid" % river_frequency)
+		return false
+	if param_lattice_step < 1 or param_lattice_step > 8:
+		push_error("[WorldConfig] param_lattice_step %d invalid" % param_lattice_step)
+		return false
+	if continentalness_frequency <= 0.0 or continentalness_frequency > 0.05:
+		push_error("[WorldConfig] continentalness_frequency invalid")
+		return false
+	if erosion_frequency <= 0.0 or erosion_frequency > 0.05:
+		push_error("[WorldConfig] erosion_frequency invalid")
+		return false
+	if peaks_valleys_frequency <= 0.0 or peaks_valleys_frequency > 0.05:
+		push_error("[WorldConfig] peaks_valleys_frequency invalid")
+		return false
+	if temperature_frequency <= 0.0 or temperature_frequency > 0.05:
+		push_error("[WorldConfig] temperature_frequency invalid")
+		return false
+	if humidity_frequency <= 0.0 or humidity_frequency > 0.05:
+		push_error("[WorldConfig] humidity_frequency invalid")
+		return false
+	if relief_scale < 0.0 or relief_scale > 30.0:
+		push_error("[WorldConfig] relief_scale %f invalid, must be 0..30" % relief_scale)
+		return false
+	if shore_influence_min < 0.0 or shore_influence_min > 1.0:
+		push_error("[WorldConfig] shore_influence_min %f invalid, must be 0..1" % shore_influence_min)
+		return false
+	if shore_influence_strong < 0.0 or shore_influence_strong > 1.0:
+		push_error("[WorldConfig] shore_influence_strong %f invalid, must be 0..1" % shore_influence_strong)
+		return false
+	if shore_influence_strong < shore_influence_min:
+		push_error("[WorldConfig] shore_influence_strong %f must be >= min %f" % [shore_influence_strong, shore_influence_min])
+		return false
+	if shore_height_margin < 0 or shore_height_margin > 10:
+		push_error("[WorldConfig] shore_height_margin %d invalid, must be 0..10" % shore_height_margin)
+		return false
+	if shore_waterline_margin < 0 or shore_waterline_margin > 10:
+		push_error("[WorldConfig] shore_waterline_margin %d invalid, must be 0..10" % shore_waterline_margin)
 		return false
 	return true
