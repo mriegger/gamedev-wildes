@@ -329,8 +329,12 @@ func _prepare_materials():
 	terrain_material = ShaderMaterial.new()
 	if terrain_shader:
 		terrain_material.shader = terrain_shader
-		terrain_material.set_shader_parameter("terrain_saturation", 1.1)
-		terrain_material.set_shader_parameter("terrain_contrast", 1.3)
+		if RenderingServer.get_rendering_device() == null:
+			terrain_material.set_shader_parameter("terrain_saturation", 1.0)
+			terrain_material.set_shader_parameter("terrain_contrast", 1.0)
+		else:
+			terrain_material.set_shader_parameter("terrain_saturation", 1.1)
+			terrain_material.set_shader_parameter("terrain_contrast", 1.3)
 
 	var water_shader = load("res://shaders/water.gdshader")
 	water_block_material = ShaderMaterial.new()

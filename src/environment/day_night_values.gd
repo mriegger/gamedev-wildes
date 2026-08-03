@@ -46,6 +46,9 @@ func _duplicate_environment():
 		env.background_mode = Environment.BG_COLOR
 		if world_env_node:
 			world_env_node.environment = env
+	if env and RenderingServer.get_rendering_device() == null:
+		env.adjustment_saturation = 1.0
+		env.adjustment_contrast = 1.0
 
 func _apply_initial_light_setup():
 	if sun_light:
@@ -130,6 +133,10 @@ func apply(time_of_day: float):
 	env.ambient_light_energy = state["ambient_energy"]
 	var sky_contrib = 0.08 if not is_day else lerp(0.08, 0.15, elev_factor)
 	env.ambient_light_sky_contribution = sky_contrib
+
+	if RenderingServer.get_rendering_device() == null:
+		env.adjustment_saturation = 1.0
+		env.adjustment_contrast = 1.0
 
 	sun_light.light_color = state["sun_col"]
 	sun_light.light_energy = state["sun_energy"]
