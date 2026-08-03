@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="BlockDefinition" load_steps=2 format=3 uid="uid://64cp1zxof7ktt"]
+
+[ext_resource type="Script" path="res://blocks/block_definition.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+id = 4
+string_id = "stone"
+is_solid = true
+is_opaque = true
+is_raycast_solid = true
+is_breakable = true
+is_replaceable = false
+top_color = Color(0.66, 0.66, 0.63, 1)
+side_color = Color(0.6072, 0.6072, 0.5796, 1)
+emissive_enabled = false
+emissive_color = Color(0, 0, 0, 0)
+emissive_energy = 0.0
+light_range = 0.0
+light_color = Color(1, 1, 1, 1)
