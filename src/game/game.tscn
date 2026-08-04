@@ -23,7 +23,7 @@ environment = ExtResource("5_env")
 [node name="CameraRig" type="Node3D" parent="." groups=["camera_rig"]]
 script = ExtResource("4_cam")
 min_ortho_size = 18.0
-max_ortho_size = 90.0
+max_ortho_size = 70.0
 zoom_speed = 10.0
 follow_lerp = 10.0
 yaw_lerp_speed = 5.5

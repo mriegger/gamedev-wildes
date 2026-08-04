@@ -92,22 +92,15 @@ func ensure_terrain_for_chunk(coord: Vector2i):
 		return
 	if not terrain_generator or not voxel_model:
 		return
-	var origin_x = coord.x * config.chunk_size
-	var origin_z = coord.y * config.chunk_size
 	if data_chunks.has(coord) or voxel_model.is_chunk_data_available(coord.x, coord.y):
 		data_chunks[coord] = true
-		if not voxel_model.has_trees_in_chunk(coord.x, coord.y):
-			var snap = voxel_model.snapshot_edits_for_chunk(origin_x, origin_z, config.chunk_size)
-			var payload = terrain_generator.build_cache_with_generation(origin_x, origin_z, config.chunk_size, config.max_build_y, snap["placed"], snap["removed"], snap["trees"])
-			var h = payload.get("height", {})
-			var t = payload.get("type", {})
-			if not h.is_empty():
-				voxel_model.apply_chunk_gen({"height": h, "type": t})
-			var tf = payload.get("tree_block_fast", {})
-			voxel_model.apply_tree_chunk_for_coord(coord, {"tree_block_fast": tf})
-			data_chunks[coord] = true
 		return
-	var payload = terrain_generator.generate_chunk_payload_for_terrain(origin_x, origin_z, config.chunk_size)
+	if chunk_renderer != null and terrain_generator != null and voxel_model != null:
+		chunk_renderer.ensure_terrain_async(coord.x, coord.y)
+		return
+	var origin_x = coord.x * config.chunk_size
+	var origin_z = coord.y * config.chunk_size
+	var payload = terrain_generator.generate_chunk_payload_for_terrain(origin_x, origin_z, config.chunk_size, true)
 	voxel_model.apply_chunk_gen(payload)
 	if payload.has("tree_block_fast"):
 		voxel_model.apply_tree_chunk_for_coord(coord, {"tree_block_fast": payload["tree_block_fast"]})
@@ -151,11 +144,6 @@ func update(player_pos: Vector3, force: bool = false) -> bool:
 		_last_keep_set = keep_set
 
 		last_player_chunk = current_chunk
-
-		if voxel_model:
-			for c in desired_keep:
-				if not data_chunks.has(c) and voxel_model.is_chunk_data_available(c.x, c.y):
-					data_chunks[c] = true
 
 		if chunk_renderer:
 			for k in chunk_renderer.chunk_instances.keys():
@@ -245,6 +233,14 @@ func update(player_pos: Vector3, force: bool = false) -> bool:
 	var visible_set = _last_visible_set
 	var keep_set = _last_keep_set
 
+	var should_promote = moved
+	if not should_promote and chunk_renderer != null:
+		should_promote = chunk_renderer.consume_terrain_dirty()
+	if voxel_model and not keep_set.is_empty() and should_promote:
+		for c in keep_set.keys():
+			if not data_chunks.has(c) and voxel_model.is_chunk_data_available(c.x, c.y):
+				data_chunks[c] = true
+
 	var processed_data = 0
 	var loads_done = 0
 	while loads_done < max_loads_per_frame and processed_data < data_load_queue.size():
@@ -252,8 +248,14 @@ func update(player_pos: Vector3, force: bool = false) -> bool:
 		processed_data += 1
 		if not keep_set.is_empty() and not keep_set.has(coord):
 			continue
+		if voxel_model and voxel_model.is_chunk_data_available(coord.x, coord.y):
+			data_chunks[coord] = true
+			loads_done += 1
+			continue
+		if data_chunks.has(coord):
+			loads_done += 1
+			continue
 		ensure_terrain_for_chunk(coord)
-		data_chunks[coord] = true
 		loads_done += 1
 	if processed_data > 0:
 		data_load_queue = data_load_queue.slice(processed_data) as Array[Vector2i]
@@ -319,9 +321,13 @@ func ensure_chunks_around(pos: Vector3, immediate: bool = false) -> int:
 		if visible_set.has(c):
 			continue
 		if not data_chunks.has(c):
-			ensure_terrain_for_chunk(c)
-			data_chunks[c] = true
-			count += 1
+			if voxel_model and voxel_model.is_chunk_data_available(c.x, c.y):
+				data_chunks[c] = true
+				count += 1
+			else:
+				ensure_terrain_for_chunk(c)
+				if data_chunks.has(c) or (voxel_model and voxel_model.is_chunk_data_available(c.x, c.y)):
+					count += 1
 	return count
 
 func is_chunk_loaded(coord: Vector2i) -> bool:

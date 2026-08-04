@@ -11,6 +11,12 @@ var world_env_node: WorldEnvironment = null
 var env: Environment = null
 var world_controller: WorldController = null
 
+@export var volumetric_fog_enabled: bool = true:
+	set(v):
+		volumetric_fog_enabled = v
+		if env:
+			env.volumetric_fog_enabled = v
+
 func setup(p_clock: GameClock, p_sun: DirectionalLight3D, p_fill: DirectionalLight3D, p_env_node: WorldEnvironment, p_config: WorldConfig = null):
 	clock = p_clock
 	sun_light = p_sun
@@ -46,6 +52,8 @@ func _duplicate_environment():
 		env.background_mode = Environment.BG_COLOR
 		if world_env_node:
 			world_env_node.environment = env
+	if env:
+		env.volumetric_fog_enabled = volumetric_fog_enabled
 	if env and RenderingServer.get_rendering_device() == null:
 		env.adjustment_saturation = 1.0
 		env.adjustment_contrast = 1.0

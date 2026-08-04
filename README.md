@@ -95,3 +95,10 @@ only third-party asset is the UI font:
 | `src/assets/fonts/RobotoSlab-{Regular,SemiBold,Bold}.ttf` | [Roboto Slab](https://fonts.google.com/specimen/Roboto+Slab) — Christian Robertson, via Google Fonts | Apache-2.0 |
 
 Godot itself is MIT licensed.
+
+## PR Index
+
+| PR | Description | Branch |
+| --- | --- | --- |
+| #1 | Volumetric fog with runtime toggle | `main` |
+| #2 | Optimize chunk streaming (async data-ring, per-thread lake cache, separate meshing budgets) + fix fog albedo | `fix/streaming-opt-albedo` |

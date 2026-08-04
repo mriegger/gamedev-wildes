@@ -2,7 +2,7 @@ extends Node3D
 class_name CameraRig
 
 @export var min_ortho_size: float = 18.0
-@export var max_ortho_size: float = 90.0
+@export var max_ortho_size: float = 70.0
 @export var zoom_speed: float = 10.0
 @export var follow_lerp: float = 10.0
 @export var yaw_lerp_speed: float = 5.5

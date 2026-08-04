@@ -12,7 +12,7 @@ var noise_temperature: FastNoiseLite
 var noise_humidity: FastNoiseLite
 var noise_river: FastNoiseLite
 
-var _lake_grid_cache: Dictionary = {}
+var _thread_lake_caches: Dictionary = {}
 var _lake_grid_mutex: Mutex = Mutex.new()
 var _noise_mutex: Mutex = Mutex.new()
 var _thread_noises: Dictionary = {}
@@ -32,7 +32,7 @@ func _init(p_config: WorldConfig = null):
 	config = p_config
 	if not config.validate():
 		push_warning("[TerrainGenerator] Invalid config, clamped")
-	_lake_grid_cache.clear()
+	_thread_lake_caches.clear()
 	_lake_grid_mutex = Mutex.new()
 	_noise_mutex = Mutex.new()
 	_biomes_loaded = false
@@ -147,7 +147,7 @@ func setup_noises():
 	noise_humidity = dict["humidity"]
 	noise_river = dict["river"]
 	_lake_grid_mutex.lock()
-	_lake_grid_cache.clear()
+	_thread_lake_caches.clear()
 	_lake_grid_mutex.unlock()
 
 # --- Biome collection ---
@@ -380,17 +380,7 @@ func _sample_params(x: int, z: int, tn: Dictionary, lattice_cache: Dictionary) -
 		out[i] = lerp(vx0, vx1, tz)
 	return out
 
-func _get_lake_for_grid_cell(gx: int, gz: int) -> Variant:
-	if not config.lake_enabled:
-		return null
-	var key = Vector2i(gx, gz)
-	_lake_grid_mutex.lock()
-	if _lake_grid_cache.has(key):
-		var cached = _lake_grid_cache[key]
-		_lake_grid_mutex.unlock()
-		return cached
-	_lake_grid_mutex.unlock()
-
+func _generate_lake_cell(gx: int, gz: int) -> Variant:
 	var rng_cell = RandomNumberGenerator.new()
 	rng_cell.seed = config.seed_value + gx * 73856093 + gz * 19349663 + 99931
 	var should_have_lake = rng_cell.randf() <= config.lake_chance_per_cell
@@ -414,21 +404,46 @@ func _get_lake_for_grid_cell(gx: int, gz: int) -> Variant:
 			var depth = config.lake_depth + rng_cell.randi_range(-1, 2)
 			depth = clamp(depth, 1, 20)
 			result = {"center": Vector2i(cx, cz), "radius": radius, "radius_sq": radius * radius, "depth": depth, "grid": Vector2i(gx, gz)}
-	_lake_grid_mutex.lock()
-	if _lake_grid_cache.has(key):
-		var existing = _lake_grid_cache[key]
-		_lake_grid_mutex.unlock()
-		return existing
-	_lake_grid_cache[key] = result
-	if _lake_grid_cache.size() > LAKE_GRID_CACHE_MAX:
-		var keys = _lake_grid_cache.keys()
-		var to_remove = _lake_grid_cache.size() - LAKE_GRID_CACHE_KEEP
-		for i in range(to_remove):
-			_lake_grid_cache.erase(keys[i])
-	_lake_grid_mutex.unlock()
 	return result
 
-func _get_lake_info_fast(x: int, z: int) -> Dictionary:
+func _get_thread_lake_cache() -> Dictionary:
+	var tid = OS.get_thread_caller_id()
+	_lake_grid_mutex.lock()
+	if not _thread_lake_caches.has(tid):
+		_thread_lake_caches[tid] = {}
+	var cache = _thread_lake_caches[tid] as Dictionary
+	_lake_grid_mutex.unlock()
+	return cache
+
+func release_thread_caches(tid: int) -> void:
+	_lake_grid_mutex.lock()
+	_thread_lake_caches.erase(tid)
+	_lake_grid_mutex.unlock()
+	_noise_mutex.lock()
+	_thread_noises.erase(tid)
+	_noise_mutex.unlock()
+
+func _get_lake_for_grid_cell(gx: int, gz: int, lake_cache: Variant = null) -> Variant:
+	if not config.lake_enabled:
+		return null
+	var cache: Dictionary
+	if lake_cache == null:
+		cache = _get_thread_lake_cache()
+	else:
+		cache = lake_cache as Dictionary
+	var key = Vector2i(gx, gz)
+	if cache.has(key):
+		return cache[key]
+	var result = _generate_lake_cell(gx, gz)
+	cache[key] = result
+	if cache.size() > LAKE_GRID_CACHE_MAX:
+		var keys = cache.keys()
+		var to_remove = cache.size() - LAKE_GRID_CACHE_KEEP
+		for i in range(to_remove):
+			cache.erase(keys[i])
+	return result
+
+func _get_lake_info_fast(x: int, z: int, lake_cache: Variant = null) -> Dictionary:
 	if not config.lake_enabled:
 		return {"factor": 0.0, "depth": 0}
 	var best = 0.0
@@ -438,7 +453,7 @@ func _get_lake_info_fast(x: int, z: int) -> Dictionary:
 	var gz = int(floor(float(z) / float(grid)))
 	for dx in range(-1, 2):
 		for dz in range(-1, 2):
-			var lake = _get_lake_for_grid_cell(gx + dx, gz + dz)
+			var lake = _get_lake_for_grid_cell(gx + dx, gz + dz, lake_cache)
 			if lake == null:
 				continue
 			var dx_ = x - lake["center"].x
@@ -650,7 +665,8 @@ func build_cache_with_generation(
 	max_y: int,
 	placed_snap: Dictionary,
 	removed_snap: Dictionary,
-	existing_tree_snap: Dictionary
+	existing_tree_snap: Dictionary,
+	terrain_only: bool = false
 ) -> Dictionary:
 	if noise_continentalness == null:
 		setup_noises()
@@ -668,6 +684,7 @@ func build_cache_with_generation(
 			"river": noise_river,
 		}
 	var tn = thread_noises as Dictionary
+	var lake_cache = _get_thread_lake_cache()
 	var cs = chunk_size
 	var size_y = clamp(max_y, 6, 128)
 	var cache_x = cs + 2
@@ -688,7 +705,7 @@ func build_cache_with_generation(
 		for z in range(ext_min_z, ext_max_z + 1):
 			var params = _sample_params(x, z, tn, lattice_cache)
 			var base = _compute_base_height_with_params(x, z, params)
-			var lake_info = _get_lake_info_fast(x, z)
+			var lake_info = _get_lake_info_fast(x, z, lake_cache)
 			var river_factors = _get_river_factors_fast(x, z, tn)
 			var hf = _apply_lake_carve_with_info(base, lake_info)
 			hf = _apply_river_carve_with_factors(hf, river_factors)
@@ -713,7 +730,7 @@ func build_cache_with_generation(
 			if h == -1:
 				var p2 = _sample_params(x, z, tn, lattice_cache)
 				var b2 = _compute_base_height_with_params(x, z, p2)
-				var li2 = _get_lake_info_fast(x, z)
+				var li2 = _get_lake_info_fast(x, z, lake_cache)
 				var rf2 = _get_river_factors_fast(x, z, tn)
 				var hf2 = _apply_lake_carve_with_info(b2, li2)
 				hf2 = _apply_river_carve_with_factors(hf2, rf2)
@@ -831,92 +848,90 @@ func build_cache_with_generation(
 			if not out_tree_fast.has(top) and not existing_tree_snap.has(top):
 				out_tree_fast[top] = BlockId.Type.LEAVES
 
-	var cache: Array = []
-	cache.resize(cache_x * size_y * cache_z)
-
-	for lx in range(cache_x):
-		var wx = origin_x + lx - 1
-		for lz in range(cache_z):
-			var wz = origin_z + lz - 1
-			var col_key = Vector2i(wx, wz)
-			var base_h = height_dict.get(col_key, -1) as int
-			var base_top_t = type_dict.get(col_key, -1) as int
-			if base_h == -1:
-				base_h = ext_h.get(col_key, -1) as int
-				if base_h != -1:
-					var lake_info = ext_lake_info.get(col_key, {"factor": 0.0, "depth": 0}) as Dictionary
-					var river_factors = ext_river_factors.get(col_key, {"core": 0.0, "wide": 0.0}) as Dictionary
-					var lf = lake_info.get("factor", 0.0) as float
-					var rf = _river_factor_from_dict(river_factors)
-					var tb = _compute_type_from_cached(wx, wz, base_h, lf, rf, thread_noises)
-					base_top_t = tb["type"]
-			for ly in range(size_y):
-				var idx = (lx * size_y * cache_z) + (ly * cache_z) + lz
-				var wy = ly
-				var p = Vector3i(wx, wy, wz)
-
-				if placed_snap.has(p):
-					cache[idx] = placed_snap[p]
-					continue
-				if removed_snap.has(p):
-					cache[idx] = -1
-					continue
-				if out_tree_fast.has(p):
-					cache[idx] = out_tree_fast[p]
-					continue
-				if existing_tree_snap.has(p):
-					cache[idx] = existing_tree_snap[p]
-					continue
-
+	var cache_dict = null
+	if not terrain_only:
+		var cache: Array = []
+		cache.resize(cache_x * size_y * cache_z)
+		for lx in range(cache_x):
+			var wx = origin_x + lx - 1
+			for lz in range(cache_z):
+				var wz = origin_z + lz - 1
+				var col_key = Vector2i(wx, wz)
+				var base_h = height_dict.get(col_key, -1) as int
+				var base_top_t = type_dict.get(col_key, -1) as int
 				if base_h == -1:
-					cache[idx] = -1
-					continue
-				if wy > base_h:
-					if wy <= config.water_level and base_h < config.water_level:
-						var lf = 0.0
-						var rf = 0.0
-						var li = ext_lake_info.get(col_key, null)
-						if li != null:
-							lf = li.get("factor", 0.0) as float
-						var rfi = ext_river_factors.get(col_key, null)
-						if rfi != null:
-							rf = _river_factor_from_dict(rfi)
-						if lf > 0.01 or rf > 0.01 or base_top_t == BlockId.Type.SAND:
-							cache[idx] = BlockId.Type.WATER
+					base_h = ext_h.get(col_key, -1) as int
+					if base_h != -1:
+						var lake_info = ext_lake_info.get(col_key, {"factor": 0.0, "depth": 0}) as Dictionary
+						var river_factors = ext_river_factors.get(col_key, {"core": 0.0, "wide": 0.0}) as Dictionary
+						var lf = lake_info.get("factor", 0.0) as float
+						var rf = _river_factor_from_dict(river_factors)
+						var tb = _compute_type_from_cached(wx, wz, base_h, lf, rf, thread_noises)
+						base_top_t = tb["type"]
+				for ly in range(size_y):
+					var idx = (lx * size_y * cache_z) + (ly * cache_z) + lz
+					var wy = ly
+					var p = Vector3i(wx, wy, wz)
+					if placed_snap.has(p):
+						cache[idx] = placed_snap[p]
+						continue
+					if removed_snap.has(p):
+						cache[idx] = -1
+						continue
+					if out_tree_fast.has(p):
+						cache[idx] = out_tree_fast[p]
+						continue
+					if existing_tree_snap.has(p):
+						cache[idx] = existing_tree_snap[p]
+						continue
+					if base_h == -1:
+						cache[idx] = -1
+						continue
+					if wy > base_h:
+						if wy <= config.water_level and base_h < config.water_level:
+							var lf = 0.0
+							var rf = 0.0
+							var li = ext_lake_info.get(col_key, null)
+							if li != null:
+								lf = li.get("factor", 0.0) as float
+							var rfi = ext_river_factors.get(col_key, null)
+							if rfi != null:
+								rf = _river_factor_from_dict(rfi)
+							if lf > 0.01 or rf > 0.01 or base_top_t == BlockId.Type.SAND:
+								cache[idx] = BlockId.Type.WATER
+							else:
+								cache[idx] = -1
 						else:
 							cache[idx] = -1
-					else:
+						continue
+					if base_top_t == -1:
 						cache[idx] = -1
-					continue
-				if base_top_t == -1:
-					cache[idx] = -1
-					continue
-				if base_top_t == BlockId.Type.SAND:
-					cache[idx] = BlockId.Type.SAND
-				elif base_top_t == BlockId.Type.STONE:
-					cache[idx] = BlockId.Type.STONE
-				elif base_top_t == BlockId.Type.GRASS:
-					if wy == base_h:
-						cache[idx] = BlockId.Type.GRASS
-					elif wy >= base_h - 2:
+						continue
+					if base_top_t == BlockId.Type.SAND:
+						cache[idx] = BlockId.Type.SAND
+					elif base_top_t == BlockId.Type.STONE:
+						cache[idx] = BlockId.Type.STONE
+					elif base_top_t == BlockId.Type.GRASS:
+						if wy == base_h:
+							cache[idx] = BlockId.Type.GRASS
+						elif wy >= base_h - 2:
+							cache[idx] = BlockId.Type.DIRT
+						else:
+							cache[idx] = BlockId.Type.STONE
+					elif base_top_t == BlockId.Type.DIRT:
 						cache[idx] = BlockId.Type.DIRT
 					else:
-						cache[idx] = BlockId.Type.STONE
-				elif base_top_t == BlockId.Type.DIRT:
-					cache[idx] = BlockId.Type.DIRT
-				else:
-					cache[idx] = base_top_t
-
-	var cache_dict = {
-		"cache": cache,
-		"origin_x": origin_x,
-		"origin_z": origin_z,
-		"size_x": cs,
-		"size_z": cs,
-		"size_y": size_y,
-		"cache_x": cache_x,
-		"cache_z": cache_z,
-	}
+						cache[idx] = base_top_t
+		cache_dict = {
+			"cache": cache,
+			"origin_x": origin_x,
+			"origin_z": origin_z,
+			"size_x": cs,
+			"size_z": cs,
+			"size_y": size_y,
+			"cache_x": cache_x,
+			"cache_z": cache_z,
+		}
 
 	var result = {
 		"cache_dict": cache_dict,
@@ -928,8 +943,8 @@ func build_cache_with_generation(
 	}
 	return result
 
-func generate_chunk_payload_for_terrain(origin_x: int, origin_z: int, chunk_size: int) -> Dictionary:
-	var payload = build_cache_with_generation(origin_x, origin_z, chunk_size, config.max_build_y, {}, {}, {})
+func generate_chunk_payload_for_terrain(origin_x: int, origin_z: int, chunk_size: int, terrain_only: bool = false) -> Dictionary:
+	var payload = build_cache_with_generation(origin_x, origin_z, chunk_size, config.max_build_y, {}, {}, {}, terrain_only)
 	return {
 		"height": payload.get("height", {}),
 		"type": payload.get("type", {}),
@@ -942,7 +957,7 @@ func generate_all() -> Dictionary:
 	setup_noises()
 	var init_radius = int(config.meadow_radius + 20)
 	var size = init_radius * 2
-	var payload = generate_chunk_payload_for_terrain(-init_radius, -init_radius, size)
+	var payload = generate_chunk_payload_for_terrain(-init_radius, -init_radius, size, true)
 	var tree_block_fast = payload.get("tree_block_fast", {}) as Dictionary
 	return {
 		"height_map": payload.get("height", {}),

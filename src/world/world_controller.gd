@@ -365,7 +365,7 @@ func _prepare_materials():
 
 func _process(delta):
 	if chunk_renderer:
-		chunk_renderer.poll_async(4)
+		chunk_renderer.poll_async(2)
 	if chunk_manager:
 		var player_pos: Vector3 = Vector3.INF
 		if _player_ref and is_instance_valid(_player_ref):

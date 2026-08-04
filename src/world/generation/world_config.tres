@@ -6,8 +6,8 @@
 script = ExtResource("1_cfg")
 seed_value = 1337
 chunk_size = 20
-max_height = 20
-build_extra = 8
+max_height = 64
+build_extra = 56
 water_level = 5
 meadow_radius = 24.0
 meadow_target_height = 9.5
@@ -51,5 +51,5 @@ enable_ao = true
 shadow_cast_distance = 220.0
 render_distance = 4
 unload_padding = 2
-max_chunk_loads_per_frame = 1
+max_chunk_loads_per_frame = 2
 max_chunk_unloads_per_frame = 4
