@@ -17,6 +17,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   detect:
     runs-on: ubuntu-latest
@@ -143,7 +147,9 @@ jobs:
               --notes-file notes.md
           fi
 
-  # Dev binary for every push to main — builds current src/ directly, no task indirection
+  # Dev binary for every push to main — builds current src/ directly, no task indirection.
+  # Now also publishes a GitHub Release for every commit that touches src/ (so
+  # you always have a downloadable build, not just for task commits).
   build-current:
     if: github.ref == 'refs/heads/main'
     runs-on: macos-14
@@ -151,6 +157,31 @@ jobs:
       GODOT_VERSION: '4.7'
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check if src changed
+        id: src_changed
+        env:
+          BEFORE: ${{ github.event.before }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          before="${BEFORE:-}"
+          sha="${SHA:-HEAD}"
+          if [ -z "$before" ] || printf '%s' "$before" | grep -qE '^0+$' || ! git cat-file -e "${before}^{commit}" 2>/dev/null; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "No valid BEFORE ($before) — treating as src-changed"
+            exit 0
+          fi
+          if git diff --name-only "$before" "$sha" -- src | grep -q .; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "src changed between $before and $sha"
+            git diff --name-only "$before" "$sha" -- src | head -n 20
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "src unchanged between $before and $sha — still building artifact, skipping Release"
+          fi
 
       - name: Build macOS .app (current src)
         id: build
@@ -183,3 +214,36 @@ jobs:
           name: ${{ steps.pkg.outputs.base }}-macos-dev-${{ github.sha }}
           path: ${{ steps.pkg.outputs.zip }}
           retention-days: 14
+
+      - name: Publish GitHub Release (src change)
+        if: steps.src_changed.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          SHORT="$(git rev-parse --short HEAD)"
+          TAG="main-${SHORT}"
+          ZIP="${{ steps.pkg.outputs.zip }}"
+          BASE="${{ steps.pkg.outputs.base }}"
+          {
+            echo "Automated macOS build (ad-hoc signed) for \`src/\` on \`main\`."
+            echo
+            echo "- Source commit: \`${SHORT}\` (\`${{ github.sha }}\`)"
+            echo "- Branch: \`main\`"
+            echo
+            echo "Ad-hoc signed — if you download this via a browser, clear the"
+            echo "quarantine flag once before launching:"
+            echo '```'
+            echo "xattr -dr com.apple.quarantine \"${BASE}.app\""
+            echo '```'
+          } > notes.md
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists — uploading asset"
+            gh release upload "$TAG" "$ZIP" --clobber
+          else
+            gh release create "$TAG" "$ZIP" \
+              --target "${{ github.sha }}" \
+              --title "Wildes (${SHORT})" \
+              --notes-file notes.md
+          fi
