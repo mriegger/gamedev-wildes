@@ -19,6 +19,7 @@ world time.
 | Hold left-click | Mine the targeted block (0.35 s) |
 | Right-click | Place the selected block |
 | `1`–`9` | Select hotbar slot |
+| `P` | Toggle backpack |
 | `Esc` | Pause |
 
 Reach is 6 blocks. The block under the cursor is outlined, and a ghost block previews where a
@@ -41,7 +42,8 @@ the four nearest to you cast real shadows.
 
 **Lighting.** Per-vertex ambient occlusion is baked into chunk meshes. A directional sun plus a
 fill light drive real-time shadows, and a keyframed day/night profile interpolates sky, ambient,
-sun color/energy, and shadow opacity across the cycle.
+sun color/energy, and shadow opacity across the cycle. Forward+ is the primary renderer. Runtime
+fallback values keep GL Compatibility usable at reduced fidelity, without volumetric fog.
 
 **Day/night.** A full 24-hour cycle runs every 20 real minutes, starting at 6:00. Day is
 06:00–19:00; sunrise and sundown get their own warm color keys, and nights stay bright enough
@@ -55,23 +57,22 @@ shortly after any block edit.
 ## Project Structure
 
 ```text
-src/                    Godot project (src/project.godot). Entry scene: ui/main_menu/main_menu.tscn
-├── game/               Root gameplay scene; wires every system together and owns save/load
-├── world/              generation/ (noise terrain, lakes, rivers), model/ (voxel data + edits),
-│                       rendering/ (chunk mesher, chunk + torch renderers), streaming/ (chunk manager)
-├── blocks/             Block ids, per-block definitions, catalog, torch placement
-├── player/             Motor, interactor (raycast + mine/place), camera rig, targeting, input buffer
-├── environment/        Game clock, day/night profile + values, water profile, debug clock panel
-├── inventory/          9-slot inventory model
-├── ui/                 HUD + hotbar, main_menu/ (menu, world select, create/delete, loading,
-│                       pause), theme/
+src/                    Godot project. Entry scene: app/app.tscn
+├── app/                Application shell and screen/session transitions
+├── game/               Gameplay composition root and session persistence
+├── world/              Coordinator plus chunks/, generation/, materials/, model/, settings/,
+│                       and special_blocks/
+├── blocks/             Block ids, definitions, catalog, and torch placement rules
+├── player/             Motor, interaction, targeting, input, camera/, and visuals/
+├── environment/        Packaged environment scene and day_night/ system
+├── inventory/          Inventory model and inventory-owned ui/
+├── ui/                 Shared components/, hud/, screens/, and theme/
 ├── save/               Three-slot JSON save manager
-├── shaders/            terrain, water, blob_shadow, frosted_glass
-└── assets/             Roboto Slab UI font, logo images
+└── tests/              Headless behavior, determinism, fuzz, and streaming checks
 ```
 
 Systems are constructed in `game/game.tscn` and injected into each other via `setup()` calls
-rather than autoloads or singletons.
+rather than autoloads or singletons. See `docs/architecture.md` and `docs/world-streaming.md`.
 
 ## Building & Running
 
@@ -105,3 +106,4 @@ Godot itself is MIT licensed.
 | #3 | Side-panel inventory (5×8 + hotbar + equipment), tabbed frosted UI, drag-drop, and interaction/performance hardening | `feat/side-panel-inventory` |
 | #4 | Comprehensive headless test suite — inventory fuzz, world golden hash, HUD integration, streaming soak + composite Godot CI | `test/comprehensive-headless-suite` |
 | #5 | Behavior-preserving codebase optimization — dense resource catalog, lower-allocation world/mesh/UI paths, lifecycle and save cleanup | `refactor/aggressive-codebase-optimization` |
+| #6 | Feature-owned Godot structure, app shell, typed catalogs, decomposed chunk pipeline, and lifecycle/save hardening | `refactor/godot-feature-structure` |

@@ -1,0 +1,36 @@
+[gd_resource type="Environment" format=3 uid="uid://b0mac8y8g5x0e"]
+
+[resource]
+background_mode=1
+background_color=Color(0.72, 0.86, 0.93, 1)
+ambient_light_source=1
+ambient_light_color=Color(1, 1, 1, 1)
+ambient_light_energy=1.45
+ambient_light_sky_contribution=0.68
+ambient_light_sun_energy_contribution=0.85
+tonemap_mode=0
+tonemap_exposure=1.0
+adjustment_enabled=true
+adjustment_contrast=1.3
+adjustment_saturation=1.2
+glow_enabled=false
+ssao_enabled=false
+ssao_radius=1.2
+ssao_intensity=1.0
+ssao_power=1.2
+ssao_light_affect=0.55
+sdfgi_enabled=false
+fog_enabled=false
+volumetric_fog_enabled=false
+volumetric_fog_density=0.0050
+volumetric_fog_albedo=Color(0.97, 0.99, 1.0, 1)
+volumetric_fog_emission=Color(0, 0, 0, 1)
+volumetric_fog_emission_energy=0.0
+volumetric_fog_gi_inject=0.65
+volumetric_fog_anisotropy=0.47
+volumetric_fog_length=16.0
+volumetric_fog_detail_spread=1.4
+volumetric_fog_ambient_inject=0.15
+volumetric_fog_sky_affect=0.00
+volumetric_fog_temporal_reprojection_enabled=true
+volumetric_fog_temporal_reprojection_amount=0.85

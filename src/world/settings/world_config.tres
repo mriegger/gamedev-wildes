@@ -1,0 +1,61 @@
+[gd_resource type="Resource" script_class="WorldConfig" load_steps=3 format=3 uid="uid://c9w0rldcnf1gtr3s"]
+
+[ext_resource type="Script" path="res://world/settings/world_config.gd" id="1_cfg"]
+[ext_resource type="Resource" path="res://world/generation/biome_library.tres" id="2_biomes"]
+
+[resource]
+script = ExtResource("1_cfg")
+seed_value = 1337
+chunk_size = 20
+max_height = 64
+build_extra = 56
+water_level = 5
+meadow_radius = 22.0
+meadow_target_height = 9.5
+base_height = 8.5
+tree_density = 0.01
+tree_trunk_min = 3
+tree_trunk_max = 4
+tree_spacing = 4.5
+continentalness_frequency = 0.0018
+continentalness_octaves = 4
+continentalness_seed_offset = 11
+erosion_frequency = 0.0045
+erosion_octaves = 3
+erosion_seed_offset = 23
+peaks_valleys_frequency = 0.018
+peaks_valleys_octaves = 2
+peaks_valleys_seed_offset = 37
+temperature_frequency = 0.0048
+temperature_octaves = 3
+temperature_seed_offset = 51
+humidity_frequency = 0.0048
+humidity_octaves = 3
+humidity_seed_offset = 67
+param_lattice_step = 4
+biome_library = ExtResource("2_biomes")
+lake_enabled = true
+lake_radius_min = 16
+lake_radius_max = 42
+lake_depth = 6
+lake_min_dist_from_meadow = 28.0
+lake_grid_size = 180
+lake_chance_per_cell = 0.68
+lake_rim_blend = 0.8
+river_enabled = true
+river_depth = 3
+river_min_dist_from_meadow = 22.0
+river_frequency = 0.006
+river_seed_offset = 505
+enable_ao = true
+shadow_cast_distance = 220.0
+render_distance = 4
+unload_padding = 2
+max_chunk_loads_per_frame = 2
+max_chunk_unloads_per_frame = 4
+base_height_variation = Vector2(-0.8, 1.5)
+meadow_radius_variation = Vector2(-2, 6)
+tree_density_variation = Vector2(-0.003, 0.008)
+continentalness_frequency_variation = Vector2(-0.0004, 0.0006)
+erosion_frequency_variation = Vector2(-0.001, 0.0015)
+peaks_valleys_frequency_variation = Vector2(-0.003, 0.004)

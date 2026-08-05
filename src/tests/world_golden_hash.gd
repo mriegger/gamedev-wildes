@@ -70,11 +70,10 @@ func _init():
 
 func _compute_hash() -> String:
 	var config = _load_config()
+	var block_catalog = load("res://blocks/block_catalog.tres") as BlockCatalog
 	var gen = TerrainGenerator.new(config)
 	gen.setup_noises()
-	var voxel = VoxelWorld.new(config.chunk_size, config.max_build_y)
-	voxel.setup_infinite(config.chunk_size, config.max_build_y)
-	voxel.water_level = config.water_level
+	var voxel = VoxelWorld.new(config.chunk_size, config.max_build_y, config.water_level, config.meadow_radius, block_catalog)
 	voxel.set_generator_ref(gen)
 	var needed_x0 = REGION_X0
 	var needed_z0 = REGION_Z0
@@ -87,8 +86,6 @@ func _compute_hash() -> String:
 			var payload = gen.build_cache_with_generation(origin_x, origin_z, config.chunk_size, config.max_build_y, {}, {}, {}, false)
 			voxel.apply_chunk_gen(payload)
 			voxel.apply_tree_chunk(payload)
-			voxel.apply_chunk_gen_for_coord(Vector2i(cx, cz), payload)
-			voxel.apply_tree_chunk_for_coord(Vector2i(cx, cz), payload)
 	for x in range(REGION_X0, REGION_X1):
 		for z in range(REGION_Z0, REGION_Z1):
 			voxel.ensure_column_generated(x, z)
@@ -103,21 +100,5 @@ func _compute_hash() -> String:
 	return digest.hex_encode()
 
 func _load_config() -> WorldConfig:
-	var p = "res://world/generation/world_config.tres"
-	var cfg: WorldConfig = null
-	if ResourceLoader.exists(p):
-		cfg = load(p) as WorldConfig
-		if cfg != null:
-			cfg = cfg.duplicate() as WorldConfig
-	if cfg == null:
-		cfg = WorldConfig.new()
-	cfg.seed_value = SEED
-	var jitter_rng = RandomNumberGenerator.new()
-	jitter_rng.seed = cfg.seed_value
-	cfg.base_height = 8.5 + jitter_rng.randf_range(-0.8, 1.5)
-	cfg.meadow_radius = 22.0 + jitter_rng.randf_range(-2.0, 6.0)
-	cfg.tree_density = 0.01 + jitter_rng.randf_range(-0.003, 0.008)
-	cfg.continentalness_frequency = clamp(0.0018 + jitter_rng.randf_range(-0.0004, 0.0006), 0.0005, 0.01)
-	cfg.erosion_frequency = clamp(0.0045 + jitter_rng.randf_range(-0.001, 0.0015), 0.001, 0.015)
-	cfg.peaks_valleys_frequency = clamp(0.018 + jitter_rng.randf_range(-0.003, 0.004), 0.005, 0.04)
-	return cfg
+	var config = load("res://world/settings/world_config.tres") as WorldConfig
+	return config.runtime_copy_for_seed(SEED)

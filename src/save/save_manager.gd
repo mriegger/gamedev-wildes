@@ -59,22 +59,13 @@ static func generate_random_seed() -> int:
 	r.randomize()
 	return r.randi_range(1, 2147483646)
 
-static func create_new_world(slot_id: int, custom_seed: int = -1, world_name: String = "") -> Dictionary:
-	var seed_val: int
-	if custom_seed == -1:
-		seed_val = generate_random_seed()
-	else:
-		seed_val = custom_seed
-
-	if world_name == "":
-		world_name = "World %d" % (slot_id + 1)
-
+static func create_new_world(slot_id: int, seed_value: int, world_name: String) -> Dictionary:
 	var now_str = _now_str()
 
 	var data := {
 		"slot_id": slot_id,
 		"exists": true,
-		"seed": seed_val,
+		"seed": seed_value,
 		"world_name": world_name,
 		"created_at": now_str,
 		"last_played": now_str,
@@ -123,7 +114,7 @@ static func serialize_vector3i_dict(dict: Dictionary) -> Dictionary:
 			out[key_str] = v
 	return out
 
-static func deserialize_vector3i_dict_to_placed(dict: Dictionary) -> Dictionary:
+static func _deserialize_placed_blocks(dict: Dictionary) -> Dictionary:
 	var out := {}
 	for key in dict:
 		var pos = _try_parse_vector3i(key)
@@ -131,7 +122,7 @@ static func deserialize_vector3i_dict_to_placed(dict: Dictionary) -> Dictionary:
 			out[pos] = int(dict[key])
 	return out
 
-static func deserialize_vector3i_dict_to_removed(dict: Dictionary) -> Dictionary:
+static func _deserialize_removed_blocks(dict: Dictionary) -> Dictionary:
 	var out := {}
 	for key in dict:
 		var pos = _try_parse_vector3i(key)
@@ -139,7 +130,7 @@ static func deserialize_vector3i_dict_to_removed(dict: Dictionary) -> Dictionary
 			out[pos] = true
 	return out
 
-static func deserialize_torch_dict(dict: Dictionary) -> Dictionary:
+static func _deserialize_torch_attachments(dict: Dictionary) -> Dictionary:
 	var out := {}
 	for key in dict:
 		var pos = _try_parse_vector3i(key)
@@ -147,6 +138,24 @@ static func deserialize_torch_dict(dict: Dictionary) -> Dictionary:
 		if pos != null and attach_dir != null:
 			out[pos] = attach_dir
 	return out
+
+static func decode_world_state(data: Dictionary) -> WorldState:
+	var placed_raw = data.get("placed_blocks", {})
+	var removed_raw = data.get("removed_blocks", {})
+	var torch_raw = data.get("torch_attachments", {})
+	var position = Vector3.ZERO
+	var position_data = data.get("player_position", null)
+	if position_data is Array and position_data.size() == 3:
+		var decoded = Vector3(float(position_data[0]), float(position_data[1]), float(position_data[2]))
+		if decoded.length() > 1.0:
+			position = decoded
+	return WorldState.new(
+		int(data.get("seed", -1)),
+		_deserialize_placed_blocks(placed_raw) if placed_raw is Dictionary else {},
+		_deserialize_removed_blocks(removed_raw) if removed_raw is Dictionary else {},
+		_deserialize_torch_attachments(torch_raw) if torch_raw is Dictionary else {},
+		position
+	)
 
 static func load_slot(slot_id: int) -> Dictionary:
 	var info = get_slot_info(slot_id)
@@ -170,10 +179,6 @@ static func load_slot(slot_id: int) -> Dictionary:
 
 static func save_world_state(slot_id: int, current_data: Dictionary, voxel_model: VoxelWorld, player: PlayerMotor, inventory: InventoryModel, extra_seconds: float, time_of_day: float) -> bool:
 	var updated = current_data.duplicate()
-	if not updated.get("exists", false):
-		push_warning("[SaveManager] save_world_state called on non-existent slot %d, creating fallback" % slot_id)
-		updated = create_new_world(slot_id)
-
 	updated["last_played"] = _now_str()
 	updated["playtime_seconds"] = float(updated.get("playtime_seconds", 0)) + extra_seconds
 

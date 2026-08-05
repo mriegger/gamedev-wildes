@@ -11,8 +11,8 @@ const BUTTON_RADIUS: int = 14
 const BUTTON_BORDER: Color = Color(1, 1, 1, 0.20)
 
 const BOLD_FONT: FontFile = preload("res://assets/fonts/RobotoSlab-Bold.ttf")
-const FROSTED_PANEL_MAT: ShaderMaterial = preload("res://shaders/frosted_panel_material.tres")
-const FROSTED_BUTTON_MAT: ShaderMaterial = preload("res://shaders/frosted_button_material.tres")
+const FROSTED_PANEL_MAT: ShaderMaterial = preload("res://ui/theme/frosted_panel_material.tres")
+const FROSTED_BUTTON_MAT: ShaderMaterial = preload("res://ui/theme/frosted_button_material.tres")
 
 
 static func make_panel(bg: Color, radius: int, border_color: Color, border_width: int) -> StyleBoxFlat:
@@ -29,8 +29,8 @@ static func make_panel(bg: Color, radius: int, border_color: Color, border_width
 	sb.border_color = border_color
 	return sb
 
-static func make_modal(radius: int = MODAL_RADIUS, border_color: Color = MODAL_BORDER) -> StyleBoxFlat:
-	return make_panel(MODAL_BG, radius, border_color, 1)
+static func make_modal() -> StyleBoxFlat:
+	return make_panel(MODAL_BG, MODAL_RADIUS, MODAL_BORDER, 1)
 
 static func make_button_frosted() -> StyleBoxFlat:
 	return make_panel(BUTTON_BG, BUTTON_RADIUS, Color(0, 0, 0, 0), 0)

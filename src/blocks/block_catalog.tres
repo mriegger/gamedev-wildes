@@ -1,6 +1,17 @@
-[gd_resource type="Resource" script_class="BlockCatalog" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="BlockCatalog" load_steps=12 format=3]
 
 [ext_resource type="Script" path="res://blocks/block_catalog.gd" id="1_catalog"]
+[ext_resource type="Script" path="res://blocks/block_definition.gd" id="2_definition"]
+[ext_resource type="Resource" path="res://blocks/definitions/air.tres" id="2_air"]
+[ext_resource type="Resource" path="res://blocks/definitions/grass.tres" id="3_grass"]
+[ext_resource type="Resource" path="res://blocks/definitions/dirt.tres" id="4_dirt"]
+[ext_resource type="Resource" path="res://blocks/definitions/sand.tres" id="5_sand"]
+[ext_resource type="Resource" path="res://blocks/definitions/stone.tres" id="6_stone"]
+[ext_resource type="Resource" path="res://blocks/definitions/log.tres" id="7_log"]
+[ext_resource type="Resource" path="res://blocks/definitions/leaves.tres" id="8_leaves"]
+[ext_resource type="Resource" path="res://blocks/definitions/torch.tres" id="9_torch"]
+[ext_resource type="Resource" path="res://blocks/definitions/water.tres" id="10_water"]
 
 [resource]
 script = ExtResource("1_catalog")
+definitions = Array[ExtResource("2_definition")]([ExtResource("2_air"), ExtResource("3_grass"), ExtResource("4_dirt"), ExtResource("5_sand"), ExtResource("6_stone"), ExtResource("7_log"), ExtResource("8_leaves"), ExtResource("9_torch"), ExtResource("10_water")])

@@ -28,7 +28,7 @@ Godot 4.7 / GDScript, Systems are built in `game.tscn` and wired via `setup()` c
 
 ## Verification - REQUIRED, DO NOT SKIP.
 1. Boot: `/Applications/Godot.app/Contents/MacOS/Godot --path src --headless --quit`
-2. Behavior: Write a temporary `extends SceneTree` script under `src/`, run it with `--path src --headless --script res://tmp_x.gd`, then DELETE it. Instantiate `res://ui/hud.tscn`, add it to `root`, call `setup_with_camera(inv, null)`, let around 120 frames pass, then inspect real node state. Drive real input with `root.push_input(event, true)`.
+2. Behavior: Write a temporary `extends SceneTree` script under `src/`, run it with `--path src --headless --script res://tmp_x.gd`, then DELETE it. Instantiate `res://ui/hud/hud.tscn`, add it to `root`, call `setup_with_camera(inv, null)`, let around 120 frames pass, then inspect real node state. Drive real input with `root.push_input(event, true)`.
 3. Leave the working tree exactly as you found it. `git status` must show no temp files.
 
 ## Tests — run periodically to prevent regressions

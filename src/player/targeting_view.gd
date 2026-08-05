@@ -1,6 +1,8 @@
 extends Node3D
 class_name TargetingView
 
+@export var blob_shadow_shader: Shader
+
 var world: WorldController = null
 var voxel_world: VoxelWorld = null
 var motor: PlayerMotor = null
@@ -114,21 +116,10 @@ func _create_contact_shadow():
 	plane.size = Vector2(1.4, 1.4)
 	contact_shadow.mesh = plane
 	contact_shadow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	var blob_shader = load("res://shaders/blob_shadow.gdshader")
-	var smat: Material
-	if blob_shader != null:
-		var sh_mat = ShaderMaterial.new()
-		sh_mat.shader = blob_shader
-		sh_mat.set_shader_parameter("shadow_color", Color(0.06, 0.06, 0.06, 0.55))
-		smat = sh_mat
-	else:
-		var stdm = StandardMaterial3D.new()
-		stdm.albedo_color = Color(0.08, 0.08, 0.08, 0.55)
-		stdm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		stdm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		stdm.cull_mode = BaseMaterial3D.CULL_DISABLED
-		smat = stdm
-	contact_shadow.material_override = smat
+	var shadow_material = ShaderMaterial.new()
+	shadow_material.shader = blob_shadow_shader
+	shadow_material.set_shader_parameter("shadow_color", Color(0.06, 0.06, 0.06, 0.55))
+	contact_shadow.material_override = shadow_material
 	add_child(contact_shadow)
 
 func _color_for_type(t: int) -> Color:
@@ -270,11 +261,8 @@ func _update_contact_shadow():
 		var shadow_size = Vector2(size_factor, size_factor)
 		if plane_mesh.size != shadow_size:
 			plane_mesh.size = shadow_size
-	var mat = contact_shadow.material_override
-	var shadow_color = Color(0.06, 0.06, 0.06, alpha) if mat is ShaderMaterial else Color(0.08, 0.08, 0.08, alpha)
+	var mat = contact_shadow.material_override as ShaderMaterial
+	var shadow_color = Color(0.06, 0.06, 0.06, alpha)
 	if shadow_color != _contact_shadow_color:
 		_contact_shadow_color = shadow_color
-		if mat is ShaderMaterial:
-			mat.set_shader_parameter("shadow_color", shadow_color)
-		elif mat is StandardMaterial3D:
-			mat.albedo_color = shadow_color
+		mat.set_shader_parameter("shadow_color", shadow_color)

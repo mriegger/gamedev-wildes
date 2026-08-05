@@ -5,7 +5,6 @@ var _phase: int = 0
 var _game: Game = null
 var _world: WorldController = null
 var _player: PlayerMotor = null
-var _hud: HUD = null
 var _errors: Array[String] = []
 var _orphan_before: int = 0
 var _start_msec: int = 0
@@ -16,10 +15,15 @@ var _max_terrain_chunks: int = 0
 var _max_orphan: int = 0
 var _last_log_frame: int = 0
 var _done: bool = false
+var _session_ready: bool = false
+var _streaming_race_started: bool = false
+var _streaming_race_verified: bool = false
+var _streaming_race_wait_frames: int = 0
+var _streaming_race_position: Vector3
+var _edited_chunk: Vector2i
+var _forced_evictions: Array[Vector2i] = []
 
 const SOAK_FRAMES: int = 900
-const MOVE_SPEED: float = 18.0
-const CHUNK_SIZE: int = 20
 
 func _init() -> void:
 	print("[soak] starting headless game soak")
@@ -40,42 +44,23 @@ func _process(_delta: float) -> bool:
 		if _game == null:
 			_fail("game instantiate null")
 			return false
-		_game.current_save_data = {}
-		_game.current_slot_id = -1
-		var world_node: WorldController = _game.get_node_or_null("World") as WorldController
-		if world_node:
-			world_node.auto_generate_on_ready = true
-			world_node.seed_override = 1337
-			world_node.pending_save_data = {}
-			if world_node.config == null:
-				world_node._ensure_config_loaded()
-			if world_node.config:
-				world_node.config = world_node.config.duplicate() as WorldConfig
-				world_node.config.seed_value = 1337
-				var jitter = RandomNumberGenerator.new()
-				jitter.seed = 1337
-				world_node.config.base_height = 8.5 + jitter.randf_range(-0.8, 1.5)
-				world_node.config.meadow_radius = 22.0 + jitter.randf_range(-2.0, 6.0)
-				world_node.config.tree_density = 0.01 + jitter.randf_range(-0.003, 0.008)
-				world_node.config.continentalness_frequency = clamp(0.0018 + jitter.randf_range(-0.0004, 0.0006), 0.0005, 0.01)
-				world_node.config.erosion_frequency = clamp(0.0045 + jitter.randf_range(-0.001, 0.0015), 0.001, 0.015)
-				world_node.config.peaks_valleys_frequency = clamp(0.018 + jitter.randf_range(-0.003, 0.004), 0.005, 0.04)
+		_game.configure_session(-1, {"seed": 1337})
+		_game.session_ready.connect(_on_session_ready)
 		root.add_child(_game)
 		print("[soak] game added frame %d" % _frame)
 		_phase = 1
 	elif _phase == 1 and _frame == 10:
 		_world = _game.get_node_or_null("World") as WorldController
 		_player = _game.get_node_or_null("Player") as PlayerMotor
-		_hud = _game.get_node_or_null("HUD") as HUD
 		if _world == null or _player == null:
 			_fail("world or player null after add")
 			return false
-		print("[soak] waiting for world generation has_generated=%s" % str(_world._has_generated))
+		print("[soak] waiting for world generation")
 		_phase = 2
 	elif _phase == 2:
 		if _frame % 30 == 0:
-			print("[soak] waiting gen frame %d has_generated=%s orphan=%d" % [_frame, str(_world._has_generated) if _world else "null", int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))])
-		if _world and _world._has_generated:
+			print("[soak] waiting gen frame %d orphan=%d" % [_frame, int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))])
+		if _session_ready:
 			print("[soak] world generated at frame %d" % _frame)
 			if _world.voxel_model == null or _world.chunk_manager == null or _world.chunk_renderer == null:
 				_fail("world not fully generated voxel=%s manager=%s renderer=%s" % [str(_world.voxel_model != null), str(_world.chunk_manager != null), str(_world.chunk_renderer != null)])
@@ -109,26 +94,119 @@ func _process(_delta: float) -> bool:
 	return false
 
 func _tick_soak() -> void:
+	if not _streaming_race_started:
+		_start_streaming_race_sequence()
+		return
+	if not _streaming_race_verified:
+		_player.global_position = _streaming_race_position
+		_streaming_race_wait_frames += 1
+		var keep_distance := _world.config.render_distance + _world.config.unload_padding
+		var keep_area := (keep_distance * 2 + 1) * (keep_distance * 2 + 1)
+		if _streaming_queues_are_drained():
+			_verify_streaming_race_sequence()
+		elif _streaming_race_wait_frames > keep_area * 5:
+			_fail("streaming race queues did not drain")
+		return
 	var t: float = float(_frame) * 0.02
 	var radius: float = 60.0 + 20.0 * sin(float(_frame) * 0.002)
-	var x: float = cos(t) * radius
-	var z: float = sin(t * 0.9) * radius
+	var x: float = _streaming_race_position.x + cos(t) * radius
+	var z: float = _streaming_race_position.z + sin(t * 0.9) * radius
 	var y: float = _player.global_position.y
 	if _world and _world.voxel_model:
 		var vm: VoxelWorld = _world.voxel_model
-		var key = Vector2i(int(floor(x / float(CHUNK_SIZE))), int(floor(z / float(CHUNK_SIZE))))
 		if vm.height_map_dict.has(Vector2i(int(x), int(z))):
 			var h = vm.height_map_dict[Vector2i(int(x), int(z))] as int
 			y = float(h) + 2.5
 		else:
 			y = 12.0
 	_player.global_position = Vector3(x, y, z)
-	if _world and _world.chunk_manager and _player:
-		_world.chunk_manager.tick(0.016, _player.global_position)
 	var do_mine: bool = _frame % 22 == 0
 	var do_place: bool = _frame % 33 == 0
 	if do_mine or do_place:
 		_do_mine_place(do_mine, do_place)
+
+func _start_streaming_race_sequence() -> void:
+	_streaming_race_started = true
+	var vm := _world.voxel_model
+	var surface_x := int(floor(_player.global_position.x))
+	var surface_z := int(floor(_player.global_position.z))
+	var edit_pos := Vector3i(surface_x, vm.get_highest_solid_y(surface_x, surface_z) + 1, surface_z)
+	var edit := vm.try_place_block(edit_pos, BlockId.Type.DIRT)
+	if not edit.is_success():
+		_fail("streaming race edit failed at %s" % str(edit_pos))
+		return
+	_edited_chunk = ChunkCoord.world_to_chunk_vec3i(edit_pos, _world.config.chunk_size)
+	_world.chunk_manager.tick(_player.global_position)
+	var span := float(_world.config.chunk_size * (_world.config.render_distance + _world.config.unload_padding + 3))
+	var targets: Array[Vector3] = [
+		Vector3(span, 24.0, 0.0),
+		Vector3(-span, 24.0, span),
+		Vector3(span, 24.0, -span),
+		Vector3(span * 2.0, 24.0, span * 2.0),
+	]
+	for target in targets:
+		_world.chunk_manager.tick(target)
+	_streaming_race_position = targets[-1]
+	_player.global_position = _streaming_race_position
+	if _world.chunk_renderer._mesh_cache.has(_edited_chunk):
+		_fail("edited chunk entered cache after cancellation")
+
+func _streaming_queues_are_drained() -> bool:
+	var manager := _world.chunk_manager
+	return (
+		_world.chunk_scheduler.pending_count() == 0
+		and manager._data_load_queue.is_empty()
+		and manager._mesh_load_queue.is_empty()
+		and manager._data_unload_queue.is_empty()
+		and manager._requested_meshes.is_empty()
+		and manager._requested_terrain.is_empty()
+		and manager._rebuilding_meshes.is_empty()
+	)
+
+func _verify_streaming_race_sequence() -> void:
+	var manager := _world.chunk_manager
+	for coord in manager.data_chunks.keys():
+		if not manager._keep_set.has(coord):
+			_fail("data chunk outside keep set after rapid teleport: %s" % str(coord))
+			return
+	if _world.chunk_renderer._mesh_cache.has(_edited_chunk):
+		_fail("stale edited mesh was cached after unload")
+		return
+	var vm := _world.voxel_model
+	var eviction_target: Variant = null
+	for coord in _world.chunk_renderer._mesh_cache.keys():
+		if vm.generated_terrain_chunks.has(coord):
+			eviction_target = coord
+			break
+	if eviction_target == null:
+		_fail("no cached generated chunk available for eviction check")
+		return
+	var target := eviction_target as Vector2i
+	var reordered_lru: Dictionary = {target: true}
+	vm._terrain_lru_mutex.lock()
+	for coord in vm._terrain_chunk_lru.keys():
+		if coord != target:
+			reordered_lru[coord] = true
+	vm._terrain_chunk_lru = reordered_lru
+	vm._terrain_lru_mutex.unlock()
+	var previous_limit := vm.max_terrain_cache_chunks
+	vm.max_terrain_cache_chunks = reordered_lru.size() - 1
+	_forced_evictions.clear()
+	vm.terrain_chunk_evicted.connect(_on_forced_terrain_evicted)
+	var eviction_count := vm.prune_terrain_cache(1)
+	vm.terrain_chunk_evicted.disconnect(_on_forced_terrain_evicted)
+	vm.max_terrain_cache_chunks = previous_limit
+	if eviction_count != 1 or _forced_evictions != [target]:
+		_fail("forced terrain eviction did not remove target %s: %s" % [str(target), str(_forced_evictions)])
+		return
+	if vm.generated_terrain_chunks.has(target) or _world.chunk_renderer._mesh_cache.has(target):
+		_fail("terrain eviction retained data or cached mesh for %s" % str(target))
+		return
+	_streaming_race_verified = true
+	print("[soak] streaming race sequence passed at frame %d" % _frame)
+
+func _on_forced_terrain_evicted(coord: Vector2i) -> void:
+	_forced_evictions.append(coord)
 
 func _do_mine_place(do_mine: bool, do_place: bool) -> void:
 	if _world == null or _world.voxel_model == null:
@@ -212,12 +290,13 @@ func _assert_bounded() -> void:
 		_warn("leaked DragPreview during soak %s" % str(previews))
 		_fail("leaked DragPreview during soak %s" % str(previews))
 		return
-	if _world and _world.chunk_renderer:
-		var async_pending: int = _world.chunk_renderer._async_pending.size() if "_async_pending" in _world.chunk_renderer else 0
-		if async_pending > 100:
+	if _world and _world.chunk_scheduler:
+		var async_pending: int = _world.chunk_scheduler.pending_count()
+		var pending_limit: int = keep_area + 20
+		if async_pending > keep_area:
 			_warn("async_pending high %d" % async_pending)
-		if async_pending > 150:
-			_fail("async_pending unbounded %d" % async_pending)
+		if async_pending > pending_limit:
+			_fail("async_pending unbounded %d > %d" % [async_pending, pending_limit])
 			return
 
 func _find_drag_previews(node: Node, out: Array) -> void:
@@ -242,10 +321,11 @@ func _check_final() -> void:
 	if not previews.is_empty():
 		_fail("final leaked preview %s" % str(previews))
 		return
-	if _world and _world.chunk_manager:
-		_world.chunk_manager.shutdown()
-	if _world and _world.chunk_renderer:
-		_world.chunk_renderer.shutdown()
+	if not _streaming_race_verified:
+		_fail("streaming race sequence was not verified")
+		return
+	if _world:
+		_world.shutdown()
 	if _errors.is_empty():
 		print("SOAK PASS frames=%d data_max=%d vis_max=%d terrain_max=%d orphan_max=%d edits=%d" % [_frame, _max_data_chunks, _max_visible_chunks, _max_terrain_chunks, _max_orphan, _mine_place_count])
 		quit(0)
@@ -264,3 +344,6 @@ func _fail(msg: String) -> void:
 	print("FAIL: %s" % msg)
 	_errors.append(msg)
 	quit(1)
+
+func _on_session_ready():
+	_session_ready = true

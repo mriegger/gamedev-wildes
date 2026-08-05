@@ -1,8 +1,0 @@
-[gd_resource type="ShaderMaterial" load_steps=2 format=3]
-
-[ext_resource type="Shader" path="res://shaders/frosted_glass.gdshader" id="1_shader"]
-
-[resource]
-shader = ExtResource("1_shader")
-shader_parameter/blur_lod = 4.5
-shader_parameter/fade = 1.0

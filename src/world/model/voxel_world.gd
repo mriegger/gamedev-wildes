@@ -6,9 +6,10 @@ signal terrain_chunk_evicted(coord: Vector2i)
 
 const NO_SURFACE_Y: float = -9999.0
 
-var chunk_size: int = 20
-var max_build_y: int = 36
-var water_level: int = 5
+var chunk_size: int
+var max_build_y: int
+var water_level: int
+var spawn_search_radius: float
 var block_catalog: BlockCatalog
 
 var type_map_dict: Dictionary = {}
@@ -31,27 +32,12 @@ var cell_revisions: Dictionary = {}
 var _highest_cache: Dictionary = {}
 var torch_attachments: Dictionary = {}
 
-func _init(p_chunk_size: int, p_max_build_y: int, p_block_catalog: BlockCatalog = null):
+func _init(p_chunk_size: int, p_max_build_y: int, p_water_level: int, p_spawn_search_radius: float, p_block_catalog: BlockCatalog):
 	chunk_size = p_chunk_size
 	max_build_y = p_max_build_y
-	block_catalog = p_block_catalog if p_block_catalog != null else BlockCatalog.new()
-	water_level = 5
-
-func setup_infinite(p_chunk_size: int, p_max_y: int):
-	chunk_size = p_chunk_size
-	max_build_y = p_max_y
-	height_map_dict.clear()
-	type_map_dict.clear()
-	tree_block_fast.clear()
-	tree_chunks_fast.clear()
-	generated_tree_chunks.clear()
-	generated_terrain_chunks.clear()
-	_terrain_chunk_lru.clear()
-	_highest_cache.clear()
-	cell_revisions.clear()
-	placed_blocks.clear()
-	removed_blocks.clear()
-	torch_attachments.clear()
+	water_level = p_water_level
+	spawn_search_radius = p_spawn_search_radius
+	block_catalog = p_block_catalog
 
 func set_generator_ref(gen: TerrainGenerator):
 	_generator_ref = gen
@@ -361,12 +347,11 @@ func try_place_block(p: Vector3i, block_type: int, attach_dir: Vector3i = Vector
 	return edit
 
 func get_spawn_position() -> Vector3:
-	var meadow_radius = WorldConfig.DEFAULT_MEADOW_RADIUS
-	var meadow_radius_squared = meadow_radius * meadow_radius
+	var meadow_radius_squared = spawn_search_radius * spawn_search_radius
 	var best = Vector3(0.5, 10.5, 0.5)
 	var best_score = 9999.0
-	for dx in range(-int(meadow_radius), int(meadow_radius) + 1):
-		for dz in range(-int(meadow_radius), int(meadow_radius) + 1):
+	for dx in range(-int(spawn_search_radius), int(spawn_search_radius) + 1):
+		for dz in range(-int(spawn_search_radius), int(spawn_search_radius) + 1):
 			var x = dx
 			var z = dz
 			if x * x + z * z > meadow_radius_squared:

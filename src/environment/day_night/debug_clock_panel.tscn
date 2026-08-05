@@ -1,0 +1,73 @@
+[gd_scene load_steps=2 format=3 uid="uid://d3bugc10ckp4n3l"]
+
+[ext_resource type="Script" path="res://environment/day_night/debug_clock_panel.gd" id="1_panel"]
+
+[node name="DebugClockPanel" type="CanvasLayer"]
+script = ExtResource("1_panel")
+layer = 20
+visible = false
+
+[node name="DebugPanel" type="Panel" parent="."]
+offset_left = 12.0
+offset_top = 12.0
+offset_right = 392.0
+offset_bottom = 222.0
+
+[node name="VBox" type="VBoxContainer" parent="DebugPanel"]
+layout_mode = 0
+offset_left = 14.0
+offset_top = 14.0
+offset_right = 366.0
+offset_bottom = 196.0
+theme_override_constants/separation = 8
+
+[node name="Title" type="Label" parent="DebugPanel/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = "Day/Night Debug (= to toggle)"
+
+[node name="TimeLabel" type="Label" parent="DebugPanel/VBox"]
+layout_mode = 2
+text = "Time: 06:00"
+
+[node name="PhaseLabel" type="Label" parent="DebugPanel/VBox"]
+layout_mode = 2
+text = "Phase: Sunrise"
+
+[node name="EnergyLabel" type="Label" parent="DebugPanel/VBox"]
+layout_mode = 2
+text = "Sun: 1.0"
+
+[node name="TimeSlider" type="HSlider" parent="DebugPanel/VBox"]
+custom_minimum_size = Vector2(0, 22)
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 24.0
+step = 0.01
+value = 6.0
+
+[node name="Controls" type="HBoxContainer" parent="DebugPanel/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="PauseButton" type="Button" parent="DebugPanel/VBox/Controls"]
+custom_minimum_size = Vector2(80, 28)
+layout_mode = 2
+toggle_mode = true
+text = "Pause"
+
+[node name="SunriseButton" type="Button" parent="DebugPanel/VBox/Controls"]
+custom_minimum_size = Vector2(110, 28)
+layout_mode = 2
+text = "Sunrise (6AM)"
+
+[node name="MidnightButton" type="Button" parent="DebugPanel/VBox/Controls"]
+custom_minimum_size = Vector2(80, 28)
+layout_mode = 2
+text = "Midnight"
+
+[node name="Help" type="Label" parent="DebugPanel/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "Cycle: 20 min (10 day +10 night). Slider controls time."
+autowrap_mode = 3

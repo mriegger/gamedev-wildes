@@ -7,6 +7,9 @@ class_name PlayerMotor
 @export var player_width: float = 0.6
 @export var player_height: float = 1.8
 
+@onready var interactor: PlayerInteractor = $Interactor as PlayerInteractor
+@onready var targeting_view: TargetingView = $TargetingView as TargetingView
+
 var voxel_world: VoxelWorld = null
 var camera_rig: CameraRig = null
 var _input_buffer: InputBuffer = null
@@ -16,10 +19,12 @@ var ground_y: float = VoxelWorld.NO_SURFACE_Y
 var velocity: Vector3 = Vector3.ZERO
 var model_root: Node3D
 
-func setup(p_voxel_world: VoxelWorld, p_camera_rig: CameraRig, p_input_buffer: InputBuffer):
-	voxel_world = p_voxel_world
+func setup(p_world: WorldController, p_camera_rig: CameraRig, p_inventory: InventoryModel, p_input_buffer: InputBuffer):
+	voxel_world = p_world.voxel_model
 	camera_rig = p_camera_rig
 	_input_buffer = p_input_buffer
+	interactor.setup(voxel_world, p_camera_rig.camera, self, p_inventory, p_input_buffer)
+	targeting_view.setup(p_world, voxel_world, self, interactor)
 
 func _ready():
 	_ensure_model()

@@ -1,65 +1,40 @@
-[gd_scene load_steps=10 format=3 uid="uid://b22g4me0x1f3h"]
+[gd_scene load_steps=9 format=3 uid="uid://b22g4me0x1f3h"]
 
 [ext_resource type="Script" path="res://game/game.gd" id="1_game"]
 [ext_resource type="PackedScene" path="res://world/world.tscn" id="2_world"]
 [ext_resource type="PackedScene" path="res://player/player.tscn" id="3_player"]
-[ext_resource type="Script" path="res://player/camera_rig.gd" id="4_cam"]
-[ext_resource type="Environment" path="res://default_env.tres" id="5_env"]
-[ext_resource type="PackedScene" path="res://ui/hud.tscn" id="6_hud"]
-[ext_resource type="Script" path="res://environment/game_clock.gd" id="7_clock"]
-[ext_resource type="Script" path="res://environment/day_night_values.gd" id="8_values"]
-[ext_resource type="PackedScene" path="res://environment/debug_clock_panel.tscn" id="9_debug"]
+[ext_resource type="PackedScene" path="res://player/camera/camera_rig.tscn" id="4_camera"]
+[ext_resource type="PackedScene" path="res://environment/environment.tscn" id="5_environment"]
+[ext_resource type="PackedScene" path="res://ui/hud/hud.tscn" id="6_hud"]
+[ext_resource type="Script" path="res://game/game_session.gd" id="7_session"]
+[ext_resource type="PackedScene" path="res://ui/screens/pause/pause_menu.tscn" id="8_pause"]
 
 [node name="Game" type="Node3D"]
 script = ExtResource("1_game")
-
-[node name="WorldEnvironment" type="WorldEnvironment" parent="." groups=["world_env"]]
-environment = ExtResource("5_env")
+pause_menu_scene = ExtResource("8_pause")
 
 [node name="World" parent="." instance=ExtResource("2_world")]
 
 [node name="Player" parent="." instance=ExtResource("3_player")]
 
-[node name="CameraRig" type="Node3D" parent="." groups=["camera_rig"]]
-script = ExtResource("4_cam")
-min_ortho_size = 18.0
-max_ortho_size = 70.0
-zoom_speed = 10.0
-follow_lerp = 10.0
-yaw_lerp_speed = 5.5
-pitch_deg = -45.0
-orbit_distance = 70.0
-target_yaw_deg = 225.0
-current_yaw_deg = 225.0
-transform = Transform3D(-0.707107, 0, 0.707107, 0, 1, 0, -0.707107, 0, -0.707107, 100, 0, 100)
+[node name="CameraRig" parent="." instance=ExtResource("4_camera")]
 
-[node name="Pitch" type="Node3D" parent="CameraRig"]
-transform = Transform3D(1, 0, 0, 0, 0.707107, 0.707107, 0, -0.707107, 0.707107, 0, 0, 0)
-
-[node name="Camera3D" type="Camera3D" parent="CameraRig/Pitch"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 70)
-projection = 1
-size = 38.0
-near = 0.1
-far = 1000.0
-current = true
-
-[node name="Sun" type="DirectionalLight3D" parent="." groups=["sun_light"]]
-transform = Transform3D(0.642788, -0.383022, 0.663414, 0, 0.866025, 0.5, -0.766044, -0.321394, 0.55667, 0, 24, 0)
-
-[node name="SunFill" type="DirectionalLight3D" parent="."]
-transform = Transform3D(-0.642788, -0.383022, -0.663414, 0, 0.866025, -0.5, 0.766044, -0.321394, -0.55667, 0, 24, 0)
-
-[node name="GameClock" type="Node3D" parent="." groups=["game_clock", "day_night"]]
-script = ExtResource("7_clock")
-cycle_duration_minutes = 20.0
-start_hour = 6.0
-enable_cycle = true
-pause_at_start = false
-
-[node name="DayNightValues" type="Node3D" parent="."]
-script = ExtResource("8_values")
-
-[node name="DebugClockPanel" parent="." instance=ExtResource("9_debug")]
+[node name="Environment" parent="." instance=ExtResource("5_environment")]
 
 [node name="HUD" parent="." instance=ExtResource("6_hud")]
+
+[node name="GameSession" type="Node" parent="."]
+script = ExtResource("7_session")
+
+[node name="SaveStatusLayer" type="CanvasLayer" parent="."]
+process_mode = 2
+visible = false
+layer = 100
+
+[node name="SaveStatusLabel" type="Label" parent="SaveStatusLayer"]
+offset_left = 10.0
+offset_top = 10.0
+offset_right = 420.0
+offset_bottom = 36.0
+theme_override_colors/font_color = Color(1, 1, 1, 0.85)
+theme_override_font_sizes/font_size = 14

@@ -23,7 +23,7 @@ func _init() -> void:
 func _process(_delta: float) -> bool:
 	_frame += 1
 	if _phase == 0 and _frame == 2:
-		var packed: PackedScene = load("res://ui/hud.tscn") as PackedScene
+		var packed: PackedScene = load("res://ui/hud/hud.tscn") as PackedScene
 		if packed == null:
 			_fail("failed to load hud.tscn")
 			return false
@@ -55,11 +55,7 @@ func _process(_delta: float) -> bool:
 			_fail("panel not open %f" % _hud.side_panel.get_progress())
 			return false
 		var src_slot: Control = _hud.hotbar.slot_nodes[0] as Control
-		var inv_slots: Array = _hud.side_panel._slots
-		if inv_slots.is_empty():
-			var groups: Dictionary = _hud.side_panel._slot_groups
-			if groups.has("inventory"):
-				inv_slots = groups["inventory"] as Array
+		var inv_slots: Array[InventorySlot] = _hud.side_panel.get_inventory_slots()
 		if inv_slots.is_empty():
 			_fail("no inventory slots")
 			return false
@@ -84,7 +80,7 @@ func _process(_delta: float) -> bool:
 		_phase = 6
 	elif _phase == 6 and _frame == 170:
 		var src_slot2: Control = _hud.hotbar.slot_nodes[6] as Control
-		var inv_slots2: Array = _hud.side_panel._slots
+		var inv_slots2: Array[InventorySlot] = _hud.side_panel.get_inventory_slots()
 		if inv_slots2.size() < 2:
 			_fail("not enough backpack slots for right test")
 			return false
@@ -231,7 +227,7 @@ func _check_left_drag_result() -> void:
 	if n0.item_type != null:
 		_fail("left drag: hotbar node 0 should be null")
 		return
-	var inv_node: InventorySlot = _hud.side_panel._slots[0] as InventorySlot
+	var inv_node: InventorySlot = _hud.side_panel.get_inventory_slots()[0]
 	if inv_node.item_type != BlockId.Type.GRASS or inv_node.item_count != 12:
 		_fail("left drag: inventory node mismatch %s %d" % [str(inv_node.item_type), inv_node.item_count])
 		return
@@ -267,7 +263,7 @@ func _check_right_drag_result() -> void:
 	if n6.item_count != 8 or n6.item_type != BlockId.Type.TORCH:
 		_fail("right drag: hotbar node6 mismatch")
 		return
-	var inv_node: InventorySlot = _hud.side_panel._slots[1] as InventorySlot
+	var inv_node: InventorySlot = _hud.side_panel.get_inventory_slots()[1]
 	if inv_node.item_type != BlockId.Type.TORCH or inv_node.item_count != 8:
 		_fail("right drag: inventory node1 mismatch")
 		return

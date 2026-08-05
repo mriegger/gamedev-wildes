@@ -44,11 +44,11 @@ godot --path src --headless --script res://tests/world_golden_hash.gd
 godot --path src --headless --script res://tests/world_golden_hash.gd -- --update
 ```
 
-The runner loads `WorldConfig` from `res://world/generation/world_config.tres`, duplicates it, forces `seed=1337` and applies the same jitter as `WorldController._prepare_config`, builds a `TerrainGenerator` + `VoxelWorld`, and hashes 524,288 blocks via `HashingContext.HASH_SHA256`.
+The runner loads `WorldConfig` from `res://world/settings/world_config.tres`, calls `runtime_copy_for_seed(1337)`, builds a `TerrainGenerator` + `VoxelWorld`, and hashes 524,288 blocks via `HashingContext.HASH_SHA256`.
 
 ## HUD Headless Integration
 
-`src/tests/hud_integration.gd` instantiates `res://ui/hud.tscn`, calls `setup_with_camera(inv, null)`, lets 120 frames pass, drives **real** `push_input` drags and asserts model + node state:
+`src/tests/hud_integration.gd` instantiates `res://ui/hud/hud.tscn`, calls `setup_with_camera(inv, null)`, lets 120 frames pass, drives **real** `push_input` drags and asserts model + node state:
 
 - `Performance.get_monitor(OBJECT_ORPHAN_NODE_COUNT) == 0`
 - **mid-drag positive**: `*DragPreview*` `CanvasLayer` count == 1 while dragging (visible before release), **negative**: == 0 after release — one preview appears while dragging, zero survive afterward (mutation G goes red if preview creation is removed)
@@ -61,15 +61,16 @@ The runner loads `WorldConfig` from `res://world/generation/world_config.tres`, 
 godot --path src --headless --script res://tests/hud_integration.gd
 ```
 
-Leaked `CanvasLayer` preview was fixed in `src/ui/inventory_slot.gd`: `_process` now hides preview when `!gui_is_dragging()` (updated via `push_input`, headless-testable) and `_notification` handles `EXIT_TREE`/`PREDELETE` plus `DRAG_END`; the unreachable `Input.is_mouse_button_pressed` guard was reverted.
+The drag implementation lives in `src/inventory/ui/inventory_slot.gd` and is exercised through the packaged HUD scene.
 
 ## World Streaming Soak
 
-`src/tests/soak_world_streaming.gd` runs the **real** `res://game/game.tscn` headless for a few simulated minutes (900 frames, ~15s wall time, 2–3 min simulated with `60+20*sin` radius walk). Each frame moves `Player` on a slow orbit, ticks `ChunkManager` with `player.global_position`, and every 22/33 frames mines/places via `VoxelWorld.try_mine_block`/`try_place_block`. Every 60 frames it asserts:
+`src/tests/soak_world_streaming.gd` runs the **real** `res://game/game.tscn` headless for a few simulated minutes (900 movement frames with a `60+20*sin` radius walk). Each frame moves `Player` on a slow orbit while the real world process ticks streaming, and every 22/33 frames mines/places via `VoxelWorld.try_mine_block`/`try_place_block`. Every 60 frames it asserts:
 
 - `ChunkManager.data_chunks <= keep_area+40` (`keep=(render+unload)^2`), `visible_chunks <= visible_area+10`, `VoxelWorld.generated_terrain_chunks <= keep*3+260` — bounded, not unbounded growth
+- rapid teleports cancel stale work, edit-then-unload cannot cache a stale mesh, and terrain eviction invalidates renderer cache entries
 - `Performance.OBJECT_ORPHAN_NODE_COUNT == 0`, no `*DragPreview*` stray `CanvasLayer`
-- `ChunkRenderSystem._async_pending <=150` (thread queue bounded)
+- `ChunkBuildScheduler.pending_count() <= keep_area+20` (thread queue bounded to the retained chunk set)
 - no `FAIL:`/`ERROR:`/`WARNING:` in stderr (catches leaked `RID`, `ObjectDB`, `TerrainGenerator` threading errors)
 
 Final `SOAK PASS frames=1080 data_max=171 …` shows max observed bounded.
