@@ -29,7 +29,15 @@ Godot 4.7 / GDScript, Systems are built in `game.tscn` and wired via `setup()` c
 ## Verification - REQUIRED, DO NOT SKIP.
 1. Boot: `/Applications/Godot.app/Contents/MacOS/Godot --path src --headless --quit`
 2. Behavior: Write a temporary `extends SceneTree` script under `src/`, run it with `--path src --headless --script res://tmp_x.gd`, then DELETE it. Instantiate `res://ui/hud.tscn`, add it to `root`, call `setup_with_camera(inv, null)`, let around 120 frames pass, then inspect real node state. Drive real input with `root.push_input(event, true)`.
-3. Leave the working tree exactly as you found it. `git status` must show no temp files. 
+3. Leave the working tree exactly as you found it. `git status` must show no temp files.
+
+## Tests — run periodically to prevent regressions
+1. After any inventory, worldgen, HUD/drag, or streaming change — and before reporting DONE — run the headless suite locally. CI runs the same four in parallel (`.github/workflows/tests.yml`, `timeout-minutes: 10`, composite `.github/actions/setup_godot` with cache).
+2. Inventory fuzz (RefCounted, ~100k seq/s): `/Applications/Godot.app/Contents/MacOS/Godot --path src --headless --script res://tests/inventory_fuzz_runner.gd -- --seqs=20000 --ops=20` — expect `ALL PASS`. Smoke: `--seqs=5000 --ops=20`.
+3. World golden hash (seed 1337, `x[-32,32) z[-32,32) y[0,128)`): `/Applications/Godot.app/Contents/MacOS/Godot --path src --headless --script res://tests/world_golden_hash.gd` — expect `GOLDEN PASS`. If you intentionally reshaped terrain (noise/spline/biome/lake/river), rerun with `-- --update` and commit the new `src/tests/golden_world_hash.json`.
+4. HUD headless integration: `/Applications/Godot.app/Contents/MacOS/Godot --path src --headless --script res://tests/hud_integration.gd` — expect `HUD_INTEGRATION PASS orphan=0 previews=0` (mid-drag 1 preview, 0 after release).
+5. World streaming soak (real `game.tscn`, 900 frames): `/Applications/Godot.app/Contents/MacOS/Godot --path src --headless --script res://tests/soak_world_streaming.gd` — expect `SOAK PASS` with bounded chunks and no orphans.
+6. Do not land with a red `inventory-fuzz`, `world-golden-hash`, `hud-integration`, or `soak-world-streaming` job. Details and invariants live in `src/tests/README.md`. 
 
 ## Definition of "DONE"
 1. Every new symbol has a caller.

@@ -334,6 +334,7 @@ func is_chunk_loaded(coord: Vector2i) -> bool:
 	return visible_chunks.has(coord) or data_chunks.has(coord)
 
 func clear():
+	# restartable reset — not a final shutdown; rearm via setup()/tick()->_ensure_workers() will restart workers, so caller must prevent stray ticks after shutdown (e.g. _done flag) or rearm turns into a crash
 	data_chunks.clear()
 	visible_chunks.clear()
 	data_load_queue.clear()
@@ -342,3 +343,14 @@ func clear():
 	last_player_chunk = Vector2i(-99999, -99999)
 	if chunk_renderer:
 		chunk_renderer.clear()
+
+func shutdown():
+	# real shutdown — delegates to renderer.shutdown() which leaves _stop_workers = true so stray ticks cannot rearm
+	data_chunks.clear()
+	visible_chunks.clear()
+	data_load_queue.clear()
+	mesh_load_queue.clear()
+	data_unload_queue.clear()
+	last_player_chunk = Vector2i(-99999, -99999)
+	if chunk_renderer:
+		chunk_renderer.shutdown()

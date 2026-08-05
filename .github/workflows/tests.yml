@@ -1,0 +1,104 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  inventory-fuzz:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run inventory fuzz tests
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path src --script res://tests/inventory_fuzz_runner.gd -- --seqs=20000 --ops=20 2>&1
+
+  world-golden-hash:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run world golden hash determinism
+        run: |
+          set -euo pipefail
+          timeout 60 godot --headless --path src --script res://tests/world_golden_hash.gd 2>&1
+
+  hud-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run HUD headless integration (orphan + preview leak)
+        run: |
+          set -uo pipefail
+          timeout 30 godot --headless --path src --script res://tests/hud_integration.gd 2>&1 | tee /tmp/hud_integration.log; HUD_EXIT=${PIPESTATUS[0]}
+          echo "--- hud log (exit $HUD_EXIT) ---"
+          cat /tmp/hud_integration.log
+          if grep -q "FAIL:" /tmp/hud_integration.log; then
+            echo "hud integration FAILED"
+            exit 1
+          fi
+          if grep -q "^\[hud_integration\] ERROR" /tmp/hud_integration.log; then
+            echo "ERROR in hud integration (scoped)"
+            exit 1
+          fi
+          if grep -q "^\[hud_integration\] WARNING" /tmp/hud_integration.log; then
+            echo "WARNING in hud integration (scoped)"
+            exit 1
+          fi
+          if [ "$HUD_EXIT" -ne 0 ] && ! grep -q "HUD_INTEGRATION PASS" /tmp/hud_integration.log; then
+            echo "godot exit $HUD_EXIT without HUD_INTEGRATION PASS"
+            exit 1
+          fi
+          if ! grep -q "HUD_INTEGRATION PASS" /tmp/hud_integration.log; then
+            echo "hud integration did not PASS"
+            exit 1
+          fi
+
+  soak-world-streaming:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run world streaming soak (bounded chunks + orphan + threading)
+        run: |
+          set -uo pipefail
+          timeout 90 godot --headless --path src --script res://tests/soak_world_streaming.gd 2>&1 | tee /tmp/soak.log; SOAK_EXIT=${PIPESTATUS[0]}
+          echo "--- soak log (exit $SOAK_EXIT) ---"
+          cat /tmp/soak.log
+          if grep -q "FAIL:" /tmp/soak.log; then
+            echo "soak FAILED"
+            exit 1
+          fi
+          if grep -q "^\[soak\] ERROR" /tmp/soak.log; then
+            echo "ERROR in soak (scoped)"
+            exit 1
+          fi
+          if [ "$SOAK_EXIT" -ne 0 ] && ! grep -q "SOAK PASS" /tmp/soak.log; then
+            echo "godot exit $SOAK_EXIT without SOAK PASS"
+            exit 1
+          fi
+          if ! grep -q "SOAK PASS" /tmp/soak.log; then
+            echo "soak did not PASS"
+            exit 1
+          fi

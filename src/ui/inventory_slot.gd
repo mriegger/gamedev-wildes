@@ -119,10 +119,23 @@ func refresh_visuals():
 var _drag_preview_layer: CanvasLayer = null
 
 func _process(_delta):
-	if _drag_preview_layer != null and is_instance_valid(_drag_preview_layer):
-		var panel = _drag_preview_layer.get_child(0) as Control
-		if panel:
-			panel.position = get_viewport().get_mouse_position() - panel.size * 0.5
+	if _drag_preview_layer == null:
+		set_process(false)
+		return
+	if not is_instance_valid(_drag_preview_layer):
+		_drag_preview_layer = null
+		set_process(false)
+		return
+	var vp = get_viewport()
+	if vp == null:
+		_hide_high_layer_preview()
+		return
+	if not vp.gui_is_dragging():
+		_hide_high_layer_preview()
+		return
+	var panel = _drag_preview_layer.get_child(0) as Control
+	if panel:
+		panel.position = vp.get_mouse_position() - panel.size * 0.5
 
 func _gui_input(event):
 	if event is InputEventMouseButton and event.pressed:
@@ -246,6 +259,7 @@ func _hide_high_layer_preview():
 	set_process(false)
 
 func _notification(what):
-	if what == NOTIFICATION_DRAG_END:
+	if what == NOTIFICATION_DRAG_END or what == NOTIFICATION_EXIT_TREE or what == NOTIFICATION_PREDELETE:
 		_hide_high_layer_preview()
-		refresh_visuals()
+		if what == NOTIFICATION_DRAG_END:
+			refresh_visuals()

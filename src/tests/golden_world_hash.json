@@ -1,0 +1,7 @@
+{
+  "seed": 1337,
+  "region": {"x0": -32, "x1": 32, "z0": -32, "z1": 32, "y0": 0, "y1": 128},
+  "digest": "1182cde5b98bb3e80f8b0008ad47564af615d45c5b3facf1df72bf740594df22",
+  "description": "SHA256 over block IDs (voxel_world.get_block_id_at) for fixed region, seed 1337 with jittered WorldConfig. Any noise/spline/biome/lake/river change that reshapes existing worlds must update this digest.",
+  "generated_by": "src/tests/world_golden_hash.gd --update"
+}

@@ -132,6 +132,7 @@ func set_water_material(mat: Material):
 			mi.material_override = water_material
 
 func clear():
+	# restartable reset — not a final shutdown; _ensure_workers() will rearm workers on next rebuild, so caller must block stray ticks after clear during shutdown or rearm crashes on freed state
 	_stop_workers = true
 	_job_mutex.lock()
 	_job_queue.clear()
@@ -174,7 +175,52 @@ func clear():
 	_water_pool.clear()
 	dirty_chunks.clear()
 
+func shutdown():
+	# real shutdown — leaves _stop_workers = true permanently so stray ticks cannot rearm workers and crash on freed state
+	_stop_workers = true
+	_job_mutex.lock()
+	_job_queue.clear()
+	_job_mutex.unlock()
+	for w in _workers:
+		if w and w.is_started():
+			w.wait_to_finish()
+	_workers.clear()
+	_workers_started = false
+
+	_async_pending.clear()
+	_job_gens.clear()
+	_cancelled.clear()
+	_queued_keys.clear()
+	_pending_terrain_only.clear()
+	_terrain_only_dirty = false
+	_result_queue.clear()
+	_terrain_result_queue.clear()
+	_pending_water.clear()
+	_mesh_cache.clear()
+	_mesh_cache_order.clear()
+	for key in chunk_instances.keys():
+		var mi = chunk_instances[key]
+		if mi and is_instance_valid(mi):
+			mi.queue_free()
+	chunk_instances.clear()
+	for key in water_chunk_instances.keys():
+		var mi2 = water_chunk_instances[key]
+		if mi2 and is_instance_valid(mi2):
+			mi2.queue_free()
+	water_chunk_instances.clear()
+	for mi in _terrain_pool:
+		if mi and is_instance_valid(mi):
+			mi.queue_free()
+	_terrain_pool.clear()
+	for miw in _water_pool:
+		if miw and is_instance_valid(miw):
+			miw.queue_free()
+	_water_pool.clear()
+	dirty_chunks.clear()
+
 func _ensure_workers():
+	if _stop_workers:
+		return
 	if _workers_started:
 		return
 	_workers_started = true
