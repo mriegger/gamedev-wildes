@@ -3,11 +3,11 @@ name: Build macOS release
 # Builds a macOS .app for each task whose task.toml changed, at the exact commit
 # the task references (commit-hash), ad-hoc signs it, and publishes a GitHub
 # Release. Engine is read from task.toml (godot | love | raylib).
+# Also builds the current src/ on every push to main as a dev artifact.
 
 on:
   push:
     branches: [main]
-    paths: ['tasks/**/task.toml']
   workflow_dispatch:
     inputs:
       task:
@@ -142,3 +142,44 @@ jobs:
               --title "${{ matrix.name }} (${SHORT})" \
               --notes-file notes.md
           fi
+
+  # Dev binary for every push to main — builds current src/ directly, no task indirection
+  build-current:
+    if: github.ref == 'refs/heads/main'
+    runs-on: macos-14
+    env:
+      GODOT_VERSION: '4.7'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build macOS .app (current src)
+        id: build
+        run: |
+          bash .github/scripts/build_macos.sh godot "Wildes" src
+
+      - name: Ad-hoc codesign
+        run: |
+          set -euo pipefail
+          APP="${{ steps.build.outputs.app_path }}"
+          codesign --force --deep --timestamp=none --sign - "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+
+      - name: Package
+        id: pkg
+        run: |
+          set -euo pipefail
+          APP="${{ steps.build.outputs.app_path }}"
+          BASE="$(basename "$APP" .app)"
+          ZIP="$(dirname "$APP")/${BASE}-macos.zip"
+          ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
+          {
+            echo "zip=${ZIP}"
+            echo "base=${BASE}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload dev artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.pkg.outputs.base }}-macos-dev-${{ github.sha }}
+          path: ${{ steps.pkg.outputs.zip }}
+          retention-days: 14
