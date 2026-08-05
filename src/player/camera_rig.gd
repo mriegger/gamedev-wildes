@@ -18,6 +18,38 @@ var target_position: Vector3 = Vector3(100, 0, 100)
 
 var _player: PlayerMotor = null
 
+var _backpack_progress: float = 0.0
+var _backpack_panel_width: float = 380.0
+
+func set_side_panel_progress(progress: float):
+	_backpack_progress = clamp(progress, 0.0, 1.0)
+	_update_backpack_offset()
+
+func set_side_panel_width(width_px: float):
+	_backpack_panel_width = width_px
+	_update_backpack_offset()
+
+func reset_side_panel_offset():
+	_backpack_progress = 0.0
+	_update_backpack_offset()
+
+func _update_backpack_offset():
+	if camera == null:
+		return
+	if _backpack_progress == 0.0 and camera.h_offset == 0.0:
+		return
+	var viewport_size = Vector2(1280, 720)
+	var vp = get_viewport()
+	if vp != null:
+		var rect = vp.get_visible_rect()
+		if rect.size.y > 1.0:
+			viewport_size = rect.size
+	var world_per_px = camera.size / viewport_size.y if viewport_size.y > 0 else 0.0
+	var pixel_shift = _backpack_panel_width * _backpack_progress * 0.5
+	var world_shift = pixel_shift * world_per_px
+	camera.h_offset = world_shift
+	camera.v_offset = 0.0
+
 func setup(p_player: PlayerMotor):
 	_player = p_player
 	target_position = p_player.global_position
@@ -78,10 +110,13 @@ func _process(delta):
 	if ib.zoom_out_pressed:
 		_zoom(zoom_speed * delta)
 
+	_update_backpack_offset()
+
 func _zoom(amount: float):
 	if camera == null:
 		return
 	camera.size = clamp(camera.size + amount, min_ortho_size, max_ortho_size)
+	_update_backpack_offset()
 
 func _lerp_angle_deg(from_deg: float, to_deg: float, weight: float) -> float:
 	var from_rad = deg_to_rad(from_deg)

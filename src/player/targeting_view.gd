@@ -15,6 +15,12 @@ var _selection_edge_mats: Array = []
 var _world_visuals_queued: bool = false
 var _shadow_queued: bool = false
 
+func _is_pointer_over_ui() -> bool:
+	var vp = get_viewport()
+	if vp != null and vp.has_method("gui_is_dragging") and vp.gui_is_dragging():
+		return true
+	return preload("res://ui/ui_utils.gd").is_pointer_over_ui(vp)
+
 func setup(p_world: WorldController, p_voxel_world: VoxelWorld, p_motor: PlayerMotor, p_interactor: PlayerInteractor):
 	world = p_world
 	voxel_world = p_voxel_world
@@ -171,6 +177,14 @@ func _color_for_type(t: int) -> Color:
 	return Color(0, 0, 0, 0)
 
 func _update_selection_visuals():
+	if _is_pointer_over_ui():
+		if selection_box:
+			selection_box.visible = false
+		if ghost_block:
+			ghost_block.visible = false
+		if breaking_block:
+			breaking_block.visible = false
+		return
 	if interactor == null or voxel_world == null:
 		return
 	var has_block = interactor.get_selected_block_type() != null

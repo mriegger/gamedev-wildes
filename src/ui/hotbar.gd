@@ -31,7 +31,7 @@ func _build_slots():
 	for c in hbox.get_children():
 		c.queue_free()
 	slot_nodes.clear()
-	for i in range(InventoryModel.DEFAULT_SIZE):
+	for i in range(InventoryModel.HOTBAR_SIZE):
 		var slot_node: HotbarSlot
 		if slot_scene != null:
 			var inst = slot_scene.instantiate()
@@ -40,6 +40,8 @@ func _build_slots():
 			slot_node = HotbarSlot.new()
 		slot_node.name = "Slot_%d" % i
 		slot_node.set_slot_index(i)
+		if _inv_model:
+			slot_node.set_inventory_model(_inv_model)
 		hbox.add_child(slot_node)
 		slot_nodes.append(slot_node)
 
@@ -50,11 +52,13 @@ func _connect_inventory_signals():
 		if conn["callable"].get_object() == self:
 			_inv_model.inventory_changed.disconnect(conn["callable"])
 	_inv_model.inventory_changed.connect(refresh)
+	for slot in slot_nodes:
+		slot.set_inventory_model(_inv_model)
 
 func refresh():
 	if _inv_model == null or slot_nodes.is_empty():
 		return
-	for i in range(InventoryModel.DEFAULT_SIZE):
+	for i in range(InventoryModel.HOTBAR_SIZE):
 		if i >= slot_nodes.size():
 			continue
 		var data = _inv_model.get_slot(i)
@@ -64,4 +68,8 @@ func refresh():
 		else:
 			ui.set_item(data["type"], data["count"])
 		ui.set_selected(i == _inv_model.selected_slot)
+
+func set_slots_interactive(enabled: bool):
+	for slot in slot_nodes:
+		slot.set_mouse_interactive(enabled)
 

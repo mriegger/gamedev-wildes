@@ -70,7 +70,7 @@ func _ready():
 	SaveManager.ensure_save_dir()
 	_create_save_status_ui()
 
-	inventory_model = InventoryModel.new(InventoryModel.DEFAULT_SIZE, InventoryModel.DEFAULT_MAX_STACK)
+	inventory_model = InventoryModel.new(InventoryModel.TOTAL_SIZE, InventoryModel.DEFAULT_MAX_STACK)
 
 	if not current_save_data.is_empty() and current_save_data.has("inventory") and current_save_data["inventory"] != null:
 		var inv_dict = current_save_data["inventory"] as Dictionary
@@ -129,6 +129,7 @@ func _setup_all(saved_pos: Vector3 = Vector3.ZERO, has_saved: bool = false, save
 	interactor.setup(world.voxel_model, camera_3d, player, inventory_model)
 	targeting_view.setup(world, world.voxel_model, player, interactor)
 	camera_rig.setup(player)
+	camera_rig.reset_side_panel_offset()
 
 	world.set_player_ref(player)
 
@@ -141,7 +142,7 @@ func _setup_all(saved_pos: Vector3 = Vector3.ZERO, has_saved: bool = false, save
 	day_night_values.world_controller = world
 	debug_clock_panel.inject(game_clock, day_night_values)
 
-	hud.setup(inventory_model)
+	hud.setup_with_camera(inventory_model, camera_rig)
 
 	var spawn_pos = world.voxel_model.get_spawn_position()
 	if has_saved and saved_pos != Vector3.ZERO:
@@ -225,9 +226,24 @@ func _physics_process(_delta):
 var _pause_menu: PauseMenu = null
 var pause_menu_scene: PackedScene = preload("res://ui/main_menu/pause_menu.tscn")
 
+func _is_side_panel_open() -> bool:
+	if hud and is_instance_valid(hud):
+		return hud.is_side_panel_open()
+	return false
+
 func _unhandled_input(event):
+	if event.is_action_pressed("toggle_backpack"):
+		if hud and is_instance_valid(hud):
+			hud.toggle_side_panel()
+		get_viewport().set_input_as_handled()
+		return
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_ESCAPE:
+			if _is_side_panel_open():
+				if hud:
+					hud.close_side_panel()
+				get_viewport().set_input_as_handled()
+				return
 			if get_tree().paused and _pause_menu:
 				_resume_from_pause()
 			else:
@@ -235,6 +251,11 @@ func _unhandled_input(event):
 			get_viewport().set_input_as_handled()
 			return
 	if event.is_action_pressed("ui_cancel"):
+		if _is_side_panel_open():
+			if hud:
+				hud.close_side_panel()
+			get_viewport().set_input_as_handled()
+			return
 		if get_tree().paused and _pause_menu:
 			_resume_from_pause()
 		else:
@@ -245,6 +266,11 @@ func _unhandled_input(event):
 func _show_pause_menu():
 	if _pause_menu and is_instance_valid(_pause_menu):
 		return
+	if _is_side_panel_open():
+		if hud:
+			hud.close_side_panel_immediate()
+		if camera_rig:
+			camera_rig.reset_side_panel_offset()
 	_pause_menu = pause_menu_scene.instantiate() as PauseMenu
 	_pause_menu.process_mode = Node.PROCESS_MODE_WHEN_PAUSED
 	if not _pause_menu.resume_requested.is_connected(_on_pause_resume):
@@ -309,6 +335,10 @@ func _perform_save(reason: String = "manual") -> bool:
 
 func _save_and_return_to_menu():
 	get_tree().paused = false
+	if hud and hud.is_side_panel_open():
+		hud.close_side_panel_immediate()
+	if camera_rig:
+		camera_rig.reset_side_panel_offset()
 	_perform_save("quit_to_menu")
 	if world:
 		if world.chunk_renderer:

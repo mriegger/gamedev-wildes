@@ -6,6 +6,9 @@ signal button_down
 signal button_up
 
 var _internal_button_text: String = "PLAY"
+var _internal_button_icon: Texture2D = null
+var _internal_icon_size: Vector2 = Vector2(20, 20)
+var _internal_font_size: int = -1
 
 @export var button_text: String = "PLAY":
 	get:
@@ -15,13 +18,76 @@ var _internal_button_text: String = "PLAY"
 		if is_inside_tree():
 			_update_text()
 
+@export var button_icon: Texture2D = null:
+	get:
+		return _internal_button_icon
+	set(v):
+		_internal_button_icon = v
+		if is_inside_tree():
+			_update_icon()
+
+@export var button_icon_size: Vector2 = Vector2(20, 20):
+	get:
+		return _internal_icon_size
+	set(v):
+		_internal_icon_size = v
+		if is_inside_tree():
+			_update_icon()
+
+@export var button_font_size: int = -1:
+	get:
+		return _internal_font_size
+	set(v):
+		_internal_font_size = v
+		if is_inside_tree():
+			_update_font_size()
+
 @onready var _frosted_rect: Panel = $FrostedGlass as Panel
 @onready var _button: Button = $Button
+var _hbox: HBoxContainer = null
+var _icon_rect: TextureRect = null
+var _text_label: Label = null
+
+func _ensure_content():
+	if _button == null:
+		return
+	if _hbox != null and is_instance_valid(_hbox):
+		return
+	# Button's own text/icon are unused - we render via centered HBox
+	_button.text = ""
+	_button.icon = null
+	_hbox = HBoxContainer.new()
+	_hbox.name = "ContentHBox"
+	_hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	_hbox.add_theme_constant_override("separation", 8)
+	_hbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_button.add_child(_hbox)
+	_icon_rect = TextureRect.new()
+	_icon_rect.name = "Icon"
+	_icon_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_icon_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_icon_rect.custom_minimum_size = _internal_icon_size
+	_icon_rect.visible = _internal_button_icon != null
+	if _internal_button_icon:
+		_icon_rect.texture = _internal_button_icon
+	_hbox.add_child(_icon_rect)
+	_text_label = Label.new()
+	_text_label.name = "TextLabel"
+	_text_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_text_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_text_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_text_label.add_theme_font_override("font", WildesStyle.BOLD_FONT)
+	_hbox.add_child(_text_label)
 
 func _ready():
 	_setup_frosted_material()
 	_setup_button_styles()
+	_ensure_content()
 	_update_text()
+	_update_icon()
+	_update_font_size()
 
 	if _button:
 		if not _button.pressed.is_connected(_on_button_pressed):
@@ -31,17 +97,25 @@ func _ready():
 		if not _button.button_up.is_connected(_on_inner_button_up):
 			_button.button_up.connect(_on_inner_button_up)
 		_button.mouse_filter = Control.MOUSE_FILTER_STOP
-		_button.focus_mode = Control.FOCUS_ALL
+		# Side-panel buttons are marked via meta to be non-focusable so Space
+		# doesn't toggle tabs while inventory is open.
+		if has_meta("_side_panel_no_focus"):
+			_button.focus_mode = Control.FOCUS_NONE
+		else:
+			_button.focus_mode = Control.FOCUS_ALL
 		_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 
-	mouse_filter = Control.MOUSE_FILTER_STOP
-	focus_mode = Control.FOCUS_ALL
+	if has_meta("_side_panel_no_focus"):
+		mouse_filter = Control.MOUSE_FILTER_STOP
+		focus_mode = Control.FOCUS_NONE
+	else:
+		mouse_filter = Control.MOUSE_FILTER_STOP
+		focus_mode = Control.FOCUS_ALL
 
 func _setup_frosted_material():
 	if _frosted_rect == null:
 		return
 	_frosted_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	# Always fresh via factory, never read back theme stylebox
 	var sb = WildesStyle.make_button_frosted()
 	WildesStyle.apply_frosted_panel(_frosted_rect, sb, 4.0, true)
 
@@ -59,31 +133,54 @@ func _setup_button_styles():
 	_button.add_theme_stylebox_override("focus", normal_box)
 	_button.add_theme_stylebox_override("disabled", disabled_box)
 
-	# Bold satisfies Roboto Slab family; preloaded, no exists check per instance
 	_button.add_theme_font_override("font", WildesStyle.BOLD_FONT)
 
 	_update_font_size()
 
 func _update_text():
+	_ensure_content()
+	if _text_label:
+		_text_label.text = _internal_button_text
 	if _button:
-		_button.text = _internal_button_text
+		_button.text = ""
 	_update_font_size()
 
 func _update_font_size():
-	if _button == null:
+	var size = _internal_font_size
+	if size < 0:
+		var len = _internal_button_text.length()
+		if len > 16:
+			size = 15
+		elif len > 12:
+			size = 16
+		elif len > 8:
+			size = 18
+		else:
+			size = 20
+	if _text_label:
+		_text_label.add_theme_font_size_override("font_size", size)
+		_text_label.add_theme_color_override("font_color", Color(1, 1, 1, 1))
+	if _button:
+		_button.add_theme_font_size_override("font_size", size)
+		_button.alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+func _update_icon():
+	_ensure_content()
+	if _button == null or _icon_rect == null:
 		return
-	var len = _internal_button_text.length()
-	var size = 20
-	if len > 16:
-		size = 15
-	elif len > 12:
-		size = 16
-	elif len > 8:
-		size = 18
-	else:
-		size = 20
-	_button.add_theme_font_size_override("font_size", size)
-	_button.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	if _internal_button_icon == null:
+		_icon_rect.visible = false
+		_icon_rect.texture = null
+		if _button:
+			_button.icon = null
+		return
+	_icon_rect.visible = true
+	_icon_rect.texture = _internal_button_icon
+	_icon_rect.custom_minimum_size = _internal_icon_size
+	_icon_rect.size = _internal_icon_size
+	if _button:
+		_button.icon = null
+		_button.expand_icon = false
 
 func _on_button_pressed():
 	pressed.emit()

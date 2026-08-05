@@ -102,3 +102,4 @@ Godot itself is MIT licensed.
 | --- | --- | --- |
 | #1 | Volumetric fog with runtime toggle | `main` |
 | #2 | Optimize chunk streaming (async data-ring, per-thread lake cache, separate meshing budgets) + fix fog albedo | `fix/streaming-opt-albedo` |
+| #3 | Side-panel inventory (5×8 + hotbar + equipment), tabbed frosted UI, drag-drop, and interaction/performance hardening | `feat/side-panel-inventory` |

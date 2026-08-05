@@ -5,3 +5,4 @@
 [resource]
 shader = ExtResource("1_shader")
 shader_parameter/blur_lod = 4.5
+shader_parameter/fade = 1.0

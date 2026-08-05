@@ -1,9 +1,6 @@
 extends RefCounted
 class_name WildesStyle
 
-# Central UI factory - consolidates StyleBoxFlat creation to one callsite.
-# Always constructs fresh instances, never reads back theme stylebox and mutates shared state.
-# Fixes class of bugs where get_theme_stylebox("panel") returned theme resource and mutation leaked.
 
 const MODAL_BG: Color = Color(0.14, 0.16, 0.18, 0.32)
 const MODAL_RADIUS: int = 18
@@ -36,12 +33,9 @@ static func make_panel_alpha(bg: Color, radius: int, border_alpha: float = 0.20,
 	return make_panel(bg, radius, Color(1, 1, 1, border_alpha), border_width)
 
 
-# Spec: Modals - bg Color(0.14,0.16,0.18,0.32) radius 18 border 1 border Color(1,1,1,0.20) material Frosted/Blur Font Roboto Slab
-static func make_modal() -> StyleBoxFlat:
-	return make_panel(MODAL_BG, MODAL_RADIUS, MODAL_BORDER, 1)
+static func make_modal(radius: int = MODAL_RADIUS, border_color: Color = MODAL_BORDER) -> StyleBoxFlat:
+	return make_panel(MODAL_BG, radius, border_color, 1)
 
-# Spec: Buttons - bg Color(0.20,0.22,0.24,0.38) radius 14 border 1 border Color(1,1,1,0.20) material Frosted/Blur Font Roboto Slab
-# Button implementation splits frosted rect (bg+blur, no border) and button states (transparent bg + border)
 static func make_button_frosted() -> StyleBoxFlat:
 	return make_panel(BUTTON_BG, BUTTON_RADIUS, Color(0, 0, 0, 0), 0)
 
@@ -61,11 +55,13 @@ static func make_button_disabled() -> StyleBoxFlat:
 static func make_frosted_panel_material(lod: float = 4.5) -> ShaderMaterial:
 	var dup := FROSTED_PANEL_MAT.duplicate() as ShaderMaterial
 	dup.set_shader_parameter("blur_lod", lod)
+	dup.set_shader_parameter("fade", 1.0)
 	return dup
 
 static func make_frosted_button_material(lod: float = 4.0) -> ShaderMaterial:
 	var dup := FROSTED_BUTTON_MAT.duplicate() as ShaderMaterial
 	dup.set_shader_parameter("blur_lod", lod)
+	dup.set_shader_parameter("fade", 1.0)
 	return dup
 
 static func apply_frosted_panel(panel: Panel, sb: StyleBoxFlat, lod: float = 4.5, is_button: bool = false) -> void:
@@ -76,3 +72,15 @@ static func apply_frosted_panel(panel: Panel, sb: StyleBoxFlat, lod: float = 4.5
 	else:
 		panel.material = make_frosted_panel_material(lod)
 	panel.add_theme_stylebox_override("panel", sb)
+
+static func set_frosted_fade(panel: Panel, fade: float) -> void:
+	if panel == null or panel.material == null:
+		return
+	if panel.material is ShaderMaterial:
+		var sm := panel.material as ShaderMaterial
+		# Duplicate shared on-disk .tres so one panel fading doesn't bleed to all
+		# instances that share the same resource and we don't dirty the file on disk.
+		if sm.resource_path != "" or sm == FROSTED_PANEL_MAT or sm == FROSTED_BUTTON_MAT:
+			sm = sm.duplicate() as ShaderMaterial
+			panel.material = sm
+		sm.set_shader_parameter("fade", clamp(fade, 0.0, 1.0))

@@ -24,6 +24,12 @@ var mine_target: Vector3i = Vector3i(-999, -999, -999)
 var mine_target_rev: int = -1
 var place_timer: float = 0.0
 
+func _is_pointer_over_ui() -> bool:
+	var vp = get_viewport()
+	if vp != null and vp.has_method("gui_is_dragging") and vp.gui_is_dragging():
+		return true
+	return preload("res://ui/ui_utils.gd").is_pointer_over_ui(vp)
+
 func setup(p_voxel_world: VoxelWorld, p_camera: Camera3D, p_motor: PlayerMotor, p_inventory: InventoryModel):
 	voxel_world = p_voxel_world
 	camera = p_camera
@@ -32,6 +38,18 @@ func setup(p_voxel_world: VoxelWorld, p_camera: Camera3D, p_motor: PlayerMotor, 
 
 func _physics_process(delta):
 	if voxel_world == null or motor == null or camera == null or inventory_model == null:
+		return
+	if _is_pointer_over_ui():
+		target_has = false
+		placement_has = false
+		can_mine_target = false
+		can_place_target = false
+		if is_mining:
+			is_mining = false
+			mine_timer = 0.0
+			mine_target = Vector3i(-999, -999, -999)
+			mine_target_rev = -1
+		InputBuffer.shared().place_just = false
 		return
 	_handle_raycast()
 	_handle_mining_placing(delta)
@@ -180,6 +198,11 @@ func _placement_collides_player(p: Vector3i) -> bool:
 
 func _handle_mining_placing(delta):
 	place_timer -= delta
+	if _is_pointer_over_ui():
+		is_mining = false
+		mine_timer = 0.0
+		InputBuffer.shared().place_just = false
+		return
 	var ib = InputBuffer.shared()
 	var left_pressed = ib.mine_pressed or ib.mouse_left_pressed
 	if left_pressed and target_has and can_mine_target:
@@ -294,7 +317,7 @@ func get_selected_block_type():
 
 func _unhandled_input(event):
 	if event is InputEventKey and event.pressed:
-		if event.keycode >= KEY_1 and event.keycode < KEY_1 + InventoryModel.DEFAULT_SIZE:
+		if event.keycode >= KEY_1 and event.keycode < KEY_1 + InventoryModel.HOTBAR_SIZE:
 			var idx = event.keycode - KEY_1
 			if inventory_model:
 				inventory_model.select_slot(idx)
