@@ -17,19 +17,15 @@ var slot_data: Dictionary = {}
 
 func _ready():
 	mouse_filter = Control.MOUSE_FILTER_STOP
-	if panel:
-		panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	if delete_button and not delete_button.pressed.is_connected(_on_delete_pressed):
-		delete_button.pressed.connect(_on_delete_pressed)
-	if click_area and not click_area.pressed.is_connected(_on_click_area_pressed):
-		click_area.pressed.connect(_on_click_area_pressed)
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	delete_button.pressed.connect(_on_delete_pressed)
+	click_area.pressed.connect(_on_click_area_pressed)
 
 	_apply_borders()
 
 func _apply_borders():
-	if panel:
-		var sb = WildesStyle.make_modal()
-		WildesStyle.apply_frosted_panel(panel, sb, 4.5, false)
+	var style = WildesStyle.make_modal()
+	WildesStyle.apply_frosted_panel(panel, style, 4.5, false)
 
 func setup(p_slot_id: int, data: Dictionary):
 	slot_id = p_slot_id
@@ -38,43 +34,29 @@ func setup(p_slot_id: int, data: Dictionary):
 	var exists = data.get("exists", false)
 
 	for lbl in [name_label, detail_label, status_label]:
-		if lbl:
-			lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-			lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	if exists:
 		var world_name = data.get("world_name", "World %d" % (slot_id + 1))
 		var seed_val = data.get("seed", 0)
 		var last_played = data.get("last_played", "Unknown")
 
-		if name_label:
-			name_label.text = world_name
-			name_label.visible = true
-			name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		if detail_label:
-			detail_label.text = "Seed: %d" % seed_val
-			detail_label.visible = true
-			detail_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		if status_label:
-			status_label.text = "Last: %s" % last_played
-			status_label.visible = true
-			status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-
-		if delete_button:
-			delete_button.visible = true
-			delete_button.button_text = "Delete"
+		name_label.text = world_name
+		name_label.visible = true
+		detail_label.text = "Seed: %d" % seed_val
+		detail_label.visible = true
+		status_label.text = "Last: %s" % last_played
+		status_label.visible = true
+		delete_button.visible = true
+		delete_button.button_text = "Delete"
 	else:
-		if name_label:
-			name_label.text = "Empty Slot %d" % (slot_id + 1)
-			name_label.visible = true
-			name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		if detail_label:
-			detail_label.visible = false
-		if status_label:
-			status_label.visible = false
-		if delete_button:
-			delete_button.visible = false
+		name_label.text = "Empty Slot %d" % (slot_id + 1)
+		name_label.visible = true
+		detail_label.visible = false
+		status_label.visible = false
+		delete_button.visible = false
 
 func _on_click_area_pressed():
 	if slot_data.get("exists", false):

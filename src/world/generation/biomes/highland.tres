@@ -5,7 +5,6 @@
 [resource]
 script = ExtResource("1")
 biome_id = "highland"
-display_name = "Highland"
 min_temperature = 0.2
 max_temperature = 0.6
 min_humidity = 0.15
@@ -17,10 +16,5 @@ max_erosion = 0.95
 min_peaks_valleys = 0.0
 max_peaks_valleys = 0.5
 surface_block = 1
-subsurface_block = 2
-filler_block = 4
 shore_block = 3
-shore_subsurface_block = 3
-subsurface_depth = 3
 tree_density = 0.008
-grass_tint = Color(0.5, 0.72, 0.35, 1)

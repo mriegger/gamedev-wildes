@@ -14,6 +14,8 @@ var _internal_font_size: int = -1
 	get:
 		return _internal_button_text
 	set(v):
+		if _internal_button_text == v:
+			return
 		_internal_button_text = v
 		if is_inside_tree():
 			_update_text()
@@ -22,6 +24,8 @@ var _internal_font_size: int = -1
 	get:
 		return _internal_button_icon
 	set(v):
+		if _internal_button_icon == v:
+			return
 		_internal_button_icon = v
 		if is_inside_tree():
 			_update_icon()
@@ -30,6 +34,8 @@ var _internal_font_size: int = -1
 	get:
 		return _internal_icon_size
 	set(v):
+		if _internal_icon_size == v:
+			return
 		_internal_icon_size = v
 		if is_inside_tree():
 			_update_icon()
@@ -38,6 +44,8 @@ var _internal_font_size: int = -1
 	get:
 		return _internal_font_size
 	set(v):
+		if _internal_font_size == v:
+			return
 		_internal_font_size = v
 		if is_inside_tree():
 			_update_font_size()
@@ -49,11 +57,8 @@ var _icon_rect: TextureRect = null
 var _text_label: Label = null
 
 func _ensure_content():
-	if _button == null:
-		return
 	if _hbox != null and is_instance_valid(_hbox):
 		return
-	# Button's own text/icon are unused - we render via centered HBox
 	_button.text = ""
 	_button.icon = null
 	_hbox = HBoxContainer.new()
@@ -87,41 +92,26 @@ func _ready():
 	_ensure_content()
 	_update_text()
 	_update_icon()
-	_update_font_size()
 
-	if _button:
-		if not _button.pressed.is_connected(_on_button_pressed):
-			_button.pressed.connect(_on_button_pressed)
-		if not _button.button_down.is_connected(_on_inner_button_down):
-			_button.button_down.connect(_on_inner_button_down)
-		if not _button.button_up.is_connected(_on_inner_button_up):
-			_button.button_up.connect(_on_inner_button_up)
-		_button.mouse_filter = Control.MOUSE_FILTER_STOP
-		# Side-panel buttons are marked via meta to be non-focusable so Space
-		# doesn't toggle tabs while inventory is open.
-		if has_meta("_side_panel_no_focus"):
-			_button.focus_mode = Control.FOCUS_NONE
-		else:
-			_button.focus_mode = Control.FOCUS_ALL
-		_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-
+	_button.pressed.connect(_on_button_pressed)
+	_button.button_down.connect(_on_inner_button_down)
+	_button.button_up.connect(_on_inner_button_up)
+	_button.mouse_filter = Control.MOUSE_FILTER_STOP
 	if has_meta("_side_panel_no_focus"):
-		mouse_filter = Control.MOUSE_FILTER_STOP
-		focus_mode = Control.FOCUS_NONE
+		_button.focus_mode = Control.FOCUS_NONE
 	else:
-		mouse_filter = Control.MOUSE_FILTER_STOP
-		focus_mode = Control.FOCUS_ALL
+		_button.focus_mode = Control.FOCUS_ALL
+	_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+
+	mouse_filter = Control.MOUSE_FILTER_STOP
+	focus_mode = Control.FOCUS_NONE
 
 func _setup_frosted_material():
-	if _frosted_rect == null:
-		return
 	_frosted_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var sb = WildesStyle.make_button_frosted()
 	WildesStyle.apply_frosted_panel(_frosted_rect, sb, 4.0, true)
 
 func _setup_button_styles():
-	if _button == null:
-		return
 	var normal_box = WildesStyle.make_button_normal()
 	var hover_box = WildesStyle.make_button_hover()
 	var pressed_box = WildesStyle.make_button_pressed()
@@ -135,14 +125,10 @@ func _setup_button_styles():
 
 	_button.add_theme_font_override("font", WildesStyle.BOLD_FONT)
 
-	_update_font_size()
-
 func _update_text():
 	_ensure_content()
-	if _text_label:
-		_text_label.text = _internal_button_text
-	if _button:
-		_button.text = ""
+	_text_label.text = _internal_button_text
+	_button.text = ""
 	_update_font_size()
 
 func _update_font_size():
@@ -157,30 +143,22 @@ func _update_font_size():
 			size = 18
 		else:
 			size = 20
-	if _text_label:
-		_text_label.add_theme_font_size_override("font_size", size)
-		_text_label.add_theme_color_override("font_color", Color(1, 1, 1, 1))
-	if _button:
-		_button.add_theme_font_size_override("font_size", size)
-		_button.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_text_label.add_theme_font_size_override("font_size", size)
+	_text_label.add_theme_color_override("font_color", Color(1, 1, 1, 1))
 
 func _update_icon():
 	_ensure_content()
-	if _button == null or _icon_rect == null:
-		return
 	if _internal_button_icon == null:
 		_icon_rect.visible = false
 		_icon_rect.texture = null
-		if _button:
-			_button.icon = null
+		_button.icon = null
 		return
 	_icon_rect.visible = true
 	_icon_rect.texture = _internal_button_icon
 	_icon_rect.custom_minimum_size = _internal_icon_size
 	_icon_rect.size = _internal_icon_size
-	if _button:
-		_button.icon = null
-		_button.expand_icon = false
+	_button.icon = null
+	_button.expand_icon = false
 
 func _on_button_pressed():
 	pressed.emit()
@@ -192,7 +170,4 @@ func _on_inner_button_up():
 	button_up.emit()
 
 func focus_button():
-	if _button:
-		_button.grab_focus()
-	else:
-		grab_focus()
+	_button.grab_focus()

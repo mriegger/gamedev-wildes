@@ -7,24 +7,19 @@ class_name PlayerMotor
 @export var player_width: float = 0.6
 @export var player_height: float = 1.8
 
-var world: WorldController = null
 var voxel_world: VoxelWorld = null
 var camera_rig: CameraRig = null
-var camera_3d: Camera3D = null
+var _input_buffer: InputBuffer = null
 
 var on_ground: bool = false
+var ground_y: float = VoxelWorld.NO_SURFACE_Y
 var velocity: Vector3 = Vector3.ZERO
 var model_root: Node3D
 
-func setup(p_world: WorldController, p_voxel_world: VoxelWorld, p_camera_rig: CameraRig, p_camera_3d: Camera3D):
-	world = p_world
+func setup(p_voxel_world: VoxelWorld, p_camera_rig: CameraRig, p_input_buffer: InputBuffer):
 	voxel_world = p_voxel_world
 	camera_rig = p_camera_rig
-	camera_3d = p_camera_3d
-	if voxel_world and (global_position == Vector3.ZERO or global_position.length() < 1.0):
-		var sp = voxel_world.get_spawn_position()
-		global_position = sp + Vector3(0, 0.1, 0)
-	_ensure_model()
+	_input_buffer = p_input_buffer
 
 func _ready():
 	_ensure_model()
@@ -88,36 +83,29 @@ func _create_blocky_model():
 
 func _physics_process(delta):
 	if voxel_world == null:
-		if world and world.voxel_model:
-			voxel_world = world.voxel_model
-		else:
-			return
+		return
 	_handle_movement(delta)
 
 func _handle_movement(delta):
 	if not on_ground:
 		velocity.y -= gravity * delta
 
-	var input_dir = _get_input_dir()
-	var cam_forward = Vector3.ZERO
-	var cam_right = Vector3.ZERO
-	if camera_rig:
-		cam_forward = camera_rig.get_flat_forward()
-		cam_right = camera_rig.get_flat_right()
-	elif camera_3d:
-		var basis = camera_3d.global_transform.basis
-		cam_forward = -basis.z
-		cam_forward.y = 0
-		cam_forward = cam_forward.normalized()
-		cam_right = basis.x
-		cam_right.y = 0
-		cam_right = cam_right.normalized()
-	else:
-		cam_forward = Vector3(0, 0, -1)
-		cam_right = Vector3(1, 0, 0)
-
+	var input_dir = _input_buffer.move_dir
 	var move_vec = Vector3.ZERO
 	if input_dir != Vector2.ZERO:
+		var camera_basis = camera_rig.get_camera_basis()
+		var cam_forward = -camera_basis.z
+		cam_forward.y = 0
+		if cam_forward.length_squared() < 0.0001:
+			cam_forward = Vector3(0, 0, -1)
+		else:
+			cam_forward = cam_forward.normalized()
+		var cam_right = camera_basis.x
+		cam_right.y = 0
+		if cam_right.length_squared() < 0.0001:
+			cam_right = Vector3(1, 0, 0)
+		else:
+			cam_right = cam_right.normalized()
 		move_vec = (cam_right * input_dir.x + cam_forward * input_dir.y)
 		move_vec = move_vec.normalized() * move_speed
 		if move_vec.length() > 0.1 and model_root:
@@ -127,7 +115,7 @@ func _handle_movement(delta):
 	velocity.x = move_vec.x
 	velocity.z = move_vec.z
 
-	var ib = InputBuffer.shared()
+	var ib = _input_buffer
 	if ib.consume_jump():
 		if on_ground:
 			velocity.y = jump_velocity
@@ -135,7 +123,8 @@ func _handle_movement(delta):
 
 	_swept_collision(velocity * delta)
 
-	if velocity.y <= 0.0 and _is_on_ground():
+	ground_y = _get_ground_y(global_position)
+	if velocity.y <= 0.0 and ground_y != VoxelWorld.NO_SURFACE_Y and abs(ground_y - global_position.y) < 0.12:
 		on_ground = true
 		velocity.y = 0.0
 	else:
@@ -143,11 +132,9 @@ func _handle_movement(delta):
 
 	if global_position.y < -10:
 		global_position = voxel_world.get_spawn_position()
+		ground_y = _get_ground_y(global_position)
 		velocity = Vector3.ZERO
 		on_ground = false
-
-func _get_input_dir() -> Vector2:
-	return InputBuffer.shared().move_dir
 
 func _swept_collision(motion: Vector3):
 	var pos = global_position
@@ -182,13 +169,13 @@ func _swept_collision(motion: Vector3):
 			for _i in range(steps_y):
 				var test = pos + Vector3(0, step_y, 0)
 				var ground = _get_ground_y(test)
-				if ground != -9999.0 and test.y <= ground + 0.03 and test.y >= ground - 0.4:
+				if ground != VoxelWorld.NO_SURFACE_Y and test.y <= ground + 0.03 and test.y >= ground - 0.4:
 					pos.y = ground
 					velocity.y = 0
 					break
 				if _collides_at(test, false):
 					var gy = _get_ground_y(test)
-					if gy != -9999.0 and abs(gy - test.y) < 0.15:
+					if gy != VoxelWorld.NO_SURFACE_Y and abs(gy - test.y) < 0.15:
 						pos.y = gy
 					velocity.y = 0
 					break
@@ -205,7 +192,7 @@ func _swept_collision(motion: Vector3):
 				pos.y = test.y
 			global_position.y = pos.y
 
-func _collides_at(pos: Vector3, ignore_ground: bool = true) -> bool:
+func _collides_at(pos: Vector3, ignore_ground: bool) -> bool:
 	if voxel_world == null:
 		return false
 	var min_x = floor(pos.x - player_width * 0.5)
@@ -227,17 +214,17 @@ func _collides_at(pos: Vector3, ignore_ground: bool = true) -> bool:
 
 func _get_ground_y(pos: Vector3) -> float:
 	if voxel_world == null:
-		return -9999.0
+		return VoxelWorld.NO_SURFACE_Y
 	var min_x = floor(pos.x - player_width * 0.5 + 0.04)
 	var max_x = floor(pos.x + player_width * 0.5 - 0.04)
 	var min_z = floor(pos.z - player_width * 0.5 + 0.04)
 	var max_z = floor(pos.z + player_width * 0.5 - 0.04)
-	var best = -9999.0
+	var best = VoxelWorld.NO_SURFACE_Y
 	var feet_y = int(floor(pos.y + 0.08))
 	for x in range(int(min_x), int(max_x) + 1):
 		for z in range(int(min_z), int(max_z) + 1):
 			var top = voxel_world.get_highest_top(x, z)
-			if top != -9999.0 and top <= pos.y + 0.08 and top >= pos.y - 1.2:
+			if top != VoxelWorld.NO_SURFACE_Y and top <= pos.y + 0.08 and top >= pos.y - 1.2:
 				if top > best:
 					best = top
 				continue
@@ -249,9 +236,3 @@ func _get_ground_y(pos: Vector3) -> float:
 						best = top2
 					break
 	return best
-
-func _is_on_ground() -> bool:
-	var g = _get_ground_y(global_position)
-	if g == -9999.0:
-		return false
-	return abs(g - global_position.y) < 0.12

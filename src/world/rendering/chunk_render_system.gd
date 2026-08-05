@@ -53,8 +53,6 @@ func setup(p_container: Node3D, p_mesher: ChunkMesher, p_material: Material, p_c
 	max_build_y = p_max_y
 	seed_value = p_seed
 	voxel_model = p_voxel_model
-	if mesher == null:
-		mesher = ChunkMesher.new(chunk_size, max_build_y, seed_value, true)
 	_mutex = Mutex.new()
 	_job_mutex = Mutex.new()
 	_result_mutex = Mutex.new()
@@ -132,51 +130,15 @@ func set_water_material(mat: Material):
 			mi.material_override = water_material
 
 func clear():
-	# restartable reset — not a final shutdown; _ensure_workers() will rearm workers on next rebuild, so caller must block stray ticks after clear during shutdown or rearm crashes on freed state
-	_stop_workers = true
-	_job_mutex.lock()
-	_job_queue.clear()
-	_job_mutex.unlock()
-	for w in _workers:
-		if w and w.is_started():
-			w.wait_to_finish()
-	_workers.clear()
-	_workers_started = false
+	_stop_workers_and_join()
 	_stop_workers = false
-
-	_async_pending.clear()
-	_job_gens.clear()
-	_cancelled.clear()
-	_queued_keys.clear()
-	_pending_terrain_only.clear()
-	_terrain_only_dirty = false
-	_result_queue.clear()
-	_terrain_result_queue.clear()
-	_pending_water.clear()
-	_mesh_cache.clear()
-	_mesh_cache_order.clear()
-	for key in chunk_instances.keys():
-		var mi = chunk_instances[key]
-		if mi and is_instance_valid(mi):
-			mi.queue_free()
-	chunk_instances.clear()
-	for key in water_chunk_instances.keys():
-		var mi2 = water_chunk_instances[key]
-		if mi2 and is_instance_valid(mi2):
-			mi2.queue_free()
-	water_chunk_instances.clear()
-	for mi in _terrain_pool:
-		if mi and is_instance_valid(mi):
-			mi.queue_free()
-	_terrain_pool.clear()
-	for miw in _water_pool:
-		if miw and is_instance_valid(miw):
-			miw.queue_free()
-	_water_pool.clear()
-	dirty_chunks.clear()
+	_clear_state()
 
 func shutdown():
-	# real shutdown — leaves _stop_workers = true permanently so stray ticks cannot rearm workers and crash on freed state
+	_stop_workers_and_join()
+	_clear_state()
+
+func _stop_workers_and_join():
 	_stop_workers = true
 	_job_mutex.lock()
 	_job_queue.clear()
@@ -187,6 +149,7 @@ func shutdown():
 	_workers.clear()
 	_workers_started = false
 
+func _clear_state():
 	_async_pending.clear()
 	_job_gens.clear()
 	_cancelled.clear()
@@ -265,9 +228,6 @@ func _worker_loop():
 			continue
 
 		var result = _do_combined_job(job)
-		if result.is_empty():
-			_clear_pending(key, job_gen)
-			continue
 
 		_mutex.lock()
 		cur_gen = _job_gens.get(key, job_gen)
@@ -315,6 +275,7 @@ func _do_combined_job(job: Dictionary) -> Dictionary:
 		gen_payload = gen.build_cache_with_generation(origin_x, origin_z, cs, max_y, placed_snap, removed_snap, tree_snap, terrain_only)
 		if not terrain_only:
 			cache_dict = gen_payload.get("cache_dict", null)
+			gen_payload.erase("cache_dict")
 
 	if not terrain_only and m != null and cache_dict != null:
 		var combined = m.build_combined_mesh_data(cache_dict)
@@ -538,9 +499,7 @@ func queue_rebuild_for_world_pos(pos: Vector3i):
 	if (pos.z + 1) % chunk_size == 0:
 		queue_rebuild(cx, cz + 1)
 
-func flush_dirty(max_per_call: int = -1) -> int:
-	if max_per_call == -1:
-		max_per_call = max_per_frame
+func flush_dirty(max_per_call: int) -> int:
 	if dirty_chunks.is_empty():
 		return 0
 	var rebuilt = 0
@@ -743,7 +702,7 @@ func ensure_terrain_async(cx: int, cz: int) -> bool:
 	_job_mutex.unlock()
 	return true
 
-func poll_async(max_to_apply: int = 4) -> int:
+func poll_async(max_to_apply: int) -> int:
 	_job_mutex.lock()
 	var job_empty = _job_queue.is_empty()
 	_job_mutex.unlock()
@@ -798,12 +757,12 @@ func poll_async(max_to_apply: int = 4) -> int:
 		var mesh = result.get("mesh", null) as ArrayMesh
 		var water_mesh = result.get("water_mesh", null) as ArrayMesh
 		if mesh == null and water_mesh == null:
-			_ensure_empty_terrain(key, cx, cz, false)
+			_ensure_empty_terrain(key, cx, cz)
 		else:
 			if mesh != null:
 				_set_or_create_terrain(key, cx, cz, mesh)
 			else:
-				_ensure_empty_terrain(key, cx, cz, false)
+				_ensure_empty_terrain(key, cx, cz)
 			if water_mesh != null:
 				if Time.get_ticks_msec() - time_start < time_budget_ms:
 					_set_or_create_water(key, cx, cz, water_mesh)
@@ -890,17 +849,17 @@ func _create_water_mesh_instance(mesh: ArrayMesh, cx: int, cz: int) -> MeshInsta
 	_attach_to_container(mi)
 	return mi
 
-func _create_empty_terrain_instance(cx: int, cz: int, cached: bool = false) -> MeshInstance3D:
+func _create_empty_terrain_instance(cx: int, cz: int) -> MeshInstance3D:
 	var mi = _pop_pooled_instance(_terrain_pool)
 	if mi != null:
 		mi.mesh = null
 		mi.visible = true
-		mi.name = "Chunk_%d_%d_empty%s" % [cx, cz, "_cached" if cached else ""]
+		mi.name = "Chunk_%d_%d_empty" % [cx, cz]
 		_attach_to_container(mi)
 		return mi
 	mi = MeshInstance3D.new()
 	mi.mesh = null
-	mi.name = "Chunk_%d_%d_empty%s" % [cx, cz, "_cached" if cached else ""]
+	mi.name = "Chunk_%d_%d_empty" % [cx, cz]
 	_attach_to_container(mi)
 	return mi
 
@@ -920,7 +879,7 @@ func _set_or_create_water(key: String, cx: int, cz: int, mesh: ArrayMesh) -> voi
 			return
 	water_chunk_instances[key] = _create_water_mesh_instance(mesh, cx, cz)
 
-func _ensure_empty_terrain(key: String, cx: int, cz: int, cached: bool = false) -> void:
+func _ensure_empty_terrain(key: String, cx: int, cz: int) -> void:
 	if chunk_instances.has(key):
 		return
-	chunk_instances[key] = _create_empty_terrain_instance(cx, cz, cached)
+	chunk_instances[key] = _create_empty_terrain_instance(cx, cz)

@@ -11,31 +11,20 @@ static func ensure_save_dir() -> void:
 static func _now_str() -> String:
 	var now = Time.get_datetime_dict_from_system()
 	return "%04d-%02d-%02d %02d:%02d" % [now.year, now.month, now.day, now.hour, now.minute]
+
 static func _try_parse_vector3i(s: String) -> Variant:
 	var parts = s.split(",")
 	if parts.size() != 3:
 		return null
 	return Vector3i(int(parts[0]), int(parts[1]), int(parts[2]))
-static func _deserialize_vector3i_keys(dict: Dictionary, value_fn: Callable) -> Dictionary:
-	var out := {}
-	for k in dict.keys():
-		var pos = _try_parse_vector3i(k)
-		if pos == null:
-			continue
-		var v = value_fn.call(dict[k])
-		if v == null:
-			continue
-		out[pos] = v
-	return out
+
 static func get_slot_path(slot_id: int) -> String:
 	return "%s/slot_%d.json" % [SAVE_DIR, slot_id]
 
 static func slot_exists(slot_id: int) -> bool:
-	ensure_save_dir()
 	return FileAccess.file_exists(get_slot_path(slot_id))
 
 static func get_slot_info(slot_id: int) -> Dictionary:
-	ensure_save_dir()
 	if not slot_exists(slot_id):
 		return {
 			"exists": false,
@@ -52,12 +41,9 @@ static func get_slot_info(slot_id: int) -> Dictionary:
 		push_warning("[SaveManager] Corrupt save slot %d" % slot_id)
 		return {"exists": false, "slot_id": slot_id, "corrupt": true}
 	parsed["exists"] = true
-	if not parsed.has("slot_id"):
-		parsed["slot_id"] = slot_id
+	parsed["slot_id"] = int(parsed.get("slot_id", slot_id))
 	if parsed.has("seed"):
 		parsed["seed"] = int(parsed["seed"])
-	if parsed.has("slot_id"):
-		parsed["slot_id"] = int(parsed["slot_id"])
 	if parsed.has("version"):
 		parsed["version"] = int(parsed["version"])
 	return parsed
@@ -65,7 +51,7 @@ static func get_slot_info(slot_id: int) -> Dictionary:
 static func get_all_slots() -> Array:
 	var out: Array = []
 	for i in range(SLOT_COUNT):
-		out.append(get_slot_info(i))
+		out.append(load_slot(i))
 	return out
 
 static func generate_random_seed() -> int:
@@ -74,7 +60,6 @@ static func generate_random_seed() -> int:
 	return r.randi_range(1, 2147483646)
 
 static func create_new_world(slot_id: int, custom_seed: int = -1, world_name: String = "") -> Dictionary:
-	ensure_save_dir()
 	var seed_val: int
 	if custom_seed == -1:
 		seed_val = generate_random_seed()
@@ -118,7 +103,6 @@ static func _save_dict_to_file(slot_id: int, data: Dictionary) -> bool:
 	return true
 
 static func delete_slot(slot_id: int) -> bool:
-	ensure_save_dir()
 	var path = get_slot_path(slot_id)
 	if not FileAccess.file_exists(path):
 		return true
@@ -130,13 +114,9 @@ static func delete_slot(slot_id: int) -> bool:
 
 static func serialize_vector3i_dict(dict: Dictionary) -> Dictionary:
 	var out := {}
-	for k in dict.keys():
-		var key_str: String
-		if k is Vector3i:
-			key_str = "%d,%d,%d" % [k.x, k.y, k.z]
-		else:
-			key_str = str(k)
-		var v = dict[k]
+	for pos in dict:
+		var key_str = "%d,%d,%d" % [pos.x, pos.y, pos.z]
+		var v = dict[pos]
 		if v is Vector3i:
 			out[key_str] = "%d,%d,%d" % [v.x, v.y, v.z]
 		else:
@@ -144,18 +124,29 @@ static func serialize_vector3i_dict(dict: Dictionary) -> Dictionary:
 	return out
 
 static func deserialize_vector3i_dict_to_placed(dict: Dictionary) -> Dictionary:
-	return _deserialize_vector3i_keys(dict, func(v): return int(v))
+	var out := {}
+	for key in dict:
+		var pos = _try_parse_vector3i(key)
+		if pos != null:
+			out[pos] = int(dict[key])
+	return out
 
 static func deserialize_vector3i_dict_to_removed(dict: Dictionary) -> Dictionary:
-	return _deserialize_vector3i_keys(dict, func(_v): return true)
+	var out := {}
+	for key in dict:
+		var pos = _try_parse_vector3i(key)
+		if pos != null:
+			out[pos] = true
+	return out
 
 static func deserialize_torch_dict(dict: Dictionary) -> Dictionary:
-	return _deserialize_vector3i_keys(dict, func(v_raw):
-		var v_str = v_raw as String
-		if v_str == null:
-			return null
-		return _try_parse_vector3i(v_str)
-	)
+	var out := {}
+	for key in dict:
+		var pos = _try_parse_vector3i(key)
+		var attach_dir = _try_parse_vector3i(dict[key]) if dict[key] is String else null
+		if pos != null and attach_dir != null:
+			out[pos] = attach_dir
+	return out
 
 static func load_slot(slot_id: int) -> Dictionary:
 	var info = get_slot_info(slot_id)
@@ -175,44 +166,36 @@ static func load_slot(slot_id: int) -> Dictionary:
 		info["time_of_day"] = 6.0
 	if not info.has("playtime_seconds"):
 		info["playtime_seconds"] = 0
-	if info.has("seed"):
-		info["seed"] = int(info["seed"])
-	if info.has("slot_id"):
-		info["slot_id"] = int(info["slot_id"])
-	if info.has("version"):
-		info["version"] = int(info["version"])
 	return info
 
-static func save_world_state(slot_id: int, voxel_model: VoxelWorld, player: PlayerMotor = null, inventory: InventoryModel = null, extra_seconds: float = 0, time_of_day: float = -1.0) -> bool:
-	ensure_save_dir()
-	var existing = get_slot_info(slot_id)
-	if not existing.get("exists", false):
+static func save_world_state(slot_id: int, current_data: Dictionary, voxel_model: VoxelWorld, player: PlayerMotor, inventory: InventoryModel, extra_seconds: float, time_of_day: float) -> bool:
+	var updated = current_data.duplicate()
+	if not updated.get("exists", false):
 		push_warning("[SaveManager] save_world_state called on non-existent slot %d, creating fallback" % slot_id)
-		existing = create_new_world(slot_id)
+		updated = create_new_world(slot_id)
 
-	existing["last_played"] = _now_str()
-	existing["playtime_seconds"] = float(existing.get("playtime_seconds", 0)) + extra_seconds
+	updated["last_played"] = _now_str()
+	updated["playtime_seconds"] = float(updated.get("playtime_seconds", 0)) + extra_seconds
 
-	if voxel_model:
-		existing["placed_blocks"] = serialize_vector3i_dict(voxel_model.placed_blocks)
-		existing["removed_blocks"] = serialize_vector3i_dict(voxel_model.removed_blocks)
-		existing["torch_attachments"] = serialize_vector3i_dict(voxel_model.torch_attachments)
+	updated["placed_blocks"] = serialize_vector3i_dict(voxel_model.placed_blocks)
+	updated["removed_blocks"] = serialize_vector3i_dict(voxel_model.removed_blocks)
+	updated["torch_attachments"] = serialize_vector3i_dict(voxel_model.torch_attachments)
+	var p = player.global_position
+	updated["player_position"] = [p.x, p.y, p.z]
+	updated["inventory"] = inventory.to_dict()
+	updated["time_of_day"] = fmod(time_of_day, GameClock.HOURS_PER_DAY)
 
-	if player:
-		var p = player.global_position
-		existing["player_position"] = [p.x, p.y, p.z]
+	if not _save_dict_to_file(slot_id, updated):
+		return false
+	current_data.clear()
+	current_data.merge(updated, true)
+	return true
 
-	if inventory:
-		existing["inventory"] = inventory.to_dict()
-
-	if time_of_day >= 0.0:
-		existing["time_of_day"] = fmod(time_of_day, GameClock.HOURS_PER_DAY)
-
-	return _save_dict_to_file(slot_id, existing)
-
-static func touch_last_played(slot_id: int) -> void:
-	var info = get_slot_info(slot_id)
-	if not info.get("exists", false):
-		return
-	info["last_played"] = _now_str()
-	_save_dict_to_file(slot_id, info)
+static func update_last_played(slot_id: int, data: Dictionary) -> bool:
+	var updated = data.duplicate()
+	updated["last_played"] = _now_str()
+	if not _save_dict_to_file(slot_id, updated):
+		return false
+	data.clear()
+	data.merge(updated, true)
+	return true

@@ -18,7 +18,6 @@ var max_build_y: int:
 @export var meadow_radius: float = DEFAULT_MEADOW_RADIUS
 @export var meadow_target_height: float = 9.5
 @export var base_height: float = 9.0
-@export var subsurface_depth_default: int = 3
 
 @export_group("Vegetation")
 @export var tree_density: float = 0.012

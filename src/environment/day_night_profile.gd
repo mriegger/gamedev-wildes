@@ -14,6 +14,7 @@ class ProfileKey extends Resource:
 @export var keys: Array[ProfileKey] = []
 
 var _sorted: bool = false
+var _sample: ProfileKey = ProfileKey.new()
 
 func _init():
 	if keys.is_empty():
@@ -50,14 +51,14 @@ func _sort_keys():
 	keys.sort_custom(func(a, b): return a.time < b.time)
 	_sorted = true
 
-func get_interpolated(t: float) -> Dictionary:
+func get_interpolated(t: float) -> ProfileKey:
 	t = fmod(t, GameClock.HOURS_PER_DAY)
 	if t < 0:
 		t += GameClock.HOURS_PER_DAY
 	if not _sorted:
 		_sort_keys()
 	if keys.is_empty():
-		return {}
+		return _sample
 
 	for i in range(keys.size() - 1):
 		var k0 = keys[i]
@@ -70,23 +71,19 @@ func get_interpolated(t: float) -> Dictionary:
 			return _lerp_keys(k0, k1, f)
 	return _lerp_keys(keys[0], keys[0], 0.0)
 
-func _lerp_keys(a: ProfileKey, b: ProfileKey, f: float) -> Dictionary:
+func _lerp_keys(a: ProfileKey, b: ProfileKey, f: float) -> ProfileKey:
 	var sf = f * f * (3.0 - 2.0 * f)
-	return {
-		"sky": a.sky.lerp(b.sky, sf),
-		"ambient_col": a.ambient_col.lerp(b.ambient_col, sf),
-		"ambient_energy": lerp(a.ambient_energy, b.ambient_energy, sf),
-		"sun_col": a.sun_col.lerp(b.sun_col, sf),
-		"sun_energy": lerp(a.sun_energy, b.sun_energy, sf),
-		"shadow_opacity": lerp(a.shadow_opacity, b.shadow_opacity, sf),
-		"fill_energy": lerp(a.fill_energy, b.fill_energy, sf),
-	}
+	_sample.sky = a.sky.lerp(b.sky, sf)
+	_sample.ambient_col = a.ambient_col.lerp(b.ambient_col, sf)
+	_sample.ambient_energy = lerp(a.ambient_energy, b.ambient_energy, sf)
+	_sample.sun_col = a.sun_col.lerp(b.sun_col, sf)
+	_sample.sun_energy = lerp(a.sun_energy, b.sun_energy, sf)
+	_sample.shadow_opacity = lerp(a.shadow_opacity, b.shadow_opacity, sf)
+	_sample.fill_energy = lerp(a.fill_energy, b.fill_energy, sf)
+	return _sample
 
 static func is_day_time(t: float) -> bool:
 	t = fmod(t, GameClock.HOURS_PER_DAY)
 	if t < 0:
 		t += GameClock.HOURS_PER_DAY
 	return t >= 6.0 and t < 19.0
-
-func is_day(t: float) -> bool:
-	return is_day_time(t)

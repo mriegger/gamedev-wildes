@@ -15,7 +15,7 @@ const FROSTED_PANEL_MAT: ShaderMaterial = preload("res://shaders/frosted_panel_m
 const FROSTED_BUTTON_MAT: ShaderMaterial = preload("res://shaders/frosted_button_material.tres")
 
 
-static func make_panel(bg: Color, radius: int, border_color: Color = Color(1, 1, 1, 0.20), border_width: int = 1) -> StyleBoxFlat:
+static func make_panel(bg: Color, radius: int, border_color: Color, border_width: int) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = bg
 	sb.corner_radius_top_left = radius
@@ -28,10 +28,6 @@ static func make_panel(bg: Color, radius: int, border_color: Color = Color(1, 1,
 	sb.border_width_bottom = border_width
 	sb.border_color = border_color
 	return sb
-
-static func make_panel_alpha(bg: Color, radius: int, border_alpha: float = 0.20, border_width: int = 1) -> StyleBoxFlat:
-	return make_panel(bg, radius, Color(1, 1, 1, border_alpha), border_width)
-
 
 static func make_modal(radius: int = MODAL_RADIUS, border_color: Color = MODAL_BORDER) -> StyleBoxFlat:
 	return make_panel(MODAL_BG, radius, border_color, 1)
@@ -52,19 +48,19 @@ static func make_button_disabled() -> StyleBoxFlat:
 	return make_panel(Color(0, 0, 0, 0.04), BUTTON_RADIUS, Color(1, 1, 1, 0.08), 1)
 
 
-static func make_frosted_panel_material(lod: float = 4.5) -> ShaderMaterial:
+static func make_frosted_panel_material(lod: float) -> ShaderMaterial:
 	var dup := FROSTED_PANEL_MAT.duplicate() as ShaderMaterial
 	dup.set_shader_parameter("blur_lod", lod)
 	dup.set_shader_parameter("fade", 1.0)
 	return dup
 
-static func make_frosted_button_material(lod: float = 4.0) -> ShaderMaterial:
+static func make_frosted_button_material(lod: float) -> ShaderMaterial:
 	var dup := FROSTED_BUTTON_MAT.duplicate() as ShaderMaterial
 	dup.set_shader_parameter("blur_lod", lod)
 	dup.set_shader_parameter("fade", 1.0)
 	return dup
 
-static func apply_frosted_panel(panel: Panel, sb: StyleBoxFlat, lod: float = 4.5, is_button: bool = false) -> void:
+static func apply_frosted_panel(panel: Panel, sb: StyleBoxFlat, lod: float, is_button: bool) -> void:
 	if panel == null:
 		return
 	if is_button:

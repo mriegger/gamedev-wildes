@@ -11,20 +11,13 @@ var wheel_up: bool = false
 var wheel_down: bool = false
 var mine_pressed: bool = false
 var place_just: bool = false
-var mouse_right_pressed: bool = false
-var mouse_left_pressed: bool = false
-
-static var _instance: InputBuffer = null
-static func shared() -> InputBuffer:
-	if _instance == null:
-		_instance = InputBuffer.new()
-	return _instance
+var place_pressed: bool = false
 
 func poll():
-	var move_right = Input.is_action_pressed("move_right") or Input.is_key_pressed(KEY_D)
-	var move_left = Input.is_action_pressed("move_left") or Input.is_key_pressed(KEY_A)
-	var move_forward = Input.is_action_pressed("move_forward") or Input.is_key_pressed(KEY_W)
-	var move_back = Input.is_action_pressed("move_back") or Input.is_key_pressed(KEY_S)
+	var move_right = Input.is_action_pressed("move_right")
+	var move_left = Input.is_action_pressed("move_left")
+	var move_forward = Input.is_action_pressed("move_forward")
+	var move_back = Input.is_action_pressed("move_back")
 	var x = 0.0
 	var y = 0.0
 	if move_right:
@@ -36,14 +29,13 @@ func poll():
 	if move_back:
 		y -= 1.0
 	var v = Vector2(x, y)
-	if v.length() > 1.0:
+	if v.length_squared() > 1.0:
 		v = v.normalized()
 	move_dir = v
 	zoom_in_pressed = Input.is_action_pressed("zoom_in")
 	zoom_out_pressed = Input.is_action_pressed("zoom_out")
 	mine_pressed = Input.is_action_pressed("mine")
-	mouse_right_pressed = Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT)
-	mouse_left_pressed = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
+	place_pressed = Input.is_action_pressed("place")
 	jump_just = jump_just or Input.is_action_just_pressed("jump")
 	rotate_left_just = rotate_left_just or Input.is_action_just_pressed("rotate_left")
 	rotate_right_just = rotate_right_just or Input.is_action_just_pressed("rotate_right")

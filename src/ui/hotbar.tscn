@@ -1,7 +1,8 @@
-[gd_scene format=3 uid="uid://h0tb4r1c0n"]
+[gd_scene load_steps=4 format=3 uid="uid://h0tb4r1c0n"]
 
 [ext_resource type="Script" path="res://ui/hotbar.gd" id="1_hotbar"]
 [ext_resource type="PackedScene" path="res://ui/hotbar_slot.tscn" id="2_slot"]
+[ext_resource type="Resource" path="res://blocks/block_catalog.tres" id="3_catalog"]
 
 [node name="Hotbar" type="Control"]
 layout_mode = 3
@@ -13,6 +14,7 @@ anchor_bottom = 1.0
 mouse_filter = 2
 script = ExtResource("1_hotbar")
 slot_scene = ExtResource("2_slot")
+block_catalog = ExtResource("3_catalog")
 
 [node name="MarginContainer" type="MarginContainer" parent="."]
 layout_mode = 1

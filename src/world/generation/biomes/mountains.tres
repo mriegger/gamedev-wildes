@@ -5,7 +5,6 @@
 [resource]
 script = ExtResource("1")
 biome_id = "mountains"
-display_name = "Mountains"
 min_temperature = 0.15
 max_temperature = 0.55
 min_humidity = 0.2
@@ -17,10 +16,5 @@ max_erosion = 0.42
 min_peaks_valleys = 0.5
 max_peaks_valleys = 1.0
 surface_block = 4
-subsurface_block = 4
-filler_block = 4
 shore_block = 3
-shore_subsurface_block = 3
-subsurface_depth = 1
 tree_density = 0.002
-grass_tint = Color(0.6, 0.65, 0.62, 1)

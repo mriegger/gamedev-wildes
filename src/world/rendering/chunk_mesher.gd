@@ -7,37 +7,28 @@ var seed_value: int = 1337
 var enable_ao: bool = true
 var ao_table: Array = [1.0, 0.86, 0.72, 0.58]
 
-var catalog: BlockCatalog
-var _color_cache: Dictionary = {}
-var _color_cache_mutex: Mutex = Mutex.new()
+var block_catalog: BlockCatalog
+var _top_colors = PackedColorArray()
+var _side_colors = PackedColorArray()
 
-func _init(p_chunk_size: int = 20, p_max_y: int = 36, p_seed: int = 1337, p_ao: bool = true):
+func _init(p_chunk_size: int, p_max_y: int, p_seed: int, p_ao: bool, p_block_catalog: BlockCatalog):
 	chunk_size = p_chunk_size
 	max_build_y = p_max_y
 	seed_value = p_seed
 	enable_ao = p_ao
-	catalog = BlockCatalog.shared()
+	block_catalog = p_block_catalog
 	_rebuild_color_cache()
 
 func _rebuild_color_cache():
-	_color_cache_mutex.lock()
-	_color_cache.clear()
-	if catalog != null:
-		for type_id in [BlockId.Type.GRASS, BlockId.Type.DIRT, BlockId.Type.STONE, BlockId.Type.SAND, BlockId.Type.LOG, BlockId.Type.LEAVES, BlockId.Type.AIR, BlockId.Type.TORCH, BlockId.Type.WATER]:
-			var def = catalog.get_definition(type_id)
-			if def != null:
-				_color_cache[type_id] = {"top": def.top_color, "side": def.side_color}
-	_color_cache_mutex.unlock()
-
-func configure_from_config(config: WorldConfig):
-	chunk_size = config.chunk_size
-	max_build_y = config.max_build_y
-	seed_value = config.seed_value
-	enable_ao = config.enable_ao
-	_rebuild_color_cache()
+	_top_colors.resize(BlockId.Type.COUNT)
+	_side_colors.resize(BlockId.Type.COUNT)
+	for type_id in range(BlockId.Type.COUNT):
+		var def = block_catalog.get_definition(type_id)
+		_top_colors[type_id] = def.top_color
+		_side_colors[type_id] = def.side_color
 
 func build_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
-	var cache: Array = cache_dict.get("cache", [])
+	var cache: PackedInt32Array = cache_dict.get("cache", PackedInt32Array())
 	var origin_x: int = cache_dict.get("origin_x", 0)
 	var origin_z: int = cache_dict.get("origin_z", 0)
 	var size_x: int = cache_dict.get("size_x", chunk_size)
@@ -60,9 +51,8 @@ func build_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 	var local_seed = seed_value
 	var local_enable_ao = enable_ao
 	var local_ao_table = ao_table
-	_color_cache_mutex.lock()
-	var local_color_cache = _color_cache.duplicate()
-	_color_cache_mutex.unlock()
+	var local_top_colors = _top_colors
+	var local_side_colors = _side_colors
 
 	var size_y_local = size_y
 	var cache_z_local = cache_z
@@ -116,11 +106,10 @@ func build_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 					continue
 				if block_type == BlockId.Type.AIR or block_type == BlockId.Type.TORCH or block_type == BlockId.Type.WATER:
 					continue
-				var cached = local_color_cache.get(block_type, null)
-				if cached == null:
+				if block_type < 0 or block_type >= local_top_colors.size():
 					continue
-				var def_top = cached["top"] as Color
-				var def_side = cached["side"] as Color
+				var def_top = local_top_colors[block_type]
+				var def_side = local_side_colors[block_type]
 				var top_col: Color
 				var side_col: Color
 				if block_type == BlockId.Type.LOG or block_type == BlockId.Type.LEAVES:
@@ -362,7 +351,7 @@ func build_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 	}
 
 func build_water_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
-	var cache: Array = cache_dict.get("cache", [])
+	var cache: PackedInt32Array = cache_dict.get("cache", PackedInt32Array())
 	var origin_x: int = cache_dict.get("origin_x", 0)
 	var origin_z: int = cache_dict.get("origin_z", 0)
 	var size_x: int = cache_dict.get("size_x", chunk_size)

@@ -3,6 +3,14 @@ class_name TorchPlacement
 
 const ATTACH_OFFSET: float = 0.32
 const DOWN_Y_OFFSET: float = 0.15
+const CARDINAL_DIRECTIONS: Array[Vector3i] = [
+	Vector3i.UP,
+	Vector3i.DOWN,
+	Vector3i(1, 0, 0),
+	Vector3i(-1, 0, 0),
+	Vector3i(0, 0, 1),
+	Vector3i(0, 0, -1),
+]
 
 static func world_position(block_pos: Vector3i, attach_dir: Vector3i) -> Vector3:
 	var base_pos = Vector3(block_pos.x + 0.5, block_pos.y + 0.5, block_pos.z + 0.5)

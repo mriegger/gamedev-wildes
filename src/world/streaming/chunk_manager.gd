@@ -9,8 +9,6 @@ var voxel_model: VoxelWorld
 var chunk_renderer: ChunkRenderSystem
 var terrain_generator: TerrainGenerator
 
-var player_ref: Node3D = null
-
 var data_chunks: Dictionary = {}
 var visible_chunks: Dictionary = {}
 
@@ -23,45 +21,34 @@ var unload_distance: int = 6
 var max_loads_per_frame: int = 1
 var max_unloads_per_frame: int = 4
 
-var last_player_chunk: Vector2i = Vector2i(-99999, -99999)
+var last_player_chunk: Vector2i = ChunkCoord.INVALID
 
 var _last_visible_set: Dictionary = {}
 var _last_keep_set: Dictionary = {}
 
 var _initialized: bool = false
 
-func setup(p_config: WorldConfig, p_voxel_model: VoxelWorld, p_renderer: ChunkRenderSystem, p_terrain_gen: TerrainGenerator = null):
+func setup(p_config: WorldConfig, p_voxel_model: VoxelWorld, p_renderer: ChunkRenderSystem, p_terrain_gen: TerrainGenerator):
 	config = p_config
 	voxel_model = p_voxel_model
 	chunk_renderer = p_renderer
 	terrain_generator = p_terrain_gen
-	if config:
-		render_distance = config.render_distance
-		unload_distance = config.render_distance + config.unload_padding
-		max_loads_per_frame = config.max_chunk_loads_per_frame
-		max_unloads_per_frame = config.max_chunk_unloads_per_frame
-	data_chunks.clear()
-	visible_chunks.clear()
-	data_load_queue.clear()
-	mesh_load_queue.clear()
-	data_unload_queue.clear()
-	last_player_chunk = Vector2i(-99999, -99999)
+	render_distance = config.render_distance
+	unload_distance = config.render_distance + config.unload_padding
+	max_loads_per_frame = config.max_chunk_loads_per_frame
+	max_unloads_per_frame = config.max_chunk_unloads_per_frame
+	_clear_state()
 	_initialized = true
-	if voxel_model:
-		voxel_model.configure_terrain_cache(render_distance, config.unload_padding if config else 2)
-		if voxel_model.has_signal("terrain_chunk_evicted"):
-			if not voxel_model.terrain_chunk_evicted.is_connected(_on_terrain_evicted):
-				voxel_model.terrain_chunk_evicted.connect(_on_terrain_evicted)
-	if chunk_renderer and terrain_generator:
-		chunk_renderer.set_terrain_generator(terrain_generator)
+	voxel_model.configure_terrain_cache(render_distance, config.unload_padding)
+	voxel_model.terrain_chunk_evicted.connect(_on_terrain_evicted)
+	chunk_renderer.set_terrain_generator(terrain_generator)
 
 func _on_terrain_evicted(coord: Vector2i):
 	if _last_keep_set.has(coord):
 		data_chunks.erase(coord)
 		var was_visible = visible_chunks.has(coord)
 		visible_chunks.erase(coord)
-		if chunk_renderer:
-			chunk_renderer.unload_render_only(coord.x, coord.y)
+		chunk_renderer.unload_render_only(coord.x, coord.y)
 		var already_data = false
 		for q in data_load_queue:
 			if q == coord:
@@ -81,34 +68,15 @@ func _on_terrain_evicted(coord: Vector2i):
 	if data_chunks.has(coord):
 		data_chunks.erase(coord)
 		visible_chunks.erase(coord)
-		if chunk_renderer:
-			chunk_renderer.unload_render_only(coord.x, coord.y)
-
-func set_player_ref(p_player: Node3D):
-	player_ref = p_player
+		chunk_renderer.unload_render_only(coord.x, coord.y)
 
 func ensure_terrain_for_chunk(coord: Vector2i):
-	if not config:
-		return
-	if not terrain_generator or not voxel_model:
-		return
 	if data_chunks.has(coord) or voxel_model.is_chunk_data_available(coord.x, coord.y):
 		data_chunks[coord] = true
 		return
-	if chunk_renderer != null and terrain_generator != null and voxel_model != null:
-		chunk_renderer.ensure_terrain_async(coord.x, coord.y)
-		return
-	var origin_x = coord.x * config.chunk_size
-	var origin_z = coord.y * config.chunk_size
-	var payload = terrain_generator.generate_chunk_payload_for_terrain(origin_x, origin_z, config.chunk_size, true)
-	voxel_model.apply_chunk_gen(payload)
-	if payload.has("tree_block_fast"):
-		voxel_model.apply_tree_chunk_for_coord(coord, {"tree_block_fast": payload["tree_block_fast"]})
-	data_chunks[coord] = true
+	chunk_renderer.ensure_terrain_async(coord.x, coord.y)
 
 func world_to_chunk(pos: Vector3) -> Vector2i:
-	if config == null:
-		return ChunkCoord.world_to_chunk(pos, 20)
 	return ChunkCoord.world_to_chunk(pos, config.chunk_size)
 
 func compute_desired_chunks(center_chunk: Vector2i) -> Array[Vector2i]:
@@ -117,19 +85,14 @@ func compute_desired_chunks(center_chunk: Vector2i) -> Array[Vector2i]:
 func compute_unload_keep_chunks(center_chunk: Vector2i) -> Array[Vector2i]:
 	return ChunkCoord.get_chunks_in_radius_infinite(center_chunk, unload_distance)
 
-func tick(_delta: float, player_pos: Vector3 = Vector3.INF) -> bool:
-	return update(player_pos, false)
-
-func update(player_pos: Vector3, force: bool = false) -> bool:
+func tick(_delta: float, player_pos: Vector3) -> bool:
 	if not _initialized:
-		return false
-	if config == null or voxel_model == null or chunk_renderer == null:
 		return false
 
 	var current_chunk = world_to_chunk(player_pos)
-	var moved = current_chunk != last_player_chunk or force
+	var moved = current_chunk != last_player_chunk
 
-	if moved or force or _last_visible_set.is_empty():
+	if moved or _last_visible_set.is_empty():
 		var desired_visible = compute_desired_chunks(current_chunk)
 		var desired_keep = compute_unload_keep_chunks(current_chunk)
 
@@ -145,15 +108,14 @@ func update(player_pos: Vector3, force: bool = false) -> bool:
 
 		last_player_chunk = current_chunk
 
-		if chunk_renderer:
-			for k in chunk_renderer.chunk_instances.keys():
-				var coord = ChunkCoord.key_to_chunk(k)
-				if coord == Vector2i(-9999, -9999):
-					continue
-				if not visible_chunks.has(coord):
-					visible_chunks[coord] = true
-				if not data_chunks.has(coord):
-					data_chunks[coord] = true
+		for k in chunk_renderer.chunk_instances.keys():
+			var coord = ChunkCoord.key_to_chunk(k)
+			if coord == ChunkCoord.INVALID:
+				continue
+			if not visible_chunks.has(coord):
+				visible_chunks[coord] = true
+			if not data_chunks.has(coord):
+				data_chunks[coord] = true
 
 		var prune_queue = func(queue: Array[Vector2i], keep_dict: Dictionary) -> Array[Vector2i]:
 			var out: Array[Vector2i] = []
@@ -161,8 +123,7 @@ func update(player_pos: Vector3, force: bool = false) -> bool:
 				if keep_dict.has(c):
 					out.append(c)
 				else:
-					if chunk_renderer:
-						chunk_renderer.unload_chunk(c.x, c.y)
+					chunk_renderer.unload_chunk(c.x, c.y)
 			return out
 
 		data_load_queue = prune_queue.call(data_load_queue, keep_set) as Array[Vector2i]
@@ -182,8 +143,7 @@ func update(player_pos: Vector3, force: bool = false) -> bool:
 			if visible_set.has(c):
 				filtered_mesh_load.append(c)
 			else:
-				if chunk_renderer:
-					chunk_renderer.unload_chunk(c.x, c.y)
+				chunk_renderer.unload_chunk(c.x, c.y)
 		mesh_load_queue = filtered_mesh_load
 
 		var data_load_set: Dictionary = {}
@@ -225,8 +185,7 @@ func update(player_pos: Vector3, force: bool = false) -> bool:
 
 		for c in visible_chunks.keys():
 			if not visible_set.has(c):
-				if chunk_renderer:
-					chunk_renderer.unload_render_only(c.x, c.y)
+				chunk_renderer.unload_render_only(c.x, c.y)
 				visible_chunks.erase(c)
 				chunk_unloaded.emit(c)
 
@@ -234,9 +193,9 @@ func update(player_pos: Vector3, force: bool = false) -> bool:
 	var keep_set = _last_keep_set
 
 	var should_promote = moved
-	if not should_promote and chunk_renderer != null:
+	if not should_promote:
 		should_promote = chunk_renderer.consume_terrain_dirty()
-	if voxel_model and not keep_set.is_empty() and should_promote:
+	if not keep_set.is_empty() and should_promote:
 		for c in keep_set.keys():
 			if not data_chunks.has(c) and voxel_model.is_chunk_data_available(c.x, c.y):
 				data_chunks[c] = true
@@ -248,7 +207,7 @@ func update(player_pos: Vector3, force: bool = false) -> bool:
 		processed_data += 1
 		if not keep_set.is_empty() and not keep_set.has(coord):
 			continue
-		if voxel_model and voxel_model.is_chunk_data_available(coord.x, coord.y):
+		if voxel_model.is_chunk_data_available(coord.x, coord.y):
 			data_chunks[coord] = true
 			loads_done += 1
 			continue
@@ -267,17 +226,15 @@ func update(player_pos: Vector3, force: bool = false) -> bool:
 		processed_mesh += 1
 		if not visible_set.is_empty() and not visible_set.has(coord):
 			continue
-		if chunk_renderer:
-			var ok = chunk_renderer.rebuild_async_combined(coord.x, coord.y)
-			if ok:
-				visible_chunks[coord] = true
-				data_chunks[coord] = true
-				chunk_loaded.emit(coord)
-				loads_done += 1
-			else:
-				if chunk_renderer.is_chunk_loaded(coord.x, coord.y):
-					visible_chunks[coord] = true
-					chunk_loaded.emit(coord)
+		var ok = chunk_renderer.rebuild_async_combined(coord.x, coord.y)
+		if ok:
+			visible_chunks[coord] = true
+			data_chunks[coord] = true
+			chunk_loaded.emit(coord)
+			loads_done += 1
+		elif chunk_renderer.is_chunk_loaded(coord.x, coord.y):
+			visible_chunks[coord] = true
+			chunk_loaded.emit(coord)
 	if processed_mesh > 0:
 		mesh_load_queue = mesh_load_queue.slice(processed_mesh) as Array[Vector2i]
 
@@ -291,16 +248,15 @@ func update(player_pos: Vector3, force: bool = false) -> bool:
 		if data_chunks.has(coord):
 			data_chunks.erase(coord)
 			visible_chunks.erase(coord)
-			if chunk_renderer:
-				chunk_renderer.unload_chunk(coord.x, coord.y)
+			chunk_renderer.unload_chunk(coord.x, coord.y)
 			unloads_done += 1
 			chunk_unloaded.emit(coord)
 	if processed_unload > 0:
 		data_unload_queue = data_unload_queue.slice(processed_unload) as Array[Vector2i]
 
-	return moved or force
+	return moved
 
-func ensure_chunks_around(pos: Vector3, immediate: bool = false) -> int:
+func ensure_chunks_around(pos: Vector3, immediate: bool) -> int:
 	if not _initialized:
 		return 0
 	var center = world_to_chunk(pos)
@@ -310,7 +266,7 @@ func ensure_chunks_around(pos: Vector3, immediate: bool = false) -> int:
 	var visible_set: Dictionary = {}
 	for c in desired_visible:
 		visible_set[c] = true
-	if immediate and chunk_renderer:
+	if immediate:
 		for c in desired_visible:
 			if not visible_chunks.has(c):
 				chunk_renderer.rebuild_immediate(c.x, c.y)
@@ -321,12 +277,12 @@ func ensure_chunks_around(pos: Vector3, immediate: bool = false) -> int:
 		if visible_set.has(c):
 			continue
 		if not data_chunks.has(c):
-			if voxel_model and voxel_model.is_chunk_data_available(c.x, c.y):
+			if voxel_model.is_chunk_data_available(c.x, c.y):
 				data_chunks[c] = true
 				count += 1
 			else:
 				ensure_terrain_for_chunk(c)
-				if data_chunks.has(c) or (voxel_model and voxel_model.is_chunk_data_available(c.x, c.y)):
+				if data_chunks.has(c) or voxel_model.is_chunk_data_available(c.x, c.y):
 					count += 1
 	return count
 
@@ -335,22 +291,21 @@ func is_chunk_loaded(coord: Vector2i) -> bool:
 
 func clear():
 	# restartable reset — not a final shutdown; rearm via setup()/tick()->_ensure_workers() will restart workers, so caller must prevent stray ticks after shutdown (e.g. _done flag) or rearm turns into a crash
-	data_chunks.clear()
-	visible_chunks.clear()
-	data_load_queue.clear()
-	mesh_load_queue.clear()
-	data_unload_queue.clear()
-	last_player_chunk = Vector2i(-99999, -99999)
-	if chunk_renderer:
-		chunk_renderer.clear()
+	_clear_state()
+	chunk_renderer.clear()
 
 func shutdown():
 	# real shutdown — delegates to renderer.shutdown() which leaves _stop_workers = true so stray ticks cannot rearm
+	_clear_state()
+	_initialized = false
+	chunk_renderer.shutdown()
+
+func _clear_state():
 	data_chunks.clear()
 	visible_chunks.clear()
 	data_load_queue.clear()
 	mesh_load_queue.clear()
 	data_unload_queue.clear()
-	last_player_chunk = Vector2i(-99999, -99999)
-	if chunk_renderer:
-		chunk_renderer.shutdown()
+	_last_visible_set.clear()
+	_last_keep_set.clear()
+	last_player_chunk = ChunkCoord.INVALID

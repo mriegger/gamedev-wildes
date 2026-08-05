@@ -12,14 +12,10 @@ const TAB_DEFS: Array[Dictionary] = [
 	{"id": "equipment", "title": "EQUIPMENT", "icon": "res://assets/images/icons/button/equipment_icon.png", "icon_size": Vector2(20, 20), "region": "equipment", "cols": 2, "placeholder": ""},
 ]
 
-var _hotbar_backing: Hotbar = null
-var hotbar: Hotbar:
-	get: return _hotbar_backing
-	set(value):
-		_hotbar_backing = value
-		_update_hotbar_position(_progress)
+var hotbar: Hotbar = null
 var inventory_model: InventoryModel = null
 var camera_rig: CameraRig = null
+var block_catalog: BlockCatalog = null
 
 var _progress: float = 0.0
 var _target_progress: float = 0.0
@@ -29,29 +25,17 @@ var _background: Panel
 var _content: Control
 var _view_root: Control
 var _title_label: Label
-var _action_buttons: HBoxContainer
 var _frosted_panels: Array[Panel] = []
+var _slot_normal_style: StyleBoxFlat
+var _slot_empty_style: StyleBoxFlat
+var _inventory_dirty: bool = true
 
 # Generic tab storage derived from TAB_DEFS
 var _views: Dictionary = {} # id -> Control
 var _slot_groups: Dictionary = {} # id -> Array[InventorySlot]
-var _tab_buttons: Dictionary = {} # id -> WildesButton
 var _current_tab_id: String = "inventory"
 
-# Legacy aliases for compat - populated from _slot_groups/_views
 var _slots: Array[InventorySlot] = []
-var _equipment_slots: Array[InventorySlot] = []
-var _crafting_wrapper: WildesButton
-var _equipment_wrapper: WildesButton
-
-func _get_region_indices(region_name: String) -> Array:
-	for r in InventoryModel.REGIONS:
-		if r["name"] == region_name:
-			var out: Array = []
-			for i in range(r["size"]):
-				out.append(r["start"] + i)
-			return out
-	return []
 
 func _ready():
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -61,6 +45,7 @@ func _ready():
 	_update_layout(0.0)
 	_apply_fade(_progress)
 	_update_hotbar_position(_progress)
+	set_process(false)
 
 func setup(inv: InventoryModel, cam_rig: CameraRig, hb: Hotbar):
 	inventory_model = inv
@@ -71,28 +56,17 @@ func setup(inv: InventoryModel, cam_rig: CameraRig, hb: Hotbar):
 	for id in _slot_groups.keys():
 		for slot in _slot_groups[id] as Array:
 			slot.set_inventory(inv)
-	# Keep legacy arrays in sync
-	for slot in _slots:
-		slot.set_inventory(inv)
-	for slot in _equipment_slots:
-		slot.set_inventory(inv)
-	_connect_inventory()
-	_update_size()
-	_update_layout(_progress)
+	inventory_model.inventory_changed.connect(_on_inventory_changed)
+	_inventory_dirty = true
 	_update_hotbar_position(_progress)
 
-func _connect_inventory():
-	if inventory_model == null:
-		return
-	for conn in inventory_model.inventory_changed.get_connections():
-		if conn["callable"].get_object() == self:
-			inventory_model.inventory_changed.disconnect(conn["callable"])
-	inventory_model.inventory_changed.connect(_on_inventory_changed)
-	_on_inventory_changed()
-
 func _on_inventory_changed():
-	if inventory_model == null:
+	if _target_progress == 0.0 and _progress <= 0.01:
+		_inventory_dirty = true
 		return
+	_refresh_inventory()
+
+func _refresh_inventory():
 	for id in _slot_groups.keys():
 		for slot in _slot_groups[id] as Array:
 			var data = inventory_model.get_slot(slot.slot_index)
@@ -100,21 +74,11 @@ func _on_inventory_changed():
 				slot.set_item(null, 0)
 			else:
 				slot.set_item(data["type"], data["count"])
-	# Legacy sync
-	for slot in _slots:
-		var data = inventory_model.get_slot(slot.slot_index)
-		if data == null:
-			slot.set_item(null, 0)
-		else:
-			slot.set_item(data["type"], data["count"])
-	for slot in _equipment_slots:
-		var data = inventory_model.get_slot(slot.slot_index)
-		if data == null:
-			slot.set_item(null, 0)
-		else:
-			slot.set_item(data["type"], data["count"])
+	_inventory_dirty = false
 
 func _build_ui():
+	_slot_normal_style = WildesStyle.make_panel(Color(0.16, 0.18, 0.20, 0.55), 6, Color(1, 1, 1, 0.14), 1)
+	_slot_empty_style = WildesStyle.make_panel(Color(0.14, 0.16, 0.18, 0.32), 6, Color(1, 1, 1, 0.10), 1)
 	_background = Panel.new()
 	_background.name = "SidePanelBackground"
 	_background.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -129,7 +93,6 @@ func _build_ui():
 	sb.border_width_bottom = 0
 	sb.border_color = Color(0, 0, 0, 0)
 	WildesStyle.apply_frosted_panel(_background, sb, 4.5, false)
-	_background.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_background)
 	_background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
@@ -174,7 +137,7 @@ func _build_ui():
 	# Build all tabs from single TAB_DEFS table
 	for tab_def in TAB_DEFS:
 		_build_tab_view(tab_def)
-	_sync_legacy_aliases()
+	_slots = _slot_groups["inventory"]
 	_switch_to_tab_id(_current_tab_id)
 
 	var spacer = Control.new()
@@ -183,13 +146,13 @@ func _build_ui():
 	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_content.add_child(spacer)
 
-	_action_buttons = HBoxContainer.new()
-	_action_buttons.name = "ActionButtons"
-	_action_buttons.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_action_buttons.add_theme_constant_override("separation", 8)
-	_action_buttons.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_action_buttons.size_flags_vertical = Control.SIZE_SHRINK_END
-	_content.add_child(_action_buttons)
+	var action_buttons = HBoxContainer.new()
+	action_buttons.name = "ActionButtons"
+	action_buttons.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	action_buttons.add_theme_constant_override("separation", 8)
+	action_buttons.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	action_buttons.size_flags_vertical = Control.SIZE_SHRINK_END
+	_content.add_child(action_buttons)
 
 	# Create buttons for tabs that have icons (derived from TAB_DEFS)
 	for tab_def in TAB_DEFS:
@@ -200,14 +163,8 @@ func _build_ui():
 		var title: String = tab_def["title"]
 		var icon_size: Vector2 = tab_def.get("icon_size", Vector2(20, 20))
 		var btn = _create_wildes_button(title, icon_path, icon_size)
-		_tab_buttons[tid] = btn
-		# Keep legacy wrappers
-		if tid == "crafting":
-			_crafting_wrapper = btn
-		elif tid == "equipment":
-			_equipment_wrapper = btn
 		btn.pressed.connect(func(): _on_tab_button_pressed(tid))
-		_action_buttons.add_child(btn)
+		action_buttons.add_child(btn)
 
 	custom_minimum_size = Vector2(PANEL_WIDTH, 0)
 	_cache_frosted_panels()
@@ -217,12 +174,6 @@ func _on_tab_button_pressed(tid: String):
 		_switch_to_tab_id(TAB_DEFS[0]["id"])
 	else:
 		_switch_to_tab_id(tid)
-
-func _sync_legacy_aliases():
-	if _slot_groups.has("inventory"):
-		_slots = _slot_groups["inventory"]
-	if _slot_groups.has("equipment"):
-		_equipment_slots = _slot_groups["equipment"]
 
 func _build_tab_view(tab_def: Dictionary):
 	var tid: String = tab_def["id"]
@@ -277,16 +228,16 @@ func _build_tab_view(tab_def: Dictionary):
 		view.add_child(lbl)
 
 func _build_slot_grid_for_region(region_name: String, grid: GridContainer, out_slots: Array[InventorySlot]):
-	var indices: Array = _get_region_indices(region_name)
+	var indices: Array = InventoryModel.get_region_indices(region_name)
 	for idx in indices:
 		var slot = InventorySlot.new()
 		slot.name = "Slot_%d" % idx
 		slot.set_slot_index(idx)
+		slot.set_block_catalog(block_catalog)
+		slot.set_inventory_styles(_slot_normal_style, _slot_empty_style)
 		slot.mouse_filter = Control.MOUSE_FILTER_STOP
 		grid.add_child(slot)
 		out_slots.append(slot)
-		if inventory_model:
-			slot.set_inventory(inventory_model)
 
 func _switch_to_tab_id(tid: String):
 	_current_tab_id = tid
@@ -300,14 +251,14 @@ func _switch_to_tab_id(tid: String):
 				_title_label.text = tab_def["title"]
 				break
 
-func _create_wildes_button(text: String, icon_path: String, icon_size: Vector2 = Vector2(20, 20), font_size: int = 14) -> WildesButton:
+func _create_wildes_button(text: String, icon_path: String, icon_size: Vector2) -> WildesButton:
 	var scene = load("res://ui/main_menu/wildes_button.tscn") as PackedScene
 	var btn = scene.instantiate() as WildesButton
 	btn.name = text.capitalize() + "Button"
 	btn.button_text = text
 	btn.button_icon = load(icon_path) as Texture2D
 	btn.button_icon_size = icon_size
-	btn.button_font_size = font_size
+	btn.button_font_size = 14
 	btn.custom_minimum_size = Vector2(0, 44)
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -328,6 +279,7 @@ func _process(delta):
 		if _progress != _target_progress:
 			_progress = _target_progress
 			_apply_state()
+		set_process(false)
 		return
 	var k = (3.5 / ANIM_DURATION) if ANIM_DURATION > 0.001 else 14.0
 	var t = 1.0 - exp(-k * delta)
@@ -336,6 +288,8 @@ func _process(delta):
 		_progress = _target_progress
 	_progress = clamp(_progress, 0.0, 1.0)
 	_apply_state()
+	if _progress == _target_progress:
+		set_process(false)
 
 func _update_size():
 	var vp_size = Vector2(1280, 720)
@@ -373,19 +327,11 @@ func _collect_frosted_panels(node: Node):
 		_collect_frosted_panels(child)
 
 func _apply_fade(progress: float):
-	if _background and not _frosted_panels.has(_background):
-		WildesStyle.set_frosted_fade(_background, progress)
 	if _content:
 		_content.modulate = Color(1, 1, 1, progress)
 	for panel in _frosted_panels:
 		if is_instance_valid(panel):
 			WildesStyle.set_frosted_fade(panel, progress)
-
-func _set_frosted_fade_recursive(node: Node, progress: float):
-	if node is Panel and node.material is ShaderMaterial:
-		WildesStyle.set_frosted_fade(node as Panel, progress)
-	for child in node.get_children():
-		_set_frosted_fade_recursive(child, progress)
 
 func _update_camera():
 	if camera_rig:
@@ -417,20 +363,23 @@ func toggle():
 		open()
 
 func open():
+	if _inventory_dirty:
+		_refresh_inventory()
 	_target_progress = 1.0
 	_is_open = true
 	_update_hotbar_interactive()
+	set_process(true)
 
 func close():
 	_target_progress = 0.0
 	_is_open = false
 	_cancel_drag_if_needed()
+	set_process(true)
 
 func _cancel_drag_if_needed():
 	var vp = get_viewport()
-	if vp and vp.has_method("gui_is_dragging") and vp.has_method("gui_cancel_drag"):
-		if vp.gui_is_dragging():
-			vp.gui_cancel_drag()
+	if vp and vp.gui_is_dragging():
+		vp.gui_cancel_drag()
 
 func close_immediate():
 	_progress = 0.0
@@ -439,6 +388,7 @@ func close_immediate():
 	_update_size()
 	_apply_state()
 	_cancel_drag_if_needed()
+	set_process(false)
 
 func _notification(what):
 	if what == NOTIFICATION_RESIZED:

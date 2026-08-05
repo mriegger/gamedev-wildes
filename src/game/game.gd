@@ -16,6 +16,7 @@ class_name Game
 @onready var hud: HUD = $HUD as HUD
 
 var inventory_model: InventoryModel = null
+var input_buffer: InputBuffer = InputBuffer.new()
 
 var current_slot_id: int = -1
 var current_save_data: Dictionary = {}
@@ -66,9 +67,8 @@ var _deferred_saved_time: float = 6.0
 var _deferred_has_saved_time: bool = false
 
 func _ready():
-
-	SaveManager.ensure_save_dir()
 	_create_save_status_ui()
+	camera_rig.setup(player, input_buffer)
 
 	inventory_model = InventoryModel.new(InventoryModel.TOTAL_SIZE, InventoryModel.DEFAULT_MAX_STACK)
 
@@ -106,29 +106,16 @@ func _ready():
 
 	_setup_all(saved_player_pos, has_saved_pos, saved_time_of_day, has_saved_time)
 
-	if world and world.voxel_model:
-		if not world.voxel_model.block_edit_committed.is_connected(_on_world_edit):
-			world.voxel_model.block_edit_committed.connect(_on_world_edit)
-
 func finalize_deferred_setup():
 	if not _defer_setup:
 		return
 	_defer_setup = false
 	_setup_all(_deferred_saved_pos, _deferred_has_saved_pos, _deferred_saved_time, _deferred_has_saved_time)
-	if world and world.voxel_model:
-		if not world.voxel_model.block_edit_committed.is_connected(_on_world_edit):
-			world.voxel_model.block_edit_committed.connect(_on_world_edit)
 
-func _setup_all(saved_pos: Vector3 = Vector3.ZERO, has_saved: bool = false, saved_time: float = 6.0, has_saved_time: bool = false):
-	if world.voxel_model == null and not current_save_data.is_empty():
-		world.set_pending_save_data(current_save_data)
-		if world.voxel_model == null:
-			world._ready()
-
-	player.setup(world, world.voxel_model, camera_rig, camera_3d)
-	interactor.setup(world.voxel_model, camera_3d, player, inventory_model)
+func _setup_all(saved_pos: Vector3, has_saved: bool, saved_time: float, has_saved_time: bool):
+	player.setup(world.voxel_model, camera_rig, input_buffer)
+	interactor.setup(world.voxel_model, camera_3d, player, inventory_model, input_buffer)
 	targeting_view.setup(world, world.voxel_model, player, interactor)
-	camera_rig.setup(player)
 	camera_rig.reset_side_panel_offset()
 
 	world.set_player_ref(player)
@@ -138,22 +125,24 @@ func _setup_all(saved_pos: Vector3 = Vector3.ZERO, has_saved: bool = false, save
 	else:
 		game_clock.set_time_of_day(game_clock.start_hour)
 
-	day_night_values.setup(game_clock, sun, sun_fill, world_env_node, world.config)
-	day_night_values.world_controller = world
+	day_night_values.setup(game_clock, sun, sun_fill, world_env_node, world.config, world)
 	debug_clock_panel.inject(game_clock, day_night_values)
 
 	hud.setup_with_camera(inventory_model, camera_rig)
 
-	var spawn_pos = world.voxel_model.get_spawn_position()
 	if has_saved and saved_pos != Vector3.ZERO:
 		player.global_position = saved_pos + Vector3(0, 0.2, 0)
 	else:
+		var spawn_pos = world.voxel_model.get_spawn_position()
 		player.global_position = spawn_pos + Vector3(0, 0.1, 0)
 
 	camera_rig.target_position = player.global_position
 	camera_rig.global_position = player.global_position
 	camera_rig.current_yaw_deg = camera_rig.target_yaw_deg
 	camera_3d.current = true
+
+	if not world.voxel_model.block_edit_committed.is_connected(_on_world_edit):
+		world.voxel_model.block_edit_committed.connect(_on_world_edit)
 
 var _save_canvas: CanvasLayer = null
 
@@ -221,7 +210,7 @@ func _process(delta):
 		_perform_save("auto")
 
 func _physics_process(_delta):
-	InputBuffer.shared().poll()
+	input_buffer.poll()
 
 var _pause_menu: PauseMenu = null
 var pause_menu_scene: PackedScene = preload("res://ui/main_menu/pause_menu.tscn")
@@ -272,11 +261,8 @@ func _show_pause_menu():
 		if camera_rig:
 			camera_rig.reset_side_panel_offset()
 	_pause_menu = pause_menu_scene.instantiate() as PauseMenu
-	_pause_menu.process_mode = Node.PROCESS_MODE_WHEN_PAUSED
-	if not _pause_menu.resume_requested.is_connected(_on_pause_resume):
-		_pause_menu.resume_requested.connect(_on_pause_resume)
-	if not _pause_menu.main_menu_requested.is_connected(_on_pause_main_menu):
-		_pause_menu.main_menu_requested.connect(_on_pause_main_menu)
+	_pause_menu.resume_requested.connect(_resume_from_pause)
+	_pause_menu.main_menu_requested.connect(_on_pause_main_menu)
 	add_child(_pause_menu)
 	if _save_canvas:
 		_save_canvas.visible = true
@@ -291,9 +277,6 @@ func _resume_from_pause():
 		_save_canvas.visible = false
 	get_tree().paused = false
 
-func _on_pause_resume():
-	_resume_from_pause()
-
 func _on_pause_main_menu():
 	get_tree().paused = false
 	if _pause_menu:
@@ -305,12 +288,10 @@ func _notification(what):
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
 		if current_slot_id != -1:
 			_perform_save("close")
-		if world and world.chunk_renderer:
-			world.chunk_renderer.clear()
-		if world and world.chunk_manager:
-			world.chunk_manager.clear()
+		if world:
+			world.shutdown()
 
-func _perform_save(reason: String = "manual") -> bool:
+func _perform_save(reason: String) -> bool:
 	if current_slot_id == -1:
 		push_warning("[Game] Cannot save - no slot selected (launch via Main Menu -> PLAY -> Select Slot)")
 		return false
@@ -319,9 +300,9 @@ func _perform_save(reason: String = "manual") -> bool:
 		return false
 
 	var time_to_save = game_clock.get_time_of_day() if game_clock else 6.0
-	var success = SaveManager.save_world_state(current_slot_id, world.voxel_model, player, inventory_model, _playtime_accum, time_to_save)
-	_playtime_accum = 0.0
+	var success = SaveManager.save_world_state(current_slot_id, current_save_data, world.voxel_model, player, inventory_model, _playtime_accum, time_to_save)
 	if success:
+		_playtime_accum = 0.0
 		_update_save_label("Saved slot %d! (%s) %s Seed %d | %d edits" % [
 			current_slot_id, reason, game_clock.get_formatted() if game_clock else "",
 			world.seed_value,
@@ -335,53 +316,16 @@ func _perform_save(reason: String = "manual") -> bool:
 
 func _save_and_return_to_menu():
 	get_tree().paused = false
-	if hud and hud.is_side_panel_open():
+	if hud.is_side_panel_open():
 		hud.close_side_panel_immediate()
-	if camera_rig:
-		camera_rig.reset_side_panel_offset()
+	camera_rig.reset_side_panel_offset()
 	_perform_save("quit_to_menu")
-	if world:
-		if world.chunk_renderer:
-			world.chunk_renderer.clear()
-		if world.chunk_manager:
-			world.chunk_manager.clear()
-	
-	if _pause_menu and is_instance_valid(_pause_menu):
-		_pause_menu.visible = false
-		_pause_menu.queue_free()
-		_pause_menu = null
-	if _save_canvas and is_instance_valid(_save_canvas):
-		_save_canvas.visible = false
-		_save_canvas.queue_free()
-		_save_canvas = null
-	if hud and is_instance_valid(hud):
-		hud.visible = false
-		if hud.has_node("Hotbar"):
-			var hb = hud.get_node("Hotbar")
-			if is_instance_valid(hb):
-				hb.visible = false
-				hb.queue_free()
-		hud.queue_free()
-		hud = null
-	if debug_clock_panel and is_instance_valid(debug_clock_panel):
-		debug_clock_panel.visible = false
-		debug_clock_panel.queue_free()
-	
+	world.shutdown()
+
 	var root = get_tree().root
 	UiCleanup.free_stray_canvas_layers(root, self)
-	for child in root.get_children():
-		if child == self:
-			continue
-		if child is Game or child is MainMenu or child is SaveSlotScreen or child is LoadingScreen:
-			if is_instance_valid(child):
-				child.visible = false
-				child.queue_free()
-	
 	var main_menu_scene = load("res://ui/main_menu/main_menu.tscn") as PackedScene
-	if main_menu_scene:
-		var menu = main_menu_scene.instantiate()
-		root.add_child(menu)
-		get_tree().current_scene = menu
-		queue_free()
-	else:
-		get_tree().quit()
+	var menu = main_menu_scene.instantiate()
+	root.add_child(menu)
+	get_tree().current_scene = menu
+	queue_free()

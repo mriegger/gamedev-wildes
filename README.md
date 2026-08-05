@@ -104,3 +104,4 @@ Godot itself is MIT licensed.
 | #2 | Optimize chunk streaming (async data-ring, per-thread lake cache, separate meshing budgets) + fix fog albedo | `fix/streaming-opt-albedo` |
 | #3 | Side-panel inventory (5×8 + hotbar + equipment), tabbed frosted UI, drag-drop, and interaction/performance hardening | `feat/side-panel-inventory` |
 | #4 | Comprehensive headless test suite — inventory fuzz, world golden hash, HUD integration, streaming soak + composite Godot CI | `test/comprehensive-headless-suite` |
+| #5 | Behavior-preserving codebase optimization — dense resource catalog, lower-allocation world/mesh/UI paths, lifecycle and save cleanup | `refactor/aggressive-codebase-optimization` |

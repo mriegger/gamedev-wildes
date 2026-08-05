@@ -11,13 +11,11 @@ var pause_button: Button
 var energy_label: Label
 var panel: Panel
 var _dragging: bool = false
-var _visible_debug: bool = false
 
 func _ready():
 	layer = 20
 	visible = false
-	_build_ui()
-	_update_ui()
+	set_process_unhandled_input(false)
 
 func _build_ui():
 	if panel != null:
@@ -97,48 +95,35 @@ func _build_ui():
 	midnight_btn.pressed.connect(_on_reset_midnight)
 
 func _on_slider_value_changed(v: float):
-	if clock:
-		clock.set_time_of_day(v)
+	clock.set_time_of_day(v)
 
 func _on_slider_drag_started():
 	_dragging = true
-	if clock:
-		clock.set_dragging(true)
+	clock.set_dragging(true)
 
 func _on_slider_drag_ended(_value_changed: bool):
 	_dragging = false
-	if clock:
-		clock.set_dragging(false)
+	clock.set_dragging(false)
 
 func _on_pause_toggled(pressed: bool):
-	if clock:
-		clock.set_paused(pressed)
+	clock.set_paused(pressed)
 	pause_button.text = "Resume" if pressed else "Pause"
 
 func _on_reset_sunrise():
-	if clock:
-		clock.set_time_of_day(6.0)
-		time_slider.value = clock.time_of_day
-		clock.set_paused(false)
-		pause_button.button_pressed = false
+	clock.set_time_of_day(6.0)
+	time_slider.value = clock.time_of_day
+	clock.set_paused(false)
+	pause_button.button_pressed = false
 
 func _on_reset_midnight():
-	if clock:
-		clock.set_time_of_day(0.0)
-		time_slider.value = clock.time_of_day
+	clock.set_time_of_day(0.0)
+	time_slider.value = clock.time_of_day
 
 func _on_clock_time_changed(_t: float):
 	_update_ui()
 
-func _process(_delta):
-	if not visible or not _visible_debug:
-		return
-	_update_ui()
-
 func _update_ui():
 	if not visible:
-		return
-	if time_slider == null or clock == null:
 		return
 	if not _dragging:
 		time_slider.value = clock.time_of_day
@@ -154,15 +139,16 @@ func _update_ui():
 func _unhandled_input(event):
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_EQUAL or "=" in event.as_text():
-			_visible_debug = !_visible_debug
-			visible = _visible_debug
+			if visible:
+				visible = false
+				clock.time_changed.disconnect(_on_clock_time_changed)
+			else:
+				_build_ui()
+				clock.time_changed.connect(_on_clock_time_changed)
+				visible = true
+				_update_ui()
 
-func inject(clock_node: GameClock, values_node: DayNightValues = null):
+func inject(clock_node: GameClock, values_node: DayNightValues):
 	clock = clock_node
 	values = values_node
-	if clock:
-		if clock.has_signal("time_changed") and not clock.time_changed.is_connected(_on_clock_time_changed):
-			clock.time_changed.connect(_on_clock_time_changed)
-		if time_slider:
-			time_slider.value = clock.time_of_day
-	_update_ui()
+	set_process_unhandled_input(true)

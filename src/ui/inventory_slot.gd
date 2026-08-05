@@ -5,7 +5,7 @@ var slot_index: int = 0
 var item_type = null
 var item_count: int = 0
 var inventory_model: InventoryModel = null
-var catalog: BlockCatalog = BlockCatalog.shared()
+var block_catalog: BlockCatalog
 
 var _normal_style: StyleBoxFlat
 var _empty_style: StyleBoxFlat
@@ -19,23 +19,28 @@ func _ready():
 	custom_minimum_size = Vector2(64, 64)
 	size = Vector2(64, 64)
 	_ensure_nodes()
-	_ensure_styles()
 	refresh_visuals()
 	set_process(false)
 
 func set_inventory(p_inv: InventoryModel):
 	inventory_model = p_inv
 
+func set_block_catalog(p_catalog: BlockCatalog):
+	block_catalog = p_catalog
+
+func set_inventory_styles(normal_style: StyleBoxFlat, empty_style: StyleBoxFlat):
+	_normal_style = normal_style
+	_empty_style = empty_style
+
 func set_slot_index(idx: int):
 	slot_index = idx
 
 func set_item(type, count: int):
+	if item_type == type and item_count == count:
+		return
 	item_type = type
 	item_count = count
 	refresh_visuals()
-
-func can_accept_type(type) -> bool:
-	return true
 
 func _ensure_nodes():
 	if icon == null:
@@ -64,42 +69,11 @@ func _ensure_nodes():
 		else:
 			count_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-func _ensure_styles():
-	if _normal_style != null and _empty_style != null:
-		return
-	_normal_style = StyleBoxFlat.new()
-	_normal_style.bg_color = Color(0.16, 0.18, 0.20, 0.55)
-	_normal_style.corner_radius_top_left = 6
-	_normal_style.corner_radius_top_right = 6
-	_normal_style.corner_radius_bottom_left = 6
-	_normal_style.corner_radius_bottom_right = 6
-	_normal_style.border_width_left = 1
-	_normal_style.border_width_right = 1
-	_normal_style.border_width_top = 1
-	_normal_style.border_width_bottom = 1
-	_normal_style.border_color = Color(1, 1, 1, 0.14)
-	_empty_style = StyleBoxFlat.new()
-	_empty_style.bg_color = Color(0.14, 0.16, 0.18, 0.32)
-	_empty_style.corner_radius_top_left = 6
-	_empty_style.corner_radius_top_right = 6
-	_empty_style.corner_radius_bottom_left = 6
-	_empty_style.corner_radius_bottom_right = 6
-	_empty_style.border_width_left = 1
-	_empty_style.border_width_right = 1
-	_empty_style.border_width_top = 1
-	_empty_style.border_width_bottom = 1
-	_empty_style.border_color = Color(1, 1, 1, 0.10)
-	if not has_theme_stylebox_override("panel"):
-		add_theme_stylebox_override("panel", _empty_style)
-
 func refresh_visuals():
-	_ensure_nodes()
-	_ensure_styles()
-	if has_theme_stylebox_override("panel"):
-		if item_type == null or item_type == BlockId.Type.AIR or item_count <= 0:
-			add_theme_stylebox_override("panel", _empty_style)
-		else:
-			add_theme_stylebox_override("panel", _normal_style)
+	if item_type == null or item_type == BlockId.Type.AIR or item_count <= 0:
+		add_theme_stylebox_override("panel", _empty_style)
+	else:
+		add_theme_stylebox_override("panel", _normal_style)
 	if icon == null or count_label == null:
 		return
 	if item_type == null or item_type == BlockId.Type.AIR or item_count <= 0:
@@ -107,13 +81,11 @@ func refresh_visuals():
 		count_label.text = ""
 	else:
 		var t = item_type
-		var col = catalog.get_side_color(t) if BlockId.is_valid(t) else Color(1, 0, 1, 1)
+		var col = block_catalog.get_side_color(t) if BlockId.is_valid(t) else Color(1, 0, 1, 1)
 		icon.color = col
 		if item_count > 1:
 			count_label.text = str(item_count)
 		else:
-			count_label.text = ""
-		if item_count <= 0:
 			count_label.text = ""
 
 var _drag_preview_layer: CanvasLayer = null
@@ -152,14 +124,13 @@ func _gui_input(event):
 					else:
 						return
 				var half = int(ceil(float(src_count) / 2.0))
-				var data = {"source_index": slot_index, "drag_count": half, "type": src_type}
+				var data = {"source_index": slot_index, "drag_count": half}
 				_show_high_layer_preview(src_type, half)
-				if has_method("force_drag"):
-					force_drag(data, Control.new())
+				force_drag(data, Control.new())
 				get_viewport().set_input_as_handled()
 				return
 
-func _get_drag_data(at_position):
+func _get_drag_data(_at_position):
 	if item_type == null or item_count <= 0:
 		return null
 	if inventory_model == null:
@@ -169,12 +140,12 @@ func _get_drag_data(at_position):
 		return null
 	var count = s["count"] as int
 	var type = s["type"]
-	var data = {"source_index": slot_index, "drag_count": count, "type": type}
+	var data = {"source_index": slot_index, "drag_count": count}
 	_show_high_layer_preview(type, count)
 	set_drag_preview(Control.new())
 	return data
 
-func _can_drop_data(at_position, data) -> bool:
+func _can_drop_data(_at_position, data) -> bool:
 	if data == null or not data is Dictionary:
 		return false
 	if not data.has("source_index") or not data.has("drag_count"):
@@ -183,23 +154,15 @@ func _can_drop_data(at_position, data) -> bool:
 		return false
 	var src_idx = int(data.get("source_index", -1))
 	var drag_count = int(data.get("drag_count", 0))
-	var drag_type = data.get("type", null)
-	if drag_type != null and not can_accept_type(drag_type):
-		return false
 	return inventory_model.can_handle_drop(src_idx, slot_index, drag_count)
 
-func _drop_data(at_position, data):
+func _drop_data(_at_position, data):
 	if data == null or not data is Dictionary:
 		return
 	if inventory_model == null:
 		return
 	var src_idx = int(data.get("source_index", -1))
 	var drag_count = int(data.get("drag_count", 0))
-	var drag_type = data.get("type", null)
-	if drag_type != null and not can_accept_type(drag_type):
-		return
-	if not inventory_model.can_handle_drop(src_idx, slot_index, drag_count):
-		return
 	inventory_model.handle_drop(src_idx, slot_index, drag_count)
 
 func _create_drag_preview(type, count: int) -> Control:
@@ -225,7 +188,7 @@ func _create_drag_preview(type, count: int) -> Control:
 	col_rect.position = Vector2(14, 8)
 	col_rect.size = Vector2(36, 36)
 	col_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var col = catalog.get_side_color(type) if BlockId.is_valid(type) else Color(1, 0, 1, 1)
+	var col = block_catalog.get_side_color(type) if BlockId.is_valid(type) else Color(1, 0, 1, 1)
 	col_rect.color = col
 	preview.add_child(col_rect)
 	if count > 1:
@@ -261,5 +224,3 @@ func _hide_high_layer_preview():
 func _notification(what):
 	if what == NOTIFICATION_DRAG_END or what == NOTIFICATION_EXIT_TREE or what == NOTIFICATION_PREDELETE:
 		_hide_high_layer_preview()
-		if what == NOTIFICATION_DRAG_END:
-			refresh_visuals()

@@ -5,7 +5,6 @@
 [resource]
 script = ExtResource("1_def")
 id = 4
-string_id = "stone"
 is_solid = true
 is_opaque = true
 is_raycast_solid = true

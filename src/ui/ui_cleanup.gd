@@ -13,13 +13,10 @@ static func is_stray_canvas_layer(node: Node) -> bool:
 			return true
 	return false
 
-static func free_stray_canvas_layers(root: Node, exclude: Node = null) -> void:
-	if root == null:
-		return
+static func free_stray_canvas_layers(root: Node, exclude: Node) -> void:
 	for child in root.get_children():
 		if child == exclude:
 			continue
 		if is_stray_canvas_layer(child):
-			if is_instance_valid(child):
-				child.visible = false
-				child.queue_free()
+			child.visible = false
+			child.queue_free()

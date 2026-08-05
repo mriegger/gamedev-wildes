@@ -2,7 +2,6 @@ extends Resource
 class_name BlockDefinition
 
 @export var id: BlockId.Type = BlockId.Type.AIR
-@export var string_id: String = ""
 
 @export_group("Physical Properties")
 @export var is_solid: bool = true

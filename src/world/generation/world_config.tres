@@ -12,7 +12,6 @@ water_level = 5
 meadow_radius = 24.0
 meadow_target_height = 9.5
 base_height = 9.0
-subsurface_depth_default = 3
 tree_density = 0.012
 tree_trunk_min = 3
 tree_trunk_max = 4

@@ -49,12 +49,11 @@ func get_normalized() -> float:
 func get_phase() -> String:
 	if not DayNightProfile.is_day_time(time_of_day):
 		return "Night (7PM-6AM)"
-	elif time_of_day >= 6.0 and time_of_day < 8.0:
+	if time_of_day >= 6.0 and time_of_day < 8.0:
 		return "Sunrise (6AM-8AM)"
-	elif time_of_day >= 8.0 and time_of_day < 17.0:
+	if time_of_day >= 8.0 and time_of_day < 17.0:
 		return "Daytime (8AM-5PM)"
-	else:
-		return "Sundown (5PM-7PM)"
+	return "Sundown (5PM-7PM)"
 
 func set_paused(p: bool):
 	_paused = p

@@ -8,6 +8,7 @@ const ChunkManager = preload("res://world/streaming/chunk_manager.gd")
 
 @export var config: WorldConfig
 @export var water_profile: WaterProfile
+@export var block_catalog: BlockCatalog
 
 @export var auto_generate_on_ready: bool = true
 
@@ -72,40 +73,17 @@ func _ensure_config_loaded():
 			else:
 				water_profile = loaded_profile
 
-	if pending_save_data.is_empty() and seed_override == -1:
-		var session_path = "user://current_session.json"
-		if FileAccess.file_exists(session_path):
-			var f = FileAccess.open(session_path, FileAccess.READ)
-			if f:
-				var txt = f.get_as_text()
-				f.close()
-				var parsed = JSON.parse_string(txt)
-				if parsed is Dictionary and not parsed.is_empty():
-					var sid = int(parsed.get("slot_id", -1))
-					if sid != -1 and SaveManager.slot_exists(sid):
-						var full = SaveManager.load_slot(sid)
-						if full.get("exists", false):
-							pending_save_data = full
-							seed_override = int(full.get("seed", seed_override))
-					elif parsed.has("seed"):
-						seed_override = int(parsed["seed"])
-						pending_save_data = parsed
-
 func _prepare_config():
-	if config == null:
-		return
 	config = config.duplicate() as WorldConfig
 	if seed_override != -1:
 		config.seed_value = seed_override
 	elif pending_save_data.is_empty():
 		var rng = RandomNumberGenerator.new()
 		rng.randomize()
-		var random_seed = rng.randi_range(1, 2147483646)
-		config.seed_value = random_seed
-	else:
-		if pending_save_data.has("seed") and seed_override == -1:
-			seed_override = int(pending_save_data["seed"])
-			config.seed_value = seed_override
+		config.seed_value = rng.randi_range(1, 2147483646)
+	elif pending_save_data.has("seed"):
+		seed_override = int(pending_save_data["seed"])
+		config.seed_value = seed_override
 
 	var jitter_rng = RandomNumberGenerator.new()
 	jitter_rng.seed = config.seed_value
@@ -120,9 +98,18 @@ func _prepare_config():
 func _generate_world_sync():
 	terrain_generator = TerrainGenerator.new(config)
 	var gen = terrain_generator.generate_all()
+	_create_world_model(gen)
 
-	voxel_model = VoxelWorld.new(chunk_size, max_build_y)
-	voxel_model.setup_infinite(chunk_size, max_build_y)
+	_prepare_materials()
+	_setup_rendering_systems()
+
+	var initial_pos = _get_initial_position()
+	chunk_manager.ensure_chunks_around(initial_pos, true)
+	for coord in chunk_manager.data_chunks.keys():
+		torch_renderer.load_torches_for_chunk(coord.x, coord.y, chunk_size, voxel_model.torch_attachments)
+
+func _create_world_model(gen: Dictionary):
+	voxel_model = VoxelWorld.new(chunk_size, max_build_y, block_catalog)
 	voxel_model.water_level = config.water_level
 	voxel_model.set_generator_ref(terrain_generator)
 	voxel_model.apply_chunk_gen(gen)
@@ -133,9 +120,7 @@ func _generate_world_sync():
 
 	voxel_model.block_edit_committed.connect(_on_block_edit_committed)
 
-	_prepare_materials()
-	_setup_rendering_systems()
-
+func _get_initial_position() -> Vector3:
 	var initial_pos = voxel_model.get_spawn_position()
 	if not pending_save_data.is_empty() and pending_save_data.has("player_position"):
 		var arr = pending_save_data["player_position"]
@@ -143,12 +128,7 @@ func _generate_world_sync():
 			var p = Vector3(float(arr[0]), float(arr[1]), float(arr[2]))
 			if p != Vector3.ZERO and p.length() > 1.0:
 				initial_pos = p
-	chunk_manager.ensure_chunks_around(initial_pos, true)
-	if torch_renderer and voxel_model:
-		for coord in chunk_manager.data_chunks.keys():
-			torch_renderer.load_torches_for_chunk(coord.x, coord.y, chunk_size, voxel_model.torch_attachments)
-	if _player_ref:
-		chunk_manager.set_player_ref(_player_ref)
+	return initial_pos
 
 func initialize_world_async() -> void:
 	if _has_generated:
@@ -175,17 +155,7 @@ func initialize_world_async() -> void:
 	await get_tree().process_frame
 
 	generation_progress.emit("model", 0.4, "Building voxel model...")
-	voxel_model = VoxelWorld.new(chunk_size, max_build_y)
-	voxel_model.setup_infinite(chunk_size, max_build_y)
-	voxel_model.water_level = config.water_level
-	voxel_model.set_generator_ref(terrain_generator)
-	voxel_model.apply_chunk_gen(gen)
-	voxel_model.apply_tree_chunk(gen)
-
-	if not pending_save_data.is_empty():
-		_apply_save_data_to_model(pending_save_data)
-
-	voxel_model.block_edit_committed.connect(_on_block_edit_committed)
+	_create_world_model(gen)
 	await get_tree().process_frame
 
 	generation_progress.emit("materials", 0.5, "Preparing materials...")
@@ -203,18 +173,8 @@ func initialize_world_async() -> void:
 	_has_generated = true
 
 func _generate_chunks_async_streaming() -> void:
-	if chunk_renderer == null:
-		return
-	chunk_renderer.clear()
-	if chunk_manager:
-		chunk_manager.clear()
-	var initial_pos = voxel_model.get_spawn_position() if voxel_model else Vector3(0,10,0)
-	if not pending_save_data.is_empty() and pending_save_data.has("player_position"):
-		var arr = pending_save_data["player_position"]
-		if arr is Array and arr.size() == 3:
-			var p = Vector3(float(arr[0]), float(arr[1]), float(arr[2]))
-			if p != Vector3.ZERO and p.length() > 1.0:
-				initial_pos = p
+	chunk_manager.clear()
+	var initial_pos = _get_initial_position()
 	var center_chunk = ChunkCoord.world_to_chunk(initial_pos, chunk_size)
 	var desired = ChunkCoord.get_chunks_in_radius_infinite(center_chunk, config.render_distance)
 	desired = ChunkCoord.sort_by_distance(desired, center_chunk)
@@ -222,11 +182,9 @@ func _generate_chunks_async_streaming() -> void:
 	var done = 0
 	for coord in desired:
 		chunk_renderer.rebuild_immediate(coord.x, coord.y)
-		if chunk_manager:
-			chunk_manager.data_chunks[coord] = true
-			chunk_manager.visible_chunks[coord] = true
-		if torch_renderer and voxel_model:
-			torch_renderer.load_torches_for_chunk(coord.x, coord.y, chunk_size, voxel_model.torch_attachments)
+		chunk_manager.data_chunks[coord] = true
+		chunk_manager.visible_chunks[coord] = true
+		torch_renderer.load_torches_for_chunk(coord.x, coord.y, chunk_size, voxel_model.torch_attachments)
 		done += 1
 		var prog = 0.55 + (float(done) / float(max(total,1))) * 0.4
 		if done % 2 == 0 or done == total:
@@ -234,8 +192,7 @@ func _generate_chunks_async_streaming() -> void:
 			await get_tree().process_frame
 		if done % 5 == 0:
 			await get_tree().process_frame
-	if chunk_manager:
-		chunk_manager.last_player_chunk = center_chunk
+	chunk_manager.last_player_chunk = center_chunk
 
 func set_pending_save_data(data: Dictionary):
 	pending_save_data = data
@@ -245,8 +202,6 @@ func set_pending_save_data(data: Dictionary):
 			config.seed_value = seed_override
 
 func _apply_save_data_to_model(save_dict: Dictionary):
-	if voxel_model == null:
-		return
 	var placed_raw = save_dict.get("placed_blocks", {})
 	var removed_raw = save_dict.get("removed_blocks", {})
 	var torch_raw = save_dict.get("torch_attachments", {})
@@ -294,38 +249,29 @@ func _on_block_edit_committed(edit: BlockEdit):
 		if edit.is_mine() and edit.old_id == BlockId.Type.TORCH:
 			torch_renderer.remove_torch(edit.pos)
 
-func _get_chunk_container() -> Node3D:
-	return $Chunks as Node3D
-func _get_torch_container() -> Node3D:
-	return $SpecialBlocks/TorchContainer as Node3D
-
 func set_player_ref(p: Node3D):
 	_player_ref = p
-	if chunk_manager:
-		chunk_manager.set_player_ref(p)
 	if torch_renderer:
 		torch_renderer.set_player_ref(p)
 
+func shutdown():
+	set_process(false)
+	if chunk_manager:
+		chunk_manager.shutdown()
+	elif chunk_renderer:
+		chunk_renderer.shutdown()
+
 func _setup_rendering_systems():
-	chunk_mesher = ChunkMesher.new(chunk_size, max_build_y, seed_value, enable_ao)
-	chunk_mesher.configure_from_config(config)
-	var c_container = _get_chunk_container()
+	chunk_mesher = ChunkMesher.new(chunk_size, max_build_y, seed_value, enable_ao, block_catalog)
 	chunk_renderer = ChunkRenderSystem.new()
-	chunk_renderer.setup(c_container, chunk_mesher, terrain_material, chunk_size, max_build_y, seed_value, voxel_model)
+	chunk_renderer.setup($Chunks as Node3D, chunk_mesher, terrain_material, chunk_size, max_build_y, seed_value, voxel_model)
 	if water_block_material:
 		chunk_renderer.set_water_material(water_block_material)
-	if terrain_generator:
-		chunk_renderer.set_terrain_generator(terrain_generator)
-	var t_container = _get_torch_container()
-	torch_renderer = TorchRenderSystem.new(t_container)
+	torch_renderer = TorchRenderSystem.new($SpecialBlocks/TorchContainer as Node3D, block_catalog)
 	chunk_manager = ChunkManager.new()
 	chunk_manager.setup(config, voxel_model, chunk_renderer, terrain_generator)
-	if not chunk_manager.chunk_loaded.is_connected(_on_chunk_loaded):
-		chunk_manager.chunk_loaded.connect(_on_chunk_loaded)
-	if not chunk_manager.chunk_unloaded.is_connected(_on_chunk_unloaded):
-		chunk_manager.chunk_unloaded.connect(_on_chunk_unloaded)
-	if _player_ref:
-		chunk_manager.set_player_ref(_player_ref)
+	chunk_manager.chunk_loaded.connect(_on_chunk_loaded)
+	chunk_manager.chunk_unloaded.connect(_on_chunk_unloaded)
 
 func _prepare_materials():
 	var terrain_shader = load("res://shaders/terrain.gdshader")

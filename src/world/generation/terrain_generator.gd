@@ -26,9 +26,7 @@ const RIVER_WIDE_WEIGHT: float = 0.42
 const LAKE_GRID_CACHE_MAX: int = 1024
 const LAKE_GRID_CACHE_KEEP: int = 768
 
-func _init(p_config: WorldConfig = null):
-	if p_config == null:
-		p_config = WorldConfig.new()
+func _init(p_config: WorldConfig):
 	config = p_config
 	if not config.validate():
 		push_warning("[TerrainGenerator] Invalid config, clamped")
@@ -103,12 +101,6 @@ func _make_noise_set() -> Dictionary:
 
 func _combined_river_factor(core: float, wide: float) -> float:
 	return maxf(core, wide * RIVER_WIDE_WEIGHT)
-
-func _river_factor_from_dict(factors: Dictionary) -> float:
-	return _combined_river_factor(
-		factors.get("core", 0.0) as float,
-		factors.get("wide", 0.0) as float
-	)
 
 func _get_thread_noises() -> Dictionary:
 	var tid = OS.get_thread_caller_id()
@@ -186,64 +178,64 @@ func _load_biomes():
 func _create_fallback_biomes():
 	biomes.clear()
 	var plains = BiomeScript.new()
-	plains.biome_id = "plains"; plains.display_name = "Plains"
+	plains.biome_id = "plains"
 	plains.min_temperature = 0.25; plains.max_temperature = 0.65
 	plains.min_humidity = 0.3; plains.max_humidity = 0.6
 	plains.min_continentalness = 0.0; plains.max_continentalness = 0.38
 	plains.min_erosion = 0.35; plains.max_erosion = 0.8
 	plains.min_peaks_valleys = 0.0; plains.max_peaks_valleys = 0.45
-	plains.surface_block = BlockId.Type.GRASS; plains.subsurface_block = BlockId.Type.DIRT; plains.filler_block = BlockId.Type.STONE; plains.shore_block = BlockId.Type.SAND; plains.shore_subsurface_block = BlockId.Type.SAND
-	plains.subsurface_depth = 3; plains.tree_density = 0.005; plains.grass_tint = Color(0.55, 0.82, 0.32)
+	plains.surface_block = BlockId.Type.GRASS; plains.shore_block = BlockId.Type.SAND
+	plains.tree_density = 0.005
 	biomes.append(plains)
 	var forest = BiomeScript.new()
-	forest.biome_id = "forest"; forest.display_name = "Forest"
+	forest.biome_id = "forest"
 	forest.min_temperature = 0.3; forest.max_temperature = 0.7
 	forest.min_humidity = 0.45; forest.max_humidity = 0.85
 	forest.min_continentalness = 0.2; forest.max_continentalness = 0.6
 	forest.min_erosion = 0.1; forest.max_erosion = 0.5
 	forest.min_peaks_valleys = 0.2; forest.max_peaks_valleys = 0.65
-	forest.surface_block = BlockId.Type.GRASS; forest.subsurface_block = BlockId.Type.DIRT; forest.filler_block = BlockId.Type.STONE; forest.shore_block = BlockId.Type.SAND; forest.shore_subsurface_block = BlockId.Type.SAND
-	forest.subsurface_depth = 3; forest.tree_density = 0.03; forest.grass_tint = Color(0.38, 0.62, 0.28)
+	forest.surface_block = BlockId.Type.GRASS; forest.shore_block = BlockId.Type.SAND
+	forest.tree_density = 0.03
 	biomes.append(forest)
 	var desert = BiomeScript.new()
-	desert.biome_id = "desert"; desert.display_name = "Desert"
+	desert.biome_id = "desert"
 	desert.min_temperature = 0.72; desert.max_temperature = 1.0
 	desert.min_humidity = 0.0; desert.max_humidity = 0.32
 	desert.min_continentalness = 0.0; desert.max_continentalness = 0.45
 	desert.min_erosion = 0.3; desert.max_erosion = 0.85
 	desert.min_peaks_valleys = 0.0; desert.max_peaks_valleys = 0.35
-	desert.surface_block = BlockId.Type.SAND; desert.subsurface_block = BlockId.Type.SAND; desert.filler_block = BlockId.Type.STONE; desert.shore_block = BlockId.Type.SAND; desert.shore_subsurface_block = BlockId.Type.SAND
-	desert.subsurface_depth = 4; desert.tree_density = 0.0; desert.grass_tint = Color(0.82, 0.76, 0.48)
+	desert.surface_block = BlockId.Type.SAND; desert.shore_block = BlockId.Type.SAND
+	desert.tree_density = 0.0
 	biomes.append(desert)
 	var mountains = BiomeScript.new()
-	mountains.biome_id = "mountains"; mountains.display_name = "Mountains"
+	mountains.biome_id = "mountains"
 	mountains.min_temperature = 0.15; mountains.max_temperature = 0.55
 	mountains.min_humidity = 0.2; mountains.max_humidity = 0.6
 	mountains.min_continentalness = 0.62; mountains.max_continentalness = 1.0
 	mountains.min_erosion = 0.0; mountains.max_erosion = 0.42
 	mountains.min_peaks_valleys = 0.5; mountains.max_peaks_valleys = 1.0
-	mountains.surface_block = BlockId.Type.STONE; mountains.subsurface_block = BlockId.Type.STONE; mountains.filler_block = BlockId.Type.STONE; mountains.shore_block = BlockId.Type.SAND; mountains.shore_subsurface_block = BlockId.Type.SAND
-	mountains.subsurface_depth = 1; mountains.tree_density = 0.002; mountains.grass_tint = Color(0.6, 0.65, 0.62)
+	mountains.surface_block = BlockId.Type.STONE; mountains.shore_block = BlockId.Type.SAND
+	mountains.tree_density = 0.002
 	biomes.append(mountains)
 	var wetland = BiomeScript.new()
-	wetland.biome_id = "wetland"; wetland.display_name = "Wetland"
+	wetland.biome_id = "wetland"
 	wetland.min_temperature = 0.35; wetland.max_temperature = 0.75
 	wetland.min_humidity = 0.62; wetland.max_humidity = 1.0
 	wetland.min_continentalness = 0.0; wetland.max_continentalness = 0.28
 	wetland.min_erosion = 0.45; wetland.max_erosion = 0.92
 	wetland.min_peaks_valleys = 0.0; wetland.max_peaks_valleys = 0.25
-	wetland.surface_block = BlockId.Type.GRASS; wetland.subsurface_block = BlockId.Type.DIRT; wetland.filler_block = BlockId.Type.STONE; wetland.shore_block = BlockId.Type.SAND; wetland.shore_subsurface_block = BlockId.Type.SAND
-	wetland.subsurface_depth = 3; wetland.tree_density = 0.012; wetland.grass_tint = Color(0.42, 0.72, 0.36)
+	wetland.surface_block = BlockId.Type.GRASS; wetland.shore_block = BlockId.Type.SAND
+	wetland.tree_density = 0.012
 	biomes.append(wetland)
 	var highland = BiomeScript.new()
-	highland.biome_id = "highland"; highland.display_name = "Highland"
+	highland.biome_id = "highland"
 	highland.min_temperature = 0.2; highland.max_temperature = 0.6
 	highland.min_humidity = 0.15; highland.max_humidity = 0.55
 	highland.min_continentalness = 0.55; highland.max_continentalness = 0.92
 	highland.min_erosion = 0.5; highland.max_erosion = 0.95
 	highland.min_peaks_valleys = 0.0; highland.max_peaks_valleys = 0.5
-	highland.surface_block = BlockId.Type.GRASS; highland.subsurface_block = BlockId.Type.DIRT; highland.filler_block = BlockId.Type.STONE; highland.shore_block = BlockId.Type.SAND; highland.shore_subsurface_block = BlockId.Type.SAND
-	highland.subsurface_depth = 3; highland.tree_density = 0.008; highland.grass_tint = Color(0.5, 0.72, 0.35)
+	highland.surface_block = BlockId.Type.GRASS; highland.shore_block = BlockId.Type.SAND
+	highland.tree_density = 0.008
 	biomes.append(highland)
 
 func _ensure_biomes():
@@ -263,25 +255,6 @@ func _find_closest_biome(params: PackedFloat32Array) -> Resource:
 			best = b
 			best_d = d
 	return best
-
-func get_biome_at(x: int, z: int, thread_noises: Variant = null) -> Resource:
-	if noise_continentalness == null:
-		setup_noises()
-	_ensure_biomes()
-	var step: int = config.param_lattice_step if config and config.param_lattice_step > 0 else 4
-	var lx: int = int(floor(float(x) / float(step))) * step
-	var lz: int = int(floor(float(z) / float(step))) * step
-	var tn: Dictionary
-	if thread_noises != null and thread_noises is Dictionary:
-		tn = thread_noises as Dictionary
-	else:
-		tn = _get_thread_noises()
-	var params = _raw_params_at(lx, lz, tn)
-	return _find_closest_biome(params)
-
-func get_biome_at_with_params(params: PackedFloat32Array) -> Resource:
-	_ensure_biomes()
-	return _find_closest_biome(params)
 
 # --- CDF flattening ---
 
@@ -354,23 +327,21 @@ func _get_lattice_raw(lx: int, lz: int, tn: Dictionary, cache: Dictionary) -> Pa
 	cache[key] = raw
 	return raw
 
-func _sample_params(x: int, z: int, tn: Dictionary, lattice_cache: Dictionary) -> PackedFloat32Array:
-	var step: int = config.param_lattice_step if config else 4
+func _sample_height_params(x: int, z: int, tn: Dictionary, lattice_cache: Dictionary) -> Vector3:
+	var step: int = config.param_lattice_step
 	if step <= 1:
-		return _raw_params_at(x, z, tn)
+		var raw = _raw_params_at(x, z, tn)
+		return Vector3(raw[Biome.IDX_CONTINENTALNESS], raw[Biome.IDX_EROSION], raw[Biome.IDX_PEAKS_VALLEYS])
 	var x0: int = int(floor(float(x) / float(step))) * step
 	var z0: int = int(floor(float(z) / float(step))) * step
 	var tx: float = float(x - x0) / float(step)
 	var tz: float = float(z - z0) / float(step)
-	tx = clamp(tx, 0.0, 1.0)
-	tz = clamp(tz, 0.0, 1.0)
 	var c00 = _get_lattice_raw(x0, z0, tn, lattice_cache)
 	var c10 = _get_lattice_raw(x0 + step, z0, tn, lattice_cache)
 	var c01 = _get_lattice_raw(x0, z0 + step, tn, lattice_cache)
 	var c11 = _get_lattice_raw(x0 + step, z0 + step, tn, lattice_cache)
-	var out = PackedFloat32Array()
-	out.resize(5)
-	for i in 5:
+	var out = Vector3.ZERO
+	for i in 3:
 		var v00 = c00[i]
 		var v10 = c10[i]
 		var v01 = c01[i]
@@ -423,7 +394,7 @@ func release_thread_caches(tid: int) -> void:
 	_thread_noises.erase(tid)
 	_noise_mutex.unlock()
 
-func _get_lake_for_grid_cell(gx: int, gz: int, lake_cache: Variant = null) -> Variant:
+func _get_lake_for_grid_cell(gx: int, gz: int, lake_cache: Variant) -> Variant:
 	if not config.lake_enabled:
 		return null
 	var cache: Dictionary
@@ -443,9 +414,9 @@ func _get_lake_for_grid_cell(gx: int, gz: int, lake_cache: Variant = null) -> Va
 			cache.erase(keys[i])
 	return result
 
-func _get_lake_info_fast(x: int, z: int, lake_cache: Variant = null) -> Dictionary:
+func _get_lake_info_fast(x: int, z: int, lake_cache: Variant = null) -> Vector2:
 	if not config.lake_enabled:
-		return {"factor": 0.0, "depth": 0}
+		return Vector2.ZERO
 	var best = 0.0
 	var best_depth = 0
 	var grid = config.lake_grid_size
@@ -467,16 +438,16 @@ func _get_lake_info_fast(x: int, z: int, lake_cache: Variant = null) -> Dictiona
 				best = smooth
 				best_depth = lake["depth"]
 				if best > 0.95:
-					return {"factor": best, "depth": best_depth}
-	return {"factor": best, "depth": best_depth}
+					return Vector2(best, best_depth)
+	return Vector2(best, best_depth)
 
-func _apply_lake_carve_with_info(base_h: float, info: Dictionary) -> float:
+func _apply_lake_carve_with_info(base_h: float, info: Vector2) -> float:
 	if not config.lake_enabled:
 		return base_h
-	var factor = info.get("factor", 0.0) as float
+	var factor = info.x
 	if factor <= 0.001:
 		return base_h
-	var depth = info.get("depth", 0) as int
+	var depth = int(info.y)
 	var target_h = float(config.water_level) - 1.2 - float(depth) * factor
 	target_h = max(target_h, 1.0)
 	var blended = lerp(base_h, target_h, factor * config.lake_rim_blend)
@@ -486,16 +457,11 @@ func _apply_lake_carve_with_info(base_h: float, info: Dictionary) -> float:
 		return blended
 	return base_h
 
-func _get_river_factors_fast(x: int, z: int, thread_noises: Variant = null) -> Dictionary:
+func _get_river_factors_fast(x: int, z: int, thread_noises: Dictionary) -> Vector2:
 	if not config.river_enabled:
-		return {"core": 0.0, "wide": 0.0}
-	var river_n = noise_river
-	var erosion_n = noise_erosion
-	if thread_noises != null:
-		river_n = thread_noises.get("river", river_n)
-		erosion_n = thread_noises.get("erosion", erosion_n)
-	if river_n == null:
-		return {"core": 0.0, "wide": 0.0}
+		return Vector2.ZERO
+	var river_n = thread_noises["river"] as FastNoiseLite
+	var erosion_n = thread_noises["erosion"] as FastNoiseLite
 	var n = river_n.get_noise_2d(float(x), float(z))
 	var abs_n = absf(n)
 	var core_thr = 0.09
@@ -509,7 +475,7 @@ func _get_river_factors_fast(x: int, z: int, thread_noises: Variant = null) -> D
 		var tc = 1.0 - abs_n / core_thr
 		core_f = tc * tc * (3.0 - 2.0 * tc)
 		core_f = pow(core_f, 0.90)
-	var n2 = erosion_n.get_noise_2d(float(x) * 0.5, float(z) * 0.5) * 0.06 if erosion_n else 0.0
+	var n2 = erosion_n.get_noise_2d(float(x) * 0.5, float(z) * 0.5) * 0.06
 	if wide_f > 0.0:
 		wide_f = clamp(wide_f + n2 * 0.5, 0.0, 1.0)
 	if core_f > 0.0:
@@ -519,13 +485,13 @@ func _get_river_factors_fast(x: int, z: int, thread_noises: Variant = null) -> D
 		var fade = clamp((d_center - (config.meadow_radius - 5.0)) / (config.river_min_dist_from_meadow), 0.0, 1.0)
 		wide_f *= fade
 		core_f *= fade
-	return {"core": core_f, "wide": wide_f}
+	return Vector2(core_f, wide_f)
 
-func _apply_river_carve_with_factors(base_h: float, factors: Dictionary) -> float:
+func _apply_river_carve_with_factors(base_h: float, factors: Vector2) -> float:
 	if not config.river_enabled:
 		return base_h
-	var core = factors.get("core", 0.0) as float
-	var wide = factors.get("wide", 0.0) as float
+	var core = factors.x
+	var wide = factors.y
 	if core <= 0.001 and wide <= 0.001:
 		return base_h
 	var h = base_h
@@ -550,17 +516,18 @@ func _apply_river_carve_with_factors(base_h: float, factors: Dictionary) -> floa
 		return h
 	return base_h
 
-func _compute_base_height_with_params(x: int, z: int, params: PackedFloat32Array) -> float:
-	var continentalness: float = clamp(params[Biome.IDX_CONTINENTALNESS], 0.0, 1.0)
-	var erosion: float = clamp(params[Biome.IDX_EROSION], 0.0, 1.0)
-	var pv: float = clamp(params[Biome.IDX_PEAKS_VALLEYS], 0.0, 1.0)
+func _compute_base_height(x: int, z: int, continentalness: float, erosion: float, pv: float) -> float:
+	continentalness = clamp(continentalness, 0.0, 1.0)
+	erosion = clamp(erosion, 0.0, 1.0)
+	pv = clamp(pv, 0.0, 1.0)
 	var cont_offset: float = config.sample_spline(continentalness, config.continentalness_curve)
 	var amp: float = config.sample_spline(erosion, config.erosion_amplitude_curve)
 	amp = clamp(amp, 0.0, 1.0)
 	var h: float = config.base_height + cont_offset + pv * amp * config.relief_scale
 	var meadow_center = config.get_meadow_center()
-	var d_center = Vector2(x, z).distance_to(meadow_center)
-	if d_center < config.meadow_radius:
+	var offset = Vector2(x, z) - meadow_center
+	if offset.length_squared() < config.meadow_radius * config.meadow_radius:
+		var d_center = offset.length()
 		var t = 1.0 - d_center / config.meadow_radius
 		h = lerp(h, config.meadow_target_height, t * 0.75)
 	return h
@@ -575,88 +542,41 @@ func _is_shore(surface_y: int, water_influence: float) -> bool:
 		return false
 	return water_influence > config.shore_influence_strong or surface_y - config.water_level <= config.shore_height_margin
 
-func compute_height_at_world(x: int, z: int, thread_noises: Variant = null) -> Dictionary:
+func compute_column_at_world(x: int, z: int) -> Vector2i:
 	if noise_continentalness == null:
 		setup_noises()
-	var tn: Dictionary
-	if thread_noises != null and thread_noises is Dictionary:
-		tn = thread_noises as Dictionary
-	else:
-		tn = _get_thread_noises()
-	var params: PackedFloat32Array
-	if thread_noises != null and thread_noises is Dictionary:
-		var lattice_cache: Dictionary = {}
-		params = _sample_params(x, z, tn, lattice_cache)
-	else:
-		params = _raw_params_at(x, z, tn)
-	var base = _compute_base_height_with_params(x, z, params)
+	var tn = _get_thread_noises()
+	var params = _raw_params_at(x, z, tn)
+	var base = _compute_base_height(x, z, params[Biome.IDX_CONTINENTALNESS], params[Biome.IDX_EROSION], params[Biome.IDX_PEAKS_VALLEYS])
 	var lake_info = _get_lake_info_fast(x, z)
 	var river_factors = _get_river_factors_fast(x, z, tn)
 	var hf = _apply_lake_carve_with_info(base, lake_info)
 	hf = _apply_river_carve_with_factors(hf, river_factors)
 	var ih = int(round(clamp(hf, 1.0, float(config.max_height))))
-	var rf = _river_factor_from_dict(river_factors)
-	return {
-		"h": ih,
-		"lake_factor": lake_info.get("factor", 0.0) as float,
-		"lake_info": lake_info,
-		"river_factors": river_factors,
-		"river_factor": rf,
-		"params": params,
-	}
+	var rf = _combined_river_factor(river_factors.x, river_factors.y)
+	var block_type = _compute_type_with_params(x, z, ih, params, lake_info.x, rf)
+	return Vector2i(ih, block_type)
 
-func _compute_type_with_params(x: int, z: int, h: int, params: PackedFloat32Array, lake_factor: float, river_factor: float) -> Dictionary:
+func _compute_type_with_params(x: int, z: int, h: int, params: PackedFloat32Array, lake_factor: float, river_factor: float) -> int:
+	return _compute_type_with_biome(x, z, h, _find_closest_biome(params), lake_factor, river_factor)
+
+func _compute_type_with_biome(x: int, z: int, h: int, biome: Resource, lake_factor: float, river_factor: float) -> int:
 	var meadow_center = config.get_meadow_center()
 	var meadow_radius = config.meadow_radius
-	var d_center = Vector2(x, z).distance_to(meadow_center)
 	var is_lake = lake_factor > 0.01
 	var is_river = river_factor > 0.01
-	if d_center < meadow_radius - 2.0:
+	if Vector2(x, z).distance_squared_to(meadow_center) < (meadow_radius - 2.0) * (meadow_radius - 2.0):
 		if (is_lake and lake_factor > 0.5 and h <= config.water_level + 1) or (is_river and river_factor > 0.55 and h <= config.water_level + 1):
-			return {"type": BlockId.Type.SAND}
-		else:
-			return {"type": BlockId.Type.GRASS}
-	var water_influence: float = max(lake_factor, river_factor)
-	if _is_shore(h, water_influence):
-		var shore_biome = _find_closest_biome(params)
-		if shore_biome != null:
-			return {"type": shore_biome.shore_block}
-		return {"type": BlockId.Type.SAND}
-	var biome = _find_closest_biome(params)
-	if biome == null:
-		return {"type": BlockId.Type.GRASS}
-	return {"type": biome.surface_block}
-
-func _compute_type_with_biome(x: int, z: int, h: int, biome: Resource, lake_factor: float, river_factor: float) -> Dictionary:
-	var meadow_center = config.get_meadow_center()
-	var meadow_radius = config.meadow_radius
-	var d_center = Vector2(x, z).distance_to(meadow_center)
-	var is_lake = lake_factor > 0.01
-	var is_river = river_factor > 0.01
-	if d_center < meadow_radius - 2.0:
-		if (is_lake and lake_factor > 0.5 and h <= config.water_level + 1) or (is_river and river_factor > 0.55 and h <= config.water_level + 1):
-			return {"type": BlockId.Type.SAND}
-		else:
-			return {"type": BlockId.Type.GRASS}
+			return BlockId.Type.SAND
+		return BlockId.Type.GRASS
 	var water_influence: float = max(lake_factor, river_factor)
 	if _is_shore(h, water_influence):
 		if biome != null:
-			return {"type": biome.shore_block}
-		return {"type": BlockId.Type.SAND}
+			return biome.shore_block
+		return BlockId.Type.SAND
 	if biome == null:
-		return {"type": BlockId.Type.GRASS}
-	return {"type": biome.surface_block}
-
-func _compute_type_from_cached(x: int, z: int, h: int, lake_factor: float, river_factor: float = 0.0, thread_noises: Variant = null) -> Dictionary:
-	var params: PackedFloat32Array
-	if thread_noises != null and thread_noises is Dictionary:
-		var tn = thread_noises as Dictionary
-		var cache: Dictionary = {}
-		params = _sample_params(x, z, tn, cache)
-	else:
-		var tn2 = _get_thread_noises()
-		params = _raw_params_at(x, z, tn2)
-	return _compute_type_with_params(x, z, h, params, lake_factor, river_factor)
+		return BlockId.Type.GRASS
+	return biome.surface_block
 
 func build_cache_with_generation(
 	origin_x: int,
@@ -703,8 +623,8 @@ func build_cache_with_generation(
 
 	for x in range(ext_min_x, ext_max_x + 1):
 		for z in range(ext_min_z, ext_max_z + 1):
-			var params = _sample_params(x, z, tn, lattice_cache)
-			var base = _compute_base_height_with_params(x, z, params)
+			var params = _sample_height_params(x, z, tn, lattice_cache)
+			var base = _compute_base_height(x, z, params.x, params.y, params.z)
 			var lake_info = _get_lake_info_fast(x, z, lake_cache)
 			var river_factors = _get_river_factors_fast(x, z, tn)
 			var hf = _apply_lake_carve_with_info(base, lake_info)
@@ -720,37 +640,26 @@ func build_cache_with_generation(
 	var max_diff_dict: Dictionary = {}
 	var biome_dict: Dictionary = {}
 
-	var step: int = config.param_lattice_step if config else 4
+	var step: int = config.param_lattice_step
 	var lattice_biome_cache: Dictionary = {}
 
 	for x in range(origin_x - 1, origin_x + cs + 1):
 		for z in range(origin_z - 1, origin_z + cs + 1):
 			var key = Vector2i(x, z)
-			var h = ext_h.get(key, -1)
-			if h == -1:
-				var p2 = _sample_params(x, z, tn, lattice_cache)
-				var b2 = _compute_base_height_with_params(x, z, p2)
-				var li2 = _get_lake_info_fast(x, z, lake_cache)
-				var rf2 = _get_river_factors_fast(x, z, tn)
-				var hf2 = _apply_lake_carve_with_info(b2, li2)
-				hf2 = _apply_river_carve_with_factors(hf2, rf2)
-				h = int(round(clamp(hf2, 1.0, float(config.max_height))))
-				ext_h[key] = h
-				ext_lake_info[key] = li2
-				ext_river_factors[key] = rf2
+			var h = ext_h[key] as int
 			height_dict[key] = h
-			var lake_info = ext_lake_info.get(key, {"factor": 0.0, "depth": 0}) as Dictionary
-			var river_factors = ext_river_factors.get(key, {"core": 0.0, "wide": 0.0}) as Dictionary
-			var lf = lake_info.get("factor", 0.0) as float
-			var rf = _river_factor_from_dict(river_factors)
+			var lake_info = ext_lake_info[key] as Vector2
+			var river_factors = ext_river_factors[key] as Vector2
+			var lf = lake_info.x
+			var rf = _combined_river_factor(river_factors.x, river_factors.y)
 			var max_diff = 0
 			var combined = max(lf, rf)
 			if combined < 0.35:
 				var h0 = h
-				var n1 = ext_h.get(Vector2i(x + 1, z), h0)
-				var n2 = ext_h.get(Vector2i(x - 1, z), h0)
-				var n3 = ext_h.get(Vector2i(x, z + 1), h0)
-				var n4 = ext_h.get(Vector2i(x, z - 1), h0)
+				var n1 = ext_h[Vector2i(x + 1, z)]
+				var n2 = ext_h[Vector2i(x - 1, z)]
+				var n3 = ext_h[Vector2i(x, z + 1)]
+				var n4 = ext_h[Vector2i(x, z - 1)]
 				max_diff = max(abs(n1 - h0), abs(n2 - h0))
 				max_diff = max(max_diff, abs(n3 - h0))
 				max_diff = max(max_diff, abs(n4 - h0))
@@ -760,13 +669,12 @@ func build_cache_with_generation(
 			var lattice_key = Vector2i(lx, lz)
 			var biome: Resource = lattice_biome_cache.get(lattice_key, null) as Resource
 			if biome == null:
-				var cell_params = _raw_params_at(lx, lz, tn)
+				var cell_params = _get_lattice_raw(lx, lz, tn, lattice_cache)
 				biome = _find_closest_biome(cell_params)
 				lattice_biome_cache[lattice_key] = biome
 			if biome != null:
 				biome_dict[key] = biome
-			var tb = _compute_type_with_biome(x, z, h, biome, lf, rf)
-			type_dict[key] = tb.get("type", BlockId.Type.GRASS) as int
+			type_dict[key] = _compute_type_with_biome(x, z, h, biome, lf, rf)
 			max_diff_dict[key] = max_diff
 
 	var out_tree_fast: Dictionary = {}
@@ -779,33 +687,25 @@ func build_cache_with_generation(
 	for x in range(origin_x, origin_x + cs):
 		for z in range(origin_z, origin_z + cs):
 			var key = Vector2i(x, z)
-			var h = height_dict.get(key, -1)
-			if h == -1:
-				h = ext_h.get(key, -1)
-				if h == -1:
-					continue
+			var h = height_dict[key] as int
 			if h <= config.water_level + 2:
 				continue
-			var lake_info = ext_lake_info.get(key, {"factor": 0.0, "depth": 0}) as Dictionary
-			var river_factors = ext_river_factors.get(key, {"core": 0.0, "wide": 0.0}) as Dictionary
-			var lf = lake_info.get("factor", 0.0) as float
-			var rf = _river_factor_from_dict(river_factors)
+			var lake_info = ext_lake_info[key] as Vector2
+			var river_factors = ext_river_factors[key] as Vector2
+			var lf = lake_info.x
+			var rf = _combined_river_factor(river_factors.x, river_factors.y)
 			if lf > 0.15 or rf > 0.12:
 				continue
-			var ttype = type_dict.get(key, -1)
+			var ttype = type_dict[key]
 			if ttype != BlockId.Type.GRASS:
 				continue
-			if Vector2(x, z).distance_to(meadow_center) < meadow_radius - 2.0:
+			if Vector2(x, z).distance_squared_to(meadow_center) < (meadow_radius - 2.0) * (meadow_radius - 2.0):
 				continue
-			var max_diff = max_diff_dict.get(key, 0) as int
+			var max_diff = max_diff_dict[key] as int
 			if max_diff > 1:
 				continue
-			var biome = biome_dict.get(key, null) as Resource
-			var biome_density: float = 0.012
-			if biome != null:
-				biome_density = biome.tree_density
-			else:
-				biome_density = config.tree_density
+			var biome = biome_dict[key] as Resource
+			var biome_density: float = biome.tree_density
 			if biome_density <= 0.0:
 				continue
 			var height_factor = clamp((float(h) - config.base_height) / 6.0, 0.2, 1.0)
@@ -817,7 +717,7 @@ func build_cache_with_generation(
 			var too_close = false
 			for p in tree_positions:
 				if abs(p.x - x) < 4 and abs(p.y - z) < 4:
-					if Vector2i(x, z).distance_to(p) < config.tree_spacing:
+					if Vector2i(x, z).distance_squared_to(p) < config.tree_spacing * config.tree_spacing:
 						too_close = true
 						break
 			if too_close:
@@ -850,78 +750,48 @@ func build_cache_with_generation(
 
 	var cache_dict = null
 	if not terrain_only:
-		var cache: Array = []
+		var cache = PackedInt32Array()
 		cache.resize(cache_x * size_y * cache_z)
+		cache.fill(-1)
 		for lx in range(cache_x):
 			var wx = origin_x + lx - 1
+			var column_offset = lx * size_y * cache_z
 			for lz in range(cache_z):
 				var wz = origin_z + lz - 1
 				var col_key = Vector2i(wx, wz)
-				var base_h = height_dict.get(col_key, -1) as int
-				var base_top_t = type_dict.get(col_key, -1) as int
-				if base_h == -1:
-					base_h = ext_h.get(col_key, -1) as int
-					if base_h != -1:
-						var lake_info = ext_lake_info.get(col_key, {"factor": 0.0, "depth": 0}) as Dictionary
-						var river_factors = ext_river_factors.get(col_key, {"core": 0.0, "wide": 0.0}) as Dictionary
-						var lf = lake_info.get("factor", 0.0) as float
-						var rf = _river_factor_from_dict(river_factors)
-						var tb = _compute_type_from_cached(wx, wz, base_h, lf, rf, thread_noises)
-						base_top_t = tb["type"]
-				for ly in range(size_y):
-					var idx = (lx * size_y * cache_z) + (ly * cache_z) + lz
-					var wy = ly
-					var p = Vector3i(wx, wy, wz)
-					if placed_snap.has(p):
-						cache[idx] = placed_snap[p]
-						continue
-					if removed_snap.has(p):
-						cache[idx] = -1
-						continue
-					if out_tree_fast.has(p):
-						cache[idx] = out_tree_fast[p]
-						continue
-					if existing_tree_snap.has(p):
-						cache[idx] = existing_tree_snap[p]
-						continue
-					if base_h == -1:
-						cache[idx] = -1
-						continue
-					if wy > base_h:
-						if wy <= config.water_level and base_h < config.water_level:
-							var lf = 0.0
-							var rf = 0.0
-							var li = ext_lake_info.get(col_key, null)
-							if li != null:
-								lf = li.get("factor", 0.0) as float
-							var rfi = ext_river_factors.get(col_key, null)
-							if rfi != null:
-								rf = _river_factor_from_dict(rfi)
-							if lf > 0.01 or rf > 0.01 or base_top_t == BlockId.Type.SAND:
-								cache[idx] = BlockId.Type.WATER
-							else:
-								cache[idx] = -1
+				var base_h = height_dict[col_key] as int
+				var base_top_t = type_dict[col_key] as int
+				for ly in range(min(base_h, size_y - 1) + 1):
+					var block_type = base_top_t
+					if base_top_t == BlockId.Type.GRASS:
+						if ly == base_h:
+							block_type = BlockId.Type.GRASS
+						elif ly >= base_h - 2:
+							block_type = BlockId.Type.DIRT
 						else:
-							cache[idx] = -1
-						continue
-					if base_top_t == -1:
-						cache[idx] = -1
-						continue
-					if base_top_t == BlockId.Type.SAND:
-						cache[idx] = BlockId.Type.SAND
-					elif base_top_t == BlockId.Type.STONE:
-						cache[idx] = BlockId.Type.STONE
-					elif base_top_t == BlockId.Type.GRASS:
-						if wy == base_h:
-							cache[idx] = BlockId.Type.GRASS
-						elif wy >= base_h - 2:
-							cache[idx] = BlockId.Type.DIRT
-						else:
-							cache[idx] = BlockId.Type.STONE
-					elif base_top_t == BlockId.Type.DIRT:
-						cache[idx] = BlockId.Type.DIRT
-					else:
-						cache[idx] = base_top_t
+							block_type = BlockId.Type.STONE
+					cache[column_offset + ly * cache_z + lz] = block_type
+				if base_h < config.water_level:
+					var lake_info = ext_lake_info[col_key] as Vector2
+					var river_factors = ext_river_factors[col_key] as Vector2
+					var lf = lake_info.x
+					var rf = _combined_river_factor(river_factors.x, river_factors.y)
+					if lf > 0.01 or rf > 0.01 or base_top_t == BlockId.Type.SAND:
+						for ly in range(base_h + 1, min(config.water_level, size_y - 1) + 1):
+							cache[column_offset + ly * cache_z + lz] = BlockId.Type.WATER
+		var overlays: Array[Dictionary] = [existing_tree_snap, out_tree_fast, removed_snap, placed_snap]
+		for overlay_index in range(overlays.size()):
+			var overlay = overlays[overlay_index]
+			for position in overlay:
+				if not position is Vector3i:
+					continue
+				var p = position as Vector3i
+				var lx = p.x - origin_x + 1
+				var lz = p.z - origin_z + 1
+				if lx < 0 or lx >= cache_x or p.y < 0 or p.y >= size_y or lz < 0 or lz >= cache_z:
+					continue
+				var idx = lx * size_y * cache_z + p.y * cache_z + lz
+				cache[idx] = -1 if overlay_index == 2 else overlay[position]
 		cache_dict = {
 			"cache": cache,
 			"origin_x": origin_x,
@@ -939,30 +809,18 @@ func build_cache_with_generation(
 		"type": type_dict,
 		"tree_block_fast": out_tree_fast,
 		"positions": tree_positions,
-		"biome": biome_dict,
 	}
 	return result
-
-func generate_chunk_payload_for_terrain(origin_x: int, origin_z: int, chunk_size: int, terrain_only: bool = false) -> Dictionary:
-	var payload = build_cache_with_generation(origin_x, origin_z, chunk_size, config.max_build_y, {}, {}, {}, terrain_only)
-	return {
-		"height": payload.get("height", {}),
-		"type": payload.get("type", {}),
-		"tree_block_fast": payload.get("tree_block_fast", {}),
-		"positions": payload.get("positions", []),
-		"biome": payload.get("biome", {}),
-	}
 
 func generate_all() -> Dictionary:
 	setup_noises()
 	var init_radius = int(config.meadow_radius + 20)
 	var size = init_radius * 2
-	var payload = generate_chunk_payload_for_terrain(-init_radius, -init_radius, size, true)
+	var payload = build_cache_with_generation(-init_radius, -init_radius, size, config.max_build_y, {}, {}, {}, true)
 	var tree_block_fast = payload.get("tree_block_fast", {}) as Dictionary
 	return {
-		"height_map": payload.get("height", {}),
-		"type_map": payload.get("type", {}),
+		"height": payload.get("height", {}),
+		"type": payload.get("type", {}),
 		"tree_block_fast": tree_block_fast,
 		"positions": payload.get("positions", []),
 	}
-

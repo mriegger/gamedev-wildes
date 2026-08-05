@@ -5,7 +5,6 @@
 [resource]
 script = ExtResource("1_def")
 id = 5
-string_id = "log"
 is_solid = true
 is_opaque = true
 is_raycast_solid = true

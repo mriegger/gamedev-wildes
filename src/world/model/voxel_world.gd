@@ -4,9 +4,12 @@ class_name VoxelWorld
 signal block_edit_committed(edit: BlockEdit)
 signal terrain_chunk_evicted(coord: Vector2i)
 
+const NO_SURFACE_Y: float = -9999.0
+
 var chunk_size: int = 20
 var max_build_y: int = 36
 var water_level: int = 5
+var block_catalog: BlockCatalog
 
 var type_map_dict: Dictionary = {}
 var height_map_dict: Dictionary = {}
@@ -28,9 +31,10 @@ var cell_revisions: Dictionary = {}
 var _highest_cache: Dictionary = {}
 var torch_attachments: Dictionary = {}
 
-func _init(p_chunk_size: int = 20, p_max_build_y: int = 36):
+func _init(p_chunk_size: int, p_max_build_y: int, p_block_catalog: BlockCatalog = null):
 	chunk_size = p_chunk_size
 	max_build_y = p_max_build_y
+	block_catalog = p_block_catalog if p_block_catalog != null else BlockCatalog.new()
 	water_level = 5
 
 func setup_infinite(p_chunk_size: int, p_max_y: int):
@@ -52,11 +56,6 @@ func setup_infinite(p_chunk_size: int, p_max_y: int):
 func set_generator_ref(gen: TerrainGenerator):
 	_generator_ref = gen
 
-func _prune_revisions():
-	for key in cell_revisions.keys():
-		if not placed_blocks.has(key) and not removed_blocks.has(key):
-			cell_revisions.erase(key)
-
 func configure_terrain_cache(render_dist: int, unload_padding: int):
 	var keep = render_dist + unload_padding
 	var touched_area = ((keep + 1) * 2 + 1) * ((keep + 1) * 2 + 1)
@@ -70,21 +69,21 @@ func _touch_terrain_chunk(coord: Vector2i):
 	_terrain_lru_mutex.unlock()
 	generated_terrain_chunks[coord] = true
 
-func prune_terrain_cache(max_to_evict: int = -1) -> int:
+func prune_terrain_cache(max_to_evict: int) -> int:
 	_terrain_lru_mutex.lock()
 	if _terrain_chunk_lru.size() <= max_terrain_cache_chunks:
 		_terrain_lru_mutex.unlock()
 		return 0
 	var to_remove = _terrain_chunk_lru.size() - max_terrain_cache_chunks
-	if max_to_evict != -1:
-		to_remove = min(to_remove, max_to_evict)
+	to_remove = min(to_remove, max_to_evict)
 	var to_evict: Array[Vector2i] = []
-	var lru_keys = _terrain_chunk_lru.keys()
-	var evict_count = min(to_remove, lru_keys.size())
-	for i in range(evict_count):
-		var coord = lru_keys[i] as Vector2i
-		_terrain_chunk_lru.erase(coord)
+	for key in _terrain_chunk_lru:
+		var coord = key as Vector2i
 		to_evict.append(coord)
+		if to_evict.size() >= to_remove:
+			break
+	for coord in to_evict:
+		_terrain_chunk_lru.erase(coord)
 	_terrain_lru_mutex.unlock()
 
 	var evicted: Array[Vector2i] = []
@@ -108,7 +107,6 @@ func prune_terrain_cache(max_to_evict: int = -1) -> int:
 
 	for coord in evicted:
 		terrain_chunk_evicted.emit(coord)
-	_prune_revisions()
 	return evicted.size()
 
 func ensure_column_generated(x: int, z: int):
@@ -117,13 +115,9 @@ func ensure_column_generated(x: int, z: int):
 	var key = Vector2i(x, z)
 	if height_map_dict.has(key) and type_map_dict.has(key):
 		return
-	var res = _generator_ref.compute_height_at_world(x, z)
-	var h = res.get("h", 1) as int
-	height_map_dict[key] = h
-	var lf = res.get("lake_factor", 0.0) as float
-	var rf = res.get("river_factor", 0.0) as float
-	var tb = _generator_ref._compute_type_from_cached(x, z, h, lf, rf)
-	type_map_dict[key] = tb.get("type", BlockId.Type.GRASS) as int
+	var column = _generator_ref.compute_column_at_world(x, z)
+	height_map_dict[key] = column.x
+	type_map_dict[key] = column.y
 	var cc = Vector2i(int(floor(float(x) / float(chunk_size))), int(floor(float(z) / float(chunk_size))))
 	_touch_terrain_chunk(cc)
 
@@ -135,25 +129,16 @@ func ensure_region_generated(origin_x: int, origin_z: int, size_x: int, size_z: 
 			ensure_column_generated(x, z)
 
 func apply_chunk_gen(chunk_data: Dictionary):
-	var h_dict = {}
-	var t_dict = {}
-	if chunk_data.has("height"):
-		h_dict = chunk_data.get("height", {})
-	elif chunk_data.has("height_map"):
-		h_dict = chunk_data.get("height_map", {})
-	if chunk_data.has("type"):
-		t_dict = chunk_data.get("type", {})
-	elif chunk_data.has("type_map"):
-		t_dict = chunk_data.get("type_map", {})
-	for k in h_dict.keys():
-		height_map_dict[k] = h_dict[k]
-	for k in t_dict.keys():
-		type_map_dict[k] = t_dict[k]
+	var h_dict = chunk_data.get("height", {}) as Dictionary
+	var t_dict = chunk_data.get("type", {}) as Dictionary
 	var counts: Dictionary = {}
 	for k in h_dict.keys():
+		height_map_dict[k] = h_dict[k]
 		if k is Vector2i:
 			var cc = Vector2i(int(floor(float(k.x) / float(chunk_size))), int(floor(float(k.y) / float(chunk_size))))
 			counts[cc] = counts.get(cc, 0) + 1
+	for k in t_dict.keys():
+		type_map_dict[k] = t_dict[k]
 	var threshold = int(float(chunk_size * chunk_size) * 0.9)
 	for cc in counts.keys():
 		if counts[cc] >= threshold:
@@ -231,19 +216,19 @@ func is_solid(p: Vector3i) -> bool:
 	var bt = get_block_at(p)
 	if bt == null:
 		return false
-	return BlockCatalog.shared().is_solid(bt)
+	return block_catalog.is_solid(bt)
 
 func is_opaque(p: Vector3i) -> bool:
 	var bt = get_block_at(p)
 	if bt == null:
 		return false
-	return BlockCatalog.shared().is_opaque(bt)
+	return block_catalog.is_opaque(bt)
 
 func is_raycast_solid(p: Vector3i) -> bool:
 	var bt = get_block_at(p)
 	if bt == null:
 		return false
-	return BlockCatalog.shared().is_raycast_solid(bt)
+	return block_catalog.is_raycast_solid(bt)
 
 func get_revision(p: Vector3i) -> int:
 	return cell_revisions.get(p, 0)
@@ -259,7 +244,7 @@ func is_breakable(p: Vector3i) -> bool:
 	var bt = get_block_at(p)
 	if bt == null:
 		return false
-	return BlockCatalog.shared().is_breakable(bt)
+	return block_catalog.is_breakable(bt)
 
 func _invalidate_highest_cache(x: int, z: int):
 	_highest_cache.erase(Vector2i(x, z))
@@ -271,7 +256,7 @@ func get_highest_solid_y(x: int, z: int) -> int:
 	for y in range(max_build_y - 1, -1, -1):
 		var p = Vector3i(x, y, z)
 		var bt = get_block_at(p)
-		if bt != null and BlockCatalog.shared().is_solid(bt):
+		if bt != null and block_catalog.is_solid(bt):
 			_highest_cache[key] = y
 			return y
 	_highest_cache[key] = -1
@@ -280,25 +265,24 @@ func get_highest_solid_y(x: int, z: int) -> int:
 func get_highest_top(x: int, z: int) -> float:
 	var y = get_highest_solid_y(x, z)
 	if y == -1:
-		return -9999.0
+		return NO_SURFACE_Y
 	return float(y) + 1.0
 
 func is_occupied(p: Vector3i) -> bool:
 	var bt = get_block_at(p)
-	if bt == null:
-		return false
-	if bt == BlockId.Type.AIR:
-		return false
-	if bt == BlockId.Type.WATER:
-		return false
-	return true
+	return bt != null and bt != BlockId.Type.AIR and bt != BlockId.Type.WATER
+
+func get_attached_torches(support_pos: Vector3i) -> Array[Vector3i]:
+	var attached: Array[Vector3i] = []
+	for attach_dir in TorchPlacement.CARDINAL_DIRECTIONS:
+		var torch_pos = support_pos - attach_dir
+		if torch_attachments.get(torch_pos, Vector3i.ZERO) == attach_dir:
+			attached.append(torch_pos)
+	return attached
 
 func try_mine_block(p: Vector3i) -> Array:
 	if not is_breakable(p):
 		return [BlockEdit.fail(p, BlockEdit.Operation.MINE, BlockEdit.Result.FAIL_NOT_BREAKABLE)]
-	var old_type = get_block_at(p)
-	if old_type == null:
-		return [BlockEdit.fail(p, BlockEdit.Operation.MINE, BlockEdit.Result.FAIL_INVALID_POS)]
 	var old_id = get_block_id_at(p)
 	var prev_rev = get_revision(p)
 	var was_placed = placed_blocks.has(p)
@@ -310,8 +294,6 @@ func try_mine_block(p: Vector3i) -> Array:
 		if h != -1 and p.y <= h:
 			removed_blocks[p] = true
 			surviving_after = true
-		else:
-			surviving_after = false
 	else:
 		removed_blocks[p] = true
 		surviving_after = true
@@ -332,12 +314,7 @@ func try_mine_block(p: Vector3i) -> Array:
 	var edit = BlockEdit.success_mine(p, old_id, rev)
 	block_edit_committed.emit(edit)
 	var batch: Array[BlockEdit] = [edit]
-	var floating: Array[Vector3i] = []
-	for torch_pos in torch_attachments.keys():
-		var attach = torch_attachments[torch_pos] as Vector3i
-		if torch_pos + attach == p:
-			floating.append(torch_pos)
-	for torch_pos in floating:
+	for torch_pos in get_attached_torches(p):
 		var torch_old_id = placed_blocks.get(torch_pos, BlockId.Type.TORCH)
 		var torch_prev = get_revision(torch_pos)
 		placed_blocks.erase(torch_pos)
@@ -351,59 +328,48 @@ func try_mine_block(p: Vector3i) -> Array:
 	return batch
 
 func try_place_block(p: Vector3i, block_type: int, attach_dir: Vector3i = Vector3i.ZERO) -> BlockEdit:
-	var canonical_id: int = block_type
-	if canonical_id == BlockId.Type.AIR:
+	if block_type == BlockId.Type.AIR:
 		return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_INVALID_POS, "AIR not placeable")
-	if not BlockId.is_valid(canonical_id):
+	if not BlockId.is_valid(block_type):
 		return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_INVALID_POS, "Invalid block id")
 	if p.y < 0 or p.y >= max_build_y:
 		return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_Y_OUT_OF_RANGE)
 	if is_occupied(p):
 		var existing_id = get_block_id_at(p)
-		if existing_id != BlockId.Type.AIR:
-			var existing_def = BlockCatalog.shared().get_definition(existing_id)
-			if existing_def == null or not existing_def.is_replaceable:
-				if existing_id != BlockId.Type.WATER:
-					return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_OCCUPIED)
-		else:
+		if not block_catalog.get_definition(existing_id).is_replaceable:
 			return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_OCCUPIED)
-	if canonical_id == BlockId.Type.TORCH:
+	if block_type == BlockId.Type.TORCH:
 		if attach_dir == Vector3i.ZERO:
 			return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_NO_SUPPORT, "Torch requires attach_dir")
-		var is_cardinal = false
-		for d in [Vector3i.UP, Vector3i.DOWN, Vector3i(1, 0, 0), Vector3i(-1, 0, 0), Vector3i(0, 0, 1), Vector3i(0, 0, -1)]:
-			if attach_dir == d:
-				is_cardinal = true
-				break
-		if not is_cardinal:
+		if attach_dir not in TorchPlacement.CARDINAL_DIRECTIONS:
 			return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_NO_SUPPORT, "Torch attach_dir must be cardinal")
 		var support_pos = p + attach_dir
 		if support_pos.y < 0 or support_pos.y >= max_build_y:
 			return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_NO_TORCH_SUPPORT, "Support Y out of bounds")
-		ensure_column_generated(support_pos.x, support_pos.z)
 		ensure_region_generated(support_pos.x -1, support_pos.z -1, 3, 3)
 		if not is_opaque(support_pos) and not is_solid(support_pos):
 			return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_NO_TORCH_SUPPORT)
 	if removed_blocks.has(p):
 		removed_blocks.erase(p)
-	placed_blocks[p] = canonical_id
-	if canonical_id == BlockId.Type.TORCH:
+	placed_blocks[p] = block_type
+	if block_type == BlockId.Type.TORCH:
 		torch_attachments[p] = attach_dir
 	_invalidate_highest_cache(p.x, p.z)
 	var rev = _increment_revision(p)
-	var edit = BlockEdit.success_place(p, canonical_id, rev, attach_dir)
+	var edit = BlockEdit.success_place(p, block_type, rev, attach_dir)
 	block_edit_committed.emit(edit)
 	return edit
 
 func get_spawn_position() -> Vector3:
 	var meadow_radius = WorldConfig.DEFAULT_MEADOW_RADIUS
+	var meadow_radius_squared = meadow_radius * meadow_radius
 	var best = Vector3(0.5, 10.5, 0.5)
 	var best_score = 9999.0
 	for dx in range(-int(meadow_radius), int(meadow_radius) + 1):
 		for dz in range(-int(meadow_radius), int(meadow_radius) + 1):
 			var x = dx
 			var z = dz
-			if Vector2(x, z).length() > meadow_radius:
+			if x * x + z * z > meadow_radius_squared:
 				continue
 			var key = Vector2i(x, z)
 			if not height_map_dict.has(key):
@@ -458,7 +424,3 @@ func snapshot_edits_for_chunk(origin_x: int, origin_z: int, p_chunk_size: int) -
 func is_chunk_data_available(cx: int, cz: int) -> bool:
 	var coord = Vector2i(cx, cz)
 	return generated_terrain_chunks.has(coord)
-
-func has_trees_in_chunk(cx: int, cz: int) -> bool:
-	var coord = Vector2i(cx, cz)
-	return generated_tree_chunks.has(coord)

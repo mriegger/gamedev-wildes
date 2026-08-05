@@ -17,6 +17,7 @@ var current_yaw_deg: float = 225.0
 var target_position: Vector3 = Vector3(100, 0, 100)
 
 var _player: PlayerMotor = null
+var _input_buffer: InputBuffer = null
 
 var _backpack_progress: float = 0.0
 var _backpack_panel_width: float = 380.0
@@ -50,8 +51,9 @@ func _update_backpack_offset():
 	camera.h_offset = world_shift
 	camera.v_offset = 0.0
 
-func setup(p_player: PlayerMotor):
+func setup(p_player: PlayerMotor, p_input_buffer: InputBuffer):
 	_player = p_player
+	_input_buffer = p_input_buffer
 	target_position = p_player.global_position
 
 func _ready():
@@ -66,13 +68,14 @@ func _ready():
 		camera.near = 0.1
 		camera.far = 1000.0
 		camera.current = true
+	get_viewport().size_changed.connect(_update_backpack_offset)
 
 func _unhandled_input(event):
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
-			InputBuffer.shared().set_wheel(true)
+			_input_buffer.set_wheel(true)
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			InputBuffer.shared().set_wheel(false)
+			_input_buffer.set_wheel(false)
 	elif event is InputEventMagnifyGesture:
 		_zoom((1.0 - event.factor) * 35.0)
 	elif event is InputEventPanGesture:
@@ -80,7 +83,7 @@ func _unhandled_input(event):
 			_zoom(event.delta.y * 4.0)
 
 func _process(delta):
-	var ib = InputBuffer.shared()
+	var ib = _input_buffer
 	if ib.consume_rotate_left():
 		target_yaw_deg -= 45.0
 	if ib.consume_rotate_right():
@@ -93,24 +96,19 @@ func _process(delta):
 		_zoom(2.5)
 		ib.clear_wheel()
 
-	current_yaw_deg = _lerp_angle_deg(current_yaw_deg, target_yaw_deg, delta * yaw_lerp_speed)
-	rotation_degrees.y = current_yaw_deg
-
-	if pitch:
-		pitch.rotation_degrees.x = pitch_deg
-		if camera and not camera.transform.origin.is_equal_approx(Vector3(0, 0, orbit_distance)):
-			camera.transform.origin = Vector3(0, 0, orbit_distance)
+	if not is_equal_approx(current_yaw_deg, target_yaw_deg):
+		current_yaw_deg = _lerp_angle_deg(current_yaw_deg, target_yaw_deg, delta * yaw_lerp_speed)
+		rotation_degrees.y = current_yaw_deg
 
 	if _player:
 		target_position = _player.global_position
-	global_position = global_position.lerp(target_position, delta * follow_lerp)
+	if not global_position.is_equal_approx(target_position):
+		global_position = global_position.lerp(target_position, delta * follow_lerp)
 
 	if ib.zoom_in_pressed:
 		_zoom(-zoom_speed * delta)
 	if ib.zoom_out_pressed:
 		_zoom(zoom_speed * delta)
-
-	_update_backpack_offset()
 
 func _zoom(amount: float):
 	if camera == null:
@@ -125,20 +123,4 @@ func _lerp_angle_deg(from_deg: float, to_deg: float, weight: float) -> float:
 	return rad_to_deg(from_rad + diff * weight)
 
 func get_camera_basis() -> Basis:
-	if camera:
-		return camera.global_transform.basis
-	return global_transform.basis
-
-func get_flat_forward() -> Vector3:
-	var f = -get_camera_basis().z
-	f.y = 0
-	if f.length_squared() < 0.0001:
-		f = Vector3(0, 0, -1)
-	return f.normalized()
-
-func get_flat_right() -> Vector3:
-	var r = get_camera_basis().x
-	r.y = 0
-	if r.length_squared() < 0.0001:
-		r = Vector3(1, 0, 0)
-	return r.normalized()
+	return camera.global_transform.basis

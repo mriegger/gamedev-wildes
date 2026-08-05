@@ -35,7 +35,7 @@ var result: Result = Result.SUCCESS
 var reason: String = ""
 var attach_dir: Vector3i = Vector3i.ZERO
 
-func _init(p_op: Operation = Operation.PLACE, p_pos: Vector3i = Vector3i.ZERO):
+func _init(p_op: Operation, p_pos: Vector3i):
 	operation = p_op
 	pos = p_pos
 
@@ -53,7 +53,7 @@ static func success_mine(p_pos: Vector3i, p_old_id: int, p_revision: int) -> Blo
 	e.result = Result.SUCCESS
 	return e
 
-static func success_place(p_pos: Vector3i, p_new_id: int, p_revision: int, p_attach: Vector3i = Vector3i.ZERO) -> BlockEdit:
+static func success_place(p_pos: Vector3i, p_new_id: int, p_revision: int, p_attach: Vector3i) -> BlockEdit:
 	var e = BlockEdit.new(Operation.PLACE, p_pos)
 	e.old_id = BlockId.Type.AIR
 	e.new_id = p_new_id
@@ -72,7 +72,5 @@ func _to_string() -> String:
 	if is_success():
 		if is_mine():
 			return "[BlockEdit MINE %s %s->AIR rev %d]" % [pos, BlockId.get_display_name(old_id as BlockId.Type), revision]
-		else:
-			return "[BlockEdit PLACE %s AIR->%s rev %d attach %s]" % [pos, BlockId.get_display_name(new_id as BlockId.Type), revision, attach_dir]
-	else:
-		return "[BlockEdit FAIL %s %s: %s]" % [pos, Result.find_key(result), reason]
+		return "[BlockEdit PLACE %s AIR->%s rev %d attach %s]" % [pos, BlockId.get_display_name(new_id as BlockId.Type), revision, attach_dir]
+	return "[BlockEdit FAIL %s %s: %s]" % [pos, Result.find_key(result), reason]

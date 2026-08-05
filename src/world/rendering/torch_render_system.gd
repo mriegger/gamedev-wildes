@@ -20,17 +20,18 @@ var torch_stem_mesh: BoxMesh
 var torch_flame_mesh: BoxMesh
 
 var _shadow_update_timer: float = 0.5
+var _shadow_pool_limited: bool = false
 var player_ref: Node3D
 
-var catalog: BlockCatalog
+var block_catalog: BlockCatalog
 
-func _init(p_container: Node3D = null):
+func _init(p_container: Node3D, p_block_catalog: BlockCatalog):
 	torch_container = p_container
-	catalog = BlockCatalog.shared()
+	block_catalog = p_block_catalog
 	_setup_materials_and_meshes()
 
 func _setup_materials_and_meshes():
-	var def = catalog.get_definition(BlockId.Type.TORCH)
+	var def = block_catalog.get_definition(BlockId.Type.TORCH)
 	var base_col = def.side_color if def else Color(0.78, 0.62, 0.42)
 	var flame_col = def.emissive_color if def and def.emissive_enabled else Color(1.0, 0.92, 0.68)
 
@@ -50,7 +51,7 @@ func _setup_materials_and_meshes():
 	torch_flame_mesh = BoxMesh.new()
 	torch_flame_mesh.size = Vector3(0.14, 0.14, 0.14)
 
-func spawn_torch(pos: Vector3i, attach_dir: Vector3i = Vector3i.ZERO) -> Node3D:
+func spawn_torch(pos: Vector3i, attach_dir: Vector3i) -> Node3D:
 	if torch_container == null:
 		return null
 	remove_torch(pos)
@@ -74,7 +75,7 @@ func spawn_torch(pos: Vector3i, attach_dir: Vector3i = Vector3i.ZERO) -> Node3D:
 	flame.material_override = torch_flame_material
 	root.add_child(flame)
 
-	var def = catalog.get_definition(BlockId.Type.TORCH)
+	var def = block_catalog.get_definition(BlockId.Type.TORCH)
 	var light = OmniLight3D.new()
 	light.name = "TorchLight"
 	light.light_color = def.light_color if def and def.light_color.a > 0 else Color(1.0, 0.96, 0.88)
@@ -148,32 +149,25 @@ func update_shadow_culling(_delta: float) -> void:
 	if DisplayServer.get_name() == "headless":
 		return
 
-	for tpos in torch_light_nodes.keys():
-		var light = torch_light_nodes[tpos] as OmniLight3D
-		if not light or not is_instance_valid(light):
-			continue
-		light.omni_shadow_mode = OmniLight3D.SHADOW_DUAL_PARABOLOID
-		light.shadow_enabled = true
-		light.shadow_reverse_cull_face = false
-		light.shadow_bias = 0.03
-		light.shadow_normal_bias = 0.2
-		light.shadow_opacity = 0.5
-		light.shadow_blur = 1.0
-
 	if player_ref != null and torch_light_nodes.size() > MAX_SHADOW_TORCHES:
+		_shadow_pool_limited = true
 		_apply_shadow_pool_limit()
+	elif _shadow_pool_limited:
+		_shadow_pool_limited = false
+		for light in torch_light_nodes.values():
+			if light and is_instance_valid(light):
+				light.shadow_enabled = true
 
 func _apply_shadow_pool_limit():
 	if player_ref == null:
 		return
-	var list: Array = []
-	for pos in torch_light_nodes.keys():
-		var dist = player_ref.global_position.distance_to(Vector3(pos.x, pos.y, pos.z))
-		list.append({"pos": pos, "dist": dist})
-	list.sort_custom(func(a, b): return a["dist"] < b["dist"])
-	for i in range(list.size()):
-		var entry = list[i]
-		var pos = entry["pos"] as Vector3i
+	var positions = torch_light_nodes.keys()
+	var player_position = player_ref.global_position
+	positions.sort_custom(func(a, b):
+		return player_position.distance_squared_to(Vector3(a)) < player_position.distance_squared_to(Vector3(b))
+	)
+	for i in range(positions.size()):
+		var pos = positions[i] as Vector3i
 		var light = torch_light_nodes.get(pos) as OmniLight3D
 		if not light or not is_instance_valid(light):
 			continue

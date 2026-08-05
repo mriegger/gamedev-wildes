@@ -2,7 +2,6 @@ extends Resource
 class_name Biome
 
 @export var biome_id: String = ""
-@export var display_name: String = ""
 
 @export_group("Parameter Ranges")
 @export_range(0.0, 1.0) var min_temperature: float = 0.0
@@ -18,17 +17,10 @@ class_name Biome
 
 @export_group("Surface")
 @export var surface_block: BlockId.Type = BlockId.Type.GRASS
-@export var subsurface_block: BlockId.Type = BlockId.Type.DIRT
-@export var filler_block: BlockId.Type = BlockId.Type.STONE
-@export_range(1, 8) var subsurface_depth: int = 3
 @export var shore_block: BlockId.Type = BlockId.Type.SAND
-@export var shore_subsurface_block: BlockId.Type = BlockId.Type.SAND
 
 @export_group("Vegetation")
 @export_range(0.0, 0.1) var tree_density: float = 0.01
-
-@export_group("Appearance")
-@export var grass_tint: Color = Color(0.52, 0.78, 0.32)
 
 # Fixed indices for PackedFloat32Array params: 0=continentalness, 1=erosion, 2=peaks_valleys, 3=temperature, 4=humidity
 const IDX_CONTINENTALNESS: int = 0
