@@ -133,3 +133,4 @@ Godot itself is MIT licensed.
 | [#18](https://github.com/codimango/gamedev-wildes/pull/18) | Fix release world initialization side effects | `codex/fix-release-initialization` |
 | [#21](https://github.com/codimango/gamedev-wildes/pull/21) | Make Godot CI validation fail closed | `codex/strict-godot-validation` |
 | [#22](https://github.com/codimango/gamedev-wildes/pull/22) | Add pull request quality scaffolding | `codex/pr-quality-scaffolding` |
+| [#23](https://github.com/codimango/gamedev-wildes/pull/23) | Widen world golden block ID encoding | `codex/widen-world-golden-hash` |

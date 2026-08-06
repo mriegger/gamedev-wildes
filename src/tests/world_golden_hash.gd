@@ -10,6 +10,11 @@ const REGION_Y0: int = 0
 const REGION_Y1: int = 128
 
 func _init():
+	var encoding_probe := _encode_block_ids(PackedInt32Array([1, 257]))
+	if encoding_probe.hex_encode() != "0100000001010000":
+		print("FAIL block ID encoding is not 32-bit little-endian")
+		quit(1)
+		return
 	var args: Array = OS.get_cmdline_user_args()
 	var do_update: bool = false
 	for a in args:
@@ -35,7 +40,7 @@ func _init():
 			"seed": SEED,
 			"region": {"x0": REGION_X0, "x1": REGION_X1, "z0": REGION_Z0, "z1": REGION_Z1, "y0": REGION_Y0, "y1": REGION_Y1},
 			"digest": digest,
-			"description": "SHA256 over block IDs (voxel_world.get_block_id_at) for fixed region, seed 1337 with jittered WorldConfig. Any noise/spline/biome/lake/river change that reshapes existing worlds must update this digest.",
+			"description": "SHA256 over 32-bit little-endian block IDs (voxel_world.get_block_id_at) for fixed region, seed 1337 with jittered WorldConfig. Any noise/spline/biome/lake/river change that reshapes existing worlds must update this digest.",
 			"generated_by": "src/tests/world_golden_hash.gd --update"
 		}
 		var json_str = JSON.stringify(out, "\t")
@@ -91,13 +96,31 @@ func _compute_hash() -> String:
 			voxel.ensure_column_generated(x, z)
 	var ctx = HashingContext.new()
 	ctx.start(HashingContext.HASH_SHA256)
+	var block_ids := PackedInt32Array()
+	block_ids.resize((REGION_Y1 - REGION_Y0) * (REGION_X1 - REGION_X0) * (REGION_Z1 - REGION_Z0))
+	var block_index := 0
 	for y in range(REGION_Y0, REGION_Y1):
 		for x in range(REGION_X0, REGION_X1):
 			for z in range(REGION_Z0, REGION_Z1):
-				var id = voxel.get_block_id_at(Vector3i(x, y, z))
-				ctx.update(PackedByteArray([id & 0xFF]))
+				block_ids[block_index] = voxel.get_block_id_at(Vector3i(x, y, z))
+				block_index += 1
+	ctx.update(_encode_block_ids(block_ids))
 	var digest = ctx.finish()
 	return digest.hex_encode()
+
+func _encode_block_ids(block_ids: PackedInt32Array) -> PackedByteArray:
+	var encoded := block_ids.to_byte_array()
+	var native_one := PackedInt32Array([1]).to_byte_array()
+	if native_one[0] == 1:
+		return encoded
+	for offset in range(0, encoded.size(), 4):
+		var first := encoded[offset]
+		var second := encoded[offset + 1]
+		encoded[offset] = encoded[offset + 3]
+		encoded[offset + 1] = encoded[offset + 2]
+		encoded[offset + 2] = second
+		encoded[offset + 3] = first
+	return encoded
 
 func _load_config() -> WorldConfig:
 	var config = load("res://world/settings/world_config.tres") as WorldConfig
