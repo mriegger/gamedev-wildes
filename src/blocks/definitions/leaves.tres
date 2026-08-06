@@ -1,6 +1,7 @@
-[gd_resource type="Resource" script_class="BlockDefinition" load_steps=2 format=3 uid="uid://7o6lmzp851d4v"]
+[gd_resource type="Resource" script_class="BlockDefinition" load_steps=3 format=3 uid="uid://7o6lmzp851d4v"]
 
 [ext_resource type="Script" path="res://blocks/block_definition.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/textures/blocks/tree_leaves.png" id="2_texture"]
 
 [resource]
 script = ExtResource("1_def")
@@ -10,8 +11,9 @@ is_opaque = false
 is_raycast_solid = true
 is_breakable = true
 is_replaceable = false
-top_color = Color(0.36, 0.52, 0.3, 1)
-side_color = Color(0.32, 0.46, 0.27, 1)
+top_texture = ExtResource("2_texture")
+side_texture = ExtResource("2_texture")
+bottom_texture = ExtResource("2_texture")
 emissive_enabled = false
 emissive_color = Color(0, 0, 0, 0)
 emissive_energy = 0.0

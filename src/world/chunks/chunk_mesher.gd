@@ -7,25 +7,18 @@ var seed_value: int
 var enable_ao: bool
 var ao_table: Array = [1.0, 0.86, 0.72, 0.58]
 
-var block_catalog: BlockCatalog
-var _top_colors = PackedColorArray()
-var _side_colors = PackedColorArray()
+var _top_layers := PackedInt32Array()
+var _side_layers := PackedInt32Array()
+var _bottom_layers := PackedInt32Array()
 
-func _init(p_chunk_size: int, p_max_y: int, p_seed: int, p_ao: bool, p_block_catalog: BlockCatalog):
+func _init(p_chunk_size: int, p_max_y: int, p_seed: int, p_ao: bool, texture_set: BlockTextureSet):
 	chunk_size = p_chunk_size
 	max_build_y = p_max_y
 	seed_value = p_seed
 	enable_ao = p_ao
-	block_catalog = p_block_catalog
-	_rebuild_color_cache()
-
-func _rebuild_color_cache():
-	_top_colors.resize(BlockId.Type.COUNT)
-	_side_colors.resize(BlockId.Type.COUNT)
-	for type_id in range(BlockId.Type.COUNT):
-		var def = block_catalog.get_definition(type_id)
-		_top_colors[type_id] = def.top_color
-		_side_colors[type_id] = def.side_color
+	_top_layers = texture_set.top_layers.duplicate()
+	_side_layers = texture_set.side_layers.duplicate()
+	_bottom_layers = texture_set.bottom_layers.duplicate()
 
 func build_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 	var cache := cache_dict["cache"] as PackedInt32Array
@@ -43,13 +36,16 @@ func build_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 	var vertices := PackedVector3Array()
 	var normals := PackedVector3Array()
 	var colors := PackedColorArray()
+	var uvs := PackedVector2Array()
+	var texture_layers := PackedVector2Array()
 	var indices := PackedInt32Array()
 
 	var local_seed = seed_value
 	var local_enable_ao = enable_ao
 	var local_ao_table = ao_table
-	var local_top_colors = _top_colors
-	var local_side_colors = _side_colors
+	var local_top_layers: PackedInt32Array = _top_layers
+	var local_side_layers: PackedInt32Array = _side_layers
+	var local_bottom_layers: PackedInt32Array = _bottom_layers
 
 	var size_y_local = size_y
 	var cache_z_local = cache_z
@@ -99,22 +95,21 @@ func build_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 				if cache_idx < 0 or cache_idx >= cache.size():
 					continue
 				var block_type = cache[cache_idx]
-				if block_type == -1:
+				if block_type < 0 or block_type >= local_top_layers.size():
 					continue
-				if block_type == BlockId.Type.AIR or block_type == BlockId.Type.TORCH or block_type == BlockId.Type.WATER:
+				var top_layer: int = local_top_layers[block_type]
+				if top_layer < 0:
 					continue
-				if block_type < 0 or block_type >= local_top_colors.size():
-					continue
-				var def_top = local_top_colors[block_type]
-				var def_side = local_side_colors[block_type]
-				var top_col: Color
-				var side_col: Color
+				var top_shade: float
+				var side_shade: float
 				if block_type == BlockId.Type.LOG or block_type == BlockId.Type.LEAVES:
-					top_col = def_top + Color(var_off_half, var_off_half, var_off_half)
-					side_col = def_side
+					top_shade = 1.0 + var_off_half
+					side_shade = 1.0
 				else:
-					top_col = def_top + Color(var_off, var_off, var_off)
-					side_col = def_side + Color(var_off_side, var_off_side, var_off_side)
+					top_shade = 1.0 + var_off
+					side_shade = 1.0 + var_off_side
+				var side_layer: int = local_side_layers[block_type]
+				var bottom_layer: int = local_bottom_layers[block_type]
 
 				var n_top = -1
 				var yp1_in_range = ly + 1 < size_y_local
@@ -217,10 +212,14 @@ func build_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 					var base_idx = vertices.size()
 					vertices.append(v0); vertices.append(v1); vertices.append(v2); vertices.append(v3)
 					normals.append(Vector3(0,1,0)); normals.append(Vector3(0,1,0)); normals.append(Vector3(0,1,0)); normals.append(Vector3(0,1,0))
+					uvs.append(Vector2(0, 0)); uvs.append(Vector2(1, 0)); uvs.append(Vector2(1, 1)); uvs.append(Vector2(0, 1))
+					var top_layer_uv := Vector2(float(top_layer), 0)
+					texture_layers.append(top_layer_uv); texture_layers.append(top_layer_uv); texture_layers.append(top_layer_uv); texture_layers.append(top_layer_uv)
 					for ci in range(4):
-						var b = local_ao_table[ao_vals[ci]] if local_enable_ao else 1.0
-						var sh = sh_vals[ci]
-						colors.append(Color(top_col.r * b * sh, top_col.g * b * sh, top_col.b * b * sh, top_col.a))
+						var b: float = local_ao_table[ao_vals[ci]] if local_enable_ao else 1.0
+						var sh: float = sh_vals[ci]
+						var light: float = top_shade * b * sh
+						colors.append(Color(light, light, light, 1.0))
 					indices.append(base_idx+0); indices.append(base_idx+1); indices.append(base_idx+2)
 					indices.append(base_idx+0); indices.append(base_idx+2); indices.append(base_idx+3)
 
@@ -233,7 +232,6 @@ func build_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 						n_bot = cache[idx_bot]
 				var bot_visible = (n_bot == -1 or n_bot == BlockId.Type.AIR or n_bot == BlockId.Type.TORCH or n_bot == BlockId.Type.WATER)
 				if bot_visible and y > 0:
-					var bcol = side_col * 0.92
 					var ao2 = [0, 0, 0, 0]
 					for i in range(4):
 						var sx = x + du_bot[i]
@@ -273,9 +271,13 @@ func build_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 					var base_idx2 = vertices.size()
 					vertices.append(Vector3(x, y, z+1)); vertices.append(Vector3(x+1, y, z+1)); vertices.append(Vector3(x+1, y, z)); vertices.append(Vector3(x, y, z))
 					normals.append(Vector3(0,-1,0)); normals.append(Vector3(0,-1,0)); normals.append(Vector3(0,-1,0)); normals.append(Vector3(0,-1,0))
+					uvs.append(Vector2(0, 0)); uvs.append(Vector2(1, 0)); uvs.append(Vector2(1, 1)); uvs.append(Vector2(0, 1))
+					var bottom_layer_uv := Vector2(float(bottom_layer), 0)
+					texture_layers.append(bottom_layer_uv); texture_layers.append(bottom_layer_uv); texture_layers.append(bottom_layer_uv); texture_layers.append(bottom_layer_uv)
 					for ci in range(4):
-						var b = local_ao_table[ao2[ci]] if local_enable_ao else 1.0
-						colors.append(Color(bcol.r * b, bcol.g * b, bcol.b * b, bcol.a))
+						var b: float = local_ao_table[ao2[ci]] if local_enable_ao else 1.0
+						var light: float = side_shade * 0.92 * b
+						colors.append(Color(light, light, light, 1.0))
 					indices.append(base_idx2+0); indices.append(base_idx2+1); indices.append(base_idx2+2)
 					indices.append(base_idx2+0); indices.append(base_idx2+2); indices.append(base_idx2+3)
 
@@ -288,8 +290,11 @@ func build_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 					var base_idx3 = vertices.size()
 					vertices.append(Vector3(x+1, y, z+1)); vertices.append(Vector3(x+1, y+1, z+1)); vertices.append(Vector3(x+1, y+1, z)); vertices.append(Vector3(x+1, y, z))
 					normals.append(Vector3(1,0,0)); normals.append(Vector3(1,0,0)); normals.append(Vector3(1,0,0)); normals.append(Vector3(1,0,0))
+					uvs.append(Vector2(0, 1)); uvs.append(Vector2(0, 0)); uvs.append(Vector2(1, 0)); uvs.append(Vector2(1, 1))
+					var east_layer_uv := Vector2(float(side_layer), 0)
+					texture_layers.append(east_layer_uv); texture_layers.append(east_layer_uv); texture_layers.append(east_layer_uv); texture_layers.append(east_layer_uv)
 					for ci in range(4):
-						colors.append(side_col)
+						colors.append(Color(side_shade, side_shade, side_shade, 1.0))
 					indices.append(base_idx3+0); indices.append(base_idx3+1); indices.append(base_idx3+2)
 					indices.append(base_idx3+0); indices.append(base_idx3+2); indices.append(base_idx3+3)
 
@@ -302,8 +307,11 @@ func build_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 					var base_idx4 = vertices.size()
 					vertices.append(Vector3(x, y, z)); vertices.append(Vector3(x, y+1, z)); vertices.append(Vector3(x, y+1, z+1)); vertices.append(Vector3(x, y, z+1))
 					normals.append(Vector3(-1,0,0)); normals.append(Vector3(-1,0,0)); normals.append(Vector3(-1,0,0)); normals.append(Vector3(-1,0,0))
+					uvs.append(Vector2(0, 1)); uvs.append(Vector2(0, 0)); uvs.append(Vector2(1, 0)); uvs.append(Vector2(1, 1))
+					var west_layer_uv := Vector2(float(side_layer), 0)
+					texture_layers.append(west_layer_uv); texture_layers.append(west_layer_uv); texture_layers.append(west_layer_uv); texture_layers.append(west_layer_uv)
 					for ci in range(4):
-						colors.append(side_col)
+						colors.append(Color(side_shade, side_shade, side_shade, 1.0))
 					indices.append(base_idx4+0); indices.append(base_idx4+1); indices.append(base_idx4+2)
 					indices.append(base_idx4+0); indices.append(base_idx4+2); indices.append(base_idx4+3)
 
@@ -316,8 +324,11 @@ func build_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 					var base_idx5 = vertices.size()
 					vertices.append(Vector3(x, y+1, z+1)); vertices.append(Vector3(x+1, y+1, z+1)); vertices.append(Vector3(x+1, y, z+1)); vertices.append(Vector3(x, y, z+1))
 					normals.append(Vector3(0,0,1)); normals.append(Vector3(0,0,1)); normals.append(Vector3(0,0,1)); normals.append(Vector3(0,0,1))
+					uvs.append(Vector2(0, 0)); uvs.append(Vector2(1, 0)); uvs.append(Vector2(1, 1)); uvs.append(Vector2(0, 1))
+					var south_layer_uv := Vector2(float(side_layer), 0)
+					texture_layers.append(south_layer_uv); texture_layers.append(south_layer_uv); texture_layers.append(south_layer_uv); texture_layers.append(south_layer_uv)
 					for ci in range(4):
-						colors.append(side_col)
+						colors.append(Color(side_shade, side_shade, side_shade, 1.0))
 					indices.append(base_idx5+0); indices.append(base_idx5+1); indices.append(base_idx5+2)
 					indices.append(base_idx5+0); indices.append(base_idx5+2); indices.append(base_idx5+3)
 
@@ -330,8 +341,11 @@ func build_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 					var base_idx6 = vertices.size()
 					vertices.append(Vector3(x, y, z)); vertices.append(Vector3(x+1, y, z)); vertices.append(Vector3(x+1, y+1, z)); vertices.append(Vector3(x, y+1, z))
 					normals.append(Vector3(0,0,-1)); normals.append(Vector3(0,0,-1)); normals.append(Vector3(0,0,-1)); normals.append(Vector3(0,0,-1))
+					uvs.append(Vector2(0, 1)); uvs.append(Vector2(1, 1)); uvs.append(Vector2(1, 0)); uvs.append(Vector2(0, 0))
+					var north_layer_uv := Vector2(float(side_layer), 0)
+					texture_layers.append(north_layer_uv); texture_layers.append(north_layer_uv); texture_layers.append(north_layer_uv); texture_layers.append(north_layer_uv)
 					for ci in range(4):
-						colors.append(side_col)
+						colors.append(Color(side_shade, side_shade, side_shade, 1.0))
 					indices.append(base_idx6+0); indices.append(base_idx6+1); indices.append(base_idx6+2)
 					indices.append(base_idx6+0); indices.append(base_idx6+2); indices.append(base_idx6+3)
 
@@ -342,6 +356,8 @@ func build_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 		"vertices": vertices,
 		"normals": normals,
 		"colors": colors,
+		"uvs": uvs,
+		"texture_layers": texture_layers,
 		"indices": indices,
 		"origin_x": origin_x,
 		"origin_z": origin_z,
@@ -518,6 +534,8 @@ func create_mesh_from_data(data: Variant) -> ArrayMesh:
 	var vertices := mesh_data["vertices"] as PackedVector3Array
 	var normals := mesh_data["normals"] as PackedVector3Array
 	var colors := mesh_data["colors"] as PackedColorArray
+	var uvs := mesh_data["uvs"] as PackedVector2Array
+	var texture_layers := mesh_data["texture_layers"] as PackedVector2Array
 	var indices := mesh_data["indices"] as PackedInt32Array
 
 	var arrays = []
@@ -525,6 +543,8 @@ func create_mesh_from_data(data: Variant) -> ArrayMesh:
 	arrays[Mesh.ARRAY_VERTEX] = vertices
 	arrays[Mesh.ARRAY_NORMAL] = normals
 	arrays[Mesh.ARRAY_COLOR] = colors
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_TEX_UV2] = texture_layers
 	arrays[Mesh.ARRAY_INDEX] = indices
 
 	var mesh = ArrayMesh.new()

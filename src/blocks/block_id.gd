@@ -31,3 +31,6 @@ static func get_display_name(id: Type) -> String:
 
 static func is_valid(id: int) -> bool:
 	return id >= Type.AIR and id < Type.COUNT
+
+static func is_chunk_cube(id: int) -> bool:
+	return is_valid(id) and id != Type.AIR and id != Type.TORCH and id != Type.WATER

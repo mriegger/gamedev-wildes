@@ -1,6 +1,9 @@
-[gd_resource type="Resource" script_class="BlockDefinition" load_steps=2 format=3 uid="uid://upbkttslgwwv3"]
+[gd_resource type="Resource" script_class="BlockDefinition" load_steps=5 format=3 uid="uid://upbkttslgwwv3"]
 
 [ext_resource type="Script" path="res://blocks/block_definition.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/textures/blocks/grass_top.png" id="2_top"]
+[ext_resource type="Texture2D" path="res://assets/textures/blocks/grass_side.png" id="3_side"]
+[ext_resource type="Texture2D" path="res://assets/textures/blocks/dirt.png" id="4_bottom"]
 
 [resource]
 script = ExtResource("1_def")
@@ -10,8 +13,9 @@ is_opaque = true
 is_raycast_solid = true
 is_breakable = true
 is_replaceable = false
-top_color = Color(0.52, 0.67, 0.4, 1)
-side_color = Color(0.42, 0.36, 0.28, 1)
+top_texture = ExtResource("2_top")
+side_texture = ExtResource("3_side")
+bottom_texture = ExtResource("4_bottom")
 emissive_enabled = false
 emissive_color = Color(0, 0, 0, 0)
 emissive_energy = 0.0

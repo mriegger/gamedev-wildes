@@ -2,25 +2,33 @@ extends SceneTree
 
 const DEFAULT_SEQS: int = 50000
 const DEFAULT_OPS: int = 20
-const MAX_STACK_OPTIONS: Array = [1, 2, 5, 10, 32, 64, 99, 0, -1]
-const VALID_TYPES: Array = [1, 2, 3, 4, 5, 6, 7, 8]
+const MAX_STACK_OPTIONS: Array[int] = [1, 2, 5, 10, 32, 64, 99]
 
-var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
+var _rng := RandomNumberGenerator.new()
 var _failures: int = 0
 var _tests_run: int = 0
 var _asserts: int = 0
+var _block_catalog: BlockCatalog
+var _base_item_catalog: ItemCatalog
+var _valid_item_ids: Array[StringName] = []
+var _catalogs_by_limit: Dictionary = {}
 
-func _init():
+func _init() -> void:
 	var seqs: int = DEFAULT_SEQS
 	var ops: int = DEFAULT_OPS
-	var args: Array = OS.get_cmdline_user_args()
-	for a in args:
-		if a.begins_with("--seqs="):
-			seqs = int(a.split("=")[1])
-		elif a.begins_with("--ops="):
-			ops = int(a.split("=")[1])
+	for argument in OS.get_cmdline_user_args():
+		if argument.begins_with("--seqs="):
+			seqs = int(argument.split("=")[1])
+		elif argument.begins_with("--ops="):
+			ops = int(argument.split("=")[1])
+	_block_catalog = load("res://blocks/block_catalog.tres") as BlockCatalog
+	_base_item_catalog = load("res://items/item_catalog.tres") as ItemCatalog
+	assert(_block_catalog.validate())
+	assert(_base_item_catalog.validate(_block_catalog))
+	for definition in _base_item_catalog.definitions:
+		_valid_item_ids.append(definition.id)
 	_rng.seed = 123456789
-	var ok: bool = true
+	var ok := true
 	ok = _run_edge_cases() and ok
 	ok = _run_raw_throughput() and ok
 	ok = _run_fuzz(seqs, ops) and ok
@@ -32,394 +40,303 @@ func _init():
 		print("FAIL | failures=%d tests_run=%d asserts=%d" % [_failures, _tests_run, _asserts])
 		quit(1)
 
-func _compute_totals(inv: InventoryModel) -> Array:
-	var arr: Array = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-	for s in inv.slots:
-		if s != null:
-			var t: int = int(s["type"])
-			if t >= 0 and t < arr.size():
-				arr[t] = int(arr[t]) + int(s["count"])
-	return arr
+func _make_catalog(max_stack: int, include_nonplaceable: bool = false) -> ItemCatalog:
+	if not include_nonplaceable and _catalogs_by_limit.has(max_stack):
+		return _catalogs_by_limit[max_stack] as ItemCatalog
+	var definitions: Array[ItemDefinition] = []
+	for source in _base_item_catalog.definitions:
+		var definition := source.duplicate() as ItemDefinition
+		definition.max_stack = max_stack
+		definitions.append(definition)
+	if include_nonplaceable:
+		var nonplaceable := ItemDefinition.new()
+		nonplaceable.id = &"test_tool"
+		nonplaceable.icon = _base_item_catalog.definitions[0].icon
+		nonplaceable.max_stack = 1
+		definitions.append(nonplaceable)
+	var catalog := ItemCatalog.new()
+	catalog.definitions = definitions
+	assert(catalog.validate(_block_catalog))
+	if not include_nonplaceable:
+		_catalogs_by_limit[max_stack] = catalog
+	return catalog
 
-func _totals_equal(a: Array, b: Array) -> bool:
-	if a.size() != b.size():
-		return false
-	for i in range(a.size()):
-		if int(a[i]) != int(b[i]):
-			return false
-	return true
+func _compute_totals(inv: InventoryModel) -> Dictionary:
+	var totals: Dictionary = {}
+	for slot in inv.slots:
+		if slot != null:
+			var item_id := slot["item_id"] as StringName
+			totals[item_id] = int(totals.get(item_id, 0)) + int(slot["count"])
+	return totals
 
 func _slots_equal(a: Array, b: Array) -> bool:
 	if a.size() != b.size():
 		return false
-	for i in range(a.size()):
-		var sa = a[i]
-		var sb = b[i]
-		if sa == null and sb == null:
+	for index in range(a.size()):
+		var left = a[index]
+		var right = b[index]
+		if left == null and right == null:
 			continue
-		if sa == null or sb == null:
+		if left == null or right == null:
 			return false
-		if sa["type"] != sb["type"]:
-			return false
-		if int(sa["count"]) != int(sb["count"]):
+		if left["item_id"] != right["item_id"] or int(left["count"]) != int(right["count"]):
 			return false
 	return true
 
-func _validate_inv(inv: InventoryModel, out_totals: Array) -> bool:
-	for i in range(out_totals.size()):
-		out_totals[i] = 0
-	for i in range(inv.size):
-		var s = inv.slots[i]
-		if s == null:
+func _validate_inv(inv: InventoryModel) -> bool:
+	for index in range(inv.size):
+		var slot = inv.slots[index]
+		if slot == null:
 			continue
-		if not (s is Dictionary):
+		if not slot is Dictionary or not slot.has("item_id") or not slot.has("count"):
 			return false
-		if not s.has("type") or not s.has("count"):
+		var item_id = slot["item_id"]
+		if not item_id is StringName or not inv.item_catalog.has_definition(item_id):
 			return false
-		var cnt: int = int(s["count"])
-		if cnt <= 0:
+		var count := int(slot["count"])
+		if count < 1 or count > inv.item_catalog.get_definition(item_id).max_stack:
 			return false
-		if inv.max_stack > 0 and cnt > inv.max_stack:
+		if not inv.can_slot_accept_item_id(index, item_id):
 			return false
-		var t = s["type"]
-		if t == null or t == BlockId.Type.AIR:
-			return false
-		if not inv.can_slot_accept_type(i, t):
-			return false
-		if int(t) >= 0 and int(t) < out_totals.size():
-			out_totals[int(t)] = int(out_totals[int(t)]) + cnt
 	return true
 
-func _assert(cond: bool, msg: String) -> bool:
+func _assert(condition: bool, message: String) -> bool:
 	_asserts += 1
-	if not cond:
-		_failures += 1
-		print("ASSERT FAIL: %s" % msg)
-		return false
-	return true
+	if condition:
+		return true
+	_failures += 1
+	print("ASSERT FAIL: %s" % message)
+	return false
+
+func _random_item_id(rng: RandomNumberGenerator) -> StringName:
+	return _valid_item_ids[rng.randi_range(0, _valid_item_ids.size() - 1)]
+
+func _random_batch(rng: RandomNumberGenerator, size: int) -> Array[StringName]:
+	var batch: Array[StringName] = []
+	for _index in range(size):
+		var pick := rng.randi_range(0, _valid_item_ids.size() + 3)
+		if pick < _valid_item_ids.size():
+			batch.append(_valid_item_ids[pick])
+		elif pick == _valid_item_ids.size():
+			batch.append(&"")
+		else:
+			batch.append(&"unknown_item")
+	return batch
 
 func _make_random_inventory(rng: RandomNumberGenerator) -> InventoryModel:
-	var ms: int = MAX_STACK_OPTIONS[rng.randi_range(0, MAX_STACK_OPTIONS.size() - 1)]
-	var inv: InventoryModel = InventoryModel.new(InventoryModel.TOTAL_SIZE, ms)
-	var batches: int = rng.randi_range(0, 6)
-	for _b in range(batches):
-		var batch: Array[int] = []
-		var sz: int = rng.randi_range(0, 14)
-		for _i in range(sz):
-			var pick: int = rng.randi_range(0, 12)
-			if pick < VALID_TYPES.size():
-				batch.append(VALID_TYPES[pick])
-			elif pick == 8:
-				batch.append(BlockId.Type.AIR)
-			elif pick == 9:
-				batch.append(-1)
-			else:
-				batch.append(rng.randi_range(0, BlockId.Type.COUNT - 1))
-		var _can: bool = inv.can_add_batch(batch)
-		var _added: bool = inv.add_batch(batch)
-		if _can != _added:
-			_assert(false, "can_add_batch vs add_batch mismatch batch=%s can=%s added=%s" % [str(batch), str(_can), str(_added)])
-	var direct_fills: int = rng.randi_range(0, 4)
-	for _f in range(direct_fills):
-		var idx: int = rng.randi_range(0, inv.size - 1)
+	var max_stack := MAX_STACK_OPTIONS[rng.randi_range(0, MAX_STACK_OPTIONS.size() - 1)]
+	var inv := InventoryModel.new(_make_catalog(max_stack))
+	for _batch_index in range(rng.randi_range(0, 6)):
+		var batch := _random_batch(rng, rng.randi_range(0, 14))
+		var can_add := inv.can_add_batch(batch)
+		var added := inv.add_batch(batch)
+		_assert(can_add == added, "can_add_batch mismatch")
+	for _fill_index in range(rng.randi_range(0, 4)):
+		var index := rng.randi_range(0, InventoryModel.FILLABLE_SIZE - 1)
 		if rng.randf() < 0.5:
-			inv.slots[idx] = null
+			inv.slots[index] = null
 		else:
-			var t: int = VALID_TYPES[rng.randi_range(0, VALID_TYPES.size() - 1)]
-			if inv.can_slot_accept_type(idx, t):
-				var cnt: int
-				if inv.max_stack <= 0:
-					cnt = rng.randi_range(1, 200)
-				else:
-					cnt = rng.randi_range(1, inv.max_stack)
-				inv.slots[idx] = {"type": t, "count": cnt}
-			else:
-				inv.slots[idx] = null
-	var tmp: Array = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-	if not _validate_inv(inv, tmp):
-		for i in range(inv.size):
-			var s = inv.slots[i]
-			if s != null:
-				var cnt2: int = int(s["count"]) if s is Dictionary and s.has("count") else -1
-				if cnt2 <= 0 or (inv.max_stack > 0 and cnt2 > inv.max_stack) or not inv.can_slot_accept_type(i, s["type"] if s is Dictionary else null):
-					inv.slots[i] = null
+			var item_id := _random_item_id(rng)
+			var limit := inv.item_catalog.get_definition(item_id).max_stack
+			inv.slots[index] = {"item_id": item_id, "count": rng.randi_range(1, limit)}
+	assert(_validate_inv(inv))
 	return inv
 
 func _run_edge_cases() -> bool:
 	print("[edge] starting")
 	_tests_run += 1
-	var inv0: InventoryModel = InventoryModel.new()
-	_assert(inv0.size == InventoryModel.TOTAL_SIZE, "default size")
-	_assert(inv0.max_stack == InventoryModel.DEFAULT_MAX_STACK, "default max_stack")
-	for i in range(inv0.size):
-		_assert(inv0.slots[i] == null, "empty init slot %d null" % i)
-	_assert(not inv0.can_handle_drop(0, 1, 1), "empty src cannot handle")
-	_assert(inv0.handle_drop(0, 1, 1) == false, "empty handle_drop false")
-	var before0: Array = inv0.slots.duplicate(true)
-	inv0.handle_drop(0, 1, 1)
-	_assert(_slots_equal(before0, inv0.slots), "empty handle_drop identity")
-	var inv1: InventoryModel = InventoryModel.new()
-	inv1.slots[0] = {"type": BlockId.Type.GRASS, "count": 10}
-	inv1.slots[1] = null
-	_assert(inv1.can_handle_drop(0, 1, 10) == true, "move full to empty")
-	var c1: Array = _compute_totals(inv1)
-	var b1: Array = inv1.slots.duplicate(true)
-	var r1: bool = inv1.handle_drop(0, 1, 10)
-	_assert(r1 == true, "handle_drop move full true")
-	_assert(inv1.slots[0] == null, "src null after move")
-	_assert(inv1.slots[1] != null and inv1.slots[1]["type"] == BlockId.Type.GRASS and inv1.slots[1]["count"] == 10, "dst has moved stack")
-	var tmp1: Array = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-	_assert(_validate_inv(inv1, tmp1), "validate after move")
-	_assert(_totals_equal(c1, _compute_totals(inv1)), "conserved after move")
-	_assert(not _slots_equal(b1, inv1.slots), "mutated after successful drop")
-	var inv2: InventoryModel = InventoryModel.new()
-	inv2.slots[0] = {"type": BlockId.Type.STONE, "count": 10}
-	inv2.slots[5] = null
-	_assert(inv2.can_handle_drop(0, 5, 3) == true, "split to empty")
-	var c2: Array = _compute_totals(inv2)
-	inv2.handle_drop(0, 5, 3)
-	_assert(inv2.slots[0]["count"] == 7, "split src 7")
-	_assert(inv2.slots[5]["count"] == 3, "split dst 3")
-	_assert(_totals_equal(c2, _compute_totals(inv2)), "conserved split")
-	var inv3: InventoryModel = InventoryModel.new()
-	inv3.slots[0] = {"type": BlockId.Type.DIRT, "count": 5}
-	inv3.slots[1] = {"type": BlockId.Type.DIRT, "count": 3}
-	_assert(inv3.can_handle_drop(0, 1, 5) == true, "merge same type full src")
-	var c3: Array = _compute_totals(inv3)
-	inv3.handle_drop(0, 1, 5)
-	_assert(inv3.slots[1]["count"] == 8, "merge dst 8")
-	_assert(inv3.slots[0] == null, "merge src null")
-	_assert(_totals_equal(c3, _compute_totals(inv3)), "conserved merge")
-	var inv4: InventoryModel = InventoryModel.new(InventoryModel.TOTAL_SIZE, 99)
-	inv4.slots[0] = {"type": BlockId.Type.SAND, "count": 10}
-	inv4.slots[1] = {"type": BlockId.Type.SAND, "count": 95}
-	_assert(inv4.can_handle_drop(0, 1, 10) == true, "merge overflow can")
-	var c4: Array = _compute_totals(inv4)
-	var b4: Array = inv4.slots.duplicate(true)
-	var can4: bool = inv4.can_handle_drop(0, 1, 10)
-	var ret4: bool = inv4.handle_drop(0, 1, 10)
-	_assert(can4 == ret4, "can==ret overflow")
-	_assert(inv4.slots[1]["count"] == 99, "dst capped 99")
-	_assert(inv4.slots[0]["count"] == 6, "src remainder 6")
-	_assert(_totals_equal(c4, _compute_totals(inv4)), "conserved overflow")
-	var tmp4: Array = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-	_assert(_validate_inv(inv4, tmp4), "validate overflow")
-	_assert(not _slots_equal(b4, inv4.slots), "mutated overflow")
-	var inv5: InventoryModel = InventoryModel.new()
-	inv5.slots[0] = {"type": BlockId.Type.GRASS, "count": 4}
-	inv5.slots[1] = {"type": BlockId.Type.STONE, "count": 6}
-	_assert(inv5.can_handle_drop(0, 1, 4) == true, "swap full different type")
-	var c5: Array = _compute_totals(inv5)
-	inv5.handle_drop(0, 1, 4)
-	_assert(inv5.slots[0]["type"] == BlockId.Type.STONE and inv5.slots[0]["count"] == 6, "swap src is stone")
-	_assert(inv5.slots[1]["type"] == BlockId.Type.GRASS and inv5.slots[1]["count"] == 4, "swap dst is grass")
-	_assert(_totals_equal(c5, _compute_totals(inv5)), "conserved swap")
-	var inv6: InventoryModel = InventoryModel.new()
-	inv6.slots[0] = {"type": BlockId.Type.GRASS, "count": 8}
-	inv6.slots[1] = {"type": BlockId.Type.STONE, "count": 2}
-	_assert(inv6.can_handle_drop(0, 1, 3) == false, "partial swap must fail")
-	var b6: Array = inv6.slots.duplicate(true)
-	var r6: bool = inv6.handle_drop(0, 1, 3)
-	_assert(r6 == false, "partial swap handle false")
-	_assert(_slots_equal(b6, inv6.slots), "partial swap identity")
-	var inv7: InventoryModel = InventoryModel.new()
-	inv7.slots[0] = {"type": BlockId.Type.TORCH, "count": 5}
-	var equip_start: int = InventoryModel.HOTBAR_SIZE + InventoryModel.BACKPACK_SIZE
-	for ei in range(equip_start, inv7.size):
-		_assert(inv7.can_handle_drop(0, ei, 5) == false, "drop to equipment must fail idx %d" % ei)
-		var be: Array = inv7.slots.duplicate(true)
-		var re: bool = inv7.handle_drop(0, ei, 5)
-		_assert(re == false, "handle to equipment false")
-		_assert(_slots_equal(be, inv7.slots), "equipment identity")
-	_assert(inv7.can_handle_drop(0, 0, 1) == false, "same index fail")
-	_assert(inv7.handle_drop(0, 0, 1) == false, "same index handle false")
-	_assert(inv7.can_handle_drop(-1, 1, 1) == false, "oob src -1")
-	_assert(inv7.can_handle_drop(0, 999, 1) == false, "oob dst 999")
-	_assert(inv7.can_handle_drop(0, 1, 0) == false, "drag 0 fail")
-	_assert(inv7.can_handle_drop(0, 1, -1) == false, "drag -1 fail")
-	_assert(inv7.can_handle_drop(0, 1, 99) == false, "drag > count fail")
-	var be7: Array = inv7.slots.duplicate(true)
-	inv7.handle_drop(0, 1, 0)
-	_assert(_slots_equal(be7, inv7.slots), "invalid drag identity")
-	var inv8: InventoryModel = InventoryModel.new(InventoryModel.TOTAL_SIZE, 10)
-	inv8.slots[0] = {"type": BlockId.Type.LOG, "count": 10}
-	inv8.slots[1] = {"type": BlockId.Type.LOG, "count": 10}
-	_assert(inv8.can_handle_drop(0, 1, 5) == false, "full dst no space")
-	var b8: Array = inv8.slots.duplicate(true)
-	_assert(inv8.handle_drop(0, 1, 5) == false, "full dst handle false")
-	_assert(_slots_equal(b8, inv8.slots), "full dst identity")
-	var inv9: InventoryModel = InventoryModel.new(InventoryModel.TOTAL_SIZE, 0)
-	inv9.slots[0] = {"type": BlockId.Type.LEAVES, "count": 500}
-	inv9.slots[1] = {"type": BlockId.Type.LEAVES, "count": 400}
-	_assert(inv9.can_handle_drop(0, 1, 100) == true, "unlimited merge can")
-	inv9.handle_drop(0, 1, 100)
-	_assert(inv9.slots[1]["count"] == 500, "unlimited merge dst 500")
-	_assert(inv9.slots[0]["count"] == 400, "unlimited merge src 400")
-	var inv10: InventoryModel = InventoryModel.new()
-	inv10.slots[0] = {"type": BlockId.Type.AIR, "count": 5}
-	_assert(not inv10.can_slot_accept_type(0, BlockId.Type.AIR), "AIR not accepted")
-	var tmp10: Array = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-	_assert(not _validate_inv(inv10, tmp10), "AIR occupied fails check")
+	var catalog := _make_catalog(99)
+	var grass_id := catalog.get_item_for_block(BlockId.Type.GRASS).id
+	var dirt_id := catalog.get_item_for_block(BlockId.Type.DIRT).id
+	var stone_id := catalog.get_item_for_block(BlockId.Type.STONE).id
+	var sand_id := catalog.get_item_for_block(BlockId.Type.SAND).id
+	var torch_id := catalog.get_item_for_block(BlockId.Type.TORCH).id
+
+	var empty := InventoryModel.new(catalog)
+	_assert(empty.size == InventoryModel.TOTAL_SIZE, "default size")
+	_assert(not empty.can_handle_drop(0, 1, 1), "empty source rejected")
+	var empty_before := empty.slots.duplicate(true)
+	_assert(not empty.handle_drop(0, 1, 1), "empty drop rejected")
+	_assert(_slots_equal(empty_before, empty.slots), "empty drop unchanged")
+
+	var moved := InventoryModel.new(catalog)
+	moved.slots[0] = {"item_id": grass_id, "count": 10}
+	var moved_totals := _compute_totals(moved)
+	_assert(moved.can_handle_drop(0, 1, 10), "full move accepted")
+	_assert(moved.handle_drop(0, 1, 10), "full move succeeds")
+	_assert(moved.slots[0] == null, "full move clears source")
+	_assert(moved.slots[1]["item_id"] == grass_id and moved.slots[1]["count"] == 10, "full move preserves stack")
+	_assert(_compute_totals(moved) == moved_totals, "full move conserves totals")
+
+	var split := InventoryModel.new(catalog)
+	split.slots[0] = {"item_id": stone_id, "count": 10}
+	_assert(split.handle_drop(0, 5, 3), "split succeeds")
+	_assert(split.slots[0]["count"] == 7 and split.slots[5]["count"] == 3, "split counts")
+
+	var merged := InventoryModel.new(catalog)
+	merged.slots[0] = {"item_id": dirt_id, "count": 5}
+	merged.slots[1] = {"item_id": dirt_id, "count": 3}
+	_assert(merged.handle_drop(0, 1, 5), "merge succeeds")
+	_assert(merged.slots[0] == null and merged.slots[1]["count"] == 8, "merge counts")
+
+	var overflow := InventoryModel.new(catalog)
+	overflow.slots[0] = {"item_id": sand_id, "count": 10}
+	overflow.slots[1] = {"item_id": sand_id, "count": 95}
+	_assert(overflow.handle_drop(0, 1, 10), "overflow merge succeeds")
+	_assert(overflow.slots[0]["count"] == 6 and overflow.slots[1]["count"] == 99, "overflow capped")
+
+	var swapped := InventoryModel.new(catalog)
+	swapped.slots[0] = {"item_id": grass_id, "count": 4}
+	swapped.slots[1] = {"item_id": stone_id, "count": 6}
+	_assert(swapped.handle_drop(0, 1, 4), "swap succeeds")
+	_assert(swapped.slots[0]["item_id"] == stone_id and swapped.slots[1]["item_id"] == grass_id, "swap identities")
+	var swap_before := swapped.slots.duplicate(true)
+	_assert(not swapped.handle_drop(0, 1, 2), "partial swap rejected")
+	_assert(_slots_equal(swap_before, swapped.slots), "partial swap unchanged")
+
+	var equipment := InventoryModel.new(catalog)
+	equipment.slots[0] = {"item_id": torch_id, "count": 5}
+	for index in range(InventoryModel.FILLABLE_SIZE, equipment.size):
+		_assert(not equipment.handle_drop(0, index, 5), "equipment drop rejected")
+	_assert(not equipment.handle_drop(0, 0, 1), "same slot rejected")
+	_assert(not equipment.handle_drop(-1, 1, 1), "invalid source rejected")
+	_assert(not equipment.handle_drop(0, 999, 1), "invalid destination rejected")
+
+	var capped_catalog := _make_catalog(10)
+	var capped_log := capped_catalog.get_item_for_block(BlockId.Type.LOG).id
+	var capped := InventoryModel.new(capped_catalog)
+	capped.slots[0] = {"item_id": capped_log, "count": 10}
+	capped.slots[1] = {"item_id": capped_log, "count": 10}
+	var capped_before := capped.slots.duplicate(true)
+	_assert(not capped.handle_drop(0, 1, 5), "full destination rejected")
+	_assert(_slots_equal(capped_before, capped.slots), "full destination unchanged")
+
+	var general_catalog := _make_catalog(99, true)
+	var general := InventoryModel.new(general_catalog)
+	var tool_batch: Array[StringName] = [&"test_tool"]
+	_assert(general.add_batch(tool_batch), "non-placeable item accepted")
+	_assert(general.get_selected_item_id() == &"test_tool", "non-placeable item selected")
+	_assert(general_catalog.get_definition(&"test_tool").placed_block == null, "non-placeable item has no block")
+
+	var saved_source := InventoryModel.new(catalog)
+	saved_source.setup_starter()
+	var encoded := saved_source.to_dict()
+	var encoded_slot = encoded["regions"]["hotbar"][0]
+	_assert(encoded_slot["item_id"] is String, "save item ID is string")
+	_assert(not encoded_slot.has("type"), "old save key absent")
+	var restored := InventoryModel.new(catalog)
+	_assert(restored.from_dict(encoded), "version 3 inventory restores")
+	_assert(_slots_equal(saved_source.slots, restored.slots), "save round trip")
+	var old_shape := encoded.duplicate(true)
+	old_shape["regions"]["hotbar"][0] = {"type": 1, "count": 12}
+	_assert(not restored.from_dict(old_shape), "old inventory shape rejected")
+
+	_assert(_validate_inv(moved), "moved inventory valid")
+	_assert(_validate_inv(split), "split inventory valid")
+	_assert(_validate_inv(merged), "merged inventory valid")
+	_assert(_validate_inv(overflow), "overflow inventory valid")
 	print("[edge] done failures=%d" % _failures)
 	return _failures == 0
 
 func _run_raw_throughput() -> bool:
 	print("[perf] measuring raw model throughput")
 	_tests_run += 1
-	var rng2: RandomNumberGenerator = RandomNumberGenerator.new()
-	rng2.seed = 987654321
-	var inv: InventoryModel = InventoryModel.new()
-	inv.slots[0] = {"type": BlockId.Type.GRASS, "count": 50}
-	inv.slots[1] = {"type": BlockId.Type.STONE, "count": 50}
-	inv.slots[2] = {"type": BlockId.Type.DIRT, "count": 50}
-	var n: int = 300000
-	var t0: int = Time.get_ticks_msec()
-	for i in range(n):
-		var src: int = rng2.randi_range(0, 2)
-		var dst: int = rng2.randi_range(0, 2)
-		if dst == src:
-			dst = (dst + 1) % 3
-		var drag: int = rng2.randi_range(1, 2)
-		inv.can_handle_drop(src, dst, drag)
-	var t1: int = Time.get_ticks_msec()
-	var rate_can: float = float(n) / max(1, t1 - t0) * 1000.0
-	t0 = Time.get_ticks_msec()
-	for i in range(n):
-		var src: int = rng2.randi_range(0, 2)
-		var dst: int = rng2.randi_range(0, 2)
-		if dst == src:
-			dst = (dst + 1) % 3
-		var drag: int = 1
-		if inv.can_handle_drop(src, dst, drag):
-			inv.handle_drop(src, dst, drag)
-	var t2: int = Time.get_ticks_msec()
-	var rate_both: float = float(n) / max(1, t2 - t0) * 1000.0
-	print("[perf] can_handle_drop: %.0f ops/s (%.0f seq/s @1op/seq) | can+handle: %.0f ops/s" % [rate_can, rate_can, rate_both])
-	_assert(rate_can > 50000, "raw throughput sanity")
+	var catalog := _make_catalog(99)
+	var inv := InventoryModel.new(catalog)
+	inv.slots[0] = {"item_id": catalog.get_item_for_block(BlockId.Type.GRASS).id, "count": 50}
+	inv.slots[1] = {"item_id": catalog.get_item_for_block(BlockId.Type.STONE).id, "count": 50}
+	inv.slots[2] = {"item_id": catalog.get_item_for_block(BlockId.Type.DIRT).id, "count": 50}
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 987654321
+	var operations := 300000
+	var started := Time.get_ticks_msec()
+	for _index in range(operations):
+		var source := rng.randi_range(0, 2)
+		var destination := rng.randi_range(0, 2)
+		if destination == source:
+			destination = (destination + 1) % 3
+		inv.can_handle_drop(source, destination, rng.randi_range(1, 2))
+	var elapsed: int = max(1, Time.get_ticks_msec() - started)
+	var rate: float = float(operations) / elapsed * 1000.0
+	print("[perf] can_handle_drop: %.0f ops/s" % rate)
+	_assert(rate > 50000, "raw throughput sanity")
 	return _failures == 0
 
 func _run_add_batch_properties() -> bool:
 	print("[add_batch] starting")
 	_tests_run += 1
-	var local_rng: RandomNumberGenerator = RandomNumberGenerator.new()
-	local_rng.seed = 0x12345678
-	for iter in range(5000):
-		var ms: int = MAX_STACK_OPTIONS[local_rng.randi_range(0, MAX_STACK_OPTIONS.size() - 1)]
-		var inv: InventoryModel = InventoryModel.new(InventoryModel.TOTAL_SIZE, ms)
-		var batch: Array[int] = []
-		var n: int = local_rng.randi_range(0, 20)
-		for i in range(n):
-			batch.append(local_rng.randi_range(-2, BlockId.Type.COUNT + 1))
-		var before: Array = inv.slots.duplicate(true)
-		var can: bool = inv.can_add_batch(batch)
-		var ret: bool = inv.add_batch(batch)
-		_assert(can == ret, "add_batch can==ret iter %d batch %s can %s ret %s" % [iter, str(batch), str(can), str(ret)])
-		var mutated: bool = not _slots_equal(before, inv.slots)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 0x12345678
+	for iteration in range(5000):
+		var max_stack := MAX_STACK_OPTIONS[rng.randi_range(0, MAX_STACK_OPTIONS.size() - 1)]
+		var inv := InventoryModel.new(_make_catalog(max_stack))
+		var batch := _random_batch(rng, rng.randi_range(0, 20))
+		var before := inv.slots.duplicate(true)
+		var can_add := inv.can_add_batch(batch)
+		var added := inv.add_batch(batch)
+		_assert(can_add == added, "add_batch can matches result")
+		var mutated := not _slots_equal(before, inv.slots)
 		if batch.is_empty():
-			_assert(not mutated, "add_batch empty not mutated iter %d" % iter)
+			_assert(not mutated, "empty batch unchanged")
 		else:
-			_assert(mutated == can, "add_batch mutated==can non-empty iter %d" % iter)
-		if not can:
-			_assert(not mutated, "add_batch not mutated when can false iter %d" % iter)
-			_assert(_slots_equal(before, inv.slots), "add_batch identity when false iter %d" % iter)
-		var tmp: Array = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-		_assert(_validate_inv(inv, tmp), "add_batch validate iter %d ms %d" % [iter, ms])
+			_assert(mutated == can_add, "batch mutation matches result")
+		if not can_add:
+			_assert(_slots_equal(before, inv.slots), "failed batch unchanged")
+		_assert(_validate_inv(inv), "batch inventory valid")
 		if _failures > 0:
-			print("[add_batch] failed at iter %d batch %s ms %d" % [iter, str(batch), ms])
+			print("[add_batch] failed at iteration %d" % iteration)
 			return false
 	print("[add_batch] done")
 	return true
 
-func _run_fuzz(seq_count: int, ops_per_seq: int) -> bool:
-	print("[fuzz] starting seqs=%d ops_per_seq=%d total_ops=%d seed=%d" % [seq_count, ops_per_seq, seq_count * ops_per_seq, _rng.seed])
+func _run_fuzz(sequence_count: int, operations_per_sequence: int) -> bool:
+	print("[fuzz] starting seqs=%d ops_per_seq=%d total_ops=%d seed=%d" % [sequence_count, operations_per_sequence, sequence_count * operations_per_sequence, _rng.seed])
 	_tests_run += 1
-	var t0: int = Time.get_ticks_msec()
-	var total_ops: int = seq_count * ops_per_seq
-	var checks: int = 0
-	var tmp_initial: Array = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-	var tmp_before: Array = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-	var tmp_after: Array = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-	var tmp_validate: Array = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-	for seq_idx in range(seq_count):
-		var inv: InventoryModel = _make_random_inventory(_rng)
-		var initial_totals: Array = _compute_totals(inv)
-		if not _validate_inv(inv, tmp_initial):
-			_assert(false, "fuzz init validate seq %d" % seq_idx)
-			print("init slots %s" % str(inv.slots))
-			return false
-		if not _totals_equal(tmp_initial, initial_totals):
-			_assert(false, "fuzz init totals mismatch")
-		for op_idx in range(ops_per_seq):
-			var src: int
-			var dst: int
-			var drag: int
-			if _rng.randf() < 0.06:
-				src = _rng.randi_range(-5, inv.size + 4)
-			else:
-				src = _rng.randi_range(0, inv.size - 1)
-			if _rng.randf() < 0.06:
-				dst = _rng.randi_range(-5, inv.size + 4)
-			else:
-				dst = _rng.randi_range(0, inv.size - 1)
+	var started := Time.get_ticks_msec()
+	for sequence_index in range(sequence_count):
+		var inv := _make_random_inventory(_rng)
+		var initial_totals := _compute_totals(inv)
+		for operation_index in range(operations_per_sequence):
+			var source := _rng.randi_range(-5, inv.size + 4) if _rng.randf() < 0.06 else _rng.randi_range(0, inv.size - 1)
+			var destination := _rng.randi_range(-5, inv.size + 4) if _rng.randf() < 0.06 else _rng.randi_range(0, inv.size - 1)
 			if _rng.randf() < 0.35:
-				src = dst
-			var src_slot = null
-			if src >= 0 and src < inv.size:
-				src_slot = inv.slots[src]
-			if src_slot != null:
-				var coin: float = _rng.randf()
+				source = destination
+			var source_slot = inv.slots[source] if source >= 0 and source < inv.size else null
+			var drag: int
+			if source_slot == null:
+				drag = _rng.randi_range(-2, 6)
+			else:
+				var coin := _rng.randf()
 				if coin < 0.62:
-					drag = _rng.randi_range(1, int(src_slot["count"]))
+					drag = _rng.randi_range(1, int(source_slot["count"]))
 				elif coin < 0.75:
 					drag = 0
 				elif coin < 0.85:
 					drag = -_rng.randi_range(1, 3)
 				elif coin < 0.92:
-					drag = int(src_slot["count"]) + _rng.randi_range(1, 5)
+					drag = int(source_slot["count"]) + _rng.randi_range(1, 5)
 				else:
-					drag = int(src_slot["count"])
-			else:
-				drag = _rng.randi_range(-2, 6)
-			var before_slots: Array = inv.slots.duplicate(true)
-			var before_totals: Array = _compute_totals(inv)
-			var can: bool = inv.can_handle_drop(src, dst, drag)
-			var ret: bool = inv.handle_drop(src, dst, drag)
-			var after_totals: Array = _compute_totals(inv)
-			var mutated: bool = not _slots_equal(before_slots, inv.slots)
-			checks += 1
-			if not _assert(can == ret, "can==ret seq %d op %d src %d dst %d drag %d can %s ret %s" % [seq_idx, op_idx, src, dst, drag, str(can), str(ret)]):
-				print(" before %s" % str(before_slots))
-				print(" after %s" % str(inv.slots))
+					drag = int(source_slot["count"])
+			var before_slots := inv.slots.duplicate(true)
+			var before_totals := _compute_totals(inv)
+			var can_drop := inv.can_handle_drop(source, destination, drag)
+			var dropped := inv.handle_drop(source, destination, drag)
+			var mutated := not _slots_equal(before_slots, inv.slots)
+			if not _assert(can_drop == dropped, "can/result mismatch seq %d op %d" % [sequence_index, operation_index]):
 				return false
-			if not _assert(mutated == can, "mutated==can seq %d op %d src %d dst %d drag %d mutated %s can %s" % [seq_idx, op_idx, src, dst, drag, str(mutated), str(can)]):
-				print(" before %s" % str(before_slots))
-				print(" after %s" % str(inv.slots))
+			if not _assert(mutated == can_drop, "mutation/result mismatch seq %d op %d" % [sequence_index, operation_index]):
 				return false
-			if not can:
-				if not _assert(_slots_equal(before_slots, inv.slots), "identity when can false seq %d op %d" % [seq_idx, op_idx]):
-					return false
-				if not _assert(_totals_equal(before_totals, after_totals), "totals identity when can false seq %d op %d" % [seq_idx, op_idx]):
-					return false
-			else:
-				if not _assert(_totals_equal(before_totals, after_totals), "conserved after drop seq %d op %d src %d dst %d drag %d before %s after %s" % [seq_idx, op_idx, src, dst, drag, str(before_totals), str(after_totals)]):
-					return false
-			if not _validate_inv(inv, tmp_validate):
-				_assert(false, "validate after drop seq %d op %d src %d dst %d drag %d max %d slots %s" % [seq_idx, op_idx, src, dst, drag, inv.max_stack, str(inv.slots)])
+			if not _assert(_compute_totals(inv) == before_totals, "operation conservation"):
 				return false
-			if not _totals_equal(tmp_validate, after_totals):
-				_assert(false, "validate totals mismatch seq %d op %d" % [seq_idx, op_idx])
+			if not _assert(_compute_totals(inv) == initial_totals, "sequence conservation"):
 				return false
-			if not _assert(_totals_equal(initial_totals, after_totals), "sequence conservation seq %d op %d" % [seq_idx, op_idx]):
-				print(" initial %s after %s" % [str(initial_totals), str(after_totals)])
+			if not _assert(_validate_inv(inv), "inventory valid after drop"):
 				return false
-			if _failures > 0:
-				return false
-		if seq_idx > 0 and seq_idx % 10000 == 0:
-			var elapsed: int = Time.get_ticks_msec() - t0
-			var done_ops: int = (seq_idx + 1) * ops_per_seq
-			var rate: float = float(done_ops) / max(1, elapsed) * 1000.0
-			print("[fuzz] progress %d/%d seqs %d ops elapsed %d ms rate %.0f ops/s" % [seq_idx, seq_count, done_ops, elapsed, rate])
-	var elapsed_total: int = Time.get_ticks_msec() - t0
-	var rate_total: float = float(total_ops) / max(1, elapsed_total) * 1000.0
-	print("[fuzz] done seqs=%d ops=%d checks=%d elapsed=%d ms rate=%.0f ops/s (%.0f seq/s) failures=%d" % [seq_count, total_ops, checks, elapsed_total, rate_total, float(seq_count) / max(1, elapsed_total) * 1000.0, _failures])
+		if sequence_index > 0 and sequence_index % 10000 == 0:
+			var elapsed: int = max(1, Time.get_ticks_msec() - started)
+			var completed := (sequence_index + 1) * operations_per_sequence
+			print("[fuzz] progress %d/%d seqs rate %.0f ops/s" % [sequence_index, sequence_count, float(completed) / elapsed * 1000.0])
+	var elapsed_total: int = max(1, Time.get_ticks_msec() - started)
+	var total_operations := sequence_count * operations_per_sequence
+	print("[fuzz] done seqs=%d ops=%d elapsed=%d ms rate=%.0f ops/s failures=%d" % [sequence_count, total_operations, elapsed_total, float(total_operations) / elapsed_total * 1000.0, _failures])
 	return _failures == 0

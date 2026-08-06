@@ -2,15 +2,14 @@ extends Panel
 class_name InventorySlot
 
 var slot_index: int = 0
-var item_type = null
+var item_id = null
 var item_count: int = 0
 var inventory_model: InventoryModel = null
-var block_catalog: BlockCatalog
 
 var _normal_style: StyleBoxFlat
 var _empty_style: StyleBoxFlat
 
-@onready var icon: ColorRect = $Color
+@onready var icon: TextureRect = $Icon
 @onready var count_label: Label = $Count
 
 func _ready():
@@ -22,9 +21,6 @@ func _ready():
 func set_inventory(p_inv: InventoryModel):
 	inventory_model = p_inv
 
-func set_block_catalog(p_catalog: BlockCatalog):
-	block_catalog = p_catalog
-
 func set_inventory_styles(normal_style: StyleBoxFlat, empty_style: StyleBoxFlat):
 	_normal_style = normal_style
 	_empty_style = empty_style
@@ -32,28 +28,26 @@ func set_inventory_styles(normal_style: StyleBoxFlat, empty_style: StyleBoxFlat)
 func set_slot_index(idx: int):
 	slot_index = idx
 
-func set_item(type, count: int):
-	if item_type == type and item_count == count:
+func set_item(p_item_id, count: int):
+	if item_id == p_item_id and item_count == count:
 		return
-	item_type = type
+	item_id = p_item_id
 	item_count = count
 	refresh_visuals()
 
 func refresh_visuals():
-	if item_type == null or item_type == BlockId.Type.AIR or item_count <= 0:
+	if item_id == null or item_count <= 0:
 		add_theme_stylebox_override("panel", _empty_style)
 	else:
 		add_theme_stylebox_override("panel", _normal_style)
 	_refresh_item_visuals()
 
 func _refresh_item_visuals():
-	if item_type == null or item_type == BlockId.Type.AIR or item_count <= 0:
-		icon.color = Color(0, 0, 0, 0)
+	if item_id == null or item_count <= 0:
+		icon.texture = null
 		count_label.text = ""
 	else:
-		var t = item_type
-		var col = block_catalog.get_side_color(t) if BlockId.is_valid(t) else Color(1, 0, 1, 1)
-		icon.color = col
+		icon.texture = inventory_model.item_catalog.get_definition(item_id).icon
 		if item_count > 1:
 			count_label.text = str(item_count)
 		else:
@@ -83,26 +77,25 @@ func _process(_delta):
 func _gui_input(event):
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_RIGHT:
-			if item_type != null and item_count > 0:
-				# Use model count for accurate half-split if available
-				var src_type = item_type
+			if item_id != null and item_count > 0:
+				var src_item_id = item_id
 				var src_count = item_count
 				if inventory_model:
 					var s = inventory_model.get_slot(slot_index)
 					if s != null:
-						src_type = s["type"]
+						src_item_id = s["item_id"]
 						src_count = int(s["count"])
 					else:
 						return
 				var half = int(ceil(float(src_count) / 2.0))
 				var data = {"source_index": slot_index, "drag_count": half}
-				_show_high_layer_preview(src_type, half)
+				_show_high_layer_preview(src_item_id, half)
 				force_drag(data, Control.new())
 				get_viewport().set_input_as_handled()
 				return
 
 func _get_drag_data(_at_position):
-	if item_type == null or item_count <= 0:
+	if item_id == null or item_count <= 0:
 		return null
 	if inventory_model == null:
 		return null
@@ -110,9 +103,9 @@ func _get_drag_data(_at_position):
 	if s == null:
 		return null
 	var count = s["count"] as int
-	var type = s["type"]
+	var source_item_id = s["item_id"]
 	var data = {"source_index": slot_index, "drag_count": count}
-	_show_high_layer_preview(type, count)
+	_show_high_layer_preview(source_item_id, count)
 	set_drag_preview(Control.new())
 	return data
 
@@ -136,7 +129,7 @@ func _drop_data(_at_position, data):
 	var drag_count = int(data.get("drag_count", 0))
 	inventory_model.handle_drop(src_idx, slot_index, drag_count)
 
-func _create_drag_preview(type, count: int) -> Control:
+func _create_drag_preview(source_item_id: StringName, count: int) -> Control:
 	var preview = Panel.new()
 	preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	preview.custom_minimum_size = Vector2(64, 64)
@@ -155,13 +148,16 @@ func _create_drag_preview(type, count: int) -> Control:
 	sb.border_width_bottom = 1
 	sb.border_color = Color(1, 1, 1, 0.4)
 	preview.add_theme_stylebox_override("panel", sb)
-	var col_rect = ColorRect.new()
-	col_rect.position = Vector2(14, 8)
-	col_rect.size = Vector2(36, 36)
-	col_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var col = block_catalog.get_side_color(type) if BlockId.is_valid(type) else Color(1, 0, 1, 1)
-	col_rect.color = col
-	preview.add_child(col_rect)
+	var preview_icon := TextureRect.new()
+	preview_icon.name = "Icon"
+	preview_icon.position = Vector2(8, 4)
+	preview_icon.size = Vector2(48, 48)
+	preview_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	preview_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	preview_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	preview_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	preview_icon.texture = inventory_model.item_catalog.get_definition(source_item_id).icon
+	preview.add_child(preview_icon)
 	if count > 1:
 		var lbl = Label.new()
 		lbl.text = str(count)
@@ -174,12 +170,12 @@ func _create_drag_preview(type, count: int) -> Control:
 	preview.modulate = Color(1, 1, 1, 0.9)
 	return preview
 
-func _show_high_layer_preview(type, count: int):
+func _show_high_layer_preview(source_item_id: StringName, count: int):
 	_hide_high_layer_preview()
 	var layer = CanvasLayer.new()
 	layer.layer = 100
 	layer.name = "InventoryDragPreview"
-	var preview = _create_drag_preview(type, count)
+	var preview = _create_drag_preview(source_item_id, count)
 	preview.position = get_viewport().get_mouse_position() - preview.size * 0.5
 	layer.add_child(preview)
 	get_tree().root.add_child(layer)

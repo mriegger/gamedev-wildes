@@ -6,6 +6,8 @@ signal session_ready
 signal main_menu_requested
 
 @export var pause_menu_scene: PackedScene
+@export var block_catalog: BlockCatalog
+@export var item_catalog: ItemCatalog
 
 @onready var world: WorldController = $World as WorldController
 @onready var player: PlayerMotor = $Player as PlayerMotor
@@ -34,7 +36,10 @@ func configure_session(slot_id: int, save_data: Dictionary):
 func _ready():
 	set_physics_process(false)
 	set_process_unhandled_input(false)
-	inventory_model = InventoryModel.new(InventoryModel.TOTAL_SIZE, InventoryModel.DEFAULT_MAX_STACK)
+	assert(block_catalog.validate())
+	assert(item_catalog.validate(block_catalog))
+	world.block_catalog = block_catalog
+	inventory_model = InventoryModel.new(item_catalog)
 	_restore_inventory()
 	world.configure_start_state(_world_state)
 	world.generation_progress.connect(_on_generation_progress)
@@ -52,7 +57,7 @@ func _ready():
 func _restore_inventory():
 	var saved_inventory = _save_data.get("inventory", null)
 	if saved_inventory is Dictionary and not saved_inventory.is_empty():
-		inventory_model.from_dict(saved_inventory)
+		assert(inventory_model.from_dict(saved_inventory))
 	else:
 		inventory_model.setup_starter()
 

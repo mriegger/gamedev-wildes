@@ -3,6 +3,7 @@ class_name SaveManager
 
 const SAVE_DIR: String = "user://saves"
 const SLOT_COUNT: int = 3
+const CURRENT_SAVE_VERSION: int = 3
 
 static func ensure_save_dir() -> void:
 	if not DirAccess.dir_exists_absolute(SAVE_DIR):
@@ -69,7 +70,7 @@ static func create_new_world(slot_id: int, seed_value: int, world_name: String) 
 		"world_name": world_name,
 		"created_at": now_str,
 		"last_played": now_str,
-		"version": 2,
+		"version": CURRENT_SAVE_VERSION,
 		"placed_blocks": {},
 		"removed_blocks": {},
 		"torch_attachments": {},
@@ -161,6 +162,9 @@ static func load_slot(slot_id: int) -> Dictionary:
 	var info = get_slot_info(slot_id)
 	if not info.get("exists", false):
 		return info
+	if int(info.get("version", 0)) != CURRENT_SAVE_VERSION:
+		info["incompatible"] = true
+		return info
 	if not info.has("seed"):
 		info["seed"] = generate_random_seed()
 	if not info.has("world_name"):
@@ -180,6 +184,7 @@ static func load_slot(slot_id: int) -> Dictionary:
 static func save_world_state(slot_id: int, current_data: Dictionary, voxel_model: VoxelWorld, player: PlayerMotor, inventory: InventoryModel, extra_seconds: float, time_of_day: float) -> bool:
 	var updated = current_data.duplicate()
 	updated["last_played"] = _now_str()
+	updated["version"] = CURRENT_SAVE_VERSION
 	updated["playtime_seconds"] = float(updated.get("playtime_seconds", 0)) + extra_seconds
 
 	updated["placed_blocks"] = serialize_vector3i_dict(voxel_model.placed_blocks)

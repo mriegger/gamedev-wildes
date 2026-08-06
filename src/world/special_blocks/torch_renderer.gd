@@ -28,11 +28,11 @@ func setup(p_block_catalog: BlockCatalog):
 
 func _setup_materials_and_meshes():
 	var def = block_catalog.get_definition(BlockId.Type.TORCH)
-	var base_col = def.side_color
 	var flame_col = def.emissive_color
 
 	torch_base_material = StandardMaterial3D.new()
-	torch_base_material.albedo_color = base_col
+	torch_base_material.albedo_texture = def.side_texture
+	torch_base_material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 	torch_base_material.roughness = 0.9
 
 	torch_flame_material = StandardMaterial3D.new()

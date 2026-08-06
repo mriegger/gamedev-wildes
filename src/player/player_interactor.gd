@@ -241,7 +241,7 @@ func _can_place() -> bool:
 		return false
 	if inventory_model == null:
 		return false
-	return inventory_model.can_consume_selected()
+	return get_selected_block_id() != null and inventory_model.can_consume_selected()
 
 func _commit_mine(pos: Vector3i):
 	_reset_mining()
@@ -252,47 +252,52 @@ func _commit_mine(pos: Vector3i):
 	if preview_id == BlockId.Type.AIR:
 		return
 
-	var ids_to_collect: Array[int] = [preview_id]
+	var item_ids_to_collect: Array[StringName] = [inventory_model.item_catalog.get_item_for_block(preview_id).id]
 	for torch_pos in voxel_world.get_attached_torches(pos):
 		var tid = voxel_world.get_block_id_at(torch_pos)
 		if tid != BlockId.Type.AIR:
-			ids_to_collect.append(tid)
+			item_ids_to_collect.append(inventory_model.item_catalog.get_item_for_block(tid).id)
 
-	if not inventory_model.can_add_batch(ids_to_collect):
+	if not inventory_model.can_add_batch(item_ids_to_collect):
 		return
 
 	var batch = voxel_world.try_mine_block(pos)
 	if batch is Array and batch.size() > 0 and batch[0] is BlockEdit:
 		if not (batch[0] as BlockEdit).is_success():
 			return
-		var collected_ids: Array[int] = []
+		var collected_item_ids: Array[StringName] = []
 		for edit in batch:
 			var be = edit as BlockEdit
 			if be.is_success() and be.is_mine():
-				collected_ids.append(be.old_id)
-		inventory_model.add_batch(collected_ids)
+				collected_item_ids.append(inventory_model.item_catalog.get_item_for_block(be.old_id).id)
+		inventory_model.add_batch(collected_item_ids)
 	_handle_raycast()
 
 func _commit_place(pos: Vector3i):
 	if voxel_world == null or inventory_model == null:
 		return
 
-	var sel_data = inventory_model.get_selected_data()
-	if sel_data == null:
+	var block_id = get_selected_block_id()
+	if block_id == null:
 		return
-	var type_to_place = sel_data["type"]
 
-	var attach_dir = -last_ray_normal if type_to_place == BlockId.Type.TORCH else Vector3i.ZERO
-	var edit: BlockEdit = voxel_world.try_place_block(pos, type_to_place, attach_dir)
+	var attach_dir = -last_ray_normal if block_id == BlockId.Type.TORCH else Vector3i.ZERO
+	var edit: BlockEdit = voxel_world.try_place_block(pos, block_id, attach_dir)
 
 	if edit.is_success():
 		inventory_model.consume_selected()
 		_handle_raycast()
 
-func get_selected_block_type():
+func get_selected_block_id():
 	if inventory_model == null:
 		return null
-	return inventory_model.get_selected_block_type()
+	var item_id = inventory_model.get_selected_item_id()
+	if item_id == null:
+		return null
+	var definition := inventory_model.item_catalog.get_definition(item_id)
+	if definition.placed_block == null:
+		return null
+	return int(definition.placed_block.id)
 
 func _unhandled_input(event):
 	if event is InputEventKey and event.pressed:

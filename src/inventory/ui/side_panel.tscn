@@ -1,11 +1,10 @@
-[gd_scene load_steps=9 format=3 uid="uid://s1d3p4n3l01"]
+[gd_scene load_steps=8 format=3 uid="uid://s1d3p4n3l01"]
 
 [ext_resource type="Script" path="res://inventory/ui/side_panel.gd" id="1_script"]
 [ext_resource type="Material" path="res://ui/theme/frosted_panel_material.tres" id="2_frosted"]
 [ext_resource type="FontFile" path="res://assets/fonts/RobotoSlab-Bold.ttf" id="3_bold"]
 [ext_resource type="PackedScene" path="res://ui/components/wildes_button.tscn" id="4_button"]
 [ext_resource type="Texture2D" path="res://assets/images/icons/button/equipment_icon.png" id="6_equipment"]
-[ext_resource type="Resource" path="res://blocks/block_catalog.tres" id="7_catalog"]
 [ext_resource type="PackedScene" path="res://inventory/ui/inventory_slot.tscn" id="8_slot"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_background"]
@@ -15,7 +14,6 @@ bg_color = Color(0.14, 0.16, 0.18, 0.32)
 custom_minimum_size = Vector2(380, 0)
 mouse_filter = 2
 script = ExtResource("1_script")
-block_catalog = ExtResource("7_catalog")
 slot_scene = ExtResource("8_slot")
 
 [node name="SidePanelBackground" type="Panel" parent="."]

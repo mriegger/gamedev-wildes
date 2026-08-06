@@ -107,3 +107,4 @@ Godot itself is MIT licensed.
 | #4 | Comprehensive headless test suite — inventory fuzz, world golden hash, HUD integration, streaming soak + composite Godot CI | `test/comprehensive-headless-suite` |
 | #5 | Behavior-preserving codebase optimization — dense resource catalog, lower-allocation world/mesh/UI paths, lifecycle and save cleanup | `refactor/aggressive-codebase-optimization` |
 | #6 | Feature-owned Godot structure, app shell, typed catalogs, decomposed chunk pipeline, and lifecycle/save hardening | `refactor/godot-feature-structure` |
+| #7 | Texture-array terrain rendering, data-driven item catalog, textured inventory UI, and item-based saves | `feat/texture-array-item-catalog` |

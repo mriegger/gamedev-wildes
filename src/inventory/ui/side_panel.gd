@@ -8,7 +8,6 @@ const TAB_TITLES: Dictionary = {
 	"equipment": "EQUIPMENT",
 }
 
-@export var block_catalog: BlockCatalog
 @export var slot_scene: PackedScene
 
 @onready var _background: Panel = $SidePanelBackground
@@ -87,7 +86,7 @@ func _refresh_inventory():
 			if data == null:
 				slot.set_item(null, 0)
 			else:
-				slot.set_item(data["type"], data["count"])
+				slot.set_item(data["item_id"], data["count"])
 	_inventory_dirty = false
 
 func _build_slot_grid_for_region(region_name: String, grid: GridContainer, out_slots: Array[InventorySlot]):
@@ -96,7 +95,6 @@ func _build_slot_grid_for_region(region_name: String, grid: GridContainer, out_s
 		var slot := slot_scene.instantiate() as InventorySlot
 		slot.name = "Slot_%d" % idx
 		slot.set_slot_index(idx)
-		slot.set_block_catalog(block_catalog)
 		slot.set_inventory_styles(_slot_normal_style, _slot_empty_style)
 		slot.mouse_filter = Control.MOUSE_FILTER_STOP
 		grid.add_child(slot)

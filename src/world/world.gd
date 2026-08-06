@@ -17,6 +17,7 @@ var terrain_material: ShaderMaterial
 var water_block_material: ShaderMaterial
 var terrain_generator: TerrainGenerator
 var voxel_model: VoxelWorld
+var block_texture_set: BlockTextureSet
 var chunk_mesher: ChunkMesher
 var chunk_manager: ChunkManager
 
@@ -32,6 +33,7 @@ func configure_start_state(state: WorldState):
 func initialize_world_async() -> void:
 	config = config.runtime_copy_for_seed(_start_state.seed)
 	assert(config.validate())
+	assert(block_catalog.validate())
 
 	generation_progress.emit("config", 0.05, "Preparing config (seed %d)" % config.seed_value)
 	await get_tree().process_frame
@@ -69,7 +71,7 @@ func _create_world_model(generation: Dictionary):
 	voxel_model.block_edit_committed.connect(_on_block_edit_committed)
 
 func _setup_systems():
-	chunk_mesher = ChunkMesher.new(config.chunk_size, config.max_build_y, config.seed_value, config.enable_ao, block_catalog)
+	chunk_mesher = ChunkMesher.new(config.chunk_size, config.max_build_y, config.seed_value, config.enable_ao, block_texture_set)
 	chunk_scheduler.setup(chunk_mesher, terrain_generator, voxel_model, config.chunk_size, config.max_build_y)
 	chunk_renderer.setup(chunk_mesher, terrain_material, water_block_material, voxel_model)
 	torch_renderer.setup(block_catalog)
@@ -94,14 +96,10 @@ func _get_initial_position() -> Vector3:
 	return voxel_model.get_spawn_position()
 
 func _prepare_materials():
+	block_texture_set = BlockTextureSet.new(block_catalog)
 	terrain_material = ShaderMaterial.new()
 	terrain_material.shader = terrain_shader
-	if RenderingServer.get_rendering_device() == null:
-		terrain_material.set_shader_parameter("terrain_saturation", 1.0)
-		terrain_material.set_shader_parameter("terrain_contrast", 1.0)
-	else:
-		terrain_material.set_shader_parameter("terrain_saturation", 1.1)
-		terrain_material.set_shader_parameter("terrain_contrast", 1.3)
+	terrain_material.set_shader_parameter("terrain_textures", block_texture_set.texture_array)
 
 	water_block_material = ShaderMaterial.new()
 	water_block_material.shader = water_shader

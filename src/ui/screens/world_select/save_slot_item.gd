@@ -38,7 +38,15 @@ func setup(p_slot_id: int, data: Dictionary):
 		lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-	if exists:
+	if exists and data.get("incompatible", false):
+		name_label.text = data.get("world_name", "World %d" % (slot_id + 1))
+		name_label.visible = true
+		detail_label.text = "Save version %d" % int(data.get("version", 0))
+		detail_label.visible = true
+		status_label.text = "Incompatible save"
+		status_label.visible = true
+		delete_button.visible = true
+	elif exists:
 		var world_name = data.get("world_name", "World %d" % (slot_id + 1))
 		var seed_val = data.get("seed", 0)
 		var last_played = data.get("last_played", "Unknown")
@@ -58,6 +66,8 @@ func setup(p_slot_id: int, data: Dictionary):
 		delete_button.visible = false
 
 func _on_click_area_pressed():
+	if slot_data.get("incompatible", false):
+		return
 	if slot_data.get("exists", false):
 		slot_play_requested.emit(slot_id)
 	else:

@@ -2,7 +2,6 @@ extends Control
 class_name Hotbar
 
 @export var slot_scene: PackedScene
-@export var block_catalog: BlockCatalog
 
 var _inv_model: InventoryModel = null
 var slot_nodes: Array[HotbarSlot] = []
@@ -29,7 +28,6 @@ func _build_slots():
 		var slot_node = slot_scene.instantiate() as HotbarSlot
 		slot_node.name = "Slot_%d" % i
 		slot_node.set_slot_index(i)
-		slot_node.set_block_catalog(block_catalog)
 		slot_node.set_hotbar_styles(_slot_normal_style, _slot_selected_style)
 		hbox.add_child(slot_node)
 		slot_nodes.append(slot_node)
@@ -43,7 +41,7 @@ func refresh():
 		if data == null:
 			ui.set_item(null, 0)
 		else:
-			ui.set_item(data["type"], data["count"])
+			ui.set_item(data["item_id"], data["count"])
 		ui.set_selected(i == _inv_model.selected_slot)
 
 func set_slots_interactive(enabled: bool):

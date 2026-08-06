@@ -86,7 +86,8 @@ func _create_selection():
 	breaking_block.mesh = bb_mesh
 	breaking_block.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var bb_mat = StandardMaterial3D.new()
-	bb_mat.albedo_color = Color(0.66, 0.66, 0.63, 1.0)
+	bb_mat.albedo_color = Color.WHITE
+	bb_mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 	bb_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	bb_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	breaking_block.material_override = bb_mat
@@ -101,7 +102,8 @@ func _create_ghost():
 	ghost_block.mesh = b
 	ghost_block.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var mat = StandardMaterial3D.new()
-	mat.albedo_color = Color(0.52, 0.67, 0.4, 0.48)
+	mat.albedo_color = Color(1.0, 1.0, 1.0, 0.48)
+	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
@@ -122,10 +124,8 @@ func _create_contact_shadow():
 	contact_shadow.material_override = shadow_material
 	add_child(contact_shadow)
 
-func _color_for_type(t: int) -> Color:
-	if BlockId.is_valid(t):
-		return block_catalog.get_side_color(t)
-	return Color(0, 0, 0, 0)
+func _texture_for_block(block_id: int) -> Texture2D:
+	return block_catalog.get_definition(block_id).side_texture
 
 func _update_selection_visuals():
 	if interactor == null or voxel_world == null:
@@ -138,8 +138,8 @@ func _update_selection_visuals():
 		if breaking_block:
 			breaking_block.visible = false
 		return
-	var selected_type = interactor.get_selected_block_type()
-	var has_block = selected_type != null
+	var selected_block_id = interactor.get_selected_block_id()
+	var has_block = selected_block_id != null
 	var left_holding = Input.is_action_pressed("mine")
 
 	var show_mining_outline = false
@@ -175,10 +175,10 @@ func _update_selection_visuals():
 				breaking_block.visible = true
 				var bt = voxel_world.get_block_at(interactor.target_block)
 				if bt != null:
-					var c = _color_for_type(bt)
+					var texture := _texture_for_block(bt)
 					var bmat = breaking_block.material_override
-					if bmat is StandardMaterial3D and bmat.albedo_color != c:
-						bmat.albedo_color = c
+					if bmat is StandardMaterial3D and bmat.albedo_texture != texture:
+						bmat.albedo_texture = texture
 				var progress = clamp(interactor.mine_timer / interactor.mine_hold_time, 0.0, 1.0)
 				var s = 1.0 + 0.12 * sin(progress * PI)
 				var mining_scale = Vector3(s, s, s)
@@ -206,14 +206,14 @@ func _update_selection_visuals():
 	if show_ghost and ghost_block and interactor.placement_has:
 		if not ghost_block.is_inside_tree():
 			return
-		var sel_type = selected_type
-		if sel_type == null or sel_type == BlockId.Type.AIR:
+		var block_id = selected_block_id
+		if block_id == null or block_id == BlockId.Type.AIR:
 			ghost_block.visible = false
 		else:
 			ghost_block.visible = true
 			var base_center: Vector3
 			var ghost_size: Vector3
-			if sel_type == BlockId.Type.TORCH:
+			if block_id == BlockId.Type.TORCH:
 				var support_dir = -interactor.last_ray_normal
 				base_center = TorchPlacement.world_position(interactor.placement_block, support_dir)
 				ghost_size = Vector3(0.12, 0.55, 0.12)
@@ -225,13 +225,15 @@ func _update_selection_visuals():
 				ghost_mesh.size = ghost_size
 			ghost_block.global_position = base_center
 			var gmat = ghost_block.material_override
-			var c = _color_for_type(sel_type)
 			if gmat is StandardMaterial3D:
+				var texture := _texture_for_block(block_id)
+				if gmat.albedo_texture != texture:
+					gmat.albedo_texture = texture
 				var ghost_color: Color
 				if interactor.can_place_target:
-					ghost_color = Color(c.r, c.g, c.b, 0.48)
+					ghost_color = Color(1.0, 1.0, 1.0, 0.48)
 				else:
-					ghost_color = Color(c.r, c.g, c.b, 0.18)
+					ghost_color = Color(1.0, 1.0, 1.0, 0.18)
 				if gmat.albedo_color != ghost_color:
 					gmat.albedo_color = ghost_color
 	else:
