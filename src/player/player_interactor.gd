@@ -2,6 +2,7 @@ extends Node3D
 class_name PlayerInteractor
 
 signal block_placed
+signal melee_attack_started(action: MeleeAttackActionDefinition)
 
 @export var reach: float = 6.0
 @export var place_cooldown: float = 0.18
@@ -27,6 +28,7 @@ var mine_timer: float = 0.0
 var mine_target: Vector3i = Vector3i(-999, -999, -999)
 var mine_target_rev: int = -1
 var mine_action: MiningActionDefinition
+var melee_attack_timer: float = 0.0
 var secondary_use_timer: float = 0.0
 var _ray_hit_pos: Vector3i
 var _ray_place_pos: Vector3i
@@ -202,9 +204,11 @@ func _placement_collides_player(p: Vector3i) -> bool:
 	return true
 
 func _handle_item_actions(delta):
+	melee_attack_timer = max(0.0, melee_attack_timer - delta)
 	secondary_use_timer -= delta
 	var selected_primary := get_selected_primary_action()
 	var selected_mining := selected_primary as MiningActionDefinition
+	var selected_melee := selected_primary as MeleeAttackActionDefinition
 	if _input_buffer.primary_use_pressed and target_has and can_mine_target and selected_mining != null:
 		if not is_mining:
 			mine_target = target_block
@@ -229,6 +233,9 @@ func _handle_item_actions(delta):
 	else:
 		if is_mining:
 			_reset_mining()
+	if _input_buffer.primary_use_pressed and selected_melee != null and melee_attack_timer <= 0.0:
+		melee_attack_timer = selected_melee.attack_duration
+		melee_attack_started.emit(selected_melee)
 
 	var selected_placement := get_selected_placement_action()
 	if (_input_buffer.secondary_use_just or _input_buffer.secondary_use_pressed) and secondary_use_timer <= 0.0:

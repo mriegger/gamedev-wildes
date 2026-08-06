@@ -4,6 +4,6 @@
 
 Reusable humanoid scenes must preserve the named rig hierarchy used by `BlockyHumanoidAnimator` and provide `LeftFootMarker` and `RightFootMarker` at the authored ends of their rigid legs. Foot planting derives its reach from those markers, so humanoids can change limb proportions without changing animation code.
 
-Each controller translates its own movement and perception into `ActorAnimationState`. `PlayerAnimationDriver` remains player-specific because mining and placement have no mob consumer. The first mob should receive its own driver while reusing the humanoid animator and profile when its topology matches. Shared action behavior should be extracted only after a second real caller exists.
+Each controller translates its own movement and perception into `ActorAnimationState`. `PlayerAnimationDriver` remains player-specific because mining, placement, and inventory-selected melee actions have no mob consumer. The first mob should receive its own driver while reusing the humanoid animator and profile when its topology matches. Shared action behavior should be extracted only after a second real caller exists.
 
 Quadrupeds, flying creatures, and other topologies need sibling animator implementations driven by the same state data; they should not imitate the humanoid hierarchy. Distant-update throttling belongs in the future mob scheduler through the existing explicit `advance_animation()` call, once real crowd visibility and distance data exist.

@@ -25,6 +25,7 @@ func setup(p_motor: PlayerMotor, p_interactor: PlayerInteractor):
 	_previous_yaw = _motor.model_root.rotation.y
 	animator.setup(_animation_state)
 	_interactor.block_placed.connect(_on_block_placed)
+	_interactor.melee_attack_started.connect(_on_melee_attack_started)
 	set_process(true)
 
 func get_preview_states() -> Array[StringName]:
@@ -83,3 +84,6 @@ func _update_preview(delta: float):
 
 func _on_block_placed():
 	animator.play_place()
+
+func _on_melee_attack_started(action: MeleeAttackActionDefinition):
+	animator.play_attack(action.attack_duration)

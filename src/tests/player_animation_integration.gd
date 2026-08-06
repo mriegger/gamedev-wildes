@@ -253,6 +253,36 @@ func _run():
 	_expect(not animator._placing, "placement one-shot did not end")
 	_expect(abs(animator.right_arm_base.rotation.x + animator.right_arm_action.rotation.x) <= deg_to_rad(animator.profile.walk_arm_swing_degrees + 1.0), "placement arm did not return to locomotion")
 
+	state.set_motion(Vector3.ZERO, 0.0, false, true, 0.0, 0.0, false, Vector3.ZERO)
+	_advance(animator, 12)
+	var attack_action := load("res://items/actions/definitions/copper_sword_melee.tres") as MeleeAttackActionDefinition
+	var attack_rest_height: float = animator.rig_root.position.y
+	var min_right_sweep := INF
+	var max_right_sweep := -INF
+	var min_left_sweep := INF
+	var max_left_sweep := -INF
+	var max_attack_lean := 0.0
+	var max_attack_leg_brace := 0.0
+	var min_attack_height := INF
+	animator.play_attack(attack_action.attack_duration)
+	for _frame in range(29):
+		_advance(animator, 1)
+		min_right_sweep = min(min_right_sweep, animator.right_arm_action.rotation.z)
+		max_right_sweep = max(max_right_sweep, animator.right_arm_action.rotation.z)
+		min_left_sweep = min(min_left_sweep, animator.left_arm_action.rotation.z)
+		max_left_sweep = max(max_left_sweep, animator.left_arm_action.rotation.z)
+		max_attack_lean = max(max_attack_lean, animator.body_action.rotation.x)
+		max_attack_leg_brace = max(max_attack_leg_brace, abs(animator.left_leg_base.rotation.x - animator.right_leg_base.rotation.x))
+		min_attack_height = min(min_attack_height, animator.rig_root.position.y)
+	_expect(min_right_sweep < -deg_to_rad(45.0) and max_right_sweep > deg_to_rad(68.0), "sword arm did not sweep left to right")
+	_expect(min_left_sweep < -deg_to_rad(30.0) and max_left_sweep > deg_to_rad(45.0), "off-hand did not follow the sword sweep")
+	_expect(max_attack_lean > deg_to_rad(12.0), "sword attack did not lean forward")
+	_expect(max_attack_leg_brace > deg_to_rad(24.0), "sword attack did not brace the legs")
+	_expect(min_attack_height < attack_rest_height - 0.035, "sword attack did not lower the stance")
+	_expect(not animator._attacking, "sword attack one-shot did not end")
+	_advance(animator, 2)
+	_expect(abs(animator.body_action.rotation.x) < 0.001, "sword attack body lean did not recover")
+
 	await _run_crowd_smoke(packed)
 	animator.queue_free()
 	await process_frame

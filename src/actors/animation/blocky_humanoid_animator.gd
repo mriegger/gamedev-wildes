@@ -45,6 +45,9 @@ var _mine_blend: float = 0.0
 var _mining_active: bool = false
 var _place_elapsed: float = 0.0
 var _placing: bool = false
+var _attack_elapsed: float = 0.0
+var _attack_duration: float = 0.0
+var _attacking: bool = false
 var _landing_elapsed: float = 0.0
 var _landing_strength: float = 0.0
 var _previous_vertical_speed: float = 0.0
@@ -122,8 +125,16 @@ func set_mining_active(active: bool):
 	_mining_active = active
 
 func play_place():
+	_attacking = false
 	_placing = true
 	_place_elapsed = 0.0
+
+func play_attack(duration: float):
+	assert(duration > 0.0)
+	_placing = false
+	_attacking = true
+	_attack_elapsed = 0.0
+	_attack_duration = duration
 
 func prepare_preview(grounded: bool):
 	_was_grounded = grounded
@@ -383,7 +394,12 @@ func _update_actions(delta: float):
 	var response = 1.0 - exp(-profile.motion_response * delta)
 	if animation_state.sprinting:
 		_placing = false
-	_mine_blend = lerp(_mine_blend, 1.0 if _mining_active and not _placing and not animation_state.sprinting else 0.0, response)
+	var attack_active := _attacking
+	var attack_progress := 0.0
+	if attack_active:
+		_attack_elapsed += delta
+		attack_progress = clamp(_attack_elapsed / _attack_duration, 0.0, 1.0)
+	_mine_blend = lerp(_mine_blend, 1.0 if _mining_active and not _placing and not attack_active and not animation_state.sprinting else 0.0, response)
 	if _mining_active:
 		_mine_phase = fmod(_mine_phase + delta / profile.mine_cycle_seconds, 1.0)
 	var right_rotation = Vector3.ZERO
@@ -406,12 +422,12 @@ func _update_actions(delta: float):
 			var landing_arm_pitch = deg_to_rad(profile.landing_arm_pitch_degrees) * _landing_pose_weight()
 			left_rotation.x = landing_arm_pitch
 			right_rotation.x = landing_arm_pitch
-	if _mine_blend > 0.001:
+	if _mine_blend > 0.001 and not attack_active:
 		var mine_degrees = _mine_swing_degrees(_mine_phase)
 		right_rotation.x = deg_to_rad(mine_degrees) * _mine_blend
 		left_rotation.x = deg_to_rad(-12.0 * clamp(-mine_degrees / 120.0, 0.0, 1.0)) * _mine_blend
 		body_rotation.y = deg_to_rad(-6.0 * clamp(-mine_degrees / 120.0, 0.0, 1.0)) * _mine_blend
-	if _placing and not animation_state.sprinting:
+	if _placing and not attack_active and not animation_state.sprinting:
 		_place_elapsed += delta
 		var place_progress = clamp(_place_elapsed / profile.place_seconds, 0.0, 1.0)
 		var place_degrees = _place_swing_degrees(place_progress)
@@ -421,7 +437,27 @@ func _update_actions(delta: float):
 		body_rotation.y = deg_to_rad(-8.0 * place_weight)
 		if _place_elapsed >= profile.place_seconds:
 			_placing = false
-	if animation_state.grounded and animation_state.speed_ratio > 0.05 and _mine_blend <= 0.001 and not _placing:
+	if attack_active:
+		var attack_weight := sin(attack_progress * PI)
+		var sweep_degrees := _attack_sweep_degrees(attack_progress)
+		right_rotation = Vector3(
+			deg_to_rad(profile.attack_right_arm_pitch_degrees * attack_weight),
+			0.0,
+			deg_to_rad(sweep_degrees)
+		)
+		left_rotation = Vector3(
+			deg_to_rad(profile.attack_left_arm_pitch_degrees * attack_weight),
+			0.0,
+			deg_to_rad(sweep_degrees * profile.attack_left_arm_sweep_ratio)
+		)
+		body_rotation.x = deg_to_rad(profile.attack_body_lean_degrees * attack_weight)
+		body_rotation.y = deg_to_rad(profile.attack_body_twist_degrees * sweep_degrees / profile.attack_follow_through_degrees)
+		left_leg_base.rotation.x -= deg_to_rad(profile.attack_leg_brace_degrees * attack_weight)
+		right_leg_base.rotation.x += deg_to_rad(profile.attack_leg_brace_degrees * attack_weight)
+		rig_root.position.y -= profile.attack_crouch_depth * attack_weight
+		if _attack_elapsed >= _attack_duration:
+			_attacking = false
+	if animation_state.grounded and animation_state.speed_ratio > 0.05 and _mine_blend <= 0.001 and not _placing and not attack_active:
 		var swing_degrees = profile.sprint_arm_swing_degrees if animation_state.sprinting else profile.walk_arm_swing_degrees
 		var arm_wave = _held_wave(_gait_phase() - profile.secondary_motion_lag) * animation_state.speed_ratio
 		var left_target = deg_to_rad(swing_degrees * arm_wave)
@@ -453,3 +489,12 @@ func _place_swing_degrees(progress: float) -> float:
 	if progress < 0.62:
 		return -75.0
 	return lerp(-75.0, 0.0, _pose_ease((progress - 0.62) / 0.38))
+
+func _attack_sweep_degrees(progress: float) -> float:
+	if progress < 0.22:
+		return lerp(0.0, -profile.attack_windup_degrees, _pose_ease(progress / 0.22))
+	if progress < 0.52:
+		return lerp(-profile.attack_windup_degrees, profile.attack_follow_through_degrees, _pose_ease((progress - 0.22) / 0.30))
+	if progress < 0.68:
+		return profile.attack_follow_through_degrees
+	return lerp(profile.attack_follow_through_degrees, 0.0, _pose_ease((progress - 0.68) / 0.32))

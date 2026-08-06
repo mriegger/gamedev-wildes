@@ -1,0 +1,11 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://player/visuals/pixel_extruded_item.gd" id="1_item"]
+[ext_resource type="Texture2D" path="res://assets/textures/tools/sword/copper_sword.png" id="2_texture"]
+
+[node name="CopperSword" type="Node3D"]
+rotation = Vector3(0, 1.5708, 0)
+script = ExtResource("1_item")
+texture = ExtResource("2_texture")
+grip_pixel = Vector2i(14, 14)
+max_dimension = 0.75

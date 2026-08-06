@@ -232,6 +232,7 @@ func _run_edge_cases() -> bool:
 	var encoded_slot = encoded["regions"]["hotbar"][0]
 	_assert(encoded_slot["item_id"] is String, "save item ID is string")
 	_assert(not encoded_slot.has("type"), "old save key absent")
+	_assert(saved_source.get_slot(3).item_id == &"copper_sword", "starter sword missing")
 	var restored := InventoryModel.new(catalog)
 	_assert(restored.from_dict(encoded), "version 3 inventory restores")
 	_assert(_slots_equal(saved_source.slots, restored.slots), "save round trip")

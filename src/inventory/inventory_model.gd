@@ -246,6 +246,7 @@ func setup_starter():
 	slots[0] = InventoryStack.new(&"copper_pickaxe", 1)
 	slots[1] = InventoryStack.new(item_catalog.get_item_for_block(BlockId.Type.GRASS).id, 12)
 	slots[2] = InventoryStack.new(item_catalog.get_item_for_block(BlockId.Type.STONE).id, 8)
+	slots[3] = InventoryStack.new(&"copper_sword", 1)
 	slots[6] = InventoryStack.new(item_catalog.get_item_for_block(BlockId.Type.TORCH).id, 16)
 	selected_slot = 0
 	inventory_changed.emit()

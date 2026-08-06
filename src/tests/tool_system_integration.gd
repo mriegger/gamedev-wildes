@@ -9,6 +9,7 @@ var _input_buffer: InputBuffer
 var _voxel_world: VoxelWorld
 var _stone_pos := Vector3i(1, 0, 0)
 var _grass_pos := Vector3i(2, 0, 0)
+var _melee_attack_count: int = 0
 
 func _init():
 	call_deferred("_run")
@@ -25,6 +26,12 @@ func _run():
 	var pickaxe_action := pickaxe.primary_action as MiningActionDefinition
 	var pickaxe_stat := pickaxe_action.get_tool_stat(&"pickaxe")
 	_expect(pickaxe_stat != null and pickaxe_stat.power == 1 and is_equal_approx(pickaxe_stat.speed_multiplier, 2.0), "pickaxe mining stats changed")
+	var sword := item_catalog.get_definition(&"copper_sword")
+	_expect(sword.max_stack == 1, "sword stack limit changed")
+	_expect(sword.primary_action is MeleeAttackActionDefinition, "sword primary action is not melee")
+	_expect(sword.secondary_action == null, "sword unexpectedly has a secondary action")
+	var sword_action := sword.primary_action as MeleeAttackActionDefinition
+	_expect(is_equal_approx(sword_action.attack_duration, 0.48), "sword attack duration changed")
 	var stone := block_catalog.get_definition(BlockId.Type.STONE)
 	_expect(stone.mining_tool_tag == &"pickaxe" and stone.minimum_mining_power == 1, "stone mining requirement changed")
 	_expect(is_equal_approx(pickaxe_action.get_mine_duration(stone), 0.35), "pickaxe stone duration changed")
@@ -32,16 +39,21 @@ func _run():
 	_inventory = InventoryModel.new(item_catalog)
 	_inventory.setup_starter()
 	_expect(_inventory.get_slot(0) is InventoryStack and _inventory.get_slot(0).item_id == &"copper_pickaxe", "starter pickaxe missing")
+	_expect(_inventory.get_slot(3) is InventoryStack and _inventory.get_slot(3).item_id == &"copper_sword", "starter sword missing")
 	var encoded := _inventory.to_dict()
 	var restored := InventoryModel.new(item_catalog)
 	_expect(restored.from_dict(encoded), "typed inventory did not restore")
 	_expect(restored.get_slot(0) is InventoryStack and restored.get_slot(0).item_id == &"copper_pickaxe", "restored pickaxe missing")
+	_expect(restored.get_slot(3) is InventoryStack and restored.get_slot(3).item_id == &"copper_sword", "restored sword missing")
 	var legacy_encoded := encoded.duplicate(true)
 	legacy_encoded["regions"]["hotbar"][0] = null
+	legacy_encoded["regions"]["hotbar"][3] = null
 	var legacy := InventoryModel.new(item_catalog)
 	_expect(legacy.from_dict(legacy_encoded), "legacy inventory did not restore")
 	_expect(legacy.ensure_item(&"copper_pickaxe"), "legacy inventory could not receive pickaxe")
+	_expect(legacy.ensure_item(&"copper_sword"), "legacy inventory could not receive sword")
 	_expect(legacy.get_slot(0) != null and legacy.get_slot(0).item_id == &"copper_pickaxe", "legacy pickaxe was not placed in hotbar")
+	_expect(legacy.get_slot(3) != null and legacy.get_slot(3).item_id == &"copper_sword", "legacy sword was not placed in hotbar")
 	var crowded := InventoryModel.new(item_catalog)
 	var grass_id := item_catalog.get_item_for_block(BlockId.Type.GRASS).id
 	for index in range(InventoryModel.HOTBAR_SIZE):
@@ -64,7 +76,10 @@ func _run():
 	_input_buffer = InputBuffer.new()
 	_interactor = _player.interactor
 	_interactor.setup(_voxel_world, _camera, _player, _inventory, _input_buffer)
+	_interactor.melee_attack_started.connect(_on_melee_attack_started)
 	_interactor.set_physics_process(false)
+	_player.animation_driver.setup(_player, _interactor)
+	_player.animation_driver.set_process(false)
 	_player.held_item_view.setup(_inventory)
 	await process_frame
 	_expect(_player.held_item_view.held_node is PixelExtrudedItem, "pickaxe held scene missing")
@@ -74,7 +89,30 @@ func _run():
 	_expect(held_pickaxe.mesh_instance.mesh.get_surface_count() == 1, "pickaxe mesh surface count changed")
 	var one_pixel_pickaxe := PixelItemMeshBuilder.build(held_pickaxe.texture, held_pickaxe.grip_pixel, held_pickaxe.max_dimension, 1.0)
 	_expect(is_equal_approx(held_pickaxe.mesh_instance.mesh.get_aabb().size.z, one_pixel_pickaxe.get_aabb().size.z * 2.0), "pickaxe mesh is not two pixels thick")
-	_verify_texture_mesh("res://assets/textures/tools/sword/copper_sword.png")
+
+	_push_hotbar_key(KEY_4)
+	await process_frame
+	_expect(_inventory.selected_slot == 3, "sword hotbar selection failed")
+	_expect(_player.held_item_view.held_node is PixelExtrudedItem, "sword held scene missing")
+	var held_sword := _player.held_item_view.held_node as PixelExtrudedItem
+	_expect(held_sword.texture == sword.icon, "sword held texture changed")
+	_expect(is_equal_approx(held_sword.rotation.y, PI * 0.5), "sword does not point toward the player's front")
+	var one_pixel_sword := PixelItemMeshBuilder.build(held_sword.texture, held_sword.grip_pixel, held_sword.max_dimension, 1.0)
+	_expect(is_equal_approx(held_sword.mesh_instance.mesh.get_aabb().size.z, one_pixel_sword.get_aabb().size.z), "sword mesh thickness changed")
+	_expect(_interactor.get_selected_primary_action() == sword_action, "sword melee action was not selected")
+	_push_primary(true)
+	await process_frame
+	_input_buffer.poll()
+	_interactor._handle_item_actions(0.0)
+	_expect(_melee_attack_count == 1, "sword attack did not start")
+	_expect(_player.animation_driver.animator._attacking, "sword attack did not reach the animation driver")
+	_expect(is_equal_approx(_interactor.melee_attack_timer, sword_action.attack_duration), "sword attack timer changed")
+	_interactor._handle_item_actions(sword_action.attack_duration * 0.5)
+	_expect(_melee_attack_count == 1, "sword attacked again before its swing ended")
+	_expect(not _interactor.is_mining, "sword attack started mining")
+	_push_primary(false)
+	await process_frame
+	_input_buffer.poll()
 
 	_push_hotbar_key(KEY_2)
 	await process_frame
@@ -138,12 +176,6 @@ func _run():
 		print("TOOL_SYSTEM FAIL %s" % str(_errors))
 		quit(1)
 
-func _verify_texture_mesh(path: String):
-	var texture := load(path) as Texture2D
-	var mesh := PixelItemMeshBuilder.build(texture, Vector2i(14, 14), 0.75, 1.0)
-	_expect(mesh.get_surface_count() == 1, "%s mesh surface count changed" % path)
-	_expect(mesh.get_aabb().size.z > 0.0, "%s mesh has no depth" % path)
-
 func _prepare_target(pos: Vector3i, action: MiningActionDefinition):
 	_interactor.target_block = pos
 	_interactor.target_has = true
@@ -162,6 +194,9 @@ func _push_primary(pressed: bool):
 	event.button_mask = MOUSE_BUTTON_MASK_LEFT if pressed else 0
 	Input.parse_input_event(event)
 	root.push_input(event, true)
+
+func _on_melee_attack_started(_action: MeleeAttackActionDefinition):
+	_melee_attack_count += 1
 
 func _expect(condition: bool, message: String):
 	if not condition:

@@ -72,3 +72,12 @@ class_name BlockyHumanoidAnimationProfile
 @export var landing_leg_pitch_degrees: float = -20.0
 @export_range(0.05, 2.0, 0.001) var mine_cycle_seconds: float = 0.35
 @export_range(0.05, 2.0, 0.001) var place_seconds: float = 0.18
+@export_range(0.0, 180.0, 1.0) var attack_windup_degrees: float = 52.0
+@export_range(1.0, 180.0, 1.0) var attack_follow_through_degrees: float = 76.0
+@export_range(-180.0, 180.0, 1.0) var attack_right_arm_pitch_degrees: float = -58.0
+@export_range(-180.0, 180.0, 1.0) var attack_left_arm_pitch_degrees: float = -38.0
+@export_range(0.0, 1.0, 0.01) var attack_left_arm_sweep_ratio: float = 0.72
+@export_range(0.0, 90.0, 1.0) var attack_body_lean_degrees: float = 14.0
+@export_range(0.0, 90.0, 1.0) var attack_body_twist_degrees: float = 20.0
+@export_range(0.0, 90.0, 1.0) var attack_leg_brace_degrees: float = 14.0
+@export_range(0.0, 0.5, 0.001) var attack_crouch_depth: float = 0.055

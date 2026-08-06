@@ -1,6 +1,6 @@
 # Tests
 
-Six test families: inventory property fuzz + world determinism golden hash + HUD integration + player animation integration + animation tuning integration + world streaming soak.
+Seven test families: inventory property fuzz + world determinism golden hash + HUD integration + player animation integration + animation tuning integration + tool system integration + world streaming soak.
 
 ## Inventory Fuzz — `src/inventory/inventory_model.gd`
 
@@ -84,7 +84,7 @@ Catches streaming/threading leaks that unit tests never see.
 
 ## Player Animation Integration
 
-`player_animation_integration.gd` instantiates the real blocky player visual and manually advances its shared animation state through idle, walk, sprint, turn, jump, fall, land, target tracking, mining, and placement. It checks the single procedural timing source, shaped cadence, detached one-piece limbs, marker-derived alternate leg proportions, a flat-bottomed stance path with rounded recovery, rigid-leg compression and extension, whole-arm counter-swing, body weight transfer and braking overshoot, cuboid squash and stretch, locomotion/action layering, finite boundary values, head limits, jump anticipation, landing recovery, a generous crowd performance budget, and final orphan count.
+`player_animation_integration.gd` instantiates the real blocky player visual and manually advances its shared animation state through idle, walk, sprint, turn, jump, fall, land, target tracking, mining, placement, and melee attack. It checks the single procedural timing source, shaped cadence, detached one-piece limbs, marker-derived alternate leg proportions, a flat-bottomed stance path with rounded recovery, rigid-leg compression and extension, whole-arm counter-swing, body weight transfer and braking overshoot, cuboid squash and stretch, locomotion/action layering, the sword's two-arm left-to-right sweep, forward lean, braced stance, finite boundary values, head limits, jump anticipation, landing recovery, a generous crowd performance budget, and final orphan count.
 
 The runner also advances 100 visual instances for 60 frames and verifies they share mesh/profile resources without changing their node count. The world soak holds real W+Shift input across live frames and verifies sprint speed and the active sprint animation.
 
@@ -102,7 +102,7 @@ godot --path src --headless --script res://tests/animation_tuning_panel_integrat
 
 ## Tool System Integration
 
-`tool_system_integration.gd` verifies action and catalog data, typed inventory persistence, stone tool gating, real primary-use input, copper-pickaxe held rendering, silhouette extrusion for both supplied tool textures, and node cleanup.
+`tool_system_integration.gd` verifies action and catalog data, typed inventory persistence, stone tool gating, real primary-use input, copper-pickaxe and copper-sword held rendering, melee cooldown and animation routing, silhouette extrusion for both supplied tool textures, and node cleanup.
 
 ```sh
 godot --path src --headless --script res://tests/tool_system_integration.gd
@@ -117,7 +117,7 @@ godot --path src --headless --script res://tests/tool_system_integration.gd
 - HUD integration — `HUD_INTEGRATION PASS orphan=0 previews=0` and grep-fails on `ERROR`/`WARNING`/`FAIL`
 - player animation integration — `PLAYER_ANIMATION PASS orphan=0` plus a 100-instance shared-resource smoke
 - animation tuning integration — `ANIMATION_TUNING PASS orphan=0` with live controls, preview, reset, and JSON export
-- tool system integration — `TOOL_SYSTEM PASS orphan=0` with action, mining gate, typed-stack, input, and extrusion coverage
+- tool system integration — `TOOL_SYSTEM PASS orphan=0` with mining, melee, typed-stack, input, held-scene, and extrusion coverage
 - world soak — `SOAK PASS` and grep-fails on `ERROR`/`WARNING`/`FAIL` + bounded chunk/orphan checks
 
 All fail the job on violation.
