@@ -3,6 +3,8 @@ class_name AnimationTuningPanel
 
 const EXPORT_PATH: String = "res://../player_animation_values.json"
 
+@export var attack_preview_item: ItemDefinition
+
 @onready var panel: Panel = $Panel
 @onready var close_button: Button = $Panel/VBox/Header/CloseButton
 @onready var preview_selector: OptionButton = $Panel/VBox/PreviewRow/PreviewSelector
@@ -41,7 +43,7 @@ const EXPORT_PATH: String = "res://../player_animation_values.json"
 var _motor: PlayerMotor
 var _driver: PlayerAnimationDriver
 var _animator: BlockyHumanoidAnimator
-var _held_item_view: HeldItemView
+var _attack_action: MeleeAttackActionDefinition
 var _movement_defaults: Dictionary = {}
 var _animation_defaults: Dictionary = {}
 var _attack_position_default: Vector3
@@ -75,12 +77,13 @@ func setup(p_motor: PlayerMotor):
 	_motor = p_motor
 	_driver = p_motor.animation_driver
 	_animator = _driver.animator
-	_held_item_view = p_motor.held_item_view
+	_driver.setup_attack_preview(attack_preview_item)
+	_attack_action = _driver.get_attack_preview_action()
 	_animator.profile = _animator.profile.duplicate(true) as BlockyHumanoidAnimationProfile
 	_movement_defaults = _capture_numeric_values(_motor)
 	_animation_defaults = _capture_numeric_values(_animator.profile)
-	_attack_position_default = _held_item_view.attack_position_offset
-	_attack_rotation_default = _held_item_view.attack_rotation_degrees
+	_attack_position_default = _attack_action.held_position_offset
+	_attack_rotation_default = _attack_action.held_rotation_degrees
 	_build_numeric_controls(_motor, movement_grid, &"character")
 	_build_numeric_controls(_animator.profile, animation_grid, &"animation")
 	for preview_state in _driver.get_preview_states():
@@ -252,8 +255,8 @@ func _sync_part_controls():
 func _on_attack_item_value_changed(_value: float):
 	if _syncing:
 		return
-	_held_item_view.attack_position_offset = Vector3(attack_position_x.value, attack_position_y.value, attack_position_z.value)
-	_held_item_view.attack_rotation_degrees = Vector3(attack_rotation_x.value, attack_rotation_y.value, attack_rotation_z.value)
+	_attack_action.held_position_offset = Vector3(attack_position_x.value, attack_position_y.value, attack_position_z.value)
+	_attack_action.held_rotation_degrees = Vector3(attack_rotation_x.value, attack_rotation_y.value, attack_rotation_z.value)
 	_sync_attack_transform_sliders()
 	_refresh_paused_attack()
 
@@ -266,12 +269,12 @@ func _sync_attack_transform_sliders():
 
 func _sync_attack_item_controls():
 	_syncing = true
-	attack_position_x.value = _held_item_view.attack_position_offset.x
-	attack_position_y.value = _held_item_view.attack_position_offset.y
-	attack_position_z.value = _held_item_view.attack_position_offset.z
-	attack_rotation_x.value = _held_item_view.attack_rotation_degrees.x
-	attack_rotation_y.value = _held_item_view.attack_rotation_degrees.y
-	attack_rotation_z.value = _held_item_view.attack_rotation_degrees.z
+	attack_position_x.value = _attack_action.held_position_offset.x
+	attack_position_y.value = _attack_action.held_position_offset.y
+	attack_position_z.value = _attack_action.held_position_offset.z
+	attack_rotation_x.value = _attack_action.held_rotation_degrees.x
+	attack_rotation_y.value = _attack_action.held_rotation_degrees.y
+	attack_rotation_z.value = _attack_action.held_rotation_degrees.z
 	_sync_attack_transform_sliders()
 	_syncing = false
 
@@ -279,8 +282,8 @@ func _on_reset_pressed():
 	_restore_values(_motor, _movement_defaults, &"character")
 	_restore_values(_animator.profile, _animation_defaults, &"animation")
 	_animator.reset_tuning_transforms()
-	_held_item_view.attack_position_offset = _attack_position_default
-	_held_item_view.attack_rotation_degrees = _attack_rotation_default
+	_attack_action.held_position_offset = _attack_position_default
+	_attack_action.held_rotation_degrees = _attack_rotation_default
 	_sync_part_controls()
 	_sync_attack_item_controls()
 	status_label.text = "All values reset to their startup defaults."
@@ -311,8 +314,8 @@ func _build_export_data() -> Dictionary:
 		"character": _capture_numeric_values(_motor),
 		"animation": _capture_numeric_values(_animator.profile),
 		"held_item_attack": {
-			"position_offset": _vector_to_array(_held_item_view.attack_position_offset),
-			"rotation_degrees": _vector_to_array(_held_item_view.attack_rotation_degrees),
+			"position_offset": _vector_to_array(_attack_action.held_position_offset),
+			"rotation_degrees": _vector_to_array(_attack_action.held_rotation_degrees),
 		},
 		"parts": parts,
 	}

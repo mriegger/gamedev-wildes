@@ -1,9 +1,6 @@
 extends Node3D
 class_name HeldItemView
 
-@export var attack_position_offset: Vector3
-@export var attack_rotation_degrees: Vector3
-
 var inventory_model: InventoryModel
 var held_node: Node3D
 var _displayed_item_id: StringName
@@ -21,13 +18,15 @@ func setup(p_inventory_model: InventoryModel):
 	inventory_model.inventory_changed.connect(_refresh)
 	_refresh()
 
-func set_attack_pose(weight: float, attack_arm_pitch: float):
+func set_attack_pose(weight: float, attack_arm_pitch: float, action: MeleeAttackActionDefinition):
 	var pose_weight: float = clampf(weight, 0.0, 1.0)
-	position = _rest_position + attack_position_offset * pose_weight
+	var position_offset := action.held_position_offset if action != null else Vector3.ZERO
+	var rotation_degrees := action.held_rotation_degrees if action != null else Vector3.ZERO
+	position = _rest_position + position_offset * pose_weight
 	rotation = _rest_rotation + Vector3(
-		deg_to_rad(attack_rotation_degrees.x),
-		deg_to_rad(attack_rotation_degrees.y),
-		deg_to_rad(attack_rotation_degrees.z)
+		deg_to_rad(rotation_degrees.x),
+		deg_to_rad(rotation_degrees.y),
+		deg_to_rad(rotation_degrees.z)
 	) * pose_weight
 	if pose_weight > 0.0:
 		rotation.x -= attack_arm_pitch

@@ -32,7 +32,7 @@ Create and register an `ItemDefinition` in the same way. Assign only the actions
 
 Item IDs are `StringName` values at runtime and JSON strings in version 3 saves. `BlockId` integers remain limited to world generation, voxel edits, meshing, and world persistence.
 
-Inventory slots contain typed `InventoryStack` objects at runtime. Version 3 saves keep the same `{item_id, count}` JSON shape. When a pre-tool save is restored, the inventory preserves every existing stack and inserts the starter copper pickaxe into an available hotbar slot.
+Inventory slots contain typed `InventoryStack` objects at runtime. Version 3 saves keep the same `{item_id, count}` stack shape. When a pre-tool save is restored, a one-time migration preserves every existing stack and inserts the starter copper tools when fillable inventory space is available.
 
 ## Add a mining tool
 
@@ -41,6 +41,8 @@ Create a `MiningActionDefinition` with one or more `MiningToolStat` entries, the
 Primary actions currently accept mining and melee definitions. Secondary actions currently accept block placement. Catalog validation rejects action types in slots that do not yet have an execution path, and new action types must add their runtime handler and catalog allowance together.
 
 Held items reference a scene through `ItemDefinition.held_scene`. Pixel-art tools can use `PixelExtrudedItem` to turn a square transparent texture into a shaded one-draw-call silhouette mesh with real depth. Custom modeled items can provide any other `Node3D` scene through the same field.
+
+Melee definitions own their held-item attack position and rotation, so different weapons can use different grips without changing the player rig. Switching away from a melee item cancels its presentation before the newly selected tool is rendered.
 
 ## Special blocks
 

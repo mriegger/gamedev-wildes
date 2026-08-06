@@ -10,14 +10,15 @@ const PREVIEW_FALL: StringName = &"Fall"
 const PREVIEW_ATTACK: StringName = &"Attack"
 
 @onready var animator: BlockyHumanoidAnimator = $"../ModelRoot/PlayerVisual" as BlockyHumanoidAnimator
-@export var attack_preview_item: ItemDefinition
 
 var _motor: PlayerMotor
 var _interactor: PlayerInteractor
 var _animation_state: ActorAnimationState = ActorAnimationState.new()
 var _previous_yaw: float = 0.0
 var _preview_state: StringName = PREVIEW_LIVE
+var _attack_preview_item: ItemDefinition
 var _attack_preview_action: MeleeAttackActionDefinition
+var _active_attack_action: MeleeAttackActionDefinition
 var _attack_preview_elapsed: float = 0.0
 var _attack_preview_direction: int = -1
 var _attack_preview_paused: bool = false
@@ -28,14 +29,22 @@ func _ready():
 func setup(p_motor: PlayerMotor, p_interactor: PlayerInteractor):
 	_motor = p_motor
 	_interactor = p_interactor
-	assert(attack_preview_item != null)
-	_attack_preview_action = attack_preview_item.primary_action as MeleeAttackActionDefinition
-	assert(_attack_preview_action != null)
 	_previous_yaw = _motor.model_root.rotation.y
 	animator.setup(_animation_state)
 	_interactor.block_placed.connect(_on_block_placed)
 	_interactor.melee_attack_started.connect(_on_melee_attack_started)
 	set_process(true)
+
+func setup_attack_preview(item: ItemDefinition):
+	assert(item != null and item.held_scene != null)
+	var action := item.primary_action as MeleeAttackActionDefinition
+	assert(action != null)
+	_attack_preview_item = item
+	_attack_preview_action = action
+
+func get_attack_preview_action() -> MeleeAttackActionDefinition:
+	assert(_attack_preview_action != null)
+	return _attack_preview_action
 
 func get_preview_states() -> Array[StringName]:
 	return [PREVIEW_LIVE, PREVIEW_IDLE, PREVIEW_WALK, PREVIEW_SPRINT, PREVIEW_JUMP, PREVIEW_FALL, PREVIEW_ATTACK]
@@ -47,11 +56,12 @@ func set_preview_state(state: StringName):
 	_preview_state = state
 	_attack_preview_paused = false
 	animator.prepare_preview(_motor.on_ground if state == PREVIEW_LIVE else state not in [PREVIEW_JUMP, PREVIEW_FALL])
-	_motor.held_item_view.set_attack_pose(0.0, 0.0)
+	_motor.held_item_view.set_attack_pose(0.0, 0.0, null)
 	if state == PREVIEW_ATTACK:
+		assert(_attack_preview_item != null and _attack_preview_action != null)
 		_attack_preview_elapsed = 0.0
 		_attack_preview_direction = -1
-		_motor.held_item_view.show_preview_item(attack_preview_item)
+		_motor.held_item_view.show_preview_item(_attack_preview_item)
 		animator.play_attack(_attack_preview_action.attack_duration, _attack_preview_direction)
 
 func set_attack_preview_paused(paused: bool):
@@ -64,7 +74,7 @@ func set_attack_preview_progress(progress: float):
 	animator.prepare_preview(true)
 	animator.play_attack(_attack_preview_action.attack_duration, _attack_preview_direction)
 	animator.advance_animation(_attack_preview_elapsed)
-	_motor.held_item_view.set_attack_pose(animator.attack_pose_weight, animator.right_arm_action.rotation.x)
+	_motor.held_item_view.set_attack_pose(animator.attack_pose_weight, animator.right_arm_action.rotation.x, _attack_preview_action)
 
 func get_attack_preview_progress() -> float:
 	assert(_preview_state == PREVIEW_ATTACK)
@@ -74,6 +84,9 @@ func _process(delta: float):
 	if _preview_state != PREVIEW_LIVE:
 		_update_preview(delta)
 		return
+	if _active_attack_action != null and (_interactor.melee_attack_action != _active_attack_action or _interactor.get_selected_primary_action() != _active_attack_action):
+		_active_attack_action = null
+		animator.cancel_attack()
 	var model_basis = _motor.model_root.global_transform.basis.orthonormalized()
 	var local_velocity = model_basis.inverse() * _motor.velocity
 	var planar_speed = Vector2(_motor.velocity.x, _motor.velocity.z).length()
@@ -92,7 +105,7 @@ func _process(delta: float):
 	_animation_state.set_motion(local_velocity, speed_ratio, sprinting, _motor.on_ground, _motor.jump_anticipation, turn_rate, has_look_target, local_look_direction)
 	animator.set_mining_active(_interactor.is_mining and _interactor.can_mine_target)
 	animator.advance_animation(delta)
-	_motor.held_item_view.set_attack_pose(animator.attack_pose_weight, animator.right_arm_action.rotation.x)
+	_motor.held_item_view.set_attack_pose(animator.attack_pose_weight, animator.right_arm_action.rotation.x, _active_attack_action)
 
 func _update_preview(delta: float):
 	var local_velocity = Vector3.ZERO
@@ -118,10 +131,10 @@ func _update_preview(delta: float):
 	if _preview_state == PREVIEW_ATTACK:
 		if not _attack_preview_paused:
 			_advance_attack_preview(delta)
-		_motor.held_item_view.set_attack_pose(animator.attack_pose_weight, animator.right_arm_action.rotation.x)
+		_motor.held_item_view.set_attack_pose(animator.attack_pose_weight, animator.right_arm_action.rotation.x, _attack_preview_action)
 	else:
 		animator.advance_animation(delta)
-		_motor.held_item_view.set_attack_pose(0.0, 0.0)
+		_motor.held_item_view.set_attack_pose(0.0, 0.0, null)
 
 func _advance_attack_preview(delta: float):
 	var remaining := delta
@@ -139,4 +152,5 @@ func _on_block_placed():
 	animator.play_place()
 
 func _on_melee_attack_started(action: MeleeAttackActionDefinition, direction: int):
+	_active_attack_action = action
 	animator.play_attack(action.attack_duration, direction)

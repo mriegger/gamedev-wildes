@@ -117,6 +117,8 @@ func _run():
 	var held_pickaxe := _player.held_item_view.held_node as PixelExtrudedItem
 	_expect(is_equal_approx(held_pickaxe.rotation.y, PI * 0.5), "pickaxe does not point toward the player's front")
 	_expect(held_pickaxe.mesh_instance.mesh.get_surface_count() == 1, "pickaxe mesh surface count changed")
+	var pickaxe_material := held_pickaxe.mesh_instance.mesh.surface_get_material(0) as StandardMaterial3D
+	_expect(pickaxe_material.cull_mode == BaseMaterial3D.CULL_BACK, "pickaxe mesh still renders hidden backfaces")
 	var one_pixel_pickaxe := PixelItemMeshBuilder.build(held_pickaxe.texture, held_pickaxe.grip_pixel, held_pickaxe.max_dimension, 1.0)
 	_expect(is_equal_approx(held_pickaxe.mesh_instance.mesh.get_aabb().size.z, one_pixel_pickaxe.get_aabb().size.z * 2.0), "pickaxe mesh is not two pixels thick")
 
@@ -141,7 +143,7 @@ func _run():
 	_expect(is_equal_approx(_interactor.melee_attack_timer, sword_action.attack_duration), "sword attack timer changed")
 	_player.on_ground = true
 	_player.animation_driver._process(sword_action.attack_duration * 0.5)
-	_expect(_player.held_item_view.position.is_equal_approx(resting_socket_position + _player.held_item_view.attack_position_offset), "sword did not move toward the wrist during attack")
+	_expect(_player.held_item_view.position.is_equal_approx(resting_socket_position + sword_action.held_position_offset), "sword did not move toward the wrist during attack")
 	_expect(is_equal_approx(_player.held_item_view.rotation.x + _player.animation_driver.animator.right_arm_action.rotation.x, resting_socket_rotation.x), "sword did not flatten against the attack arm pitch")
 	_interactor._handle_item_actions(sword_action.attack_duration * 0.5)
 	_expect(_melee_attack_directions.size() == 1, "holding primary use repeated the sword attack")
@@ -180,6 +182,24 @@ func _run():
 	_player.animation_driver._process(sword_action.attack_duration)
 	_expect(_player.held_item_view.position.is_equal_approx(resting_socket_position), "sword position did not recover after attacking")
 	_expect(_player.held_item_view.rotation.is_equal_approx(resting_socket_rotation), "sword rotation did not recover after attacking")
+	_push_primary(true)
+	await process_frame
+	_input_buffer.poll()
+	_interactor._handle_item_actions(0.0)
+	_player.animation_driver._process(sword_action.attack_duration * 0.5)
+	_expect(_player.animation_driver.animator._attacking, "mid-swing cancellation setup did not start")
+	_push_hotbar_key(KEY_1)
+	await process_frame
+	_player.animation_driver._process(0.0)
+	_expect(not _player.animation_driver.animator._attacking, "switching tools did not cancel the sword animation")
+	_expect(_player.animation_driver._active_attack_action == null, "switching tools retained the sword presentation action")
+	_expect(_player.held_item_view.held_node is PixelExtrudedItem, "mid-swing switch did not display the pickaxe")
+	_expect(_player.held_item_view.position.is_equal_approx(resting_socket_position), "mid-swing switch retained the sword position")
+	_expect(_player.held_item_view.rotation.is_equal_approx(resting_socket_rotation), "mid-swing switch retained the sword rotation")
+	_interactor._handle_item_actions(0.0)
+	_push_primary(false)
+	await process_frame
+	_input_buffer.poll()
 
 	_push_hotbar_key(KEY_2)
 	await process_frame

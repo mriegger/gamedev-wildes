@@ -140,6 +140,12 @@ func play_attack(duration: float, direction: int):
 	_attack_duration = duration
 	_attack_direction = direction
 
+func cancel_attack():
+	_attacking = false
+	_attack_elapsed = 0.0
+	_attack_duration = 0.0
+	attack_pose_weight = 0.0
+
 func prepare_preview(grounded: bool):
 	_was_grounded = grounded
 	_landing_strength = 0.0

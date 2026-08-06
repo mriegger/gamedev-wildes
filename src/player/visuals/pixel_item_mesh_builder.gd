@@ -21,7 +21,7 @@ static func build(texture: Texture2D, grip_pixel: Vector2i, max_dimension: float
 	var material := StandardMaterial3D.new()
 	material.albedo_texture = texture
 	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
-	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	material.cull_mode = BaseMaterial3D.CULL_BACK
 	material.roughness = 0.82
 	surface.set_material(material)
 	return surface.commit() as ArrayMesh

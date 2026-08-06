@@ -10,7 +10,7 @@ func _run():
 	var player_scene = load("res://player/player.tscn") as PackedScene
 	var panel_scene = load("res://player/debug/animation_tuning_panel.tscn") as PackedScene
 	var player = player_scene.instantiate() as PlayerMotor
-	var panel = panel_scene.instantiate()
+	var panel = panel_scene.instantiate() as AnimationTuningPanel
 	root.add_child(player)
 	root.add_child(panel)
 	await process_frame
@@ -21,6 +21,7 @@ func _run():
 	player.animation_driver.setup(player, player.interactor)
 	panel.setup(player)
 	panel.show_panel()
+	var attack_action: MeleeAttackActionDefinition = player.animation_driver.get_attack_preview_action()
 	var panel_control = panel.get_node("Panel") as Panel
 	_expect(panel_control.size.x <= 420.0, "animation panel is too wide to keep the character visible")
 	var profile = player.animation_driver.animator.profile
@@ -36,8 +37,8 @@ func _run():
 	_expect(is_equal_approx(profile.attack_body_twist_degrees, 60.0), "exported attack body twist was not adopted as the default")
 	_expect(is_equal_approx(profile.attack_leg_brace_degrees, 0.0), "exported attack leg brace was not adopted as the default")
 	_expect(is_equal_approx(profile.attack_crouch_depth, 0.0), "exported attack crouch was not adopted as the default")
-	_expect(player.held_item_view.attack_position_offset.is_equal_approx(Vector3(0.0, 0.1125, 0.0)), "exported attack item position was not adopted as the default")
-	_expect(player.held_item_view.attack_rotation_degrees.is_equal_approx(Vector3(0.0, -113.6, 0.0)), "exported attack item rotation was not adopted as the default")
+	_expect(attack_action.held_position_offset.is_equal_approx(Vector3(0.0, 0.1125, 0.0)), "exported attack item position was not adopted as the default")
+	_expect(attack_action.held_rotation_degrees.is_equal_approx(Vector3(0.0, -113.6, 0.0)), "exported attack item rotation was not adopted as the default")
 	var input_buffer = InputBuffer.new()
 	player._input_buffer = input_buffer
 	player.on_ground = true
@@ -70,8 +71,8 @@ func _run():
 		await process_frame
 	_expect(player.animation_driver.animator.get_current_state() == BlockyHumanoidAnimator.SPRINT, "sprint preview did not play selected=%s driver=%s current=%s" % [preview_selector.get_item_text(preview_selector.selected), String(player.animation_driver._preview_state), String(player.animation_driver.animator.get_current_state())])
 	_expect(is_equal_approx(player.animation_driver.animator.left_arm_action.position.x, 0.125), "left arm tuning did not reach the rendered rig")
-	var default_attack_position: Vector3 = player.held_item_view.attack_position_offset
-	var default_attack_rotation: Vector3 = player.held_item_view.attack_rotation_degrees
+	var default_attack_position: Vector3 = attack_action.held_position_offset
+	var default_attack_rotation: Vector3 = attack_action.held_rotation_degrees
 	var attack_position_x = panel.get_node("Panel/VBox/Tabs/Attack/VBox/TransformGrid/PositionX") as SpinBox
 	var attack_position_y = panel.get_node("Panel/VBox/Tabs/Attack/VBox/TransformGrid/PositionY") as SpinBox
 	var attack_position_z = panel.get_node("Panel/VBox/Tabs/Attack/VBox/TransformGrid/PositionZ") as SpinBox
@@ -100,8 +101,8 @@ func _run():
 	_expect(is_equal_approx(attack_rotation_z.value, attack_rotation_slider_z.value), "attack rotation Z slider did not update its numeric field")
 	attack_rotation_z.value = 20.0
 	_expect(is_equal_approx(attack_rotation_slider_z.value, attack_rotation_z.value), "attack rotation numeric field did not update its slider")
-	_expect(player.held_item_view.attack_position_offset.is_equal_approx(Vector3(default_attack_position.x + 0.075, default_attack_position.y + 0.025, default_attack_position.z - 0.03)), "attack XYZ sliders did not update the sword position live")
-	_expect(player.held_item_view.attack_rotation_degrees.is_equal_approx(Vector3(-12.0, 18.0, 20.0)), "attack XYZ sliders did not update the sword rotation live")
+	_expect(attack_action.held_position_offset.is_equal_approx(Vector3(default_attack_position.x + 0.075, default_attack_position.y + 0.025, default_attack_position.z - 0.03)), "attack XYZ sliders did not update the sword position live")
+	_expect(attack_action.held_rotation_degrees.is_equal_approx(Vector3(-12.0, 18.0, 20.0)), "attack XYZ sliders did not update the sword rotation live")
 	player.animation_driver.set_process(false)
 	var attack_preview_index: int = preview_selector.item_count - 1
 	_expect(preview_selector.get_item_text(attack_preview_index) == String(PlayerAnimationDriver.PREVIEW_ATTACK), "attack preview is missing from the selector")
@@ -111,10 +112,9 @@ func _run():
 	_expect(tabs.get_tab_title(tabs.current_tab) == "Attack", "attack preview did not open its tuning screen")
 	_expect(player.held_item_view.held_node is PixelExtrudedItem, "attack preview did not display a held sword")
 	var preview_sword := player.held_item_view.held_node as PixelExtrudedItem
-	_expect(preview_sword.texture == player.animation_driver.attack_preview_item.icon, "attack preview displayed the wrong held item")
+	_expect(preview_sword.texture == panel.attack_preview_item.icon, "attack preview displayed the wrong held item")
 	var resting_socket_position: Vector3 = player.held_item_view._rest_position
 	var resting_socket_rotation: Vector3 = player.held_item_view._rest_rotation
-	var attack_action := player.animation_driver.attack_preview_item.primary_action as MeleeAttackActionDefinition
 	var pause_button := panel.get_node("Panel/VBox/Tabs/Attack/VBox/PlaybackRow/PauseButton") as CheckButton
 	var progress_slider := panel.get_node("Panel/VBox/Tabs/Attack/VBox/PlaybackRow/ProgressSlider") as HSlider
 	var progress_label := panel.get_node("Panel/VBox/Tabs/Attack/VBox/PlaybackRow/ProgressLabel") as Label
@@ -124,7 +124,7 @@ func _run():
 	_expect(is_equal_approx(player.animation_driver.get_attack_preview_progress(), 0.5), "attack preview did not seek to the slider position")
 	_expect(progress_label.text == "50%", "attack progress label did not show the paused point")
 	_expect(player.animation_driver.animator.attack_pose_weight > 0.99, "attack preview did not reach the middle of the swing")
-	_expect(player.held_item_view.position.is_equal_approx(resting_socket_position + player.held_item_view.attack_position_offset), "attack preview did not apply the tuned sword position")
+	_expect(player.held_item_view.position.is_equal_approx(resting_socket_position + attack_action.held_position_offset), "attack preview did not apply the tuned sword position")
 	_expect(is_equal_approx(player.held_item_view.rotation.y, resting_socket_rotation.y + deg_to_rad(18.0)), "attack preview did not apply the tuned sword rotation")
 	var paused_arm_rotation: Vector3 = player.animation_driver.animator.right_arm_action.rotation
 	player.animation_driver._process(0.2)
@@ -162,8 +162,8 @@ func _run():
 	_expect(is_equal_approx(profile.sprint_bob_height, default_bob), "reset did not restore animation defaults")
 	arm_transform = player.animation_driver.animator.get_tuning_transform(BlockyHumanoidAnimator.TUNING_LEFT_ARM)
 	_expect((arm_transform["position"] as Vector3).is_zero_approx(), "reset did not restore part transforms")
-	_expect(player.held_item_view.attack_position_offset.is_equal_approx(default_attack_position), "reset did not restore attack sword position")
-	_expect(player.held_item_view.attack_rotation_degrees.is_equal_approx(default_attack_rotation), "reset did not restore attack sword rotation")
+	_expect(attack_action.held_position_offset.is_equal_approx(default_attack_position), "reset did not restore attack sword position")
+	_expect(attack_action.held_rotation_degrees.is_equal_approx(default_attack_rotation), "reset did not restore attack sword rotation")
 	_expect(is_equal_approx(attack_position_slider_x.value, default_attack_position.x) and is_equal_approx(attack_position_slider_y.value, default_attack_position.y) and is_equal_approx(attack_position_slider_z.value, default_attack_position.z), "reset did not restore attack position sliders")
 	_expect(is_equal_approx(attack_rotation_slider_x.value, default_attack_rotation.x) and is_equal_approx(attack_rotation_slider_y.value, default_attack_rotation.y) and is_equal_approx(attack_rotation_slider_z.value, default_attack_rotation.z), "reset did not restore attack rotation sliders")
 	panel.hide_panel()

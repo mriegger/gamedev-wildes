@@ -6,3 +6,5 @@
 script = ExtResource("1_melee")
 attack_duration = 0.48
 chain_input_window = 0.26
+held_position_offset = Vector3(0, 0.1125, 0)
+held_rotation_degrees = Vector3(0, -113.6, 0)

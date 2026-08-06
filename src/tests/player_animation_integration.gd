@@ -300,6 +300,12 @@ func _run():
 	_expect(not animator._attacking, "reversed sword attack one-shot did not end")
 	_advance(animator, 2)
 	_expect(abs(animator.body_action.rotation.x) < 0.001, "sword attack body lean did not recover")
+	animator.play_attack(attack_action.attack_duration, -1)
+	_advance(animator, 5)
+	animator.cancel_attack()
+	_advance(animator, 1)
+	_expect(not animator._attacking and is_zero_approx(animator.attack_pose_weight), "cancelled sword attack remained active")
+	_expect(abs(animator.right_arm_action.rotation.z) < 0.001, "cancelled sword attack retained its sweep")
 
 	await _run_crowd_smoke(packed)
 	animator.queue_free()
