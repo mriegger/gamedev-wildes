@@ -121,6 +121,16 @@ func _run():
 	_expect(held_pickaxe.mesh_instance.mesh.get_surface_count() == 1, "pickaxe mesh surface count changed")
 	var pickaxe_material := held_pickaxe.mesh_instance.mesh.surface_get_material(0) as StandardMaterial3D
 	_expect(pickaxe_material.cull_mode == BaseMaterial3D.CULL_BACK, "pickaxe mesh still renders hidden backfaces")
+	var pickaxe_arrays := held_pickaxe.mesh_instance.mesh.surface_get_arrays(0)
+	var pickaxe_vertices := pickaxe_arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array
+	var pickaxe_normals := pickaxe_arrays[Mesh.ARRAY_NORMAL] as PackedVector3Array
+	var pickaxe_winding_valid := pickaxe_vertices.size() == pickaxe_normals.size()
+	for index in range(0, pickaxe_vertices.size(), 3):
+		var triangle_normal := (pickaxe_vertices[index + 1] - pickaxe_vertices[index]).cross(pickaxe_vertices[index + 2] - pickaxe_vertices[index]).normalized()
+		if triangle_normal.dot(pickaxe_normals[index]) > -0.99:
+			pickaxe_winding_valid = false
+			break
+	_expect(pickaxe_winding_valid, "pickaxe triangle winding does not face its supplied normals")
 	var one_pixel_pickaxe := PixelItemMeshBuilder.build(held_pickaxe.texture, held_pickaxe.grip_pixel, held_pickaxe.max_dimension, 1.0)
 	_expect(is_equal_approx(held_pickaxe.mesh_instance.mesh.get_aabb().size.z, one_pixel_pickaxe.get_aabb().size.z * 2.0), "pickaxe mesh is not two pixels thick")
 

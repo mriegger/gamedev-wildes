@@ -136,3 +136,4 @@ Godot itself is MIT licensed.
 | [#21](https://github.com/codimango/gamedev-wildes/pull/21) | Make Godot CI validation fail closed | `codex/strict-godot-validation` |
 | [#22](https://github.com/codimango/gamedev-wildes/pull/22) | Add pull request quality scaffolding | `codex/pr-quality-scaffolding` |
 | [#23](https://github.com/codimango/gamedev-wildes/pull/23) | Widen world golden block ID encoding | `codex/widen-world-golden-hash` |
+| [#24](https://github.com/codimango/gamedev-wildes/pull/24) | Fix pixel weapon mesh shading | `codex/fix-weapon-mesh-winding` |

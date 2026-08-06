@@ -77,11 +77,11 @@ static func _add_solid_quad(surface: SurfaceTool, a: Vector3, b: Vector3, c: Vec
 
 static func _add_quad(surface: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: Vector3, normal: Vector3, uv_a: Vector2, uv_b: Vector2, uv_c: Vector2, uv_d: Vector2):
 	_add_vertex(surface, a, normal, uv_a)
+	_add_vertex(surface, c, normal, uv_c)
 	_add_vertex(surface, b, normal, uv_b)
-	_add_vertex(surface, c, normal, uv_c)
 	_add_vertex(surface, a, normal, uv_a)
-	_add_vertex(surface, c, normal, uv_c)
 	_add_vertex(surface, d, normal, uv_d)
+	_add_vertex(surface, c, normal, uv_c)
 
 static func _add_vertex(surface: SurfaceTool, position: Vector3, normal: Vector3, uv: Vector2):
 	surface.set_normal(normal)
