@@ -453,18 +453,11 @@ func _verify_item_block_round_trip() -> bool:
 	if inventory.selected_slot != 1:
 		_fail("hotbar key input did not select slot 1")
 		return false
-	var key_one := InputEventKey.new()
-	key_one.keycode = KEY_1
-	key_one.pressed = true
-	root.push_input(key_one, true)
-	if inventory.selected_slot != 0:
-		_fail("hotbar key input did not restore slot 0")
-		return false
-	var before = inventory.get_slot(0)
-	if before == null or before["item_id"] != grass_item.id:
+	var before: InventoryStack = inventory.get_slot(1)
+	if before == null or before.item_id != grass_item.id:
 		_fail("starter grass item missing")
 		return false
-	var before_count := int(before["count"])
+	var before_count: int = before.count
 	var voxel_world := _world.voxel_model
 	var base_x := int(floor(_player.global_position.x))
 	var base_z := int(floor(_player.global_position.z))
@@ -480,22 +473,29 @@ func _verify_item_block_round_trip() -> bool:
 		_fail("no position available for item round trip")
 		return false
 	var placed_pos := placement as Vector3i
-	_player.interactor._commit_place(placed_pos)
+	_player.interactor._commit_place(placed_pos, _player.interactor.get_selected_placement_action())
 	if voxel_world.get_block_id_at(placed_pos) != BlockId.Type.GRASS:
 		_fail("selected item did not place grass block")
 		return false
 	if not _player.animation_driver.animator._placing:
 		_fail("successful placement did not trigger player animation")
 		return false
-	if int(inventory.get_slot(0)["count"]) != before_count - 1:
+	if inventory.get_slot(1).count != before_count - 1:
 		_fail("placing block did not consume item")
 		return false
-	_player.interactor._commit_mine(placed_pos)
+	_player.interactor._commit_mine(placed_pos, _player.interactor.get_selected_primary_action() as MiningActionDefinition)
 	if voxel_world.get_block_id_at(placed_pos) != BlockId.Type.AIR:
 		_fail("placed grass block was not mined")
 		return false
-	if int(inventory.get_slot(0)["count"]) != before_count:
+	if inventory.get_slot(1).count != before_count:
 		_fail("mined block did not restore grass item")
+		return false
+	var key_one := InputEventKey.new()
+	key_one.keycode = KEY_1
+	key_one.pressed = true
+	root.push_input(key_one, true)
+	if inventory.selected_slot != 0 or inventory.get_slot(0).item_id != &"copper_pickaxe":
+		_fail("hotbar key input did not restore copper pickaxe")
 		return false
 	_item_round_trip_verified = true
 	return true

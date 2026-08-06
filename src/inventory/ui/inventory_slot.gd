@@ -83,8 +83,8 @@ func _gui_input(event):
 				if inventory_model:
 					var s = inventory_model.get_slot(slot_index)
 					if s != null:
-						src_item_id = s["item_id"]
-						src_count = int(s["count"])
+						src_item_id = s.item_id
+						src_count = s.count
 					else:
 						return
 				var half = int(ceil(float(src_count) / 2.0))
@@ -99,11 +99,11 @@ func _get_drag_data(_at_position):
 		return null
 	if inventory_model == null:
 		return null
-	var s = inventory_model.get_slot(slot_index)
+	var s: InventoryStack = inventory_model.get_slot(slot_index)
 	if s == null:
 		return null
-	var count = s["count"] as int
-	var source_item_id = s["item_id"]
+	var count: int = s.count
+	var source_item_id: StringName = s.item_id
 	var data = {"source_index": slot_index, "drag_count": count}
 	_show_high_layer_preview(source_item_id, count)
 	set_drag_preview(Control.new())

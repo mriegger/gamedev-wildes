@@ -140,18 +140,19 @@ func _update_selection_visuals():
 		return
 	var selected_block_id = interactor.get_selected_block_id()
 	var has_block = selected_block_id != null
-	var left_holding = Input.is_action_pressed("mine")
+	var primary_holding = Input.is_action_pressed("primary_use")
+	var has_mining_action = interactor.get_selected_primary_action() is MiningActionDefinition
 
 	var show_mining_outline = false
 	var show_ghost = false
 
 	if has_block:
-		if left_holding or interactor.is_mining:
-			show_mining_outline = interactor.target_has
+		if primary_holding or interactor.is_mining:
+			show_mining_outline = has_mining_action and interactor.target_has
 		else:
 			show_ghost = interactor.placement_has
 	else:
-		show_mining_outline = interactor.target_has
+		show_mining_outline = has_mining_action and interactor.target_has
 
 	if show_mining_outline and interactor.target_has:
 		if selection_box == null or not selection_box.is_inside_tree():
@@ -179,7 +180,7 @@ func _update_selection_visuals():
 					var bmat = breaking_block.material_override
 					if bmat is StandardMaterial3D and bmat.albedo_texture != texture:
 						bmat.albedo_texture = texture
-				var progress = clamp(interactor.mine_timer / interactor.mine_hold_time, 0.0, 1.0)
+				var progress = clamp(interactor.mine_timer / interactor.get_mine_duration(), 0.0, 1.0)
 				var s = 1.0 + 0.12 * sin(progress * PI)
 				var mining_scale = Vector3(s, s, s)
 				if breaking_block.scale != mining_scale:

@@ -100,15 +100,24 @@ godot --path src --headless --script res://tests/player_animation_integration.gd
 godot --path src --headless --script res://tests/animation_tuning_panel_integration.gd
 ```
 
+## Tool System Integration
+
+`tool_system_integration.gd` verifies action and catalog data, typed inventory persistence, stone tool gating, real primary-use input, copper-pickaxe held rendering, silhouette extrusion for both supplied tool textures, and node cleanup.
+
+```sh
+godot --path src --headless --script res://tests/tool_system_integration.gd
+```
+
 ## CI
 
-`.github/workflows/tests.yml` downloads Godot 4.7 Linux headless, imports `src/`, and runs six:
+`.github/workflows/tests.yml` downloads Godot 4.7 Linux headless, imports `src/`, and runs seven:
 
 - fuzzer with 20k sequences × 20 ops (≈400k drops) — prints throughput (`~1M ops/s` raw, `~16k ops/s` invariant-checked)
 - golden hash — `GOLDEN PASS` / `GOLDEN FAIL` with expected vs actual
 - HUD integration — `HUD_INTEGRATION PASS orphan=0 previews=0` and grep-fails on `ERROR`/`WARNING`/`FAIL`
 - player animation integration — `PLAYER_ANIMATION PASS orphan=0` plus a 100-instance shared-resource smoke
 - animation tuning integration — `ANIMATION_TUNING PASS orphan=0` with live controls, preview, reset, and JSON export
+- tool system integration — `TOOL_SYSTEM PASS orphan=0` with action, mining gate, typed-stack, input, and extrusion coverage
 - world soak — `SOAK PASS` and grep-fails on `ERROR`/`WARNING`/`FAIL` + bounded chunk/orphan checks
 
 All fail the job on violation.

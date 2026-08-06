@@ -36,18 +36,22 @@ func _rebuild_lookup() -> void:
 			push_error("[ItemCatalog] Invalid max stack for %s at %s" % [definition.id, source])
 			_is_valid = false
 		_definitions_by_id[definition.id] = definition
-		if definition.placed_block == null:
-			continue
-		var block_id := int(definition.placed_block.id)
-		if not BlockId.is_valid(block_id) or block_id == BlockId.Type.AIR:
-			push_error("[ItemCatalog] Invalid placed block for %s at %s" % [definition.id, source])
-			_is_valid = false
-			continue
-		if _definitions_by_block[block_id] != null:
-			push_error("[ItemCatalog] Duplicate block mapping for %s at %s" % [BlockId.get_display_name(block_id), source])
-			_is_valid = false
-			continue
-		_definitions_by_block[block_id] = definition
+		for action in [definition.primary_action, definition.secondary_action]:
+			if action == null:
+				continue
+			_is_valid = action.validate(source) and _is_valid
+			if action is BlockPlacementActionDefinition:
+				var placement := action as BlockPlacementActionDefinition
+				if placement.block == null:
+					continue
+				var block_id := int(placement.block.id)
+				if not BlockId.is_valid(block_id) or block_id == BlockId.Type.AIR:
+					continue
+				if _definitions_by_block[block_id] != null:
+					push_error("[ItemCatalog] Duplicate block mapping for %s at %s" % [BlockId.get_display_name(block_id), source])
+					_is_valid = false
+					continue
+				_definitions_by_block[block_id] = definition
 
 func _ensure_lookup() -> void:
 	if _definitions_by_block.size() != BlockId.Type.COUNT:
@@ -57,14 +61,16 @@ func validate(block_catalog: BlockCatalog) -> bool:
 	_ensure_lookup()
 	var valid := _is_valid
 	for definition in definitions:
-		if definition == null or definition.placed_block == null:
+		if definition == null:
 			continue
-		var block_id := int(definition.placed_block.id)
-		if not BlockId.is_valid(block_id):
-			continue
-		if block_catalog.get_definition(block_id) != definition.placed_block:
-			push_error("[ItemCatalog] Non-canonical block resource for %s" % definition.id)
-			valid = false
+		for action in [definition.primary_action, definition.secondary_action]:
+			if action is BlockPlacementActionDefinition:
+				var placement := action as BlockPlacementActionDefinition
+				if placement.block == null or not BlockId.is_valid(placement.block.id):
+					continue
+				if block_catalog.get_definition(placement.block.id) != placement.block:
+					push_error("[ItemCatalog] Non-canonical block resource for %s" % definition.id)
+					valid = false
 	return valid
 
 func has_definition(id: StringName) -> bool:

@@ -18,7 +18,7 @@ const FILLABLE_SIZE: int = HOTBAR_SIZE + BACKPACK_SIZE
 var size: int = TOTAL_SIZE
 var item_catalog: ItemCatalog
 
-var slots: Array = []
+var slots: Array[InventoryStack] = []
 var selected_slot: int = 0
 
 func _init(p_item_catalog: ItemCatalog, p_size: int = DEFAULT_SIZE):
@@ -26,23 +26,22 @@ func _init(p_item_catalog: ItemCatalog, p_size: int = DEFAULT_SIZE):
 	item_catalog = p_item_catalog
 	size = p_size
 	slots.resize(size)
-	for i in range(size):
-		slots[i] = null
+	slots.fill(null)
 	selected_slot = 0
 
-func get_slot(idx: int):
+func get_slot(idx: int) -> InventoryStack:
 	if idx < 0 or idx >= size:
 		return null
 	return slots[idx]
 
-func get_selected_data():
+func get_selected_data() -> InventoryStack:
 	return get_slot(selected_slot)
 
 func get_selected_item_id():
-	var s = get_selected_data()
-	if s == null:
+	var stack := get_selected_data()
+	if stack == null:
 		return null
-	return s["item_id"]
+	return stack.item_id
 
 func select_slot(idx: int) -> bool:
 	if not is_hotbar_index(idx):
@@ -53,31 +52,57 @@ func select_slot(idx: int) -> bool:
 	inventory_changed.emit()
 	return true
 
-func _simulate_slots(ids: Array[StringName]) -> Array:
-	var sim = slots.duplicate(true)
+func ensure_item(item_id: StringName) -> bool:
+	if not item_catalog.has_definition(item_id):
+		return false
+	for stack in slots:
+		if stack != null and stack.item_id == item_id:
+			return true
+	for index in range(min(size, HOTBAR_SIZE)):
+		if slots[index] == null:
+			slots[index] = InventoryStack.new(item_id, 1)
+			inventory_changed.emit()
+			return true
+	for index in range(HOTBAR_SIZE, size):
+		if slots[index] == null:
+			slots[index] = slots[0]
+			slots[0] = InventoryStack.new(item_id, 1)
+			inventory_changed.emit()
+			return true
+	return false
+
+func _copy_slots() -> Array[InventoryStack]:
+	var copied: Array[InventoryStack] = []
+	copied.resize(size)
+	for index in range(size):
+		if slots[index] != null:
+			copied[index] = slots[index].copy()
+	return copied
+
+func _simulate_slots(ids: Array[StringName]) -> Array[InventoryStack]:
+	var sim := _copy_slots()
 	for item_id in ids:
 		if item_id.is_empty() or not item_catalog.has_definition(item_id):
 			return []
 		var max_stack := item_catalog.get_definition(item_id).max_stack
-		var added = false
-		var empty_idx = -1
-		for i in range(min(size, FILLABLE_SIZE)):
-			var s = sim[i]
-			if s == null:
+		var added := false
+		var empty_idx := -1
+		for index in range(min(size, FILLABLE_SIZE)):
+			var stack := sim[index]
+			if stack == null:
 				if empty_idx == -1:
-					empty_idx = i
+					empty_idx = index
 				continue
-			if s["item_id"] == item_id and s["count"] < max_stack:
-				s["count"] += 1
+			if stack.item_id == item_id and stack.count < max_stack:
+				stack.count += 1
 				added = true
 				break
 		if added:
 			continue
 		if empty_idx != -1:
-			sim[empty_idx] = {"item_id": item_id, "count": 1}
+			sim[empty_idx] = InventoryStack.new(item_id, 1)
 			continue
 		return []
-
 	return sim
 
 func can_add_batch(ids: Array[StringName]) -> bool:
@@ -88,7 +113,7 @@ func can_add_batch(ids: Array[StringName]) -> bool:
 func add_batch(ids: Array[StringName]) -> bool:
 	if ids.is_empty():
 		return true
-	var sim = _simulate_slots(ids)
+	var sim := _simulate_slots(ids)
 	if sim.is_empty():
 		return false
 	slots = sim
@@ -98,9 +123,9 @@ func add_batch(ids: Array[StringName]) -> bool:
 func consume_selected() -> bool:
 	if not can_consume_selected():
 		return false
-	var s = slots[selected_slot]
-	s["count"] -= 1
-	if s["count"] <= 0:
+	var stack := slots[selected_slot]
+	stack.count -= 1
+	if stack.count <= 0:
 		slots[selected_slot] = null
 	inventory_changed.emit()
 	return true
@@ -108,18 +133,18 @@ func consume_selected() -> bool:
 func can_consume_selected() -> bool:
 	if not is_hotbar_index(selected_slot):
 		return false
-	var s = get_selected_data()
-	return s != null and s["count"] > 0
+	var stack := get_selected_data()
+	return stack != null and stack.count > 0
 
 func is_hotbar_index(idx: int) -> bool:
 	return idx >= 0 and idx < HOTBAR_SIZE
 
 static func get_region_indices(region_name: String) -> Array:
-	for r in REGIONS:
-		if r["name"] == region_name:
+	for region in REGIONS:
+		if region["name"] == region_name:
 			var out: Array = []
-			for i in range(r["size"]):
-				out.append(r["start"] + i)
+			for index in range(region["size"]):
+				out.append(region["start"] + index)
 			return out
 	return []
 
@@ -131,40 +156,40 @@ func can_handle_drop(src_idx: int, dst_idx: int, drag_count: int) -> bool:
 		return false
 	if src_idx == dst_idx:
 		return false
-	var src = slots[src_idx]
+	var src := slots[src_idx]
 	if src == null:
 		return false
-	if drag_count <= 0 or drag_count > src["count"]:
+	if drag_count <= 0 or drag_count > src.count:
 		return false
-	var drag_item_id := src["item_id"] as StringName
+	var drag_item_id := src.item_id
 	if not can_slot_accept_item_id(dst_idx, drag_item_id):
 		return false
-	var dst = slots[dst_idx]
+	var dst := slots[dst_idx]
 	if dst == null:
 		return true
-	if dst["item_id"] == drag_item_id:
-		return dst["count"] < item_catalog.get_definition(drag_item_id).max_stack
-	return drag_count == src["count"] and can_slot_accept_item_id(src_idx, dst["item_id"])
+	if dst.item_id == drag_item_id:
+		return dst.count < item_catalog.get_definition(drag_item_id).max_stack
+	return drag_count == src.count and can_slot_accept_item_id(src_idx, dst.item_id)
 
 func handle_drop(src_idx: int, dst_idx: int, drag_count: int) -> bool:
 	if not can_handle_drop(src_idx, dst_idx, drag_count):
 		return false
-	var src = slots[src_idx]
-	var dst = slots[dst_idx]
-	var drag_item_id := src["item_id"] as StringName
+	var src := slots[src_idx]
+	var dst := slots[dst_idx]
+	var drag_item_id := src.item_id
 	if dst == null:
-		slots[dst_idx] = {"item_id": drag_item_id, "count": drag_count}
-		src["count"] -= drag_count
-		if src["count"] <= 0:
+		slots[dst_idx] = InventoryStack.new(drag_item_id, drag_count)
+		src.count -= drag_count
+		if src.count <= 0:
 			slots[src_idx] = null
 		inventory_changed.emit()
 		return true
-	if dst["item_id"] == drag_item_id:
+	if dst.item_id == drag_item_id:
 		var max_stack := item_catalog.get_definition(drag_item_id).max_stack
-		var to_move = min(drag_count, max_stack - dst["count"])
-		dst["count"] += to_move
-		src["count"] -= to_move
-		if src["count"] <= 0:
+		var to_move: int = mini(drag_count, max_stack - dst.count)
+		dst.count += to_move
+		src.count -= to_move
+		if src.count <= 0:
 			slots[src_idx] = null
 		inventory_changed.emit()
 		return true
@@ -175,48 +200,42 @@ func handle_drop(src_idx: int, dst_idx: int, drag_count: int) -> bool:
 
 func to_dict() -> Dictionary:
 	var regions_dict: Dictionary = {}
-	for r in REGIONS:
-		var rname: String = r["name"]
-		var indices: Array = InventoryModel.get_region_indices(rname)
-		var arr: Array = []
+	for region in REGIONS:
+		var region_name: String = region["name"]
+		var indices: Array = InventoryModel.get_region_indices(region_name)
+		var encoded: Array = []
 		for idx in indices:
-			var v = slots[idx] if idx >= 0 and idx < slots.size() else null
-			if v == null:
-				arr.append(null)
-			elif v is Dictionary and v.has("item_id") and v.has("count"):
-				arr.append({"item_id": String(v["item_id"]), "count": int(v["count"])})
-			else:
-				arr.append(null)
-		regions_dict[rname] = arr
+			var stack := slots[idx] if idx >= 0 and idx < slots.size() else null
+			encoded.append(null if stack == null else stack.to_dict())
+		regions_dict[region_name] = encoded
 	return {"selected": selected_slot, "regions": regions_dict}
 
-func from_dict(d: Dictionary) -> bool:
-	var regions_dict = d.get("regions", {}) as Dictionary
-	var restored_slots: Array = []
+func from_dict(data: Dictionary) -> bool:
+	var regions_dict = data.get("regions", {}) as Dictionary
+	var restored_slots: Array[InventoryStack] = []
 	restored_slots.resize(size)
 	restored_slots.fill(null)
-	for r in REGIONS:
-		var rname: String = r["name"]
-		var indices: Array = InventoryModel.get_region_indices(rname)
-		var arr = regions_dict.get(rname, null)
-		if arr == null or not arr is Array:
+	for region in REGIONS:
+		var region_name: String = region["name"]
+		var indices: Array = InventoryModel.get_region_indices(region_name)
+		var encoded = regions_dict.get(region_name, null)
+		if encoded == null or not encoded is Array:
 			return false
-		for j in range(min(indices.size(), (arr as Array).size())):
-			var idx = int(indices[j])
-			var raw = (arr as Array)[j]
+		for offset in range(min(indices.size(), (encoded as Array).size())):
+			var idx := int(indices[offset])
+			var raw = (encoded as Array)[offset]
 			if raw == null:
 				continue
 			if not raw is Dictionary or not raw.has("item_id") or not raw.has("count"):
 				return false
-			var item_id := StringName(raw.get("item_id", ""))
-			var count := int(raw.get("count", 0))
-			if not item_catalog.has_definition(item_id):
+			var stack := InventoryStack.from_dict(raw)
+			if not item_catalog.has_definition(stack.item_id):
 				return false
-			if count < 1 or count > item_catalog.get_definition(item_id).max_stack:
+			if stack.count < 1 or stack.count > item_catalog.get_definition(stack.item_id).max_stack:
 				return false
-			restored_slots[idx] = {"item_id": item_id, "count": count}
+			restored_slots[idx] = stack
 	slots = restored_slots
-	selected_slot = int(d.get("selected", 0))
+	selected_slot = int(data.get("selected", 0))
 	if not is_hotbar_index(selected_slot):
 		selected_slot = 0
 	inventory_changed.emit()
@@ -224,8 +243,9 @@ func from_dict(d: Dictionary) -> bool:
 
 func setup_starter():
 	slots.fill(null)
-	slots[6] = {"item_id": item_catalog.get_item_for_block(BlockId.Type.TORCH).id, "count": 16}
-	slots[0] = {"item_id": item_catalog.get_item_for_block(BlockId.Type.GRASS).id, "count": 12}
-	slots[1] = {"item_id": item_catalog.get_item_for_block(BlockId.Type.STONE).id, "count": 8}
+	slots[0] = InventoryStack.new(&"copper_pickaxe", 1)
+	slots[1] = InventoryStack.new(item_catalog.get_item_for_block(BlockId.Type.GRASS).id, 12)
+	slots[2] = InventoryStack.new(item_catalog.get_item_for_block(BlockId.Type.STONE).id, 8)
+	slots[6] = InventoryStack.new(item_catalog.get_item_for_block(BlockId.Type.TORCH).id, 16)
 	selected_slot = 0
 	inventory_changed.emit()

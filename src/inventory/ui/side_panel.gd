@@ -86,7 +86,7 @@ func _refresh_inventory():
 			if data == null:
 				slot.set_item(null, 0)
 			else:
-				slot.set_item(data["item_id"], data["count"])
+				slot.set_item(data.item_id, data.count)
 	_inventory_dirty = false
 
 func _build_slot_grid_for_region(region_name: String, grid: GridContainer, out_slots: Array[InventorySlot]):

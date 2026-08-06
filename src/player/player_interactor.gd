@@ -4,8 +4,8 @@ class_name PlayerInteractor
 signal block_placed
 
 @export var reach: float = 6.0
-@export var mine_hold_time: float = 0.35
 @export var place_cooldown: float = 0.18
+@export var unarmed_primary_action: MiningActionDefinition
 
 var voxel_world: VoxelWorld = null
 var camera: Camera3D = null
@@ -26,7 +26,8 @@ var is_mining: bool = false
 var mine_timer: float = 0.0
 var mine_target: Vector3i = Vector3i(-999, -999, -999)
 var mine_target_rev: int = -1
-var place_timer: float = 0.0
+var mine_action: MiningActionDefinition
+var secondary_use_timer: float = 0.0
 var _ray_hit_pos: Vector3i
 var _ray_place_pos: Vector3i
 var _ray_face_normal: Vector3i
@@ -49,10 +50,10 @@ func _physics_process(delta):
 		can_place_target = false
 		if is_mining:
 			_reset_mining()
-		_input_buffer.place_just = false
+		_input_buffer.secondary_use_just = false
 		return
 	_handle_raycast()
-	_handle_mining_placing(delta)
+	_handle_item_actions(delta)
 
 func _handle_raycast():
 	target_has = false
@@ -79,7 +80,8 @@ func _handle_raycast():
 
 	var motor_pos = motor.global_position
 	var reach_squared = reach * reach
-	can_mine_target = motor_pos.distance_squared_to(Vector3(best_hit.x + 0.5, best_hit.y + 0.5, best_hit.z + 0.5)) <= reach_squared
+	var selected_primary := get_selected_primary_action()
+	can_mine_target = selected_primary is MiningActionDefinition and _can_mine_position(best_hit, selected_primary as MiningActionDefinition)
 
 	if voxel_world.get_block_at(best_place) == null:
 		if not _placement_collides_player(best_place):
@@ -199,53 +201,76 @@ func _placement_collides_player(p: Vector3i) -> bool:
 		return false
 	return true
 
-func _handle_mining_placing(delta):
-	place_timer -= delta
-	var ib = _input_buffer
-	var left_pressed = ib.mine_pressed
-	if left_pressed and target_has and can_mine_target:
+func _handle_item_actions(delta):
+	secondary_use_timer -= delta
+	var selected_primary := get_selected_primary_action()
+	var selected_mining := selected_primary as MiningActionDefinition
+	if _input_buffer.primary_use_pressed and target_has and can_mine_target and selected_mining != null:
 		if not is_mining:
 			mine_target = target_block
 			mine_target_rev = voxel_world.get_revision(mine_target)
 			mine_timer = 0.0
+			mine_action = selected_mining
 			is_mining = true
 		else:
-			if mine_target != target_block:
+			if mine_target != target_block or mine_action != selected_mining:
 				mine_target = target_block
 				mine_target_rev = voxel_world.get_revision(mine_target)
 				mine_timer = 0.0
+				mine_action = selected_mining
 			else:
 				var cur_rev = voxel_world.get_revision(mine_target)
 				if cur_rev != mine_target_rev:
 					_reset_mining()
 				else:
 					mine_timer += delta
-					if mine_timer >= mine_hold_time:
-						_commit_mine(mine_target)
+					if mine_timer >= get_mine_duration():
+						_commit_mine(mine_target, mine_action)
 	else:
 		if is_mining:
 			_reset_mining()
 
-	if (ib.place_just or ib.place_pressed) and place_timer <= 0.0:
-		ib.place_just = false
-		if _can_place():
-			_commit_place(placement_block)
-			place_timer = place_cooldown
+	var selected_placement := get_selected_placement_action()
+	if (_input_buffer.secondary_use_just or _input_buffer.secondary_use_pressed) and secondary_use_timer <= 0.0:
+		_input_buffer.secondary_use_just = false
+		if _can_place(selected_placement):
+			_commit_place(placement_block, selected_placement)
+			secondary_use_timer = place_cooldown
 
 func _reset_mining():
 	is_mining = false
 	mine_timer = 0.0
 	mine_target = Vector3i(-999, -999, -999)
 	mine_target_rev = -1
+	mine_action = null
 
-func _can_place() -> bool:
+func _can_mine_position(pos: Vector3i, action: MiningActionDefinition) -> bool:
+	if action == null or voxel_world == null or motor == null:
+		return false
+	var center := Vector3(pos) + Vector3(0.5, 0.5, 0.5)
+	if motor.global_position.distance_squared_to(center) > reach * reach:
+		return false
+	var block_id := voxel_world.get_block_id_at(pos)
+	if block_id == BlockId.Type.AIR:
+		return false
+	return action.can_mine(voxel_world.block_catalog.get_definition(block_id))
+
+func get_mine_duration() -> float:
+	assert(is_mining and mine_action != null)
+	var block_id := voxel_world.get_block_id_at(mine_target)
+	return mine_action.get_mine_duration(voxel_world.block_catalog.get_definition(block_id))
+
+func _can_place(action: BlockPlacementActionDefinition) -> bool:
 	if not placement_has or not can_place_target:
 		return false
 	if inventory_model == null:
 		return false
-	return get_selected_block_id() != null and inventory_model.can_consume_selected()
+	return action != null and inventory_model.can_consume_selected()
 
-func _commit_mine(pos: Vector3i):
+func _commit_mine(pos: Vector3i, action: MiningActionDefinition):
+	if not _can_mine_position(pos, action):
+		_reset_mining()
+		return
 	_reset_mining()
 	if voxel_world == null or inventory_model == null:
 		return
@@ -275,13 +300,11 @@ func _commit_mine(pos: Vector3i):
 		inventory_model.add_batch(collected_item_ids)
 	_handle_raycast()
 
-func _commit_place(pos: Vector3i):
+func _commit_place(pos: Vector3i, action: BlockPlacementActionDefinition):
 	if voxel_world == null or inventory_model == null:
 		return
 
-	var block_id = get_selected_block_id()
-	if block_id == null:
-		return
+	var block_id := int(action.block.id)
 
 	var attach_dir = -last_ray_normal if block_id == BlockId.Type.TORCH else Vector3i.ZERO
 	var edit: BlockEdit = voxel_world.try_place_block(pos, block_id, attach_dir)
@@ -292,15 +315,27 @@ func _commit_place(pos: Vector3i):
 		block_placed.emit()
 
 func get_selected_block_id():
+	var action := get_selected_placement_action()
+	if action == null:
+		return null
+	return int(action.block.id)
+
+func get_selected_primary_action() -> ItemActionDefinition:
+	if inventory_model == null:
+		return unarmed_primary_action
+	var item_id = inventory_model.get_selected_item_id()
+	if item_id == null:
+		return unarmed_primary_action
+	return inventory_model.item_catalog.get_definition(item_id).primary_action
+
+func get_selected_placement_action() -> BlockPlacementActionDefinition:
 	if inventory_model == null:
 		return null
 	var item_id = inventory_model.get_selected_item_id()
 	if item_id == null:
 		return null
-	var definition := inventory_model.item_catalog.get_definition(item_id)
-	if definition.placed_block == null:
-		return null
-	return int(definition.placed_block.id)
+	var action := inventory_model.item_catalog.get_definition(item_id).secondary_action
+	return action as BlockPlacementActionDefinition
 
 func _unhandled_input(event):
 	if event is InputEventKey and event.pressed:

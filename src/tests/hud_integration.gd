@@ -48,7 +48,7 @@ func _process(_delta: float) -> bool:
 			_fail("side_panel null")
 			return false
 		var grass_item := _item_catalog.get_item_for_block(BlockId.Type.GRASS)
-		var hotbar_grass := _hud.hotbar.slot_nodes[0] as HotbarSlot
+		var hotbar_grass := _hud.hotbar.slot_nodes[1] as HotbarSlot
 		if hotbar_grass.icon.texture != grass_item.icon:
 			_fail("grass hotbar icon mismatch")
 			return false
@@ -61,7 +61,7 @@ func _process(_delta: float) -> bool:
 				return false
 			_fail("panel not open %f" % _hud.side_panel.get_progress())
 			return false
-		var src_slot: Control = _hud.hotbar.slot_nodes[0] as Control
+		var src_slot: Control = _hud.hotbar.slot_nodes[1] as Control
 		var inv_slots: Array[InventorySlot] = _hud.side_panel.get_inventory_slots()
 		if inv_slots.is_empty():
 			_fail("no inventory slots")
@@ -179,7 +179,7 @@ func _totals(inv: InventoryModel) -> Dictionary:
 	var d: Dictionary = {}
 	for s in inv.slots:
 		if s != null:
-			d[s["item_id"]] = d.get(s["item_id"], 0) + int(s["count"])
+			d[s.item_id] = d.get(s.item_id, 0) + s.count
 	return d
 
 func _check_mid_drag(label: String, expected: int) -> void:
@@ -228,21 +228,21 @@ func _check_left_drag_result() -> void:
 	if not previews.is_empty():
 		_fail("leaked preview after left drag %s" % str(previews))
 		return
-	var s0 = _inv.get_slot(0)
+	var s1 = _inv.get_slot(1)
 	var s9 = _inv.get_slot(9)
 	var grass_id := _item_catalog.get_item_for_block(BlockId.Type.GRASS).id
 	var stone_id := _item_catalog.get_item_for_block(BlockId.Type.STONE).id
 	var torch_id := _item_catalog.get_item_for_block(BlockId.Type.TORCH).id
-	print("[hud_integration] slot0 %s slot9 %s" % [str(s0), str(s9)])
-	if s0 != null:
-		_fail("left drag: slot 0 should be null after move but got %s" % str(s0))
+	print("[hud_integration] slot1 %s slot9 %s" % [str(s1), str(s9)])
+	if s1 != null:
+		_fail("left drag: slot 1 should be null after move but got %s" % str(s1))
 		return
-	if s9 == null or s9["item_id"] != grass_id or int(s9["count"]) != 12:
+	if s9 == null or s9.item_id != grass_id or s9.count != 12:
 		_fail("left drag: slot 9 expected grass 12 got %s" % str(s9))
 		return
-	var n0: HotbarSlot = _hud.hotbar.slot_nodes[0] as HotbarSlot
-	if n0.item_id != null:
-		_fail("left drag: hotbar node 0 should be null")
+	var n1: HotbarSlot = _hud.hotbar.slot_nodes[1] as HotbarSlot
+	if n1.item_id != null:
+		_fail("left drag: hotbar node 1 should be null")
 		return
 	var inv_node: InventorySlot = _hud.side_panel.get_inventory_slots()[0]
 	if inv_node.item_id != grass_id or inv_node.item_count != 12:
@@ -252,7 +252,7 @@ func _check_left_drag_result() -> void:
 		_fail("left drag: inventory icon mismatch")
 		return
 	var totals: Dictionary = _totals(_inv)
-	if totals.get(grass_id, 0) != 12 or totals.get(stone_id, 0) != 8 or totals.get(torch_id, 0) != 16:
+	if totals.get(&"copper_pickaxe", 0) != 1 or totals.get(grass_id, 0) != 12 or totals.get(stone_id, 0) != 8 or totals.get(torch_id, 0) != 16:
 		_fail("left drag: totals changed %s" % str(totals))
 		return
 	print("[hud_integration] left drag ok")
@@ -274,10 +274,10 @@ func _check_right_drag_result() -> void:
 	var s10 = _inv.get_slot(10)
 	var torch_id := _item_catalog.get_item_for_block(BlockId.Type.TORCH).id
 	print("[hud_integration] slot6 %s slot10 %s" % [str(s6), str(s10)])
-	if s6 == null or int(s6["count"]) != 8 or s6["item_id"] != torch_id:
+	if s6 == null or s6.count != 8 or s6.item_id != torch_id:
 		_fail("right drag: slot6 expected torch 8 got %s" % str(s6))
 		return
-	if s10 == null or int(s10["count"]) != 8 or s10["item_id"] != torch_id:
+	if s10 == null or s10.count != 8 or s10.item_id != torch_id:
 		_fail("right drag: slot10 expected torch 8 got %s" % str(s10))
 		return
 	var n6: HotbarSlot = _hud.hotbar.slot_nodes[6] as HotbarSlot
@@ -291,11 +291,11 @@ func _check_right_drag_result() -> void:
 	for i in range(_inv.size):
 		var s = _inv.get_slot(i)
 		if s != null:
-			var max_stack := _item_catalog.get_definition(s["item_id"]).max_stack
-			if int(s["count"]) <= 0 or int(s["count"]) > max_stack:
+			var max_stack := _item_catalog.get_definition(s.item_id).max_stack
+			if s.count <= 0 or s.count > max_stack:
 				_fail("right drag: invariant at %d" % i)
 				return
-			if not _inv.can_slot_accept_item_id(i, s["item_id"]):
+			if not _inv.can_slot_accept_item_id(i, s.item_id):
 				_fail("right drag: slot %d not accepted" % i)
 				return
 	print("[hud_integration] right drag ok")

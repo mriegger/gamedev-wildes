@@ -17,7 +17,7 @@ world time.
 | `Space` | Hop — needed to get up any ledge |
 | `Q` / `E` | Rotate the camera 45° |
 | Mouse wheel / pinch | Zoom |
-| Hold left-click | Mine the targeted block (0.35 s) |
+| Hold left-click | Use the selected item's primary action |
 | Right-click | Place the selected block |
 | `1`–`9` | Select hotbar slot |
 | `P` | Toggle backpack |
@@ -43,7 +43,8 @@ into the terrain and fill with water up to level 5.
 further out. Meshing runs on background threads so movement doesn't hitch; edits are stored
 globally and survive unload/reload.
 
-**Blocks.** Grass, dirt, sand, stone, wood, and leaves are minable and placeable. Torches are
+**Blocks.** Grass, dirt, sand, stone, wood, and leaves are minable and placeable. Stone requires
+the starter copper pickaxe; other current blocks remain hand-minable. Torches are
 a seventh placeable that you can walk through — each is an omni light with a 9-block radius.
 Torch shadows are configurable for the nearest 0, 1, 2, or 4 lights and default to the nearest
 one.

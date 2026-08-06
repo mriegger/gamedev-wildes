@@ -41,7 +41,7 @@ func refresh():
 		if data == null:
 			ui.set_item(null, 0)
 		else:
-			ui.set_item(data["item_id"], data["count"])
+			ui.set_item(data.item_id, data.count)
 		ui.set_selected(i == _inv_model.selected_slot)
 
 func set_slots_interactive(enabled: bool):

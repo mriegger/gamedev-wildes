@@ -66,6 +66,7 @@ func _restore_inventory():
 	var saved_inventory = _save_data.get("inventory", null)
 	if saved_inventory is Dictionary and not saved_inventory.is_empty():
 		assert(inventory_model.from_dict(saved_inventory))
+		assert(inventory_model.ensure_item(&"copper_pickaxe"))
 	else:
 		inventory_model.setup_starter()
 

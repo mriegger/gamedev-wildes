@@ -122,6 +122,27 @@ jobs:
             exit 1
           fi
 
+  tool-system-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run tool system integration
+        run: |
+          set -uo pipefail
+          timeout 30 godot --headless --path src --script res://tests/tool_system_integration.gd 2>&1 | tee /tmp/tool_system.log; TOOL_EXIT=${PIPESTATUS[0]}
+          if grep -q "FAIL:" /tmp/tool_system.log; then
+            echo "tool system integration FAILED"
+            exit 1
+          fi
+          if [ "$TOOL_EXIT" -ne 0 ] || ! grep -q "TOOL_SYSTEM PASS" /tmp/tool_system.log; then
+            echo "tool system integration did not PASS"
+            exit 1
+          fi
+
   soak-world-streaming:
     runs-on: ubuntu-latest
     timeout-minutes: 10

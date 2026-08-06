@@ -28,6 +28,12 @@ func _rebuild_lookup() -> void:
 			_is_valid = false
 			continue
 		_definitions_by_id[definition.id] = definition
+		if definition.is_breakable and definition.mine_duration <= 0.0:
+			push_error("[BlockCatalog] Invalid mine duration for %s" % BlockId.get_display_name(definition.id))
+			_is_valid = false
+		if definition.minimum_mining_power > 0 and definition.mining_tool_tag.is_empty():
+			push_error("[BlockCatalog] Missing mining tool tag for %s" % BlockId.get_display_name(definition.id))
+			_is_valid = false
 	for id in range(BlockId.Type.COUNT):
 		if _definitions_by_id[id] == null:
 			push_error("[BlockCatalog] Missing block for BlockId %d" % id)

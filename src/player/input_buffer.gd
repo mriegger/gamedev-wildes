@@ -10,9 +10,9 @@ var zoom_in_pressed: bool = false
 var zoom_out_pressed: bool = false
 var wheel_up: bool = false
 var wheel_down: bool = false
-var mine_pressed: bool = false
-var place_just: bool = false
-var place_pressed: bool = false
+var primary_use_pressed: bool = false
+var secondary_use_just: bool = false
+var secondary_use_pressed: bool = false
 
 func poll():
 	var move_right = Input.is_action_pressed("move_right")
@@ -36,12 +36,12 @@ func poll():
 	sprint_pressed = Input.is_action_pressed("sprint")
 	zoom_in_pressed = Input.is_action_pressed("zoom_in")
 	zoom_out_pressed = Input.is_action_pressed("zoom_out")
-	mine_pressed = Input.is_action_pressed("mine")
-	place_pressed = Input.is_action_pressed("place")
+	primary_use_pressed = Input.is_action_pressed("primary_use")
+	secondary_use_pressed = Input.is_action_pressed("secondary_use")
 	jump_just = jump_just or Input.is_action_just_pressed("jump")
 	rotate_left_just = rotate_left_just or Input.is_action_just_pressed("rotate_left")
 	rotate_right_just = rotate_right_just or Input.is_action_just_pressed("rotate_right")
-	place_just = place_just or Input.is_action_just_pressed("place")
+	secondary_use_just = secondary_use_just or Input.is_action_just_pressed("secondary_use")
 
 func clear_gameplay():
 	move_dir = Vector2.ZERO
@@ -53,9 +53,9 @@ func clear_gameplay():
 	zoom_out_pressed = false
 	wheel_up = false
 	wheel_down = false
-	mine_pressed = false
-	place_just = false
-	place_pressed = false
+	primary_use_pressed = false
+	secondary_use_just = false
+	secondary_use_pressed = false
 
 func set_wheel(up: bool):
 	if up:

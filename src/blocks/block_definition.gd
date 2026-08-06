@@ -9,6 +9,9 @@ class_name BlockDefinition
 @export var is_raycast_solid: bool = true
 @export var is_breakable: bool = true
 @export var is_replaceable: bool = false
+@export_range(0.01, 60.0, 0.01) var mine_duration: float = 0.35
+@export var mining_tool_tag: StringName
+@export_range(0, 999) var minimum_mining_power: int = 0
 
 @export_group("Appearance")
 @export var top_texture: Texture2D
