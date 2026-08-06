@@ -32,12 +32,15 @@ Godot 4.7 / GDScript, Systems are built in `game.tscn` and wired via `setup()` c
 3. Leave the working tree exactly as you found it. `git status` must show no temp files.
 
 ## Tests — run periodically to prevent regressions
-1. After any inventory, worldgen, HUD/drag, or streaming change — and before reporting DONE — run the headless suite locally. CI runs the same four in parallel (`.github/workflows/tests.yml`, `timeout-minutes: 10`, composite `.github/actions/setup_godot` with cache).
+1. After any inventory, worldgen, HUD/drag, streaming, player animation, animation tuning, or tool change — and before reporting DONE — run the headless suite locally. CI runs the suite in parallel; `.github/workflows/tests.yml` defines the jobs and `src/tests/README.md` documents their invariants.
 2. Inventory fuzz (RefCounted, ~100k seq/s): `/Applications/Godot.app/Contents/MacOS/Godot --path src --headless --script res://tests/inventory_fuzz_runner.gd -- --seqs=20000 --ops=20` — expect `ALL PASS`. Smoke: `--seqs=5000 --ops=20`.
 3. World golden hash (seed 1337, `x[-32,32) z[-32,32) y[0,128)`): `/Applications/Godot.app/Contents/MacOS/Godot --path src --headless --script res://tests/world_golden_hash.gd` — expect `GOLDEN PASS`. If you intentionally reshaped terrain (noise/spline/biome/lake/river), rerun with `-- --update` and commit the new `src/tests/golden_world_hash.json`.
 4. HUD headless integration: `/Applications/Godot.app/Contents/MacOS/Godot --path src --headless --script res://tests/hud_integration.gd` — expect `HUD_INTEGRATION PASS orphan=0 previews=0` (mid-drag 1 preview, 0 after release).
-5. World streaming soak (real `game.tscn`, 900 frames): `/Applications/Godot.app/Contents/MacOS/Godot --path src --headless --script res://tests/soak_world_streaming.gd` — expect `SOAK PASS` with bounded chunks and no orphans.
-6. Do not land with a red `inventory-fuzz`, `world-golden-hash`, `hud-integration`, or `soak-world-streaming` job. Details and invariants live in `src/tests/README.md`. 
+5. Player animation integration: `/Applications/Godot.app/Contents/MacOS/Godot --path src --headless --script res://tests/player_animation_integration.gd` — expect `PLAYER_ANIMATION PASS orphan=0`.
+6. Animation tuning integration: `/Applications/Godot.app/Contents/MacOS/Godot --path src --headless --script res://tests/animation_tuning_panel_integration.gd` — expect `ANIMATION_TUNING PASS orphan=0`.
+7. Tool system integration: `/Applications/Godot.app/Contents/MacOS/Godot --path src --headless --script res://tests/tool_system_integration.gd` — expect `TOOL_SYSTEM PASS orphan=0`.
+8. World streaming soak (real `game.tscn`, 900 frames): `/Applications/Godot.app/Contents/MacOS/Godot --path src --headless --script res://tests/soak_world_streaming.gd` — expect `SOAK PASS` with bounded chunks and no orphans.
+9. Do not land with any red test job. Details and invariants live in `src/tests/README.md`.
 
 ## Definition of "DONE"
 1. Every new symbol has a caller.
