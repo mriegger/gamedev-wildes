@@ -1,5 +1,7 @@
 extends Node
 
+const MAX_3D_RENDER_SIZE := Vector2(2560.0, 1440.0)
+
 @export var main_menu_scene: PackedScene
 @export var world_select_scene: PackedScene
 @export var loading_scene: PackedScene
@@ -12,7 +14,16 @@ var _screen: Node
 var _game: Game
 
 func _ready():
+	get_viewport().size_changed.connect(_update_3d_render_scale)
+	_update_3d_render_scale()
 	_show_main_menu()
+
+func _update_3d_render_scale():
+	var viewport := get_viewport()
+	var viewport_size := Vector2(viewport.size)
+	var width_scale := MAX_3D_RENDER_SIZE.x / viewport_size.x
+	var height_scale := MAX_3D_RENDER_SIZE.y / viewport_size.y
+	viewport.scaling_3d_scale = minf(1.0, minf(width_scale, height_scale))
 
 func _show_main_menu():
 	var menu = main_menu_scene.instantiate() as MainMenu
