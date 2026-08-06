@@ -11,6 +11,7 @@ is_opaque = true
 is_raycast_solid = true
 is_breakable = true
 is_replaceable = false
+drop_item_id = &"log_block"
 top_texture = ExtResource("2_texture")
 side_texture = ExtResource("2_texture")
 bottom_texture = ExtResource("2_texture")

@@ -40,8 +40,11 @@ func configure_session(slot_id: int, save_data: Dictionary, p_settings: GameSett
 func _ready():
 	set_physics_process(false)
 	set_process_unhandled_input(false)
-	assert(block_catalog.validate())
-	assert(item_catalog.validate(block_catalog))
+	var block_catalog_valid := block_catalog.validate()
+	var item_catalog_valid := item_catalog.validate(block_catalog)
+	if not block_catalog_valid or not item_catalog_valid:
+		push_error("[Game] Catalog validation failed")
+		return
 	settings.apply_display(get_viewport())
 	game_environment.setup(float(_save_data.get("time_of_day", 6.0)), settings.get_shadow_distance())
 	game_environment.apply_settings(settings)
@@ -65,9 +68,13 @@ func _ready():
 func _restore_inventory():
 	var saved_inventory = _save_data.get("inventory", null)
 	if saved_inventory is Dictionary and not saved_inventory.is_empty():
-		assert(inventory_model.from_dict(saved_inventory))
-		assert(inventory_model.ensure_item(&"copper_pickaxe"))
-		assert(inventory_model.ensure_item(&"copper_sword"))
+		if not inventory_model.from_dict(saved_inventory):
+			push_error("[Game] Saved inventory is invalid; using starter inventory")
+			inventory_model.setup_starter()
+			return
+		var starter_items: Array[StringName] = [&"copper_pickaxe", &"copper_sword"]
+		if not inventory_model.migrate_starter_items(starter_items):
+			push_warning("[Game] Starter items will be retried after inventory space is available")
 	else:
 		inventory_model.setup_starter()
 

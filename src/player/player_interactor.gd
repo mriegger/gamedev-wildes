@@ -319,11 +319,12 @@ func _commit_mine(pos: Vector3i, action: MiningActionDefinition):
 	if preview_id == BlockId.Type.AIR:
 		return
 
-	var item_ids_to_collect: Array[StringName] = [inventory_model.item_catalog.get_item_for_block(preview_id).id]
+	var item_ids_to_collect: Array[StringName] = []
+	_append_block_drop(item_ids_to_collect, preview_id)
 	for torch_pos in voxel_world.get_attached_torches(pos):
 		var tid = voxel_world.get_block_id_at(torch_pos)
 		if tid != BlockId.Type.AIR:
-			item_ids_to_collect.append(inventory_model.item_catalog.get_item_for_block(tid).id)
+			_append_block_drop(item_ids_to_collect, tid)
 
 	if not inventory_model.can_add_batch(item_ids_to_collect):
 		return
@@ -336,9 +337,14 @@ func _commit_mine(pos: Vector3i, action: MiningActionDefinition):
 		for edit in batch:
 			var be = edit as BlockEdit
 			if be.is_success() and be.is_mine():
-				collected_item_ids.append(inventory_model.item_catalog.get_item_for_block(be.old_id).id)
+				_append_block_drop(collected_item_ids, be.old_id)
 		inventory_model.add_batch(collected_item_ids)
 	_handle_raycast()
+
+func _append_block_drop(item_ids: Array[StringName], block_id: int):
+	var drop_item_id := voxel_world.block_catalog.get_definition(block_id).drop_item_id
+	if not drop_item_id.is_empty():
+		item_ids.append(drop_item_id)
 
 func _commit_place(pos: Vector3i, action: BlockPlacementActionDefinition):
 	if voxel_world == null or inventory_model == null:

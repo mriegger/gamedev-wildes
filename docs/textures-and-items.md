@@ -22,7 +22,9 @@ Create an `ItemDefinition` resource in `src/items/definitions` with:
 - the shared unarmed mining action as its primary action
 - a `BlockPlacementActionDefinition` secondary action containing the canonical block resource it places
 
-Add the resource to `src/items/item_catalog.tres`. The item catalog derives the reverse block-to-item mapping from the placement action, so placement and mined drops cannot drift into separate mappings.
+Add the resource to `src/items/item_catalog.tres`. The item catalog derives the reverse block-to-item mapping used by placement UI from the placement action.
+
+Set `BlockDefinition.drop_item_id` to the stable item ID produced by mining. Leave it empty for an intentional no-drop block. Drop data is independent from placement, so future ores, transformed drops, and tool effects do not have to pretend their result places the original block.
 
 ## Add a non-block item
 
@@ -35,6 +37,8 @@ Inventory slots contain typed `InventoryStack` objects at runtime. Version 3 sav
 ## Add a mining tool
 
 Create a `MiningActionDefinition` with one or more `MiningToolStat` entries, then assign it as the item's primary action. Each stat has a `StringName` tag, power, and speed multiplier. Blocks declare a mining tag, minimum power, and base duration. A minimum power of zero keeps hand mining available; a positive value requires a matching tool stat.
+
+Primary actions currently accept mining and melee definitions. Secondary actions currently accept block placement. Catalog validation rejects action types in slots that do not yet have an execution path, and new action types must add their runtime handler and catalog allowance together.
 
 Held items reference a scene through `ItemDefinition.held_scene`. Pixel-art tools can use `PixelExtrudedItem` to turn a square transparent texture into a shaded one-draw-call silhouette mesh with real depth. Custom modeled items can provide any other `Node3D` scene through the same field.
 

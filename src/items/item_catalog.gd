@@ -36,22 +36,38 @@ func _rebuild_lookup() -> void:
 			push_error("[ItemCatalog] Invalid max stack for %s at %s" % [definition.id, source])
 			_is_valid = false
 		_definitions_by_id[definition.id] = definition
+		if not _is_supported_primary_action(definition.primary_action):
+			push_error("[ItemCatalog] Unsupported primary action for %s at %s" % [definition.id, source])
+			_is_valid = false
+		if not _is_supported_secondary_action(definition.secondary_action):
+			push_error("[ItemCatalog] Unsupported secondary action for %s at %s" % [definition.id, source])
+			_is_valid = false
+		if definition.held_scene != null:
+			var scene_state := definition.held_scene.get_state()
+			if scene_state.get_node_count() == 0 or not ClassDB.is_parent_class(scene_state.get_node_type(0), &"Node3D"):
+				push_error("[ItemCatalog] Held scene root must be Node3D for %s at %s" % [definition.id, source])
+				_is_valid = false
 		for action in [definition.primary_action, definition.secondary_action]:
 			if action == null:
 				continue
 			_is_valid = action.validate(source) and _is_valid
-			if action is BlockPlacementActionDefinition:
-				var placement := action as BlockPlacementActionDefinition
-				if placement.block == null:
-					continue
-				var block_id := int(placement.block.id)
-				if not BlockId.is_valid(block_id) or block_id == BlockId.Type.AIR:
-					continue
-				if _definitions_by_block[block_id] != null:
-					push_error("[ItemCatalog] Duplicate block mapping for %s at %s" % [BlockId.get_display_name(block_id), source])
-					_is_valid = false
-					continue
-				_definitions_by_block[block_id] = definition
+		var placement := definition.secondary_action as BlockPlacementActionDefinition
+		if placement == null or placement.block == null:
+			continue
+		var block_id := int(placement.block.id)
+		if not BlockId.is_valid(block_id) or block_id == BlockId.Type.AIR:
+			continue
+		if _definitions_by_block[block_id] != null:
+			push_error("[ItemCatalog] Duplicate block mapping for %s at %s" % [BlockId.get_display_name(block_id), source])
+			_is_valid = false
+			continue
+		_definitions_by_block[block_id] = definition
+
+func _is_supported_primary_action(action: ItemActionDefinition) -> bool:
+	return action == null or action is MiningActionDefinition or action is MeleeAttackActionDefinition
+
+func _is_supported_secondary_action(action: ItemActionDefinition) -> bool:
+	return action == null or action is BlockPlacementActionDefinition
 
 func _ensure_lookup() -> void:
 	if _definitions_by_block.size() != BlockId.Type.COUNT:
@@ -60,17 +76,38 @@ func _ensure_lookup() -> void:
 func validate(block_catalog: BlockCatalog) -> bool:
 	_ensure_lookup()
 	var valid := _is_valid
+	var block_tags: Dictionary = {}
+	var maximum_power_by_tag: Dictionary = {}
+	for block in block_catalog.definitions:
+		if block != null and not block.mining_tool_tag.is_empty():
+			block_tags[block.mining_tool_tag] = true
 	for definition in definitions:
 		if definition == null:
 			continue
-		for action in [definition.primary_action, definition.secondary_action]:
-			if action is BlockPlacementActionDefinition:
-				var placement := action as BlockPlacementActionDefinition
-				if placement.block == null or not BlockId.is_valid(placement.block.id):
-					continue
-				if block_catalog.get_definition(placement.block.id) != placement.block:
-					push_error("[ItemCatalog] Non-canonical block resource for %s" % definition.id)
-					valid = false
+		var placement := definition.secondary_action as BlockPlacementActionDefinition
+		if placement != null and placement.block != null and BlockId.is_valid(placement.block.id):
+			if block_catalog.get_definition(placement.block.id) != placement.block:
+				push_error("[ItemCatalog] Non-canonical block resource for %s" % definition.id)
+				valid = false
+		var mining := definition.primary_action as MiningActionDefinition
+		if mining == null:
+			continue
+		for stat in mining.tool_stats:
+			if stat == null or stat.tag.is_empty():
+				continue
+			if not block_tags.has(stat.tag):
+				push_error("[ItemCatalog] Mining tag %s on %s has no matching block" % [stat.tag, definition.id])
+				valid = false
+			maximum_power_by_tag[stat.tag] = maxi(int(maximum_power_by_tag.get(stat.tag, 0)), stat.power)
+	for block in block_catalog.definitions:
+		if block == null:
+			continue
+		if not block.drop_item_id.is_empty() and not _definitions_by_id.has(block.drop_item_id):
+			push_error("[ItemCatalog] Unknown drop item %s for %s" % [block.drop_item_id, BlockId.get_display_name(block.id)])
+			valid = false
+		if block.minimum_mining_power > int(maximum_power_by_tag.get(block.mining_tool_tag, 0)):
+			push_error("[ItemCatalog] No tool can mine %s at power %d" % [BlockId.get_display_name(block.id), block.minimum_mining_power])
+			valid = false
 	return valid
 
 func has_definition(id: StringName) -> bool:

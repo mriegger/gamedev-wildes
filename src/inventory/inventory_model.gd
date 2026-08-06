@@ -14,12 +14,14 @@ const REGIONS: Array = [
 const TOTAL_SIZE: int = HOTBAR_SIZE + BACKPACK_SIZE + EQUIPMENT_SIZE
 const DEFAULT_SIZE: int = TOTAL_SIZE
 const FILLABLE_SIZE: int = HOTBAR_SIZE + BACKPACK_SIZE
+const STARTER_ITEM_MIGRATION_VERSION: int = 1
 
 var size: int = TOTAL_SIZE
 var item_catalog: ItemCatalog
 
 var slots: Array[InventoryStack] = []
 var selected_slot: int = 0
+var starter_item_migration_version: int = 0
 
 func _init(p_item_catalog: ItemCatalog, p_size: int = DEFAULT_SIZE):
 	assert(p_item_catalog != null)
@@ -63,13 +65,22 @@ func ensure_item(item_id: StringName) -> bool:
 			slots[index] = InventoryStack.new(item_id, 1)
 			inventory_changed.emit()
 			return true
-	for index in range(HOTBAR_SIZE, size):
+	for index in range(HOTBAR_SIZE, min(size, FILLABLE_SIZE)):
 		if slots[index] == null:
 			slots[index] = slots[0]
 			slots[0] = InventoryStack.new(item_id, 1)
 			inventory_changed.emit()
 			return true
 	return false
+
+func migrate_starter_items(item_ids: Array[StringName]) -> bool:
+	if starter_item_migration_version >= STARTER_ITEM_MIGRATION_VERSION:
+		return true
+	for item_id in item_ids:
+		if not ensure_item(item_id):
+			return false
+	starter_item_migration_version = STARTER_ITEM_MIGRATION_VERSION
+	return true
 
 func _copy_slots() -> Array[InventoryStack]:
 	var copied: Array[InventoryStack] = []
@@ -208,7 +219,11 @@ func to_dict() -> Dictionary:
 			var stack := slots[idx] if idx >= 0 and idx < slots.size() else null
 			encoded.append(null if stack == null else stack.to_dict())
 		regions_dict[region_name] = encoded
-	return {"selected": selected_slot, "regions": regions_dict}
+	return {
+		"selected": selected_slot,
+		"starter_item_migration_version": starter_item_migration_version,
+		"regions": regions_dict,
+	}
 
 func from_dict(data: Dictionary) -> bool:
 	var regions_dict = data.get("regions", {}) as Dictionary
@@ -219,22 +234,28 @@ func from_dict(data: Dictionary) -> bool:
 		var region_name: String = region["name"]
 		var indices: Array = InventoryModel.get_region_indices(region_name)
 		var encoded = regions_dict.get(region_name, null)
-		if encoded == null or not encoded is Array:
+		if encoded == null or not encoded is Array or (encoded as Array).size() != indices.size():
 			return false
-		for offset in range(min(indices.size(), (encoded as Array).size())):
+		for offset in range(indices.size()):
 			var idx := int(indices[offset])
 			var raw = (encoded as Array)[offset]
 			if raw == null:
 				continue
+			if idx >= size:
+				return false
 			if not raw is Dictionary or not raw.has("item_id") or not raw.has("count"):
 				return false
 			var stack := InventoryStack.from_dict(raw)
-			if not item_catalog.has_definition(stack.item_id):
+			if not can_slot_accept_item_id(idx, stack.item_id):
 				return false
 			if stack.count < 1 or stack.count > item_catalog.get_definition(stack.item_id).max_stack:
 				return false
 			restored_slots[idx] = stack
+	var restored_migration_version := int(data.get("starter_item_migration_version", 0))
+	if restored_migration_version < 0 or restored_migration_version > STARTER_ITEM_MIGRATION_VERSION:
+		return false
 	slots = restored_slots
+	starter_item_migration_version = restored_migration_version
 	selected_slot = int(data.get("selected", 0))
 	if not is_hotbar_index(selected_slot):
 		selected_slot = 0
@@ -249,4 +270,5 @@ func setup_starter():
 	slots[3] = InventoryStack.new(&"copper_sword", 1)
 	slots[6] = InventoryStack.new(item_catalog.get_item_for_block(BlockId.Type.TORCH).id, 16)
 	selected_slot = 0
+	starter_item_migration_version = STARTER_ITEM_MIGRATION_VERSION
 	inventory_changed.emit()

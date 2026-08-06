@@ -236,9 +236,19 @@ func _run_edge_cases() -> bool:
 	var restored := InventoryModel.new(catalog)
 	_assert(restored.from_dict(encoded), "version 3 inventory restores")
 	_assert(_slots_equal(saved_source.slots, restored.slots), "save round trip")
+	_assert(restored.starter_item_migration_version == InventoryModel.STARTER_ITEM_MIGRATION_VERSION, "starter migration version round trip")
 	var old_shape := encoded.duplicate(true)
 	old_shape["regions"]["hotbar"][0] = {"type": 1, "count": 12}
 	_assert(not restored.from_dict(old_shape), "old inventory shape rejected")
+	var short_region := encoded.duplicate(true)
+	short_region["regions"]["hotbar"].pop_back()
+	_assert(not restored.from_dict(short_region), "short inventory region rejected")
+	var long_region := encoded.duplicate(true)
+	long_region["regions"]["hotbar"].append(null)
+	_assert(not restored.from_dict(long_region), "long inventory region rejected")
+	var occupied_equipment := encoded.duplicate(true)
+	occupied_equipment["regions"]["equipment"][0] = {"item_id": String(grass_id), "count": 1}
+	_assert(not restored.from_dict(occupied_equipment), "occupied reserved equipment rejected")
 
 	_assert(_validate_inv(moved), "moved inventory valid")
 	_assert(_validate_inv(split), "split inventory valid")

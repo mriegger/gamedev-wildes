@@ -13,6 +13,7 @@ is_opaque = true
 is_raycast_solid = true
 is_breakable = true
 is_replaceable = false
+drop_item_id = &"grass_block"
 top_texture = ExtResource("2_top")
 side_texture = ExtResource("3_side")
 bottom_texture = ExtResource("4_bottom")

@@ -35,7 +35,17 @@ func _run():
 	_expect(is_equal_approx(sword_action.chain_input_window, 0.26), "sword chain input window changed")
 	var stone := block_catalog.get_definition(BlockId.Type.STONE)
 	_expect(stone.mining_tool_tag == &"pickaxe" and stone.minimum_mining_power == 1, "stone mining requirement changed")
+	_expect(stone.drop_item_id == &"stone_block", "stone drop item changed")
 	_expect(is_equal_approx(pickaxe_action.get_mine_duration(stone), 0.35), "pickaxe stone duration changed")
+	var grass_placement := item_catalog.get_definition(&"grass_block").secondary_action
+	_expect(not item_catalog._is_supported_primary_action(grass_placement), "placement action was accepted as a primary action")
+	_expect(not item_catalog._is_supported_secondary_action(pickaxe_action), "mining action was accepted as a secondary action")
+	for definition in item_catalog.definitions:
+		if definition.held_scene == null:
+			continue
+		var held_root := definition.held_scene.instantiate()
+		_expect(held_root is Node3D, "held scene root is not Node3D for %s" % definition.id)
+		held_root.free()
 
 	_inventory = InventoryModel.new(item_catalog)
 	_inventory.setup_starter()
@@ -46,21 +56,40 @@ func _run():
 	_expect(restored.from_dict(encoded), "typed inventory did not restore")
 	_expect(restored.get_slot(0) is InventoryStack and restored.get_slot(0).item_id == &"copper_pickaxe", "restored pickaxe missing")
 	_expect(restored.get_slot(3) is InventoryStack and restored.get_slot(3).item_id == &"copper_sword", "restored sword missing")
+	_expect(restored.starter_item_migration_version == InventoryModel.STARTER_ITEM_MIGRATION_VERSION, "starter item migration version did not restore")
 	var legacy_encoded := encoded.duplicate(true)
 	legacy_encoded["regions"]["hotbar"][0] = null
 	legacy_encoded["regions"]["hotbar"][3] = null
+	legacy_encoded.erase("starter_item_migration_version")
 	var legacy := InventoryModel.new(item_catalog)
 	_expect(legacy.from_dict(legacy_encoded), "legacy inventory did not restore")
-	_expect(legacy.ensure_item(&"copper_pickaxe"), "legacy inventory could not receive pickaxe")
-	_expect(legacy.ensure_item(&"copper_sword"), "legacy inventory could not receive sword")
+	var starter_items: Array[StringName] = [&"copper_pickaxe", &"copper_sword"]
+	_expect(legacy.migrate_starter_items(starter_items), "legacy inventory could not receive starter items")
 	_expect(legacy.get_slot(0) != null and legacy.get_slot(0).item_id == &"copper_pickaxe", "legacy pickaxe was not placed in hotbar")
 	_expect(legacy.get_slot(3) != null and legacy.get_slot(3).item_id == &"copper_sword", "legacy sword was not placed in hotbar")
+	var restore_game := Game.new()
+	restore_game.item_catalog = item_catalog
+	restore_game.inventory_model = InventoryModel.new(item_catalog)
+	restore_game._save_data = {"inventory": legacy_encoded}
+	restore_game._restore_inventory()
+	_expect(restore_game.inventory_model.get_slot(0).item_id == &"copper_pickaxe", "game restore did not execute pickaxe migration")
+	_expect(restore_game.inventory_model.get_slot(3).item_id == &"copper_sword", "game restore did not execute sword migration")
+	restore_game.free()
+	legacy.slots[3] = null
+	_expect(legacy.migrate_starter_items(starter_items), "completed starter migration did not remain complete")
+	_expect(legacy.get_slot(3) == null, "completed starter migration re-granted a removed sword")
 	var crowded := InventoryModel.new(item_catalog)
 	var grass_id := item_catalog.get_item_for_block(BlockId.Type.GRASS).id
 	for index in range(InventoryModel.HOTBAR_SIZE):
 		crowded.slots[index] = InventoryStack.new(grass_id, index + 1)
 	_expect(crowded.ensure_item(&"copper_pickaxe"), "full legacy hotbar could not receive pickaxe")
 	_expect(crowded.get_slot(0).item_id == &"copper_pickaxe" and crowded.get_slot(InventoryModel.HOTBAR_SIZE).count == 1, "legacy hotbar migration lost its displaced stack")
+	var full := InventoryModel.new(item_catalog)
+	for index in range(InventoryModel.FILLABLE_SIZE):
+		full.slots[index] = InventoryStack.new(grass_id, 1)
+	_expect(not full.migrate_starter_items(starter_items), "full inventory unexpectedly accepted starter items")
+	for index in range(InventoryModel.FILLABLE_SIZE, InventoryModel.TOTAL_SIZE):
+		_expect(full.slots[index] == null, "starter migration used reserved equipment slot %d" % index)
 
 	_voxel_world = VoxelWorld.new(20, 36, 5, 12.0, block_catalog)
 	_voxel_world.placed_blocks[_stone_pos] = BlockId.Type.STONE
@@ -182,6 +211,7 @@ func _run():
 	_interactor._handle_item_actions(0.0)
 	_interactor._handle_item_actions(0.36)
 	_expect(_voxel_world.get_block_id_at(_stone_pos) == BlockId.Type.AIR, "pickaxe did not mine stone")
+	_expect(_inventory.get_slot(2).count == 9, "stone drop did not use explicit block drop data")
 	_push_primary(false)
 	await process_frame
 	_input_buffer.poll()
