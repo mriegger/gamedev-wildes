@@ -45,7 +45,7 @@ func set_generator_ref(gen: TerrainGenerator):
 func configure_terrain_cache(render_dist: int, unload_padding: int):
 	var keep = render_dist + unload_padding
 	var touched_area = ((keep + 1) * 2 + 1) * ((keep + 1) * 2 + 1)
-	max_terrain_cache_chunks = touched_area * 3 + 256
+	max_terrain_cache_chunks = touched_area + 128
 
 func _touch_terrain_chunk(coord: Vector2i):
 	_terrain_lru_mutex.lock()

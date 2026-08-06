@@ -54,7 +54,7 @@ func _process(_delta: float) -> bool:
 		if _game == null:
 			_fail("game instantiate null")
 			return false
-		_game.configure_session(-1, {"seed": 1337, "time_of_day": 16.25})
+		_game.configure_session(-1, {"seed": 1337, "time_of_day": 16.25}, GameSettings.new())
 		_game.session_ready.connect(_on_session_ready)
 		root.add_child(_game)
 		print("[soak] game added frame %d" % _frame)
@@ -303,8 +303,8 @@ func _verify_lighting_pipeline() -> bool:
 	if bool(ProjectSettings.get_setting("rendering/lights_and_shadows/directional_shadow/16_bits")):
 		_fail("directional shadows are using low-precision depth")
 		return false
-	if not bool(ProjectSettings.get_setting("rendering/anti_aliasing/quality/use_taa")):
-		_fail("temporal antialiasing is disabled")
+	if root.screen_space_aa != Viewport.SCREEN_SPACE_AA_FXAA or root.use_taa:
+		_fail("default anti-aliasing is not FXAA")
 		return false
 	var game_environment := _game.game_environment
 	var world_environment := game_environment.get_node("WorldEnvironment") as WorldEnvironment
@@ -399,7 +399,7 @@ func _verify_lighting_pipeline() -> bool:
 		_fail("shadow reset did not restore toggles")
 		return false
 	var shadow_center := _world.chunk_manager._last_player_chunk
-	var shadow_distance := _world.config.shadow_render_distance
+	var shadow_distance := _game.settings.get_shadow_chunk_radius()
 	var shadow_casters := 0
 	for coord in _world.chunk_renderer._terrain_instances:
 		var instance := _world.chunk_renderer._terrain_instances[coord] as MeshInstance3D

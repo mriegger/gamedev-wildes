@@ -17,7 +17,7 @@ var _shadow_blur_override: float = -1.0
 var _shadow_opacity_override: float = -1.0
 var _default_shadow_cast_distance: float
 
-@export var volumetric_fog_enabled: bool = true:
+@export var volumetric_fog_enabled: bool = false:
 	set(v):
 		volumetric_fog_enabled = v
 		_apply_renderer_effects()

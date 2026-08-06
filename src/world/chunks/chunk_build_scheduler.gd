@@ -1,7 +1,7 @@
 extends Node
 class_name ChunkBuildScheduler
 
-const MAX_WORKERS: int = 4
+const WORKER_COUNT: int = 2
 
 var _mesher: ChunkMesher
 var _terrain_generator: TerrainGenerator
@@ -142,9 +142,9 @@ func _ensure_workers():
 	if _workers_started or _stopped:
 		return
 	_workers_started = true
-	for index in range(MAX_WORKERS):
+	for index in range(WORKER_COUNT):
 		var worker := Thread.new()
-		var error := worker.start(_worker_loop)
+		var error := worker.start(_worker_loop, Thread.PRIORITY_LOW)
 		if error == OK:
 			_workers.append(worker)
 		else:
@@ -162,6 +162,8 @@ func _worker_loop():
 		if not _is_current(job.coord, job.generation):
 			continue
 		var result := _build(job)
+		if result == null:
+			continue
 		if not _is_current(job.coord, job.generation):
 			continue
 		_push_result(result)
@@ -197,6 +199,8 @@ func _build(job: ChunkBuildJob) -> ChunkBuildResult:
 		job.tree_blocks,
 		job.terrain_only
 	)
+	if job.generation != 0 and not _is_current(job.coord, job.generation):
+		return null
 	var terrain_data: Variant = null
 	var water_data: Variant = null
 	if not job.terrain_only:

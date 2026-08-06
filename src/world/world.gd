@@ -20,6 +20,7 @@ var voxel_model: VoxelWorld
 var block_texture_set: BlockTextureSet
 var chunk_mesher: ChunkMesher
 var chunk_manager: ChunkManager
+var _settings: GameSettings
 
 var _start_state: WorldState
 var _player_ref: Node3D
@@ -29,6 +30,9 @@ func _ready():
 
 func configure_start_state(state: WorldState):
 	_start_state = state
+
+func configure_settings(settings: GameSettings):
+	_settings = settings
 
 func initialize_world_async() -> void:
 	config = config.runtime_copy_for_seed(_start_state.seed)
@@ -73,8 +77,8 @@ func _create_world_model(generation: Dictionary):
 func _setup_systems():
 	chunk_mesher = ChunkMesher.new(config.chunk_size, config.max_build_y, config.seed_value, config.enable_ao, block_texture_set)
 	chunk_scheduler.setup(chunk_mesher, terrain_generator, voxel_model, config.chunk_size, config.max_build_y)
-	chunk_renderer.setup(chunk_mesher, terrain_material, water_block_material, voxel_model, config.shadow_render_distance)
-	torch_renderer.setup(block_catalog)
+	chunk_renderer.setup(chunk_mesher, terrain_material, water_block_material, voxel_model, _settings.get_shadow_chunk_radius())
+	torch_renderer.setup(block_catalog, _settings.torch_shadow_count)
 	chunk_manager = ChunkManager.new()
 	chunk_manager.setup(config, voxel_model, chunk_scheduler, chunk_renderer)
 	chunk_manager.chunk_loaded.connect(_on_chunk_loaded)
@@ -121,7 +125,7 @@ func _prepare_materials():
 func _process(delta: float):
 	chunk_manager.tick(_player_ref.global_position)
 	chunk_manager.poll_completed()
-	voxel_model.prune_terrain_cache(1)
+	voxel_model.prune_terrain_cache(2)
 	torch_renderer.update_shadow_culling(delta)
 
 func _on_chunk_loaded(coord: Vector2i):
@@ -143,6 +147,11 @@ func _on_block_edit_committed(edit: BlockEdit):
 func set_player_ref(player: Node3D):
 	_player_ref = player
 	torch_renderer.set_player_ref(player)
+
+func apply_settings(settings: GameSettings):
+	_settings = settings
+	chunk_renderer.set_shadow_render_distance(settings.get_shadow_chunk_radius())
+	torch_renderer.set_max_shadow_torches(settings.torch_shadow_count)
 
 func update_water_tint(sky_color: Color):
 	var sky_luminance: float = (sky_color.r + sky_color.g + sky_color.b) / 3.0

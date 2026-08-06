@@ -46,7 +46,8 @@ func tick(player_pos: Vector3):
 	var current_chunk := ChunkCoord.world_to_chunk(player_pos, _config.chunk_size)
 	if current_chunk != _last_player_chunk:
 		_recompute_streaming(current_chunk)
-	_promote_generated_terrain()
+	if not _data_load_queue.is_empty():
+		_promote_generated_terrain()
 	_process_data_loads()
 	_process_mesh_loads()
 	_process_unloads()

@@ -44,8 +44,9 @@ further out. Meshing runs on background threads so movement doesn't hitch; edits
 globally and survive unload/reload.
 
 **Blocks.** Grass, dirt, sand, stone, wood, and leaves are minable and placeable. Torches are
-a seventh placeable that you can walk through — each is an omni light with a 9-block radius;
-the four nearest to you cast real shadows.
+a seventh placeable that you can walk through — each is an omni light with a 9-block radius.
+Torch shadows are configurable for the nearest 0, 1, 2, or 4 lights and default to the nearest
+one.
 
 **Lighting.** Per-vertex ambient occlusion is baked into chunk meshes. A directional sun plus a
 fill light drive real-time shadows, and a keyframed day/night profile interpolates sky, ambient,
@@ -58,8 +59,9 @@ to play.
 
 **UI & saves.** A frosted-glass front-end: main menu, world select over three save slots,
 create-world and hold-3-seconds-to-delete modals, a chunk-progress loading screen, and a pause
-menu that freezes the game. Saves live in `user://saves/` and autosave every 30 seconds, plus
-shortly after any block edit.
+menu that freezes the game. The pause menu exposes persistent frame-rate, 3D resolution,
+anti-aliasing, fog, sun-shadow, shadow-range, and torch-shadow settings. Saves live in
+`user://saves/` and autosave every 30 seconds, plus shortly after any block edit.
 
 ## Project Structure
 
@@ -90,8 +92,10 @@ Godot APIs.
 godot --path src
 ```
 
-Or open `src/` in the Godot 4.7 editor and press Play. Window is a fixed 1280×720. macOS
-(universal) and Web export presets are committed in `src/export_presets.cfg`.
+Or open `src/` in the Godot 4.7 editor and press Play. The window starts at 1280×720 and is
+resizable. The 3D scene renders natively through 2560×1440 and upscales above that ceiling;
+UI remains at output resolution. macOS (universal) and Web export presets are committed in
+`src/export_presets.cfg`.
 
 ## Assets & Attribution
 
@@ -118,3 +122,4 @@ Godot itself is MIT licensed.
 | #8 | Expressive procedural player animation, Shift sprinting, rigid-limb gait, squash/stretch, and live animation tuner | `feat/expressive-player-animation` |
 | #9 | Full-face voxel ambient occlusion, polished day/night lighting, bounded terrain shadows, and live shadow tuning | `feat/ao-lighting-polish` |
 | #11 | Saved-time clock startup and linear day/night lighting progression | `codex/fix-linear-day-night` |
+| #12 | Persistent pause-menu graphics settings, 1440p native render ceiling, and thermal-load optimizations | `codex/settings` |

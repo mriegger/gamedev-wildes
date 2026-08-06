@@ -21,6 +21,11 @@ func start_clock():
 	_debug_clock_panel.inject(_clock, _values)
 	_clock.start()
 
+func apply_settings(settings: GameSettings):
+	_values.volumetric_fog_enabled = settings.volumetric_fog_enabled
+	_values.set_shadow_enabled(settings.sun_shadows_enabled)
+	_values.set_shadow_max_distance(settings.get_shadow_distance())
+
 func get_time_of_day() -> float:
 	return _clock.get_time_of_day()
 

@@ -21,6 +21,7 @@ signal main_menu_requested
 
 var inventory_model: InventoryModel
 var input_buffer: InputBuffer = InputBuffer.new()
+var settings: GameSettings
 
 var _slot_id: int = -1
 var _save_data: Dictionary = {}
@@ -30,9 +31,10 @@ var animation_tuning_panel: AnimationTuningPanel = null
 var _save_status_timer: float = 0.0
 var _session_active: bool = false
 
-func configure_session(slot_id: int, save_data: Dictionary):
+func configure_session(slot_id: int, save_data: Dictionary, p_settings: GameSettings):
 	_slot_id = slot_id
 	_save_data = save_data
+	settings = p_settings
 	_world_state = SaveManager.decode_world_state(save_data)
 
 func _ready():
@@ -40,8 +42,11 @@ func _ready():
 	set_process_unhandled_input(false)
 	assert(block_catalog.validate())
 	assert(item_catalog.validate(block_catalog))
-	game_environment.setup(float(_save_data.get("time_of_day", 6.0)), world.config.shadow_cast_distance)
+	settings.apply_display(get_viewport())
+	game_environment.setup(float(_save_data.get("time_of_day", 6.0)), settings.get_shadow_distance())
+	game_environment.apply_settings(settings)
 	world.block_catalog = block_catalog
+	world.configure_settings(settings)
 	inventory_model = InventoryModel.new(item_catalog)
 	_restore_inventory()
 	world.configure_start_state(_world_state)
@@ -151,9 +156,19 @@ func _show_pause_menu():
 	_pause_menu.resume_requested.connect(_resume_from_pause)
 	_pause_menu.main_menu_requested.connect(_save_and_request_main_menu)
 	add_child(_pause_menu)
+	_pause_menu.setup(settings)
+	_pause_menu.settings_screen.settings_changed.connect(_on_settings_changed)
 	_save_canvas.visible = true
 	_refresh_save_label()
 	get_tree().paused = true
+
+func _on_settings_changed(updated_settings: GameSettings):
+	settings = updated_settings
+	settings.apply_display(get_viewport())
+	game_environment.apply_settings(settings)
+	world.apply_settings(settings)
+	if settings.persist_changes:
+		settings.save_to_disk()
 
 func _resume_from_pause():
 	if _pause_menu and is_instance_valid(_pause_menu):

@@ -2,6 +2,7 @@ extends Node3D
 class_name GameClock
 
 const HOURS_PER_DAY: float = 24.0
+const VISUAL_UPDATE_INTERVAL: float = 0.1
 
 @export var cycle_duration_minutes: float = 20.0
 @export var enable_cycle: bool = true
@@ -14,6 +15,7 @@ var time_of_day: float = 6.0
 var _paused: bool = false
 var _dragging: bool = false
 var _running: bool = false
+var _visual_update_elapsed: float = 0.0
 
 signal time_changed(new_time: float)
 
@@ -26,13 +28,14 @@ func start():
 func _process(delta):
 	if _running and enable_cycle and not _paused and not _dragging and not get_tree().paused:
 		var hours_per_sec = HOURS_PER_DAY / cycle_duration_seconds
-		var prev = time_of_day
 		time_of_day += delta * hours_per_sec
 		if time_of_day >= HOURS_PER_DAY:
 			time_of_day -= HOURS_PER_DAY
 		elif time_of_day < 0.0:
 			time_of_day += HOURS_PER_DAY
-		if not is_equal_approx(prev, time_of_day):
+		_visual_update_elapsed += delta
+		if _visual_update_elapsed >= VISUAL_UPDATE_INTERVAL:
+			_visual_update_elapsed = fmod(_visual_update_elapsed, VISUAL_UPDATE_INTERVAL)
 			time_changed.emit(time_of_day)
 
 func get_time_of_day() -> float:
@@ -42,6 +45,7 @@ func set_time_of_day(h: float):
 	time_of_day = fmod(h, HOURS_PER_DAY)
 	if time_of_day < 0:
 		time_of_day += HOURS_PER_DAY
+	_visual_update_elapsed = 0.0
 	time_changed.emit(time_of_day)
 
 func get_normalized() -> float:

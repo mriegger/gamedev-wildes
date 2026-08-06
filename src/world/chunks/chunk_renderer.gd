@@ -1,7 +1,7 @@
 extends Node3D
 class_name ChunkRenderer
 
-const MAX_MESH_CACHE: int = 200
+const MAX_MESH_CACHE: int = 96
 
 var _terrain_instances: Dictionary = {}
 var _water_instances: Dictionary = {}
@@ -27,6 +27,13 @@ func setup(p_mesher: ChunkMesher, p_terrain_material: Material, p_water_material
 
 func set_shadow_center(center: Vector2i):
 	_shadow_center = center
+	_update_shadow_casters()
+
+func set_shadow_render_distance(distance: int):
+	_shadow_render_distance = distance
+	_update_shadow_casters()
+
+func _update_shadow_casters():
 	for coord in _terrain_instances:
 		var instance := _terrain_instances[coord] as MeshInstance3D
 		if instance != null and is_instance_valid(instance):

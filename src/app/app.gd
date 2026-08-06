@@ -1,7 +1,5 @@
 extends Node
 
-const MAX_3D_RENDER_SIZE := Vector2(2560.0, 1440.0)
-
 @export var main_menu_scene: PackedScene
 @export var world_select_scene: PackedScene
 @export var loading_scene: PackedScene
@@ -12,18 +10,16 @@ const MAX_3D_RENDER_SIZE := Vector2(2560.0, 1440.0)
 
 var _screen: Node
 var _game: Game
+var _settings: GameSettings
 
 func _ready():
+	_settings = GameSettings.load_from_disk()
 	get_viewport().size_changed.connect(_update_3d_render_scale)
 	_update_3d_render_scale()
 	_show_main_menu()
 
 func _update_3d_render_scale():
-	var viewport := get_viewport()
-	var viewport_size := Vector2(viewport.size)
-	var width_scale := MAX_3D_RENDER_SIZE.x / viewport_size.x
-	var height_scale := MAX_3D_RENDER_SIZE.y / viewport_size.y
-	viewport.scaling_3d_scale = minf(1.0, minf(width_scale, height_scale))
+	_settings.apply_display(get_viewport())
 
 func _show_main_menu():
 	var menu = main_menu_scene.instantiate() as MainMenu
@@ -42,7 +38,7 @@ func _start_session(slot_id: int, save_data: Dictionary):
 	_replace_screen(loading)
 
 	_game = game_scene.instantiate() as Game
-	_game.configure_session(slot_id, save_data)
+	_game.configure_session(slot_id, save_data, _settings)
 	_game.loading_progress.connect(loading.update_progress)
 	_game.session_ready.connect(_on_session_ready)
 	_game.main_menu_requested.connect(_on_game_main_menu_requested)
