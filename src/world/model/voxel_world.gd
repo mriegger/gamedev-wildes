@@ -26,8 +26,10 @@ var _terrain_chunk_lru: Dictionary = {}
 var max_terrain_cache_chunks: int = 257
 var _terrain_lru_mutex: Mutex = Mutex.new()
 
-var placed_blocks: Dictionary = {}
-var removed_blocks: Dictionary = {}
+var _placed_blocks: Dictionary = {}
+var _removed_blocks: Dictionary = {}
+var _placed_edits_by_chunk: Dictionary = {}
+var _removed_edits_by_chunk: Dictionary = {}
 var cell_revisions: Dictionary = {}
 var _highest_cache: Dictionary = {}
 var torch_attachments: Dictionary = {}
@@ -41,6 +43,48 @@ func _init(p_chunk_size: int, p_max_build_y: int, p_water_level: int, p_spawn_se
 
 func set_generator_ref(gen: TerrainGenerator):
 	_generator_ref = gen
+
+func restore_block_edits(p_placed_blocks: Dictionary, p_removed_blocks: Dictionary) -> void:
+	_placed_blocks = p_placed_blocks.duplicate()
+	_removed_blocks = p_removed_blocks.duplicate()
+	_rebuild_edit_index(_placed_blocks, _placed_edits_by_chunk)
+	_rebuild_edit_index(_removed_blocks, _removed_edits_by_chunk)
+
+func snapshot_block_edits() -> Dictionary:
+	return {
+		"placed": _placed_blocks.duplicate(),
+		"removed": _removed_blocks.duplicate(),
+	}
+
+func get_block_edit_count() -> int:
+	return _placed_blocks.size() + _removed_blocks.size()
+
+func _rebuild_edit_index(edits: Dictionary, index: Dictionary) -> void:
+	index.clear()
+	for pos in edits:
+		var coord := ChunkCoord.world_to_chunk_vec3i(pos, chunk_size)
+		if not index.has(coord):
+			index[coord] = {}
+		var chunk_edits := index[coord] as Dictionary
+		chunk_edits[pos] = edits[pos]
+
+func _put_indexed_edit(edits: Dictionary, index: Dictionary, pos: Vector3i, value: Variant) -> void:
+	edits[pos] = value
+	var coord := ChunkCoord.world_to_chunk_vec3i(pos, chunk_size)
+	if not index.has(coord):
+		index[coord] = {}
+	var chunk_edits := index[coord] as Dictionary
+	chunk_edits[pos] = value
+
+func _erase_indexed_edit(edits: Dictionary, index: Dictionary, pos: Vector3i) -> void:
+	edits.erase(pos)
+	var coord := ChunkCoord.world_to_chunk_vec3i(pos, chunk_size)
+	if not index.has(coord):
+		return
+	var chunk_edits := index[coord] as Dictionary
+	chunk_edits.erase(pos)
+	if chunk_edits.is_empty():
+		index.erase(coord)
 
 func configure_terrain_cache(render_dist: int, unload_padding: int):
 	var keep = render_dist + unload_padding
@@ -173,9 +217,9 @@ func apply_tree_chunk_for_coord(coord: Vector2i, tree_data: Dictionary):
 	generated_tree_chunks[coord] = true
 
 func get_block_at(p: Vector3i):
-	if placed_blocks.has(p):
-		return placed_blocks[p]
-	if removed_blocks.has(p):
+	if _placed_blocks.has(p):
+		return _placed_blocks[p]
+	if _removed_blocks.has(p):
 		return null
 	if tree_block_fast.has(p):
 		return tree_block_fast[p]
@@ -271,17 +315,17 @@ func try_mine_block(p: Vector3i) -> Array:
 		return [BlockEdit.fail(p, BlockEdit.Operation.MINE, BlockEdit.Result.FAIL_NOT_BREAKABLE)]
 	var old_id = get_block_id_at(p)
 	var prev_rev = get_revision(p)
-	var was_placed = placed_blocks.has(p)
+	var was_placed = _placed_blocks.has(p)
 	var surviving_after = false
 	if was_placed:
-		placed_blocks.erase(p)
+		_erase_indexed_edit(_placed_blocks, _placed_edits_by_chunk, p)
 		var col_key = Vector2i(p.x, p.z)
 		var h = height_map_dict.get(col_key, -1) as int
 		if h != -1 and p.y <= h:
-			removed_blocks[p] = true
+			_put_indexed_edit(_removed_blocks, _removed_edits_by_chunk, p, true)
 			surviving_after = true
 	else:
-		removed_blocks[p] = true
+		_put_indexed_edit(_removed_blocks, _removed_edits_by_chunk, p, true)
 		surviving_after = true
 		if tree_block_fast.has(p):
 			tree_block_fast.erase(p)
@@ -301,9 +345,9 @@ func try_mine_block(p: Vector3i) -> Array:
 	block_edit_committed.emit(edit)
 	var batch: Array[BlockEdit] = [edit]
 	for torch_pos in get_attached_torches(p):
-		var torch_old_id = placed_blocks.get(torch_pos, BlockId.Type.TORCH)
+		var torch_old_id = _placed_blocks.get(torch_pos, BlockId.Type.TORCH)
 		var torch_prev = get_revision(torch_pos)
-		placed_blocks.erase(torch_pos)
+		_erase_indexed_edit(_placed_blocks, _placed_edits_by_chunk, torch_pos)
 		torch_attachments.erase(torch_pos)
 		_invalidate_highest_cache(torch_pos.x, torch_pos.z)
 		cell_revisions.erase(torch_pos)
@@ -335,9 +379,9 @@ func try_place_block(p: Vector3i, block_type: int, attach_dir: Vector3i = Vector
 		ensure_region_generated(support_pos.x -1, support_pos.z -1, 3, 3)
 		if not is_opaque(support_pos) and not is_solid(support_pos):
 			return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_NO_TORCH_SUPPORT)
-	if removed_blocks.has(p):
-		removed_blocks.erase(p)
-	placed_blocks[p] = block_type
+	if _removed_blocks.has(p):
+		_erase_indexed_edit(_removed_blocks, _removed_edits_by_chunk, p)
+	_put_indexed_edit(_placed_blocks, _placed_edits_by_chunk, p, block_type)
 	if block_type == BlockId.Type.TORCH:
 		torch_attachments[p] = attach_dir
 	_invalidate_highest_cache(p.x, p.z)
@@ -375,28 +419,20 @@ func get_spawn_position() -> Vector3:
 				best = Vector3(x + 0.5, float(h) + 1.0, z + 0.5)
 	return best
 
-func snapshot_edits_for_chunk(origin_x: int, origin_z: int, p_chunk_size: int) -> Dictionary:
+func snapshot_edits_for_chunk(origin_x: int, origin_z: int) -> Dictionary:
 	var ox_min = origin_x - 2
-	var ox_max = origin_x + p_chunk_size + 1
+	var ox_max = origin_x + chunk_size + 1
 	var oz_min = origin_z - 2
-	var oz_max = origin_z + p_chunk_size + 1
+	var oz_max = origin_z + chunk_size + 1
+	var min_coord := ChunkCoord.world_to_chunk_vec3i(Vector3i(ox_min, 0, oz_min), chunk_size)
+	var max_coord := ChunkCoord.world_to_chunk_vec3i(Vector3i(ox_max, 0, oz_max), chunk_size)
 	var placed_snap: Dictionary = {}
 	var removed_snap: Dictionary = {}
-	for pos in placed_blocks.keys():
-		if pos is Vector3i:
-			if pos.x >= ox_min and pos.x <= ox_max and pos.z >= oz_min and pos.z <= oz_max:
-				placed_snap[pos] = placed_blocks[pos]
-	for pos in removed_blocks.keys():
-		if pos is Vector3i:
-			if pos.x >= ox_min and pos.x <= ox_max and pos.z >= oz_min and pos.z <= oz_max:
-				removed_snap[pos] = true
+	_copy_indexed_edits(_placed_edits_by_chunk, placed_snap, min_coord, max_coord, ox_min, ox_max, oz_min, oz_max)
+	_copy_indexed_edits(_removed_edits_by_chunk, removed_snap, min_coord, max_coord, ox_min, ox_max, oz_min, oz_max)
 	var tree_snap: Dictionary = {}
-	var c_min_x = int(floor(float(ox_min) / float(chunk_size)))
-	var c_max_x = int(floor(float(ox_max) / float(chunk_size)))
-	var c_min_z = int(floor(float(oz_min) / float(chunk_size)))
-	var c_max_z = int(floor(float(oz_max) / float(chunk_size)))
-	for cx in range(c_min_x, c_max_x + 1):
-		for cz in range(c_min_z, c_max_z + 1):
+	for cx in range(min_coord.x, max_coord.x + 1):
+		for cz in range(min_coord.y, max_coord.y + 1):
 			var c = Vector2i(cx, cz)
 			if tree_chunks_fast.has(c):
 				var dict = tree_chunks_fast[c] as Dictionary
@@ -405,6 +441,17 @@ func snapshot_edits_for_chunk(origin_x: int, origin_z: int, p_chunk_size: int) -
 						if pos.x >= ox_min and pos.x <= ox_max and pos.z >= oz_min and pos.z <= oz_max:
 							tree_snap[pos] = dict[pos]
 	return {"placed": placed_snap, "removed": removed_snap, "trees": tree_snap}
+
+func _copy_indexed_edits(index: Dictionary, target: Dictionary, min_coord: Vector2i, max_coord: Vector2i, min_x: int, max_x: int, min_z: int, max_z: int) -> void:
+	for cx in range(min_coord.x, max_coord.x + 1):
+		for cz in range(min_coord.y, max_coord.y + 1):
+			var coord := Vector2i(cx, cz)
+			if not index.has(coord):
+				continue
+			var chunk_edits := index[coord] as Dictionary
+			for pos in chunk_edits:
+				if pos.x >= min_x and pos.x <= max_x and pos.z >= min_z and pos.z <= max_z:
+					target[pos] = chunk_edits[pos]
 
 func is_chunk_data_available(cx: int, cz: int) -> bool:
 	var coord = Vector2i(cx, cz)

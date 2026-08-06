@@ -187,8 +187,9 @@ static func save_world_state(slot_id: int, current_data: Dictionary, voxel_model
 	updated["version"] = CURRENT_SAVE_VERSION
 	updated["playtime_seconds"] = float(updated.get("playtime_seconds", 0)) + extra_seconds
 
-	updated["placed_blocks"] = serialize_vector3i_dict(voxel_model.placed_blocks)
-	updated["removed_blocks"] = serialize_vector3i_dict(voxel_model.removed_blocks)
+	var block_edits := voxel_model.snapshot_block_edits()
+	updated["placed_blocks"] = serialize_vector3i_dict(block_edits["placed"])
+	updated["removed_blocks"] = serialize_vector3i_dict(block_edits["removed"])
 	updated["torch_attachments"] = serialize_vector3i_dict(voxel_model.torch_attachments)
 	var p = player.global_position
 	updated["player_position"] = [p.x, p.y, p.z]

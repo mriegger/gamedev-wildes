@@ -131,6 +131,7 @@ Godot itself is MIT licensed.
 | [#16](https://github.com/codimango/gamedev-wildes/pull/16) | Harden tool data and save contracts | `codex/tool-system-hardening` |
 | [#17](https://github.com/codimango/gamedev-wildes/pull/17) | Unify the melee attack presentation lifecycle | `codex/tool-attack-lifecycle` |
 | [#18](https://github.com/codimango/gamedev-wildes/pull/18) | Fix release world initialization side effects | `codex/fix-release-initialization` |
+| [#19](https://github.com/codimango/gamedev-wildes/pull/19) | Index world edits for chunk builds | `codex/index-world-edits` |
 | [#20](https://github.com/codimango/gamedev-wildes/pull/20) | Batch torch shadow selection during chunk loads | `codex/batch-torch-shadow-updates` |
 | [#21](https://github.com/codimango/gamedev-wildes/pull/21) | Make Godot CI validation fail closed | `codex/strict-godot-validation` |
 | [#22](https://github.com/codimango/gamedev-wildes/pull/22) | Add pull request quality scaffolding | `codex/pr-quality-scaffolding` |

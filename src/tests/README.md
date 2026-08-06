@@ -1,6 +1,6 @@
 # Tests
 
-Seven test families: inventory property fuzz + world determinism golden hash + HUD integration + player animation integration + animation tuning integration + tool system integration + world streaming soak.
+Eight test families: inventory property fuzz + world determinism golden hash + world edit spatial index + HUD integration + player animation integration + animation tuning integration + tool system integration + world streaming soak.
 
 ## Inventory Fuzz — `src/inventory/inventory_model.gd`
 
@@ -43,6 +43,16 @@ godot --path src --headless --script res://tests/world_golden_hash.gd -- --updat
 ```
 
 The runner loads `WorldConfig` from `res://world/settings/world_config.tres`, calls `runtime_copy_for_seed(1337)`, builds a `TerrainGenerator` + `VoxelWorld`, and hashes 524,288 blocks via `HashingContext.HASH_SHA256`.
+
+## World Edit Spatial Index
+
+`world_edit_index.gd` verifies that chunk build snapshots preserve the exact inclusive two-block edit margin across positive and negative chunk boundaries. It covers restored placed/removed overlap, placement, mining, terrain replacement, attached-torch removal, and snapshot equality against a full-scan reference.
+
+The scale fixture restores 100,000 distant edits, compares repeated local snapshots against the reference result, and requires the indexed path to remain at least 10× faster on the same machine.
+
+```sh
+godot --path src --headless --script res://tests/world_edit_index.gd
+```
 
 ## HUD Headless Integration
 
@@ -110,10 +120,11 @@ godot --path src --headless --script res://tests/tool_system_integration.gd
 
 ## CI
 
-`.github/workflows/tests.yml` downloads Godot 4.7 Linux headless, imports `src/`, and runs seven:
+`.github/workflows/tests.yml` downloads Godot 4.7 Linux headless, imports `src/`, and runs eight:
 
 - fuzzer with 20k sequences × 20 ops (≈400k drops) — prints throughput (`~1M ops/s` raw, `~16k ops/s` invariant-checked)
 - golden hash — `GOLDEN PASS` / `GOLDEN FAIL` with expected vs actual
+- world edit index — `WORLD_EDIT_INDEX PASS` with exact snapshot equivalence and a 100,000-edit scale comparison
 - HUD integration — `HUD_INTEGRATION PASS orphan=0 previews=0` and grep-fails on `ERROR`/`WARNING`/`FAIL`
 - player animation integration — `PLAYER_ANIMATION PASS orphan=0` plus a 100-instance shared-resource smoke
 - animation tuning integration — `ANIMATION_TUNING PASS orphan=0` with live controls, preview, reset, and JSON export

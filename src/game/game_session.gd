@@ -74,7 +74,7 @@ func get_summary() -> String:
 	if slot_id == -1:
 		return "No save slot | Seed %d | %s" % [_world.config.seed_value, _environment.get_formatted_time()]
 	var world_name = save_data.get("world_name", "World")
-	var edit_count = _world.voxel_model.placed_blocks.size() + _world.voxel_model.removed_blocks.size()
+	var edit_count = _world.voxel_model.get_block_edit_count()
 	return "Slot %d | Seed %d | %s | %s | %d edits" % [slot_id, _world.config.seed_value, world_name, _environment.get_formatted_time(), edit_count]
 
 func shutdown(reason: String):

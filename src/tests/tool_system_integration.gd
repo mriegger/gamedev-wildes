@@ -92,8 +92,10 @@ func _run():
 		_expect(full.slots[index] == null, "starter migration used reserved equipment slot %d" % index)
 
 	_voxel_world = VoxelWorld.new(20, 36, 5, 12.0, block_catalog)
-	_voxel_world.placed_blocks[_stone_pos] = BlockId.Type.STONE
-	_voxel_world.placed_blocks[_grass_pos] = BlockId.Type.GRASS
+	_voxel_world.restore_block_edits({
+		_stone_pos: BlockId.Type.STONE,
+		_grass_pos: BlockId.Type.GRASS,
+	}, {})
 	_player = (load("res://player/player.tscn") as PackedScene).instantiate() as PlayerMotor
 	root.add_child(_player)
 	_player.global_position = Vector3.ZERO

@@ -128,7 +128,7 @@ func _queue_build(coord: Vector2i, terrain_only: bool, replace_existing: bool) -
 func _create_job(coord: Vector2i, generation: int, terrain_only: bool) -> ChunkBuildJob:
 	var origin_x := coord.x * _chunk_size
 	var origin_z := coord.y * _chunk_size
-	var edits := _voxel_model.snapshot_edits_for_chunk(origin_x, origin_z, _chunk_size)
+	var edits := _voxel_model.snapshot_edits_for_chunk(origin_x, origin_z)
 	return ChunkBuildJob.new(
 		coord,
 		generation,
