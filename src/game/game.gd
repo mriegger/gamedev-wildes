@@ -82,7 +82,6 @@ func _setup_gameplay():
 	camera_rig.setup(player, input_buffer)
 	player.setup(world, camera_rig, inventory_model, input_buffer)
 	camera_rig.reset_right_obstruction()
-	world.set_player_ref(player)
 
 	game_environment.sky_color_changed.connect(world.update_water_tint)
 	game_environment.start_clock()
@@ -93,6 +92,7 @@ func _setup_gameplay():
 		player.global_position = saved_position + Vector3(0, 0.2, 0)
 	else:
 		player.global_position = world.voxel_model.get_spawn_position() + Vector3(0, 0.1, 0)
+	world.set_player_ref(player)
 
 	camera_rig.target_position = player.global_position
 	camera_rig.global_position = player.global_position

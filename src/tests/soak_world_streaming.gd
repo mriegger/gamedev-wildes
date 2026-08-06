@@ -34,6 +34,13 @@ var _forced_evictions: Array[Vector2i] = []
 
 const MOVEMENT_FRAMES: int = 900
 const STREAMING_RACE_TIMEOUT_MSEC: int = 30000
+const SAVED_PLAYER_POSITION := Vector3(2.25, 14.0, 2.25)
+const SAVED_TORCH_POSITIONS: Array[Vector3i] = [
+	Vector3i(2, 13, 2),
+	Vector3i(8, 13, 2),
+	Vector3i(2, 13, 8),
+	Vector3i(12, 13, 12),
+]
 
 func _init() -> void:
 	print("[soak] starting headless game soak")
@@ -54,7 +61,9 @@ func _process(_delta: float) -> bool:
 		if _game == null:
 			_fail("game instantiate null")
 			return false
-		_game.configure_session(-1, {"seed": 1337, "time_of_day": 16.25}, GameSettings.new())
+		var settings := GameSettings.new()
+		settings.torch_shadow_count = 1
+		_game.configure_session(-1, _make_saved_world(), settings)
 		_game.session_ready.connect(_on_session_ready)
 		root.add_child(_game)
 		print("[soak] game added frame %d" % _frame)
@@ -88,6 +97,8 @@ func _process(_delta: float) -> bool:
 			if not _verify_side_face_ao():
 				return false
 			if not _verify_lighting_pipeline():
+				return false
+			if not _verify_torch_shadow_pool():
 				return false
 			var spawn = _world.voxel_model.get_spawn_position()
 			_player.global_position = spawn + Vector3(0, 2, 0)
@@ -188,6 +199,58 @@ func _process(_delta: float) -> bool:
 		_check_final()
 		_phase = 6
 	return false
+
+func _make_saved_world() -> Dictionary:
+	var placed_blocks: Dictionary = {}
+	var torch_attachments: Dictionary = {}
+	for pos in SAVED_TORCH_POSITIONS:
+		var key := "%d,%d,%d" % [pos.x, pos.y, pos.z]
+		placed_blocks[key] = BlockId.Type.TORCH
+		torch_attachments[key] = "-1,0,0"
+	return {
+		"seed": 1337,
+		"time_of_day": 16.25,
+		"player_position": [SAVED_PLAYER_POSITION.x, SAVED_PLAYER_POSITION.y, SAVED_PLAYER_POSITION.z],
+		"placed_blocks": placed_blocks,
+		"torch_attachments": torch_attachments,
+	}
+
+func _verify_torch_shadow_pool() -> bool:
+	var renderer := _world.torch_renderer
+	if renderer.torch_instances.size() != SAVED_TORCH_POSITIONS.size():
+		_fail("saved torches were not loaded: %d" % renderer.torch_instances.size())
+		return false
+	var shadow_count := 0
+	var shadow_position := Vector3i.ZERO
+	for pos in SAVED_TORCH_POSITIONS:
+		var torch_root := renderer.torch_instances.get(pos) as Node3D
+		var light := torch_root.get_node_or_null("TorchLight") as OmniLight3D if torch_root != null else null
+		if light == null:
+			_fail("saved torch light missing at %s" % str(pos))
+			return false
+		if light.shadow_enabled:
+			shadow_count += 1
+			shadow_position = pos
+	if shadow_count != 1:
+		_fail("torch shadow pool limit mismatch: %d" % shadow_count)
+		return false
+	if shadow_position != SAVED_TORCH_POSITIONS[0]:
+		_fail("torch shadow pool did not select saved-player nearest: %s" % str(shadow_position))
+		return false
+	renderer.set_max_shadow_torches(0)
+	for pos in SAVED_TORCH_POSITIONS:
+		var light := (renderer.torch_instances[pos] as Node3D).get_node("TorchLight") as OmniLight3D
+		if light.shadow_enabled:
+			_fail("disabled torch shadow pool retained a caster at %s" % str(pos))
+			return false
+	renderer.set_max_shadow_torches(4)
+	for pos in SAVED_TORCH_POSITIONS:
+		var light := (renderer.torch_instances[pos] as Node3D).get_node("TorchLight") as OmniLight3D
+		if not light.shadow_enabled:
+			_fail("full torch shadow pool omitted a caster at %s" % str(pos))
+			return false
+	renderer.set_max_shadow_torches(1)
+	return true
 
 func _tick_soak() -> void:
 	if not _streaming_race_started:

@@ -48,6 +48,11 @@ func _setup_materials_and_meshes():
 	torch_flame_mesh.size = Vector3(0.14, 0.14, 0.14)
 
 func spawn_torch(pos: Vector3i, attach_dir: Vector3i) -> Node3D:
+	var root := _create_torch(pos, attach_dir)
+	_apply_shadow_pool_limit()
+	return root
+
+func _create_torch(pos: Vector3i, attach_dir: Vector3i) -> Node3D:
 	remove_torch(pos)
 
 	var root = Node3D.new()
@@ -77,7 +82,7 @@ func spawn_torch(pos: Vector3i, attach_dir: Vector3i) -> Node3D:
 	light.omni_range = def.light_range
 	light.omni_attenuation = 0.75
 	light.omni_shadow_mode = OmniLight3D.SHADOW_DUAL_PARABOLOID
-	light.shadow_enabled = _max_shadow_torches > 0
+	light.shadow_enabled = false
 	light.shadow_reverse_cull_face = false
 	light.shadow_bias = 0.03
 	light.shadow_normal_bias = 0.2
@@ -88,7 +93,6 @@ func spawn_torch(pos: Vector3i, attach_dir: Vector3i) -> Node3D:
 
 	torch_instances[pos] = root
 	torch_light_nodes[pos] = light
-	_apply_shadow_pool_limit()
 	return root
 
 func remove_torch(pos: Vector3i) -> bool:
@@ -127,8 +131,10 @@ func load_torches_for_chunk(cx: int, cz: int, p_chunk_size: int, torch_attachmen
 			if has_torch(torch_pos):
 				continue
 			var dir = torch_attachments[torch_pos] as Vector3i
-			spawn_torch(torch_pos, dir)
+			_create_torch(torch_pos, dir)
 			loaded += 1
+	if loaded > 0:
+		_apply_shadow_pool_limit()
 	return loaded
 
 func update_shadow_culling(delta: float) -> void:
@@ -145,21 +151,21 @@ func update_shadow_culling(delta: float) -> void:
 	_apply_shadow_pool_limit()
 
 func _apply_shadow_pool_limit():
-	var positions = torch_light_nodes.keys()
 	if _max_shadow_torches == 0:
-		for pos in positions:
+		for pos in torch_light_nodes:
 			var disabled_light = torch_light_nodes.get(pos) as OmniLight3D
 			if disabled_light and is_instance_valid(disabled_light):
 				disabled_light.shadow_enabled = false
 		return
-	if positions.size() <= _max_shadow_torches:
-		for pos in positions:
+	if torch_light_nodes.size() <= _max_shadow_torches:
+		for pos in torch_light_nodes:
 			var enabled_light = torch_light_nodes.get(pos) as OmniLight3D
 			if enabled_light and is_instance_valid(enabled_light):
 				enabled_light.shadow_enabled = true
 		return
 	if player_ref == null:
 		return
+	var positions = torch_light_nodes.keys()
 	var player_position = player_ref.global_position
 	positions.sort_custom(func(a, b):
 		return player_position.distance_squared_to(Vector3(a)) < player_position.distance_squared_to(Vector3(b))
@@ -177,3 +183,4 @@ func set_max_shadow_torches(count: int):
 
 func set_player_ref(p: Node3D):
 	player_ref = p
+	_apply_shadow_pool_limit()
