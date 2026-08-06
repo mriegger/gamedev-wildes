@@ -73,7 +73,7 @@ func _create_world_model(generation: Dictionary):
 func _setup_systems():
 	chunk_mesher = ChunkMesher.new(config.chunk_size, config.max_build_y, config.seed_value, config.enable_ao, block_texture_set)
 	chunk_scheduler.setup(chunk_mesher, terrain_generator, voxel_model, config.chunk_size, config.max_build_y)
-	chunk_renderer.setup(chunk_mesher, terrain_material, water_block_material, voxel_model)
+	chunk_renderer.setup(chunk_mesher, terrain_material, water_block_material, voxel_model, config.shadow_render_distance)
 	torch_renderer.setup(block_catalog)
 	chunk_manager = ChunkManager.new()
 	chunk_manager.setup(config, voxel_model, chunk_scheduler, chunk_renderer)

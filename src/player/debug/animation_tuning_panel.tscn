@@ -1,0 +1,265 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://player/debug/animation_tuning_panel.gd" id="1_panel"]
+
+[node name="AnimationTuningPanel" type="CanvasLayer"]
+layer = 200
+visible = false
+script = ExtResource("1_panel")
+
+[node name="Panel" type="Panel" parent="."]
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -432.0
+offset_top = 12.0
+offset_right = -12.0
+offset_bottom = 708.0
+grow_horizontal = 0
+
+[node name="VBox" type="VBoxContainer" parent="Panel"]
+layout_mode = 0
+offset_left = 14.0
+offset_top = 12.0
+offset_right = 406.0
+offset_bottom = 684.0
+theme_override_constants/separation = 8
+
+[node name="Header" type="HBoxContainer" parent="Panel/VBox"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="Panel/VBox/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 18
+text = "Player Animation Tuner"
+
+[node name="CloseButton" type="Button" parent="Panel/VBox/Header"]
+custom_minimum_size = Vector2(84, 30)
+layout_mode = 2
+text = "Close F10"
+
+[node name="PreviewRow" type="HBoxContainer" parent="Panel/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="PreviewLabel" type="Label" parent="Panel/VBox/PreviewRow"]
+layout_mode = 2
+text = "Preview"
+
+[node name="PreviewSelector" type="OptionButton" parent="Panel/VBox/PreviewRow"]
+custom_minimum_size = Vector2(180, 32)
+layout_mode = 2
+
+[node name="PreviewHelp" type="Label" parent="Panel/VBox/PreviewRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 10
+text = "Live follows gameplay"
+
+[node name="Tabs" type="TabContainer" parent="Panel/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Movement" type="MarginContainer" parent="Panel/VBox/Tabs"]
+layout_mode = 2
+
+[node name="Scroll" type="ScrollContainer" parent="Panel/VBox/Tabs/Movement"]
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="VBox" type="VBoxContainer" parent="Panel/VBox/Tabs/Movement/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Help" type="Label" parent="Panel/VBox/Tabs/Movement/Scroll/VBox"]
+layout_mode = 2
+text = "Player movement, jumping, gravity, and collision dimensions"
+
+[node name="Grid" type="GridContainer" parent="Panel/VBox/Tabs/Movement/Scroll/VBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/h_separation = 12
+theme_override_constants/v_separation = 6
+columns = 2
+
+[node name="Animation" type="MarginContainer" parent="Panel/VBox/Tabs"]
+layout_mode = 2
+
+[node name="Scroll" type="ScrollContainer" parent="Panel/VBox/Tabs/Animation"]
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="VBox" type="VBoxContainer" parent="Panel/VBox/Tabs/Animation/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Help" type="Label" parent="Panel/VBox/Tabs/Animation/Scroll/VBox"]
+layout_mode = 2
+text = "Every exported animation profile value appears here automatically"
+
+[node name="Grid" type="GridContainer" parent="Panel/VBox/Tabs/Animation/Scroll/VBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/h_separation = 12
+theme_override_constants/v_separation = 6
+columns = 2
+
+[node name="Parts" type="MarginContainer" parent="Panel/VBox/Tabs"]
+layout_mode = 2
+
+[node name="VBox" type="VBoxContainer" parent="Panel/VBox/Tabs/Parts"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Help" type="Label" parent="Panel/VBox/Tabs/Parts/VBox"]
+layout_mode = 2
+text = "Offsets layer over the procedural animation without adding joints"
+
+[node name="PartSelector" type="OptionButton" parent="Panel/VBox/Tabs/Parts/VBox"]
+custom_minimum_size = Vector2(220, 34)
+layout_mode = 2
+
+[node name="TransformGrid" type="GridContainer" parent="Panel/VBox/Tabs/Parts/VBox"]
+layout_mode = 2
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 8
+columns = 4
+
+[node name="Blank" type="Label" parent="Panel/VBox/Tabs/Parts/VBox/TransformGrid"]
+layout_mode = 2
+text = "Transform"
+
+[node name="XLabel" type="Label" parent="Panel/VBox/Tabs/Parts/VBox/TransformGrid"]
+layout_mode = 2
+text = "X"
+horizontal_alignment = 1
+
+[node name="YLabel" type="Label" parent="Panel/VBox/Tabs/Parts/VBox/TransformGrid"]
+layout_mode = 2
+text = "Y"
+horizontal_alignment = 1
+
+[node name="ZLabel" type="Label" parent="Panel/VBox/Tabs/Parts/VBox/TransformGrid"]
+layout_mode = 2
+text = "Z"
+horizontal_alignment = 1
+
+[node name="PositionLabel" type="Label" parent="Panel/VBox/Tabs/Parts/VBox/TransformGrid"]
+custom_minimum_size = Vector2(72, 0)
+layout_mode = 2
+text = "Position"
+
+[node name="PositionX" type="SpinBox" parent="Panel/VBox/Tabs/Parts/VBox/TransformGrid"]
+custom_minimum_size = Vector2(96, 32)
+layout_mode = 2
+min_value = -3.0
+max_value = 3.0
+step = 0.001
+allow_greater = true
+allow_lesser = true
+
+[node name="PositionY" type="SpinBox" parent="Panel/VBox/Tabs/Parts/VBox/TransformGrid"]
+custom_minimum_size = Vector2(96, 32)
+layout_mode = 2
+min_value = -3.0
+max_value = 3.0
+step = 0.001
+allow_greater = true
+allow_lesser = true
+
+[node name="PositionZ" type="SpinBox" parent="Panel/VBox/Tabs/Parts/VBox/TransformGrid"]
+custom_minimum_size = Vector2(96, 32)
+layout_mode = 2
+min_value = -3.0
+max_value = 3.0
+step = 0.001
+allow_greater = true
+allow_lesser = true
+
+[node name="RotationLabel" type="Label" parent="Panel/VBox/Tabs/Parts/VBox/TransformGrid"]
+layout_mode = 2
+text = "Rotation °"
+
+[node name="RotationX" type="SpinBox" parent="Panel/VBox/Tabs/Parts/VBox/TransformGrid"]
+custom_minimum_size = Vector2(96, 32)
+layout_mode = 2
+min_value = -180.0
+max_value = 180.0
+step = 0.1
+allow_greater = true
+allow_lesser = true
+
+[node name="RotationY" type="SpinBox" parent="Panel/VBox/Tabs/Parts/VBox/TransformGrid"]
+custom_minimum_size = Vector2(96, 32)
+layout_mode = 2
+min_value = -180.0
+max_value = 180.0
+step = 0.1
+allow_greater = true
+allow_lesser = true
+
+[node name="RotationZ" type="SpinBox" parent="Panel/VBox/Tabs/Parts/VBox/TransformGrid"]
+custom_minimum_size = Vector2(96, 32)
+layout_mode = 2
+min_value = -180.0
+max_value = 180.0
+step = 0.1
+allow_greater = true
+allow_lesser = true
+
+[node name="ScaleLabel" type="Label" parent="Panel/VBox/Tabs/Parts/VBox/TransformGrid"]
+layout_mode = 2
+text = "Scale"
+
+[node name="ScaleX" type="SpinBox" parent="Panel/VBox/Tabs/Parts/VBox/TransformGrid"]
+custom_minimum_size = Vector2(96, 32)
+layout_mode = 2
+min_value = 0.05
+max_value = 4.0
+step = 0.001
+value = 1.0
+allow_greater = true
+
+[node name="ScaleY" type="SpinBox" parent="Panel/VBox/Tabs/Parts/VBox/TransformGrid"]
+custom_minimum_size = Vector2(96, 32)
+layout_mode = 2
+min_value = 0.05
+max_value = 4.0
+step = 0.001
+value = 1.0
+allow_greater = true
+
+[node name="ScaleZ" type="SpinBox" parent="Panel/VBox/Tabs/Parts/VBox/TransformGrid"]
+custom_minimum_size = Vector2(96, 32)
+layout_mode = 2
+min_value = 0.05
+max_value = 4.0
+step = 0.001
+value = 1.0
+allow_greater = true
+
+[node name="Footer" type="HBoxContainer" parent="Panel/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="ResetButton" type="Button" parent="Panel/VBox/Footer"]
+custom_minimum_size = Vector2(130, 34)
+layout_mode = 2
+text = "Reset All"
+
+[node name="Spacer" type="Control" parent="Panel/VBox/Footer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ExportButton" type="Button" parent="Panel/VBox/Footer"]
+custom_minimum_size = Vector2(230, 34)
+layout_mode = 2
+text = "Export Values to Project Root"
+
+[node name="StatusLabel" type="Label" parent="Panel/VBox"]
+custom_minimum_size = Vector2(0, 32)
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "F10 toggles this panel."
+autowrap_mode = 3

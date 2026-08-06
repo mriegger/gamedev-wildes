@@ -3,22 +3,30 @@ class_name DayNightValues
 
 signal sky_color_changed(sky_color: Color)
 
+const SHADOW_DEPTH_BIAS := 0.03
+
 @export var profile: DayNightProfile
 
 var sun_light: DirectionalLight3D = null
 var fill_light: DirectionalLight3D = null
 var world_env_node: WorldEnvironment = null
 var env: Environment = null
+var _shadow_bias_override: float = -1.0
+var _shadow_normal_bias_override: float = -1.0
+var _shadow_blur_override: float = -1.0
+var _shadow_opacity_override: float = -1.0
+var _default_shadow_cast_distance: float
 
 @export var volumetric_fog_enabled: bool = true:
 	set(v):
 		volumetric_fog_enabled = v
-		_apply_volumetric_fog()
+		_apply_renderer_effects()
 
 func setup(p_clock: GameClock, p_sun: DirectionalLight3D, p_fill: DirectionalLight3D, p_env_node: WorldEnvironment, shadow_cast_distance: float):
 	sun_light = p_sun
 	fill_light = p_fill
 	world_env_node = p_env_node
+	_default_shadow_cast_distance = shadow_cast_distance
 	_duplicate_environment()
 	_apply_initial_light_setup(shadow_cast_distance)
 	p_clock.time_changed.connect(apply)
@@ -26,23 +34,59 @@ func setup(p_clock: GameClock, p_sun: DirectionalLight3D, p_fill: DirectionalLig
 func _duplicate_environment():
 	env = world_env_node.environment.duplicate() as Environment
 	world_env_node.environment = env
-	_apply_volumetric_fog()
+	_apply_renderer_effects()
 	if RenderingServer.get_rendering_device() == null:
 		env.adjustment_saturation = 1.0
 		env.adjustment_contrast = 1.0
 
-func _apply_volumetric_fog():
+func _apply_renderer_effects():
 	if env:
-		env.volumetric_fog_enabled = volumetric_fog_enabled and RenderingServer.get_rendering_device() != null
+		var forward_plus := RenderingServer.get_rendering_device() != null
+		env.volumetric_fog_enabled = volumetric_fog_enabled and forward_plus
+
+func set_shadow_enabled(enabled: bool):
+	sun_light.shadow_enabled = enabled
+
+func set_shadow_opacity(value: float):
+	_shadow_opacity_override = value
+	sun_light.shadow_opacity = value
+
+func set_shadow_bias(value: float):
+	_shadow_bias_override = value
+	sun_light.shadow_bias = value
+
+func set_shadow_normal_bias(value: float):
+	_shadow_normal_bias_override = value
+	sun_light.shadow_normal_bias = value
+
+func set_shadow_blur(value: float):
+	_shadow_blur_override = value
+	sun_light.shadow_blur = value
+
+func set_shadow_max_distance(value: float):
+	sun_light.directional_shadow_max_distance = value
+
+func set_shadow_fade_start(value: float):
+	sun_light.directional_shadow_fade_start = value
+
+func set_shadow_reverse_cull(enabled: bool):
+	sun_light.shadow_reverse_cull_face = enabled
+
+func reset_shadow_values(time_of_day: float):
+	_shadow_bias_override = -1.0
+	_shadow_normal_bias_override = -1.0
+	_shadow_blur_override = -1.0
+	_shadow_opacity_override = -1.0
+	sun_light.shadow_enabled = true
+	sun_light.directional_shadow_max_distance = _default_shadow_cast_distance
+	sun_light.directional_shadow_fade_start = 0.85
+	sun_light.shadow_reverse_cull_face = true
+	apply(time_of_day)
 
 func _apply_initial_light_setup(shadow_cast_distance: float):
 	sun_light.shadow_enabled = true
 	sun_light.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
-	sun_light.directional_shadow_split_1 = 0.15
-	sun_light.directional_shadow_split_2 = 0.35
-	sun_light.directional_shadow_split_3 = 0.70
-	sun_light.directional_shadow_blend_splits = true
-	sun_light.shadow_bias = 0.05
+	sun_light.shadow_bias = SHADOW_DEPTH_BIAS
 	sun_light.shadow_normal_bias = 1.2
 	sun_light.shadow_blur = 1.2
 	sun_light.directional_shadow_max_distance = shadow_cast_distance
@@ -88,10 +132,9 @@ func apply(time_of_day: float):
 	_set_light_direction(sun_light, sun_dir)
 
 	var blur = 1.0 + (1.0 - elev_factor) * 0.9
-	var bias = 0.03 + (1.0 - elev_factor) * 0.09
-	sun_light.shadow_blur = blur
-	sun_light.shadow_bias = bias
-	sun_light.shadow_normal_bias = 1.0 + (1.0 - elev_factor) * 0.6
+	sun_light.shadow_blur = _shadow_blur_override if _shadow_blur_override >= 0.0 else blur
+	sun_light.shadow_bias = _shadow_bias_override if _shadow_bias_override >= 0.0 else SHADOW_DEPTH_BIAS
+	sun_light.shadow_normal_bias = _shadow_normal_bias_override if _shadow_normal_bias_override >= 0.0 else 1.0 + (1.0 - elev_factor) * 0.6
 
 	var fill_pos = Vector3(-cos_az * cos_e * 0.8, sin_e * 0.55, -sin_az * cos_e * 0.8)
 	var fill_dir = -fill_pos.normalized()
@@ -109,7 +152,7 @@ func apply(time_of_day: float):
 
 	sun_light.light_color = state.sun_col
 	sun_light.light_energy = state.sun_energy
-	sun_light.shadow_opacity = state.shadow_opacity
+	sun_light.shadow_opacity = _shadow_opacity_override if _shadow_opacity_override >= 0.0 else state.shadow_opacity
 
 	var fill_col = state.ambient_col.lerp(state.sky, 0.28)
 	fill_light.light_color = fill_col

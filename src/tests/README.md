@@ -1,6 +1,6 @@
 # Tests
 
-Four test families: inventory property fuzz + world determinism golden hash + HUD integration + world streaming soak.
+Six test families: inventory property fuzz + world determinism golden hash + HUD integration + player animation integration + animation tuning integration + world streaming soak.
 
 ## Inventory Fuzz — `src/inventory/inventory_model.gd`
 
@@ -81,13 +81,33 @@ godot --path src --headless --script res://tests/soak_world_streaming.gd
 
 Catches streaming/threading leaks that unit tests never see.
 
+## Player Animation Integration
+
+`player_animation_integration.gd` instantiates the real blocky player visual and manually advances its shared animation state through idle, walk, sprint, turn, jump, fall, land, target tracking, mining, and placement. It checks the single procedural timing source, shaped cadence, detached one-piece limbs, marker-derived alternate leg proportions, a flat-bottomed stance path with rounded recovery, rigid-leg compression and extension, whole-arm counter-swing, body weight transfer and braking overshoot, cuboid squash and stretch, locomotion/action layering, finite boundary values, head limits, jump anticipation, landing recovery, a generous crowd performance budget, and final orphan count.
+
+The runner also advances 100 visual instances for 60 frames and verifies they share mesh/profile resources without changing their node count. The world soak holds real W+Shift input across live frames and verifies sprint speed and the active sprint animation.
+
+```sh
+godot --path src --headless --script res://tests/player_animation_integration.gd
+```
+
+## Animation Tuning Panel Integration
+
+`animation_tuning_panel_integration.gd` instantiates the real player and animation tuning panel, edits a generated animation field and a rigid arm transform through the live controls, switches to sprint preview, exports the complete configuration as full-precision JSON, resets every value, and checks the final orphan count.
+
+```sh
+godot --path src --headless --script res://tests/animation_tuning_panel_integration.gd
+```
+
 ## CI
 
-`.github/workflows/tests.yml` downloads Godot 4.7 Linux headless, imports `src/`, and runs four:
+`.github/workflows/tests.yml` downloads Godot 4.7 Linux headless, imports `src/`, and runs six:
 
 - fuzzer with 20k sequences × 20 ops (≈400k drops) — prints throughput (`~1M ops/s` raw, `~16k ops/s` invariant-checked)
 - golden hash — `GOLDEN PASS` / `GOLDEN FAIL` with expected vs actual
 - HUD integration — `HUD_INTEGRATION PASS orphan=0 previews=0` and grep-fails on `ERROR`/`WARNING`/`FAIL`
+- player animation integration — `PLAYER_ANIMATION PASS orphan=0` plus a 100-instance shared-resource smoke
+- animation tuning integration — `ANIMATION_TUNING PASS orphan=0` with live controls, preview, reset, and JSON export
 - world soak — `SOAK PASS` and grep-fails on `ERROR`/`WARNING`/`FAIL` + bounded chunk/orphan checks
 
 All fail the job on violation.

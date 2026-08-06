@@ -10,15 +10,15 @@ visible = false
 [node name="DebugPanel" type="Panel" parent="."]
 offset_left = 12.0
 offset_top = 12.0
-offset_right = 392.0
-offset_bottom = 222.0
+offset_right = 540.0
+offset_bottom = 560.0
 
 [node name="VBox" type="VBoxContainer" parent="DebugPanel"]
 layout_mode = 0
 offset_left = 14.0
 offset_top = 14.0
-offset_right = 366.0
-offset_bottom = 196.0
+offset_right = 514.0
+offset_bottom = 532.0
 theme_override_constants/separation = 8
 
 [node name="Title" type="Label" parent="DebugPanel/VBox"]
@@ -46,6 +46,144 @@ max_value = 24.0
 step = 0.01
 value = 6.0
 
+[node name="ShadowTitle" type="Label" parent="DebugPanel/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+text = "Live Shadow Tuning"
+
+[node name="ShadowToggles" type="HBoxContainer" parent="DebugPanel/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="ShadowEnabled" type="CheckButton" parent="DebugPanel/VBox/ShadowToggles"]
+layout_mode = 2
+button_pressed = true
+text = "Enabled"
+
+[node name="ReverseCull" type="CheckButton" parent="DebugPanel/VBox/ShadowToggles"]
+layout_mode = 2
+button_pressed = true
+text = "Reverse Cull"
+
+[node name="ResetShadows" type="Button" parent="DebugPanel/VBox/ShadowToggles"]
+layout_mode = 2
+text = "Reset Shadows"
+
+[node name="ShadowGrid" type="GridContainer" parent="DebugPanel/VBox"]
+layout_mode = 2
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 6
+columns = 3
+
+[node name="OpacityLabel" type="Label" parent="DebugPanel/VBox/ShadowGrid"]
+custom_minimum_size = Vector2(110, 0)
+layout_mode = 2
+text = "Opacity"
+
+[node name="OpacitySlider" type="HSlider" parent="DebugPanel/VBox/ShadowGrid"]
+custom_minimum_size = Vector2(300, 22)
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 1.0
+step = 0.01
+value = 0.68
+
+[node name="OpacityValue" type="Label" parent="DebugPanel/VBox/ShadowGrid"]
+custom_minimum_size = Vector2(50, 0)
+layout_mode = 2
+text = "0.68"
+
+[node name="BiasLabel" type="Label" parent="DebugPanel/VBox/ShadowGrid"]
+custom_minimum_size = Vector2(110, 0)
+layout_mode = 2
+text = "Depth Bias"
+
+[node name="BiasSlider" type="HSlider" parent="DebugPanel/VBox/ShadowGrid"]
+custom_minimum_size = Vector2(300, 22)
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 0.25
+step = 0.001
+value = 0.03
+
+[node name="BiasValue" type="Label" parent="DebugPanel/VBox/ShadowGrid"]
+custom_minimum_size = Vector2(50, 0)
+layout_mode = 2
+text = "0.030"
+
+[node name="NormalBiasLabel" type="Label" parent="DebugPanel/VBox/ShadowGrid"]
+custom_minimum_size = Vector2(110, 0)
+layout_mode = 2
+text = "Normal Bias"
+
+[node name="NormalBiasSlider" type="HSlider" parent="DebugPanel/VBox/ShadowGrid"]
+custom_minimum_size = Vector2(300, 22)
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 2.0
+step = 0.01
+value = 1.2
+
+[node name="NormalBiasValue" type="Label" parent="DebugPanel/VBox/ShadowGrid"]
+custom_minimum_size = Vector2(50, 0)
+layout_mode = 2
+text = "1.20"
+
+[node name="BlurLabel" type="Label" parent="DebugPanel/VBox/ShadowGrid"]
+custom_minimum_size = Vector2(110, 0)
+layout_mode = 2
+text = "Blur"
+
+[node name="BlurSlider" type="HSlider" parent="DebugPanel/VBox/ShadowGrid"]
+custom_minimum_size = Vector2(300, 22)
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 3.0
+step = 0.05
+value = 1.2
+
+[node name="BlurValue" type="Label" parent="DebugPanel/VBox/ShadowGrid"]
+custom_minimum_size = Vector2(50, 0)
+layout_mode = 2
+text = "1.20"
+
+[node name="DistanceLabel" type="Label" parent="DebugPanel/VBox/ShadowGrid"]
+custom_minimum_size = Vector2(110, 0)
+layout_mode = 2
+text = "Cast Distance"
+
+[node name="DistanceSlider" type="HSlider" parent="DebugPanel/VBox/ShadowGrid"]
+custom_minimum_size = Vector2(300, 22)
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 32.0
+max_value = 256.0
+step = 1.0
+value = 128.0
+
+[node name="DistanceValue" type="Label" parent="DebugPanel/VBox/ShadowGrid"]
+custom_minimum_size = Vector2(50, 0)
+layout_mode = 2
+text = "128"
+
+[node name="FadeLabel" type="Label" parent="DebugPanel/VBox/ShadowGrid"]
+custom_minimum_size = Vector2(110, 0)
+layout_mode = 2
+text = "Fade Start"
+
+[node name="FadeSlider" type="HSlider" parent="DebugPanel/VBox/ShadowGrid"]
+custom_minimum_size = Vector2(300, 22)
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 1.0
+step = 0.01
+value = 0.85
+
+[node name="FadeValue" type="Label" parent="DebugPanel/VBox/ShadowGrid"]
+custom_minimum_size = Vector2(50, 0)
+layout_mode = 2
+text = "0.85"
+
 [node name="Controls" type="HBoxContainer" parent="DebugPanel/VBox"]
 layout_mode = 2
 theme_override_constants/separation = 8
@@ -69,5 +207,5 @@ text = "Midnight"
 [node name="Help" type="Label" parent="DebugPanel/VBox"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 10
-text = "Cycle: 20 min (10 day +10 night). Slider controls time."
+text = "Runtime-only shadow overrides. Reset returns to the time-driven defaults."
 autowrap_mode = 3

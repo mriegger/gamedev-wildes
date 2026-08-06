@@ -1,4 +1,4 @@
-[gd_scene load_steps=11 format=3 uid="uid://b22g4me0x1f3h"]
+[gd_scene load_steps=12 format=3 uid="uid://b22g4me0x1f3h"]
 
 [ext_resource type="Script" path="res://game/game.gd" id="1_game"]
 [ext_resource type="PackedScene" path="res://world/world.tscn" id="2_world"]
@@ -10,10 +10,12 @@
 [ext_resource type="PackedScene" path="res://ui/screens/pause/pause_menu.tscn" id="8_pause"]
 [ext_resource type="Resource" path="res://blocks/block_catalog.tres" id="9_block_catalog"]
 [ext_resource type="Resource" path="res://items/item_catalog.tres" id="10_item_catalog"]
+[ext_resource type="PackedScene" path="res://player/debug/animation_tuning_panel.tscn" id="11_tuning"]
 
 [node name="Game" type="Node3D"]
 script = ExtResource("1_game")
 pause_menu_scene = ExtResource("8_pause")
+animation_tuning_panel_scene = ExtResource("11_tuning")
 block_catalog = ExtResource("9_block_catalog")
 item_catalog = ExtResource("10_item_catalog")
 

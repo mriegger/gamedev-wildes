@@ -72,6 +72,56 @@ jobs:
             exit 1
           fi
 
+  player-animation-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run player animation integration
+        run: |
+          set -uo pipefail
+          timeout 30 godot --headless --path src --script res://tests/player_animation_integration.gd 2>&1 | tee /tmp/player_animation.log; ANIMATION_EXIT=${PIPESTATUS[0]}
+          if grep -q "FAIL:" /tmp/player_animation.log; then
+            echo "player animation integration FAILED"
+            exit 1
+          fi
+          if grep -q "^\[player_animation\] ERROR" /tmp/player_animation.log; then
+            echo "ERROR in player animation integration"
+            exit 1
+          fi
+          if grep -q "^\[player_animation\] WARNING" /tmp/player_animation.log; then
+            echo "WARNING in player animation integration"
+            exit 1
+          fi
+          if [ "$ANIMATION_EXIT" -ne 0 ] || ! grep -q "PLAYER_ANIMATION PASS" /tmp/player_animation.log; then
+            echo "player animation integration did not PASS"
+            exit 1
+          fi
+
+  animation-tuning-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run animation tuning panel integration
+        run: |
+          set -uo pipefail
+          timeout 30 godot --headless --path src --script res://tests/animation_tuning_panel_integration.gd 2>&1 | tee /tmp/animation_tuning.log; TUNING_EXIT=${PIPESTATUS[0]}
+          if grep -q "FAIL:" /tmp/animation_tuning.log; then
+            echo "animation tuning integration FAILED"
+            exit 1
+          fi
+          if [ "$TUNING_EXIT" -ne 0 ] || ! grep -q "ANIMATION_TUNING PASS" /tmp/animation_tuning.log; then
+            echo "animation tuning integration did not PASS"
+            exit 1
+          fi
+
   soak-world-streaming:
     runs-on: ubuntu-latest
     timeout-minutes: 10

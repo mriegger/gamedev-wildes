@@ -1,23 +1,31 @@
 extends Node3D
 class_name PlayerMotor
 
-@export var move_speed: float = 5.5
-@export var jump_velocity: float = 9.0
-@export var gravity: float = 20.0
-@export var player_width: float = 0.6
-@export var player_height: float = 1.8
+@export_range(0.01, 30.0, 0.01) var move_speed: float = 5.5
+@export_range(0.01, 30.0, 0.01) var sprint_speed: float = 8.0
+@export_range(0.0, 30.0, 0.01) var jump_velocity: float = 9.0
+@export_range(0.01, 1.0, 0.001) var jump_windup_seconds: float = 0.11
+@export_range(0.0, 100.0, 0.01) var gravity: float = 30.0
+@export_range(0.1, 5.0, 0.01) var player_width: float = 0.6
+@export_range(0.1, 10.0, 0.01) var player_height: float = 1.8
 
 @onready var interactor: PlayerInteractor = $Interactor as PlayerInteractor
 @onready var targeting_view: TargetingView = $TargetingView as TargetingView
+@onready var animation_driver: PlayerAnimationDriver = $AnimationDriver as PlayerAnimationDriver
+@onready var model_root: Node3D = $ModelRoot as Node3D
 
 var voxel_world: VoxelWorld = null
 var camera_rig: CameraRig = null
 var _input_buffer: InputBuffer = null
 
 var on_ground: bool = false
+var is_sprinting: bool = false
 var ground_y: float = VoxelWorld.NO_SURFACE_Y
 var velocity: Vector3 = Vector3.ZERO
-var model_root: Node3D
+var jump_anticipation: float = 0.0
+
+var _jump_windup_remaining: float = 0.0
+var _jump_ready: bool = false
 
 func setup(p_world: WorldController, p_camera_rig: CameraRig, p_inventory: InventoryModel, p_input_buffer: InputBuffer):
 	voxel_world = p_world.voxel_model
@@ -25,66 +33,7 @@ func setup(p_world: WorldController, p_camera_rig: CameraRig, p_inventory: Inven
 	_input_buffer = p_input_buffer
 	interactor.setup(voxel_world, p_camera_rig.camera, self, p_inventory, p_input_buffer)
 	targeting_view.setup(p_world, voxel_world, self, interactor)
-
-func _ready():
-	_ensure_model()
-
-func _ensure_model():
-	if model_root == null:
-		var existing = get_node_or_null("ModelRoot") as Node3D
-		if existing != null:
-			model_root = existing
-		else:
-			model_root = Node3D.new()
-			model_root.name = "ModelRoot"
-			add_child(model_root)
-	_create_blocky_model()
-
-func _create_blocky_model():
-	if model_root.get_child_count() > 0:
-		return
-	var torso = MeshInstance3D.new()
-	var box = BoxMesh.new()
-	box.size = Vector3(0.6, 0.7, 0.35)
-	torso.mesh = box
-	torso.position = Vector3(0, 0.95, 0)
-	torso.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
-	var mat = StandardMaterial3D.new()
-	mat.albedo_color = Color(0.32, 0.49, 0.78)
-	torso.material_override = mat
-	model_root.add_child(torso)
-	var head = MeshInstance3D.new()
-	var head_box = BoxMesh.new()
-	head_box.size = Vector3(0.5, 0.5, 0.5)
-	head.mesh = head_box
-	head.position = Vector3(0, 1.55, 0)
-	head.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
-	var hmat = StandardMaterial3D.new()
-	hmat.albedo_color = Color(0.92, 0.80, 0.62)
-	head.material_override = hmat
-	model_root.add_child(head)
-	for side in [-1, 1]:
-		var leg = MeshInstance3D.new()
-		var leg_box = BoxMesh.new()
-		leg_box.size = Vector3(0.22, 0.6, 0.24)
-		leg.mesh = leg_box
-		leg.position = Vector3(side * 0.15, 0.3, 0)
-		leg.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
-		var lmat = StandardMaterial3D.new()
-		lmat.albedo_color = Color(0.28, 0.28, 0.32)
-		leg.material_override = lmat
-		model_root.add_child(leg)
-	for side in [-1, 1]:
-		var arm = MeshInstance3D.new()
-		var arm_box = BoxMesh.new()
-		arm_box.size = Vector3(0.2, 0.55, 0.2)
-		arm.mesh = arm_box
-		arm.position = Vector3(side * 0.4, 0.95, 0)
-		arm.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
-		var amat = StandardMaterial3D.new()
-		amat.albedo_color = Color(0.92, 0.80, 0.62)
-		arm.material_override = amat
-		model_root.add_child(arm)
+	animation_driver.setup(self, interactor)
 
 func _physics_process(delta):
 	if voxel_world == null:
@@ -94,9 +43,15 @@ func _physics_process(delta):
 func _handle_movement(delta):
 	if not on_ground:
 		velocity.y -= gravity * delta
+		_jump_windup_remaining = 0.0
+		_jump_ready = false
+		jump_anticipation = 0.0
+	var launch_ready = _jump_ready
+	_jump_ready = false
 
 	var input_dir = _input_buffer.move_dir
 	var move_vec = Vector3.ZERO
+	is_sprinting = _input_buffer.sprint_pressed and input_dir != Vector2.ZERO
 	if input_dir != Vector2.ZERO:
 		var camera_basis = camera_rig.get_camera_basis()
 		var cam_forward = -camera_basis.z
@@ -112,8 +67,8 @@ func _handle_movement(delta):
 		else:
 			cam_right = cam_right.normalized()
 		move_vec = (cam_right * input_dir.x + cam_forward * input_dir.y)
-		move_vec = move_vec.normalized() * move_speed
-		if move_vec.length() > 0.1 and model_root:
+		move_vec = move_vec.normalized() * (sprint_speed if is_sprinting else move_speed)
+		if move_vec.length() > 0.1:
 			var yaw = atan2(move_vec.x, move_vec.z)
 			model_root.rotation.y = lerp_angle(model_root.rotation.y, yaw, delta * 10.0)
 
@@ -121,10 +76,17 @@ func _handle_movement(delta):
 	velocity.z = move_vec.z
 
 	var ib = _input_buffer
-	if ib.consume_jump():
-		if on_ground:
-			velocity.y = jump_velocity
-			on_ground = false
+	if ib.consume_jump() and on_ground and _jump_windup_remaining <= 0.0 and not launch_ready:
+		_jump_windup_remaining = jump_windup_seconds
+	if _jump_windup_remaining > 0.0:
+		jump_anticipation = 1.0 - _jump_windup_remaining / jump_windup_seconds
+		_jump_windup_remaining -= delta
+		if _jump_windup_remaining <= 0.0:
+			_jump_windup_remaining = 0.0
+			jump_anticipation = 1.0
+			_jump_ready = true
+	elif not launch_ready:
+		jump_anticipation = 0.0
 
 	_swept_collision(velocity * delta)
 
@@ -134,12 +96,20 @@ func _handle_movement(delta):
 		velocity.y = 0.0
 	else:
 		on_ground = false
+	if launch_ready:
+		if on_ground:
+			velocity.y = jump_velocity
+			on_ground = false
+		jump_anticipation = 0.0
 
 	if global_position.y < -10:
 		global_position = voxel_world.get_spawn_position()
 		ground_y = _get_ground_y(global_position)
 		velocity = Vector3.ZERO
 		on_ground = false
+		_jump_windup_remaining = 0.0
+		_jump_ready = false
+		jump_anticipation = 0.0
 
 func _swept_collision(motion: Vector3):
 	var pos = global_position

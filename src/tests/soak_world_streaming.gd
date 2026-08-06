@@ -19,9 +19,15 @@ var _session_ready: bool = false
 var _streaming_race_started: bool = false
 var _streaming_race_verified: bool = false
 var _texture_pipeline_verified: bool = false
+var _lighting_pipeline_verified: bool = false
 var _item_round_trip_verified: bool = false
 var _streaming_race_started_msec: int = 0
 var _movement_frames: int = 0
+var _sprint_input_start_msec: int = 0
+var _sprint_camera_size: float = 0.0
+var _jump_input_start_msec: int = 0
+var _jump_start_y: float = 0.0
+var _panel_toggle_msec: int = 0
 var _streaming_race_position: Vector3
 var _edited_chunk: Vector2i
 var _forced_evictions: Array[Vector2i] = []
@@ -71,6 +77,10 @@ func _process(_delta: float) -> bool:
 				return false
 			if not _verify_texture_pipeline():
 				return false
+			if not _verify_side_face_ao():
+				return false
+			if not _verify_lighting_pipeline():
+				return false
 			var spawn = _world.voxel_model.get_spawn_position()
 			_player.global_position = spawn + Vector3(0, 2, 0)
 			print("[soak] spawn %s player %s" % [str(spawn), str(_player.global_position)])
@@ -80,6 +90,76 @@ func _process(_delta: float) -> bool:
 			return false
 	elif _phase == 3:
 		if _frame < 180:
+			return false
+		if _game.animation_tuning_panel != null:
+			_fail("animation tuning panel was initialized before F10 requested it")
+			return false
+		_push_key(KEY_F10, true)
+		_panel_toggle_msec = Time.get_ticks_msec()
+		_phase = 30
+	elif _phase == 30:
+		if _game.animation_tuning_panel == null or not _game.animation_tuning_panel.is_open():
+			if Time.get_ticks_msec() - _panel_toggle_msec >= 1000:
+				_fail("F10 did not open the animation tuning panel")
+			return false
+		if (_game.animation_tuning_panel.get_node("Panel") as Panel).size.x > 420.0:
+			_fail("animation tuning panel obscures too much of the character view")
+			return false
+		_push_key(KEY_F10, false)
+		_panel_toggle_msec = Time.get_ticks_msec()
+		_phase = 300
+	elif _phase == 300:
+		if Time.get_ticks_msec() - _panel_toggle_msec < 50:
+			return false
+		_push_key(KEY_F10, true)
+		_panel_toggle_msec = Time.get_ticks_msec()
+		_phase = 301
+	elif _phase == 301:
+		if Time.get_ticks_msec() - _panel_toggle_msec < 50:
+			return false
+		if _game.animation_tuning_panel.is_open():
+			if Time.get_ticks_msec() - _panel_toggle_msec >= 1000:
+				_fail("F10 did not close the animation tuning panel")
+			return false
+		_push_key(KEY_F10, false)
+		_push_key(KEY_W, true)
+		_push_key(KEY_SHIFT, true)
+		_sprint_camera_size = _game.camera_rig.camera.size
+		_sprint_input_start_msec = Time.get_ticks_msec()
+		_phase = 31
+	elif _phase == 31:
+		var sprint_state = _player.animation_driver.animator.get_current_state()
+		var planar_speed = Vector2(_player.velocity.x, _player.velocity.z).length()
+		if not _player.is_sprinting or not is_equal_approx(planar_speed, _player.sprint_speed) or sprint_state != BlockyHumanoidAnimator.SPRINT:
+			if Time.get_ticks_msec() - _sprint_input_start_msec >= 1000:
+				_verify_sprint_input()
+			return false
+		if not _verify_sprint_input():
+			return false
+		_push_key(KEY_SPACE, true)
+		_jump_input_start_msec = Time.get_ticks_msec()
+		_jump_start_y = _player.global_position.y
+		_phase = 32
+	elif _phase == 32:
+		if _player.velocity.y > 0.0:
+			_fail("jump launched before its anticipation pose")
+			return false
+		if _player.jump_anticipation <= 0.0 or not _player.on_ground:
+			if Time.get_ticks_msec() - _jump_input_start_msec >= 1000:
+				_fail("jump anticipation pose was not observed")
+			return false
+		_push_key(KEY_SPACE, false)
+		_phase = 33
+	elif _phase == 33:
+		if _player.velocity.y <= 0.0:
+			if Time.get_ticks_msec() - _jump_input_start_msec >= 1500:
+				_fail("jump did not launch after its anticipation pose velocity_y=%.3f start_y=%.3f current_y=%.3f anticipation=%.3f grounded=%s" % [_player.velocity.y, _jump_start_y, _player.global_position.y, _player.jump_anticipation, str(_player.on_ground)])
+			return false
+		if _player.global_position.y <= _jump_start_y:
+			return false
+		if _player.animation_driver.animator.get_current_state() != BlockyHumanoidAnimator.JUMP:
+			if Time.get_ticks_msec() - _jump_input_start_msec >= 1500:
+				_fail("anticipated jump did not enter the jump animation state=%s velocity_y=%.3f grounded=%s anticipation=%.3f" % [str(_player.animation_driver.animator.get_current_state()), _player.velocity.y, str(_player.on_ground), _player.jump_anticipation])
 			return false
 		if not _verify_item_block_round_trip():
 			return false
@@ -190,6 +270,165 @@ func _verify_texture_pipeline() -> bool:
 	_texture_pipeline_verified = true
 	return true
 
+func _verify_side_face_ao() -> bool:
+	for instance in _world.chunk_renderer._terrain_instances.values():
+		var terrain_instance := instance as MeshInstance3D
+		var mesh := terrain_instance.mesh as ArrayMesh
+		if mesh == null or mesh.get_surface_count() == 0:
+			continue
+		var arrays := mesh.surface_get_arrays(0)
+		var normals := arrays[Mesh.ARRAY_NORMAL] as PackedVector3Array
+		var colors := arrays[Mesh.ARRAY_COLOR] as PackedColorArray
+		for index in range(0, normals.size(), 4):
+			if index + 3 >= normals.size() or abs(normals[index].y) > 0.5:
+				continue
+			var first := colors[index].r
+			if not is_equal_approx(colors[index + 1].r, first) or not is_equal_approx(colors[index + 2].r, first) or not is_equal_approx(colors[index + 3].r, first):
+				return true
+	_fail("no side-face ambient occlusion found")
+	return false
+
+func _verify_lighting_pipeline() -> bool:
+	if int(ProjectSettings.get_setting("rendering/lights_and_shadows/directional_shadow/soft_shadow_filter_quality")) < 2:
+		_fail("directional shadow filtering quality is too low")
+		return false
+	if bool(ProjectSettings.get_setting("rendering/lights_and_shadows/directional_shadow/16_bits")):
+		_fail("directional shadows are using low-precision depth")
+		return false
+	if not bool(ProjectSettings.get_setting("rendering/anti_aliasing/quality/use_taa")):
+		_fail("temporal antialiasing is disabled")
+		return false
+	var game_environment := _game.game_environment
+	var world_environment := game_environment.get_node("WorldEnvironment") as WorldEnvironment
+	var environment := world_environment.environment
+	if environment.tonemap_mode != Environment.TONE_MAPPER_ACES:
+		_fail("lighting pipeline is not using ACES tonemapping")
+		return false
+	if environment.adjustment_contrast > 1.1 or environment.adjustment_saturation > 1.1:
+		_fail("lighting color grading is too aggressive")
+		return false
+	if environment.ssao_enabled:
+		_fail("dynamic SSAO should be replaced by baked terrain AO")
+		return false
+	var sun := game_environment.get_node("Sun") as DirectionalLight3D
+	var values := game_environment.get_node("DayNightValues") as DayNightValues
+	var clock := game_environment.get_node("GameClock") as GameClock
+	for hour in [0.0, 6.0, 12.0, 18.0]:
+		values.apply(hour)
+		if not is_equal_approx(sun.shadow_bias, 0.03):
+			_fail("sun shadow depth bias changes with time")
+			return false
+	values.apply(clock.time_of_day)
+	if sun.directional_shadow_mode != DirectionalLight3D.SHADOW_ORTHOGONAL:
+		_fail("sun is not using stable orthogonal shadows")
+		return false
+	if sun.directional_shadow_max_distance > 128.01:
+		_fail("sun shadow coverage is too broad for stable texel density")
+		return false
+	if sun.shadow_blur < 0.99:
+		_fail("sun shadow filtering is too sharp")
+		return false
+	if not is_equal_approx(sun.shadow_bias, 0.03):
+		_fail("sun shadow depth bias is not fixed at 0.03")
+		return false
+	if sun.shadow_normal_bias < 0.99 or sun.shadow_normal_bias > 1.61:
+		_fail("sun shadow normal bias differs from the acne-free range")
+		return false
+	if not sun.shadow_reverse_cull_face:
+		_fail("sun shadows are not using the acne-free reverse-face path")
+		return false
+	if not _world.terrain_material.shader.code.contains("cull_disabled"):
+		_fail("terrain shadow casting differs from the acne-free baseline")
+		return false
+	var debug_panel := game_environment.get_node("DebugClockPanel") as DebugClockPanel
+	var original_time := clock.time_of_day
+	var debug_panel_was_visible := debug_panel.visible
+	clock.set_time_of_day(12.345)
+	debug_panel.visible = true
+	debug_panel._update_ui()
+	if not is_equal_approx(clock.time_of_day, 12.345):
+		_fail("debug time display fed a rounded slider value back into the clock")
+		return false
+	debug_panel.visible = debug_panel_was_visible
+	clock.set_time_of_day(original_time)
+	var original_opacity := sun.shadow_opacity
+	var original_bias := sun.shadow_bias
+	var original_normal_bias := sun.shadow_normal_bias
+	var original_blur := sun.shadow_blur
+	var original_distance := sun.directional_shadow_max_distance
+	var original_fade := sun.directional_shadow_fade_start
+	debug_panel.opacity_slider.value = 0.42
+	debug_panel.bias_slider.value = 0.077
+	debug_panel.normal_bias_slider.value = 0.33
+	debug_panel.blur_slider.value = 1.5
+	debug_panel.distance_slider.value = 96.0
+	debug_panel.fade_slider.value = 0.70
+	debug_panel.reverse_cull.button_pressed = false
+	debug_panel.shadow_enabled.button_pressed = false
+	if not is_equal_approx(sun.shadow_opacity, 0.42) or not is_equal_approx(sun.shadow_bias, 0.077) or not is_equal_approx(sun.shadow_normal_bias, 0.33):
+		_fail("live shadow bias controls are not applied")
+		return false
+	if not is_equal_approx(sun.shadow_blur, 1.5) or not is_equal_approx(sun.directional_shadow_max_distance, 96.0) or not is_equal_approx(sun.directional_shadow_fade_start, 0.70):
+		_fail("live shadow coverage controls are not applied")
+		return false
+	if sun.shadow_reverse_cull_face or sun.shadow_enabled:
+		_fail("live shadow toggle controls are not applied")
+		return false
+	debug_panel.reset_shadows.pressed.emit()
+	if not is_equal_approx(sun.shadow_opacity, original_opacity) or not is_equal_approx(sun.shadow_bias, original_bias) or not is_equal_approx(sun.shadow_normal_bias, original_normal_bias):
+		_fail("shadow reset did not restore profile values")
+		return false
+	if not is_equal_approx(sun.shadow_blur, original_blur) or not is_equal_approx(sun.directional_shadow_max_distance, original_distance) or not is_equal_approx(sun.directional_shadow_fade_start, original_fade):
+		_fail("shadow reset did not restore coverage values")
+		return false
+	if not sun.shadow_reverse_cull_face or not sun.shadow_enabled:
+		_fail("shadow reset did not restore toggles")
+		return false
+	var shadow_center := _world.chunk_manager._last_player_chunk
+	var shadow_distance := _world.config.shadow_render_distance
+	var shadow_casters := 0
+	for coord in _world.chunk_renderer._terrain_instances:
+		var instance := _world.chunk_renderer._terrain_instances[coord] as MeshInstance3D
+		if instance.mesh == null:
+			continue
+		var offset := (coord as Vector2i) - shadow_center
+		var should_cast := maxi(abs(offset.x), abs(offset.y)) <= shadow_distance
+		var casts := instance.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+		if casts != should_cast:
+			_fail("terrain chunk shadow radius mismatch")
+			return false
+		if casts:
+			shadow_casters += 1
+	var shadow_limit := (shadow_distance * 2 + 1) * (shadow_distance * 2 + 1)
+	if shadow_casters > shadow_limit:
+		_fail("too many terrain chunks cast dynamic shadows")
+		return false
+	for hour in [8.0, 12.0, 17.0]:
+		var day_state := values.profile.get_interpolated(hour)
+		if not is_equal_approx(day_state.sun_energy, 0.70):
+			_fail("daytime sun energy mismatch")
+			return false
+	var noon := values.profile.get_interpolated(12.0)
+	var noon_ambient := noon.ambient_energy
+	var noon_sun := noon.sun_energy
+	if not is_equal_approx(noon_ambient, 0.30) or not is_equal_approx(noon_sun, 0.70):
+		_fail("noon lighting energy mismatch")
+		return false
+	var midnight := values.profile.get_interpolated(0.0)
+	if noon_sun <= noon_ambient * 2.0:
+		_fail("day lighting lacks directional contrast")
+		return false
+	if midnight.ambient_energy < 0.17 or midnight.sun_energy < 0.28:
+		_fail("night lighting is below the visibility floor")
+		return false
+	var expected_ao: Array[float] = [1.0, 0.90, 0.78, 0.62]
+	for index in range(expected_ao.size()):
+		if not is_equal_approx(_world.chunk_mesher.ao_table[index], expected_ao[index]):
+			_fail("terrain AO curve mismatch")
+			return false
+	_lighting_pipeline_verified = true
+	return true
+
 func _verify_item_block_round_trip() -> bool:
 	var inventory := _game.inventory_model
 	var grass_item := inventory.item_catalog.get_item_for_block(BlockId.Type.GRASS)
@@ -231,6 +470,9 @@ func _verify_item_block_round_trip() -> bool:
 	if voxel_world.get_block_id_at(placed_pos) != BlockId.Type.GRASS:
 		_fail("selected item did not place grass block")
 		return false
+	if not _player.animation_driver.animator._placing:
+		_fail("successful placement did not trigger player animation")
+		return false
 	if int(inventory.get_slot(0)["count"]) != before_count - 1:
 		_fail("placing block did not consume item")
 		return false
@@ -243,6 +485,33 @@ func _verify_item_block_round_trip() -> bool:
 		return false
 	_item_round_trip_verified = true
 	return true
+
+func _verify_sprint_input() -> bool:
+	var planar_speed = Vector2(_player.velocity.x, _player.velocity.z).length()
+	var sprint_state = _player.animation_driver.animator.get_current_state()
+	var sprint_active = _player.is_sprinting
+	_push_key(KEY_SHIFT, false)
+	_push_key(KEY_W, false)
+	if not sprint_active:
+		_fail("shift movement input did not activate sprinting")
+		return false
+	if not is_equal_approx(planar_speed, _player.sprint_speed):
+		_fail("sprint speed mismatch %.3f expected %.3f" % [planar_speed, _player.sprint_speed])
+		return false
+	if sprint_state != BlockyHumanoidAnimator.SPRINT:
+		_fail("shift movement input did not enter sprint animation")
+		return false
+	if not is_equal_approx(_game.camera_rig.camera.size, _sprint_camera_size):
+		_fail("shift sprint input changed camera zoom")
+		return false
+	return true
+
+func _push_key(keycode: Key, pressed: bool):
+	var event = InputEventKey.new()
+	event.physical_keycode = keycode
+	event.pressed = pressed
+	Input.parse_input_event(event)
+	root.push_input(event, true)
 
 func _start_streaming_race_sequence() -> void:
 	_streaming_race_started = true
@@ -445,8 +714,8 @@ func _check_final() -> void:
 	if not _streaming_race_verified:
 		_fail("streaming race sequence was not verified")
 		return
-	if not _texture_pipeline_verified or not _item_round_trip_verified:
-		_fail("texture or item round-trip verification missing")
+	if not _texture_pipeline_verified or not _lighting_pipeline_verified or not _item_round_trip_verified:
+		_fail("texture, lighting, or item round-trip verification missing")
 		return
 	if _world:
 		_world.shutdown()

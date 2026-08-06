@@ -13,6 +13,7 @@ world time.
 | Input | Action |
 | --- | --- |
 | `WASD` / arrows | Move (camera-relative) |
+| `Shift` + move | Sprint |
 | `Space` | Hop — needed to get up any ledge |
 | `Q` / `E` | Rotate the camera 45° |
 | Mouse wheel / pinch | Zoom |
@@ -20,10 +21,16 @@ world time.
 | Right-click | Place the selected block |
 | `1`–`9` | Select hotbar slot |
 | `P` | Toggle backpack |
+| `F10` | Toggle player animation tuner |
 | `Esc` | Pause |
 
 Reach is 6 blocks. The block under the cursor is outlined, and a ghost block previews where a
 placement would land; placements that would overlap you are rejected.
+
+The animation tuner is a compact right-side debug-build panel. Its Movement, Animation, and
+Parts tabs update the live player immediately, while preview modes let you hold idle, walk,
+sprint, jump, or fall behavior. `Export Values to Project Root` writes the complete current
+configuration to `player_animation_values.json` beside the `src/` directory.
 
 ## Features
 
@@ -108,3 +115,5 @@ Godot itself is MIT licensed.
 | #5 | Behavior-preserving codebase optimization — dense resource catalog, lower-allocation world/mesh/UI paths, lifecycle and save cleanup | `refactor/aggressive-codebase-optimization` |
 | #6 | Feature-owned Godot structure, app shell, typed catalogs, decomposed chunk pipeline, and lifecycle/save hardening | `refactor/godot-feature-structure` |
 | #7 | Texture-array terrain rendering, data-driven item catalog, textured inventory UI, and item-based saves | `feat/texture-array-item-catalog` |
+| #8 | Expressive procedural player animation, Shift sprinting, rigid-limb gait, squash/stretch, and live animation tuner | `feat/expressive-player-animation` |
+| #9 | Full-face voxel ambient occlusion, polished day/night lighting, bounded terrain shadows, and live shadow tuning | `feat/ao-lighting-polish` |

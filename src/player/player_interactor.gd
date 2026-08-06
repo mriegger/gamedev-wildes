@@ -1,6 +1,8 @@
 extends Node3D
 class_name PlayerInteractor
 
+signal block_placed
+
 @export var reach: float = 6.0
 @export var mine_hold_time: float = 0.35
 @export var place_cooldown: float = 0.18
@@ -287,6 +289,7 @@ func _commit_place(pos: Vector3i):
 	if edit.is_success():
 		inventory_model.consume_selected()
 		_handle_raycast()
+		block_placed.emit()
 
 func get_selected_block_id():
 	if inventory_model == null:

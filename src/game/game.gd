@@ -6,6 +6,7 @@ signal session_ready
 signal main_menu_requested
 
 @export var pause_menu_scene: PackedScene
+@export var animation_tuning_panel_scene: PackedScene
 @export var block_catalog: BlockCatalog
 @export var item_catalog: ItemCatalog
 
@@ -25,6 +26,7 @@ var _slot_id: int = -1
 var _save_data: Dictionary = {}
 var _world_state: WorldState
 var _pause_menu: PauseMenu
+var animation_tuning_panel: AnimationTuningPanel = null
 var _save_status_timer: float = 0.0
 var _session_active: bool = false
 
@@ -101,9 +103,20 @@ func _process(delta):
 		_save_canvas.visible = false
 
 func _physics_process(_delta):
+	if OS.is_debug_build() and Input.is_action_just_pressed("toggle_animation_tuner"):
+		_toggle_animation_tuning_panel()
 	input_buffer.poll()
+	if animation_tuning_panel != null and animation_tuning_panel.is_open():
+		input_buffer.clear_gameplay()
 
 func _unhandled_input(event):
+	if event is InputEventKey and event.pressed and not event.echo:
+		var key_event = event as InputEventKey
+		if animation_tuning_panel != null and animation_tuning_panel.is_open():
+			if key_event.keycode == KEY_ESCAPE or key_event.physical_keycode == KEY_ESCAPE:
+				animation_tuning_panel.hide_panel()
+			get_viewport().set_input_as_handled()
+			return
 	if event.is_action_pressed("toggle_backpack"):
 		hud.toggle_side_panel()
 		get_viewport().set_input_as_handled()
@@ -116,7 +129,17 @@ func _unhandled_input(event):
 		_handle_cancel()
 		get_viewport().set_input_as_handled()
 
+func _toggle_animation_tuning_panel():
+	if animation_tuning_panel == null:
+		animation_tuning_panel = animation_tuning_panel_scene.instantiate() as AnimationTuningPanel
+		add_child(animation_tuning_panel)
+		animation_tuning_panel.setup(player)
+	animation_tuning_panel.toggle_panel()
+
 func _handle_cancel():
+	if animation_tuning_panel != null and animation_tuning_panel.is_open():
+		animation_tuning_panel.hide_panel()
+		return
 	if hud.is_side_panel_open():
 		hud.close_side_panel()
 		return

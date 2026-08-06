@@ -10,17 +10,31 @@ var _mesher: ChunkMesher
 var _terrain_material: Material
 var _water_material: Material
 var _voxel_model: VoxelWorld
+var _shadow_center := Vector2i.ZERO
+var _shadow_render_distance: int
 
 var _mesh_cache: Dictionary = {}
 var _mesh_cache_order: Array[Vector2i] = []
 var _terrain_pool: Array[MeshInstance3D] = []
 var _water_pool: Array[MeshInstance3D] = []
 
-func setup(p_mesher: ChunkMesher, p_terrain_material: Material, p_water_material: Material, p_voxel_model: VoxelWorld):
+func setup(p_mesher: ChunkMesher, p_terrain_material: Material, p_water_material: Material, p_voxel_model: VoxelWorld, p_shadow_render_distance: int):
 	_mesher = p_mesher
 	_terrain_material = p_terrain_material
 	_water_material = p_water_material
 	_voxel_model = p_voxel_model
+	_shadow_render_distance = p_shadow_render_distance
+
+func set_shadow_center(center: Vector2i):
+	_shadow_center = center
+	for coord in _terrain_instances:
+		var instance := _terrain_instances[coord] as MeshInstance3D
+		if instance != null and is_instance_valid(instance):
+			instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if _should_cast_shadow(coord) else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+func _should_cast_shadow(coord: Vector2i) -> bool:
+	var offset := coord - _shadow_center
+	return maxi(abs(offset.x), abs(offset.y)) <= _shadow_render_distance
 
 func apply_result(result: ChunkBuildResult):
 	_apply_generation(result.coord, result.generation_payload)
@@ -166,7 +180,7 @@ func _create_terrain_instance(coord: Vector2i, mesh: ArrayMesh) -> MeshInstance3
 		instance = MeshInstance3D.new()
 	instance.mesh = mesh
 	instance.material_override = _terrain_material
-	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if _should_cast_shadow(coord) else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	instance.visible = true
 	instance.name = "Chunk_%d_%d" % [coord.x, coord.y]
 	_attach_to_container(instance)

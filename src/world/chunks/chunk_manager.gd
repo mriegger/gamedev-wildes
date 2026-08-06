@@ -71,6 +71,7 @@ func poll_completed():
 
 func begin_initial_load(pos: Vector3) -> int:
 	var center := ChunkCoord.world_to_chunk(pos, _config.chunk_size)
+	_renderer.set_shadow_center(center)
 	var desired_visible := ChunkCoord.get_chunks_in_radius_infinite(center, _render_distance)
 	var desired_keep := ChunkCoord.get_chunks_in_radius_infinite(center, _unload_distance)
 	_visible_set = _to_set(desired_visible)
@@ -115,6 +116,7 @@ func _recompute_streaming(current_chunk: Vector2i):
 	_visible_set = _to_set(desired_visible)
 	_keep_set = _to_set(desired_keep)
 	_last_player_chunk = current_chunk
+	_renderer.set_shadow_center(current_chunk)
 
 	for coord in _requested_meshes.keys():
 		if not _visible_set.has(coord):

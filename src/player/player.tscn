@@ -1,21 +1,23 @@
-[gd_scene load_steps=5 format=3 uid="uid://p1a2y3r0m0t0r"]
+[gd_scene load_steps=7 format=3 uid="uid://p1a2y3r0m0t0r"]
 
 [ext_resource type="Script" path="res://player/player_motor.gd" id="1_motor"]
 [ext_resource type="Script" path="res://player/player_interactor.gd" id="2_interactor"]
 [ext_resource type="Script" path="res://player/targeting_view.gd" id="3_target"]
 [ext_resource type="Shader" path="res://player/visuals/blob_shadow.gdshader" id="4_blob_shadow"]
+[ext_resource type="PackedScene" path="res://player/visuals/player_visual.tscn" id="5_visual"]
+[ext_resource type="Script" path="res://player/player_animation_driver.gd" id="6_animation_driver"]
 
 [node name="Player" type="Node3D" groups=["player"]]
 script = ExtResource("1_motor")
-move_speed = 5.5
-jump_velocity = 9.0
-gravity = 20.0
-player_width = 0.6
-player_height = 1.8
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 100, 10, 100)
 
 [node name="ModelRoot" type="Node3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+
+[node name="PlayerVisual" parent="ModelRoot" instance=ExtResource("5_visual")]
+
+[node name="AnimationDriver" type="Node" parent="."]
+script = ExtResource("6_animation_driver")
 
 [node name="Interactor" type="Node3D" parent="." groups=["player_interactor"]]
 script = ExtResource("2_interactor")

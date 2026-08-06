@@ -1,5 +1,5 @@
 shader_type spatial;
-render_mode cull_disabled, diffuse_lambert_wrap, specular_disabled;
+render_mode cull_disabled, diffuse_burley;
 
 uniform sampler2DArray terrain_textures : source_color, filter_nearest_mipmap, repeat_enable;
 
@@ -9,5 +9,6 @@ void fragment() {
     ALBEDO = texel.rgb * COLOR.rgb;
     ALPHA = texel.a;
     ALPHA_SCISSOR_THRESHOLD = 0.5;
-    ROUGHNESS = 0.96;
+    ROUGHNESS = 0.90;
+    SPECULAR = 0.18;
 }

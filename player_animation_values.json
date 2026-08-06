@@ -1,0 +1,123 @@
+{
+	"format": "wildes_player_animation",
+	"version": 1,
+	"character": {
+		"move_speed": 5.5,
+		"sprint_speed": 8.0,
+		"jump_velocity": 9.0,
+		"jump_windup_seconds": 0.11,
+		"gravity": 30.0,
+		"player_width": 0.6,
+		"player_height": 1.8
+	},
+	"animation": {
+		"walk_cycle_seconds": 0.65,
+		"walk_bob_height": 0.075,
+		"walk_leg_travel": 0.45,
+		"walk_leg_lift": 0.18,
+		"walk_leg_reach_degrees": 30.0,
+		"walk_leg_push_degrees": 30.0,
+		"walk_leg_compression": 0.07,
+		"walk_limb_stretch": 0.035,
+		"walk_rhythm_shape": 0.1,
+		"walk_voxel_squash": 0.045,
+		"walk_voxel_stretch": 0.015,
+		"sprint_cycle_seconds": 0.46,
+		"sprint_bob_height": 0.14,
+		"sprint_leg_travel": 0.5,
+		"sprint_leg_lift": 0.4,
+		"sprint_leg_reach_degrees": 24.0,
+		"sprint_leg_push_degrees": 40.0,
+		"sprint_leg_compression": 0.13,
+		"sprint_lean_degrees": 8.0,
+		"sprint_limb_stretch": 0.08,
+		"sprint_rhythm_shape": 0.01,
+		"sprint_voxel_squash": 0.075,
+		"sprint_voxel_stretch": 0.025,
+		"gait_contact_hold": 0.02,
+		"gait_down_pose": 0.22,
+		"gait_push_pose": 0.48,
+		"gait_passing_pose": 0.72,
+		"leg_follow_through_degrees": 9.0,
+		"locomotion_twist_degrees": 3.5,
+		"locomotion_sway_degrees": 2.5,
+		"sprint_arm_swing_degrees": 68.0,
+		"walk_arm_swing_degrees": 46.0,
+		"secondary_motion_lag": 0.32,
+		"acceleration_overshoot_degrees": 9.0,
+		"braking_overshoot_degrees": 14.0,
+		"inertia_recovery": 7.5,
+		"jump_anticipation_depth": 0.09,
+		"jump_anticipation_squash": 0.14,
+		"jump_anticipation_widen": 0.07,
+		"idle_bob_height": 0.012,
+		"idle_cycle_seconds": 2.4,
+		"idle_torso_pitch_degrees": 1.0,
+		"idle_torso_sway_degrees": 1.5,
+		"idle_arm_swing_degrees": 1.5,
+		"body_lean_degrees": 8.0,
+		"turn_lean_degrees": 8.0,
+		"motion_response": 11.0,
+		"head_response": 10.0,
+		"head_yaw_limit_degrees": 55.0,
+		"head_up_limit_degrees": 30.0,
+		"head_down_limit_degrees": 25.0,
+		"idle_head_degrees": 3.0,
+		"landing_seconds": 0.28,
+		"landing_hold_seconds": 0.055,
+		"landing_squash": 0.2,
+		"landing_widen": 0.1,
+		"landing_rebound_stretch": 0.09,
+		"jump_stretch": 0.1,
+		"jump_torso_pitch_degrees": 6.0,
+		"jump_arm_pitch_degrees": 18.0,
+		"jump_arm_spread_degrees": 5.0,
+		"jump_leg_split_degrees": 15.0,
+		"fall_torso_pitch_degrees": 6.0,
+		"fall_arm_pitch_degrees": -13.0,
+		"fall_arm_spread_degrees": 13.0,
+		"fall_leg_split_degrees": 12.0,
+		"landing_torso_pitch_degrees": 10.0,
+		"landing_arm_pitch_degrees": 12.0,
+		"landing_leg_pitch_degrees": -20.0,
+		"mine_cycle_seconds": 0.35,
+		"place_seconds": 0.18
+	},
+	"parts": {
+		"Whole Rig": {
+			"position": [0.0, 0.0, 0.0],
+			"rotation_degrees": [0.0, 0.0, 0.0],
+			"scale": [1.0, 1.0, 1.0]
+		},
+		"Body": {
+			"position": [0.0, 0.0, 0.0],
+			"rotation_degrees": [0.0, 0.0, 0.0],
+			"scale": [1.0, 1.0, 1.0]
+		},
+		"Head": {
+			"position": [0.0, 0.0, 0.0],
+			"rotation_degrees": [0.0, 0.0, 0.0],
+			"scale": [1.0, 1.0, 1.0]
+		},
+		"Left Arm": {
+			"position": [0.0, 0.0, 0.0],
+			"rotation_degrees": [0.0, 0.0, 0.0],
+			"scale": [1.0, 1.0, 1.0]
+		},
+		"Right Arm": {
+			"position": [0.0, 0.0, 0.0],
+			"rotation_degrees": [0.0, 0.0, 0.0],
+			"scale": [1.0, 1.0, 1.0]
+		},
+		"Left Leg": {
+			"position": [0.0, 0.0, 0.0],
+			"rotation_degrees": [0.0, 0.0, 0.0],
+			"scale": [1.0, 1.0, 1.0]
+		},
+		"Right Leg": {
+			"position": [0.0, 0.0, 0.0],
+			"rotation_degrees": [0.0, 0.0, 0.0],
+			"scale": [1.0, 1.0, 1.0]
+		}
+	}
+}

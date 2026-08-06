@@ -92,7 +92,8 @@ var max_build_y: int:
 
 @export_group("Lighting / Rendering")
 @export var enable_ao: bool = true
-@export var shadow_cast_distance: float = 220.0
+@export var shadow_cast_distance: float = 128.0
+@export var shadow_render_distance: int = 3
 
 @export_group("Chunk Streaming")
 @export var render_distance: int = 4
@@ -175,6 +176,9 @@ func validate() -> bool:
 		return false
 	if render_distance < 1 or render_distance > 20:
 		push_error("[WorldConfig] render_distance %d invalid, must be 1..20" % render_distance)
+		return false
+	if shadow_render_distance < 0 or shadow_render_distance > render_distance:
+		push_error("[WorldConfig] shadow_render_distance %d invalid, must be 0..render_distance" % shadow_render_distance)
 		return false
 	if unload_padding < 0 or unload_padding > 10:
 		push_error("[WorldConfig] unload_padding %d invalid, must be 0..10" % unload_padding)

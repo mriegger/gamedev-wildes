@@ -2,6 +2,7 @@ extends RefCounted
 class_name InputBuffer
 
 var move_dir: Vector2 = Vector2.ZERO
+var sprint_pressed: bool = false
 var jump_just: bool = false
 var rotate_left_just: bool = false
 var rotate_right_just: bool = false
@@ -32,6 +33,7 @@ func poll():
 	if v.length_squared() > 1.0:
 		v = v.normalized()
 	move_dir = v
+	sprint_pressed = Input.is_action_pressed("sprint")
 	zoom_in_pressed = Input.is_action_pressed("zoom_in")
 	zoom_out_pressed = Input.is_action_pressed("zoom_out")
 	mine_pressed = Input.is_action_pressed("mine")
@@ -40,6 +42,20 @@ func poll():
 	rotate_left_just = rotate_left_just or Input.is_action_just_pressed("rotate_left")
 	rotate_right_just = rotate_right_just or Input.is_action_just_pressed("rotate_right")
 	place_just = place_just or Input.is_action_just_pressed("place")
+
+func clear_gameplay():
+	move_dir = Vector2.ZERO
+	sprint_pressed = false
+	jump_just = false
+	rotate_left_just = false
+	rotate_right_just = false
+	zoom_in_pressed = false
+	zoom_out_pressed = false
+	wheel_up = false
+	wheel_down = false
+	mine_pressed = false
+	place_just = false
+	place_pressed = false
 
 func set_wheel(up: bool):
 	if up:

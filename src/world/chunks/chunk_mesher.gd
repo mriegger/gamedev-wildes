@@ -5,11 +5,48 @@ var chunk_size: int
 var max_build_y: int
 var seed_value: int
 var enable_ao: bool
-var ao_table: Array = [1.0, 0.86, 0.72, 0.58]
+var ao_table: Array = [1.0, 0.90, 0.78, 0.62]
 
 var _top_layers := PackedInt32Array()
 var _side_layers := PackedInt32Array()
 var _bottom_layers := PackedInt32Array()
+
+const TOP_AO_SAMPLES := [
+	[Vector3i(-1, 1, 0), Vector3i(0, 1, -1), Vector3i(-1, 1, -1)],
+	[Vector3i(1, 1, 0), Vector3i(0, 1, -1), Vector3i(1, 1, -1)],
+	[Vector3i(1, 1, 0), Vector3i(0, 1, 1), Vector3i(1, 1, 1)],
+	[Vector3i(-1, 1, 0), Vector3i(0, 1, 1), Vector3i(-1, 1, 1)],
+]
+const BOTTOM_AO_SAMPLES := [
+	[Vector3i(-1, -1, 0), Vector3i(0, -1, 1), Vector3i(-1, -1, 1)],
+	[Vector3i(1, -1, 0), Vector3i(0, -1, 1), Vector3i(1, -1, 1)],
+	[Vector3i(1, -1, 0), Vector3i(0, -1, -1), Vector3i(1, -1, -1)],
+	[Vector3i(-1, -1, 0), Vector3i(0, -1, -1), Vector3i(-1, -1, -1)],
+]
+const EAST_AO_SAMPLES := [
+	[Vector3i(1, -1, 0), Vector3i(1, 0, 1), Vector3i(1, -1, 1)],
+	[Vector3i(1, 1, 0), Vector3i(1, 0, 1), Vector3i(1, 1, 1)],
+	[Vector3i(1, 1, 0), Vector3i(1, 0, -1), Vector3i(1, 1, -1)],
+	[Vector3i(1, -1, 0), Vector3i(1, 0, -1), Vector3i(1, -1, -1)],
+]
+const WEST_AO_SAMPLES := [
+	[Vector3i(-1, -1, 0), Vector3i(-1, 0, -1), Vector3i(-1, -1, -1)],
+	[Vector3i(-1, 1, 0), Vector3i(-1, 0, -1), Vector3i(-1, 1, -1)],
+	[Vector3i(-1, 1, 0), Vector3i(-1, 0, 1), Vector3i(-1, 1, 1)],
+	[Vector3i(-1, -1, 0), Vector3i(-1, 0, 1), Vector3i(-1, -1, 1)],
+]
+const SOUTH_AO_SAMPLES := [
+	[Vector3i(0, 1, 1), Vector3i(-1, 0, 1), Vector3i(-1, 1, 1)],
+	[Vector3i(0, 1, 1), Vector3i(1, 0, 1), Vector3i(1, 1, 1)],
+	[Vector3i(0, -1, 1), Vector3i(1, 0, 1), Vector3i(1, -1, 1)],
+	[Vector3i(0, -1, 1), Vector3i(-1, 0, 1), Vector3i(-1, -1, 1)],
+]
+const NORTH_AO_SAMPLES := [
+	[Vector3i(0, -1, -1), Vector3i(-1, 0, -1), Vector3i(-1, -1, -1)],
+	[Vector3i(0, -1, -1), Vector3i(1, 0, -1), Vector3i(1, -1, -1)],
+	[Vector3i(0, 1, -1), Vector3i(1, 0, -1), Vector3i(1, 1, -1)],
+	[Vector3i(0, 1, -1), Vector3i(-1, 0, -1), Vector3i(-1, 1, -1)],
+]
 
 func _init(p_chunk_size: int, p_max_y: int, p_seed: int, p_ao: bool, texture_set: BlockTextureSet):
 	chunk_size = p_chunk_size
@@ -19,6 +56,33 @@ func _init(p_chunk_size: int, p_max_y: int, p_seed: int, p_ao: bool, texture_set
 	_top_layers = texture_set.top_layers.duplicate()
 	_side_layers = texture_set.side_layers.duplicate()
 	_bottom_layers = texture_set.bottom_layers.duplicate()
+
+func _sample_face_ao(cache: PackedInt32Array, x: int, y: int, z: int, samples: Array, origin_x: int, origin_z: int, size_y: int, cache_x: int, cache_z: int, sy_cz: int) -> int:
+	var side_a := _is_ao_solid(cache, x, y, z, samples[0], origin_x, origin_z, size_y, cache_x, cache_z, sy_cz)
+	var side_b := _is_ao_solid(cache, x, y, z, samples[1], origin_x, origin_z, size_y, cache_x, cache_z, sy_cz)
+	if side_a and side_b:
+		return 3
+	var corner := _is_ao_solid(cache, x, y, z, samples[2], origin_x, origin_z, size_y, cache_x, cache_z, sy_cz)
+	return int(side_a) + int(side_b) + int(corner)
+
+func _is_ao_solid(cache: PackedInt32Array, x: int, y: int, z: int, offset: Vector3i, origin_x: int, origin_z: int, size_y: int, cache_x: int, cache_z: int, sy_cz: int) -> bool:
+	var sample_y := y + offset.y
+	if sample_y < 0 or sample_y >= size_y:
+		return false
+	var sample_x := x + offset.x - origin_x + 1
+	var sample_z := z + offset.z - origin_z + 1
+	if sample_x < 0 or sample_x >= cache_x or sample_z < 0 or sample_z >= cache_z:
+		return false
+	var index := sample_x * sy_cz + sample_y * cache_z + sample_z
+	return index >= 0 and index < cache.size() and BlockId.is_chunk_cube(cache[index])
+
+func _append_face_indices(indices: PackedInt32Array, base_index: int, ao_levels: Array):
+	if ao_levels[0] + ao_levels[2] < ao_levels[1] + ao_levels[3]:
+		indices.append(base_index); indices.append(base_index + 1); indices.append(base_index + 3)
+		indices.append(base_index + 1); indices.append(base_index + 2); indices.append(base_index + 3)
+	else:
+		indices.append(base_index); indices.append(base_index + 1); indices.append(base_index + 2)
+		indices.append(base_index); indices.append(base_index + 2); indices.append(base_index + 3)
 
 func build_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 	var cache := cache_dict["cache"] as PackedInt32Array
@@ -61,13 +125,8 @@ func build_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 		sqrt2, 1.0, sqrt2
 	]
 
-	var du_top = [-1, 1, 1, -1]
-	var dv_top = [-1, -1, 1, 1]
 	var cx_off_top = [0, 1, 1, 0]
 	var cz_off_top = [0, 0, 1, 1]
-
-	var du_bot = [-1, 1, 1, -1]
-	var dv_bot = [1, 1, -1, -1]
 
 	var shadow_cache: Dictionary = {}
 
@@ -113,7 +172,6 @@ func build_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 
 				var n_top = -1
 				var yp1_in_range = ly + 1 < size_y_local
-				var y_plus = y + 1
 				if yp1_in_range:
 					var idx_top = lx_sycz + (ly + 1) * cache_z_local + lz
 					if idx_top >= 0 and idx_top < cache.size():
@@ -127,40 +185,7 @@ func build_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 					var ao_vals = [0, 0, 0, 0]
 					var sh_vals = [1.0, 1.0, 1.0, 1.0]
 					for i in range(4):
-						var sx = x + du_top[i]
-						var sz_ = z + dv_top[i]
-						var s1 = false
-						var s2 = false
-						var cs = false
-						if yp1_in_range and y_plus >= 0 and y_plus < size_y_local:
-							var clx1 = sx - origin_x_local + 1
-							var clz2 = sz_ - origin_z_local + 1
-							if clx1 >= 0 and clx1 < cache_x_local:
-								var idx1 = clx1 * sy_cz + y_plus * cache_z_local + lz
-								if idx1 >= 0 and idx1 < cache.size():
-									var vv = cache[idx1]
-									if vv != -1 and vv != BlockId.Type.AIR and vv != BlockId.Type.TORCH and vv != BlockId.Type.WATER:
-										s1 = true
-							if clz2 >= 0 and clz2 < cache_z_local:
-								var idx2 = lx_sycz + y_plus * cache_z_local + clz2
-								if idx2 >= 0 and idx2 < cache.size():
-									var vv2 = cache[idx2]
-									if vv2 != -1 and vv2 != BlockId.Type.AIR and vv2 != BlockId.Type.TORCH and vv2 != BlockId.Type.WATER:
-										s2 = true
-							if clx1 >= 0 and clx1 < cache_x_local and clz2 >= 0 and clz2 < cache_z_local:
-								var idxc = clx1 * sy_cz + y_plus * cache_z_local + clz2
-								if idxc >= 0 and idxc < cache.size():
-									var vvc = cache[idxc]
-									if vvc != -1 and vvc != BlockId.Type.AIR and vvc != BlockId.Type.TORCH and vvc != BlockId.Type.WATER:
-										cs = true
-						var ao = 0
-						if s1 and s2:
-							ao = 3
-						else:
-							if s1: ao += 1
-							if s2: ao += 1
-							if cs: ao += 1
-						ao_vals[i] = ao
+						ao_vals[i] = _sample_face_ao(cache, x, y, z, TOP_AO_SAMPLES[i], origin_x_local, origin_z_local, size_y_local, cache_x_local, cache_z_local, sy_cz)
 
 						var vx = x + cx_off_top[i]
 						var vz_ = z + cz_off_top[i]
@@ -178,7 +203,7 @@ func build_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 									continue
 								var clx_s_sycz = clx_s * sy_cz
 								for oz_idx in range(3):
-									if best_sh <= 0.721:
+									if best_sh <= 0.781:
 										break
 									var oz = oz_idx - 1
 									var horiz = horiz_table[ox_idx * 3 + oz_idx]
@@ -199,13 +224,13 @@ func build_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 										var vvs = cache[idx_s]
 										if vvs != -1 and vvs != BlockId.Type.AIR and vvs != BlockId.Type.TORCH and vvs != BlockId.Type.WATER:
 											var vert = dy - 1
-											var f = 0.72 + float(vert - 1) * 0.06 + horiz * 0.10
-											if f > 0.97:
-												f = 0.97
+											var f = 0.78 + float(vert - 1) * 0.05 + horiz * 0.08
+											if f > 0.98:
+												f = 0.98
 											if f < best_sh:
 												best_sh = f
 											break
-								if best_sh <= 0.721:
+								if best_sh <= 0.781:
 									break
 							shadow_cache[skey] = best_sh
 							sh_vals[i] = best_sh
@@ -220,12 +245,10 @@ func build_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 						var sh: float = sh_vals[ci]
 						var light: float = top_shade * b * sh
 						colors.append(Color(light, light, light, 1.0))
-					indices.append(base_idx+0); indices.append(base_idx+1); indices.append(base_idx+2)
-					indices.append(base_idx+0); indices.append(base_idx+2); indices.append(base_idx+3)
+					_append_face_indices(indices, base_idx, ao_vals)
 
 				var n_bot = -1
 				var ym1_in_range = ly - 1 >= 0
-				var y_minus = y - 1
 				if ym1_in_range:
 					var idx_bot = lx_sycz + (ly - 1) * cache_z_local + lz
 					if idx_bot >= 0 and idx_bot < cache.size():
@@ -234,40 +257,7 @@ func build_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 				if bot_visible and y > 0:
 					var ao2 = [0, 0, 0, 0]
 					for i in range(4):
-						var sx = x + du_bot[i]
-						var sz_ = z + dv_bot[i]
-						var s1 = false
-						var s2 = false
-						var cs = false
-						if ym1_in_range and y_minus >= 0 and y_minus < size_y_local:
-							var clx1 = sx - origin_x_local + 1
-							var clz2 = sz_ - origin_z_local + 1
-							if clx1 >= 0 and clx1 < cache_x_local:
-								var idx1 = clx1 * sy_cz + y_minus * cache_z_local + lz
-								if idx1 >= 0 and idx1 < cache.size():
-									var vv = cache[idx1]
-									if vv != -1 and vv != BlockId.Type.AIR and vv != BlockId.Type.TORCH and vv != BlockId.Type.WATER:
-										s1 = true
-							if clz2 >= 0 and clz2 < cache_z_local:
-								var idx2 = lx_sycz + y_minus * cache_z_local + clz2
-								if idx2 >= 0 and idx2 < cache.size():
-									var vv2 = cache[idx2]
-									if vv2 != -1 and vv2 != BlockId.Type.AIR and vv2 != BlockId.Type.TORCH and vv2 != BlockId.Type.WATER:
-										s2 = true
-							if clx1 >= 0 and clx1 < cache_x_local and clz2 >= 0 and clz2 < cache_z_local:
-								var idxc = clx1 * sy_cz + y_minus * cache_z_local + clz2
-								if idxc >= 0 and idxc < cache.size():
-									var vvc = cache[idxc]
-									if vvc != -1 and vvc != BlockId.Type.AIR and vvc != BlockId.Type.TORCH and vvc != BlockId.Type.WATER:
-										cs = true
-						var ao = 0
-						if s1 and s2:
-							ao = 3
-						else:
-							if s1: ao += 1
-							if s2: ao += 1
-							if cs: ao += 1
-						ao2[i] = ao
+						ao2[i] = _sample_face_ao(cache, x, y, z, BOTTOM_AO_SAMPLES[i], origin_x_local, origin_z_local, size_y_local, cache_x_local, cache_z_local, sy_cz)
 					var base_idx2 = vertices.size()
 					vertices.append(Vector3(x, y, z+1)); vertices.append(Vector3(x+1, y, z+1)); vertices.append(Vector3(x+1, y, z)); vertices.append(Vector3(x, y, z))
 					normals.append(Vector3(0,-1,0)); normals.append(Vector3(0,-1,0)); normals.append(Vector3(0,-1,0)); normals.append(Vector3(0,-1,0))
@@ -278,8 +268,7 @@ func build_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 						var b: float = local_ao_table[ao2[ci]] if local_enable_ao else 1.0
 						var light: float = side_shade * 0.92 * b
 						colors.append(Color(light, light, light, 1.0))
-					indices.append(base_idx2+0); indices.append(base_idx2+1); indices.append(base_idx2+2)
-					indices.append(base_idx2+0); indices.append(base_idx2+2); indices.append(base_idx2+3)
+					_append_face_indices(indices, base_idx2, ao2)
 
 				var n_east = -1
 				if lx_p1_sycz != -1:
@@ -293,10 +282,12 @@ func build_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 					uvs.append(Vector2(0, 1)); uvs.append(Vector2(0, 0)); uvs.append(Vector2(1, 0)); uvs.append(Vector2(1, 1))
 					var east_layer_uv := Vector2(float(side_layer), 0)
 					texture_layers.append(east_layer_uv); texture_layers.append(east_layer_uv); texture_layers.append(east_layer_uv); texture_layers.append(east_layer_uv)
+					var east_ao = [0, 0, 0, 0]
 					for ci in range(4):
-						colors.append(Color(side_shade, side_shade, side_shade, 1.0))
-					indices.append(base_idx3+0); indices.append(base_idx3+1); indices.append(base_idx3+2)
-					indices.append(base_idx3+0); indices.append(base_idx3+2); indices.append(base_idx3+3)
+						east_ao[ci] = _sample_face_ao(cache, x, y, z, EAST_AO_SAMPLES[ci], origin_x_local, origin_z_local, size_y_local, cache_x_local, cache_z_local, sy_cz)
+						var east_light: float = side_shade * (local_ao_table[east_ao[ci]] if local_enable_ao else 1.0)
+						colors.append(Color(east_light, east_light, east_light, 1.0))
+					_append_face_indices(indices, base_idx3, east_ao)
 
 				var n_west = -1
 				if lx_m1_sycz != -1:
@@ -310,10 +301,12 @@ func build_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 					uvs.append(Vector2(0, 1)); uvs.append(Vector2(0, 0)); uvs.append(Vector2(1, 0)); uvs.append(Vector2(1, 1))
 					var west_layer_uv := Vector2(float(side_layer), 0)
 					texture_layers.append(west_layer_uv); texture_layers.append(west_layer_uv); texture_layers.append(west_layer_uv); texture_layers.append(west_layer_uv)
+					var west_ao = [0, 0, 0, 0]
 					for ci in range(4):
-						colors.append(Color(side_shade, side_shade, side_shade, 1.0))
-					indices.append(base_idx4+0); indices.append(base_idx4+1); indices.append(base_idx4+2)
-					indices.append(base_idx4+0); indices.append(base_idx4+2); indices.append(base_idx4+3)
+						west_ao[ci] = _sample_face_ao(cache, x, y, z, WEST_AO_SAMPLES[ci], origin_x_local, origin_z_local, size_y_local, cache_x_local, cache_z_local, sy_cz)
+						var west_light: float = side_shade * (local_ao_table[west_ao[ci]] if local_enable_ao else 1.0)
+						colors.append(Color(west_light, west_light, west_light, 1.0))
+					_append_face_indices(indices, base_idx4, west_ao)
 
 				var n_south = -1
 				if lz + 1 < cache_z_local:
@@ -327,10 +320,12 @@ func build_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 					uvs.append(Vector2(0, 0)); uvs.append(Vector2(1, 0)); uvs.append(Vector2(1, 1)); uvs.append(Vector2(0, 1))
 					var south_layer_uv := Vector2(float(side_layer), 0)
 					texture_layers.append(south_layer_uv); texture_layers.append(south_layer_uv); texture_layers.append(south_layer_uv); texture_layers.append(south_layer_uv)
+					var south_ao = [0, 0, 0, 0]
 					for ci in range(4):
-						colors.append(Color(side_shade, side_shade, side_shade, 1.0))
-					indices.append(base_idx5+0); indices.append(base_idx5+1); indices.append(base_idx5+2)
-					indices.append(base_idx5+0); indices.append(base_idx5+2); indices.append(base_idx5+3)
+						south_ao[ci] = _sample_face_ao(cache, x, y, z, SOUTH_AO_SAMPLES[ci], origin_x_local, origin_z_local, size_y_local, cache_x_local, cache_z_local, sy_cz)
+						var south_light: float = side_shade * (local_ao_table[south_ao[ci]] if local_enable_ao else 1.0)
+						colors.append(Color(south_light, south_light, south_light, 1.0))
+					_append_face_indices(indices, base_idx5, south_ao)
 
 				var n_north = -1
 				if lz - 1 >= 0:
@@ -344,10 +339,12 @@ func build_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 					uvs.append(Vector2(0, 1)); uvs.append(Vector2(1, 1)); uvs.append(Vector2(1, 0)); uvs.append(Vector2(0, 0))
 					var north_layer_uv := Vector2(float(side_layer), 0)
 					texture_layers.append(north_layer_uv); texture_layers.append(north_layer_uv); texture_layers.append(north_layer_uv); texture_layers.append(north_layer_uv)
+					var north_ao = [0, 0, 0, 0]
 					for ci in range(4):
-						colors.append(Color(side_shade, side_shade, side_shade, 1.0))
-					indices.append(base_idx6+0); indices.append(base_idx6+1); indices.append(base_idx6+2)
-					indices.append(base_idx6+0); indices.append(base_idx6+2); indices.append(base_idx6+3)
+						north_ao[ci] = _sample_face_ao(cache, x, y, z, NORTH_AO_SAMPLES[ci], origin_x_local, origin_z_local, size_y_local, cache_x_local, cache_z_local, sy_cz)
+						var north_light: float = side_shade * (local_ao_table[north_ao[ci]] if local_enable_ao else 1.0)
+						colors.append(Color(north_light, north_light, north_light, 1.0))
+					_append_face_indices(indices, base_idx6, north_ao)
 
 	if vertices.is_empty():
 		return null
