@@ -117,3 +117,4 @@ Godot itself is MIT licensed.
 | #7 | Texture-array terrain rendering, data-driven item catalog, textured inventory UI, and item-based saves | `feat/texture-array-item-catalog` |
 | #8 | Expressive procedural player animation, Shift sprinting, rigid-limb gait, squash/stretch, and live animation tuner | `feat/expressive-player-animation` |
 | #9 | Full-face voxel ambient occlusion, polished day/night lighting, bounded terrain shadows, and live shadow tuning | `feat/ao-lighting-polish` |
+| #11 | Saved-time clock startup and linear day/night lighting progression | `codex/fix-linear-day-night` |

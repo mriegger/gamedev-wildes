@@ -67,6 +67,7 @@ The drag implementation lives in `src/inventory/ui/inventory_slot.gd` and is exe
 
 - `ChunkManager.data_chunks <= keep_area+40` (`keep=(render+unload)^2`), `visible_chunks <= visible_area+10`, `VoxelWorld.generated_terrain_chunks <= keep*3+260` — bounded, not unbounded growth
 - rapid teleports cancel stale work, edit-then-unload cannot cache a stale mesh, and terrain eviction invalidates renderer cache entries
+- a saved late-day clock value is applied before world loading, remains unchanged until gameplay starts, and the sunset profile interpolates linearly between lighting keys
 - the terrain material owns the shared `Texture2DArray`, terrain UV/layer arrays match vertex counts, and each face has one constant in-range texture layer
 - real hotbar key input selects items, then a selected grass item places a `BlockId.GRASS` and mining maps it back to the same item
 - `Performance.OBJECT_ORPHAN_NODE_COUNT == 0`, no `*DragPreview*` stray `CanvasLayer`

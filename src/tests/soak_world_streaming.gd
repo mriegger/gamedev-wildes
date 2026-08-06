@@ -54,7 +54,7 @@ func _process(_delta: float) -> bool:
 		if _game == null:
 			_fail("game instantiate null")
 			return false
-		_game.configure_session(-1, {"seed": 1337})
+		_game.configure_session(-1, {"seed": 1337, "time_of_day": 16.25})
 		_game.session_ready.connect(_on_session_ready)
 		root.add_child(_game)
 		print("[soak] game added frame %d" % _frame)
@@ -68,10 +68,18 @@ func _process(_delta: float) -> bool:
 		print("[soak] waiting for world generation")
 		_phase = 2
 	elif _phase == 2:
+		var loading_clock := _game.get_node("Environment/GameClock") as GameClock
+		if not _session_ready and not is_equal_approx(loading_clock.time_of_day, 16.25):
+			_fail("clock changed while loading: %.6f" % loading_clock.time_of_day)
+			return false
 		if _frame % 30 == 0:
 			print("[soak] waiting gen frame %d orphan=%d" % [_frame, int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))])
 		if _session_ready:
 			print("[soak] world generated at frame %d" % _frame)
+			var ready_clock := _game.get_node("Environment/GameClock") as GameClock
+			if absf(ready_clock.time_of_day - 16.25) > 0.01:
+				_fail("clock did not start from saved time: %.6f" % ready_clock.time_of_day)
+				return false
 			if _world.voxel_model == null or _world.chunk_manager == null or _world.chunk_renderer == null:
 				_fail("world not fully generated voxel=%s manager=%s renderer=%s" % [str(_world.voxel_model != null), str(_world.chunk_manager != null), str(_world.chunk_renderer != null)])
 				return false
@@ -313,6 +321,12 @@ func _verify_lighting_pipeline() -> bool:
 	var sun := game_environment.get_node("Sun") as DirectionalLight3D
 	var values := game_environment.get_node("DayNightValues") as DayNightValues
 	var clock := game_environment.get_node("GameClock") as GameClock
+	var sunset_start := values.profile.get_interpolated(17.0).sky
+	var sunset_end := values.profile.get_interpolated(18.0).sky
+	var sunset_quarter := values.profile.get_interpolated(17.25).sky
+	if not sunset_quarter.is_equal_approx(sunset_start.lerp(sunset_end, 0.25)):
+		_fail("sunset profile does not interpolate linearly")
+		return false
 	for hour in [0.0, 6.0, 12.0, 18.0]:
 		values.apply(hour)
 		if not is_equal_approx(sun.shadow_bias, 0.03):

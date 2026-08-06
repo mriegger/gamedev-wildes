@@ -4,9 +4,7 @@ class_name GameClock
 const HOURS_PER_DAY: float = 24.0
 
 @export var cycle_duration_minutes: float = 20.0
-@export var start_hour: float = 6.0
 @export var enable_cycle: bool = true
-@export var pause_at_start: bool = false
 
 var cycle_duration_seconds: float:
 	get:
@@ -15,15 +13,18 @@ var cycle_duration_seconds: float:
 var time_of_day: float = 6.0
 var _paused: bool = false
 var _dragging: bool = false
+var _running: bool = false
 
 signal time_changed(new_time: float)
 
-func _ready():
-	time_of_day = start_hour
-	_paused = pause_at_start
+func setup(initial_time: float):
+	set_time_of_day(initial_time)
+
+func start():
+	_running = true
 
 func _process(delta):
-	if enable_cycle and not _paused and not _dragging and not get_tree().paused:
+	if _running and enable_cycle and not _paused and not _dragging and not get_tree().paused:
 		var hours_per_sec = HOURS_PER_DAY / cycle_duration_seconds
 		var prev = time_of_day
 		time_of_day += delta * hours_per_sec

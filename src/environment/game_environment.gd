@@ -15,8 +15,11 @@ func _ready():
 
 func setup(time_of_day: float, shadow_cast_distance: float):
 	_values.setup(_clock, _sun, _sun_fill, _world_environment, shadow_cast_distance)
+	_clock.setup(time_of_day)
+
+func start_clock():
 	_debug_clock_panel.inject(_clock, _values)
-	_clock.set_time_of_day(time_of_day)
+	_clock.start()
 
 func get_time_of_day() -> float:
 	return _clock.get_time_of_day()

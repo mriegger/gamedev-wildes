@@ -40,6 +40,7 @@ func _ready():
 	set_process_unhandled_input(false)
 	assert(block_catalog.validate())
 	assert(item_catalog.validate(block_catalog))
+	game_environment.setup(float(_save_data.get("time_of_day", 6.0)), world.config.shadow_cast_distance)
 	world.block_catalog = block_catalog
 	inventory_model = InventoryModel.new(item_catalog)
 	_restore_inventory()
@@ -70,7 +71,7 @@ func _setup_gameplay():
 	world.set_player_ref(player)
 
 	game_environment.sky_color_changed.connect(world.update_water_tint)
-	game_environment.setup(float(_save_data.get("time_of_day", 6.0)), world.config.shadow_cast_distance)
+	game_environment.start_clock()
 	hud.setup_with_camera(inventory_model, camera_rig)
 
 	var saved_position = _world_state.player_position
