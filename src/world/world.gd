@@ -36,8 +36,10 @@ func configure_settings(settings: GameSettings):
 
 func initialize_world_async() -> void:
 	config = config.runtime_copy_for_seed(_start_state.seed)
-	assert(config.validate())
-	assert(block_catalog.validate())
+	var config_valid := config.validate()
+	var block_catalog_valid := block_catalog.validate()
+	assert(config_valid)
+	assert(block_catalog_valid)
 
 	generation_progress.emit("config", 0.05, "Preparing config (seed %d)" % config.seed_value)
 	await get_tree().process_frame

@@ -10,7 +10,8 @@ var _sources: Array[Texture2D] = []
 var _layers_by_path: Dictionary = {}
 
 func _init(block_catalog: BlockCatalog) -> void:
-	assert(block_catalog.validate())
+	var catalog_valid := block_catalog.validate()
+	assert(catalog_valid)
 	top_layers.resize(BlockId.Type.COUNT)
 	side_layers.resize(BlockId.Type.COUNT)
 	bottom_layers.resize(BlockId.Type.COUNT)
@@ -29,14 +30,17 @@ func _init(block_catalog: BlockCatalog) -> void:
 		var image := source.get_image()
 		assert(image != null)
 		if image.is_compressed():
-			assert(image.decompress() == OK)
+			var decompress_error := image.decompress()
+			assert(decompress_error == OK)
 		assert(image.get_width() == 16 and image.get_height() == 16)
 		image.convert(Image.FORMAT_RGBA8)
 		if not image.has_mipmaps():
-			assert(image.generate_mipmaps() == OK)
+			var mipmap_error := image.generate_mipmaps()
+			assert(mipmap_error == OK)
 		images.append(image)
 	texture_array = Texture2DArray.new()
-	assert(texture_array.create_from_images(images) == OK)
+	var texture_array_error := texture_array.create_from_images(images)
+	assert(texture_array_error == OK)
 	_sources.clear()
 	_layers_by_path.clear()
 
