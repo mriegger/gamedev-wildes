@@ -239,6 +239,227 @@ step = 0.001
 value = 1.0
 allow_greater = true
 
+[node name="Attack" type="MarginContainer" parent="Panel/VBox/Tabs"]
+layout_mode = 2
+
+[node name="VBox" type="VBoxContainer" parent="Panel/VBox/Tabs/Attack"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Help" type="Label" parent="Panel/VBox/Tabs/Attack/VBox"]
+layout_mode = 2
+text = "Scrub to pause at an exact swing point, then tune attack-only sword positioning."
+autowrap_mode = 2
+
+[node name="PlaybackRow" type="HBoxContainer" parent="Panel/VBox/Tabs/Attack/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="PauseButton" type="CheckButton" parent="Panel/VBox/Tabs/Attack/VBox/PlaybackRow"]
+custom_minimum_size = Vector2(82, 32)
+layout_mode = 2
+disabled = true
+text = "Pause"
+
+[node name="ProgressSlider" type="HSlider" parent="Panel/VBox/Tabs/Attack/VBox/PlaybackRow"]
+custom_minimum_size = Vector2(220, 32)
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 1.0
+step = 0.001
+editable = false
+
+[node name="ProgressLabel" type="Label" parent="Panel/VBox/Tabs/Attack/VBox/PlaybackRow"]
+custom_minimum_size = Vector2(48, 32)
+layout_mode = 2
+text = "0%"
+horizontal_alignment = 2
+vertical_alignment = 1
+
+[node name="PositionSliderGrid" type="GridContainer" parent="Panel/VBox/Tabs/Attack/VBox"]
+layout_mode = 2
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 4
+columns = 2
+
+[node name="PositionXLabel" type="Label" parent="Panel/VBox/Tabs/Attack/VBox/PositionSliderGrid"]
+custom_minimum_size = Vector2(72, 32)
+layout_mode = 2
+text = "Position X"
+vertical_alignment = 1
+
+[node name="PositionXSlider" type="HSlider" parent="Panel/VBox/Tabs/Attack/VBox/PositionSliderGrid"]
+custom_minimum_size = Vector2(280, 32)
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = -3.0
+max_value = 3.0
+step = 0.0005
+
+[node name="PositionYLabel" type="Label" parent="Panel/VBox/Tabs/Attack/VBox/PositionSliderGrid"]
+custom_minimum_size = Vector2(72, 32)
+layout_mode = 2
+text = "Position Y"
+vertical_alignment = 1
+
+[node name="PositionYSlider" type="HSlider" parent="Panel/VBox/Tabs/Attack/VBox/PositionSliderGrid"]
+custom_minimum_size = Vector2(280, 32)
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = -3.0
+max_value = 3.0
+step = 0.0005
+
+[node name="PositionZLabel" type="Label" parent="Panel/VBox/Tabs/Attack/VBox/PositionSliderGrid"]
+custom_minimum_size = Vector2(72, 32)
+layout_mode = 2
+text = "Position Z"
+vertical_alignment = 1
+
+[node name="PositionZSlider" type="HSlider" parent="Panel/VBox/Tabs/Attack/VBox/PositionSliderGrid"]
+custom_minimum_size = Vector2(280, 32)
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = -3.0
+max_value = 3.0
+step = 0.0005
+
+[node name="RotationSliderGrid" type="GridContainer" parent="Panel/VBox/Tabs/Attack/VBox"]
+layout_mode = 2
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 4
+columns = 2
+
+[node name="RotationXLabel" type="Label" parent="Panel/VBox/Tabs/Attack/VBox/RotationSliderGrid"]
+custom_minimum_size = Vector2(72, 32)
+layout_mode = 2
+text = "Rotation X"
+vertical_alignment = 1
+
+[node name="RotationXSlider" type="HSlider" parent="Panel/VBox/Tabs/Attack/VBox/RotationSliderGrid"]
+custom_minimum_size = Vector2(280, 32)
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = -180.0
+max_value = 180.0
+step = 0.1
+
+[node name="RotationYLabel" type="Label" parent="Panel/VBox/Tabs/Attack/VBox/RotationSliderGrid"]
+custom_minimum_size = Vector2(72, 32)
+layout_mode = 2
+text = "Rotation Y"
+vertical_alignment = 1
+
+[node name="RotationYSlider" type="HSlider" parent="Panel/VBox/Tabs/Attack/VBox/RotationSliderGrid"]
+custom_minimum_size = Vector2(280, 32)
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = -180.0
+max_value = 180.0
+step = 0.1
+
+[node name="RotationZLabel" type="Label" parent="Panel/VBox/Tabs/Attack/VBox/RotationSliderGrid"]
+custom_minimum_size = Vector2(72, 32)
+layout_mode = 2
+text = "Rotation Z"
+vertical_alignment = 1
+
+[node name="RotationZSlider" type="HSlider" parent="Panel/VBox/Tabs/Attack/VBox/RotationSliderGrid"]
+custom_minimum_size = Vector2(280, 32)
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = -180.0
+max_value = 180.0
+step = 0.1
+
+[node name="TransformGrid" type="GridContainer" parent="Panel/VBox/Tabs/Attack/VBox"]
+layout_mode = 2
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 8
+columns = 4
+
+[node name="Blank" type="Label" parent="Panel/VBox/Tabs/Attack/VBox/TransformGrid"]
+layout_mode = 2
+text = "Sword"
+
+[node name="XLabel" type="Label" parent="Panel/VBox/Tabs/Attack/VBox/TransformGrid"]
+layout_mode = 2
+text = "X"
+horizontal_alignment = 1
+
+[node name="YLabel" type="Label" parent="Panel/VBox/Tabs/Attack/VBox/TransformGrid"]
+layout_mode = 2
+text = "Y"
+horizontal_alignment = 1
+
+[node name="ZLabel" type="Label" parent="Panel/VBox/Tabs/Attack/VBox/TransformGrid"]
+layout_mode = 2
+text = "Z"
+horizontal_alignment = 1
+
+[node name="PositionLabel" type="Label" parent="Panel/VBox/Tabs/Attack/VBox/TransformGrid"]
+custom_minimum_size = Vector2(72, 0)
+layout_mode = 2
+text = "Position"
+
+[node name="PositionX" type="SpinBox" parent="Panel/VBox/Tabs/Attack/VBox/TransformGrid"]
+custom_minimum_size = Vector2(96, 32)
+layout_mode = 2
+min_value = -3.0
+max_value = 3.0
+step = 0.0005
+allow_greater = true
+allow_lesser = true
+
+[node name="PositionY" type="SpinBox" parent="Panel/VBox/Tabs/Attack/VBox/TransformGrid"]
+custom_minimum_size = Vector2(96, 32)
+layout_mode = 2
+min_value = -3.0
+max_value = 3.0
+step = 0.0005
+allow_greater = true
+allow_lesser = true
+
+[node name="PositionZ" type="SpinBox" parent="Panel/VBox/Tabs/Attack/VBox/TransformGrid"]
+custom_minimum_size = Vector2(96, 32)
+layout_mode = 2
+min_value = -3.0
+max_value = 3.0
+step = 0.0005
+allow_greater = true
+allow_lesser = true
+
+[node name="RotationLabel" type="Label" parent="Panel/VBox/Tabs/Attack/VBox/TransformGrid"]
+layout_mode = 2
+text = "Rotation °"
+
+[node name="RotationX" type="SpinBox" parent="Panel/VBox/Tabs/Attack/VBox/TransformGrid"]
+custom_minimum_size = Vector2(96, 32)
+layout_mode = 2
+min_value = -180.0
+max_value = 180.0
+step = 0.1
+allow_greater = true
+allow_lesser = true
+
+[node name="RotationY" type="SpinBox" parent="Panel/VBox/Tabs/Attack/VBox/TransformGrid"]
+custom_minimum_size = Vector2(96, 32)
+layout_mode = 2
+min_value = -180.0
+max_value = 180.0
+step = 0.1
+allow_greater = true
+allow_lesser = true
+
+[node name="RotationZ" type="SpinBox" parent="Panel/VBox/Tabs/Attack/VBox/TransformGrid"]
+custom_minimum_size = Vector2(96, 32)
+layout_mode = 2
+min_value = -180.0
+max_value = 180.0
+step = 0.1
+allow_greater = true
+allow_lesser = true
+
 [node name="Footer" type="HBoxContainer" parent="Panel/VBox"]
 layout_mode = 2
 theme_override_constants/separation = 8

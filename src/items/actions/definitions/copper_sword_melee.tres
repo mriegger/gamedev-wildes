@@ -5,3 +5,4 @@
 [resource]
 script = ExtResource("1_melee")
 attack_duration = 0.48
+chain_input_window = 0.26

@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3 uid="uid://p1a2y3r0m0t0r"]
+[gd_scene load_steps=9 format=3 uid="uid://p1a2y3r0m0t0r"]
 
 [ext_resource type="Script" path="res://player/player_motor.gd" id="1_motor"]
 [ext_resource type="Script" path="res://player/player_interactor.gd" id="2_interactor"]
@@ -7,6 +7,7 @@
 [ext_resource type="PackedScene" path="res://player/visuals/player_visual.tscn" id="5_visual"]
 [ext_resource type="Script" path="res://player/player_animation_driver.gd" id="6_animation_driver"]
 [ext_resource type="Resource" path="res://items/actions/definitions/unarmed_mining.tres" id="7_unarmed_mining"]
+[ext_resource type="Resource" path="res://items/definitions/copper_sword.tres" id="8_attack_preview"]
 
 [node name="Player" type="Node3D" groups=["player"]]
 script = ExtResource("1_motor")
@@ -19,6 +20,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
 
 [node name="AnimationDriver" type="Node" parent="."]
 script = ExtResource("6_animation_driver")
+attack_preview_item = ExtResource("8_attack_preview")
 
 [node name="Interactor" type="Node3D" parent="." groups=["player_interactor"]]
 script = ExtResource("2_interactor")

@@ -2,7 +2,7 @@ extends Node3D
 class_name PlayerInteractor
 
 signal block_placed
-signal melee_attack_started(action: MeleeAttackActionDefinition)
+signal melee_attack_started(action: MeleeAttackActionDefinition, direction: int)
 
 @export var reach: float = 6.0
 @export var place_cooldown: float = 0.18
@@ -29,6 +29,10 @@ var mine_target: Vector3i = Vector3i(-999, -999, -999)
 var mine_target_rev: int = -1
 var mine_action: MiningActionDefinition
 var melee_attack_timer: float = 0.0
+var melee_attack_queue: int = 0
+var melee_attack_action: MeleeAttackActionDefinition
+var melee_chain_input_timer: float = 0.0
+var next_melee_attack_direction: int = -1
 var secondary_use_timer: float = 0.0
 var _ray_hit_pos: Vector3i
 var _ray_place_pos: Vector3i
@@ -52,6 +56,8 @@ func _physics_process(delta):
 		can_place_target = false
 		if is_mining:
 			_reset_mining()
+		_reset_melee_chain()
+		_input_buffer.primary_use_just = false
 		_input_buffer.secondary_use_just = false
 		return
 	_handle_raycast()
@@ -205,7 +211,10 @@ func _placement_collides_player(p: Vector3i) -> bool:
 
 func _handle_item_actions(delta):
 	melee_attack_timer = max(0.0, melee_attack_timer - delta)
+	melee_chain_input_timer = max(0.0, melee_chain_input_timer - delta)
 	secondary_use_timer -= delta
+	var primary_use_just := _input_buffer.primary_use_just
+	_input_buffer.primary_use_just = false
 	var selected_primary := get_selected_primary_action()
 	var selected_mining := selected_primary as MiningActionDefinition
 	var selected_melee := selected_primary as MeleeAttackActionDefinition
@@ -233,9 +242,26 @@ func _handle_item_actions(delta):
 	else:
 		if is_mining:
 			_reset_mining()
-	if _input_buffer.primary_use_pressed and selected_melee != null and melee_attack_timer <= 0.0:
-		melee_attack_timer = selected_melee.attack_duration
-		melee_attack_started.emit(selected_melee)
+	if selected_melee == null:
+		_reset_melee_chain()
+	elif melee_attack_action != null and melee_attack_action != selected_melee:
+		_reset_melee_chain()
+	if primary_use_just and selected_melee != null:
+		melee_attack_action = selected_melee
+		melee_attack_queue = 1
+		melee_chain_input_timer = selected_melee.chain_input_window
+	if melee_attack_queue > 0 and melee_chain_input_timer <= 0.0:
+		melee_attack_queue = 0
+	if melee_attack_timer <= 0.0:
+		if melee_attack_queue > 0 and melee_attack_action == selected_melee:
+			melee_attack_queue -= 1
+			melee_attack_timer = melee_attack_action.attack_duration
+			melee_chain_input_timer = 0.0
+			var attack_direction := next_melee_attack_direction
+			next_melee_attack_direction = -next_melee_attack_direction
+			melee_attack_started.emit(melee_attack_action, attack_direction)
+		else:
+			_reset_melee_chain()
 
 	var selected_placement := get_selected_placement_action()
 	if (_input_buffer.secondary_use_just or _input_buffer.secondary_use_pressed) and secondary_use_timer <= 0.0:
@@ -250,6 +276,13 @@ func _reset_mining():
 	mine_target = Vector3i(-999, -999, -999)
 	mine_target_rev = -1
 	mine_action = null
+
+func _reset_melee_chain():
+	melee_attack_timer = 0.0
+	melee_attack_queue = 0
+	melee_attack_action = null
+	melee_chain_input_timer = 0.0
+	next_melee_attack_direction = -1
 
 func _can_mine_position(pos: Vector3i, action: MiningActionDefinition) -> bool:
 	if action == null or voxel_world == null or motor == null:

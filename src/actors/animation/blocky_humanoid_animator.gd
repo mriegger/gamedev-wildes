@@ -47,7 +47,9 @@ var _place_elapsed: float = 0.0
 var _placing: bool = false
 var _attack_elapsed: float = 0.0
 var _attack_duration: float = 0.0
+var _attack_direction: int = -1
 var _attacking: bool = false
+var attack_pose_weight: float = 0.0
 var _landing_elapsed: float = 0.0
 var _landing_strength: float = 0.0
 var _previous_vertical_speed: float = 0.0
@@ -129,17 +131,24 @@ func play_place():
 	_placing = true
 	_place_elapsed = 0.0
 
-func play_attack(duration: float):
+func play_attack(duration: float, direction: int):
 	assert(duration > 0.0)
+	assert(direction == -1 or direction == 1)
 	_placing = false
 	_attacking = true
 	_attack_elapsed = 0.0
 	_attack_duration = duration
+	_attack_direction = direction
 
 func prepare_preview(grounded: bool):
 	_was_grounded = grounded
 	_landing_strength = 0.0
 	_landing_elapsed = profile.landing_seconds
+	_mining_active = false
+	_mine_blend = 0.0
+	_placing = false
+	_attacking = false
+	attack_pose_weight = 0.0
 
 func advance_animation(delta: float):
 	assert(animation_state != null)
@@ -392,6 +401,7 @@ func _update_head(delta: float):
 
 func _update_actions(delta: float):
 	var response = 1.0 - exp(-profile.motion_response * delta)
+	attack_pose_weight = 0.0
 	if animation_state.sprinting:
 		_placing = false
 	var attack_active := _attacking
@@ -438,23 +448,18 @@ func _update_actions(delta: float):
 		if _place_elapsed >= profile.place_seconds:
 			_placing = false
 	if attack_active:
-		var attack_weight := sin(attack_progress * PI)
-		var sweep_degrees := _attack_sweep_degrees(attack_progress)
+		attack_pose_weight = sin(attack_progress * PI)
+		var sweep_degrees := _attack_sweep_degrees(attack_progress) * float(_attack_direction)
 		right_rotation = Vector3(
-			deg_to_rad(profile.attack_right_arm_pitch_degrees * attack_weight),
+			deg_to_rad(profile.attack_right_arm_pitch_degrees * attack_pose_weight),
 			0.0,
 			deg_to_rad(sweep_degrees)
 		)
-		left_rotation = Vector3(
-			deg_to_rad(profile.attack_left_arm_pitch_degrees * attack_weight),
-			0.0,
-			deg_to_rad(sweep_degrees * profile.attack_left_arm_sweep_ratio)
-		)
-		body_rotation.x = deg_to_rad(profile.attack_body_lean_degrees * attack_weight)
+		body_rotation.x = deg_to_rad(profile.attack_body_lean_degrees * attack_pose_weight)
 		body_rotation.y = deg_to_rad(profile.attack_body_twist_degrees * sweep_degrees / profile.attack_follow_through_degrees)
-		left_leg_base.rotation.x -= deg_to_rad(profile.attack_leg_brace_degrees * attack_weight)
-		right_leg_base.rotation.x += deg_to_rad(profile.attack_leg_brace_degrees * attack_weight)
-		rig_root.position.y -= profile.attack_crouch_depth * attack_weight
+		left_leg_base.rotation.x -= deg_to_rad(profile.attack_leg_brace_degrees * attack_pose_weight * _attack_direction)
+		right_leg_base.rotation.x += deg_to_rad(profile.attack_leg_brace_degrees * attack_pose_weight * _attack_direction)
+		rig_root.position.y -= profile.attack_crouch_depth * attack_pose_weight
 		if _attack_elapsed >= _attack_duration:
 			_attacking = false
 	if animation_state.grounded and animation_state.speed_ratio > 0.05 and _mine_blend <= 0.001 and not _placing and not attack_active:

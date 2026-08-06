@@ -11,6 +11,7 @@ var zoom_out_pressed: bool = false
 var wheel_up: bool = false
 var wheel_down: bool = false
 var primary_use_pressed: bool = false
+var primary_use_just: bool = false
 var secondary_use_just: bool = false
 var secondary_use_pressed: bool = false
 
@@ -41,6 +42,7 @@ func poll():
 	jump_just = jump_just or Input.is_action_just_pressed("jump")
 	rotate_left_just = rotate_left_just or Input.is_action_just_pressed("rotate_left")
 	rotate_right_just = rotate_right_just or Input.is_action_just_pressed("rotate_right")
+	primary_use_just = primary_use_just or Input.is_action_just_pressed("primary_use")
 	secondary_use_just = secondary_use_just or Input.is_action_just_pressed("secondary_use")
 
 func clear_gameplay():
@@ -54,6 +56,7 @@ func clear_gameplay():
 	wheel_up = false
 	wheel_down = false
 	primary_use_pressed = false
+	primary_use_just = false
 	secondary_use_just = false
 	secondary_use_pressed = false
 

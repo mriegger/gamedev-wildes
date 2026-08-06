@@ -83,6 +83,8 @@ mesh = SubResource("Box_arm")
 position = Vector3(0, -0.675, 0)
 rotation = Vector3(0.785398, 0, 0)
 script = ExtResource("3_held_item")
+attack_position_offset = Vector3(0, 0.1125, 0)
+attack_rotation_degrees = Vector3(0, -113.6, 0)
 
 [node name="LeftHip" type="Node3D" parent="RigRoot"]
 position = Vector3(-0.1125, 0.675, 0)

@@ -257,29 +257,47 @@ func _run():
 	_advance(animator, 12)
 	var attack_action := load("res://items/actions/definitions/copper_sword_melee.tres") as MeleeAttackActionDefinition
 	var attack_rest_height: float = animator.rig_root.position.y
-	var min_right_sweep := INF
-	var max_right_sweep := -INF
-	var min_left_sweep := INF
-	var max_left_sweep := -INF
+	var first_windup_sweep := 0.0
+	var first_strike_sweep := 0.0
+	var max_off_hand_sweep := 0.0
 	var max_attack_lean := 0.0
+	var max_attack_twist := 0.0
 	var max_attack_leg_brace := 0.0
+	var min_attack_arm_pitch := 0.0
 	var min_attack_height := INF
-	animator.play_attack(attack_action.attack_duration)
-	for _frame in range(29):
+	animator.play_attack(attack_action.attack_duration, -1)
+	for frame in range(29):
 		_advance(animator, 1)
-		min_right_sweep = min(min_right_sweep, animator.right_arm_action.rotation.z)
-		max_right_sweep = max(max_right_sweep, animator.right_arm_action.rotation.z)
-		min_left_sweep = min(min_left_sweep, animator.left_arm_action.rotation.z)
-		max_left_sweep = max(max_left_sweep, animator.left_arm_action.rotation.z)
+		if frame == 5:
+			first_windup_sweep = animator.right_arm_action.rotation.z
+		elif frame == 15:
+			first_strike_sweep = animator.right_arm_action.rotation.z
+		max_off_hand_sweep = max(max_off_hand_sweep, abs(animator.left_arm_action.rotation.z))
 		max_attack_lean = max(max_attack_lean, animator.body_action.rotation.x)
+		max_attack_twist = max(max_attack_twist, abs(animator.body_action.rotation.y))
 		max_attack_leg_brace = max(max_attack_leg_brace, abs(animator.left_leg_base.rotation.x - animator.right_leg_base.rotation.x))
+		min_attack_arm_pitch = min(min_attack_arm_pitch, animator.right_arm_action.rotation.x)
 		min_attack_height = min(min_attack_height, animator.rig_root.position.y)
-	_expect(min_right_sweep < -deg_to_rad(45.0) and max_right_sweep > deg_to_rad(68.0), "sword arm did not sweep left to right")
-	_expect(min_left_sweep < -deg_to_rad(30.0) and max_left_sweep > deg_to_rad(45.0), "off-hand did not follow the sword sweep")
-	_expect(max_attack_lean > deg_to_rad(12.0), "sword attack did not lean forward")
-	_expect(max_attack_leg_brace > deg_to_rad(24.0), "sword attack did not brace the legs")
-	_expect(min_attack_height < attack_rest_height - 0.035, "sword attack did not lower the stance")
+	_expect(first_windup_sweep > deg_to_rad(45.0) and first_strike_sweep < -deg_to_rad(68.0), "single sword hit did not sweep left to right")
+	_expect(max_off_hand_sweep < 0.001, "off-hand joined the sword swing")
+	_expect(max_attack_lean < 0.001, "sword attack unexpectedly leaned forward")
+	_expect(max_attack_twist > deg_to_rad(55.0), "sword attack did not apply the tuned body twist")
+	_expect(max_attack_leg_brace < 0.001, "sword attack unexpectedly braced the legs")
+	_expect(min_attack_arm_pitch < -deg_to_rad(110.0), "sword attack did not apply the tuned arm pitch")
+	_expect(min_attack_height > attack_rest_height - 0.03, "sword attack unexpectedly added a crouch")
 	_expect(not animator._attacking, "sword attack one-shot did not end")
+	var return_windup_sweep := 0.0
+	var return_strike_sweep := 0.0
+	animator.play_attack(attack_action.attack_duration, 1)
+	for frame in range(29):
+		_advance(animator, 1)
+		if frame == 5:
+			return_windup_sweep = animator.right_arm_action.rotation.z
+		elif frame == 15:
+			return_strike_sweep = animator.right_arm_action.rotation.z
+	_expect(return_windup_sweep < -deg_to_rad(45.0) and return_strike_sweep > deg_to_rad(68.0), "chained sword hit did not sweep right to left")
+	_expect(abs(animator.left_arm_action.rotation.z) < 0.001, "off-hand joined the reversed sword swing")
+	_expect(not animator._attacking, "reversed sword attack one-shot did not end")
 	_advance(animator, 2)
 	_expect(abs(animator.body_action.rotation.x) < 0.001, "sword attack body lean did not recover")
 
