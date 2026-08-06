@@ -130,4 +130,5 @@ Godot itself is MIT licensed.
 | [#15](https://github.com/codimango/gamedev-wildes/pull/15) | Add copper sword combat | `codex/copper-sword` |
 | [#16](https://github.com/codimango/gamedev-wildes/pull/16) | Harden tool data and save contracts | `codex/tool-system-hardening` |
 | [#17](https://github.com/codimango/gamedev-wildes/pull/17) | Unify the melee attack presentation lifecycle | `codex/tool-attack-lifecycle` |
+| [#21](https://github.com/codimango/gamedev-wildes/pull/21) | Make Godot CI validation fail closed | `codex/strict-godot-validation` |
 | [#22](https://github.com/codimango/gamedev-wildes/pull/22) | Add pull request quality scaffolding | `codex/pr-quality-scaffolding` |

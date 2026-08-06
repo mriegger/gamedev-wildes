@@ -13,6 +13,7 @@
 # RAYLIB_VERSION (5.0 -- must match the game Makefile's raylib path).
 set -euo pipefail
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 engine="${1:?engine required}"
 name="${2:?name required}"
 project_dir="${3:-src}"
@@ -53,7 +54,8 @@ build_godot() {
     || { echo "::error::no export_presets.cfg in ${project_dir} (add a preset named 'macOS')"; exit 1; }
 
   log "Importing project assets"
-  "$godot_bin" --headless --path "$project_dir" --import 2>/dev/null || true
+  bash "$script_dir/import_godot_project.sh" \
+    "$godot_bin" "$project_dir" "$build_dir/godot-import-initial.log" "$build_dir/godot-import-validation.log"
   log "Exporting macOS app"
   "$godot_bin" --headless --path "$project_dir" --export-release "macOS" "$app"
   [ -d "$app" ] || { echo "::error::Godot export produced no .app at ${app}"; exit 1; }

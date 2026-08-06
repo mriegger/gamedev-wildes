@@ -42,5 +42,5 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        godot --headless --path src --import 2>&1 | head -n 100 || true
-        test -d src/.godot || echo "no .godot after import (ok for headless)"
+        timeout 180 bash .github/scripts/import_godot_project.sh \
+          godot src /tmp/godot-import-initial.log /tmp/godot-import-validation.log
