@@ -118,32 +118,3 @@ asset is the UI font:
 | `src/assets/fonts/RobotoSlab-{Regular,SemiBold,Bold}.ttf` | [Roboto Slab](https://fonts.google.com/specimen/Roboto+Slab) — Christian Robertson, via Google Fonts | Apache-2.0 |
 
 Godot itself is MIT licensed.
-
-## PR Index
-
-| PR | Description | Branch |
-| --- | --- | --- |
-| [#1](https://github.com/codimango/gamedev-wildes/pull/1) | Optimize chunk streaming and fix volumetric fog albedo | `fix/streaming-opt-albedo` |
-| [#2](https://github.com/codimango/gamedev-wildes/pull/2) | Add side-panel inventory, tabbed UI, drag-drop, and interaction hardening | `feat/side-panel-inventory` |
-| [#3](https://github.com/codimango/gamedev-wildes/pull/3) | Add the comprehensive headless test suite and composite Godot CI | `test/comprehensive-headless-suite` |
-| [#4](https://github.com/codimango/gamedev-wildes/pull/4) | Publish a GitHub Release for every `src` change on `main` | `release/src-releases-main` |
-| [#5](https://github.com/codimango/gamedev-wildes/pull/5) | Optimize runtime systems and remove redundant code | `refactor/aggressive-codebase-optimization` |
-| [#6](https://github.com/codimango/gamedev-wildes/pull/6) | Organize the project around Godot feature ownership | `refactor/godot-feature-structure` |
-| [#7](https://github.com/codimango/gamedev-wildes/pull/7) | Add scalable texture and item catalogs | `feat/texture-array-item-catalog` |
-| [#8](https://github.com/codimango/gamedev-wildes/pull/8) | Add expressive procedural player animation | `feat/expressive-player-animation` |
-| [#9](https://github.com/codimango/gamedev-wildes/pull/9) | Add full-face voxel ambient occlusion and lighting polish | `feat/ao-lighting-polish` |
-| [#10](https://github.com/codimango/gamedev-wildes/pull/10) | Land the AO lighting and player animation stack | `codex/land-pr8-pr9` |
-| [#11](https://github.com/codimango/gamedev-wildes/pull/11) | Fix saved-time startup and linear day-night transitions | `codex/fix-linear-day-night` |
-| [#12](https://github.com/codimango/gamedev-wildes/pull/12) | Add graphics settings and reduce thermal load | `codex/settings` |
-| [#13](https://github.com/codimango/gamedev-wildes/pull/13) | Add an extensible tool system and copper pickaxe | `codex/tool-system` |
-| [#14](https://github.com/codimango/gamedev-wildes/pull/14) | Add a configurable sword attack rig and preview | `codex/sword-animation-rig` |
-| [#15](https://github.com/codimango/gamedev-wildes/pull/15) | Add copper sword combat | `codex/copper-sword` |
-| [#16](https://github.com/codimango/gamedev-wildes/pull/16) | Harden tool data and save contracts | `codex/tool-system-hardening` |
-| [#17](https://github.com/codimango/gamedev-wildes/pull/17) | Unify the melee attack presentation lifecycle | `codex/tool-attack-lifecycle` |
-| [#18](https://github.com/codimango/gamedev-wildes/pull/18) | Fix release world initialization side effects | `codex/fix-release-initialization` |
-| [#19](https://github.com/codimango/gamedev-wildes/pull/19) | Index world edits for chunk builds | `codex/index-world-edits` |
-| [#20](https://github.com/codimango/gamedev-wildes/pull/20) | Batch torch shadow selection during chunk loads | `codex/batch-torch-shadow-updates` |
-| [#21](https://github.com/codimango/gamedev-wildes/pull/21) | Make Godot CI validation fail closed | `codex/strict-godot-validation` |
-| [#22](https://github.com/codimango/gamedev-wildes/pull/22) | Add pull request quality scaffolding | `codex/pr-quality-scaffolding` |
-| [#23](https://github.com/codimango/gamedev-wildes/pull/23) | Widen world golden block ID encoding | `codex/widen-world-golden-hash` |
-| [#24](https://github.com/codimango/gamedev-wildes/pull/24) | Fix pixel weapon mesh shading | `codex/fix-weapon-mesh-winding` |
