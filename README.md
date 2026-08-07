@@ -17,7 +17,7 @@ world time.
 | `Space` | Hop — needed to get up any ledge |
 | `Q` / `E` | Rotate the camera 45° |
 | Mouse wheel / pinch | Zoom |
-| Hold left-click | Use the selected item's primary action |
+| Left-click / hold | Use the selected item's primary action; hold to mine, click to attack |
 | Right-click | Place the selected block |
 | `1`–`9` | Select hotbar slot |
 | `P` | Toggle backpack |
@@ -27,17 +27,18 @@ world time.
 Reach is 6 blocks. The block under the cursor is outlined, and a ghost block previews where a
 placement would land; placements that would overlap you are rejected.
 
-The animation tuner is a compact right-side debug-build panel. Its Movement, Animation, and
-Parts tabs update the live player immediately, while preview modes let you hold idle, walk,
-sprint, jump, or fall behavior. `Export Values to Project Root` writes the complete current
-configuration to `player_animation_values.json` beside the `src/` directory.
+The animation tuner is a compact right-side debug-build panel. Its Movement, Animation, Parts,
+and Attack tabs update the live player immediately, while preview modes let you hold idle, walk,
+sprint, jump, fall, or sword-attack behavior. `Export Values to Project Root` writes the complete
+current configuration to `player_animation_values.json` beside the `src/` directory.
 
 ## Features
 
-**World.** Endless terrain generated from layered noise (hills, detail, biome, forest, ridges)
-in 20×20 chunk columns, 36 blocks tall. You spawn in a grass meadow clearing; beyond it are
-sandy lowlands, forests, and stone ridges. Lakes (16–42 blocks wide, 6 deep) and rivers carve
-into the terrain and fill with water up to level 5.
+**World.** Endless terrain generated from continentalness, erosion, peaks-and-valleys,
+temperature, and humidity noise in 20×20 chunk columns, 36 blocks tall. You spawn in a grass
+meadow clearing; beyond it are plains, forests, wetlands, sandy lowlands, highlands, and stone
+mountains. Lakes with 16–42-block radii and 5–8-block depths, plus rivers, carve into the terrain
+and fill with water up to level 5.
 
 **Streaming.** Chunks load in a radius of 4 around you (9×9 = 81 chunks) and unload two chunks
 further out. Meshing runs on background threads so movement doesn't hitch; edits are stored
@@ -48,6 +49,11 @@ the starter copper pickaxe; other current blocks remain hand-minable. Torches ar
 a seventh placeable that you can walk through — each is an omni light with a 9-block radius.
 Torch shadows are configurable for the nearest 0, 1, 2, or 4 lights and default to the nearest
 one.
+
+**Tools.** New worlds start with a copper pickaxe and copper sword. Item actions are data-driven:
+the pickaxe satisfies stone's mining requirement, while the sword uses click-triggered,
+alternating melee swings. Pixel-art held tools are extruded into shaded 3D silhouette meshes at
+runtime.
 
 **Lighting.** Per-vertex ambient occlusion is baked into chunk meshes. A directional sun plus a
 fill light drive real-time shadows, and a keyframed day/night profile interpolates sky, ambient,
@@ -68,14 +74,17 @@ anti-aliasing, fog, sun-shadow, shadow-range, and torch-shadow settings. Saves l
 
 ```text
 src/                    Godot project. Entry scene: app/app.tscn
+├── actors/             Shared procedural animation state, profiles, and humanoid animator
 ├── app/                Application shell and screen/session transitions
 ├── game/               Gameplay composition root and session persistence
 ├── world/              Coordinator plus chunks/, generation/, materials/, model/, settings/,
 │                       and special_blocks/
 ├── blocks/             Block ids, definitions, catalog, and torch placement rules
-├── player/             Motor, interaction, targeting, input, camera/, and visuals/
+├── items/              Item catalog, action definitions, and held-item scenes
+├── player/             Motor, interaction, targeting, input, animation, camera/, debug/, and visuals/
 ├── environment/        Packaged environment scene and day_night/ system
 ├── inventory/          Inventory model and inventory-owned ui/
+├── settings/           Persistent display and rendering settings
 ├── ui/                 Shared components/, hud/, screens/, and theme/
 ├── save/               Three-slot JSON save manager
 └── tests/              Headless behavior, determinism, fuzz, and streaming checks
@@ -100,8 +109,9 @@ UI remains at output resolution. macOS (universal) and Web export presets are co
 
 ## Assets & Attribution
 
-The world, blocks, and player are code-generated meshes with hand-written GDScript shaders. The
-only third-party asset is the UI font:
+World geometry and held pixel-tool meshes are generated at runtime, while the player is assembled
+from Godot primitive meshes. Visual effects use project-authored shaders. The only third-party
+asset is the UI font:
 
 | Asset | Source | License |
 | --- | --- | --- |

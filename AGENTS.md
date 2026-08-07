@@ -1,50 +1,63 @@
-# Project Wildes - agent working rules
+# Project Wildes agent rules
 
-This is a directory for a isometric voxel game called Project Wildes. 
+Project Wildes is a Godot 4.7 isometric voxel sandbox expected to grow into many interacting
+systems. Keep features independently changeable without introducing shared mutable state.
 
-Godot 4.7 / GDScript, Systems are built in `game.tscn` and wired via `setup()` calls. No autoloads, no singletons. Keep it that way. 
+## Architecture
 
-## Renames and refactors
-1. No external API consumers. When you rename something, rename every call site and delete the old name. Never leave behind an alias const, a forwarding one liner, a reexport, a thin subclass, or a duplicate signal. 
-2. Never keep an old API shape alongside a new one for "compatibility". No int/enum facade over string keyed table, no `old_foo()` calling `foo_new()`. Migrate callers and delete the old path in the same change. 
+1. `src/game/game.tscn` is the gameplay composition root. Wire dependencies explicitly through
+   constructors, exported resources, or `setup()` calls.
+2. No autoloads, singletons, service locators, global mutable registries, or hidden scene-tree
+   lookups.
+3. Dependencies flow in one direction: definitions and catalogs → domain models → coordinators →
+   presentation. Composition roots connect the layers.
+4. Each piece of mutable state has one owner. Other systems use its command and query APIs rather
+   than mutating its collections, resources, or nodes.
+5. Keep rules deterministic and independent of `Node` when they do not require rendering or frame
+   callbacks. UI, animation, audio, and meshes present state; they do not own gameplay truth.
+6. Avoid dependency cycles. Coordinate peer systems from `Game` or a focused feature coordinator,
+   never a global event bus.
+7. Cross-system operations must validate before committing so inventory, world, equipment,
+   crafting, and combat state cannot partially diverge.
 
-## Dead code
-1. Do not add a function, constant, signal, variable, or parameter that has no caller. If it is for a feature that hasnt landed, leave it out.
-2. Do not emit a signal nothing connects to. Wire the consumer in the same change or dont declare the signal. 
-3. D not add optional parameters that no call site passes.
-4. Do not write defensive branches for conditions that cannot occur (`has_method()` on a method the same base class always has, a fallback behind an early `return`, `if x: A else: A`).
-5. Before reporting done, grep every symbol you added. Zero callers means delete it.
+## Systems and content
 
-## Do not write code that undoes itself
-1. Don't call a helper and then overwrite every field to set.
-2. Do not build a paramterized API and then hardcode the values at the callsite. 
-3. If two functions encode the same rule (`can_x()` predicate and the `x()` that mutates), one MUST call the other. Never maintain them in parallel. 
+1. A feature directory owns its definitions, domain state, runtime coordination, presentation, and
+   focused tests.
+2. Blocks, items, actions, biomes, and future content use canonical typed definitions and catalogs.
+   Persist stable IDs, not scene paths or display names.
+3. Adding content to an existing mechanic should require a resource and catalog entry, not branches
+   scattered through the player, HUD, save manager, or world.
+4. A new behavior family must add its definition, executor, validation, and real caller together.
+5. Keep mappings in one authoritative place. Do not synchronize parallel block-to-item,
+   item-to-action, or similar tables.
+6. Prefer focused composition over broad inheritance. Extract shared behavior after a second real
+   caller exists; do not create vague `Manager`, `Utils`, or `BaseSystem` abstractions.
+7. Commands request changes, queries inspect state, and signals announce completed changes. Every
+   signal must have a consumer.
+8. Expose narrow semantic APIs such as `try_place_block()` instead of internal collections.
 
-## Comments
-1. Do not add comments
+## Voxel world
 
-## Shared code
-1. Extract a shared base class rather then copying a block into a second file. Two near identical copies always drift.
+1. `VoxelWorld` is authoritative for block state and edits. Renderers react to committed changes and
+   never maintain competing gameplay state.
+2. World generation remains deterministic for a seed and is configured through typed resources.
+3. Chunk workers consume snapshots and return data. Scene nodes, meshes, signals, and visual changes
+   stay on the main thread.
+4. Streaming queues, caches, and indexes must remain bounded. Per-frame, per-block, and per-chunk
+   paths use spatial indexes rather than full-world scans.
 
-## Verification - REQUIRED, DO NOT SKIP.
-1. Boot: `/Applications/Godot.app/Contents/MacOS/Godot --path src --headless --quit`
-2. Behavior: Write a temporary `extends SceneTree` script under `src/`, run it with `--path src --headless --script res://tmp_x.gd`, then DELETE it. Instantiate `res://ui/hud/hud.tscn`, add it to `root`, call `setup_with_camera(inv, null)`, let around 120 frames pass, then inspect real node state. Drive real input with `root.push_input(event, true)`.
-3. Leave the working tree exactly as you found it. `git status` must show no temp files.
+## Persistence and refactors
 
-## Tests — run periodically to prevent regressions
-1. After any inventory, worldgen, HUD/drag, streaming, player animation, animation tuning, or tool change — and before reporting DONE — run the headless suite locally. CI runs the suite in parallel; `.github/workflows/tests.yml` defines the jobs and `src/tests/README.md` documents their invariants.
-2. Inventory fuzz (RefCounted, ~100k seq/s): `/Applications/Godot.app/Contents/MacOS/Godot --path src --headless --script res://tests/inventory_fuzz_runner.gd -- --seqs=20000 --ops=20` — expect `ALL PASS`. Smoke: `--seqs=5000 --ops=20`.
-3. World golden hash (seed 1337, `x[-32,32) z[-32,32) y[0,128)`): `/Applications/Godot.app/Contents/MacOS/Godot --path src --headless --script res://tests/world_golden_hash.gd` — expect `GOLDEN PASS`. If you intentionally reshaped terrain (noise/spline/biome/lake/river), rerun with `-- --update` and commit the new `src/tests/golden_world_hash.json`.
-4. HUD headless integration: `/Applications/Godot.app/Contents/MacOS/Godot --path src --headless --script res://tests/hud_integration.gd` — expect `HUD_INTEGRATION PASS orphan=0 previews=0` (mid-drag 1 preview, 0 after release).
-5. Player animation integration: `/Applications/Godot.app/Contents/MacOS/Godot --path src --headless --script res://tests/player_animation_integration.gd` — expect `PLAYER_ANIMATION PASS orphan=0`.
-6. Animation tuning integration: `/Applications/Godot.app/Contents/MacOS/Godot --path src --headless --script res://tests/animation_tuning_panel_integration.gd` — expect `ANIMATION_TUNING PASS orphan=0`.
-7. Tool system integration: `/Applications/Godot.app/Contents/MacOS/Godot --path src --headless --script res://tests/tool_system_integration.gd` — expect `TOOL_SYSTEM PASS orphan=0`.
-8. World streaming soak (real `game.tscn`, 900 frames): `/Applications/Godot.app/Contents/MacOS/Godot --path src --headless --script res://tests/soak_world_streaming.gd` — expect `SOAK PASS` with bounded chunks and no orphans.
-9. Do not land with any red test job. Details and invariants live in `src/tests/README.md`.
-
-## Definition of "DONE"
-1. Every new symbol has a caller.
-2. No old name survives a rename
-3. Headless boot is clean
-4. The behavior is verified by running it, not by reading it. 
-5. `git status` shows only intended files.
+1. Save stable IDs and plain values. Rebuild resources, nodes, caches, indexes, and derived state
+   after loading.
+2. State owners expose snapshot and restore contracts; `SaveManager` owns file encoding and storage.
+3. Persisted shape changes require explicit version handling. Never silently reinterpret old data.
+4. Rename every call site and delete the old API in the same change. Do not keep aliases, forwarding
+   methods, reexports, thin subclasses, or compatibility paths.
+5. Do not add unused symbols, signals, parameters, speculative extension points, or defensive paths
+   excluded by the type and architecture contracts.
+6. If `can_x()` and `x()` encode the same rule, they must share one implementation.
+7. Do not add comments. Make ownership, naming, types, and boundaries explain the code.
+8. Before finishing, search every added symbol, remove dead code and temporary files, and confirm
+   `git status` contains only intended changes.
