@@ -15,6 +15,7 @@ class_name PlayerMotor
 @onready var model_root: Node3D = $ModelRoot as Node3D
 @onready var held_item_view: HeldItemView = $ModelRoot/PlayerVisual/RigRoot/BodySecondary/BodyAction/TorsoBase/RightShoulder/RightArmBase/RightArmAction/RightHandSocket as HeldItemView
 @onready var _footsteps: Node = $Footsteps
+@onready var _action_audio: Node = $ActionAudio
 
 var voxel_world: VoxelWorld = null
 var camera_rig: CameraRig = null
@@ -38,6 +39,7 @@ func setup(p_world: WorldController, p_camera_rig: CameraRig, p_inventory: Inven
 	animation_driver.setup(self, interactor)
 	held_item_view.setup(p_inventory)
 	_footsteps.setup(self)
+	_action_audio.setup(interactor)
 
 func _physics_process(delta):
 	if voxel_world == null:
