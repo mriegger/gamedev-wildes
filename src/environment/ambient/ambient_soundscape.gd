@@ -94,7 +94,7 @@ func _on_time_changed(new_time: float):
 
 
 func _apply_volumes():
-	var birds_linear = _ambient_volume * _day_factor if _birds_enabled else 0.0
+	var birds_linear = _ambient_volume * _day_factor * 0.5 if _birds_enabled else 0.0
 	var insects_linear = _ambient_volume * (1.0 - _day_factor) if _insects_enabled else 0.0
 	_birds_player.volume_db = linear_to_db(birds_linear) if birds_linear > 0.001 else -80.0
 	_insects_player.volume_db = linear_to_db(insects_linear) if insects_linear > 0.001 else -80.0
