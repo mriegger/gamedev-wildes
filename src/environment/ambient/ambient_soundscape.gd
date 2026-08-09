@@ -29,8 +29,9 @@ func start():
 	_running = true
 	_day_factor = _get_day_factor(_clock.get_time_of_day())
 	_apply_volumes()
-	if _day_factor > 0.01 and _birds_enabled and _birds_timer.is_stopped():
-		_birds_timer.start(randf_range(2.0, 6.0))
+	if _day_factor > 0.01 and _birds_enabled:
+		if not _birds_player.playing:
+			_birds_player.play()
 	if (1.0 - _day_factor) > 0.01 and _insects_enabled and _insects_timer.is_stopped():
 		_insects_timer.start(randf_range(3.0, 7.0))
 
@@ -51,10 +52,10 @@ func set_volume(volume: float):
 func set_birds_enabled(enabled: bool):
 	_birds_enabled = enabled
 	if not enabled:
-		_birds_timer.stop()
 		_birds_player.stop()
-	elif _running and _day_factor > 0.01 and _birds_timer.is_stopped():
-		_birds_timer.start(randf_range(1.0, 4.0))
+	elif _running and _day_factor > 0.01:
+		if not _birds_player.playing:
+			_birds_player.play()
 	_apply_volumes()
 
 
@@ -81,10 +82,10 @@ func _on_time_changed(new_time: float):
 		return
 	var night_factor = 1.0 - _day_factor
 	if _day_factor <= 0.01:
-		_birds_timer.stop()
+		_birds_player.stop()
 	else:
-		if _birds_enabled and _birds_timer.is_stopped():
-			_birds_timer.start(randf_range(4.0, 10.0))
+		if _birds_enabled and not _birds_player.playing:
+			_birds_player.play()
 	if night_factor <= 0.01:
 		_insects_timer.stop()
 	else:
@@ -114,10 +115,8 @@ func _on_birds_timer_timeout():
 		return
 	if not _running:
 		return
-	_birds_player.pitch_scale = randf_range(0.92, 1.08)
 	if not _birds_player.playing:
 		_birds_player.play()
-	_birds_timer.start(randf_range(8.0, 25.0))
 
 
 func _on_insects_timer_timeout():
