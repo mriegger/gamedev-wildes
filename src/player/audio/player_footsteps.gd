@@ -1,7 +1,7 @@
 extends Node
 class_name PlayerFootsteps
 
-@onready var _player: AudioStreamPlayer3D = $FootstepPlayer
+@onready var _player: AudioStreamPlayer = $FootstepPlayer
 
 var _motor: PlayerMotor
 var _step_timer: float = 0.0
