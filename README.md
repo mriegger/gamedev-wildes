@@ -110,11 +110,12 @@ UI remains at output resolution. macOS (universal) and Web export presets are co
 ## Assets & Attribution
 
 World geometry and held pixel-tool meshes are generated at runtime, while the player is assembled
-from Godot primitive meshes. Visual effects use project-authored shaders. The only third-party
-asset is the UI font:
+from Godot primitive meshes. Visual effects use project-authored shaders.
 
 | Asset | Source | License |
 | --- | --- | --- |
 | `src/assets/fonts/RobotoSlab-{Regular,SemiBold,Bold}.ttf` | [Roboto Slab](https://fonts.google.com/specimen/Roboto+Slab) — Christian Robertson, via Google Fonts | Apache-2.0 |
+| `src/assets/audio/ambient/nri-DawnchorusinAmphitheater.mp3` | National Park Service – Dawn chorus in Amphitheater | Public Domain (U.S. Government work) |
+| `src/assets/audio/footsteps/dirt/Footstep_Dirt_*.wav` (9 files) | [Fantasy Sound Effects Library](https://littlerobotsoundfactory.com/) – Footstep Dirt – by Morten Barfod Søegaard, Little Robot Sound Factory, distributed by Little Robot Sound Factory | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 
 Godot itself is MIT licensed.

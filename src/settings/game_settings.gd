@@ -17,6 +17,9 @@ var volumetric_fog_enabled: bool = false
 var sun_shadows_enabled: bool = true
 var shadow_range: int = SHADOW_RANGE_MEDIUM
 var torch_shadow_count: int = 1
+var ambient_volume: float = 1.0
+var birds_enabled: bool = true
+var insects_enabled: bool = true
 var persist_changes: bool = false
 
 static func load_from_disk() -> GameSettings:
@@ -76,6 +79,9 @@ func to_dict() -> Dictionary:
 		"sun_shadows_enabled": sun_shadows_enabled,
 		"shadow_range": shadow_range,
 		"torch_shadow_count": torch_shadow_count,
+		"ambient_volume": ambient_volume,
+		"birds_enabled": birds_enabled,
+		"insects_enabled": insects_enabled,
 	}
 
 func _apply_dict(data: Dictionary):
@@ -89,3 +95,7 @@ func _apply_dict(data: Dictionary):
 	shadow_range = clampi(int(data.get("shadow_range", shadow_range)), SHADOW_RANGE_LOW, SHADOW_RANGE_HIGH)
 	var loaded_torch_shadows := int(data.get("torch_shadow_count", torch_shadow_count))
 	torch_shadow_count = loaded_torch_shadows if loaded_torch_shadows in [0, 1, 2, 4] else 1
+	var loaded_ambient_vol := float(data.get("ambient_volume", ambient_volume))
+	ambient_volume = clampf(loaded_ambient_vol, 0.0, 1.0)
+	birds_enabled = bool(data.get("birds_enabled", birds_enabled))
+	insects_enabled = bool(data.get("insects_enabled", insects_enabled))
