@@ -30,7 +30,7 @@ func setup(p_runtime_id: int, p_definition: EntityDefinition, p_voxel_world: Vox
 	animation_driver.setup(self)
 	set_process(true)
 
-func tick(_delta: float, _player_position: Vector3):
+func tick(_delta: float, _player_position: Vector3, _separation_velocity: Vector3):
 	assert(false)
 
 func _process(delta: float):

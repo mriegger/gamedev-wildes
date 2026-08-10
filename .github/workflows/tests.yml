@@ -109,6 +109,34 @@ jobs:
             30 "ENTITY_COMBAT_INTEGRATION PASS" /tmp/entity_combat.log -- \
             godot --headless --path src --script res://tests/entity_combat_integration.gd
 
+  entity-spatial-index:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run entity spatial index tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "ENTITY_SPATIAL_INDEX PASS" /tmp/entity_spatial_index.log -- \
+            godot --headless --path src --script res://tests/entity_spatial_index.gd
+
+  entity-population-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run entity population integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "ENTITY_POPULATION_INTEGRATION PASS" /tmp/entity_population.log -- \
+            godot --headless --path src --script res://tests/entity_population_integration.gd
+
   hud-integration:
     runs-on: ubuntu-latest
     timeout-minutes: 10

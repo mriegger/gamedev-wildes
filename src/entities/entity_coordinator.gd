@@ -8,12 +8,16 @@ const SPAWN_ATTEMPTS: int = 4
 const MIN_SPAWN_DISTANCE: float = 18.0
 const MAX_SPAWN_DISTANCE: float = 36.0
 const DESPAWN_DISTANCE: float = 56.0
+const SPATIAL_CELL_SIZE: float = 4.0
+const SEPARATION_RADIUS: float = 1.2
+const SEPARATION_SPEED: float = 1.25
 
 var _catalog: EntityCatalog
 var _voxel_world: VoxelWorld
 var _position_ready: Callable
 var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 var _active: Dictionary = {}
+var _spatial_index: EntitySpatialIndex = EntitySpatialIndex.new(SPATIAL_CELL_SIZE)
 var _spawn_elapsed: float = 0.0
 var _next_runtime_id: int = 1
 
@@ -26,13 +30,25 @@ func setup(p_catalog: EntityCatalog, p_voxel_world: VoxelWorld, world_seed: int,
 	_position_ready = p_position_ready
 	_rng.seed = world_seed
 	_spawn_elapsed = 0.0
+	_spatial_index.clear()
 
 func tick(delta: float, player_position: Vector3, time_of_day: float):
 	assert(_catalog != null and _voxel_world != null)
 	_despawn_distant(player_position)
-	for actor in _active.values():
-		if is_instance_valid(actor):
-			(actor as EntityActor).tick(delta, player_position)
+	_refresh_spatial_index()
+	var runtime_ids: Array = _active.keys()
+	runtime_ids.sort()
+	var separation_velocities: Dictionary = {}
+	for runtime_id in runtime_ids:
+		var actor := get_actor(runtime_id)
+		if actor != null:
+			separation_velocities[runtime_id] = _get_separation_velocity(actor)
+	for runtime_id in runtime_ids:
+		var actor := get_actor(runtime_id)
+		if actor == null:
+			continue
+		actor.tick(delta, player_position, separation_velocities[runtime_id] as Vector3)
+		_spatial_index.upsert(actor.runtime_id, actor.global_position, actor.get_world_bounds())
 	_spawn_elapsed += delta
 	if _spawn_elapsed < SPAWN_INTERVAL_SECONDS:
 		return
@@ -56,6 +72,10 @@ func _try_spawn(definition: EntityDefinition, player_position: Vector3) -> bool:
 		if feet_y == VoxelWorld.NO_SURFACE_Y:
 			continue
 		var spawn_position := Vector3(float(x) + 0.5, feet_y, float(z) + 0.5)
+		var horizontal_offset := Vector2(spawn_position.x - player_position.x, spawn_position.z - player_position.z)
+		var horizontal_distance_squared := horizontal_offset.length_squared()
+		if horizontal_distance_squared < MIN_SPAWN_DISTANCE * MIN_SPAWN_DISTANCE or horizontal_distance_squared > MAX_SPAWN_DISTANCE * MAX_SPAWN_DISTANCE:
+			continue
 		if not bool(_position_ready.call(spawn_position)):
 			continue
 		var actor := definition.actor_scene.instantiate() as EntityActor
@@ -69,6 +89,7 @@ func _try_spawn(definition: EntityDefinition, player_position: Vector3) -> bool:
 		actor.global_position = spawn_position
 		actor.setup(runtime_id, definition, _voxel_world, int(_rng.randi()))
 		actor.melee_contact_reached.connect(_on_actor_melee_contact_reached)
+		_spatial_index.upsert(runtime_id, actor.global_position, actor.get_world_bounds())
 		return true
 	return false
 
@@ -104,6 +125,7 @@ func _despawn(runtime_id: int):
 		return
 	var actor := _active[runtime_id] as EntityActor
 	_active.erase(runtime_id)
+	_spatial_index.remove(runtime_id)
 	if is_instance_valid(actor):
 		actor.queue_free()
 
@@ -113,6 +135,33 @@ func _count_definition(definition_id: StringName) -> int:
 		if is_instance_valid(actor) and (actor as EntityActor).definition.id == definition_id:
 			count += 1
 	return count
+
+func _refresh_spatial_index():
+	for actor in _active.values():
+		if is_instance_valid(actor):
+			var entity := actor as EntityActor
+			_spatial_index.upsert(entity.runtime_id, entity.global_position, entity.get_world_bounds())
+
+func _get_separation_velocity(actor: EntityActor) -> Vector3:
+	var separation := Vector3.ZERO
+	for nearby_id in _spatial_index.query_nearby(actor.global_position, SEPARATION_RADIUS):
+		if nearby_id == actor.runtime_id:
+			continue
+		var other := get_actor(nearby_id)
+		if other == null:
+			continue
+		var offset := actor.global_position - other.global_position
+		offset.y = 0.0
+		var distance := offset.length()
+		if distance <= 0.001:
+			offset = Vector3.RIGHT if actor.runtime_id < other.runtime_id else Vector3.LEFT
+			distance = 0.0
+		var strength := 1.0 - distance / SEPARATION_RADIUS
+		if strength > 0.0:
+			separation += offset.normalized() * strength
+	if separation.length_squared() > 1.0:
+		separation = separation.normalized()
+	return separation * SEPARATION_SPEED
 
 func get_active_count() -> int:
 	return _active.size()
@@ -140,6 +189,7 @@ func shutdown():
 	for runtime_id in _active.keys():
 		_despawn(runtime_id)
 	_active.clear()
+	_spatial_index.clear()
 	_catalog = null
 	_voxel_world = null
 	_position_ready = Callable()

@@ -33,7 +33,7 @@ func _run():
 	var zombie := catalog.get_definition(&"zombie")
 	_expect(zombie.id == &"zombie", "zombie ID changed")
 	_expect(zombie.spawn_phase == EntityDefinition.SpawnPhase.NIGHT, "zombie is not night-spawned")
-	_expect(zombie.max_active == 1, "initial zombie cap is not one")
+	_expect(zombie.max_active == 6, "zombie population cap is not six")
 
 	var coordinator := EntityCoordinator.new()
 	get_root().add_child(coordinator)

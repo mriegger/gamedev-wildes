@@ -22,7 +22,7 @@ func setup(p_runtime_id: int, p_definition: EntityDefinition, p_voxel_world: Vox
 	_zombie_animation = animation_driver as ZombieAnimationDriver
 	assert(_zombie_animation != null)
 
-func tick(delta: float, player_position: Vector3):
+func tick(delta: float, player_position: Vector3, separation_velocity: Vector3):
 	assert(brain != null and voxel_world != null)
 	_advance_melee_contact(delta)
 	var visible := _has_line_of_sight(player_position)
@@ -41,6 +41,12 @@ func tick(delta: float, player_position: Vector3):
 		if not (chasing and global_position.distance_squared_to(player_position) <= reach_squared):
 			desired_velocity = _get_path_velocity(delta, goal, _behavior.chase_speed if chasing else _behavior.wander_speed)
 	max_speed = _behavior.chase_speed if chasing else _behavior.wander_speed
+	desired_velocity += separation_velocity
+	var planar_velocity := Vector2(desired_velocity.x, desired_velocity.z)
+	if planar_velocity.length() > max_speed:
+		planar_velocity = planar_velocity.normalized() * max_speed
+		desired_velocity.x = planar_velocity.x
+		desired_velocity.z = planar_velocity.y
 	_advance_motion(delta, desired_velocity)
 
 func _arm_melee_contact(profile: MeleeAttackProfile):

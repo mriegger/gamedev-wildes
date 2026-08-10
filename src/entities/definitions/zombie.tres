@@ -12,5 +12,5 @@ behavior = ExtResource("3_behavior")
 body_width = 0.6
 body_height = 1.8
 spawn_phase = 1
-max_active = 1
+max_active = 6
 spawn_floor_ids = Array[int]([1, 2, 3, 4])

@@ -179,7 +179,7 @@ func _test_zombie_actor_movement_and_animation() -> void:
 	var target := Vector3(4.5, float(FEET_Y), 0.5)
 	var initial_distance := actor.global_position.distance_to(target)
 	for _step in range(5):
-		actor.tick(0.1, target)
+		actor.tick(0.1, target, Vector3.ZERO)
 	actor.animation_driver.advance(0.1)
 	_expect(actor.brain.state == ZombieBrain.State.CHASE, "zombie actor did not enter chase")
 	_expect(actor.global_position.distance_to(target) < initial_distance, "zombie actor did not move toward its target")
@@ -187,7 +187,7 @@ func _test_zombie_actor_movement_and_animation() -> void:
 
 	actor.global_position = target - Vector3(1.0, 0.0, 0.0)
 	actor.velocity = Vector3.ZERO
-	actor.tick(0.01, target)
+	actor.tick(0.01, target, Vector3.ZERO)
 	actor.animation_driver.advance(0.0)
 	_expect(actor.brain.state == ZombieBrain.State.ATTACK, "zombie actor did not enter attack at melee range")
 	_expect((actor.animation_driver as ZombieAnimationDriver).get_current_state() == ZombieAnimationDriver.ATTACK, "custom zombie animation did not enter attack")
