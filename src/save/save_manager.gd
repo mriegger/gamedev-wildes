@@ -3,7 +3,7 @@ class_name SaveManager
 
 const SAVE_DIR: String = "user://saves"
 const SLOT_COUNT: int = 3
-const CURRENT_SAVE_VERSION: int = 3
+const CURRENT_SAVE_VERSION: int = 4
 
 static func ensure_save_dir() -> void:
 	if not DirAccess.dir_exists_absolute(SAVE_DIR):
@@ -75,6 +75,7 @@ static func create_new_world(slot_id: int, seed_value: int, world_name: String) 
 		"removed_blocks": {},
 		"torch_attachments": {},
 		"player_position": null,
+		"player_stats": null,
 		"inventory": null,
 		"playtime_seconds": 0,
 		"time_of_day": 6.0,
@@ -179,6 +180,8 @@ static func load_slot(slot_id: int) -> Dictionary:
 		info["time_of_day"] = 6.0
 	if not info.has("playtime_seconds"):
 		info["playtime_seconds"] = 0
+	if not info.has("player_stats"):
+		info["player_stats"] = null
 	return info
 
 static func save_world_state(slot_id: int, current_data: Dictionary, voxel_model: VoxelWorld, player: PlayerMotor, inventory: InventoryModel, extra_seconds: float, time_of_day: float) -> bool:
@@ -193,6 +196,7 @@ static func save_world_state(slot_id: int, current_data: Dictionary, voxel_model
 	updated["torch_attachments"] = serialize_vector3i_dict(voxel_model.torch_attachments)
 	var p = player.global_position
 	updated["player_position"] = [p.x, p.y, p.z]
+	updated["player_stats"] = player.stats.snapshot_progression()
 	updated["inventory"] = inventory.to_dict()
 	updated["time_of_day"] = fmod(time_of_day, GameClock.HOURS_PER_DAY)
 

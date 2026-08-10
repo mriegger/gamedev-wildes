@@ -10,6 +10,7 @@ signal main_menu_requested
 @export var block_catalog: BlockCatalog
 @export var item_catalog: ItemCatalog
 @export var entity_catalog: EntityCatalog
+@export var player_stats_definition: ActorStatsDefinition
 
 @onready var world: WorldController = $World as WorldController
 @onready var player: PlayerMotor = $Player as PlayerMotor
@@ -24,6 +25,7 @@ signal main_menu_requested
 @onready var _save_label: Label = $SaveStatusLayer/SaveStatusLabel as Label
 
 var inventory_model: InventoryModel
+var player_stats: ActorStats
 var input_buffer: InputBuffer = InputBuffer.new()
 var settings: GameSettings
 
@@ -47,7 +49,8 @@ func _ready():
 	var block_catalog_valid := block_catalog.validate()
 	var item_catalog_valid := item_catalog.validate(block_catalog)
 	var entity_catalog_valid := entity_catalog.validate()
-	if not block_catalog_valid or not item_catalog_valid or not entity_catalog_valid:
+	var player_stats_valid := player_stats_definition.validate()
+	if not block_catalog_valid or not item_catalog_valid or not entity_catalog_valid or not player_stats_valid:
 		push_error("[Game] Catalog validation failed")
 		return
 	settings.apply_display(get_viewport())
@@ -56,7 +59,9 @@ func _ready():
 	world.block_catalog = block_catalog
 	world.configure_settings(settings)
 	inventory_model = InventoryModel.new(item_catalog)
+	player_stats = ActorStats.new(player_stats_definition)
 	_restore_inventory()
+	_restore_player_stats()
 	world.configure_start_state(_world_state)
 	world.generation_progress.connect(_on_generation_progress)
 	await world.initialize_world_async()
@@ -83,9 +88,14 @@ func _restore_inventory():
 	else:
 		inventory_model.setup_starter()
 
+func _restore_player_stats():
+	var saved_stats = _save_data.get("player_stats", null)
+	if saved_stats is Dictionary and not player_stats.restore_progression(saved_stats):
+		push_error("[Game] Saved player stats are invalid; using base progression")
+
 func _setup_gameplay():
 	camera_rig.setup(player, input_buffer)
-	player.setup(world, camera_rig, inventory_model, input_buffer)
+	player.setup(world, camera_rig, inventory_model, input_buffer, player_stats)
 	var mining_particle_tints := MiningParticleTintPalette.new(block_catalog)
 	mining_break_particles.setup(world.voxel_model, mining_particle_tints)
 	mining_hit_particles.setup(player.animation_driver, player.interactor, mining_particle_tints)

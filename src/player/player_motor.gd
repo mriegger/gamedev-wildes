@@ -16,10 +16,12 @@ class_name PlayerMotor
 @onready var held_item_view: HeldItemView = $ModelRoot/PlayerVisual/RigRoot/BodySecondary/BodyAction/TorsoBase/RightShoulder/RightArmBase/RightArmAction/RightHandSocket as HeldItemView
 @onready var _footsteps: PlayerFootsteps = $Footsteps as PlayerFootsteps
 @onready var _action_audio: PlayerActionAudio = $ActionAudio as PlayerActionAudio
+@onready var stat_modifier_clock: StatModifierClock = $StatModifierClock as StatModifierClock
 
 var voxel_world: VoxelWorld = null
 var camera_rig: CameraRig = null
 var _input_buffer: InputBuffer = null
+var stats: ActorStats
 
 var on_ground: bool = false
 var is_sprinting: bool = false
@@ -30,10 +32,12 @@ var jump_anticipation: float = 0.0
 var _jump_windup_remaining: float = 0.0
 var _jump_ready: bool = false
 
-func setup(p_world: WorldController, p_camera_rig: CameraRig, p_inventory: InventoryModel, p_input_buffer: InputBuffer):
+func setup(p_world: WorldController, p_camera_rig: CameraRig, p_inventory: InventoryModel, p_input_buffer: InputBuffer, p_stats: ActorStats):
 	voxel_world = p_world.voxel_model
 	camera_rig = p_camera_rig
 	_input_buffer = p_input_buffer
+	stats = p_stats
+	stat_modifier_clock.setup(stats)
 	interactor.setup(voxel_world, p_camera_rig.camera, self, p_inventory, p_input_buffer)
 	targeting_view.setup(p_world, voxel_world, self, interactor)
 	animation_driver.setup(self, interactor)
