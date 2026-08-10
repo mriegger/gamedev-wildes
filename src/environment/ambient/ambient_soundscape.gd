@@ -38,10 +38,6 @@ func start():
 
 func stop():
 	_running = false
-	if _clock != null:
-		if _clock.time_changed.is_connected(_on_time_changed):
-			_clock.time_changed.disconnect(_on_time_changed)
-	_clock = null
 	_birds_timer.stop()
 	_insects_timer.stop()
 	_birds_player.stop()
@@ -50,6 +46,9 @@ func stop():
 
 func _exit_tree():
 	stop()
+	if _clock != null and _clock.time_changed.is_connected(_on_time_changed):
+		_clock.time_changed.disconnect(_on_time_changed)
+	_clock = null
 	if _birds_player:
 		_birds_player.stream = null
 	if _insects_player:

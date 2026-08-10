@@ -1,11 +1,9 @@
 extends SceneTree
 
 var _errors: Array[String] = []
-var _orphan_before: int = 0
 
 func _init():
 	print("[audio_footsteps] starting")
-	_orphan_before = int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
 	call_deferred("_run")
 
 func _expect(cond: bool, msg: String):
@@ -50,7 +48,6 @@ func _run():
 	await process_frame
 	_expect(asp.stream != null, "setup didn't assign stream")
 
-	# non-repeating logic over 30 plays
 	var last = -1
 	var repeated = false
 	for i in range(30):
@@ -58,29 +55,26 @@ func _run():
 		footsteps._play_step()
 		if footsteps._last_idx == last and footsteps._streams.size() > 1 and last != -1:
 			repeated = true
+		_expect(asp.pitch_scale >= 0.92 and asp.pitch_scale <= 1.08, "footstep pitch out of range %f" % asp.pitch_scale)
 		last = footsteps._last_idx
 	_expect(not repeated, "footstep repeated same idx immediate")
 
-	# gating: on_ground false resets timer
 	player.on_ground = false
 	player.velocity = Vector3(5.5, 0, 0)
 	footsteps._step_timer = 0.32
 	footsteps._process(0.1)
 	_expect(is_equal_approx(footsteps._step_timer, 0.0), "timer not reset when not on_ground")
 
-	# planar < MIN resets
 	player.on_ground = true
 	player.velocity = Vector3(0.1, 0, 0.1)
 	footsteps._step_timer = 0.32
 	footsteps._process(0.1)
 	_expect(is_equal_approx(footsteps._step_timer, 0.0), "timer not reset when planar <0.2")
 
-	# interval selection
 	player.on_ground = true
 	player.velocity = Vector3(5.5, 0, 0)
 	player.is_sprinting = false
 	footsteps._step_timer = 0.0
-	# walk interval 0.325
 	footsteps._process(0.32)
 	_expect(footsteps._step_timer > 0.0, "walk should not yet trigger at 0.32")
 	footsteps._process(0.01)
@@ -93,7 +87,6 @@ func _run():
 	footsteps._process(0.02)
 	_expect(is_equal_approx(footsteps._step_timer, 0.0), "sprint should trigger at 0.24")
 
-	# no node leak during process
 	var before_count = _count_nodes(root)
 	player.velocity = Vector3(5.5, 0, 0)
 	player.on_ground = true
@@ -102,6 +95,6 @@ func _run():
 	_expect(_count_nodes(root) == before_count, "footstep _process leaked nodes")
 
 	player.queue_free()
-	await process_frame
-	await process_frame
-	_finish("AUDIO_FOOTSTEPS")
+	for _frame_index in range(10):
+		await process_frame
+	call_deferred("_finish", "AUDIO_FOOTSTEPS")

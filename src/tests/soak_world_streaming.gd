@@ -797,6 +797,9 @@ func _check_final() -> void:
 	if _world:
 		_world.shutdown()
 	if _errors.is_empty():
+		_game.queue_free()
+		for _frame_index in range(10):
+			await process_frame
 		print("SOAK PASS frames=%d movement_frames=%d data_max=%d vis_max=%d terrain_max=%d orphan_max=%d edits=%d" % [_frame, _movement_frames, _max_data_chunks, _max_visible_chunks, _max_terrain_chunks, _max_orphan, _mine_place_count])
 		quit(0)
 	else:

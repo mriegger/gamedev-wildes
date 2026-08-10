@@ -1,11 +1,9 @@
 extends SceneTree
 
 var _errors: Array[String] = []
-var _orphan_before: int = 0
 
 func _init():
 	print("[audio_action] starting")
-	_orphan_before = int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
 	call_deferred("_run")
 
 func _expect(cond: bool, msg: String):
@@ -52,13 +50,13 @@ func _run():
 	_expect(has_mining, "mining_hit not connected to action audio")
 	_expect(has_melee, "melee_terrain_hit not connected")
 
-	action_audio._on_mining_hit(Vector3i.ZERO, 0, null)
+	interactor.mining_hit.emit(Vector3i.ZERO, 0, null)
 	await process_frame
 	_expect(clunk.stream != null, "clunk stream null after mining_hit")
 	_expect(abs(clunk.volume_db - (-6.0)) < 0.1, "mining clunk vol expected -6 got %f" % clunk.volume_db)
 	_expect(clunk.pitch_scale >= 0.95 and clunk.pitch_scale <= 1.07, "mining pitch out of range %f" % clunk.pitch_scale)
 
-	action_audio._on_melee_terrain_hit(Vector3i(1,2,3))
+	interactor.melee_terrain_hit.emit(Vector3i(1, 2, 3))
 	await process_frame
 	_expect(abs(clunk.volume_db - (-4.0)) < 0.1, "melee clunk vol expected -4 got %f" % clunk.volume_db)
 
@@ -69,6 +67,6 @@ func _run():
 	_expect(before == after, "clunk spam leaked orphan before %d after %d" % [before, after])
 
 	player.queue_free()
-	await process_frame
-	await process_frame
-	_finish("AUDIO_ACTION")
+	for _frame_index in range(10):
+		await process_frame
+	call_deferred("_finish", "AUDIO_ACTION")

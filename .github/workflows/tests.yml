@@ -123,6 +123,30 @@ jobs:
             30 "TOOL_SYSTEM PASS" /tmp/tool_system.log -- \
             godot --headless --path src --script res://tests/tool_system_integration.gd
 
+  audio-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run ambient audio integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "AUDIO_AMBIENT PASS" /tmp/audio_ambient.log -- \
+            godot --headless --path src --script res://tests/audio_ambient_integration.gd
+      - name: Run footstep audio integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "AUDIO_FOOTSTEPS PASS" /tmp/audio_footsteps.log -- \
+            godot --headless --path src --script res://tests/audio_footsteps_integration.gd
+      - name: Run action audio integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "AUDIO_ACTION PASS" /tmp/audio_action.log -- \
+            godot --headless --path src --script res://tests/audio_action_integration.gd
+
   soak-world-streaming:
     runs-on: ubuntu-latest
     timeout-minutes: 10
