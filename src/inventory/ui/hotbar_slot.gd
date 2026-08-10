@@ -4,11 +4,12 @@ class_name HotbarSlot
 var is_selected: bool = false
 var _selected_style: StyleBoxFlat
 var _left_click_candidate: bool = false
+var _backpack_open: bool = false
 
 @onready var key_label: Label = $Key
 
 func _ready():
-	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	mouse_filter = Control.MOUSE_FILTER_STOP
 	focus_mode = Control.FOCUS_NONE
 	key_label.text = str(slot_index + 1)
 	refresh_visuals()
@@ -29,10 +30,9 @@ func set_selected(selected: bool):
 	is_selected = selected
 	refresh_visuals()
 
-func set_mouse_interactive(enabled: bool):
-	mouse_filter = Control.MOUSE_FILTER_STOP if enabled else Control.MOUSE_FILTER_IGNORE
-	if not enabled:
-		_left_click_candidate = false
+func set_backpack_open(open: bool):
+	_backpack_open = open
+	_left_click_candidate = false
 
 func refresh_visuals():
 	if is_selected:
@@ -42,31 +42,37 @@ func refresh_visuals():
 	_refresh_item_visuals()
 
 func _gui_input(event):
-	if mouse_filter == Control.MOUSE_FILTER_IGNORE:
-		return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if event.pressed:
 			_left_click_candidate = true
 		elif _left_click_candidate:
 			_left_click_candidate = false
-			if not get_viewport().gui_is_dragging() and inventory_model.move_hotbar_slot_to_backpack(slot_index):
+			if get_viewport().gui_is_dragging() or inventory_model == null:
+				return
+			var changed := false
+			if _backpack_open:
+				changed = inventory_model.move_hotbar_slot_to_backpack(slot_index)
+			elif inventory_model.get_slot(slot_index) != null:
+				changed = inventory_model.select_slot(slot_index)
+			if changed:
 				get_viewport().set_input_as_handled()
 				return
-	super._gui_input(event)
+	if _backpack_open:
+		super._gui_input(event)
 
 func _get_drag_data(at_position):
-	if mouse_filter == Control.MOUSE_FILTER_IGNORE:
-		return null
 	_left_click_candidate = false
+	if not _backpack_open:
+		return null
 	return super._get_drag_data(at_position)
 
 func _can_drop_data(at_position, data) -> bool:
-	if mouse_filter == Control.MOUSE_FILTER_IGNORE:
+	if not _backpack_open:
 		return false
 	return super._can_drop_data(at_position, data)
 
 func _drop_data(at_position, data):
-	if mouse_filter == Control.MOUSE_FILTER_IGNORE:
+	if not _backpack_open:
 		return
 	super._drop_data(at_position, data)
 

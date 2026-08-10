@@ -72,6 +72,7 @@ func setup(inv: InventoryModel, cam_rig: CameraRig, hb: Hotbar):
 	inventory_model.inventory_changed.connect(_on_inventory_changed)
 	_inventory_dirty = true
 	_update_hotbar_position(_progress)
+	_update_hotbar_backpack_state()
 
 func _on_inventory_changed():
 	if _target_progress == 0.0 and _progress <= 0.01:
@@ -152,7 +153,7 @@ func _apply_state():
 	_apply_fade(_progress)
 	_update_camera()
 	_update_hotbar_position(_progress)
-	_update_hotbar_interactive()
+	_update_hotbar_backpack_state()
 
 func _process(delta):
 	if abs(_progress - _target_progress) < 0.001:
@@ -221,11 +222,10 @@ func _update_hotbar_position(progress: float):
 	hotbar.offset_left = -shift
 	hotbar.offset_right = -shift
 
-func _update_hotbar_interactive():
+func _update_hotbar_backpack_state():
 	if hotbar == null:
 		return
-	var should_interact = _target_progress > 0.5 or _progress > 0.01
-	hotbar.set_slots_interactive(should_interact)
+	hotbar.set_backpack_open(_is_open)
 
 func is_open() -> bool:
 	return _is_open
@@ -247,12 +247,13 @@ func open():
 		_refresh_inventory()
 	_target_progress = 1.0
 	_is_open = true
-	_update_hotbar_interactive()
+	_update_hotbar_backpack_state()
 	set_process(true)
 
 func close():
 	_target_progress = 0.0
 	_is_open = false
+	_update_hotbar_backpack_state()
 	_cancel_drag_if_needed()
 	set_process(true)
 

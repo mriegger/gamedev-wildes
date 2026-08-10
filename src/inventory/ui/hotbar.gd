@@ -7,7 +7,7 @@ var _inv_model: InventoryModel = null
 var slot_nodes: Array[HotbarSlot] = []
 var _slot_normal_style: StyleBoxFlat
 var _slot_selected_style: StyleBoxFlat
-var _slots_interactive: bool = false
+var _backpack_open: bool = false
 
 @onready var hbox: HBoxContainer = $MarginContainer/HBoxContainer
 
@@ -44,9 +44,9 @@ func refresh():
 			ui.set_item(data.item_id, data.count)
 		ui.set_selected(i == _inv_model.selected_slot)
 
-func set_slots_interactive(enabled: bool):
-	if _slots_interactive == enabled:
+func set_backpack_open(open: bool):
+	if _backpack_open == open:
 		return
-	_slots_interactive = enabled
+	_backpack_open = open
 	for slot in slot_nodes:
-		slot.set_mouse_interactive(enabled)
+		slot.set_backpack_open(open)

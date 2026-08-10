@@ -135,6 +135,15 @@ func _process(_delta: float) -> bool:
 		_check_hotbar_click_result()
 		_phase = 19
 	elif _phase == 19 and _frame == 203:
+		_start_closed_hotbar_click()
+		_phase = 20
+	elif _phase == 20 and _frame == 205:
+		_check_closed_hotbar_press_and_release()
+		_phase = 21
+	elif _phase == 21 and _frame == 207:
+		_check_closed_hotbar_click_result()
+		_phase = 22
+	elif _phase == 22 and _frame == 209:
 		_check_final_and_quit()
 	return false
 
@@ -492,6 +501,44 @@ func _check_hotbar_click_result() -> void:
 		_fail("hotbar click: backpack visuals not refreshed")
 		return
 	print("[hud_integration] hotbar click ok")
+
+func _start_closed_hotbar_click() -> void:
+	_hud.close_side_panel_immediate()
+	var hotbar_center := _hud.hotbar.slot_nodes[2].get_global_rect().get_center()
+	var motion := InputEventMouseMotion.new()
+	motion.position = hotbar_center
+	motion.global_position = hotbar_center
+	root.push_input(motion, true)
+	var press := InputEventMouseButton.new()
+	press.position = hotbar_center
+	press.global_position = hotbar_center
+	press.button_index = MOUSE_BUTTON_LEFT
+	press.pressed = true
+	press.button_mask = MOUSE_BUTTON_MASK_LEFT
+	root.push_input(press, true)
+
+func _check_closed_hotbar_press_and_release() -> void:
+	if _inv.selected_slot != 0:
+		_fail("closed hotbar click: slot activated before mouse release")
+		return
+	var hotbar_center := _hud.hotbar.slot_nodes[2].get_global_rect().get_center()
+	var release := InputEventMouseButton.new()
+	release.position = hotbar_center
+	release.global_position = hotbar_center
+	release.button_index = MOUSE_BUTTON_LEFT
+	release.pressed = false
+	root.push_input(release, true)
+
+func _check_closed_hotbar_click_result() -> void:
+	if _inv.selected_slot != 2:
+		_fail("closed hotbar click: slot 3 was not activated")
+		return
+	var hotbar_stack := _inv.get_slot(2)
+	var stone_id := _item_catalog.get_item_for_block(BlockId.Type.STONE).id
+	if hotbar_stack == null or hotbar_stack.item_id != stone_id or hotbar_stack.count != 8:
+		_fail("closed hotbar click: hotbar item moved")
+		return
+	print("[hud_integration] closed hotbar click activated slot")
 
 func _find_drag_previews(node: Node, out: Array) -> void:
 	if node.name.contains("DragPreview"):
