@@ -228,6 +228,25 @@ func _run_edge_cases() -> bool:
 	_assert(reassigned.slots[2].item_id == stone_id and reassigned.slots[2].count == 6, "reassigned hotbar destination swaps back")
 	_assert(reassigned.slots[4].item_id == grass_id and reassigned.slots[4].count == 4, "hotbar item assigned to another hotkey")
 	_assert(_compute_totals(reassigned) == reassigned_totals, "hotbar reassignment conserves totals")
+	_assert(assigned_to_empty.move_hotbar_slot_to_backpack(2), "hotbar item moves to backpack")
+	_assert(assigned_to_empty.slots[2] == null, "hotbar to backpack move clears hotbar slot")
+	_assert(assigned_to_empty.slots[InventoryModel.HOTBAR_SIZE].item_id == grass_id and assigned_to_empty.slots[InventoryModel.HOTBAR_SIZE].count == 4, "backpack receives hotbar item")
+
+	var merged_into_backpack := InventoryModel.new(catalog)
+	merged_into_backpack.slots[0] = InventoryStack.new(grass_id, 4)
+	merged_into_backpack.slots[InventoryModel.HOTBAR_SIZE] = InventoryStack.new(grass_id, 97)
+	_assert(merged_into_backpack.move_hotbar_slot_to_backpack(0), "hotbar item merges into backpack")
+	_assert(merged_into_backpack.slots[0] == null, "merged hotbar stack cleared")
+	_assert(merged_into_backpack.slots[InventoryModel.HOTBAR_SIZE].count == 99, "existing backpack stack filled first")
+	_assert(merged_into_backpack.slots[InventoryModel.HOTBAR_SIZE + 1].count == 2, "merge remainder moved to empty backpack slot")
+
+	var full_backpack := InventoryModel.new(catalog)
+	full_backpack.slots[0] = InventoryStack.new(grass_id, 4)
+	for backpack_idx in range(InventoryModel.HOTBAR_SIZE, InventoryModel.FILLABLE_SIZE):
+		full_backpack.slots[backpack_idx] = InventoryStack.new(stone_id, 99)
+	var full_backpack_before := _copy_stacks(full_backpack.slots)
+	_assert(not full_backpack.move_hotbar_slot_to_backpack(0), "full backpack rejects hotbar move")
+	_assert(_slots_equal(full_backpack_before, full_backpack.slots), "failed hotbar move leaves inventory unchanged")
 
 	var equipment := InventoryModel.new(catalog)
 	equipment.slots[0] = InventoryStack.new(torch_id, 5)
@@ -284,6 +303,8 @@ func _run_edge_cases() -> bool:
 	_assert(_validate_inv(assigned), "assigned inventory valid")
 	_assert(_validate_inv(assigned_to_empty), "empty hotbar assignment inventory valid")
 	_assert(_validate_inv(reassigned), "reassigned hotbar inventory valid")
+	_assert(_validate_inv(merged_into_backpack), "merged backpack inventory valid")
+	_assert(_validate_inv(full_backpack), "full backpack inventory valid")
 	print("[edge] done failures=%d" % _failures)
 	return _failures == 0
 

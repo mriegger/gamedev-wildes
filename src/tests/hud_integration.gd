@@ -120,6 +120,21 @@ func _process(_delta: float) -> bool:
 		_check_hotbar_reassignment_restored()
 		_phase = 14
 	elif _phase == 14 and _frame == 193:
+		_fill_backpack_and_start_hotbar_click()
+		_phase = 15
+	elif _phase == 15 and _frame == 195:
+		_check_hotbar_press_and_release()
+		_phase = 16
+	elif _phase == 16 and _frame == 197:
+		_check_full_backpack_click_result()
+		_phase = 17
+	elif _phase == 17 and _frame == 199:
+		_check_hotbar_press_and_release()
+		_phase = 18
+	elif _phase == 18 and _frame == 201:
+		_check_hotbar_click_result()
+		_phase = 19
+	elif _phase == 19 and _frame == 203:
 		_check_final_and_quit()
 	return false
 
@@ -404,6 +419,79 @@ func _check_hotbar_reassignment_restored() -> void:
 		_fail("hotbar reassignment: empty hovered slot changed inventory")
 		return
 	print("[hud_integration] hotbar reassignment ok")
+
+func _start_hotbar_click() -> void:
+	var hotbar_center := _hud.hotbar.slot_nodes[3].get_global_rect().get_center()
+	var motion := InputEventMouseMotion.new()
+	motion.position = hotbar_center
+	motion.global_position = hotbar_center
+	root.push_input(motion, true)
+	var press := InputEventMouseButton.new()
+	press.position = hotbar_center
+	press.global_position = hotbar_center
+	press.button_index = MOUSE_BUTTON_LEFT
+	press.pressed = true
+	press.button_mask = MOUSE_BUTTON_MASK_LEFT
+	root.push_input(press, true)
+
+func _fill_backpack_and_start_hotbar_click() -> void:
+	var stone_id := _item_catalog.get_item_for_block(BlockId.Type.STONE).id
+	var max_stack: int = _item_catalog.get_definition(stone_id).max_stack
+	for backpack_idx in range(InventoryModel.HOTBAR_SIZE, InventoryModel.FILLABLE_SIZE):
+		if _inv.get_slot(backpack_idx) == null:
+			_inv.slots[backpack_idx] = InventoryStack.new(stone_id, max_stack)
+	_inv.inventory_changed.emit()
+	_start_hotbar_click()
+
+func _check_hotbar_press_and_release() -> void:
+	var hotbar_stack := _inv.get_slot(3)
+	if hotbar_stack == null:
+		_fail("hotbar click: item moved before mouse release")
+		return
+	var hotbar_center := _hud.hotbar.slot_nodes[3].get_global_rect().get_center()
+	var release := InputEventMouseButton.new()
+	release.position = hotbar_center
+	release.global_position = hotbar_center
+	release.button_index = MOUSE_BUTTON_LEFT
+	release.pressed = false
+	root.push_input(release, true)
+
+func _check_full_backpack_click_result() -> void:
+	var hotbar_stack := _inv.get_slot(3)
+	var torch_id := _item_catalog.get_item_for_block(BlockId.Type.TORCH).id
+	if hotbar_stack == null or hotbar_stack.item_id != torch_id or hotbar_stack.count != 8:
+		_fail("full backpack click: hotbar item changed")
+		return
+	for backpack_idx in range(InventoryModel.HOTBAR_SIZE, InventoryModel.FILLABLE_SIZE):
+		var backpack_stack := _inv.get_slot(backpack_idx)
+		if backpack_stack == null:
+			_fail("full backpack click: backpack slot %d became empty" % backpack_idx)
+			return
+		if backpack_stack.item_id == torch_id:
+			_fail("full backpack click: hotbar item moved to backpack slot %d" % backpack_idx)
+			return
+	print("[hud_integration] full backpack click rejected")
+	_inv.slots[InventoryModel.HOTBAR_SIZE + 2] = null
+	_inv.inventory_changed.emit()
+	_start_hotbar_click()
+
+func _check_hotbar_click_result() -> void:
+	if _inv.get_slot(3) != null:
+		_fail("hotbar click: hotbar slot was not cleared")
+		return
+	var backpack_stack := _inv.get_slot(InventoryModel.HOTBAR_SIZE + 2)
+	var torch_id := _item_catalog.get_item_for_block(BlockId.Type.TORCH).id
+	if backpack_stack == null or backpack_stack.item_id != torch_id or backpack_stack.count != 8:
+		_fail("hotbar click: backpack expected torch 8 got %s" % str(backpack_stack))
+		return
+	if _hud.hotbar.slot_nodes[3].item_id != null:
+		_fail("hotbar click: hotbar visuals not refreshed")
+		return
+	var backpack_node := _hud.side_panel.get_inventory_slots()[2]
+	if backpack_node.item_id != torch_id or backpack_node.item_count != 8:
+		_fail("hotbar click: backpack visuals not refreshed")
+		return
+	print("[hud_integration] hotbar click ok")
 
 func _find_drag_previews(node: Node, out: Array) -> void:
 	if node.name.contains("DragPreview"):

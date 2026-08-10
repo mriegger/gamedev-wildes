@@ -72,6 +72,44 @@ func assign_slot_to_hotbar(source_idx: int, hotbar_idx: int) -> bool:
 	inventory_changed.emit()
 	return true
 
+func move_hotbar_slot_to_backpack(hotbar_idx: int) -> bool:
+	if not is_hotbar_index(hotbar_idx) or hotbar_idx >= size:
+		return false
+	var hotbar_stack := slots[hotbar_idx]
+	if hotbar_stack == null:
+		return false
+	var max_stack: int = item_catalog.get_definition(hotbar_stack.item_id).max_stack
+	var backpack_end: int = mini(size, FILLABLE_SIZE)
+	var available_capacity: int = 0
+	for backpack_idx in range(HOTBAR_SIZE, backpack_end):
+		var backpack_stack := slots[backpack_idx]
+		if backpack_stack == null:
+			available_capacity += max_stack
+		elif backpack_stack.item_id == hotbar_stack.item_id:
+			available_capacity += max_stack - backpack_stack.count
+	if available_capacity < hotbar_stack.count:
+		return false
+	var remaining: int = hotbar_stack.count
+	for backpack_idx in range(HOTBAR_SIZE, backpack_end):
+		var backpack_stack := slots[backpack_idx]
+		if backpack_stack == null or backpack_stack.item_id != hotbar_stack.item_id:
+			continue
+		var moved := mini(remaining, max_stack - backpack_stack.count)
+		backpack_stack.count += moved
+		remaining -= moved
+		if remaining == 0:
+			break
+	if remaining > 0:
+		for backpack_idx in range(HOTBAR_SIZE, backpack_end):
+			if slots[backpack_idx] == null:
+				slots[backpack_idx] = InventoryStack.new(hotbar_stack.item_id, remaining)
+				remaining = 0
+				break
+	assert(remaining == 0)
+	slots[hotbar_idx] = null
+	inventory_changed.emit()
+	return true
+
 func ensure_item(item_id: StringName) -> bool:
 	if not item_catalog.has_definition(item_id):
 		return false
