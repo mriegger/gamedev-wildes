@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="ArmorDefinition" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://inventory/equipment/armor_definition.gd" id="1_armor"]
+[ext_resource type="Texture2D" path="res://inventory/equipment/icons/copper_chest_plate.svg" id="2_icon"]
+[ext_resource type="Script" path="res://stats/stat_modifier.gd" id="3_modifier"]
+
+[sub_resource type="Resource" id="defense"]
+script = ExtResource("3_modifier")
+id = &"copper_chest_plate_defense"
+source_item_id = &"copper_chest_plate"
+stat_id = &"defense"
+amount = 3.0
+
+[resource]
+script = ExtResource("1_armor")
+id = &"copper_chest_plate"
+icon = ExtResource("2_icon")
+max_stack = 1
+stat_modifier_activation = 1
+stat_modifiers = Array[ExtResource("3_modifier")]([SubResource("defense")])
+armor_slot = 1

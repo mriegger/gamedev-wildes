@@ -35,6 +35,9 @@ func _rebuild_lookup() -> void:
 		if definition.max_stack < 1:
 			push_error("[ItemCatalog] Invalid max stack for %s at %s" % [definition.id, source])
 			_is_valid = false
+		if definition.stat_modifier_activation == ItemDefinition.StatModifierActivation.EQUIPPED and not definition is ArmorDefinition:
+			push_error("[ItemCatalog] Equipped modifiers require armor for %s at %s" % [definition.id, source])
+			_is_valid = false
 		_definitions_by_id[definition.id] = definition
 		if not _is_supported_primary_action(definition.primary_action):
 			push_error("[ItemCatalog] Unsupported primary action for %s at %s" % [definition.id, source])
@@ -84,6 +87,9 @@ func validate(block_catalog: BlockCatalog) -> bool:
 	for definition in definitions:
 		if definition == null:
 			continue
+		var armor := definition as ArmorDefinition
+		if armor != null:
+			valid = armor.validate(definition.resource_path) and valid
 		var placement := definition.secondary_action as BlockPlacementActionDefinition
 		if placement != null and placement.block != null and BlockId.is_valid(placement.block.id):
 			if block_catalog.get_definition(placement.block.id) != placement.block:

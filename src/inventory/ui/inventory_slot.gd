@@ -5,6 +5,8 @@ var slot_index: int = 0
 var item_id = null
 var item_count: int = 0
 var inventory_model: InventoryModel = null
+var inventory_stat_coordinator: InventoryStatCoordinator = null
+var empty_label: String = ""
 
 var _normal_style: StyleBoxFlat
 var _empty_style: StyleBoxFlat
@@ -15,11 +17,16 @@ var _empty_style: StyleBoxFlat
 func _ready():
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	focus_mode = Control.FOCUS_NONE
+	if not empty_label.is_empty():
+		count_label.add_theme_font_size_override("font_size", 10)
 	refresh_visuals()
 	set_process(false)
 
 func set_inventory(p_inv: InventoryModel):
 	inventory_model = p_inv
+
+func set_inventory_stat_coordinator(coordinator: InventoryStatCoordinator):
+	inventory_stat_coordinator = coordinator
 
 func set_inventory_styles(normal_style: StyleBoxFlat, empty_style: StyleBoxFlat):
 	_normal_style = normal_style
@@ -27,6 +34,12 @@ func set_inventory_styles(normal_style: StyleBoxFlat, empty_style: StyleBoxFlat)
 
 func set_slot_index(idx: int):
 	slot_index = idx
+
+func set_empty_label(label: String):
+	empty_label = label
+	tooltip_text = label
+	if is_node_ready():
+		refresh_visuals()
 
 func set_item(p_item_id, count: int):
 	if item_id == p_item_id and item_count == count:
@@ -45,7 +58,7 @@ func refresh_visuals():
 func _refresh_item_visuals():
 	if item_id == null or item_count <= 0:
 		icon.texture = null
-		count_label.text = ""
+		count_label.text = empty_label
 	else:
 		icon.texture = inventory_model.item_catalog.get_definition(item_id).icon
 		if item_count > 1:
@@ -76,6 +89,11 @@ func _process(_delta):
 
 func _gui_input(event):
 	if event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_LEFT and event.double_click and inventory_stat_coordinator != null:
+			var changed := inventory_stat_coordinator.try_unequip_armor(slot_index) if InventoryModel.is_equipment_index(slot_index) else inventory_stat_coordinator.try_equip_armor(slot_index)
+			if changed:
+				get_viewport().set_input_as_handled()
+			return
 		if event.button_index == MOUSE_BUTTON_RIGHT:
 			if item_id != null and item_count > 0:
 				var src_item_id = item_id
@@ -114,20 +132,20 @@ func _can_drop_data(_at_position, data) -> bool:
 		return false
 	if not data.has("source_index") or not data.has("drag_count"):
 		return false
-	if inventory_model == null:
+	if inventory_model == null or inventory_stat_coordinator == null:
 		return false
 	var src_idx = int(data.get("source_index", -1))
 	var drag_count = int(data.get("drag_count", 0))
-	return inventory_model.can_handle_drop(src_idx, slot_index, drag_count)
+	return inventory_stat_coordinator.can_handle_drop(src_idx, slot_index, drag_count)
 
 func _drop_data(_at_position, data):
 	if data == null or not data is Dictionary:
 		return
-	if inventory_model == null:
+	if inventory_model == null or inventory_stat_coordinator == null:
 		return
 	var src_idx = int(data.get("source_index", -1))
 	var drag_count = int(data.get("drag_count", 0))
-	inventory_model.handle_drop(src_idx, slot_index, drag_count)
+	inventory_stat_coordinator.handle_drop(src_idx, slot_index, drag_count)
 
 func _create_drag_preview(source_item_id: StringName, count: int) -> Control:
 	var preview = Panel.new()

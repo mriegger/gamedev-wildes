@@ -46,7 +46,7 @@ func _make_catalog(max_stack: int, include_nonplaceable: bool = false) -> ItemCa
 	var definitions: Array[ItemDefinition] = []
 	for source in _base_item_catalog.definitions:
 		var definition := source.duplicate() as ItemDefinition
-		definition.max_stack = max_stack
+		definition.max_stack = 1 if definition is ArmorDefinition else max_stack
 		definitions.append(definition)
 	if include_nonplaceable:
 		var nonplaceable := ItemDefinition.new()
@@ -68,6 +68,13 @@ func _compute_totals(inv: InventoryModel) -> Dictionary:
 			var item_id := slot.item_id
 			totals[item_id] = int(totals.get(item_id, 0)) + slot.count
 	return totals
+
+func _find_item(inv: InventoryModel, item_id: StringName) -> int:
+	for index in range(inv.size):
+		var stack := inv.get_slot(index)
+		if stack != null and stack.item_id == item_id:
+			return index
+	return -1
 
 func _copy_stacks(stacks: Array[InventoryStack]) -> Array[InventoryStack]:
 	var copied: Array[InventoryStack] = []
@@ -159,6 +166,7 @@ func _run_edge_cases() -> bool:
 	var stone_id := catalog.get_item_for_block(BlockId.Type.STONE).id
 	var sand_id := catalog.get_item_for_block(BlockId.Type.SAND).id
 	var torch_id := catalog.get_item_for_block(BlockId.Type.TORCH).id
+	var helmet := catalog.get_definition(&"copper_helmet") as ArmorDefinition
 
 	var empty := InventoryModel.new(catalog)
 	_assert(empty.size == InventoryModel.TOTAL_SIZE, "default size")
@@ -251,7 +259,15 @@ func _run_edge_cases() -> bool:
 	var equipment := InventoryModel.new(catalog)
 	equipment.slots[0] = InventoryStack.new(torch_id, 5)
 	for index in range(InventoryModel.FILLABLE_SIZE, equipment.size):
-		_assert(not equipment.handle_drop(0, index, 5), "equipment drop rejected")
+		_assert(not equipment.handle_drop(0, index, 5), "non-armor equipment drop rejected")
+	equipment.slots[0] = InventoryStack.new(helmet.id, 1)
+	var helmet_index := InventoryModel.get_equipment_index(ArmorDefinition.Slot.HELMET)
+	var chest_index := InventoryModel.get_equipment_index(ArmorDefinition.Slot.CHEST_PLATE)
+	_assert(not equipment.handle_drop(0, chest_index, 1), "wrong armor slot rejected")
+	_assert(equipment.handle_drop(0, helmet_index, 1), "matching armor drop failed")
+	_assert(equipment.get_slot(helmet_index).item_id == helmet.id, "helmet did not move to equipment")
+	_assert(equipment.handle_drop(helmet_index, 0, 1), "armor return to inventory failed")
+	_assert(equipment.get_slot(helmet_index) == null, "helmet equipment slot did not clear")
 	_assert(not equipment.handle_drop(0, 0, 1), "same slot rejected")
 	_assert(not equipment.handle_drop(-1, 1, 1), "invalid source rejected")
 	_assert(not equipment.handle_drop(0, 999, 1), "invalid destination rejected")
@@ -274,6 +290,9 @@ func _run_edge_cases() -> bool:
 
 	var saved_source := InventoryModel.new(catalog)
 	saved_source.setup_starter()
+	var saved_helmet_source := _find_item(saved_source, &"copper_helmet")
+	_assert(saved_helmet_source >= 0, "starter helmet missing")
+	_assert(saved_source.handle_drop(saved_helmet_source, InventoryModel.get_equipment_index(ArmorDefinition.Slot.HELMET), 1), "starter helmet equip before save failed")
 	var encoded := saved_source.to_dict()
 	var encoded_slot = encoded["regions"]["hotbar"][0]
 	_assert(encoded_slot["item_id"] is String, "save item ID is string")
@@ -282,6 +301,7 @@ func _run_edge_cases() -> bool:
 	var restored := InventoryModel.new(catalog)
 	_assert(restored.from_dict(encoded), "version 3 inventory restores")
 	_assert(_slots_equal(saved_source.slots, restored.slots), "save round trip")
+	_assert(restored.get_equipped_armor(ArmorDefinition.Slot.HELMET).id == &"copper_helmet", "equipped armor round trip failed")
 	_assert(restored.starter_item_migration_version == InventoryModel.STARTER_ITEM_MIGRATION_VERSION, "starter migration version round trip")
 	var old_shape := encoded.duplicate(true)
 	old_shape["regions"]["hotbar"][0] = {"type": 1, "count": 12}
@@ -294,7 +314,7 @@ func _run_edge_cases() -> bool:
 	_assert(not restored.from_dict(long_region), "long inventory region rejected")
 	var occupied_equipment := encoded.duplicate(true)
 	occupied_equipment["regions"]["equipment"][0] = {"item_id": String(grass_id), "count": 1}
-	_assert(not restored.from_dict(occupied_equipment), "occupied reserved equipment rejected")
+	_assert(not restored.from_dict(occupied_equipment), "non-armor equipment save rejected")
 
 	_assert(_validate_inv(moved), "moved inventory valid")
 	_assert(_validate_inv(split), "split inventory valid")

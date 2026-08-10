@@ -5,6 +5,8 @@ var _phase: int = 0
 var _hud: HUD = null
 var _inv: InventoryModel = null
 var _item_catalog: ItemCatalog = null
+var _stats: ActorStats = null
+var _inventory_stat_coordinator: InventoryStatCoordinator = null
 var _errors: Array[String] = []
 var _orphan_before: int = 0
 var _src_center: Vector2 = Vector2.ZERO
@@ -13,12 +15,23 @@ var _right_src_center: Vector2 = Vector2.ZERO
 var _right_dst_center: Vector2 = Vector2.ZERO
 var _left_start_frame: int = 0
 var _right_start_frame: int = 0
+var _left_destination_index: int = -1
+var _left_destination_ui_index: int = -1
+var _right_destination_index: int = -1
+var _right_destination_ui_index: int = -1
+var _hotbar_click_destination_index: int = -1
+var _hotbar_click_destination_ui_index: int = -1
+var _helmet_inventory_slot: InventorySlot = null
 
 func _init() -> void:
 	print("[hud_integration] starting")
 	_item_catalog = load("res://items/item_catalog.tres") as ItemCatalog
 	_inv = InventoryModel.new(_item_catalog)
 	_inv.setup_starter()
+	_stats = ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
+	_inventory_stat_coordinator = InventoryStatCoordinator.new()
+	if not _inventory_stat_coordinator.setup(_inv, _stats):
+		_fail("equipment coordinator setup failed")
 	_orphan_before = int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
 	print("[hud_integration] orphan before %d" % _orphan_before)
 
@@ -34,7 +47,7 @@ func _process(_delta: float) -> bool:
 			_fail("hud instantiate null")
 			return false
 		root.add_child(_hud)
-		_hud.setup_with_camera(_inv, null)
+		_hud.setup_with_camera(_inv, _inventory_stat_coordinator, null)
 		print("[hud_integration] hud added orphan=%d" % int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT)))
 		_phase = 1
 	elif _phase == 1 and _frame == 122:
@@ -66,7 +79,13 @@ func _process(_delta: float) -> bool:
 		if inv_slots.is_empty():
 			_fail("no inventory slots")
 			return false
-		var dst_slot: Control = inv_slots[0] as Control
+		_left_destination_ui_index = _find_empty_inventory_ui_index(inv_slots)
+		if _left_destination_ui_index < 0:
+			_fail("no empty inventory slot for left drag")
+			return false
+		var dst_inventory_slot := inv_slots[_left_destination_ui_index]
+		_left_destination_index = dst_inventory_slot.slot_index
+		var dst_slot: Control = dst_inventory_slot as Control
 		_src_center = src_slot.get_global_rect().get_center()
 		_dst_center = dst_slot.get_global_rect().get_center()
 		print("[hud_integration] left drag src %s dst %s" % [str(_src_center), str(_dst_center)])
@@ -88,10 +107,13 @@ func _process(_delta: float) -> bool:
 	elif _phase == 6 and _frame == 170:
 		var src_slot2: Control = _hud.hotbar.slot_nodes[6] as Control
 		var inv_slots2: Array[InventorySlot] = _hud.side_panel.get_inventory_slots()
-		if inv_slots2.size() < 2:
-			_fail("not enough backpack slots for right test")
+		_right_destination_ui_index = _find_empty_inventory_ui_index(inv_slots2)
+		if _right_destination_ui_index < 0:
+			_fail("no empty inventory slot for right drag")
 			return false
-		var dst_slot2: Control = inv_slots2[1] as Control
+		var dst_inventory_slot2 := inv_slots2[_right_destination_ui_index]
+		_right_destination_index = dst_inventory_slot2.slot_index
+		var dst_slot2: Control = dst_inventory_slot2 as Control
 		_right_src_center = src_slot2.get_global_rect().get_center()
 		_right_dst_center = dst_slot2.get_global_rect().get_center()
 		print("[hud_integration] right drag src %s dst %s" % [str(_right_src_center), str(_right_dst_center)])
@@ -108,42 +130,54 @@ func _process(_delta: float) -> bool:
 		_check_right_drag_result()
 		_phase = 10
 	elif _phase == 10 and _frame == 185:
-		_start_number_assignment()
+		_start_armor_equip()
 		_phase = 11
 	elif _phase == 11 and _frame == 187:
-		_check_number_assignment()
+		_check_armor_equipped_and_open_tab()
 		_phase = 12
 	elif _phase == 12 and _frame == 189:
-		_check_hotbar_reassignment()
+		_start_armor_unequip()
 		_phase = 13
 	elif _phase == 13 and _frame == 191:
-		_check_hotbar_reassignment_restored()
+		_check_armor_unequipped()
 		_phase = 14
 	elif _phase == 14 and _frame == 193:
-		_fill_backpack_and_start_hotbar_click()
+		_start_number_assignment()
 		_phase = 15
 	elif _phase == 15 and _frame == 195:
-		_check_hotbar_press_and_release()
+		_check_number_assignment()
 		_phase = 16
 	elif _phase == 16 and _frame == 197:
-		_check_full_backpack_click_result()
+		_check_hotbar_reassignment()
 		_phase = 17
 	elif _phase == 17 and _frame == 199:
-		_check_hotbar_press_and_release()
+		_check_hotbar_reassignment_restored()
 		_phase = 18
 	elif _phase == 18 and _frame == 201:
-		_check_hotbar_click_result()
+		_fill_backpack_and_start_hotbar_click()
 		_phase = 19
 	elif _phase == 19 and _frame == 203:
-		_start_closed_hotbar_click()
+		_check_hotbar_press_and_release()
 		_phase = 20
 	elif _phase == 20 and _frame == 205:
-		_check_closed_hotbar_press_and_release()
+		_check_full_backpack_click_result()
 		_phase = 21
 	elif _phase == 21 and _frame == 207:
-		_check_closed_hotbar_click_result()
+		_check_hotbar_press_and_release()
 		_phase = 22
 	elif _phase == 22 and _frame == 209:
+		_check_hotbar_click_result()
+		_phase = 23
+	elif _phase == 23 and _frame == 211:
+		_start_closed_hotbar_click()
+		_phase = 24
+	elif _phase == 24 and _frame == 213:
+		_check_closed_hotbar_press_and_release()
+		_phase = 25
+	elif _phase == 25 and _frame == 215:
+		_check_closed_hotbar_click_result()
+		_phase = 26
+	elif _phase == 26 and _frame == 217:
 		_check_final_and_quit()
 	return false
 
@@ -218,6 +252,12 @@ func _totals(inv: InventoryModel) -> Dictionary:
 			d[s.item_id] = d.get(s.item_id, 0) + s.count
 	return d
 
+func _find_empty_inventory_ui_index(slots: Array[InventorySlot]) -> int:
+	for index in range(slots.size()):
+		if _inv.get_slot(slots[index].slot_index) == null:
+			return index
+	return -1
+
 func _check_mid_drag(label: String, expected: int) -> void:
 	print("[hud_integration] check mid %s drag frame %d" % [label, _frame])
 	var orphan: int = int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
@@ -265,22 +305,22 @@ func _check_left_drag_result() -> void:
 		_fail("leaked preview after left drag %s" % str(previews))
 		return
 	var s1 = _inv.get_slot(1)
-	var s9 = _inv.get_slot(9)
+	var destination = _inv.get_slot(_left_destination_index)
 	var grass_id := _item_catalog.get_item_for_block(BlockId.Type.GRASS).id
 	var stone_id := _item_catalog.get_item_for_block(BlockId.Type.STONE).id
 	var torch_id := _item_catalog.get_item_for_block(BlockId.Type.TORCH).id
-	print("[hud_integration] slot1 %s slot9 %s" % [str(s1), str(s9)])
+	print("[hud_integration] slot1 %s destination %s" % [str(s1), str(destination)])
 	if s1 != null:
 		_fail("left drag: slot 1 should be null after move but got %s" % str(s1))
 		return
-	if s9 == null or s9.item_id != grass_id or s9.count != 12:
-		_fail("left drag: slot 9 expected grass 12 got %s" % str(s9))
+	if destination == null or destination.item_id != grass_id or destination.count != 12:
+		_fail("left drag: destination expected grass 12 got %s" % str(destination))
 		return
 	var n1: HotbarSlot = _hud.hotbar.slot_nodes[1] as HotbarSlot
 	if n1.item_id != null:
 		_fail("left drag: hotbar node 1 should be null")
 		return
-	var inv_node: InventorySlot = _hud.side_panel.get_inventory_slots()[0]
+	var inv_node: InventorySlot = _hud.side_panel.get_inventory_slots()[_left_destination_ui_index]
 	if inv_node.item_id != grass_id or inv_node.item_count != 12:
 		_fail("left drag: inventory node mismatch %s %d" % [str(inv_node.item_id), inv_node.item_count])
 		return
@@ -307,20 +347,20 @@ func _check_right_drag_result() -> void:
 		_fail("leaked drag preview after right drag %s" % str(previews))
 		return
 	var s6 = _inv.get_slot(6)
-	var s10 = _inv.get_slot(10)
+	var destination = _inv.get_slot(_right_destination_index)
 	var torch_id := _item_catalog.get_item_for_block(BlockId.Type.TORCH).id
-	print("[hud_integration] slot6 %s slot10 %s" % [str(s6), str(s10)])
+	print("[hud_integration] slot6 %s destination %s" % [str(s6), str(destination)])
 	if s6 == null or s6.count != 8 or s6.item_id != torch_id:
 		_fail("right drag: slot6 expected torch 8 got %s" % str(s6))
 		return
-	if s10 == null or s10.count != 8 or s10.item_id != torch_id:
-		_fail("right drag: slot10 expected torch 8 got %s" % str(s10))
+	if destination == null or destination.count != 8 or destination.item_id != torch_id:
+		_fail("right drag: destination expected torch 8 got %s" % str(destination))
 		return
 	var n6: HotbarSlot = _hud.hotbar.slot_nodes[6] as HotbarSlot
 	if n6.item_count != 8 or n6.item_id != torch_id:
 		_fail("right drag: hotbar node6 mismatch")
 		return
-	var inv_node: InventorySlot = _hud.side_panel.get_inventory_slots()[1]
+	var inv_node: InventorySlot = _hud.side_panel.get_inventory_slots()[_right_destination_ui_index]
 	if inv_node.item_id != torch_id or inv_node.item_count != 8:
 		_fail("right drag: inventory node1 mismatch")
 		return
@@ -337,7 +377,7 @@ func _check_right_drag_result() -> void:
 	print("[hud_integration] right drag ok")
 
 func _start_number_assignment() -> void:
-	var backpack_slot := _hud.side_panel.get_inventory_slots()[1]
+	var backpack_slot := _hud.side_panel.get_inventory_slots()[_right_destination_ui_index]
 	var backpack_center := backpack_slot.get_global_rect().get_center()
 	var motion := InputEventMouseMotion.new()
 	motion.position = backpack_center
@@ -350,7 +390,7 @@ func _start_number_assignment() -> void:
 
 func _check_number_assignment() -> void:
 	var hotbar_stack := _inv.get_slot(3)
-	var backpack_stack := _inv.get_slot(InventoryModel.HOTBAR_SIZE + 1)
+	var backpack_stack := _inv.get_slot(_right_destination_index)
 	var torch_id := _item_catalog.get_item_for_block(BlockId.Type.TORCH).id
 	if hotbar_stack == null or hotbar_stack.item_id != torch_id or hotbar_stack.count != 8:
 		_fail("number assignment: hotbar slot 4 expected torch 8 got %s" % str(hotbar_stack))
@@ -359,7 +399,7 @@ func _check_number_assignment() -> void:
 		_fail("number assignment: backpack expected copper sword got %s" % str(backpack_stack))
 		return
 	var hotbar_node := _hud.hotbar.slot_nodes[3]
-	var backpack_node := _hud.side_panel.get_inventory_slots()[1]
+	var backpack_node := _hud.side_panel.get_inventory_slots()[_right_destination_ui_index]
 	if hotbar_node.item_id != torch_id or hotbar_node.item_count != 8:
 		_fail("number assignment: hotbar visuals not refreshed")
 		return
@@ -444,6 +484,12 @@ func _start_hotbar_click() -> void:
 	root.push_input(press, true)
 
 func _fill_backpack_and_start_hotbar_click() -> void:
+	var inventory_slots := _hud.side_panel.get_inventory_slots()
+	_hotbar_click_destination_ui_index = _find_empty_inventory_ui_index(inventory_slots)
+	if _hotbar_click_destination_ui_index < 0:
+		_fail("hotbar click: no empty backpack destination")
+		return
+	_hotbar_click_destination_index = inventory_slots[_hotbar_click_destination_ui_index].slot_index
 	var stone_id := _item_catalog.get_item_for_block(BlockId.Type.STONE).id
 	var max_stack: int = _item_catalog.get_definition(stone_id).max_stack
 	for backpack_idx in range(InventoryModel.HOTBAR_SIZE, InventoryModel.FILLABLE_SIZE):
@@ -480,7 +526,7 @@ func _check_full_backpack_click_result() -> void:
 			_fail("full backpack click: hotbar item moved to backpack slot %d" % backpack_idx)
 			return
 	print("[hud_integration] full backpack click rejected")
-	_inv.slots[InventoryModel.HOTBAR_SIZE + 2] = null
+	_inv.slots[_hotbar_click_destination_index] = null
 	_inv.inventory_changed.emit()
 	_start_hotbar_click()
 
@@ -488,7 +534,7 @@ func _check_hotbar_click_result() -> void:
 	if _inv.get_slot(3) != null:
 		_fail("hotbar click: hotbar slot was not cleared")
 		return
-	var backpack_stack := _inv.get_slot(InventoryModel.HOTBAR_SIZE + 2)
+	var backpack_stack := _inv.get_slot(_hotbar_click_destination_index)
 	var torch_id := _item_catalog.get_item_for_block(BlockId.Type.TORCH).id
 	if backpack_stack == null or backpack_stack.item_id != torch_id or backpack_stack.count != 8:
 		_fail("hotbar click: backpack expected torch 8 got %s" % str(backpack_stack))
@@ -496,11 +542,103 @@ func _check_hotbar_click_result() -> void:
 	if _hud.hotbar.slot_nodes[3].item_id != null:
 		_fail("hotbar click: hotbar visuals not refreshed")
 		return
-	var backpack_node := _hud.side_panel.get_inventory_slots()[2]
+	var backpack_node := _hud.side_panel.get_inventory_slots()[_hotbar_click_destination_ui_index]
 	if backpack_node.item_id != torch_id or backpack_node.item_count != 8:
 		_fail("hotbar click: backpack visuals not refreshed")
 		return
 	print("[hud_integration] hotbar click ok")
+
+func _start_armor_equip() -> void:
+	print("[hud_integration] armor equip double click")
+	for slot in _hud.side_panel.get_inventory_slots():
+		var stack := _inv.get_slot(slot.slot_index)
+		if stack != null and stack.item_id == &"copper_helmet":
+			_helmet_inventory_slot = slot
+			break
+	if _helmet_inventory_slot == null:
+		_fail("helmet inventory slot missing")
+		return
+	_push_double_click(_helmet_inventory_slot)
+
+func _check_armor_equipped_and_open_tab() -> void:
+	var equipped := _inv.get_equipped_armor(ArmorDefinition.Slot.HELMET)
+	if equipped == null or equipped.id != &"copper_helmet":
+		_fail("helmet double click did not equip")
+		return
+	if not is_equal_approx(_stats.get_value(&"defense"), 1.0):
+		_fail("helmet equip did not apply defense")
+		return
+	var equipment_slots := _hud.side_panel.get_equipment_slots()
+	for armor_slot in range(ArmorDefinition.SLOT_COUNT):
+		if equipment_slots[armor_slot].empty_label != ArmorDefinition.get_slot_label(armor_slot):
+			_fail("equipment label mismatch for slot %d" % armor_slot)
+			return
+	var button := _hud.side_panel.get_node("Margin/Content/ActionButtons/EquipmentButton/Button") as Control
+	_push_left_click(button)
+
+func _start_armor_unequip() -> void:
+	var equipment_view := _hud.side_panel.get_node("Margin/Content/ViewRoot/EquipmentView") as Control
+	if not equipment_view.visible:
+		_fail("equipment button did not open the equipment tab")
+		return
+	var equipment_slot := _hud.side_panel.get_equipment_slots()[ArmorDefinition.Slot.HELMET]
+	if equipment_slot.item_id != &"copper_helmet":
+		_fail("helmet equipment UI did not refresh")
+		return
+	_push_double_click(equipment_slot)
+
+func _check_armor_unequipped() -> void:
+	if _inv.get_equipped_armor(ArmorDefinition.Slot.HELMET) != null:
+		_fail("helmet double click did not unequip")
+		return
+	if _find_item_index(&"copper_helmet") < 0:
+		_fail("unequipped helmet did not return to inventory")
+		return
+	if not is_equal_approx(_stats.get_value(&"defense"), 0.0):
+		_fail("helmet unequip did not remove defense")
+		return
+	_hud.side_panel._switch_to_tab_id("inventory")
+	print("[hud_integration] armor double click ok")
+
+func _push_double_click(control: Control) -> void:
+	var position := control.get_global_rect().get_center()
+	var double_click := InputEventMouseButton.new()
+	double_click.position = position
+	double_click.global_position = position
+	double_click.button_index = MOUSE_BUTTON_LEFT
+	double_click.pressed = true
+	double_click.button_mask = MOUSE_BUTTON_MASK_LEFT
+	double_click.double_click = true
+	root.push_input(double_click, true)
+	var release := InputEventMouseButton.new()
+	release.position = position
+	release.global_position = position
+	release.button_index = MOUSE_BUTTON_LEFT
+	release.pressed = false
+	root.push_input(release, true)
+
+func _push_left_click(control: Control) -> void:
+	var position := control.get_global_rect().get_center()
+	var press := InputEventMouseButton.new()
+	press.position = position
+	press.global_position = position
+	press.button_index = MOUSE_BUTTON_LEFT
+	press.pressed = true
+	press.button_mask = MOUSE_BUTTON_MASK_LEFT
+	root.push_input(press, true)
+	var release := InputEventMouseButton.new()
+	release.position = position
+	release.global_position = position
+	release.button_index = MOUSE_BUTTON_LEFT
+	release.pressed = false
+	root.push_input(release, true)
+
+func _find_item_index(item_id: StringName) -> int:
+	for index in range(_inv.size):
+		var stack := _inv.get_slot(index)
+		if stack != null and stack.item_id == item_id:
+			return index
+	return -1
 
 func _start_closed_hotbar_click() -> void:
 	_hud.close_side_panel_immediate()

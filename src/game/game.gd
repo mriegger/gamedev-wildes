@@ -28,6 +28,7 @@ signal main_menu_requested
 
 var inventory_model: InventoryModel
 var player_stats: ActorStats
+var inventory_stat_coordinator: InventoryStatCoordinator
 var input_buffer: InputBuffer = InputBuffer.new()
 var settings: GameSettings
 
@@ -64,6 +65,10 @@ func _ready():
 	inventory_model = InventoryModel.new(item_catalog)
 	player_stats = ActorStats.new(player_stats_definition)
 	_restore_inventory()
+	inventory_stat_coordinator = InventoryStatCoordinator.new()
+	if not inventory_stat_coordinator.setup(inventory_model, player_stats):
+		push_error("[Game] Equipment modifiers are invalid")
+		return
 	_restore_player_stats()
 	world.configure_start_state(_world_state)
 	world.generation_progress.connect(_on_generation_progress)
@@ -85,10 +90,8 @@ func _restore_inventory():
 			push_error("[Game] Saved inventory is invalid; using starter inventory")
 			inventory_model.setup_starter()
 			return
-		var starter_items: Array[StringName] = [&"copper_pickaxe", &"copper_sword"]
-		var backpack_items: Array[StringName] = [&"test_totem"]
-		if not inventory_model.migrate_starter_items(starter_items, backpack_items):
-			push_warning("[Game] Starter items will be retried after inventory space is available")
+		if not inventory_model.migrate_starter_items():
+			push_warning("[Game] Starter item migration deferred because inventory is full")
 	else:
 		inventory_model.setup_starter()
 
@@ -111,7 +114,7 @@ func _setup_gameplay():
 
 	game_environment.sky_color_changed.connect(world.update_water_tint)
 	game_environment.start_clock()
-	hud.setup_with_camera(inventory_model, camera_rig)
+	hud.setup_with_camera(inventory_model, inventory_stat_coordinator, camera_rig)
 
 	var saved_position = _world_state.player_position
 	if saved_position != Vector3.ZERO:

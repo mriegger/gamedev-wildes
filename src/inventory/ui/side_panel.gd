@@ -60,7 +60,7 @@ func _ready():
 	_update_hotbar_position(_progress)
 	set_process(false)
 
-func setup(inv: InventoryModel, cam_rig: CameraRig, hb: Hotbar):
+func setup(inv: InventoryModel, inventory_stat_coordinator: InventoryStatCoordinator, cam_rig: CameraRig, hb: Hotbar):
 	inventory_model = inv
 	camera_rig = cam_rig
 	hotbar = hb
@@ -69,6 +69,7 @@ func setup(inv: InventoryModel, cam_rig: CameraRig, hb: Hotbar):
 	for id in _slot_groups.keys():
 		for slot in _slot_groups[id] as Array:
 			slot.set_inventory(inv)
+			slot.set_inventory_stat_coordinator(inventory_stat_coordinator)
 	inventory_model.inventory_changed.connect(_on_inventory_changed)
 	_inventory_dirty = true
 	_update_hotbar_position(_progress)
@@ -130,6 +131,8 @@ func _build_slot_grid_for_region(region_name: String, grid: GridContainer, out_s
 		var slot := slot_scene.instantiate() as InventorySlot
 		slot.name = "Slot_%d" % idx
 		slot.set_slot_index(idx)
+		if InventoryModel.is_equipment_index(idx):
+			slot.set_empty_label(ArmorDefinition.get_slot_label(idx - InventoryModel.FILLABLE_SIZE))
 		slot.set_inventory_styles(_slot_normal_style, _slot_empty_style)
 		slot.mouse_filter = Control.MOUSE_FILTER_STOP
 		grid.add_child(slot)
@@ -235,6 +238,9 @@ func get_progress() -> float:
 
 func get_inventory_slots() -> Array[InventorySlot]:
 	return _slot_groups["inventory"] as Array[InventorySlot]
+
+func get_equipment_slots() -> Array[InventorySlot]:
+	return _slot_groups["equipment"] as Array[InventorySlot]
 
 func toggle():
 	if _is_open:

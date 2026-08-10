@@ -73,6 +73,14 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 
+[node name="Hint" type="Label" parent="Margin/Content/ViewRoot/InventoryView"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.76, 0.74, 0.68, 1)
+theme_override_font_sizes/font_size = 11
+text = "DOUBLE-CLICK ARMOR TO EQUIP"
+horizontal_alignment = 1
+
 [node name="InventoryGrid" type="GridContainer" parent="Margin/Content/ViewRoot/InventoryView"]
 layout_mode = 2
 mouse_filter = 2
@@ -96,7 +104,7 @@ mouse_filter = 2
 theme_override_colors/font_color = Color(0.96, 0.95, 0.9, 1)
 theme_override_fonts/font = ExtResource("3_bold")
 theme_override_font_sizes/font_size = 14
-text = "EQUIPMENT"
+text = "DOUBLE-CLICK ARMOR TO UNEQUIP"
 horizontal_alignment = 1
 
 [node name="EquipmentGrid" type="GridContainer" parent="Margin/Content/ViewRoot/EquipmentView"]

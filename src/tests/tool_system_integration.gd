@@ -68,8 +68,7 @@ func _run():
 	legacy_encoded.erase("starter_item_migration_version")
 	var legacy := InventoryModel.new(item_catalog)
 	_expect(legacy.from_dict(legacy_encoded), "legacy inventory did not restore")
-	var starter_items: Array[StringName] = [&"copper_pickaxe", &"copper_sword"]
-	_expect(legacy.migrate_starter_items(starter_items), "legacy inventory could not receive starter items")
+	_expect(legacy.migrate_starter_items(), "legacy inventory could not receive starter items")
 	_expect(legacy.get_slot(0) != null and legacy.get_slot(0).item_id == &"copper_pickaxe", "legacy pickaxe was not placed in hotbar")
 	_expect(legacy.get_slot(3) != null and legacy.get_slot(3).item_id == &"copper_sword", "legacy sword was not placed in hotbar")
 	var restore_game := Game.new()
@@ -81,7 +80,7 @@ func _run():
 	_expect(restore_game.inventory_model.get_slot(3).item_id == &"copper_sword", "game restore did not execute sword migration")
 	restore_game.free()
 	legacy.slots[3] = null
-	_expect(legacy.migrate_starter_items(starter_items), "completed starter migration did not remain complete")
+	_expect(legacy.migrate_starter_items(), "completed starter migration did not remain complete")
 	_expect(legacy.get_slot(3) == null, "completed starter migration re-granted a removed sword")
 	var crowded := InventoryModel.new(item_catalog)
 	var grass_id := item_catalog.get_item_for_block(BlockId.Type.GRASS).id
@@ -92,7 +91,7 @@ func _run():
 	var full := InventoryModel.new(item_catalog)
 	for index in range(InventoryModel.FILLABLE_SIZE):
 		full.slots[index] = InventoryStack.new(grass_id, 1)
-	_expect(not full.migrate_starter_items(starter_items), "full inventory unexpectedly accepted starter items")
+	_expect(not full.migrate_starter_items(), "full inventory unexpectedly accepted starter items")
 	for index in range(InventoryModel.FILLABLE_SIZE, InventoryModel.TOTAL_SIZE):
 		_expect(full.slots[index] == null, "starter migration used reserved equipment slot %d" % index)
 

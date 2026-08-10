@@ -5,7 +5,7 @@ signal inventory_changed()
 
 const HOTBAR_SIZE: int = 9
 const BACKPACK_SIZE: int = 40
-const EQUIPMENT_SIZE: int = 4
+const EQUIPMENT_SIZE: int = ArmorDefinition.SLOT_COUNT
 const REGIONS: Array = [
 	{"name": "hotbar", "start": 0, "size": HOTBAR_SIZE},
 	{"name": "backpack", "start": HOTBAR_SIZE, "size": BACKPACK_SIZE},
@@ -14,7 +14,16 @@ const REGIONS: Array = [
 const TOTAL_SIZE: int = HOTBAR_SIZE + BACKPACK_SIZE + EQUIPMENT_SIZE
 const DEFAULT_SIZE: int = TOTAL_SIZE
 const FILLABLE_SIZE: int = HOTBAR_SIZE + BACKPACK_SIZE
-const STARTER_ITEM_MIGRATION_VERSION: int = 2
+const STARTER_ITEM_MIGRATION_VERSION: int = 3
+const STARTER_ITEMS_BY_SLOT: Dictionary[int, StringName] = {
+	0: &"copper_pickaxe",
+	3: &"copper_sword",
+	FILLABLE_SIZE - 5: &"copper_helmet",
+	FILLABLE_SIZE - 4: &"copper_chest_plate",
+	FILLABLE_SIZE - 3: &"copper_pants",
+	FILLABLE_SIZE - 2: &"copper_shoes",
+	FILLABLE_SIZE - 1: &"test_totem",
+}
 
 var size: int = TOTAL_SIZE
 var item_catalog: ItemCatalog
@@ -129,16 +138,19 @@ func ensure_item(item_id: StringName) -> bool:
 			return true
 	return false
 
-func migrate_starter_items(item_ids: Array[StringName], backpack_item_ids: Array[StringName] = []) -> bool:
+func migrate_starter_items() -> bool:
 	if starter_item_migration_version >= STARTER_ITEM_MIGRATION_VERSION:
 		return true
-	for item_id in item_ids:
-		if not ensure_item(item_id):
+	var simulated := InventoryModel.new(item_catalog, size)
+	simulated.slots = _copy_slots()
+	for starter_slot in STARTER_ITEMS_BY_SLOT:
+		var item_id: StringName = STARTER_ITEMS_BY_SLOT[starter_slot]
+		var item_ensured := simulated.ensure_item(item_id) if starter_slot < HOTBAR_SIZE else simulated.ensure_backpack_item(item_id)
+		if not item_ensured:
 			return false
-	for item_id in backpack_item_ids:
-		if not ensure_backpack_item(item_id):
-			return false
+	slots = simulated.slots
 	starter_item_migration_version = STARTER_ITEM_MIGRATION_VERSION
+	inventory_changed.emit()
 	return true
 
 func ensure_backpack_item(item_id: StringName) -> bool:
@@ -222,6 +234,20 @@ func can_consume_selected() -> bool:
 func is_hotbar_index(idx: int) -> bool:
 	return idx >= 0 and idx < HOTBAR_SIZE
 
+static func is_equipment_index(idx: int) -> bool:
+	return idx >= FILLABLE_SIZE and idx < TOTAL_SIZE
+
+static func get_equipment_index(armor_slot: int) -> int:
+	if not ArmorDefinition.is_valid_slot(armor_slot):
+		return -1
+	return FILLABLE_SIZE + armor_slot
+
+func get_equipped_armor(armor_slot: int) -> ArmorDefinition:
+	var stack := get_slot(get_equipment_index(armor_slot))
+	if stack == null:
+		return null
+	return item_catalog.get_definition(stack.item_id) as ArmorDefinition
+
 static func get_region_indices(region_name: String) -> Array:
 	for region in REGIONS:
 		if region["name"] == region_name:
@@ -232,7 +258,14 @@ static func get_region_indices(region_name: String) -> Array:
 	return []
 
 func can_slot_accept_item_id(idx: int, item_id) -> bool:
-	return idx >= 0 and idx < min(size, FILLABLE_SIZE) and item_id is StringName and item_catalog.has_definition(item_id)
+	if idx < 0 or idx >= size or not item_id is StringName or not item_catalog.has_definition(item_id):
+		return false
+	if idx < FILLABLE_SIZE:
+		return true
+	if not is_equipment_index(idx):
+		return false
+	var armor := item_catalog.get_definition(item_id) as ArmorDefinition
+	return armor != null and get_equipment_index(armor.armor_slot) == idx
 
 func can_handle_drop(src_idx: int, dst_idx: int, drag_count: int) -> bool:
 	if src_idx < 0 or src_idx >= size or dst_idx < 0 or dst_idx >= size:
@@ -336,12 +369,11 @@ func from_dict(data: Dictionary) -> bool:
 
 func setup_starter():
 	slots.fill(null)
-	slots[0] = InventoryStack.new(&"copper_pickaxe", 1)
+	for starter_slot in STARTER_ITEMS_BY_SLOT:
+		slots[starter_slot] = InventoryStack.new(STARTER_ITEMS_BY_SLOT[starter_slot], 1)
 	slots[1] = InventoryStack.new(item_catalog.get_item_for_block(BlockId.Type.GRASS).id, 12)
 	slots[2] = InventoryStack.new(item_catalog.get_item_for_block(BlockId.Type.STONE).id, 8)
-	slots[3] = InventoryStack.new(&"copper_sword", 1)
 	slots[6] = InventoryStack.new(item_catalog.get_item_for_block(BlockId.Type.TORCH).id, 16)
-	slots[FILLABLE_SIZE - 1] = InventoryStack.new(&"test_totem", 1)
 	selected_slot = 0
 	starter_item_migration_version = STARTER_ITEM_MIGRATION_VERSION
 	inventory_changed.emit()
