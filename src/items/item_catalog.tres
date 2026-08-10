@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="ItemCatalog" load_steps=12 format=3]
+[gd_resource type="Resource" script_class="ItemCatalog" load_steps=13 format=3]
 
 [ext_resource type="Script" path="res://items/item_catalog.gd" id="1_catalog"]
 [ext_resource type="Script" path="res://items/item_definition.gd" id="2_definition"]
@@ -11,7 +11,8 @@
 [ext_resource type="Resource" path="res://items/definitions/torch.tres" id="9_torch"]
 [ext_resource type="Resource" path="res://items/definitions/copper_pickaxe.tres" id="10_pickaxe"]
 [ext_resource type="Resource" path="res://items/definitions/copper_sword.tres" id="11_sword"]
+[ext_resource type="Resource" path="res://items/definitions/test_totem.tres" id="12_test_totem"]
 
 [resource]
 script = ExtResource("1_catalog")
-definitions = Array[ExtResource("2_definition")]([ExtResource("3_grass"), ExtResource("4_dirt"), ExtResource("5_sand"), ExtResource("6_stone"), ExtResource("7_log"), ExtResource("8_leaves"), ExtResource("9_torch"), ExtResource("10_pickaxe"), ExtResource("11_sword")])
+definitions = Array[ExtResource("2_definition")]([ExtResource("3_grass"), ExtResource("4_dirt"), ExtResource("5_sand"), ExtResource("6_stone"), ExtResource("7_log"), ExtResource("8_leaves"), ExtResource("9_torch"), ExtResource("10_pickaxe"), ExtResource("11_sword"), ExtResource("12_test_totem")])

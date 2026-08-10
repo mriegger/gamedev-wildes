@@ -51,11 +51,14 @@ func _run():
 	_inventory.setup_starter()
 	_expect(_inventory.get_slot(0) is InventoryStack and _inventory.get_slot(0).item_id == &"copper_pickaxe", "starter pickaxe missing")
 	_expect(_inventory.get_slot(3) is InventoryStack and _inventory.get_slot(3).item_id == &"copper_sword", "starter sword missing")
+	var test_totem_slot := InventoryModel.FILLABLE_SIZE - 1
+	_expect(_inventory.get_slot(test_totem_slot) is InventoryStack and _inventory.get_slot(test_totem_slot).item_id == &"test_totem", "test totem is not in the starter backpack")
 	var encoded := _inventory.to_dict()
 	var restored := InventoryModel.new(item_catalog)
 	_expect(restored.from_dict(encoded), "typed inventory did not restore")
 	_expect(restored.get_slot(0) is InventoryStack and restored.get_slot(0).item_id == &"copper_pickaxe", "restored pickaxe missing")
 	_expect(restored.get_slot(3) is InventoryStack and restored.get_slot(3).item_id == &"copper_sword", "restored sword missing")
+	_expect(restored.get_slot(test_totem_slot) is InventoryStack and restored.get_slot(test_totem_slot).item_id == &"test_totem", "restored test totem missing")
 	_expect(restored.starter_item_migration_version == InventoryModel.STARTER_ITEM_MIGRATION_VERSION, "starter item migration version did not restore")
 	var legacy_encoded := encoded.duplicate(true)
 	legacy_encoded["regions"]["hotbar"][0] = null

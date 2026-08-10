@@ -1,0 +1,36 @@
+[gd_resource type="Resource" script_class="ItemDefinition" load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://items/item_definition.gd" id="1"]
+[ext_resource type="Texture2D" path="res://assets/textures/tools/sword/copper_sword.png" id="2"]
+[ext_resource type="PackedScene" path="res://items/held/test_totem.tscn" id="3"]
+[ext_resource type="Script" path="res://stats/stat_modifier.gd" id="4"]
+
+[sub_resource type="Resource" id="strength"]
+script = ExtResource("4")
+id = &"test_totem_strength"
+source_item_id = &"test_totem"
+stat_id = &"strength"
+amount = 10.0
+
+[sub_resource type="Resource" id="mobility"]
+script = ExtResource("4")
+id = &"test_totem_mobility"
+source_item_id = &"test_totem"
+stat_id = &"mobility"
+amount = -5.0
+
+[sub_resource type="Resource" id="health"]
+script = ExtResource("4")
+id = &"test_totem_health"
+source_item_id = &"test_totem"
+stat_id = &"hp"
+operation = 1
+amount = 2.0
+
+[resource]
+script = ExtResource("1")
+id = &"test_totem"
+icon = ExtResource("2")
+max_stack = 1
+held_scene = ExtResource("3")
+stat_modifiers = Array[ExtResource("4")]([SubResource("strength"), SubResource("mobility"), SubResource("health")])

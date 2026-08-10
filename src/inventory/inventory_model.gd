@@ -14,7 +14,7 @@ const REGIONS: Array = [
 const TOTAL_SIZE: int = HOTBAR_SIZE + BACKPACK_SIZE + EQUIPMENT_SIZE
 const DEFAULT_SIZE: int = TOTAL_SIZE
 const FILLABLE_SIZE: int = HOTBAR_SIZE + BACKPACK_SIZE
-const STARTER_ITEM_MIGRATION_VERSION: int = 1
+const STARTER_ITEM_MIGRATION_VERSION: int = 2
 
 var size: int = TOTAL_SIZE
 var item_catalog: ItemCatalog
@@ -129,14 +129,30 @@ func ensure_item(item_id: StringName) -> bool:
 			return true
 	return false
 
-func migrate_starter_items(item_ids: Array[StringName]) -> bool:
+func migrate_starter_items(item_ids: Array[StringName], backpack_item_ids: Array[StringName] = []) -> bool:
 	if starter_item_migration_version >= STARTER_ITEM_MIGRATION_VERSION:
 		return true
 	for item_id in item_ids:
 		if not ensure_item(item_id):
 			return false
+	for item_id in backpack_item_ids:
+		if not ensure_backpack_item(item_id):
+			return false
 	starter_item_migration_version = STARTER_ITEM_MIGRATION_VERSION
 	return true
+
+func ensure_backpack_item(item_id: StringName) -> bool:
+	if not item_catalog.has_definition(item_id):
+		return false
+	for stack in slots:
+		if stack != null and stack.item_id == item_id:
+			return true
+	for index in range(HOTBAR_SIZE, FILLABLE_SIZE):
+		if slots[index] == null:
+			slots[index] = InventoryStack.new(item_id, 1)
+			inventory_changed.emit()
+			return true
+	return false
 
 func _copy_slots() -> Array[InventoryStack]:
 	var copied: Array[InventoryStack] = []
@@ -325,6 +341,7 @@ func setup_starter():
 	slots[2] = InventoryStack.new(item_catalog.get_item_for_block(BlockId.Type.STONE).id, 8)
 	slots[3] = InventoryStack.new(&"copper_sword", 1)
 	slots[6] = InventoryStack.new(item_catalog.get_item_for_block(BlockId.Type.TORCH).id, 16)
+	slots[FILLABLE_SIZE - 1] = InventoryStack.new(&"test_totem", 1)
 	selected_slot = 0
 	starter_item_migration_version = STARTER_ITEM_MIGRATION_VERSION
 	inventory_changed.emit()

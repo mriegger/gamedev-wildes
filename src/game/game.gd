@@ -85,7 +85,8 @@ func _restore_inventory():
 			inventory_model.setup_starter()
 			return
 		var starter_items: Array[StringName] = [&"copper_pickaxe", &"copper_sword"]
-		if not inventory_model.migrate_starter_items(starter_items):
+		var backpack_items: Array[StringName] = [&"test_totem"]
+		if not inventory_model.migrate_starter_items(starter_items, backpack_items):
 			push_warning("[Game] Starter items will be retried after inventory space is available")
 	else:
 		inventory_model.setup_starter()
