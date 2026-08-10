@@ -112,7 +112,7 @@ func _try_spawn(definition: EntityDefinition, player_position: Vector3) -> bool:
 		var runtime_id := _next_runtime_id
 		_next_runtime_id += 1
 		_active[runtime_id] = actor
-		add_child(actor)
+		actor.visible = true
 		actor.global_position = spawn_position
 		actor.setup(runtime_id, definition, _voxel_world, int(_rng.randi()))
 		actor.melee_contact_reached.connect(_on_actor_melee_contact_reached)
@@ -155,6 +155,8 @@ func _prepare_one_actor():
 func _prepare_actor(definition: EntityDefinition):
 	var actor := definition.actor_scene.instantiate() as EntityActor
 	assert(actor != null)
+	actor.visible = false
+	add_child(actor)
 	if not _prepared_actors.has(definition.id):
 		_prepared_actors[definition.id] = []
 	var actors := _prepared_actors[definition.id] as Array
