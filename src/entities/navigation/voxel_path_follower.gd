@@ -1,6 +1,9 @@
 extends RefCounted
 class_name VoxelPathFollower
 
+const MAX_SEARCH_RADIUS: int = 24
+const MAX_SEARCH_NODES: int = 256
+
 var _voxel_world: VoxelWorld
 var _body_width: float
 var _body_height: float
@@ -19,12 +22,13 @@ func _init(p_voxel_world: VoxelWorld, p_body_width: float, p_body_height: float,
 	_body_height = p_body_height
 	_repath_seconds = p_repath_seconds
 
-func advance(delta: float, position: Vector3, goal: Vector3, speed: float, on_ground: bool) -> VoxelPathFollowResult:
+func advance(delta: float, position: Vector3, goal: Vector3, speed: float, on_ground: bool, search_budget: NavigationSearchBudget) -> VoxelPathFollowResult:
 	assert(delta >= 0.0 and position.is_finite() and goal.is_finite() and speed >= 0.0)
+	assert(search_budget != null)
 	_repath_remaining = maxf(_repath_remaining - delta, 0.0)
 	var goal_cell := _resolve_feet_cell(goal)
 	var path_failed := false
-	if _repath_remaining <= 0.0 or (goal_cell != _path_goal and not _last_search_failed):
+	if (_repath_remaining <= 0.0 or (goal_cell != _path_goal and not _last_search_failed)) and search_budget.try_acquire():
 		path_failed = not _rebuild_path(position, goal_cell)
 	if _path_index >= _path.size():
 		return VoxelPathFollowResult.new(Vector3.ZERO, false, path_failed)
@@ -48,7 +52,7 @@ func _rebuild_path(position: Vector3, goal_cell: Vector3i) -> bool:
 	_path_goal = goal_cell
 	_repath_remaining = _repath_seconds
 	var start_cell := _resolve_feet_cell(position)
-	var result := VoxelPathfinder.find_path(_voxel_world, start_cell, goal_cell, _body_width, _body_height)
+	var result := VoxelPathfinder.find_path(_voxel_world, start_cell, goal_cell, _body_width, _body_height, MAX_SEARCH_RADIUS, MAX_SEARCH_NODES)
 	if result.is_success():
 		_path = result.path
 		_path_index = 1 if _path.size() > 1 else _path.size()

@@ -20,7 +20,7 @@ func setup(p_runtime_id: int, p_definition: EntityDefinition, p_voxel_world: Vox
 	_sheep_animation = animation_driver as SheepAnimationDriver
 	assert(_sheep_animation != null)
 
-func tick(delta: float, _player_position: Vector3, separation_velocity: Vector3):
+func tick(delta: float, _player_position: Vector3, separation_velocity: Vector3, navigation_search_budget: NavigationSearchBudget):
 	assert(brain != null and voxel_world != null)
 	brain.advance(delta, global_position)
 	var fleeing := brain.state == SheepBrain.State.FLEE
@@ -28,7 +28,7 @@ func tick(delta: float, _player_position: Vector3, separation_velocity: Vector3)
 	max_speed = _behavior.flee_speed if fleeing else _behavior.wander_speed
 	var desired_velocity := Vector3.ZERO
 	if brain.state != SheepBrain.State.IDLE:
-		desired_velocity = _get_path_velocity(delta, brain.get_movement_goal(), max_speed)
+		desired_velocity = _get_path_velocity(delta, brain.get_movement_goal(), max_speed, navigation_search_budget)
 	desired_velocity += separation_velocity
 	var planar_velocity := Vector2(desired_velocity.x, desired_velocity.z)
 	if planar_velocity.length() > max_speed:
@@ -42,8 +42,8 @@ func record_melee_contact(world_hit_direction: Vector3):
 	brain.record_melee_contact(global_position, world_hit_direction)
 	super.record_melee_contact(world_hit_direction)
 
-func _get_path_velocity(delta: float, goal: Vector3, speed: float) -> Vector3:
-	var result := _path_follower.advance(delta, global_position, goal, speed, on_ground)
+func _get_path_velocity(delta: float, goal: Vector3, speed: float, navigation_search_budget: NavigationSearchBudget) -> Vector3:
+	var result := _path_follower.advance(delta, global_position, goal, speed, on_ground, navigation_search_budget)
 	if result.path_failed:
 		brain.reject_movement_goal(global_position)
 	if result.should_jump:

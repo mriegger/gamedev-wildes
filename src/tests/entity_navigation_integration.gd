@@ -102,15 +102,33 @@ func _test_failed_path_repath_throttle() -> void:
 		blocking_edits[Vector3i(direction.x, FEET_Y + 1, direction.z)] = BlockId.Type.STONE
 	world.restore_block_edits(blocking_edits, {})
 	var follower := VoxelPathFollower.new(world, BODY_WIDTH, BODY_HEIGHT, 0.5)
+	var search_budget := NavigationSearchBudget.new(1)
 	var start := Vector3(0.5, float(FEET_Y), 0.5)
 	var goal := Vector3(4.5, float(FEET_Y), 0.5)
-	var first := follower.advance(0.0, start, goal, 1.0, true)
+	var first := follower.advance(0.0, start, goal, 1.0, true, search_budget)
 	_expect(first.path_failed, "unreachable goal did not report its initial failed search")
 	var changed_goal := Vector3(-4.5, float(FEET_Y), 0.5)
-	var throttled := follower.advance(0.1, start, changed_goal, 1.0, true)
+	search_budget.reset()
+	var throttled := follower.advance(0.1, start, changed_goal, 1.0, true, search_budget)
 	_expect(not throttled.path_failed, "changed failed goal bypassed the repath interval")
-	var retry := follower.advance(0.4, start, changed_goal, 1.0, true)
+	search_budget.reset()
+	var retry := follower.advance(0.4, start, changed_goal, 1.0, true, search_budget)
 	_expect(retry.path_failed, "failed path did not retry after the repath interval")
+
+func _test_shared_navigation_search_budget() -> void:
+	var world := _make_flat_world()
+	var start := Vector3(0.5, float(FEET_Y), 0.5)
+	var goal := Vector3(4.5, float(FEET_Y), 0.5)
+	var first_follower := VoxelPathFollower.new(world, BODY_WIDTH, BODY_HEIGHT, 0.5)
+	var second_follower := VoxelPathFollower.new(world, BODY_WIDTH, BODY_HEIGHT, 0.5)
+	var search_budget := NavigationSearchBudget.new(1)
+	var first := first_follower.advance(0.0, start, goal, 1.0, true, search_budget)
+	var deferred := second_follower.advance(0.0, start, goal, 1.0, true, search_budget)
+	_expect(not first.desired_velocity.is_zero_approx(), "first due follower did not acquire the shared search budget")
+	_expect(deferred.desired_velocity.is_zero_approx() and not deferred.path_failed, "exhausted search budget did not defer the second follower")
+	search_budget.reset()
+	var second := second_follower.advance(0.0, start, goal, 1.0, true, search_budget)
+	_expect(not second.desired_velocity.is_zero_approx(), "deferred follower did not search after the budget reset")
 
 func _test_shared_body_solver() -> void:
 	var world := _make_flat_world()
@@ -196,8 +214,10 @@ func _test_zombie_actor_movement_and_animation() -> void:
 	actor.setup(1, definition, world, 99)
 	var target := Vector3(4.5, float(FEET_Y), 0.5)
 	var initial_distance := actor.global_position.distance_to(target)
+	var search_budget := NavigationSearchBudget.new(1)
 	for _step in range(5):
-		actor.tick(0.1, target, Vector3.ZERO)
+		search_budget.reset()
+		actor.tick(0.1, target, Vector3.ZERO, search_budget)
 	actor.animation_driver.advance(0.1)
 	_expect(actor.brain.state == ZombieBrain.State.CHASE, "zombie actor did not enter chase")
 	_expect(actor.global_position.distance_to(target) < initial_distance, "zombie actor did not move toward its target")
@@ -205,7 +225,8 @@ func _test_zombie_actor_movement_and_animation() -> void:
 
 	actor.global_position = target - Vector3(1.0, 0.0, 0.0)
 	actor.velocity = Vector3.ZERO
-	actor.tick(0.01, target, Vector3.ZERO)
+	search_budget.reset()
+	actor.tick(0.01, target, Vector3.ZERO, search_budget)
 	actor.animation_driver.advance(0.0)
 	_expect(actor.brain.state == ZombieBrain.State.ATTACK, "zombie actor did not enter attack at melee range")
 	var animation := actor.animation_driver as ZombieAnimationDriver
@@ -219,6 +240,7 @@ func _run() -> void:
 	_test_deterministic_bounded_pathfinding()
 	_test_elevation_clearance_and_water()
 	_test_failed_path_repath_throttle()
+	_test_shared_navigation_search_budget()
 	_test_shared_body_solver()
 	_test_zombie_brain_transitions()
 	_test_zombie_actor_movement_and_animation()

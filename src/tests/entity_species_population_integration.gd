@@ -120,7 +120,7 @@ func _route_sheep_contact(coordinator: EntityCoordinator, world: VoxelWorld) -> 
 	var animation := sheep.animation_driver as SheepAnimationDriver
 	animation.advance(0.01)
 	_expect(animation.get_current_state() == SheepAnimationDriver.HIT, "routed contact did not play sheep hit animation")
-	sheep.tick(0.05, player.global_position, Vector3.ZERO)
+	sheep.tick(0.05, player.global_position, Vector3.ZERO, NavigationSearchBudget.new(1))
 	animation.advance(SheepAnimationDriver.HIT_SECONDS)
 	_expect(animation.get_current_state() == SheepAnimationDriver.FLEE, "sheep animation did not transition from hit to flee")
 	return [combat, player]

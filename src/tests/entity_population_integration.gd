@@ -80,6 +80,11 @@ func _run() -> void:
 
 	coordinator.tick(EntityCoordinator.SPAWN_INTERVAL_SECONDS, player_position, 20.0)
 	_expect(coordinator.get_active_count() == 6, "seventh spawn cycle exceeded the six-zombie cap")
+	var actors_with_paths := 0
+	for actor in _sorted_actors(coordinator):
+		if not (actor as ZombieActor)._path_follower._path.is_empty():
+			actors_with_paths += 1
+	_expect(actors_with_paths >= 4, "shared navigation budget reached only %d due actors" % actors_with_paths)
 	_expect(spawned_ids == [1, 2, 3, 4, 5, 6], "runtime IDs were not unique and increasing")
 	_expect(spawn_positions.size() == 6, "did not capture all six spawn positions")
 	for index in range(spawn_positions.size()):

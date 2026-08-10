@@ -13,6 +13,7 @@ const SEPARATION_RADIUS: float = 1.2
 const SEPARATION_SPEED: float = 1.25
 const MAX_TOTAL_ACTIVE: int = 12
 const MAX_RETIRING_VISUALS: int = 12
+const MAX_NAVIGATION_SEARCHES_PER_TICK: int = 1
 
 var _catalog: EntityCatalog
 var _voxel_world: VoxelWorld
@@ -23,6 +24,8 @@ var _retiring: Dictionary = {}
 var _spatial_index: EntitySpatialIndex = EntitySpatialIndex.new(SPATIAL_CELL_SIZE)
 var _spawn_elapsed: float = 0.0
 var _next_runtime_id: int = 1
+var _navigation_search_budget: NavigationSearchBudget = NavigationSearchBudget.new(MAX_NAVIGATION_SEARCHES_PER_TICK)
+var _actor_tick_start_index: int = 0
 
 func setup(p_catalog: EntityCatalog, p_voxel_world: VoxelWorld, world_seed: int, p_position_ready: Callable):
 	assert(p_catalog != null and p_catalog.validate())
@@ -33,6 +36,7 @@ func setup(p_catalog: EntityCatalog, p_voxel_world: VoxelWorld, world_seed: int,
 	_position_ready = p_position_ready
 	_rng.seed = world_seed
 	_spawn_elapsed = 0.0
+	_actor_tick_start_index = 0
 	_spatial_index.clear()
 
 func tick(delta: float, player_position: Vector3, time_of_day: float):
@@ -40,19 +44,25 @@ func tick(delta: float, player_position: Vector3, time_of_day: float):
 	_advance_retiring(delta)
 	_despawn_distant(player_position)
 	_refresh_spatial_index()
+	_navigation_search_budget.reset()
 	var runtime_ids: Array = _active.keys()
 	runtime_ids.sort()
+	var tick_runtime_ids := runtime_ids.duplicate()
+	if not tick_runtime_ids.is_empty():
+		var start_index := _actor_tick_start_index % tick_runtime_ids.size()
+		tick_runtime_ids = tick_runtime_ids.slice(start_index) + tick_runtime_ids.slice(0, start_index)
+		_actor_tick_start_index = (start_index + 1) % runtime_ids.size()
 	var separation_velocities: Dictionary = {}
 	for runtime_id in runtime_ids:
 		var actor := get_actor(runtime_id)
 		if actor != null:
 			separation_velocities[runtime_id] = _get_separation_velocity(actor)
-	for runtime_id in runtime_ids:
+	for runtime_id in tick_runtime_ids:
 		var actor := get_actor(runtime_id)
 		if actor == null:
 			continue
 		actor.advance_visual_fade(delta)
-		actor.tick(delta, player_position, separation_velocities[runtime_id] as Vector3)
+		actor.tick(delta, player_position, separation_velocities[runtime_id] as Vector3, _navigation_search_budget)
 		if get_actor(runtime_id) == actor:
 			_spatial_index.upsert(actor.runtime_id, actor.global_position, actor.get_world_bounds())
 	_spawn_elapsed += delta
@@ -238,3 +248,4 @@ func shutdown():
 	_catalog = null
 	_voxel_world = null
 	_position_ready = Callable()
+	_actor_tick_start_index = 0

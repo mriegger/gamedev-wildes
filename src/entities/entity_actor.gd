@@ -35,7 +35,7 @@ func setup(p_runtime_id: int, p_definition: EntityDefinition, p_voxel_world: Vox
 	visual_fader.setup(model_root)
 	set_process(true)
 
-func tick(_delta: float, _player_position: Vector3, _separation_velocity: Vector3):
+func tick(_delta: float, _player_position: Vector3, _separation_velocity: Vector3, _navigation_search_budget: NavigationSearchBudget):
 	assert(false)
 
 func supports_behavior(_behavior: EntityBehaviorDefinition) -> bool:

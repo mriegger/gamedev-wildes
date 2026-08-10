@@ -23,7 +23,7 @@ func setup(p_runtime_id: int, p_definition: EntityDefinition, p_voxel_world: Vox
 	_zombie_animation = animation_driver as ZombieAnimationDriver
 	assert(_zombie_animation != null)
 
-func tick(delta: float, player_position: Vector3, separation_velocity: Vector3):
+func tick(delta: float, player_position: Vector3, separation_velocity: Vector3, navigation_search_budget: NavigationSearchBudget):
 	assert(brain != null and voxel_world != null)
 	_advance_melee_contact(delta)
 	var visible := _has_line_of_sight(player_position)
@@ -40,7 +40,7 @@ func tick(delta: float, player_position: Vector3, separation_velocity: Vector3):
 		var goal := brain.get_movement_goal()
 		var reach_squared := _behavior.melee_profile.reach * _behavior.melee_profile.reach
 		if not (chasing and global_position.distance_squared_to(player_position) <= reach_squared):
-			desired_velocity = _get_path_velocity(delta, goal, _behavior.chase_speed if chasing else _behavior.wander_speed)
+			desired_velocity = _get_path_velocity(delta, goal, _behavior.chase_speed if chasing else _behavior.wander_speed, navigation_search_budget)
 	max_speed = _behavior.chase_speed if chasing else _behavior.wander_speed
 	desired_velocity += separation_velocity
 	var planar_velocity := Vector2(desired_velocity.x, desired_velocity.z)
@@ -72,8 +72,8 @@ func _emit_melee_contact():
 	_melee_profile = null
 	melee_contact_reached.emit(runtime_id, profile)
 
-func _get_path_velocity(delta: float, goal: Vector3, speed: float) -> Vector3:
-	var result := _path_follower.advance(delta, global_position, goal, speed, on_ground)
+func _get_path_velocity(delta: float, goal: Vector3, speed: float, navigation_search_budget: NavigationSearchBudget) -> Vector3:
+	var result := _path_follower.advance(delta, global_position, goal, speed, on_ground, navigation_search_budget)
 	if result.path_failed:
 		brain.reject_wander_goal()
 	if result.should_jump:
