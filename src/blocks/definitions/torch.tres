@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="BlockDefinition" load_steps=3 format=3 uid="uid://bbuaa64ve8sxf"]
+
+[ext_resource type="Script" path="res://blocks/block_definition.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/textures/blocks/wood.png" id="2_texture"]
+
+[resource]
+script = ExtResource("1_def")
+id = 7
+is_solid = false
+is_opaque = false
+is_raycast_solid = true
+is_breakable = true
+is_replaceable = false
+drop_item_id = &"torch"
+side_texture = ExtResource("2_texture")
+emissive_enabled = true
+emissive_color = Color(1, 0.92, 0.68, 1)
+emissive_energy = 1.2
+light_range = 9.0
+light_color = Color(1, 0.96, 0.88, 1)

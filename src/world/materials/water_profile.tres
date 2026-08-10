@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="WaterProfile" format=3 uid="uid://cb1c5b38njr2a"]
+
+[ext_resource type="Script" path="res://world/materials/water_profile.gd" id="1_profile"]
+
+[resource]
+script = ExtResource("1_profile")
+tint_color = Vector4(0.08, 0.35, 0.65, 0.88)
+color_intensity = 1.0
+normal_scale = 0.048
+normal_time_scale = 0.06
+normal_move_dir_a = Vector2(-1, 0.2)
+normal_move_dir_b = Vector2(0.2, 1.5)
+normal_bump_strength = 20.0
+refraction_test = 0.35
+refraction_offset_scale = 0.08
+roughness = 0.12
+specular = 1.0

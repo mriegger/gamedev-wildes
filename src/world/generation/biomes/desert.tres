@@ -1,0 +1,20 @@
+[gd_resource type="Resource" load_steps=2 format=3 uid="uid://dKVMFlorQUA49"]
+
+[ext_resource type="Script" path="res://world/generation/biome.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+biome_id = "desert"
+min_temperature = 0.72
+max_temperature = 1.0
+min_humidity = 0.0
+max_humidity = 0.32
+min_continentalness = 0.0
+max_continentalness = 0.45
+min_erosion = 0.3
+max_erosion = 0.85
+min_peaks_valleys = 0.0
+max_peaks_valleys = 0.35
+surface_block = 3
+shore_block = 3
+tree_density = 0.0

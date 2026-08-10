@@ -1,0 +1,20 @@
+[gd_resource type="Resource" load_steps=2 format=3 uid="uid://7wJECWTees37h"]
+
+[ext_resource type="Script" path="res://world/generation/biome.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+biome_id = "highland"
+min_temperature = 0.2
+max_temperature = 0.6
+min_humidity = 0.15
+max_humidity = 0.55
+min_continentalness = 0.55
+max_continentalness = 0.92
+min_erosion = 0.5
+max_erosion = 0.95
+min_peaks_valleys = 0.0
+max_peaks_valleys = 0.5
+surface_block = 1
+shore_block = 3
+tree_density = 0.008

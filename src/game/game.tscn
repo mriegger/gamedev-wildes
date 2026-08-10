@@ -1,0 +1,46 @@
+[gd_scene load_steps=12 format=3 uid="uid://b22g4me0x1f3h"]
+
+[ext_resource type="Script" path="res://game/game.gd" id="1_game"]
+[ext_resource type="PackedScene" path="res://world/world.tscn" id="2_world"]
+[ext_resource type="PackedScene" path="res://player/player.tscn" id="3_player"]
+[ext_resource type="PackedScene" path="res://player/camera/camera_rig.tscn" id="4_camera"]
+[ext_resource type="PackedScene" path="res://environment/environment.tscn" id="5_environment"]
+[ext_resource type="PackedScene" path="res://ui/hud/hud.tscn" id="6_hud"]
+[ext_resource type="Script" path="res://game/game_session.gd" id="7_session"]
+[ext_resource type="PackedScene" path="res://ui/screens/pause/pause_menu.tscn" id="8_pause"]
+[ext_resource type="Resource" path="res://blocks/block_catalog.tres" id="9_block_catalog"]
+[ext_resource type="Resource" path="res://items/item_catalog.tres" id="10_item_catalog"]
+[ext_resource type="PackedScene" path="res://player/debug/animation_tuning_panel.tscn" id="11_tuning"]
+
+[node name="Game" type="Node3D"]
+script = ExtResource("1_game")
+pause_menu_scene = ExtResource("8_pause")
+animation_tuning_panel_scene = ExtResource("11_tuning")
+block_catalog = ExtResource("9_block_catalog")
+item_catalog = ExtResource("10_item_catalog")
+
+[node name="World" parent="." instance=ExtResource("2_world")]
+
+[node name="Player" parent="." instance=ExtResource("3_player")]
+
+[node name="CameraRig" parent="." instance=ExtResource("4_camera")]
+
+[node name="Environment" parent="." instance=ExtResource("5_environment")]
+
+[node name="HUD" parent="." instance=ExtResource("6_hud")]
+
+[node name="GameSession" type="Node" parent="."]
+script = ExtResource("7_session")
+
+[node name="SaveStatusLayer" type="CanvasLayer" parent="."]
+process_mode = 2
+visible = false
+layer = 100
+
+[node name="SaveStatusLabel" type="Label" parent="SaveStatusLayer"]
+offset_left = 10.0
+offset_top = 10.0
+offset_right = 420.0
+offset_bottom = 36.0
+theme_override_colors/font_color = Color(1, 1, 1, 0.85)
+theme_override_font_sizes/font_size = 14

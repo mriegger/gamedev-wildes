@@ -1,0 +1,28 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://inventory/ui/inventory_slot.gd" id="1_slot"]
+
+[node name="InventorySlot" type="Panel"]
+custom_minimum_size = Vector2(64, 64)
+script = ExtResource("1_slot")
+
+[node name="Icon" type="TextureRect" parent="."]
+texture_filter = 1
+custom_minimum_size = Vector2(32, 32)
+offset_left = 16.0
+offset_top = 8.0
+offset_right = 48.0
+offset_bottom = 40.0
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Count" type="Label" parent="."]
+offset_left = 4.0
+offset_top = 40.0
+offset_right = 60.0
+offset_bottom = 58.0
+mouse_filter = 2
+theme_override_font_sizes/font_size = 14
+text = ""
+horizontal_alignment = 1
