@@ -54,6 +54,24 @@ func select_slot(idx: int) -> bool:
 	inventory_changed.emit()
 	return true
 
+func assign_slot_to_hotbar(source_idx: int, hotbar_idx: int) -> bool:
+	if source_idx < 0 or source_idx >= min(size, FILLABLE_SIZE):
+		return false
+	if not is_hotbar_index(hotbar_idx) or hotbar_idx >= size:
+		return false
+	if source_idx == hotbar_idx:
+		return false
+	var source_stack := slots[source_idx]
+	if source_stack == null or not can_slot_accept_item_id(hotbar_idx, source_stack.item_id):
+		return false
+	var hotbar_stack := slots[hotbar_idx]
+	if hotbar_stack != null and not can_slot_accept_item_id(source_idx, hotbar_stack.item_id):
+		return false
+	slots[source_idx] = hotbar_stack
+	slots[hotbar_idx] = source_stack
+	inventory_changed.emit()
+	return true
+
 func ensure_item(item_id: StringName) -> bool:
 	if not item_catalog.has_definition(item_id):
 		return false

@@ -108,6 +108,18 @@ func _process(_delta: float) -> bool:
 		_check_right_drag_result()
 		_phase = 10
 	elif _phase == 10 and _frame == 185:
+		_start_number_assignment()
+		_phase = 11
+	elif _phase == 11 and _frame == 187:
+		_check_number_assignment()
+		_phase = 12
+	elif _phase == 12 and _frame == 189:
+		_check_hotbar_reassignment()
+		_phase = 13
+	elif _phase == 13 and _frame == 191:
+		_check_hotbar_reassignment_restored()
+		_phase = 14
+	elif _phase == 14 and _frame == 193:
 		_check_final_and_quit()
 	return false
 
@@ -299,6 +311,99 @@ func _check_right_drag_result() -> void:
 				_fail("right drag: slot %d not accepted" % i)
 				return
 	print("[hud_integration] right drag ok")
+
+func _start_number_assignment() -> void:
+	var backpack_slot := _hud.side_panel.get_inventory_slots()[1]
+	var backpack_center := backpack_slot.get_global_rect().get_center()
+	var motion := InputEventMouseMotion.new()
+	motion.position = backpack_center
+	motion.global_position = backpack_center
+	root.push_input(motion, true)
+	var key := InputEventKey.new()
+	key.physical_keycode = KEY_4
+	key.pressed = true
+	root.push_input(key, true)
+
+func _check_number_assignment() -> void:
+	var hotbar_stack := _inv.get_slot(3)
+	var backpack_stack := _inv.get_slot(InventoryModel.HOTBAR_SIZE + 1)
+	var torch_id := _item_catalog.get_item_for_block(BlockId.Type.TORCH).id
+	if hotbar_stack == null or hotbar_stack.item_id != torch_id or hotbar_stack.count != 8:
+		_fail("number assignment: hotbar slot 4 expected torch 8 got %s" % str(hotbar_stack))
+		return
+	if backpack_stack == null or backpack_stack.item_id != &"copper_sword" or backpack_stack.count != 1:
+		_fail("number assignment: backpack expected copper sword got %s" % str(backpack_stack))
+		return
+	var hotbar_node := _hud.hotbar.slot_nodes[3]
+	var backpack_node := _hud.side_panel.get_inventory_slots()[1]
+	if hotbar_node.item_id != torch_id or hotbar_node.item_count != 8:
+		_fail("number assignment: hotbar visuals not refreshed")
+		return
+	if backpack_node.item_id != &"copper_sword" or backpack_node.item_count != 1:
+		_fail("number assignment: backpack visuals not refreshed")
+		return
+	if _inv.selected_slot != 0:
+		_fail("number assignment: selected hotbar slot changed")
+		return
+	print("[hud_integration] number assignment ok")
+	_push_hotbar_assignment(3, KEY_5)
+
+func _push_hotbar_assignment(source_index: int, keycode: Key) -> void:
+	var source_center := _hud.hotbar.slot_nodes[source_index].get_global_rect().get_center()
+	var motion := InputEventMouseMotion.new()
+	motion.position = source_center
+	motion.global_position = source_center
+	root.push_input(motion, true)
+	var key := InputEventKey.new()
+	key.physical_keycode = keycode
+	key.pressed = true
+	root.push_input(key, true)
+
+func _check_hotbar_reassignment() -> void:
+	var torch_id := _item_catalog.get_item_for_block(BlockId.Type.TORCH).id
+	if _inv.get_slot(3) != null:
+		_fail("hotbar reassignment: source slot was not cleared")
+		return
+	var reassigned_stack := _inv.get_slot(4)
+	if reassigned_stack == null or reassigned_stack.item_id != torch_id or reassigned_stack.count != 8:
+		_fail("hotbar reassignment: destination expected torch 8 got %s" % str(reassigned_stack))
+		return
+	_push_hotbar_assignment(4, KEY_4)
+
+func _check_hotbar_reassignment_restored() -> void:
+	var torch_id := _item_catalog.get_item_for_block(BlockId.Type.TORCH).id
+	var restored_stack := _inv.get_slot(3)
+	if restored_stack == null or restored_stack.item_id != torch_id or restored_stack.count != 8:
+		_fail("hotbar reassignment: restored slot expected torch 8 got %s" % str(restored_stack))
+		return
+	if _inv.get_slot(4) != null:
+		_fail("hotbar reassignment: temporary destination was not cleared")
+		return
+	if _inv.selected_slot != 0:
+		_fail("hotbar reassignment: selected hotbar slot changed")
+		return
+	_hud.side_panel._switch_to_tab_id("equipment")
+	_push_hotbar_assignment(3, KEY_5)
+	var equipment_tab_stack := _inv.get_slot(4)
+	if equipment_tab_stack == null or equipment_tab_stack.item_id != torch_id or equipment_tab_stack.count != 8:
+		_fail("hotbar reassignment: equipment tab blocked reassignment")
+		return
+	_push_hotbar_assignment(4, KEY_4)
+	var equipment_tab_restored := _inv.get_slot(3)
+	if equipment_tab_restored == null or equipment_tab_restored.item_id != torch_id or equipment_tab_restored.count != 8:
+		_fail("hotbar reassignment: equipment tab restore failed")
+		return
+	_hud.side_panel._switch_to_tab_id("inventory")
+	_push_hotbar_assignment(4, KEY_3)
+	if not root.is_input_handled():
+		_fail("hotbar reassignment: empty hovered slot did not consume hotkey input")
+		return
+	var unchanged_stack := _inv.get_slot(2)
+	var stone_id := _item_catalog.get_item_for_block(BlockId.Type.STONE).id
+	if unchanged_stack == null or unchanged_stack.item_id != stone_id or unchanged_stack.count != 8:
+		_fail("hotbar reassignment: empty hovered slot changed inventory")
+		return
+	print("[hud_integration] hotbar reassignment ok")
 
 func _find_drag_previews(node: Node, out: Array) -> void:
 	if node.name.contains("DragPreview"):

@@ -19,7 +19,7 @@ world time.
 | Mouse wheel / pinch | Zoom |
 | Left-click / hold | Use the selected item's primary action; hold to mine, click to attack |
 | Right-click | Place the selected block |
-| `1`–`9` | Select hotbar slot |
+| `1`–`9` | Select hotbar slot; while the backpack is open, assign the hovered item to that slot |
 | `P` | Toggle backpack |
 | `F10` | Toggle player animation tuner |
 | `Esc` | Pause |

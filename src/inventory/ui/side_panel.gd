@@ -79,6 +79,40 @@ func _on_inventory_changed():
 		return
 	_refresh_inventory()
 
+func _unhandled_key_input(event: InputEvent):
+	if not _is_open or not event is InputEventKey:
+		return
+	var key_event := event as InputEventKey
+	if not key_event.pressed or key_event.echo:
+		return
+	var hotbar_index := _get_hotbar_index(key_event)
+	if hotbar_index == -1:
+		return
+	var hovered_slot := _get_hovered_assignable_slot()
+	if hovered_slot == null:
+		return
+	inventory_model.assign_slot_to_hotbar(hovered_slot.slot_index, hotbar_index)
+	get_viewport().set_input_as_handled()
+
+func _get_hotbar_index(event: InputEventKey) -> int:
+	var number_key := event.keycode
+	if number_key < KEY_1 or number_key > KEY_9:
+		number_key = event.physical_keycode
+	if number_key < KEY_1 or number_key > KEY_9:
+		return -1
+	return number_key - KEY_1
+
+func _get_hovered_assignable_slot() -> InventorySlot:
+	var backpack_slots := _slot_groups["inventory"] as Array[InventorySlot]
+	var hovered_control := get_viewport().gui_get_hovered_control()
+	while hovered_control != null:
+		if hovered_control is InventorySlot:
+			var hovered_slot := hovered_control as InventorySlot
+			if backpack_slots.has(hovered_slot) or hotbar.slot_nodes.has(hovered_slot):
+				return hovered_slot
+		hovered_control = hovered_control.get_parent() as Control
+	return null
+
 func _refresh_inventory():
 	for id in _slot_groups.keys():
 		for slot in _slot_groups[id] as Array:
