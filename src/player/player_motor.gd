@@ -16,6 +16,7 @@ class_name PlayerMotor
 @onready var held_item_view: HeldItemView = $ModelRoot/PlayerVisual/RigRoot/BodySecondary/BodyAction/TorsoBase/RightShoulder/RightArmBase/RightArmAction/RightHandSocket as HeldItemView
 @onready var _footsteps: PlayerFootsteps = $Footsteps as PlayerFootsteps
 @onready var _action_audio: PlayerActionAudio = $ActionAudio as PlayerActionAudio
+@onready var armor_view: PlayerArmorView = $ModelRoot/PlayerVisual/ArmorView as PlayerArmorView
 @onready var stat_modifier_clock: StatModifierClock = $StatModifierClock as StatModifierClock
 
 var voxel_world: VoxelWorld = null
@@ -44,6 +45,7 @@ func setup(p_world: WorldController, p_camera_rig: CameraRig, p_inventory: Inven
 	held_item_view.setup(p_inventory)
 	_footsteps.setup(self, animation_driver.animator.profile)
 	_action_audio.setup(animation_driver, interactor)
+	armor_view.setup(p_inventory)
 
 func _physics_process(delta):
 	if voxel_world == null:

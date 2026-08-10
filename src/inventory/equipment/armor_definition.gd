@@ -18,6 +18,7 @@ const SLOT_LABELS: Dictionary[int, String] = {
 const SLOT_COUNT: int = Slot.COUNT
 
 @export var armor_slot: Slot = Slot.HELMET
+@export var visual_parts: Array[ArmorVisualPart] = []
 
 static func is_valid_slot(value: int) -> bool:
 	return SLOT_LABELS.has(value)
@@ -37,4 +38,14 @@ func validate(source: String) -> bool:
 	if stat_modifier_activation != ItemDefinition.StatModifierActivation.EQUIPPED:
 		push_error("[ArmorDefinition] Armor modifiers must activate while equipped at %s" % source)
 		valid = false
+	if visual_parts.is_empty():
+		push_error("[ArmorDefinition] Armor visual parts are missing at %s" % source)
+		valid = false
+	for part_index in range(visual_parts.size()):
+		var part := visual_parts[part_index]
+		if part == null:
+			push_error("[ArmorDefinition] Missing visual part %d at %s" % [part_index, source])
+			valid = false
+		elif not part.validate("%s visual part %d" % [source, part_index]):
+			valid = false
 	return valid

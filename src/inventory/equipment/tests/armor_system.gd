@@ -7,6 +7,7 @@ const ARMOR_IDS: Array[StringName] = [
 	&"copper_shoes",
 ]
 const DEFENSE_VALUES: Array[float] = [1.0, 3.0, 2.0, 1.0]
+const VISUAL_PART_COUNTS: Array[int] = [5, 3, 2, 2]
 
 var _errors: Array[String] = []
 var _inventory_change_count: int = 0
@@ -31,6 +32,9 @@ func _init() -> void:
 		if armor.stat_modifiers.size() == 1:
 			_expect(armor.stat_modifiers[0].stat_id == &"defense", "armor modifier stat mismatch for %s" % armor.id)
 			_expect(is_equal_approx(armor.stat_modifiers[0].amount, DEFENSE_VALUES[armor_slot]), "armor defense mismatch for %s" % armor.id)
+		_expect(armor.visual_parts.size() == VISUAL_PART_COUNTS[armor_slot], "armor visual part count mismatch for %s" % armor.id)
+		for visual_part in armor.visual_parts:
+			_expect(visual_part != null and visual_part.mesh != null, "armor visual mesh missing for %s" % armor.id)
 		_expect(armor.resource_path.ends_with(".tres"), "armor is not a tres resource for %s" % armor.id)
 
 	var selected_armor_inventory := InventoryModel.new(item_catalog)
