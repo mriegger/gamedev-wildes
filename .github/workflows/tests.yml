@@ -292,6 +292,20 @@ jobs:
             30 "MINING_HIT_PARTICLES PASS" /tmp/mining_hit_particles.log -- \
             godot --headless --path src --script res://mining/tests/mining_hit_particles_integration.gd
 
+  entity-efficiency:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Record entity efficiency telemetry and verify deterministic bounds
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            120 "ENTITY_EFFICIENCY PASS" /tmp/entity_efficiency.log -- \
+            godot --headless --path src --script res://tests/entity_efficiency_benchmark.gd -- --output=/tmp/entity_efficiency.json
+
   soak-entity-streaming:
     runs-on: ubuntu-latest
     timeout-minutes: 10
