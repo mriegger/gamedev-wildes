@@ -8,6 +8,7 @@ enum SpawnPhase {
 
 @export var id: StringName
 @export var actor_scene: PackedScene
+@export var behavior: EntityBehaviorDefinition
 @export_range(0.1, 4.0, 0.01) var body_width: float = 0.6
 @export_range(0.1, 4.0, 0.01) var body_height: float = 1.8
 @export var spawn_phase: SpawnPhase = SpawnPhase.NIGHT
@@ -27,6 +28,11 @@ func validate(source: String) -> bool:
 		if state.get_node_count() == 0 or not ClassDB.is_parent_class(state.get_node_type(0), &"Node3D"):
 			push_error("[EntityDefinition] Actor scene root must be Node3D for %s at %s" % [id, source])
 			valid = false
+	if behavior == null:
+		push_error("[EntityDefinition] Missing behavior for %s at %s" % [id, source])
+		valid = false
+	elif not behavior.validate(source):
+		valid = false
 	if body_width <= 0.0 or body_height <= 0.0:
 		push_error("[EntityDefinition] Invalid body dimensions for %s at %s" % [id, source])
 		valid = false

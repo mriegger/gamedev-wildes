@@ -81,6 +81,20 @@ jobs:
             30 "ENTITY_DOMAIN PASS" /tmp/entity_domain.log -- \
             godot --headless --path src --script res://tests/entity_domain.gd
 
+  entity-navigation-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run entity navigation integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "ENTITY_NAVIGATION_INTEGRATION PASS" /tmp/entity_navigation.log -- \
+            godot --headless --path src --script res://tests/entity_navigation_integration.gd
+
   hud-integration:
     runs-on: ubuntu-latest
     timeout-minutes: 10

@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="ZombieBehaviorDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://entities/zombie/zombie_behavior_definition.gd" id="1_behavior"]
+
+[resource]
+script = ExtResource("1_behavior")
+wander_speed = 1.6
+chase_speed = 3.2
+gravity = 30.0
+jump_velocity = 7.0
+detection_range = 16.0
+forget_range = 24.0
+target_memory_seconds = 3.0
+attack_range = 1.4
+attack_duration = 0.65
+attack_cooldown = 1.2
+wander_radius = 8.0
+wander_goal_seconds = 4.0
+repath_seconds = 0.5

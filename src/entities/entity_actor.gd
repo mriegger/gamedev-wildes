@@ -7,6 +7,7 @@ class_name EntityActor
 
 var runtime_id: int = -1
 var definition: EntityDefinition
+var voxel_world: VoxelWorld
 var velocity: Vector3 = Vector3.ZERO
 var on_ground: bool = true
 var max_speed: float = 1.0
@@ -15,15 +16,20 @@ var animation_driver: EntityAnimationDriver
 func _ready():
 	set_process(false)
 
-func setup(p_runtime_id: int, p_definition: EntityDefinition):
+func setup(p_runtime_id: int, p_definition: EntityDefinition, p_voxel_world: VoxelWorld, _behavior_seed: int):
 	assert(p_runtime_id >= 0)
 	assert(p_definition != null)
+	assert(p_voxel_world != null)
 	runtime_id = p_runtime_id
 	definition = p_definition
+	voxel_world = p_voxel_world
 	animation_driver = get_node(animation_driver_path) as EntityAnimationDriver
 	assert(animation_driver != null)
 	animation_driver.setup(self)
 	set_process(true)
+
+func tick(_delta: float, _player_position: Vector3):
+	assert(false)
 
 func _process(delta: float):
 	animation_driver.advance(delta)

@@ -28,6 +28,9 @@ func setup(p_catalog: EntityCatalog, p_voxel_world: VoxelWorld, world_seed: int,
 func tick(delta: float, player_position: Vector3, time_of_day: float):
 	assert(_catalog != null and _voxel_world != null)
 	_despawn_distant(player_position)
+	for actor in _active.values():
+		if is_instance_valid(actor):
+			(actor as EntityActor).tick(delta, player_position)
 	_spawn_elapsed += delta
 	if _spawn_elapsed < SPAWN_INTERVAL_SECONDS:
 		return
@@ -62,7 +65,7 @@ func _try_spawn(definition: EntityDefinition, player_position: Vector3) -> bool:
 		_active[runtime_id] = actor
 		add_child(actor)
 		actor.global_position = spawn_position
-		actor.setup(runtime_id, definition)
+		actor.setup(runtime_id, definition, _voxel_world, int(_rng.randi()))
 		return true
 	return false
 
@@ -110,6 +113,13 @@ func _count_definition(definition_id: StringName) -> int:
 
 func get_active_count() -> int:
 	return _active.size()
+
+func get_active_actors() -> Array[EntityActor]:
+	var actors: Array[EntityActor] = []
+	for actor in _active.values():
+		if is_instance_valid(actor):
+			actors.append(actor as EntityActor)
+	return actors
 
 func shutdown():
 	for runtime_id in _active.keys():
