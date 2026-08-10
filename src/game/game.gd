@@ -9,11 +9,13 @@ signal main_menu_requested
 @export var animation_tuning_panel_scene: PackedScene
 @export var block_catalog: BlockCatalog
 @export var item_catalog: ItemCatalog
+@export var entity_catalog: EntityCatalog
 
 @onready var world: WorldController = $World as WorldController
 @onready var player: PlayerMotor = $Player as PlayerMotor
 @onready var camera_rig: CameraRig = $CameraRig as CameraRig
 @onready var game_environment: GameEnvironment = $Environment as GameEnvironment
+@onready var entity_coordinator: EntityCoordinator = $Entities as EntityCoordinator
 @onready var hud: HUD = $HUD as HUD
 @onready var game_session: GameSession = $GameSession as GameSession
 @onready var mining_break_particles: MiningBreakParticles = $MiningBreakParticles as MiningBreakParticles
@@ -44,7 +46,8 @@ func _ready():
 	set_process_unhandled_input(false)
 	var block_catalog_valid := block_catalog.validate()
 	var item_catalog_valid := item_catalog.validate(block_catalog)
-	if not block_catalog_valid or not item_catalog_valid:
+	var entity_catalog_valid := entity_catalog.validate()
+	if not block_catalog_valid or not item_catalog_valid or not entity_catalog_valid:
 		push_error("[Game] Catalog validation failed")
 		return
 	settings.apply_display(get_viewport())
@@ -98,6 +101,7 @@ func _setup_gameplay():
 	else:
 		player.global_position = world.voxel_model.get_spawn_position() + Vector3(0, 0.1, 0)
 	world.set_player_ref(player)
+	entity_coordinator.setup(entity_catalog, world.voxel_model, world.config.seed_value, world.is_position_streamed)
 
 	camera_rig.target_position = player.global_position
 	camera_rig.global_position = player.global_position
@@ -122,12 +126,13 @@ func _process(delta):
 	if _save_status_timer <= 0.0:
 		_save_canvas.visible = false
 
-func _physics_process(_delta):
+func _physics_process(delta):
 	if OS.is_debug_build() and Input.is_action_just_pressed("toggle_animation_tuner"):
 		_toggle_animation_tuning_panel()
 	input_buffer.poll()
 	if animation_tuning_panel != null and animation_tuning_panel.is_open():
 		input_buffer.clear_gameplay()
+	entity_coordinator.tick(delta, player.global_position, game_environment.get_time_of_day())
 
 func _unhandled_input(event):
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -199,6 +204,7 @@ func _save_and_request_main_menu():
 	hud.close_side_panel_immediate()
 	camera_rig.reset_right_obstruction()
 	game_session.shutdown("quit_to_menu")
+	entity_coordinator.shutdown()
 	world.shutdown()
 	_session_active = false
 	main_menu_requested.emit()
@@ -207,4 +213,5 @@ func _notification(what):
 	if what == NOTIFICATION_WM_CLOSE_REQUEST and _session_active:
 		_session_active = false
 		game_session.shutdown("close")
+		entity_coordinator.shutdown()
 		world.shutdown()

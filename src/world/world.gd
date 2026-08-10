@@ -149,6 +149,13 @@ func set_player_ref(player: Node3D):
 	_player_ref = player
 	torch_renderer.set_player_ref(player)
 
+func is_position_streamed(position: Vector3) -> bool:
+	if chunk_manager == null:
+		return false
+	var cell := Vector3i(floori(position.x), floori(position.y), floori(position.z))
+	var coord := ChunkCoord.world_to_chunk_vec3i(cell, config.chunk_size)
+	return chunk_manager.visible_chunks.has(coord)
+
 func apply_settings(settings: GameSettings):
 	_settings = settings
 	chunk_renderer.set_shadow_render_distance(settings.get_shadow_chunk_radius())

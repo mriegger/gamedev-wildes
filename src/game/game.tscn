@@ -1,4 +1,4 @@
-[gd_scene load_steps=14 format=3 uid="uid://b22g4me0x1f3h"]
+[gd_scene load_steps=16 format=3 uid="uid://b22g4me0x1f3h"]
 
 [ext_resource type="Script" path="res://game/game.gd" id="1_game"]
 [ext_resource type="PackedScene" path="res://world/world.tscn" id="2_world"]
@@ -13,6 +13,8 @@
 [ext_resource type="PackedScene" path="res://player/debug/animation_tuning_panel.tscn" id="11_tuning"]
 [ext_resource type="PackedScene" path="res://mining/presentation/mining_break_particles.tscn" id="12_mining_particles"]
 [ext_resource type="PackedScene" path="res://mining/presentation/mining_hit_particles.tscn" id="13_mining_hit_particles"]
+[ext_resource type="Script" path="res://entities/entity_coordinator.gd" id="14_entities"]
+[ext_resource type="Resource" path="res://entities/entity_catalog.tres" id="15_entity_catalog"]
 
 [node name="Game" type="Node3D"]
 script = ExtResource("1_game")
@@ -20,6 +22,7 @@ pause_menu_scene = ExtResource("8_pause")
 animation_tuning_panel_scene = ExtResource("11_tuning")
 block_catalog = ExtResource("9_block_catalog")
 item_catalog = ExtResource("10_item_catalog")
+entity_catalog = ExtResource("15_entity_catalog")
 
 [node name="World" parent="." instance=ExtResource("2_world")]
 
@@ -28,6 +31,9 @@ item_catalog = ExtResource("10_item_catalog")
 [node name="CameraRig" parent="." instance=ExtResource("4_camera")]
 
 [node name="Environment" parent="." instance=ExtResource("5_environment")]
+
+[node name="Entities" type="Node3D" parent="."]
+script = ExtResource("14_entities")
 
 [node name="HUD" parent="." instance=ExtResource("6_hud")]
 

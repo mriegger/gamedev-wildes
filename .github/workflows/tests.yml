@@ -67,6 +67,20 @@ jobs:
             60 "WORLD_EDIT_INDEX PASS" /tmp/world_edit_index.log -- \
             godot --headless --path src --script res://tests/world_edit_index.gd
 
+  entity-domain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run entity domain tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "ENTITY_DOMAIN PASS" /tmp/entity_domain.log -- \
+            godot --headless --path src --script res://tests/entity_domain.gd
+
   hud-integration:
     runs-on: ubuntu-latest
     timeout-minutes: 10
