@@ -1,6 +1,8 @@
 extends Node
 class_name PlayerAnimationDriver
 
+signal mining_impact
+
 const PREVIEW_LIVE: StringName = &"Live"
 const PREVIEW_IDLE: StringName = &"Idle"
 const PREVIEW_WALK: StringName = &"Walk"
@@ -22,6 +24,8 @@ var _active_attack_action: MeleeAttackActionDefinition
 var _attack_preview_elapsed: float = 0.0
 var _attack_preview_direction: int = -1
 var _attack_preview_paused: bool = false
+var _mining_impact_elapsed: float = 0.0
+var _mining_impact_active: bool = false
 
 func _ready():
 	set_process(false)
@@ -82,6 +86,7 @@ func get_attack_preview_progress() -> float:
 
 func _process(delta: float):
 	if _preview_state != PREVIEW_LIVE:
+		_update_mining_impact(0.0, false)
 		_update_preview(delta)
 		return
 	if _active_attack_action != null and (_interactor.melee_attack_action != _active_attack_action or _interactor.get_selected_primary_action() != _active_attack_action):
@@ -103,7 +108,9 @@ func _process(delta: float):
 		var head_position = animator.head_secondary.global_position
 		local_look_direction = model_basis.inverse() * (target_center - head_position)
 	_animation_state.set_motion(local_velocity, speed_ratio, sprinting, _motor.on_ground, _motor.jump_anticipation, turn_rate, has_look_target, local_look_direction)
-	animator.set_mining_active(_interactor.is_mining and _interactor.can_mine_target)
+	var mining_active = _interactor.is_mining and _interactor.can_mine_target
+	animator.set_mining_active(mining_active)
+	_update_mining_impact(delta, mining_active)
 	animator.advance_animation(delta)
 	_motor.held_item_view.set_attack_pose(animator.attack_pose_weight, animator.right_arm_action.rotation.x, _active_attack_action)
 
@@ -135,6 +142,19 @@ func _update_preview(delta: float):
 	else:
 		animator.advance_animation(delta)
 		_motor.held_item_view.set_attack_pose(0.0, 0.0, null)
+
+func _update_mining_impact(delta: float, active: bool):
+	if not active:
+		_mining_impact_elapsed = 0.0
+		_mining_impact_active = false
+		return
+	if not _mining_impact_active:
+		_mining_impact_active = true
+		mining_impact.emit()
+	_mining_impact_elapsed += delta
+	while _mining_impact_elapsed >= animator.profile.mine_cycle_seconds:
+		_mining_impact_elapsed -= animator.profile.mine_cycle_seconds
+		mining_impact.emit()
 
 func _advance_attack_preview(delta: float):
 	var remaining := delta

@@ -44,7 +44,8 @@ func _run():
 	for s in footsteps._streams:
 		_expect(s != null, "null stream in footsteps")
 
-	footsteps.setup(player)
+	var profile = player.animation_driver.animator.profile
+	footsteps.setup(player, profile)
 	await process_frame
 	_expect(asp.stream != null, "setup didn't assign stream")
 
@@ -75,17 +76,19 @@ func _run():
 	player.velocity = Vector3(5.5, 0, 0)
 	player.is_sprinting = false
 	footsteps._step_timer = 0.0
-	footsteps._process(0.32)
-	_expect(footsteps._step_timer > 0.0, "walk should not yet trigger at 0.32")
-	footsteps._process(0.01)
-	_expect(is_equal_approx(footsteps._step_timer, 0.0), "walk should trigger at 0.33 and reset")
+	var walk_interval = profile.walk_cycle_seconds * 0.5
+	footsteps._process(walk_interval - 0.01)
+	_expect(footsteps._step_timer > 0.0, "walk triggered before profile contact interval")
+	footsteps._process(0.02)
+	_expect(is_equal_approx(footsteps._step_timer, 0.0), "walk did not trigger at profile contact interval")
 
 	player.is_sprinting = true
 	footsteps._step_timer = 0.0
-	footsteps._process(0.22)
-	_expect(footsteps._step_timer > 0.0, "sprint should not trigger at 0.22")
+	var sprint_interval = profile.sprint_cycle_seconds * 0.5
+	footsteps._process(sprint_interval - 0.01)
+	_expect(footsteps._step_timer > 0.0, "sprint triggered before profile contact interval")
 	footsteps._process(0.02)
-	_expect(is_equal_approx(footsteps._step_timer, 0.0), "sprint should trigger at 0.24")
+	_expect(is_equal_approx(footsteps._step_timer, 0.0), "sprint did not trigger at profile contact interval")
 
 	var before_count = _count_nodes(root)
 	player.velocity = Vector3(5.5, 0, 0)

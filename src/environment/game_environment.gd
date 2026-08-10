@@ -9,7 +9,7 @@ signal sky_color_changed(sky_color: Color)
 @onready var _clock: GameClock = $GameClock
 @onready var _values: DayNightValues = $DayNightValues
 @onready var _debug_clock_panel: DebugClockPanel = $DebugClockPanel
-@onready var _ambient_soundscape: Node = $AmbientSoundscape
+@onready var _ambient_soundscape: AmbientSoundscape = $AmbientSoundscape as AmbientSoundscape
 
 func _ready():
 	_values.sky_color_changed.connect(sky_color_changed.emit)

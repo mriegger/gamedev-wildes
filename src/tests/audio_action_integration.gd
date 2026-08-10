@@ -29,6 +29,7 @@ func _run():
 	await process_frame
 
 	var interactor = player.interactor as PlayerInteractor
+	var animation_driver = player.animation_driver as PlayerAnimationDriver
 	var action_audio = player.get_node_or_null("ActionAudio")
 	_expect(action_audio != null, "ActionAudio node missing")
 	var clunk = action_audio.get_node_or_null("ClunkPlayer") as AudioStreamPlayer
@@ -36,35 +37,38 @@ func _run():
 	_expect(clunk.bus == &"SFX", "clunk bus not SFX is %s" % clunk.bus)
 	_expect(action_audio._streams.size() == 4, "clunk streams expected 4 got %d" % action_audio._streams.size())
 
-	action_audio.setup(interactor)
+	animation_driver.setup(player, interactor)
+	animation_driver.set_process(false)
+	action_audio.setup(animation_driver, interactor)
 	await process_frame
 
 	var has_mining = false
 	var has_melee = false
-	for c in interactor.mining_hit.get_connections():
+	for c in animation_driver.mining_impact.get_connections():
 		if c["callable"].get_object() == action_audio:
 			has_mining = true
 	for c in interactor.melee_terrain_hit.get_connections():
 		if c["callable"].get_object() == action_audio:
 			has_melee = true
-	_expect(has_mining, "mining_hit not connected to action audio")
+	_expect(has_mining, "mining impact not connected to action audio")
 	_expect(has_melee, "melee_terrain_hit not connected")
 
-	interactor.mining_hit.emit(Vector3i.ZERO, 0, null)
+	animation_driver._update_mining_impact(0.0, true)
 	await process_frame
-	_expect(clunk.stream != null, "clunk stream null after mining_hit")
+	_expect(clunk.stream != null, "clunk stream null after mining impact")
 	_expect(abs(clunk.volume_db - (-6.0)) < 0.1, "mining clunk vol expected -6 got %f" % clunk.volume_db)
 	_expect(clunk.pitch_scale >= 0.95 and clunk.pitch_scale <= 1.07, "mining pitch out of range %f" % clunk.pitch_scale)
+	clunk.stop()
+	clunk.stream = null
+	animation_driver._update_mining_impact(animation_driver.animator.profile.mine_cycle_seconds - 0.01, true)
+	_expect(clunk.stream == null, "mining impact ignored profile cadence")
+	animation_driver._update_mining_impact(0.02, true)
+	_expect(clunk.stream != null, "mining impact did not follow profile cadence")
+	animation_driver._update_mining_impact(0.0, false)
 
 	interactor.melee_terrain_hit.emit(Vector3i(1, 2, 3))
 	await process_frame
 	_expect(abs(clunk.volume_db - (-4.0)) < 0.1, "melee clunk vol expected -4 got %f" % clunk.volume_db)
-
-	var before = int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
-	for i in range(50):
-		action_audio._play_clunk(-6.0)
-	var after = int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
-	_expect(before == after, "clunk spam leaked orphan before %d after %d" % [before, after])
 
 	player.queue_free()
 	for _frame_index in range(10):

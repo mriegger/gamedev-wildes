@@ -4,6 +4,7 @@ class_name PlayerActionAudio
 @onready var _player: AudioStreamPlayer = $ClunkPlayer
 
 var _interactor: PlayerInteractor
+var _animation_driver: PlayerAnimationDriver
 var _streams: Array[AudioStream] = [
 	preload("res://assets/audio/sfx/tools/impactGeneric_light_001.ogg"),
 	preload("res://assets/audio/sfx/tools/impactGeneric_light_002.ogg"),
@@ -14,15 +15,16 @@ var _streams: Array[AudioStream] = [
 var _last_idx: int = -1
 
 
-func setup(p_interactor: PlayerInteractor):
+func setup(p_animation_driver: PlayerAnimationDriver, p_interactor: PlayerInteractor):
+	_animation_driver = p_animation_driver
 	_interactor = p_interactor
-	_interactor.mining_hit.connect(_on_mining_hit)
+	_animation_driver.mining_impact.connect(_on_mining_impact)
 	_interactor.melee_terrain_hit.connect(_on_melee_terrain_hit)
 	if _player.stream == null and _streams.size() > 0:
 		_player.stream = _streams[0]
 
 
-func _on_mining_hit(_pos: Vector3i, _block_id: int, _action):
+func _on_mining_impact():
 	_play_clunk(-6.0)
 
 
@@ -45,11 +47,12 @@ func _play_clunk(volume_db: float = -6.0):
 
 
 func _exit_tree():
+	if _animation_driver != null and _animation_driver.mining_impact.is_connected(_on_mining_impact):
+		_animation_driver.mining_impact.disconnect(_on_mining_impact)
 	if _interactor != null:
-		if _interactor.mining_hit.is_connected(_on_mining_hit):
-			_interactor.mining_hit.disconnect(_on_mining_hit)
 		if _interactor.melee_terrain_hit.is_connected(_on_melee_terrain_hit):
 			_interactor.melee_terrain_hit.disconnect(_on_melee_terrain_hit)
+	_animation_driver = null
 	_interactor = null
 	_streams.clear()
 	if _player:

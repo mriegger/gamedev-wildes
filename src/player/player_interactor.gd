@@ -3,7 +3,6 @@ class_name PlayerInteractor
 
 signal block_placed
 signal melee_attack_started(action: MeleeAttackActionDefinition, direction: int)
-signal mining_hit(position: Vector3i, block_id: int, action: MiningActionDefinition)
 signal melee_terrain_hit(position: Vector3i)
 
 @export var reach: float = 6.0
@@ -30,8 +29,6 @@ var mine_timer: float = 0.0
 var mine_target: Vector3i = Vector3i(-999, -999, -999)
 var mine_target_rev: int = -1
 var mine_action: MiningActionDefinition
-var _mine_next_hit_time: float = 0.0
-const MINE_HIT_INTERVAL: float = 0.35
 var melee_attack_timer: float = 0.0
 var melee_attack_queue: int = 0
 var melee_attack_action: MeleeAttackActionDefinition
@@ -229,25 +226,18 @@ func _handle_item_actions(delta):
 			mine_timer = 0.0
 			mine_action = selected_mining
 			is_mining = true
-			_mine_next_hit_time = MINE_HIT_INTERVAL
-			_emit_mining_hit(mine_target, mine_action)
 		else:
 			if mine_target != target_block or mine_action != selected_mining:
 				mine_target = target_block
 				mine_target_rev = voxel_world.get_revision(mine_target)
 				mine_timer = 0.0
 				mine_action = selected_mining
-				_mine_next_hit_time = MINE_HIT_INTERVAL
-				_emit_mining_hit(mine_target, mine_action)
 			else:
 				var cur_rev = voxel_world.get_revision(mine_target)
 				if cur_rev != mine_target_rev:
 					_reset_mining()
 				else:
 					mine_timer += delta
-					if mine_timer >= _mine_next_hit_time:
-						_mine_next_hit_time += MINE_HIT_INTERVAL
-						_emit_mining_hit(mine_target, mine_action)
 					if mine_timer >= get_mine_duration():
 						_commit_mine(mine_target, mine_action)
 	else:
@@ -289,16 +279,6 @@ func _reset_mining():
 	mine_target = Vector3i(-999, -999, -999)
 	mine_target_rev = -1
 	mine_action = null
-	_mine_next_hit_time = 0.0
-
-
-func _emit_mining_hit(pos: Vector3i, action: MiningActionDefinition):
-	if voxel_world == null:
-		return
-	var block_id = voxel_world.get_block_id_at(pos)
-	if block_id == BlockId.Type.AIR:
-		return
-	mining_hit.emit(pos, block_id, action)
 
 func _reset_melee_chain():
 	melee_attack_timer = 0.0

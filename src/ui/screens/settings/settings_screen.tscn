@@ -35,7 +35,7 @@ theme_override_colors/font_color = Color(0.96, 0.95, 0.9, 1)
 
 [node name="Description" type="Label" parent="VBox"]
 layout_mode = 2
-text = "3D rendering is capped at 2560×1440 and upscaled on larger displays. Changes apply immediately."
+text = "Display and audio changes apply immediately. 3D rendering is capped at 2560×1440."
 autowrap_mode = 3
 horizontal_alignment = 1
 theme_override_font_sizes/font_size = 14
@@ -109,6 +109,28 @@ text = "Torch shadows"
 custom_minimum_size = Vector2(220, 38)
 layout_mode = 2
 size_flags_horizontal = 3
+
+[node name="AmbientVolumeLabel" type="Label" parent="VBox/SettingsGrid"]
+layout_mode = 2
+text = "Ambient volume"
+
+[node name="AmbientVolume" type="HSlider" parent="VBox/SettingsGrid"]
+custom_minimum_size = Vector2(220, 38)
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 0.0
+max_value = 1.0
+step = 0.01
+value = 1.0
+
+[node name="BirdsEnabledLabel" type="Label" parent="VBox/SettingsGrid"]
+layout_mode = 2
+text = "Bird ambience"
+
+[node name="BirdsEnabled" type="CheckButton" parent="VBox/SettingsGrid"]
+layout_mode = 2
+button_pressed = true
+text = "Enabled"
 
 [node name="BackButton" parent="VBox" instance=ExtResource("2_button")]
 custom_minimum_size = Vector2(220, 58)

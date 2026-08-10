@@ -11,6 +11,8 @@ signal back_requested
 @onready var sun_shadows: CheckButton = $VBox/SettingsGrid/SunShadows
 @onready var shadow_range: OptionButton = $VBox/SettingsGrid/ShadowRange
 @onready var torch_shadows: OptionButton = $VBox/SettingsGrid/TorchShadows
+@onready var ambient_volume: HSlider = $VBox/SettingsGrid/AmbientVolume
+@onready var birds_enabled: CheckButton = $VBox/SettingsGrid/BirdsEnabled
 @onready var back_button: WildesButton = $VBox/BackButton
 
 var _settings: GameSettings
@@ -26,6 +28,8 @@ func _ready():
 	sun_shadows.toggled.connect(_on_sun_shadows_toggled)
 	shadow_range.item_selected.connect(_on_shadow_range_selected)
 	torch_shadows.item_selected.connect(_on_torch_shadows_selected)
+	ambient_volume.value_changed.connect(_on_ambient_volume_changed)
+	birds_enabled.toggled.connect(_on_birds_enabled_toggled)
 	back_button.pressed.connect(back_requested.emit)
 
 func setup(settings: GameSettings):
@@ -74,6 +78,8 @@ func _sync_controls():
 	sun_shadows.set_pressed_no_signal(_settings.sun_shadows_enabled)
 	_select_value(shadow_range, _settings.shadow_range)
 	_select_value(torch_shadows, _settings.torch_shadow_count)
+	ambient_volume.set_value_no_signal(_settings.ambient_volume)
+	birds_enabled.set_pressed_no_signal(_settings.birds_enabled)
 	_syncing = false
 
 func _select_value(option: OptionButton, value: Variant):
@@ -112,4 +118,12 @@ func _on_shadow_range_selected(index: int):
 
 func _on_torch_shadows_selected(index: int):
 	_settings.torch_shadow_count = int(torch_shadows.get_item_metadata(index))
+	_emit_change()
+
+func _on_ambient_volume_changed(value: float):
+	_settings.ambient_volume = value
+	_emit_change()
+
+func _on_birds_enabled_toggled(enabled: bool):
+	_settings.birds_enabled = enabled
 	_emit_change()

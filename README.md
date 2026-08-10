@@ -67,7 +67,7 @@ to play.
 **UI & saves.** A frosted-glass front-end: main menu, world select over three save slots,
 create-world and hold-3-seconds-to-delete modals, a chunk-progress loading screen, and a pause
 menu that freezes the game. The pause menu exposes persistent frame-rate, 3D resolution,
-anti-aliasing, fog, sun-shadow, shadow-range, and torch-shadow settings. Saves live in
+anti-aliasing, fog, sun-shadow, shadow-range, torch-shadow, and ambient-audio settings. Saves live in
 `user://saves/` and autosave every 30 seconds, plus shortly after any block edit.
 
 ## Project Structure

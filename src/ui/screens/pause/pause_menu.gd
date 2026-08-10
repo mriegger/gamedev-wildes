@@ -53,7 +53,7 @@ func _on_main_menu_pressed():
 func _show_settings():
 	_main_view.visible = false
 	settings_screen.visible = true
-	_panel.custom_minimum_size = Vector2(640, 590)
+	_panel.custom_minimum_size = Vector2(640, 680)
 	settings_screen.focus_first_control()
 
 func _show_pause_menu():

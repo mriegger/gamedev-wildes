@@ -33,16 +33,9 @@ func _run():
 	await process_frame
 
 	var birds = amb.get_node("BirdsPlayer") as AudioStreamPlayer
-	var insects = amb.get_node("InsectsPlayer") as AudioStreamPlayer
-	var timer_birds = amb.get_node("TimerBirds") as Timer
-	var timer_insects = amb.get_node("TimerInsects") as Timer
 
 	_expect(birds != null, "BirdsPlayer missing")
-	_expect(insects != null, "InsectsPlayer missing")
 	_expect(birds.bus == &"Ambient", "birds bus not Ambient is %s" % birds.bus)
-	_expect(insects.bus == &"Ambient", "insects bus not Ambient")
-	_expect(timer_birds != null, "TimerBirds missing")
-	_expect(timer_insects != null, "TimerInsects missing")
 
 	var clock = GameClock.new()
 	root.add_child(clock)
@@ -56,19 +49,30 @@ func _run():
 	var settings = GameSettings.new()
 	settings.ambient_volume = 0.0
 	settings.birds_enabled = true
-	settings.insects_enabled = true
 	amb.apply_settings(settings)
 	await process_frame
 	_expect(birds.volume_db <= -79.0, "birds not muted at vol 0: %f" % birds.volume_db)
 
 	settings.ambient_volume = 0.42
 	settings.birds_enabled = false
-	settings.insects_enabled = false
 	var restored_settings = GameSettings.new()
 	restored_settings._apply_dict(settings.to_dict())
 	_expect(is_equal_approx(restored_settings.ambient_volume, 0.42), "ambient volume did not persist")
 	_expect(not restored_settings.birds_enabled, "birds setting did not persist")
-	_expect(not restored_settings.insects_enabled, "insects setting did not persist")
+
+	var settings_scene = load("res://ui/screens/settings/settings_screen.tscn") as PackedScene
+	var settings_screen = settings_scene.instantiate() as SettingsScreen
+	root.add_child(settings_screen)
+	await process_frame
+	settings_screen.setup(restored_settings)
+	_expect(is_equal_approx(settings_screen.ambient_volume.value, 0.42), "ambient volume control did not sync")
+	_expect(not settings_screen.birds_enabled.button_pressed, "birds control did not sync")
+	settings_screen.ambient_volume.set_value_no_signal(0.65)
+	settings_screen.ambient_volume.value_changed.emit(0.65)
+	settings_screen.birds_enabled.set_pressed_no_signal(true)
+	settings_screen.birds_enabled.toggled.emit(true)
+	_expect(is_equal_approx(restored_settings.ambient_volume, 0.65), "ambient volume control did not update settings")
+	_expect(restored_settings.birds_enabled, "birds control did not update settings")
 
 	_expect(is_equal_approx(amb._get_day_factor(0.0), 0.0), "day_factor 0")
 	_expect(is_equal_approx(amb._get_day_factor(5.99), 0.0), "day_factor 5.99")
@@ -81,20 +85,19 @@ func _run():
 	_expect(is_equal_approx(amb._get_day_factor(19.0), 0.0), "day_factor 19")
 	_expect(is_equal_approx(amb._get_day_factor(20.0), 0.0), "day_factor 20")
 
-	settings.ambient_volume = 1.0
-	settings.birds_enabled = true
-	settings.insects_enabled = true
-	amb.apply_settings(settings)
+	restored_settings.ambient_volume = 1.0
+	amb.apply_settings(restored_settings)
 	clock.set_time_of_day(12.0)
+	amb.start()
 	await process_frame
 	_expect(birds.volume_db > -8.0 and birds.volume_db < -4.0, "birds vol at noon not ~-6dB got %f" % birds.volume_db)
-	_expect(insects.volume_db <= -79.0, "insects should be muted at noon got %f" % insects.volume_db)
+	_expect(birds.playing, "birds did not start during daytime")
 
 	clock.set_time_of_day(2.0)
 	_expect(is_equal_approx(amb._day_factor, 0.0), "night day_factor not 0")
 	_expect(birds.volume_db <= -79.0, "birds should mute at night")
+	_expect(not birds.playing, "birds did not stop at night")
 
-	amb.start()
 	amb.stop()
 	amb.stop()
 	_expect(not birds.playing, "birds still playing after stop")
@@ -104,6 +107,7 @@ func _run():
 
 	amb.queue_free()
 	clock.queue_free()
+	settings_screen.queue_free()
 	for _frame_index in range(10):
 		await process_frame
 	call_deferred("_finish", "AUDIO_AMBIENT")
