@@ -1,10 +1,10 @@
-[gd_resource type="Resource" script_class="ArmorDefinition" load_steps=16 format=3]
+[gd_resource type="Resource" script_class="ArmorDefinition" load_steps=15 format=3]
 
-[ext_resource type="Script" path="res://inventory/equipment/armor_definition.gd" id="1_armor"]
-[ext_resource type="Texture2D" path="res://inventory/equipment/icons/copper_helmet.svg" id="2_icon"]
+[ext_resource type="Script" path="res://equipment/armor/armor_definition.gd" id="1_armor"]
+[ext_resource type="Texture2D" path="res://equipment/armor/sets/copper/icons/copper_helmet.svg" id="2_icon"]
 [ext_resource type="Script" path="res://stats/stat_modifier.gd" id="3_modifier"]
-[ext_resource type="Script" path="res://inventory/equipment/armor_visual_part.gd" id="4_visual"]
-[ext_resource type="Material" path="res://inventory/equipment/materials/copper_armor_material.tres" id="5_material"]
+[ext_resource type="Script" path="res://equipment/armor/armor_visual_part.gd" id="4_visual"]
+[ext_resource type="Material" path="res://equipment/armor/sets/copper/copper_armor_material.tres" id="5_material"]
 
 [sub_resource type="Resource" id="defense"]
 script = ExtResource("3_modifier")
@@ -22,22 +22,18 @@ script = ExtResource("4_visual")
 mesh = SubResource("helmet_top_mesh")
 local_transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.235, 0)
 
-[sub_resource type="BoxMesh" id="helmet_left_mesh"]
+[sub_resource type="BoxMesh" id="helmet_side_mesh"]
 material = ExtResource("5_material")
 size = Vector3(0.06, 0.38, 0.48)
 
 [sub_resource type="Resource" id="helmet_left"]
 script = ExtResource("4_visual")
-mesh = SubResource("helmet_left_mesh")
+mesh = SubResource("helmet_side_mesh")
 local_transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.235, -0.02, 0)
-
-[sub_resource type="BoxMesh" id="helmet_right_mesh"]
-material = ExtResource("5_material")
-size = Vector3(0.06, 0.38, 0.48)
 
 [sub_resource type="Resource" id="helmet_right"]
 script = ExtResource("4_visual")
-mesh = SubResource("helmet_right_mesh")
+mesh = SubResource("helmet_side_mesh")
 local_transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.235, -0.02, 0)
 
 [sub_resource type="BoxMesh" id="helmet_back_mesh"]

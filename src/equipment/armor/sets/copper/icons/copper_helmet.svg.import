@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cqv17bbl6hxqk"
-path="res://.godot/imported/copper_chest_plate.svg-6782dc22dea8b697255af612bf58cfb0.ctex"
+uid="uid://dmmnarum54rft"
+path="res://.godot/imported/copper_helmet.svg-9d6d08134b8138ec780f7f090ab010ca.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://inventory/equipment/icons/copper_chest_plate.svg"
-dest_files=["res://.godot/imported/copper_chest_plate.svg-6782dc22dea8b697255af612bf58cfb0.ctex"]
+source_file="res://equipment/armor/sets/copper/icons/copper_helmet.svg"
+dest_files=["res://.godot/imported/copper_helmet.svg-9d6d08134b8138ec780f7f090ab010ca.ctex"]
 
 [params]
 

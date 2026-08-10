@@ -2,22 +2,22 @@ extends ItemDefinition
 class_name ArmorDefinition
 
 enum Slot {
-	HELMET,
-	CHEST_PLATE,
-	PANTS,
-	SHOES,
+	HEAD,
+	CHEST,
+	LEGS,
+	FEET,
 	COUNT,
 }
 
 const SLOT_LABELS: Dictionary[int, String] = {
-	Slot.HELMET: "Helmet",
-	Slot.CHEST_PLATE: "Chest Plate",
-	Slot.PANTS: "Pants",
-	Slot.SHOES: "Shoes",
+	Slot.HEAD: "Head",
+	Slot.CHEST: "Chest",
+	Slot.LEGS: "Legs",
+	Slot.FEET: "Feet",
 }
 const SLOT_COUNT: int = Slot.COUNT
 
-@export var armor_slot: Slot = Slot.HELMET
+@export var armor_slot: Slot = Slot.HEAD
 @export var visual_parts: Array[ArmorVisualPart] = []
 
 static func is_valid_slot(value: int) -> bool:

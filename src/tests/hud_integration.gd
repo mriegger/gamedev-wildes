@@ -561,7 +561,7 @@ func _start_armor_equip() -> void:
 	_push_double_click(_helmet_inventory_slot)
 
 func _check_armor_equipped_and_open_tab() -> void:
-	var equipped := _inv.get_equipped_armor(ArmorDefinition.Slot.HELMET)
+	var equipped := _inv.get_equipped_armor(ArmorDefinition.Slot.HEAD)
 	if equipped == null or equipped.id != &"copper_helmet":
 		_fail("helmet double click did not equip")
 		return
@@ -581,14 +581,14 @@ func _start_armor_unequip() -> void:
 	if not equipment_view.visible:
 		_fail("equipment button did not open the equipment tab")
 		return
-	var equipment_slot := _hud.side_panel.get_equipment_slots()[ArmorDefinition.Slot.HELMET]
+	var equipment_slot := _hud.side_panel.get_equipment_slots()[ArmorDefinition.Slot.HEAD]
 	if equipment_slot.item_id != &"copper_helmet":
 		_fail("helmet equipment UI did not refresh")
 		return
 	_push_double_click(equipment_slot)
 
 func _check_armor_unequipped() -> void:
-	if _inv.get_equipped_armor(ArmorDefinition.Slot.HELMET) != null:
+	if _inv.get_equipped_armor(ArmorDefinition.Slot.HEAD) != null:
 		_fail("helmet double click did not unequip")
 		return
 	if _find_item_index(&"copper_helmet") < 0:

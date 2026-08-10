@@ -35,11 +35,11 @@ func _run() -> void:
 
 	var helmet_source := _find_item(inventory, &"copper_helmet")
 	_expect(coordinator.try_equip_armor(helmet_source), "helmet equip failed")
-	_expect(armor_view.get_displayed_armor_id(ArmorDefinition.Slot.HELMET) == &"copper_helmet", "helmet visual ID did not synchronize")
-	_expect(armor_view.get_visual_part_count(ArmorDefinition.Slot.HELMET) == VISUAL_PART_COUNTS[ArmorDefinition.Slot.HELMET], "helmet visuals were not created")
-	var helmet_instance_id := armor_view.get_visual_part_instance_id(ArmorDefinition.Slot.HELMET, 0)
+	_expect(armor_view.get_displayed_armor_id(ArmorDefinition.Slot.HEAD) == &"copper_helmet", "helmet visual ID did not synchronize")
+	_expect(armor_view.get_visual_part_count(ArmorDefinition.Slot.HEAD) == VISUAL_PART_COUNTS[ArmorDefinition.Slot.HEAD], "helmet visuals were not created")
+	var helmet_instance_id := armor_view.get_visual_part_instance_id(ArmorDefinition.Slot.HEAD, 0)
 	_expect(inventory.select_slot(1), "unrelated inventory selection failed")
-	_expect(armor_view.get_visual_part_instance_id(ArmorDefinition.Slot.HELMET, 0) == helmet_instance_id, "unrelated inventory change rebuilt helmet visuals")
+	_expect(armor_view.get_visual_part_instance_id(ArmorDefinition.Slot.HEAD, 0) == helmet_instance_id, "unrelated inventory change rebuilt helmet visuals")
 
 	for armor_slot in range(1, ArmorDefinition.SLOT_COUNT):
 		var source := _find_item(inventory, ARMOR_IDS[armor_slot])

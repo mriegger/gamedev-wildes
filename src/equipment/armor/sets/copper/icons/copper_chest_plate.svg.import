@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dciy4is2hefkv"
-path="res://.godot/imported/copper_pants.svg-193e4d7fc55bce201ab744e261ff5e42.ctex"
+uid="uid://cqv17bbl6hxqk"
+path="res://.godot/imported/copper_chest_plate.svg-52493a253d25b5547a5da0a87dcaa997.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://inventory/equipment/icons/copper_pants.svg"
-dest_files=["res://.godot/imported/copper_pants.svg-193e4d7fc55bce201ab744e261ff5e42.ctex"]
+source_file="res://equipment/armor/sets/copper/icons/copper_chest_plate.svg"
+dest_files=["res://.godot/imported/copper_chest_plate.svg-52493a253d25b5547a5da0a87dcaa997.ctex"]
 
 [params]
 

@@ -1,10 +1,10 @@
-[gd_resource type="Resource" script_class="ArmorDefinition" load_steps=10 format=3]
+[gd_resource type="Resource" script_class="ArmorDefinition" load_steps=9 format=3]
 
-[ext_resource type="Script" path="res://inventory/equipment/armor_definition.gd" id="1_armor"]
-[ext_resource type="Texture2D" path="res://inventory/equipment/icons/copper_pants.svg" id="2_icon"]
+[ext_resource type="Script" path="res://equipment/armor/armor_definition.gd" id="1_armor"]
+[ext_resource type="Texture2D" path="res://equipment/armor/sets/copper/icons/copper_pants.svg" id="2_icon"]
 [ext_resource type="Script" path="res://stats/stat_modifier.gd" id="3_modifier"]
-[ext_resource type="Script" path="res://inventory/equipment/armor_visual_part.gd" id="4_visual"]
-[ext_resource type="Material" path="res://inventory/equipment/materials/copper_armor_material.tres" id="5_material"]
+[ext_resource type="Script" path="res://equipment/armor/armor_visual_part.gd" id="4_visual"]
+[ext_resource type="Material" path="res://equipment/armor/sets/copper/copper_armor_material.tres" id="5_material"]
 
 [sub_resource type="Resource" id="defense"]
 script = ExtResource("3_modifier")
@@ -13,24 +13,20 @@ source_item_id = &"copper_pants"
 stat_id = &"defense"
 amount = 2.0
 
-[sub_resource type="BoxMesh" id="left_pants_mesh"]
+[sub_resource type="BoxMesh" id="pants_leg_mesh"]
 material = ExtResource("5_material")
 size = Vector3(0.24, 0.42, 0.25)
 
 [sub_resource type="Resource" id="left_pants"]
 script = ExtResource("4_visual")
 attachment = 4
-mesh = SubResource("left_pants_mesh")
+mesh = SubResource("pants_leg_mesh")
 local_transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.008, 0.13, 0)
-
-[sub_resource type="BoxMesh" id="right_pants_mesh"]
-material = ExtResource("5_material")
-size = Vector3(0.24, 0.42, 0.25)
 
 [sub_resource type="Resource" id="right_pants"]
 script = ExtResource("4_visual")
 attachment = 5
-mesh = SubResource("right_pants_mesh")
+mesh = SubResource("pants_leg_mesh")
 local_transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.008, 0.13, 0)
 
 [resource]

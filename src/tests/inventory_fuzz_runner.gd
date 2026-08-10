@@ -261,8 +261,8 @@ func _run_edge_cases() -> bool:
 	for index in range(InventoryModel.FILLABLE_SIZE, equipment.size):
 		_assert(not equipment.handle_drop(0, index, 5), "non-armor equipment drop rejected")
 	equipment.slots[0] = InventoryStack.new(helmet.id, 1)
-	var helmet_index := InventoryModel.get_equipment_index(ArmorDefinition.Slot.HELMET)
-	var chest_index := InventoryModel.get_equipment_index(ArmorDefinition.Slot.CHEST_PLATE)
+	var helmet_index := InventoryModel.get_equipment_index(ArmorDefinition.Slot.HEAD)
+	var chest_index := InventoryModel.get_equipment_index(ArmorDefinition.Slot.CHEST)
 	_assert(not equipment.handle_drop(0, chest_index, 1), "wrong armor slot rejected")
 	_assert(equipment.handle_drop(0, helmet_index, 1), "matching armor drop failed")
 	_assert(equipment.get_slot(helmet_index).item_id == helmet.id, "helmet did not move to equipment")
@@ -292,7 +292,7 @@ func _run_edge_cases() -> bool:
 	saved_source.setup_starter()
 	var saved_helmet_source := _find_item(saved_source, &"copper_helmet")
 	_assert(saved_helmet_source >= 0, "starter helmet missing")
-	_assert(saved_source.handle_drop(saved_helmet_source, InventoryModel.get_equipment_index(ArmorDefinition.Slot.HELMET), 1), "starter helmet equip before save failed")
+	_assert(saved_source.handle_drop(saved_helmet_source, InventoryModel.get_equipment_index(ArmorDefinition.Slot.HEAD), 1), "starter helmet equip before save failed")
 	var encoded := saved_source.to_dict()
 	var encoded_slot = encoded["regions"]["hotbar"][0]
 	_assert(encoded_slot["item_id"] is String, "save item ID is string")
@@ -301,7 +301,7 @@ func _run_edge_cases() -> bool:
 	var restored := InventoryModel.new(catalog)
 	_assert(restored.from_dict(encoded), "version 3 inventory restores")
 	_assert(_slots_equal(saved_source.slots, restored.slots), "save round trip")
-	_assert(restored.get_equipped_armor(ArmorDefinition.Slot.HELMET).id == &"copper_helmet", "equipped armor round trip failed")
+	_assert(restored.get_equipped_armor(ArmorDefinition.Slot.HEAD).id == &"copper_helmet", "equipped armor round trip failed")
 	_assert(restored.starter_item_migration_version == InventoryModel.STARTER_ITEM_MIGRATION_VERSION, "starter migration version round trip")
 	var old_shape := encoded.duplicate(true)
 	old_shape["regions"]["hotbar"][0] = {"type": 1, "count": 12}

@@ -12,10 +12,10 @@
 [ext_resource type="Resource" path="res://items/definitions/copper_pickaxe.tres" id="10_pickaxe"]
 [ext_resource type="Resource" path="res://items/definitions/copper_sword.tres" id="11_sword"]
 [ext_resource type="Resource" path="res://items/definitions/test_totem.tres" id="12_test_totem"]
-[ext_resource type="Resource" path="res://inventory/equipment/definitions/copper_helmet.tres" id="13_helmet"]
-[ext_resource type="Resource" path="res://inventory/equipment/definitions/copper_chest_plate.tres" id="14_chest_plate"]
-[ext_resource type="Resource" path="res://inventory/equipment/definitions/copper_pants.tres" id="15_pants"]
-[ext_resource type="Resource" path="res://inventory/equipment/definitions/copper_shoes.tres" id="16_shoes"]
+[ext_resource type="Resource" path="res://equipment/armor/sets/copper/copper_helmet.tres" id="13_helmet"]
+[ext_resource type="Resource" path="res://equipment/armor/sets/copper/copper_chest_plate.tres" id="14_chest_plate"]
+[ext_resource type="Resource" path="res://equipment/armor/sets/copper/copper_pants.tres" id="15_pants"]
+[ext_resource type="Resource" path="res://equipment/armor/sets/copper/copper_shoes.tres" id="16_shoes"]
 
 [resource]
 script = ExtResource("1_catalog")

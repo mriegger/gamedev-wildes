@@ -46,7 +46,7 @@ func _init() -> void:
 	var selected_armor_coordinator := InventoryStatCoordinator.new()
 	_expect(selected_armor_coordinator.setup(selected_armor_inventory, selected_armor_stats), "selected armor coordinator setup failed")
 	_expect(is_equal_approx(selected_armor_stats.get_value(&"defense"), 0.0), "selected armor applied equipped modifiers")
-	var selected_helmet_index := InventoryModel.get_equipment_index(ArmorDefinition.Slot.HELMET)
+	var selected_helmet_index := InventoryModel.get_equipment_index(ArmorDefinition.Slot.HEAD)
 	_expect(selected_armor_inventory.handle_drop(4, selected_helmet_index, 1), "direct equipment model move failed")
 	_expect(is_equal_approx(selected_armor_stats.get_value(&"defense"), 1.0), "direct equipment model move did not synchronize stats")
 	_expect(selected_armor_inventory.handle_drop(selected_helmet_index, 4, 1), "direct equipment model return failed")
@@ -95,7 +95,7 @@ func _init() -> void:
 	_expect(_inventory_change_count == unchanged_count, "failed equip emitted a change")
 	_expect(is_equal_approx(stats.get_value(&"defense"), 0.0), "failed equip changed defense")
 	var helmet_source := _find_item(inventory, &"copper_helmet")
-	var chest_index := InventoryModel.get_equipment_index(ArmorDefinition.Slot.CHEST_PLATE)
+	var chest_index := InventoryModel.get_equipment_index(ArmorDefinition.Slot.CHEST)
 	_expect(not coordinator.can_handle_drop(helmet_source, chest_index, 1), "helmet accepted by chest slot")
 
 	var expected_defense := 0.0
@@ -123,11 +123,11 @@ func _init() -> void:
 
 	var restored_before_invalid := restored_inventory.to_dict()
 	var wrong_slot_save := encoded.duplicate(true)
-	wrong_slot_save["regions"]["equipment"][ArmorDefinition.Slot.HELMET] = {"item_id": "copper_chest_plate", "count": 1}
+	wrong_slot_save["regions"]["equipment"][ArmorDefinition.Slot.HEAD] = {"item_id": "copper_chest_plate", "count": 1}
 	_expect(not restored_inventory.from_dict(wrong_slot_save), "wrong-slot armor save restored")
 	_expect(restored_inventory.to_dict() == restored_before_invalid, "failed wrong-slot restore changed inventory")
 	var stacked_armor_save := encoded.duplicate(true)
-	stacked_armor_save["regions"]["equipment"][ArmorDefinition.Slot.HELMET]["count"] = 2
+	stacked_armor_save["regions"]["equipment"][ArmorDefinition.Slot.HEAD]["count"] = 2
 	_expect(not restored_inventory.from_dict(stacked_armor_save), "stacked armor save restored")
 	_expect(restored_inventory.to_dict() == restored_before_invalid, "failed stacked restore changed inventory")
 
@@ -145,7 +145,7 @@ func _init() -> void:
 	var blocked_coordinator := InventoryStatCoordinator.new()
 	_expect(blocked_coordinator.setup(blocked, blocked_stats), "blocked equipment coordinator setup failed")
 	var blocked_helmet_source := _find_item(blocked, &"copper_helmet")
-	var helmet_index := InventoryModel.get_equipment_index(ArmorDefinition.Slot.HELMET)
+	var helmet_index := InventoryModel.get_equipment_index(ArmorDefinition.Slot.HEAD)
 	_expect(blocked_coordinator.try_equip_armor(blocked_helmet_source), "blocked inventory helmet setup failed")
 	var grass_id := item_catalog.get_item_for_block(BlockId.Type.GRASS).id
 	for index in range(InventoryModel.FILLABLE_SIZE):

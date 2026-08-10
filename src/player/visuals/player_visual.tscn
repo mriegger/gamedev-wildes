@@ -3,7 +3,7 @@
 [ext_resource type="Script" path="res://actors/animation/blocky_humanoid_animator.gd" id="1_animator"]
 [ext_resource type="Resource" path="res://actors/animation/blocky_humanoid_animation_profile.tres" id="2_profile"]
 [ext_resource type="Script" path="res://player/visuals/held_item_view.gd" id="3_held_item"]
-[ext_resource type="Script" path="res://inventory/equipment/player_armor_view.gd" id="4_armor_view"]
+[ext_resource type="Script" path="res://equipment/armor/presentation/player_armor_view.gd" id="4_armor_view"]
 
 [sub_resource type="StandardMaterial3D" id="Material_torso"]
 albedo_color = Color(0.32, 0.49, 0.78, 1)
