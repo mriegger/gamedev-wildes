@@ -12,7 +12,6 @@ var _path: Array[Vector3i] = []
 var _path_index: int = 0
 var _path_goal: Vector3i = Vector3i.ZERO
 var _repath_remaining: float = 0.0
-var _last_search_failed: bool = false
 
 func _init(p_voxel_world: VoxelWorld, p_body_width: float, p_body_height: float, p_repath_seconds: float):
 	assert(p_voxel_world != null)
@@ -28,7 +27,7 @@ func advance(delta: float, position: Vector3, goal: Vector3, speed: float, on_gr
 	_repath_remaining = maxf(_repath_remaining - delta, 0.0)
 	var goal_cell := _resolve_feet_cell(goal)
 	var path_failed := false
-	if (_repath_remaining <= 0.0 or (goal_cell != _path_goal and not _last_search_failed)) and search_budget.try_acquire():
+	if _repath_remaining <= 0.0 and search_budget.try_acquire():
 		path_failed = not _rebuild_path(position, goal_cell)
 	if _path_index >= _path.size():
 		return VoxelPathFollowResult.new(Vector3.ZERO, false, path_failed)
@@ -45,7 +44,9 @@ func advance(delta: float, position: Vector3, goal: Vector3, speed: float, on_gr
 		return VoxelPathFollowResult.new(Vector3.ZERO, should_jump, path_failed)
 	return VoxelPathFollowResult.new(flat_offset.normalized() * speed, should_jump, path_failed)
 
-func invalidate_path():
+func request_repath():
+	_path.clear()
+	_path_index = 0
 	_repath_remaining = 0.0
 
 func _rebuild_path(position: Vector3, goal_cell: Vector3i) -> bool:
@@ -56,11 +57,9 @@ func _rebuild_path(position: Vector3, goal_cell: Vector3i) -> bool:
 	if result.is_success():
 		_path = result.path
 		_path_index = 1 if _path.size() > 1 else _path.size()
-		_last_search_failed = false
 		return true
 	_path.clear()
 	_path_index = 0
-	_last_search_failed = true
 	return false
 
 func _resolve_feet_cell(position: Vector3) -> Vector3i:

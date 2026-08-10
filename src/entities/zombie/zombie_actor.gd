@@ -27,7 +27,10 @@ func tick(delta: float, player_position: Vector3, separation_velocity: Vector3, 
 	assert(brain != null and voxel_world != null)
 	_advance_melee_contact(delta)
 	var visible := _has_line_of_sight(player_position)
+	var previous_state := brain.state
 	brain.advance(delta, global_position, player_position, visible)
+	if brain.state != previous_state and brain.state != ZombieBrain.State.ATTACK:
+		_path_follower.request_repath()
 	var attacking := brain.state == ZombieBrain.State.ATTACK
 	var chasing := brain.state == ZombieBrain.State.CHASE
 	_zombie_animation.set_chasing(chasing)
@@ -90,7 +93,6 @@ func _advance_motion(delta: float, desired_velocity: Vector3):
 	velocity.z = desired_velocity.z
 	if not on_ground:
 		velocity.y -= _behavior.gravity * delta
-	var intended_horizontal := Vector2(velocity.x, velocity.z)
 	var result := VoxelBodySolver.sweep(voxel_world, global_position, velocity, velocity * delta, definition.body_width, definition.body_height)
 	global_position = result.position
 	velocity = result.velocity
@@ -98,8 +100,6 @@ func _advance_motion(delta: float, desired_velocity: Vector3):
 	on_ground = velocity.y <= 0.0 and ground_y != VoxelWorld.NO_SURFACE_Y and absf(ground_y - global_position.y) < 0.12
 	if on_ground:
 		velocity.y = 0.0
-	if intended_horizontal.length_squared() > 0.01 and Vector2(velocity.x, velocity.z).length_squared() < 0.0001:
-		_path_follower.invalidate_path()
 
 func _has_line_of_sight(player_position: Vector3) -> bool:
 	var origin := global_position + Vector3.UP * minf(definition.body_height * 0.8, 1.4)

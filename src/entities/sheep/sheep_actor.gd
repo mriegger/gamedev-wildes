@@ -22,7 +22,10 @@ func setup(p_runtime_id: int, p_definition: EntityDefinition, p_voxel_world: Vox
 
 func tick(delta: float, _player_position: Vector3, separation_velocity: Vector3, navigation_search_budget: NavigationSearchBudget):
 	assert(brain != null and voxel_world != null)
+	var previous_state := brain.state
 	brain.advance(delta, global_position)
+	if brain.state != previous_state and brain.state == SheepBrain.State.WANDER:
+		_path_follower.request_repath()
 	var fleeing := brain.state == SheepBrain.State.FLEE
 	_sheep_animation.set_fleeing(fleeing)
 	max_speed = _behavior.flee_speed if fleeing else _behavior.wander_speed
@@ -40,6 +43,7 @@ func tick(delta: float, _player_position: Vector3, separation_velocity: Vector3,
 func record_melee_contact(world_hit_direction: Vector3):
 	assert(brain != null)
 	brain.record_melee_contact(global_position, world_hit_direction)
+	_path_follower.request_repath()
 	super.record_melee_contact(world_hit_direction)
 
 func _get_path_velocity(delta: float, goal: Vector3, speed: float, navigation_search_budget: NavigationSearchBudget) -> Vector3:
@@ -60,7 +64,6 @@ func _advance_motion(delta: float, desired_velocity: Vector3):
 	velocity.z = desired_velocity.z
 	if not on_ground:
 		velocity.y -= _behavior.gravity * delta
-	var intended_horizontal := Vector2(velocity.x, velocity.z)
 	var result := VoxelBodySolver.sweep(voxel_world, global_position, velocity, velocity * delta, definition.body_width, definition.body_height)
 	global_position = result.position
 	velocity = result.velocity
@@ -68,5 +71,3 @@ func _advance_motion(delta: float, desired_velocity: Vector3):
 	on_ground = velocity.y <= 0.0 and ground_y != VoxelWorld.NO_SURFACE_Y and absf(ground_y - global_position.y) < 0.12
 	if on_ground:
 		velocity.y = 0.0
-	if intended_horizontal.length_squared() > 0.01 and Vector2(velocity.x, velocity.z).length_squared() < 0.0001:
-		_path_follower.invalidate_path()

@@ -115,6 +115,37 @@ func _test_failed_path_repath_throttle() -> void:
 	var retry := follower.advance(0.4, start, changed_goal, 1.0, true, search_budget)
 	_expect(retry.path_failed, "failed path did not retry after the repath interval")
 
+func _test_successful_path_repath_throttle() -> void:
+	var world := _make_flat_world()
+	var follower := VoxelPathFollower.new(world, BODY_WIDTH, BODY_HEIGHT, 0.5)
+	var search_budget := NavigationSearchBudget.new(1)
+	var start := Vector3(0.5, float(FEET_Y), 0.5)
+	var first := follower.advance(0.0, start, Vector3(4.5, float(FEET_Y), 0.5), 1.0, true, search_budget)
+	_expect(first.desired_velocity.x > 0.0, "initial successful path did not lead toward its goal")
+	search_budget.reset()
+	var throttled := follower.advance(0.1, start, Vector3(-4.5, float(FEET_Y), 0.5), 1.0, true, search_budget)
+	_expect(throttled.desired_velocity.x > 0.0, "changed successful goal bypassed the repath interval")
+	search_budget.reset()
+	var rebuilt := follower.advance(0.4, start, Vector3(-4.5, float(FEET_Y), 0.5), 1.0, true, search_budget)
+	_expect(rebuilt.desired_velocity.x < 0.0, "changed successful goal was not applied after the repath interval")
+
+func _test_blocked_motion_keeps_repath_cadence() -> void:
+	var world := _make_flat_world()
+	world.restore_block_edits({
+		Vector3i(1, FEET_Y, 0): BlockId.Type.STONE,
+		Vector3i(1, FEET_Y + 1, 0): BlockId.Type.STONE,
+	}, {})
+	var definition := load("res://entities/definitions/zombie.tres") as EntityDefinition
+	var actor := definition.actor_scene.instantiate() as ZombieActor
+	get_root().add_child(actor)
+	actor.global_position = Vector3(0.5, float(FEET_Y), 0.5)
+	actor.setup(20, definition, world, 19)
+	actor._path_follower._repath_remaining = 0.3
+	actor._advance_motion(0.5, Vector3(2.0, 0.0, 0.0))
+	_expect(is_zero_approx(actor.velocity.x), "blocked-motion test did not collide with its wall")
+	_expect(is_equal_approx(actor._path_follower._repath_remaining, 0.3), "blocked motion forced an immediate repath")
+	actor.free()
+
 func _test_shared_navigation_search_budget() -> void:
 	var world := _make_flat_world()
 	var start := Vector3(0.5, float(FEET_Y), 0.5)
@@ -240,6 +271,8 @@ func _run() -> void:
 	_test_deterministic_bounded_pathfinding()
 	_test_elevation_clearance_and_water()
 	_test_failed_path_repath_throttle()
+	_test_successful_path_repath_throttle()
+	_test_blocked_motion_keeps_repath_cadence()
 	_test_shared_navigation_search_budget()
 	_test_shared_body_solver()
 	_test_zombie_brain_transitions()
