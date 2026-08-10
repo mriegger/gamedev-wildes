@@ -43,7 +43,6 @@ func tick(delta: float, player_position: Vector3, time_of_day: float):
 	assert(_catalog != null and _voxel_world != null)
 	_advance_retiring(delta)
 	_despawn_distant(player_position)
-	_refresh_spatial_index()
 	_navigation_search_budget.reset()
 	var runtime_ids: Array = _active.keys()
 	runtime_ids.sort()
@@ -181,12 +180,6 @@ func _count_definition(definition_id: StringName) -> int:
 		if is_instance_valid(actor) and (actor as EntityActor).definition.id == definition_id:
 			count += 1
 	return count
-
-func _refresh_spatial_index():
-	for actor in _active.values():
-		if is_instance_valid(actor):
-			var entity := actor as EntityActor
-			_spatial_index.upsert(entity.runtime_id, entity.global_position, entity.get_world_bounds())
 
 func _get_separation_velocity(actor: EntityActor) -> Vector3:
 	var separation := Vector3.ZERO

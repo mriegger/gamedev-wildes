@@ -29,6 +29,13 @@ func _test_insert_update_and_queries() -> void:
 	_expect(index.get_cell_count() == 2, "shared-cell insert created stale cells")
 	_expect(index.query_nearby(Vector3.ZERO, 2.0) == [3, 20], "nearby query was not exact and sorted")
 	_expect(index.query_overlapping(AABB(Vector3.ZERO, Vector3(2.0, 2.0, 1.0))) == [3, 20], "overlap query was not exact and sorted")
+	var original_entry := index._entries[20] as EntitySpatialIndex.Entry
+	var original_bucket := index._cells[Vector3i.ZERO] as Dictionary
+	var same_cell_position := Vector3(0.75, 0.0, 0.5)
+	index.upsert(20, same_cell_position, _bounds_at(same_cell_position))
+	_expect(is_same(original_entry, index._entries[20]), "same-cell update replaced its entry")
+	_expect(is_same(original_bucket, index._cells[Vector3i.ZERO]), "same-cell update rebuilt its bucket")
+	_expect(index.query_nearby(same_cell_position, 0.1) == [20], "same-cell update retained a stale position")
 
 	var moved_position := Vector3(8.5, 0.0, 0.5)
 	index.upsert(20, moved_position, _bounds_at(moved_position))

@@ -44,6 +44,10 @@ func _expect_index_bounded(coordinator: EntityCoordinator, context: String) -> v
 	if active_count == 0:
 		_expect(index.get_cell_count() == 0, "%s retained cells for an empty population" % context)
 
+func _index_actors(coordinator: EntityCoordinator, actors: Array[EntityActor]) -> void:
+	for actor in actors:
+		coordinator._spatial_index.upsert(actor.runtime_id, actor.global_position, actor.get_world_bounds())
+
 func _run() -> void:
 	var catalog := load("res://entities/entity_catalog.tres") as EntityCatalog
 	var world := _make_world()
@@ -103,7 +107,7 @@ func _run() -> void:
 		actors[3].global_position = Vector3(18.5, FEET_Y, 18.5)
 		actors[4].global_position = Vector3(-10.5, FEET_Y, 10.5)
 		actors[5].global_position = Vector3(10.5, FEET_Y, -10.5)
-		coordinator._refresh_spatial_index()
+		_index_actors(coordinator, actors)
 		var first_separation := coordinator._get_separation_velocity(actors[0])
 		var second_separation := coordinator._get_separation_velocity(actors[1])
 		_expect(first_separation.length() > 0.0 and second_separation.length() > 0.0, "overlapping zombies received no separation")

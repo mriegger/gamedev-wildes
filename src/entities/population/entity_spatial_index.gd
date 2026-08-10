@@ -4,12 +4,14 @@ class_name EntitySpatialIndex
 class Entry:
 	var position: Vector3
 	var bounds: AABB
-	var cells: Array[Vector3i]
+	var min_cell: Vector3i
+	var max_cell: Vector3i
 
-	func _init(p_position: Vector3, p_bounds: AABB, p_cells: Array[Vector3i]) -> void:
+	func _init(p_position: Vector3, p_bounds: AABB, p_min_cell: Vector3i, p_max_cell: Vector3i) -> void:
 		position = p_position
 		bounds = p_bounds
-		cells = p_cells
+		min_cell = p_min_cell
+		max_cell = p_max_cell
 
 var _cell_size: float
 var _entries: Dictionary = {}
@@ -25,15 +27,22 @@ func upsert(runtime_id: int, position: Vector3, bounds: AABB) -> void:
 	assert(bounds.position.is_finite() and bounds.size.is_finite())
 	assert(bounds.size.x > 0.0 and bounds.size.y > 0.0 and bounds.size.z > 0.0)
 	assert(bounds.has_point(position))
+	var min_cell := _cell_at(bounds.position)
+	var max_cell := _cell_at(bounds.end - Vector3.ONE * 0.000001)
 	if _entries.has(runtime_id):
-		_unindex(runtime_id, _entries[runtime_id] as Entry)
-	var entry := Entry.new(position, bounds, _cells_for_bounds(bounds))
+		var existing := _entries[runtime_id] as Entry
+		existing.position = position
+		existing.bounds = bounds
+		if existing.min_cell == min_cell and existing.max_cell == max_cell:
+			return
+		_unindex(runtime_id, existing)
+		existing.min_cell = min_cell
+		existing.max_cell = max_cell
+		_index(runtime_id, existing)
+		return
+	var entry := Entry.new(position, bounds, min_cell, max_cell)
 	_entries[runtime_id] = entry
-	for cell in entry.cells:
-		if not _cells.has(cell):
-			_cells[cell] = {}
-		var bucket := _cells[cell] as Dictionary
-		bucket[runtime_id] = true
+	_index(runtime_id, entry)
 
 func remove(runtime_id: int) -> bool:
 	if not _entries.has(runtime_id):
@@ -82,22 +91,24 @@ func get_cell_count() -> int:
 	return _cells.size()
 
 func _unindex(runtime_id: int, entry: Entry) -> void:
-	for cell in entry.cells:
-		var bucket := _cells[cell] as Dictionary
-		bucket.erase(runtime_id)
-		if bucket.is_empty():
-			_cells.erase(cell)
+	for x in range(entry.min_cell.x, entry.max_cell.x + 1):
+		for y in range(entry.min_cell.y, entry.max_cell.y + 1):
+			for z in range(entry.min_cell.z, entry.max_cell.z + 1):
+				var cell := Vector3i(x, y, z)
+				var bucket := _cells[cell] as Dictionary
+				bucket.erase(runtime_id)
+				if bucket.is_empty():
+					_cells.erase(cell)
 
-func _cells_for_bounds(bounds: AABB) -> Array[Vector3i]:
-	var range_cells := _cell_range_for_bounds(bounds)
-	var min_cell := range_cells[0]
-	var max_cell := range_cells[1]
-	var result: Array[Vector3i] = []
-	for x in range(min_cell.x, max_cell.x + 1):
-		for y in range(min_cell.y, max_cell.y + 1):
-			for z in range(min_cell.z, max_cell.z + 1):
-				result.append(Vector3i(x, y, z))
-	return result
+func _index(runtime_id: int, entry: Entry) -> void:
+	for x in range(entry.min_cell.x, entry.max_cell.x + 1):
+		for y in range(entry.min_cell.y, entry.max_cell.y + 1):
+			for z in range(entry.min_cell.z, entry.max_cell.z + 1):
+				var cell := Vector3i(x, y, z)
+				if not _cells.has(cell):
+					_cells[cell] = {}
+				var bucket := _cells[cell] as Dictionary
+				bucket[runtime_id] = true
 
 func _cell_range_for_bounds(bounds: AABB) -> Array[Vector3i]:
 	var epsilon := Vector3.ONE * 0.000001

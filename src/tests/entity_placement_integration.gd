@@ -47,6 +47,9 @@ func _make_one_zombie_catalog() -> EntityCatalog:
 func _always_ready(_position: Vector3) -> bool:
 	return true
 
+func _index_actor(actor: EntityActor) -> void:
+	_coordinator._spatial_index.upsert(actor.runtime_id, actor.global_position, actor.get_world_bounds())
+
 func _grass_count() -> int:
 	var stack := _inventory.get_slot(GRASS_SLOT)
 	return stack.count if stack != null else 0
@@ -126,7 +129,7 @@ func _run() -> void:
 	var initial_grass_count := _grass_count()
 
 	zombie.global_position = Vector3(0.5, FEET_Y, 0.5)
-	_coordinator._refresh_spatial_index()
+	_index_actor(zombie)
 	_aim_at_placement(target_a)
 	await process_frame
 	_interactor._handle_raycast()
@@ -138,7 +141,7 @@ func _run() -> void:
 	_expect_unchanged(target_a, rejected_overlap, "direct entity-overlap rejection")
 
 	zombie.global_position = Vector3(6.5, FEET_Y, 0.5)
-	_coordinator._refresh_spatial_index()
+	_index_actor(zombie)
 	_interactor._handle_raycast()
 	_expect(_interactor.placement_has and _interactor.can_place_target, "moving the zombie away did not permit the preview")
 	_expect(_interactor.placement_block == target_a, "move-away preview changed placement cells")
@@ -156,7 +159,7 @@ func _run() -> void:
 	_interactor._handle_raycast()
 	_expect(_interactor.placement_has and _interactor.can_place_target and _interactor.placement_block == target_b, "race setup did not produce a valid preview")
 	zombie.global_position = Vector3(1.5, FEET_Y, 0.5)
-	_coordinator._refresh_spatial_index()
+	_index_actor(zombie)
 	var moved_after_preview := _snapshot(target_b)
 	_interactor._commit_place(target_b, grass_action)
 	_expect_unchanged(target_b, moved_after_preview, "entity movement after preview")
