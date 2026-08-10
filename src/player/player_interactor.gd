@@ -14,6 +14,7 @@ var camera: Camera3D = null
 var motor: PlayerMotor = null
 var inventory_model: InventoryModel = null
 var combat: MeleeCombatCoordinator = null
+var entity_coordinator: EntityCoordinator = null
 var _input_buffer: InputBuffer = null
 
 var target_block: Vector3i = Vector3i(-999, -999, -999)
@@ -45,14 +46,15 @@ var _melee_contact_pending: bool = false
 var _melee_ray_origin: Vector3
 var _melee_ray_direction: Vector3
 
-func setup(p_voxel_world: VoxelWorld, p_camera: Camera3D, p_motor: PlayerMotor, p_inventory: InventoryModel, p_input_buffer: InputBuffer, p_combat: MeleeCombatCoordinator):
-	assert(p_combat != null)
+func setup(p_voxel_world: VoxelWorld, p_camera: Camera3D, p_motor: PlayerMotor, p_inventory: InventoryModel, p_input_buffer: InputBuffer, p_combat: MeleeCombatCoordinator, p_entity_coordinator: EntityCoordinator):
+	assert(p_combat != null and p_entity_coordinator != null)
 	voxel_world = p_voxel_world
 	camera = p_camera
 	motor = p_motor
 	inventory_model = p_inventory
 	_input_buffer = p_input_buffer
 	combat = p_combat
+	entity_coordinator = p_entity_coordinator
 
 func _physics_process(delta):
 	if voxel_world == null or motor == null or camera == null or inventory_model == null or _input_buffer == null:
@@ -101,7 +103,7 @@ func _handle_raycast():
 	can_mine_target = selected_primary is MiningActionDefinition and _can_mine_position(best_hit, selected_primary as MiningActionDefinition)
 
 	if voxel_world.get_block_at(best_place) == null:
-		if not _placement_collides_player(best_place):
+		if not _placement_collides_player(best_place) and not _placement_collides_entity(best_place):
 			placement_has = true
 			can_place_target = motor_pos.distance_squared_to(Vector3(best_place.x + 0.5, best_place.y + 0.5, best_place.z + 0.5)) <= reach_squared
 	else:
@@ -217,6 +219,10 @@ func _placement_collides_player(p: Vector3i) -> bool:
 	if max_a.z <= bmin.z or min_a.z >= bmax.z:
 		return false
 	return true
+
+func _placement_collides_entity(position: Vector3i) -> bool:
+	var block_bounds := AABB(Vector3(position), Vector3.ONE)
+	return entity_coordinator.has_entity_overlap(block_bounds)
 
 func _handle_item_actions(delta):
 	melee_chain_input_timer = max(0.0, melee_chain_input_timer - delta)
@@ -361,9 +367,19 @@ func get_mining_impact_block_id() -> int:
 func _can_place(action: BlockPlacementActionDefinition) -> bool:
 	if not placement_has or not can_place_target:
 		return false
-	if inventory_model == null:
+	return _validate_placement(placement_block, action)
+
+func _validate_placement(position: Vector3i, action: BlockPlacementActionDefinition) -> bool:
+	if action == null or voxel_world == null or inventory_model == null or motor == null:
 		return false
-	return action != null and inventory_model.can_consume_selected()
+	if get_selected_placement_action() != action or not inventory_model.can_consume_selected():
+		return false
+	if voxel_world.get_block_id_at(position) != BlockId.Type.AIR:
+		return false
+	var center := Vector3(position) + Vector3(0.5, 0.5, 0.5)
+	if motor.global_position.distance_squared_to(center) > reach * reach:
+		return false
+	return not _placement_collides_player(position) and not _placement_collides_entity(position)
 
 func _commit_mine(pos: Vector3i, action: MiningActionDefinition):
 	if not _can_mine_position(pos, action):
@@ -405,7 +421,7 @@ func _append_block_drop(item_ids: Array[StringName], block_id: int):
 		item_ids.append(drop_item_id)
 
 func _commit_place(pos: Vector3i, action: BlockPlacementActionDefinition):
-	if voxel_world == null or inventory_model == null:
+	if not _validate_placement(pos, action):
 		return
 
 	var block_id := int(action.block.id)
@@ -414,7 +430,8 @@ func _commit_place(pos: Vector3i, action: BlockPlacementActionDefinition):
 	var edit: BlockEdit = voxel_world.try_place_block(pos, block_id, attach_dir)
 
 	if edit.is_success():
-		inventory_model.consume_selected()
+		var consumed := inventory_model.consume_selected()
+		assert(consumed)
 		_handle_raycast()
 		block_placed.emit()
 

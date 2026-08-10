@@ -131,7 +131,7 @@ func _run() -> void:
 	inventory.setup_starter()
 	inventory.select_slot(3)
 	var input_buffer := InputBuffer.new()
-	player.interactor.setup(world, camera, player, inventory, input_buffer, combat)
+	player.interactor.setup(world, camera, player, inventory, input_buffer, combat, coordinator)
 	var sword_action := item_catalog.get_definition(&"copper_sword").primary_action as MeleeAttackActionDefinition
 	player.interactor.melee_attack_action = sword_action
 	player.interactor.melee_attack_timer = sword_profile.cooldown

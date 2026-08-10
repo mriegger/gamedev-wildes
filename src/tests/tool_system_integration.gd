@@ -117,7 +117,7 @@ func _run():
 	_combat = MeleeCombatCoordinator.new()
 	root.add_child(_combat)
 	_combat.setup(_voxel_world, _player, _entity_coordinator)
-	_interactor.setup(_voxel_world, _camera, _player, _inventory, _input_buffer, _combat)
+	_interactor.setup(_voxel_world, _camera, _player, _inventory, _input_buffer, _combat, _entity_coordinator)
 	_interactor.melee_attack_started.connect(_on_melee_attack_started)
 	_interactor.set_physics_process(false)
 	_player.animation_driver.setup(_player, _interactor)

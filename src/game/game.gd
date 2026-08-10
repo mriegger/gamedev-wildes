@@ -103,7 +103,7 @@ func _setup_gameplay():
 	melee_combat.setup(world.voxel_model, player, entity_coordinator)
 	entity_coordinator.entity_melee_contact_reached.connect(melee_combat.try_commit_entity_contact)
 	melee_combat.melee_contact_committed.connect(entity_coordinator.record_melee_contact)
-	player.setup(world, camera_rig, inventory_model, input_buffer, player_stats, melee_combat)
+	player.setup(world, camera_rig, inventory_model, input_buffer, player_stats, melee_combat, entity_coordinator)
 	var mining_particle_tints := MiningParticleTintPalette.new(block_catalog)
 	mining_break_particles.setup(world.voxel_model, mining_particle_tints)
 	mining_hit_particles.setup(player.animation_driver, player.interactor, mining_particle_tints)

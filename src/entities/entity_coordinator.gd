@@ -177,6 +177,9 @@ func get_actor(runtime_id: int) -> EntityActor:
 	var actor := _active.get(runtime_id) as EntityActor
 	return actor if is_instance_valid(actor) else null
 
+func has_entity_overlap(bounds: AABB) -> bool:
+	return not _spatial_index.query_overlapping(bounds).is_empty()
+
 func record_melee_contact(contact: MeleeContact):
 	var target := get_actor(contact.target_runtime_id)
 	if target != null:
