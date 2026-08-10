@@ -236,6 +236,32 @@ func _test_zombie_brain_transitions() -> void:
 	attacker.advance(0.5, self_position, attack_target, true)
 	_expect(attacker.state == ZombieBrain.State.ATTACK and attacker.consume_attack_started(), "attack did not restart after cooldown")
 
+func _test_zombie_visibility_cadence() -> void:
+	var world := _make_flat_world()
+	var definition := load("res://entities/definitions/zombie.tres") as EntityDefinition
+	var first := definition.actor_scene.instantiate() as ZombieActor
+	var second := definition.actor_scene.instantiate() as ZombieActor
+	get_root().add_child(first)
+	get_root().add_child(second)
+	first.global_position = Vector3(0.5, float(FEET_Y), 0.5)
+	second.global_position = Vector3(0.5, float(FEET_Y), 1.5)
+	first.setup(1, definition, world, 31)
+	second.setup(2, definition, world, 32)
+	_expect(not is_equal_approx(first._vision_sample_remaining, second._vision_sample_remaining), "zombie visibility samples were not phase-staggered")
+	var target := Vector3(4.5, float(FEET_Y), 0.5)
+	first._vision_sample_remaining = 0.0
+	_expect(first._sample_player_visibility(0.0, target), "clear target was not visible on the sample tick")
+	world.restore_block_edits({Vector3i(2, FEET_Y + 1, 0): BlockId.Type.STONE}, {})
+	var half_interval := ZombieActor.VISION_SAMPLE_INTERVAL_SECONDS * 0.5
+	_expect(first._sample_player_visibility(half_interval, target), "visibility cache changed before the next sample")
+	_expect(not first._sample_player_visibility(half_interval, target), "occlusion was not observed on the next sample")
+	first._player_visible = true
+	first._vision_sample_remaining = ZombieActor.VISION_SAMPLE_INTERVAL_SECONDS
+	var outside_detection := first.global_position + Vector3(first._behavior.detection_range + 1.0, 0.0, 0.0)
+	_expect(not first._sample_player_visibility(0.0, outside_detection), "target outside detection range retained cached visibility")
+	first.free()
+	second.free()
+
 func _test_zombie_actor_movement_and_animation() -> void:
 	var world := _make_flat_world()
 	var definition := load("res://entities/definitions/zombie.tres") as EntityDefinition
@@ -276,6 +302,7 @@ func _run() -> void:
 	_test_shared_navigation_search_budget()
 	_test_shared_body_solver()
 	_test_zombie_brain_transitions()
+	_test_zombie_visibility_cadence()
 	_test_zombie_actor_movement_and_animation()
 	if _failures == 0:
 		print("ENTITY_NAVIGATION_INTEGRATION PASS")

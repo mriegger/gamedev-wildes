@@ -1,6 +1,9 @@
 extends EntityActor
 class_name ZombieActor
 
+const VISION_SAMPLE_INTERVAL_SECONDS: float = 0.125
+const VISION_PHASE_COUNT: int = 8
+
 var brain: ZombieBrain
 
 var _behavior: ZombieBehaviorDefinition
@@ -9,6 +12,8 @@ var _path_follower: VoxelPathFollower
 var _melee_profile: MeleeAttackProfile
 var _melee_elapsed: float = 0.0
 var _melee_contact_pending: bool = false
+var _player_visible: bool = false
+var _vision_sample_remaining: float = 0.0
 
 func supports_behavior(behavior: EntityBehaviorDefinition) -> bool:
 	return behavior is ZombieBehaviorDefinition
@@ -22,11 +27,13 @@ func setup(p_runtime_id: int, p_definition: EntityDefinition, p_voxel_world: Vox
 	max_speed = _behavior.wander_speed
 	_zombie_animation = animation_driver as ZombieAnimationDriver
 	assert(_zombie_animation != null)
+	_player_visible = false
+	_vision_sample_remaining = VISION_SAMPLE_INTERVAL_SECONDS * float(runtime_id % VISION_PHASE_COUNT) / float(VISION_PHASE_COUNT)
 
 func tick(delta: float, player_position: Vector3, separation_velocity: Vector3, navigation_search_budget: NavigationSearchBudget):
 	assert(brain != null and voxel_world != null)
 	_advance_melee_contact(delta)
-	var visible := _has_line_of_sight(player_position)
+	var visible := _sample_player_visibility(delta, player_position)
 	var previous_state := brain.state
 	brain.advance(delta, global_position, player_position, visible)
 	if brain.state != previous_state and brain.state != ZombieBrain.State.ATTACK:
@@ -101,11 +108,19 @@ func _advance_motion(delta: float, desired_velocity: Vector3):
 	if on_ground:
 		velocity.y = 0.0
 
-func _has_line_of_sight(player_position: Vector3) -> bool:
+func _sample_player_visibility(delta: float, player_position: Vector3) -> bool:
+	_vision_sample_remaining -= delta
+	var sample_due := _vision_sample_remaining <= 0.0
+	if sample_due:
+		_vision_sample_remaining = fposmod(_vision_sample_remaining, VISION_SAMPLE_INTERVAL_SECONDS)
+		if is_zero_approx(_vision_sample_remaining):
+			_vision_sample_remaining = VISION_SAMPLE_INTERVAL_SECONDS
+	if global_position.distance_squared_to(player_position) > _behavior.detection_range * _behavior.detection_range:
+		_player_visible = false
+		return false
+	if not sample_due:
+		return _player_visible
 	var origin := global_position + Vector3.UP * minf(definition.body_height * 0.8, 1.4)
 	var target := player_position + Vector3.UP * 0.9
-	var offset := target - origin
-	var distance := offset.length()
-	if distance > _behavior.forget_range or distance <= 0.001:
-		return distance <= 0.001
-	return VoxelLineOfSight.has_clear_path(voxel_world, origin, target)
+	_player_visible = VoxelLineOfSight.has_clear_path(voxel_world, origin, target)
+	return _player_visible
