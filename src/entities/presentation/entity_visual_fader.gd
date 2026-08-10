@@ -14,6 +14,7 @@ enum Phase {
 
 var _geometries: Array[GeometryInstance3D] = []
 var _baseline_transparencies: Array[float] = []
+var _baseline_shadow_settings: Array[int] = []
 var _phase: Phase = Phase.NOT_READY
 var _elapsed: float = 0.0
 var _opacity: float = 0.0
@@ -25,6 +26,7 @@ func setup(visual_root: Node3D):
 	assert(can_fade(visual_root))
 	_collect_geometries(visual_root)
 	_phase = Phase.FADING_IN
+	_disable_shadows()
 	_set_opacity(0.0)
 
 func advance(delta: float) -> bool:
@@ -37,6 +39,7 @@ func advance(delta: float) -> bool:
 			_set_opacity(progress)
 			if _elapsed >= fade_in_seconds:
 				_phase = Phase.VISIBLE
+				_restore_shadows()
 		Phase.FADING_OUT:
 			_elapsed = minf(_elapsed + delta, fade_out_seconds)
 			var progress := _smooth_progress(_elapsed, fade_out_seconds)
@@ -50,6 +53,7 @@ func begin_fade_out():
 	_fade_out_start_opacity = _opacity
 	_elapsed = 0.0
 	_phase = Phase.FADING_OUT
+	_disable_shadows()
 
 func get_opacity() -> float:
 	return _opacity
@@ -69,6 +73,7 @@ func _collect_geometries(node: Node):
 		var geometry := node as GeometryInstance3D
 		_geometries.append(geometry)
 		_baseline_transparencies.append(geometry.transparency)
+		_baseline_shadow_settings.append(geometry.cast_shadow)
 	for child in node.get_children():
 		_collect_geometries(child)
 
@@ -79,3 +84,11 @@ func _set_opacity(value: float):
 
 func _smooth_progress(elapsed: float, duration: float) -> float:
 	return smoothstep(0.0, 1.0, clampf(elapsed / duration, 0.0, 1.0))
+
+func _disable_shadows():
+	for geometry in _geometries:
+		geometry.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+func _restore_shadows():
+	for index in _geometries.size():
+		_geometries[index].cast_shadow = _baseline_shadow_settings[index]

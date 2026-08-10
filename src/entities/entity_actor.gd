@@ -63,6 +63,7 @@ func advance_visual_fade(delta: float) -> bool:
 
 func begin_despawn_fade():
 	assert(visual_fader != null)
+	set_process(false)
 	visual_fader.begin_fade_out()
 
 func get_visual_opacity() -> float:

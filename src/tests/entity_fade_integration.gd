@@ -44,6 +44,16 @@ func _get_transparencies(geometries: Array[GeometryInstance3D]) -> Array[float]:
 		result.append(geometry.transparency)
 	return result
 
+func _get_shadow_settings(geometries: Array[GeometryInstance3D]) -> Array[int]:
+	var result: Array[int] = []
+	for geometry in geometries:
+		result.append(geometry.cast_shadow)
+	return result
+
+func _expect_shadows_disabled(geometries: Array[GeometryInstance3D], context: String) -> void:
+	for index in range(geometries.size()):
+		_expect(geometries[index].cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF, "%s geometry %d still cast shadows" % [context, index])
+
 func _get_material_colors(geometries: Array[GeometryInstance3D]) -> Array[Color]:
 	var result: Array[Color] = []
 	for geometry in geometries:
@@ -73,6 +83,7 @@ func _test_species_visual_fades(catalog: EntityCatalog, world: VoxelWorld) -> vo
 		var actor := definition.actor_scene.instantiate() as EntityActor
 		var geometries := _get_geometries(actor)
 		var baselines := _get_transparencies(geometries)
+		var baseline_shadows := _get_shadow_settings(geometries)
 		var material_colors := _get_material_colors(geometries)
 		_expect(not geometries.is_empty(), "%s visual contained no fade geometry" % definition.id)
 		get_root().add_child(actor)
@@ -80,20 +91,27 @@ func _test_species_visual_fades(catalog: EntityCatalog, world: VoxelWorld) -> vo
 		actor.setup(index + 1, definition, world, 100 + index)
 		_expect(is_zero_approx(actor.get_visual_opacity()), "%s did not begin fully faded out" % definition.id)
 		_expect_opacity(geometries, baselines, 0.0, "%s spawn start" % definition.id)
+		_expect_shadows_disabled(geometries, "%s spawn start" % definition.id)
 		var fade_in_seconds := actor.visual_fader.fade_in_seconds
 		_expect(not actor.advance_visual_fade(fade_in_seconds * 0.5), "%s completed retirement during fade-in" % definition.id)
 		_expect(is_equal_approx(actor.get_visual_opacity(), 0.5), "%s midpoint fade-in was not smoothstep-balanced" % definition.id)
 		_expect_opacity(geometries, baselines, 0.5, "%s spawn midpoint" % definition.id)
+		_expect_shadows_disabled(geometries, "%s spawn midpoint" % definition.id)
 		actor.advance_visual_fade(fade_in_seconds * 0.5)
 		_expect(is_equal_approx(actor.get_visual_opacity(), 1.0), "%s did not finish fully visible" % definition.id)
 		_expect_opacity(geometries, baselines, 1.0, "%s spawn completion" % definition.id)
+		_expect(_get_shadow_settings(geometries) == baseline_shadows, "%s did not restore its shadow settings" % definition.id)
 		_expect(_get_material_colors(geometries) == material_colors, "%s fade mutated its materials" % definition.id)
+		_expect(actor.is_processing(), "%s stopped animation before retirement" % definition.id)
 		actor.begin_despawn_fade()
+		_expect(not actor.is_processing(), "%s kept animation processing during retirement" % definition.id)
+		_expect_shadows_disabled(geometries, "%s retirement start" % definition.id)
 		_expect(is_equal_approx(actor.get_visual_opacity(), 1.0), "%s despawn began with an opacity jump" % definition.id)
 		var fade_out_seconds := actor.visual_fader.fade_out_seconds
 		_expect(not actor.advance_visual_fade(fade_out_seconds * 0.5), "%s despawn completed before its duration" % definition.id)
 		_expect(is_equal_approx(actor.get_visual_opacity(), 0.5), "%s midpoint fade-out was not smoothstep-balanced" % definition.id)
 		_expect_opacity(geometries, baselines, 0.5, "%s despawn midpoint" % definition.id)
+		_expect_shadows_disabled(geometries, "%s despawn midpoint" % definition.id)
 		_expect(actor.advance_visual_fade(fade_out_seconds * 0.5), "%s despawn did not complete" % definition.id)
 		_expect(is_zero_approx(actor.get_visual_opacity()), "%s did not finish fully transparent" % definition.id)
 		_expect_opacity(geometries, baselines, 0.0, "%s despawn completion" % definition.id)
