@@ -13,6 +13,8 @@ actors/                      reusable procedural animation
 app/                         application navigation
 game/                        gameplay composition and session lifecycle
 blocks/                      block domain resources and rules
+combat/                      melee profiles, contacts, targeting, and validation
+entities/                    content, AI, navigation, populations, and presentation
 environment/                 packaged environment and day/night feature
 inventory/                   inventory model and inventory-owned UI
 items/                       item resources, actions, catalogs, and held scenes
@@ -30,9 +32,35 @@ world/
 tests/                       headless verification
 ```
 
+## Entities and combat
+
+`EntityCatalog` is the authoritative list of stable entity content IDs. Each `EntityDefinition`
+references an actor scene that validates compatibility with its typed behavior resource.
+`EntityCoordinator` owns transient runtime IDs, spawn/despawn lifecycle, the bounded spatial index,
+and active actor nodes. Zombies and sheep own only their deterministic behavior state;
+the shared voxel solver and bounded path follower own reusable movement calculations. Their custom
+animation drivers present actor state without deciding gameplay outcomes.
+
+`MeleeCombatCoordinator` validates cursor targeting, range, voxel visibility, target existence, and
+contact timing. A successful physical hit produces an immutable `MeleeContact` with stable actor and
+attack IDs, world contact position, and normalized direction. `Game` explicitly connects completed
+contacts to entity reactions. An effects presenter can consume the same signal without changing AI
+or combat rules.
+
+Health, armor, attributes, death resolution, and XP are not implemented. Validated contacts feed
+the current entity reaction consumer without introducing temporary health state or unused combat
+interfaces.
+
+Entity populations are transient and bounded to six per species and twelve total. Spawning makes
+four attempts every two seconds in an 18–36 block annulus. Voxel A* has fixed radius, node, and
+failed-search retry budgets. The spatial index contains only active actors, and distance or
+chunk-streaming loss removes actors and index entries together. Block placement queries that index
+and revalidates world, inventory, reach, player overlap, and active-entity overlap immediately
+before committing.
+
 Serialized configuration is explicit and typed. `BlockCatalog` lists `BlockDefinition` resources,
 `ItemCatalog` lists item resources and their action definitions, `BiomeLibrary` lists biome
-resources, and `WorldConfig` references the biome library. Runtime code does not scan directories
-or manufacture fallback domain resources.
+resources, `EntityCatalog` lists entity definitions, and `WorldConfig` references the biome library.
+Runtime code does not scan directories or manufacture fallback domain resources.
 
 Forward+ is the primary renderer. Runtime rendering-device checks select reduced visual values for GL Compatibility fallback. Features unavailable on GL, including volumetric fog, remain disabled there.

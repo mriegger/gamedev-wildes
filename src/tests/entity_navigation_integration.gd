@@ -94,6 +94,24 @@ func _test_elevation_clearance_and_water() -> void:
 	var water_goal := VoxelPathfinder.find_path(water_world, Vector3i(0, FEET_Y, 0), water_cell, BODY_WIDTH, BODY_HEIGHT, 4, 64)
 	_expect(water_goal.status == VoxelPathResult.Status.INVALID_GOAL, "water goal was accepted as walkable")
 
+func _test_failed_path_repath_throttle() -> void:
+	var world := _make_flat_world()
+	var blocking_edits: Dictionary = {}
+	for direction in VoxelPathfinder.CARDINAL_DIRECTIONS:
+		blocking_edits[Vector3i(direction.x, FEET_Y, direction.z)] = BlockId.Type.STONE
+		blocking_edits[Vector3i(direction.x, FEET_Y + 1, direction.z)] = BlockId.Type.STONE
+	world.restore_block_edits(blocking_edits, {})
+	var follower := VoxelPathFollower.new(world, BODY_WIDTH, BODY_HEIGHT, 0.5)
+	var start := Vector3(0.5, float(FEET_Y), 0.5)
+	var goal := Vector3(4.5, float(FEET_Y), 0.5)
+	var first := follower.advance(0.0, start, goal, 1.0, true)
+	_expect(first.path_failed, "unreachable goal did not report its initial failed search")
+	var changed_goal := Vector3(-4.5, float(FEET_Y), 0.5)
+	var throttled := follower.advance(0.1, start, changed_goal, 1.0, true)
+	_expect(not throttled.path_failed, "changed failed goal bypassed the repath interval")
+	var retry := follower.advance(0.4, start, changed_goal, 1.0, true)
+	_expect(retry.path_failed, "failed path did not retry after the repath interval")
+
 func _test_shared_body_solver() -> void:
 	var world := _make_flat_world()
 	var start := Vector3(0.5, float(FEET_Y), 0.5)
@@ -190,12 +208,17 @@ func _test_zombie_actor_movement_and_animation() -> void:
 	actor.tick(0.01, target, Vector3.ZERO)
 	actor.animation_driver.advance(0.0)
 	_expect(actor.brain.state == ZombieBrain.State.ATTACK, "zombie actor did not enter attack at melee range")
-	_expect((actor.animation_driver as ZombieAnimationDriver).get_current_state() == ZombieAnimationDriver.ATTACK, "custom zombie animation did not enter attack")
+	var animation := actor.animation_driver as ZombieAnimationDriver
+	_expect(animation.get_current_state() == ZombieAnimationDriver.ATTACK, "custom zombie animation did not enter attack")
+	animation.play_hit(Vector3.RIGHT)
+	animation.advance(ZombieAnimationDriver.HIT_SECONDS * 0.5)
+	_expect((animation.animator.position - animation._visual_origin_position).dot(Vector3.RIGHT) > 0.0, "zombie recoil moved toward the attacker")
 	actor.free()
 
 func _run() -> void:
 	_test_deterministic_bounded_pathfinding()
 	_test_elevation_clearance_and_water()
+	_test_failed_path_repath_throttle()
 	_test_shared_body_solver()
 	_test_zombie_brain_transitions()
 	_test_zombie_actor_movement_and_animation()

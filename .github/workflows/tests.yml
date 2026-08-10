@@ -278,6 +278,20 @@ jobs:
             30 "MINING_HIT_PARTICLES PASS" /tmp/mining_hit_particles.log -- \
             godot --headless --path src --script res://mining/tests/mining_hit_particles_integration.gd
 
+  soak-entity-streaming:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run entity streaming soak (population + pathfinding + cleanup bounds)
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            60 "SOAK_ENTITY_STREAMING PASS" /tmp/soak_entity_streaming.log -- \
+            godot --headless --path src --script res://tests/soak_entity_streaming.gd
+
   soak-world-streaming:
     runs-on: ubuntu-latest
     timeout-minutes: 10

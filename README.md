@@ -80,6 +80,8 @@ src/                    Godot project. Entry scene: app/app.tscn
 ├── world/              Coordinator plus chunks/, generation/, materials/, model/, settings/,
 │                       and special_blocks/
 ├── blocks/             Block ids, definitions, catalog, and torch placement rules
+├── combat/             Melee contacts, profiles, targeting, and validation
+├── entities/           Entity catalog, AI, voxel navigation, populations, and custom presentation
 ├── items/              Item catalog, action definitions, and held-item scenes
 ├── mining/             Mining-owned presentation and focused tests
 ├── player/             Motor, interaction, targeting, input, animation, camera/, debug/, and visuals/

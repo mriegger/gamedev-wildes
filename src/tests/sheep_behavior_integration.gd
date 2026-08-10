@@ -101,10 +101,12 @@ func _test_actor_movement_and_animation() -> SheepActor:
 	_expect(animation.get_current_state() == SheepAnimationDriver.WALK, "sheep animation did not enter walk")
 
 	var pre_flee_position := actor.global_position
+	actor.model_root.rotation.y = 0.0
 	actor.record_melee_contact(Vector3.RIGHT)
 	animation.advance(0.01)
 	_expect(actor.brain.state == SheepBrain.State.FLEE, "actor did not record melee-triggered flee")
 	_expect(animation.get_current_state() == SheepAnimationDriver.HIT, "sheep animation did not enter hit reaction")
+	_expect((animation._rig_root.position - animation._rig_origin_position).dot(Vector3.RIGHT) > 0.0, "sheep recoil moved toward the attacker")
 	actor.tick(0.1, Vector3.ZERO, Vector3.ZERO)
 	animation.advance(SheepAnimationDriver.HIT_SECONDS)
 	_expect(actor.global_position.x > pre_flee_position.x, "sheep did not move along its flee direction")

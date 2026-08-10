@@ -23,17 +23,13 @@ func validate(source: String) -> bool:
 	if actor_scene == null:
 		push_error("[EntityDefinition] Missing actor scene for %s at %s" % [id, source])
 		valid = false
-	else:
-		var actor_root := actor_scene.instantiate()
-		if not actor_root is EntityActor:
-			push_error("[EntityDefinition] Actor scene root must be EntityActor for %s at %s" % [id, source])
-			valid = false
-		if actor_root != null:
-			actor_root.free()
 	if behavior == null:
 		push_error("[EntityDefinition] Missing behavior for %s at %s" % [id, source])
 		valid = false
 	elif not behavior.validate(source):
+		valid = false
+	if actor_scene != null and behavior != null and not is_actor_compatible():
+		push_error("[EntityDefinition] Actor scene and behavior are incompatible for %s at %s" % [id, source])
 		valid = false
 	if body_width <= 0.0 or body_height <= 0.0:
 		push_error("[EntityDefinition] Invalid body dimensions for %s at %s" % [id, source])
@@ -49,6 +45,16 @@ func validate(source: String) -> bool:
 			push_error("[EntityDefinition] Invalid spawn floor %d for %s at %s" % [block_id, id, source])
 			valid = false
 	return valid
+
+func is_actor_compatible() -> bool:
+	if actor_scene == null or behavior == null:
+		return false
+	var actor_root := actor_scene.instantiate()
+	if actor_root == null:
+		return false
+	var compatible := actor_root is EntityActor and (actor_root as EntityActor).supports_behavior(behavior)
+	actor_root.free()
+	return compatible
 
 func can_spawn_on(block_id: int) -> bool:
 	return block_id in spawn_floor_ids

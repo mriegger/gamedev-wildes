@@ -10,6 +10,9 @@ var _melee_profile: MeleeAttackProfile
 var _melee_elapsed: float = 0.0
 var _melee_contact_pending: bool = false
 
+func supports_behavior(behavior: EntityBehaviorDefinition) -> bool:
+	return behavior is ZombieBehaviorDefinition
+
 func setup(p_runtime_id: int, p_definition: EntityDefinition, p_voxel_world: VoxelWorld, behavior_seed: int):
 	super.setup(p_runtime_id, p_definition, p_voxel_world, behavior_seed)
 	_behavior = p_definition.behavior as ZombieBehaviorDefinition

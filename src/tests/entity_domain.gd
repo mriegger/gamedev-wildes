@@ -38,6 +38,18 @@ func _run():
 	var sheep := catalog.get_definition(&"sheep")
 	_expect(sheep.spawn_phase == EntityDefinition.SpawnPhase.DAY, "sheep is not day-spawned")
 	_expect(sheep.max_active == 6, "sheep population cap is not six")
+	_expect(zombie.is_actor_compatible(), "zombie actor rejected its behavior definition")
+	_expect(sheep.is_actor_compatible(), "sheep actor rejected its behavior definition")
+	var mismatched_definition := zombie.duplicate(true) as EntityDefinition
+	mismatched_definition.behavior = sheep.behavior
+	_expect(not mismatched_definition.is_actor_compatible(), "zombie actor accepted sheep behavior")
+	var plain_root := Node3D.new()
+	var plain_scene := PackedScene.new()
+	_expect(plain_scene.pack(plain_root) == OK, "plain test scene could not be packed")
+	plain_root.free()
+	var plain_definition := zombie.duplicate(true) as EntityDefinition
+	plain_definition.actor_scene = plain_scene
+	_expect(not plain_definition.is_actor_compatible(), "plain Node3D passed entity actor validation")
 
 	var coordinator := EntityCoordinator.new()
 	get_root().add_child(coordinator)

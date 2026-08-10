@@ -155,7 +155,7 @@ func _apply_hit_pose():
 		return
 	var progress := clampf(_hit_elapsed / HIT_SECONDS, 0.0, 1.0)
 	var weight := sin(progress * PI)
-	_rig_root.position = _rig_origin_position - _hit_direction * (0.14 * weight) + Vector3.UP * (0.055 * weight)
+	_rig_root.position = _rig_origin_position + _hit_direction * (0.14 * weight) + Vector3.UP * (0.055 * weight)
 	_rig_root.rotation = _rig_origin_rotation + Vector3(
 		deg_to_rad(8.0) * _hit_direction.z * weight,
 		0.0,

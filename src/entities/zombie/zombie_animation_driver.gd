@@ -102,7 +102,7 @@ func _apply_hit_pose():
 		return
 	var progress := clampf(_hit_elapsed / HIT_SECONDS, 0.0, 1.0)
 	var weight := sin(progress * PI)
-	animator.position = _visual_origin_position - _hit_direction * (0.13 * weight) + Vector3.UP * (0.04 * weight)
+	animator.position = _visual_origin_position + _hit_direction * (0.13 * weight) + Vector3.UP * (0.04 * weight)
 	animator.rotation = _visual_origin_rotation + Vector3(
 		deg_to_rad(9.0) * _hit_direction.z * weight,
 		0.0,
