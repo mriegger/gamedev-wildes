@@ -298,6 +298,10 @@ func get_highest_top(x: int, z: int) -> float:
 		return NO_SURFACE_Y
 	return float(y) + 1.0
 
+func get_terrain_surface_y(x: int, z: int) -> float:
+	var height: Variant = height_map_dict.get(Vector2i(x, z), null)
+	return float(height) if height is int else NO_SURFACE_Y
+
 func is_occupied(p: Vector3i) -> bool:
 	var bt = get_block_at(p)
 	return bt != null and bt != BlockId.Type.AIR and bt != BlockId.Type.WATER

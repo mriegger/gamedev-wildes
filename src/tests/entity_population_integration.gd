@@ -55,6 +55,10 @@ func _run() -> void:
 	get_root().add_child(coordinator)
 	coordinator.setup(catalog, world, 1337, _position_ready)
 	var player_position := Vector3(0.5, FEET_Y, 0.5)
+	_expect(is_equal_approx(world.get_terrain_surface_y(0, 0), float(FLAT_HEIGHT)), "terrain surface query missed a generated column")
+	_expect(world.get_terrain_surface_y(TEST_RADIUS + 1, 0) == VoxelWorld.NO_SURFACE_Y, "terrain surface query invented a missing column")
+	_expect(coordinator._prepared_actor_count() == catalog.definitions.size(), "setup did not prepare one actor per definition")
+	var prepared_zombie := (coordinator._prepared_actors[&"zombie"] as Array).back() as ZombieActor
 
 	_ready_calls = 0
 	coordinator.tick(1.0, player_position, 20.0)
@@ -84,6 +88,7 @@ func _run() -> void:
 
 	coordinator.tick(EntityCoordinator.SPAWN_INTERVAL_SECONDS, player_position, 20.0)
 	_expect(coordinator.get_active_count() == 6, "seventh spawn cycle exceeded the six-zombie cap")
+	_expect(is_same(prepared_zombie, coordinator.get_actor(1)), "first zombie was constructed on its spawn frame")
 	var actors_with_paths := 0
 	for actor in _sorted_actors(coordinator):
 		if not (actor as ZombieActor)._path_follower._path.is_empty():
@@ -129,6 +134,7 @@ func _run() -> void:
 		_expect_index_bounded(coordinator, "streaming despawn")
 
 	coordinator.shutdown()
+	_expect(coordinator._prepared_actors.is_empty(), "shutdown retained prepared actors")
 	coordinator.queue_free()
 	await process_frame
 	await process_frame

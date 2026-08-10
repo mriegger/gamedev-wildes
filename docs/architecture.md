@@ -37,7 +37,7 @@ tests/                       headless verification
 `EntityCatalog` is the authoritative list of stable entity content IDs. Each `EntityDefinition`
 references an actor scene that validates compatibility with its typed behavior resource.
 `EntityCoordinator` owns transient runtime IDs, spawn/despawn lifecycle, the bounded spatial index,
-and active actor nodes. Zombies and sheep own only their deterministic behavior state;
+and active and prepared actor nodes. Zombies and sheep own only their deterministic behavior state;
 the shared voxel solver and bounded path follower own reusable movement calculations. Their custom
 animation drivers present actor state without deciding gameplay outcomes. Spawned actors fade in
 through instance-local geometry transparency. Despawn removes gameplay state immediately, then a
