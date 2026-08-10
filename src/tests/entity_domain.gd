@@ -50,6 +50,27 @@ func _run():
 	var plain_definition := zombie.duplicate(true) as EntityDefinition
 	plain_definition.actor_scene = plain_scene
 	_expect(not plain_definition.is_actor_compatible(), "plain Node3D passed entity actor validation")
+	var incomplete_actor := ZombieActor.new()
+	var incomplete_model_root := Node3D.new()
+	incomplete_model_root.name = &"ModelRoot"
+	incomplete_actor.add_child(incomplete_model_root)
+	incomplete_model_root.owner = incomplete_actor
+	var incomplete_animation_driver := EntityAnimationDriver.new()
+	incomplete_animation_driver.name = &"AnimationDriver"
+	incomplete_actor.add_child(incomplete_animation_driver)
+	incomplete_animation_driver.owner = incomplete_actor
+	var incomplete_visual_fader := EntityVisualFader.new()
+	incomplete_visual_fader.name = &"VisualFader"
+	incomplete_actor.add_child(incomplete_visual_fader)
+	incomplete_visual_fader.owner = incomplete_actor
+	incomplete_actor.animation_driver_path = ^"AnimationDriver"
+	incomplete_actor.visual_fader_path = ^"VisualFader"
+	var incomplete_scene := PackedScene.new()
+	_expect(incomplete_scene.pack(incomplete_actor) == OK, "incomplete actor scene could not be packed")
+	incomplete_actor.free()
+	var incomplete_definition := zombie.duplicate(true) as EntityDefinition
+	incomplete_definition.actor_scene = incomplete_scene
+	_expect(not incomplete_definition.is_actor_compatible(), "actor without fade geometry passed validation")
 
 	var coordinator := EntityCoordinator.new()
 	get_root().add_child(coordinator)

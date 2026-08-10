@@ -88,8 +88,10 @@ func _assert_runtime_ids(actors: Array[EntityActor], context: String) -> void:
 func _assert_population(coordinator: EntityCoordinator, player_position: Vector3, context: String) -> void:
 	var actors := coordinator.get_active_actors()
 	var active_count := coordinator.get_active_count()
+	var retiring_count := coordinator._retiring.size()
 	_expect(actors.size() == active_count, "%s active actor query returned %d of %d" % [context, actors.size(), active_count])
 	_expect(active_count <= EntityCoordinator.MAX_TOTAL_ACTIVE, "%s exceeded the twelve-entity cap" % context)
+	_expect(retiring_count <= EntityCoordinator.MAX_RETIRING_VISUALS, "%s exceeded the retiring-visual cap" % context)
 	var species_counts: Dictionary = {&"sheep": 0, &"zombie": 0}
 	for actor in actors:
 		if actor.definition == null or not species_counts.has(actor.definition.id):
@@ -146,6 +148,7 @@ func _run() -> void:
 	_expect(_instance_by_runtime_id.size() == STREAM_REGIONS.size() * CYCLES_PER_REGION, "soak observed %d unique runtime IDs instead of %d" % [_instance_by_runtime_id.size(), STREAM_REGIONS.size() * CYCLES_PER_REGION])
 	coordinator.shutdown()
 	_expect(coordinator.get_active_count() == 0, "shutdown retained active actors")
+	_expect(coordinator._retiring.is_empty(), "shutdown retained fading actors")
 	_expect(coordinator._spatial_index.get_entry_count() == 0, "shutdown retained spatial entries")
 	_expect(coordinator._spatial_index.get_cell_count() == 0, "shutdown retained spatial cells")
 	coordinator.queue_free()

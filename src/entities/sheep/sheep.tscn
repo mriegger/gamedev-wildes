@@ -1,12 +1,17 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://entities/sheep/sheep_actor.gd" id="1_actor"]
 [ext_resource type="PackedScene" path="res://entities/sheep/sheep_visual.tscn" id="2_visual"]
+[ext_resource type="Script" path="res://entities/presentation/entity_visual_fader.gd" id="3_fader"]
 
 [node name="Sheep" type="Node3D"]
 script = ExtResource("1_actor")
 animation_driver_path = NodePath("ModelRoot/SheepVisual/AnimationDriver")
+visual_fader_path = NodePath("VisualFader")
 
 [node name="ModelRoot" type="Node3D" parent="."]
 
 [node name="SheepVisual" parent="ModelRoot" instance=ExtResource("2_visual")]
+
+[node name="VisualFader" type="Node" parent="."]
+script = ExtResource("3_fader")

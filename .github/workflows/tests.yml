@@ -179,6 +179,20 @@ jobs:
             30 "ENTITY_SPECIES_POPULATION_INTEGRATION PASS" /tmp/entity_species_population.log -- \
             godot --headless --path src --script res://tests/entity_species_population_integration.gd
 
+  entity-fade-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run entity fade lifecycle integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "ENTITY_FADE_INTEGRATION PASS" /tmp/entity_fade.log -- \
+            godot --headless --path src --script res://tests/entity_fade_integration.gd
+
   hud-integration:
     runs-on: ubuntu-latest
     timeout-minutes: 10

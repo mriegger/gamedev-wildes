@@ -52,7 +52,11 @@ func is_actor_compatible() -> bool:
 	var actor_root := actor_scene.instantiate()
 	if actor_root == null:
 		return false
-	var compatible := actor_root is EntityActor and (actor_root as EntityActor).supports_behavior(behavior)
+	var compatible := (
+		actor_root is EntityActor
+		and (actor_root as EntityActor).supports_behavior(behavior)
+		and (actor_root as EntityActor).has_valid_presentation()
+	)
 	actor_root.free()
 	return compatible
 

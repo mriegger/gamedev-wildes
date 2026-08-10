@@ -12,12 +12,14 @@ const SPATIAL_CELL_SIZE: float = 4.0
 const SEPARATION_RADIUS: float = 1.2
 const SEPARATION_SPEED: float = 1.25
 const MAX_TOTAL_ACTIVE: int = 12
+const MAX_RETIRING_VISUALS: int = 12
 
 var _catalog: EntityCatalog
 var _voxel_world: VoxelWorld
 var _position_ready: Callable
 var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 var _active: Dictionary = {}
+var _retiring: Dictionary = {}
 var _spatial_index: EntitySpatialIndex = EntitySpatialIndex.new(SPATIAL_CELL_SIZE)
 var _spawn_elapsed: float = 0.0
 var _next_runtime_id: int = 1
@@ -35,6 +37,7 @@ func setup(p_catalog: EntityCatalog, p_voxel_world: VoxelWorld, world_seed: int,
 
 func tick(delta: float, player_position: Vector3, time_of_day: float):
 	assert(_catalog != null and _voxel_world != null)
+	_advance_retiring(delta)
 	_despawn_distant(player_position)
 	_refresh_spatial_index()
 	var runtime_ids: Array = _active.keys()
@@ -48,8 +51,10 @@ func tick(delta: float, player_position: Vector3, time_of_day: float):
 		var actor := get_actor(runtime_id)
 		if actor == null:
 			continue
+		actor.advance_visual_fade(delta)
 		actor.tick(delta, player_position, separation_velocities[runtime_id] as Vector3)
-		_spatial_index.upsert(actor.runtime_id, actor.global_position, actor.get_world_bounds())
+		if get_actor(runtime_id) == actor:
+			_spatial_index.upsert(actor.runtime_id, actor.global_position, actor.get_world_bounds())
 	_spawn_elapsed += delta
 	if _spawn_elapsed < SPAWN_INTERVAL_SECONDS:
 		return
@@ -130,6 +135,34 @@ func _despawn(runtime_id: int):
 	_active.erase(runtime_id)
 	_spatial_index.remove(runtime_id)
 	if is_instance_valid(actor):
+		if actor.melee_contact_reached.is_connected(_on_actor_melee_contact_reached):
+			actor.melee_contact_reached.disconnect(_on_actor_melee_contact_reached)
+		_make_retiring_capacity()
+		_retiring[runtime_id] = actor
+		actor.begin_despawn_fade()
+
+func _make_retiring_capacity():
+	if _retiring.size() < MAX_RETIRING_VISUALS:
+		return
+	var runtime_ids: Array = _retiring.keys()
+	runtime_ids.sort()
+	_finish_retiring(runtime_ids[0])
+
+func _advance_retiring(delta: float):
+	var completed_ids: Array[int] = []
+	var runtime_ids: Array = _retiring.keys()
+	runtime_ids.sort()
+	for runtime_id in runtime_ids:
+		var actor := _retiring[runtime_id] as EntityActor
+		if not is_instance_valid(actor) or actor.advance_visual_fade(delta):
+			completed_ids.append(runtime_id)
+	for runtime_id in completed_ids:
+		_finish_retiring(runtime_id)
+
+func _finish_retiring(runtime_id: int):
+	var actor := _retiring.get(runtime_id) as EntityActor
+	_retiring.erase(runtime_id)
+	if is_instance_valid(actor):
 		actor.queue_free()
 
 func _count_definition(definition_id: StringName) -> int:
@@ -193,8 +226,14 @@ func _on_actor_melee_contact_reached(source_runtime_id: int, profile: MeleeAttac
 
 func shutdown():
 	for runtime_id in _active.keys():
-		_despawn(runtime_id)
+		var actor := _active[runtime_id] as EntityActor
+		if is_instance_valid(actor):
+			actor.queue_free()
+	for actor in _retiring.values():
+		if is_instance_valid(actor):
+			(actor as EntityActor).queue_free()
 	_active.clear()
+	_retiring.clear()
 	_spatial_index.clear()
 	_catalog = null
 	_voxel_world = null

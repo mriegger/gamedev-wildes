@@ -25,4 +25,5 @@ Transient entities use the same readiness boundary through `WorldController.is_p
 soon as their position is no longer streamed or exceeds the despawn radius. Removal also clears the
 actor's spatial-index entry. The entity streaming soak
 moves across regions while alternating day and night, and asserts population, pathfinding, index,
-and cleanup bounds independently of the chunk renderer soak.
+and cleanup bounds independently of the chunk renderer soak. Retired actors leave all gameplay
+indexes and population counts immediately. Their fading presentations use a separate fixed bound.

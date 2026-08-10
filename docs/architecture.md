@@ -39,7 +39,9 @@ references an actor scene that validates compatibility with its typed behavior r
 `EntityCoordinator` owns transient runtime IDs, spawn/despawn lifecycle, the bounded spatial index,
 and active actor nodes. Zombies and sheep own only their deterministic behavior state;
 the shared voxel solver and bounded path follower own reusable movement calculations. Their custom
-animation drivers present actor state without deciding gameplay outcomes.
+animation drivers present actor state without deciding gameplay outcomes. Spawned actors fade in
+through instance-local geometry transparency. Despawn removes gameplay state immediately, then a
+separately bounded retiring-visual set fades the actor out before freeing its scene node.
 
 `MeleeCombatCoordinator` validates cursor targeting, range, voxel visibility, target existence, and
 contact timing. A successful physical hit produces an immutable `MeleeContact` with stable actor and
