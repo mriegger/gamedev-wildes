@@ -38,10 +38,23 @@ func start():
 
 func stop():
 	_running = false
+	if _clock != null:
+		if _clock.time_changed.is_connected(_on_time_changed):
+			_clock.time_changed.disconnect(_on_time_changed)
+	_clock = null
 	_birds_timer.stop()
 	_insects_timer.stop()
 	_birds_player.stop()
 	_insects_player.stop()
+
+
+func _exit_tree():
+	stop()
+	if _birds_player:
+		_birds_player.stream = null
+	if _insects_player:
+		_insects_player.stream = null
+	_birds_stream = null
 
 
 func set_volume(volume: float):

@@ -42,3 +42,16 @@ func _play_clunk(volume_db: float = -6.0):
 	_player.pitch_scale = randf_range(0.95, 1.07)
 	_player.volume_db = volume_db
 	_player.play()
+
+
+func _exit_tree():
+	if _interactor != null:
+		if _interactor.mining_hit.is_connected(_on_mining_hit):
+			_interactor.mining_hit.disconnect(_on_mining_hit)
+		if _interactor.melee_terrain_hit.is_connected(_on_melee_terrain_hit):
+			_interactor.melee_terrain_hit.disconnect(_on_melee_terrain_hit)
+	_interactor = null
+	_streams.clear()
+	if _player:
+		_player.stream = null
+		_player.stop()

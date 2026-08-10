@@ -58,3 +58,11 @@ func _play_step():
 	_player.stream = _streams[idx]
 	_player.pitch_scale = randf_range(0.92, 1.08)
 	_player.play()
+
+
+func _exit_tree():
+	_motor = null
+	_streams.clear()
+	if _player:
+		_player.stream = null
+		_player.stop()
