@@ -9,6 +9,9 @@ var _path: Array[Vector3i] = []
 var _path_index: int = 0
 var _path_goal: Vector3i = Vector3i.ZERO
 var _repath_remaining: float = 0.0
+var _melee_profile: MeleeAttackProfile
+var _melee_elapsed: float = 0.0
+var _melee_contact_pending: bool = false
 
 func setup(p_runtime_id: int, p_definition: EntityDefinition, p_voxel_world: VoxelWorld, behavior_seed: int):
 	super.setup(p_runtime_id, p_definition, p_voxel_world, behavior_seed)
@@ -21,20 +24,46 @@ func setup(p_runtime_id: int, p_definition: EntityDefinition, p_voxel_world: Vox
 
 func tick(delta: float, player_position: Vector3):
 	assert(brain != null and voxel_world != null)
+	_advance_melee_contact(delta)
 	var visible := _has_line_of_sight(player_position)
 	brain.advance(delta, global_position, player_position, visible)
 	var attacking := brain.state == ZombieBrain.State.ATTACK
 	var chasing := brain.state == ZombieBrain.State.CHASE
 	_zombie_animation.set_chasing(chasing)
 	if brain.consume_attack_started():
-		play_attack(_behavior.attack_duration)
+		var melee_profile := _behavior.melee_profile
+		play_attack(melee_profile.duration)
+		_arm_melee_contact(melee_profile)
 	var desired_velocity := Vector3.ZERO
 	if not attacking:
 		var goal := brain.get_movement_goal()
-		if not (chasing and global_position.distance_squared_to(player_position) <= _behavior.attack_range * _behavior.attack_range):
+		var reach_squared := _behavior.melee_profile.reach * _behavior.melee_profile.reach
+		if not (chasing and global_position.distance_squared_to(player_position) <= reach_squared):
 			desired_velocity = _get_path_velocity(delta, goal, _behavior.chase_speed if chasing else _behavior.wander_speed)
 	max_speed = _behavior.chase_speed if chasing else _behavior.wander_speed
 	_advance_motion(delta, desired_velocity)
+
+func _arm_melee_contact(profile: MeleeAttackProfile):
+	assert(profile != null)
+	_melee_profile = profile
+	_melee_elapsed = 0.0
+	_melee_contact_pending = true
+	if is_zero_approx(profile.contact_time):
+		_emit_melee_contact()
+
+func _advance_melee_contact(delta: float):
+	if not _melee_contact_pending:
+		return
+	var previous_elapsed := _melee_elapsed
+	_melee_elapsed = minf(_melee_elapsed + delta, _melee_profile.duration)
+	if previous_elapsed < _melee_profile.contact_time and _melee_elapsed >= _melee_profile.contact_time:
+		_emit_melee_contact()
+
+func _emit_melee_contact():
+	var profile := _melee_profile
+	_melee_contact_pending = false
+	_melee_profile = null
+	melee_contact_reached.emit(runtime_id, profile)
 
 func _get_path_velocity(delta: float, goal: Vector3, speed: float) -> Vector3:
 	_repath_remaining = maxf(_repath_remaining - delta, 0.0)
@@ -107,10 +136,4 @@ func _has_line_of_sight(player_position: Vector3) -> bool:
 	var distance := offset.length()
 	if distance > _behavior.forget_range or distance <= 0.001:
 		return distance <= 0.001
-	var direction := offset / distance
-	var step_count := ceili(distance / 0.25)
-	for step in range(1, step_count):
-		var point := origin + direction * (float(step) * distance / float(step_count))
-		if voxel_world.is_raycast_solid(Vector3i(floori(point.x), floori(point.y), floori(point.z))):
-			return false
-	return true
+	return VoxelLineOfSight.has_clear_path(voxel_world, origin, target)

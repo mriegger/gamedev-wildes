@@ -134,7 +134,7 @@ func _run():
 	_expect(player.animation_driver.animator.right_arm_action.rotation.is_equal_approx(paused_arm_rotation), "paused attack pose changed")
 	pause_button.set_pressed_no_signal(false)
 	pause_button.toggled.emit(false)
-	player.animation_driver._process(attack_action.attack_duration * 0.5 + 0.01)
+	player.animation_driver._process(attack_action.attack_profile.duration * 0.5 + 0.01)
 	_expect(player.animation_driver.animator._attack_direction == 1, "attack preview did not alternate swing directions")
 	preview_selector.select(3)
 	preview_selector.item_selected.emit(3)

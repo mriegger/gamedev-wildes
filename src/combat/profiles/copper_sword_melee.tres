@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="MeleeAttackProfile" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://combat/melee_attack_profile.gd" id="1_profile"]
+
+[resource]
+script = ExtResource("1_profile")
+id = &"copper_sword_melee"
+duration = 0.48
+contact_time = 0.24
+cooldown = 0.48
+reach = 2.5

@@ -1,6 +1,8 @@
 extends Node3D
 class_name EntityActor
 
+signal melee_contact_reached(source_runtime_id: int, profile: MeleeAttackProfile)
+
 @export_node_path("Node") var animation_driver_path: NodePath
 
 @onready var model_root: Node3D = $ModelRoot as Node3D
@@ -39,6 +41,11 @@ func play_attack(duration: float):
 
 func play_hit(local_hit_direction: Vector3):
 	animation_driver.play_hit(local_hit_direction)
+
+func record_melee_contact(world_hit_direction: Vector3):
+	assert(world_hit_direction.is_finite() and not world_hit_direction.is_zero_approx())
+	var model_basis := model_root.global_transform.basis.orthonormalized()
+	play_hit(model_basis.inverse() * world_hit_direction)
 
 func get_world_bounds() -> AABB:
 	assert(definition != null)

@@ -95,6 +95,20 @@ jobs:
             30 "ENTITY_NAVIGATION_INTEGRATION PASS" /tmp/entity_navigation.log -- \
             godot --headless --path src --script res://tests/entity_navigation_integration.gd
 
+  entity-combat-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run entity combat integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "ENTITY_COMBAT_INTEGRATION PASS" /tmp/entity_combat.log -- \
+            godot --headless --path src --script res://tests/entity_combat_integration.gd
+
   hud-integration:
     runs-on: ubuntu-latest
     timeout-minutes: 10

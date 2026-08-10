@@ -66,7 +66,7 @@ func set_preview_state(state: StringName):
 		_attack_preview_elapsed = 0.0
 		_attack_preview_direction = -1
 		_motor.held_item_view.show_preview_item(_attack_preview_item)
-		animator.play_attack(_attack_preview_action.attack_duration, _attack_preview_direction)
+		animator.play_attack(_attack_preview_action.attack_profile.duration, _attack_preview_direction)
 
 func set_attack_preview_paused(paused: bool):
 	assert(_preview_state == PREVIEW_ATTACK)
@@ -74,15 +74,15 @@ func set_attack_preview_paused(paused: bool):
 
 func set_attack_preview_progress(progress: float):
 	assert(_preview_state == PREVIEW_ATTACK)
-	_attack_preview_elapsed = clampf(progress, 0.0, 1.0) * _attack_preview_action.attack_duration
+	_attack_preview_elapsed = clampf(progress, 0.0, 1.0) * _attack_preview_action.attack_profile.duration
 	animator.prepare_preview(true)
-	animator.play_attack(_attack_preview_action.attack_duration, _attack_preview_direction)
+	animator.play_attack(_attack_preview_action.attack_profile.duration, _attack_preview_direction)
 	animator.advance_animation(_attack_preview_elapsed)
 	_motor.held_item_view.set_attack_pose(animator.attack_pose_weight, animator.right_arm_action.rotation.x, _attack_preview_action)
 
 func get_attack_preview_progress() -> float:
 	assert(_preview_state == PREVIEW_ATTACK)
-	return _attack_preview_elapsed / _attack_preview_action.attack_duration
+	return _attack_preview_elapsed / _attack_preview_action.attack_profile.duration
 
 func _process(delta: float):
 	if _preview_state != PREVIEW_LIVE:
@@ -159,18 +159,18 @@ func _update_mining_impact(delta: float, active: bool):
 func _advance_attack_preview(delta: float):
 	var remaining := delta
 	while remaining > 0.0:
-		var step := minf(remaining, _attack_preview_action.attack_duration - _attack_preview_elapsed)
+		var step := minf(remaining, _attack_preview_action.attack_profile.duration - _attack_preview_elapsed)
 		animator.advance_animation(step)
 		_attack_preview_elapsed += step
 		remaining -= step
-		if is_equal_approx(_attack_preview_elapsed, _attack_preview_action.attack_duration):
+		if is_equal_approx(_attack_preview_elapsed, _attack_preview_action.attack_profile.duration):
 			_attack_preview_elapsed = 0.0
 			_attack_preview_direction *= -1
-			animator.play_attack(_attack_preview_action.attack_duration, _attack_preview_direction)
+			animator.play_attack(_attack_preview_action.attack_profile.duration, _attack_preview_direction)
 
 func _on_block_placed():
 	animator.play_place()
 
 func _on_melee_attack_started(action: MeleeAttackActionDefinition, direction: int):
 	_active_attack_action = action
-	animator.play_attack(action.attack_duration, direction)
+	animator.play_attack(action.attack_profile.duration, direction)

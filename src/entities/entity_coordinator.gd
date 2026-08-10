@@ -1,6 +1,8 @@
 extends Node3D
 class_name EntityCoordinator
 
+signal entity_melee_contact_reached(source_runtime_id: int, profile: MeleeAttackProfile)
+
 const SPAWN_INTERVAL_SECONDS: float = 2.0
 const SPAWN_ATTEMPTS: int = 4
 const MIN_SPAWN_DISTANCE: float = 18.0
@@ -66,6 +68,7 @@ func _try_spawn(definition: EntityDefinition, player_position: Vector3) -> bool:
 		add_child(actor)
 		actor.global_position = spawn_position
 		actor.setup(runtime_id, definition, _voxel_world, int(_rng.randi()))
+		actor.melee_contact_reached.connect(_on_actor_melee_contact_reached)
 		return true
 	return false
 
@@ -120,6 +123,18 @@ func get_active_actors() -> Array[EntityActor]:
 		if is_instance_valid(actor):
 			actors.append(actor as EntityActor)
 	return actors
+
+func get_actor(runtime_id: int) -> EntityActor:
+	var actor := _active.get(runtime_id) as EntityActor
+	return actor if is_instance_valid(actor) else null
+
+func record_melee_contact(contact: MeleeContact):
+	var target := get_actor(contact.target_runtime_id)
+	if target != null:
+		target.record_melee_contact(contact.hit_direction)
+
+func _on_actor_melee_contact_reached(source_runtime_id: int, profile: MeleeAttackProfile):
+	entity_melee_contact_reached.emit(source_runtime_id, profile)
 
 func shutdown():
 	for runtime_id in _active.keys():

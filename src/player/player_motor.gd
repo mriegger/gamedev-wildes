@@ -33,13 +33,13 @@ var jump_anticipation: float = 0.0
 var _jump_windup_remaining: float = 0.0
 var _jump_ready: bool = false
 
-func setup(p_world: WorldController, p_camera_rig: CameraRig, p_inventory: InventoryModel, p_input_buffer: InputBuffer, p_stats: ActorStats):
+func setup(p_world: WorldController, p_camera_rig: CameraRig, p_inventory: InventoryModel, p_input_buffer: InputBuffer, p_stats: ActorStats, p_combat: MeleeCombatCoordinator):
 	voxel_world = p_world.voxel_model
 	camera_rig = p_camera_rig
 	_input_buffer = p_input_buffer
 	stats = p_stats
 	stat_modifier_clock.setup(stats)
-	interactor.setup(voxel_world, p_camera_rig.camera, self, p_inventory, p_input_buffer)
+	interactor.setup(voxel_world, p_camera_rig.camera, self, p_inventory, p_input_buffer, p_combat)
 	targeting_view.setup(p_world, voxel_world, self, interactor)
 	animation_driver.setup(self, interactor)
 	held_item_view.setup(p_inventory)

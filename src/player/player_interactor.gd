@@ -13,6 +13,7 @@ var voxel_world: VoxelWorld = null
 var camera: Camera3D = null
 var motor: PlayerMotor = null
 var inventory_model: InventoryModel = null
+var combat: MeleeCombatCoordinator = null
 var _input_buffer: InputBuffer = null
 
 var target_block: Vector3i = Vector3i(-999, -999, -999)
@@ -32,19 +33,26 @@ var mine_action: MiningActionDefinition
 var melee_attack_timer: float = 0.0
 var melee_attack_queue: int = 0
 var melee_attack_action: MeleeAttackActionDefinition
+var melee_attack_elapsed: float = 0.0
 var melee_chain_input_timer: float = 0.0
 var next_melee_attack_direction: int = -1
 var secondary_use_timer: float = 0.0
 var _ray_hit_pos: Vector3i
 var _ray_place_pos: Vector3i
 var _ray_face_normal: Vector3i
+var _melee_target_runtime_id: int = -1
+var _melee_contact_pending: bool = false
+var _melee_ray_origin: Vector3
+var _melee_ray_direction: Vector3
 
-func setup(p_voxel_world: VoxelWorld, p_camera: Camera3D, p_motor: PlayerMotor, p_inventory: InventoryModel, p_input_buffer: InputBuffer):
+func setup(p_voxel_world: VoxelWorld, p_camera: Camera3D, p_motor: PlayerMotor, p_inventory: InventoryModel, p_input_buffer: InputBuffer, p_combat: MeleeCombatCoordinator):
+	assert(p_combat != null)
 	voxel_world = p_voxel_world
 	camera = p_camera
 	motor = p_motor
 	inventory_model = p_inventory
 	_input_buffer = p_input_buffer
+	combat = p_combat
 
 func _physics_process(delta):
 	if voxel_world == null or motor == null or camera == null or inventory_model == null or _input_buffer == null:
@@ -211,7 +219,6 @@ func _placement_collides_player(p: Vector3i) -> bool:
 	return true
 
 func _handle_item_actions(delta):
-	melee_attack_timer = max(0.0, melee_attack_timer - delta)
 	melee_chain_input_timer = max(0.0, melee_chain_input_timer - delta)
 	secondary_use_timer -= delta
 	var primary_use_just := _input_buffer.primary_use_just
@@ -247,6 +254,8 @@ func _handle_item_actions(delta):
 		_reset_melee_chain()
 	elif melee_attack_action != null and melee_attack_action != selected_melee:
 		_reset_melee_chain()
+	else:
+		_advance_melee_attack(delta)
 	if primary_use_just and selected_melee != null:
 		melee_attack_action = selected_melee
 		melee_attack_queue = 1
@@ -256,13 +265,7 @@ func _handle_item_actions(delta):
 	if melee_attack_timer <= 0.0:
 		if melee_attack_queue > 0 and melee_attack_action == selected_melee:
 			melee_attack_queue -= 1
-			melee_attack_timer = melee_attack_action.attack_duration
-			melee_chain_input_timer = 0.0
-			var attack_direction := next_melee_attack_direction
-			next_melee_attack_direction = -next_melee_attack_direction
-			melee_attack_started.emit(melee_attack_action, attack_direction)
-			if target_has and voxel_world != null and voxel_world.is_solid(target_block):
-				melee_terrain_hit.emit(target_block)
+			_start_melee_attack()
 		else:
 			_reset_melee_chain()
 
@@ -281,11 +284,48 @@ func _reset_mining():
 	mine_action = null
 
 func _reset_melee_chain():
+	_melee_contact_pending = false
+	_melee_target_runtime_id = -1
 	melee_attack_timer = 0.0
+	melee_attack_elapsed = 0.0
 	melee_attack_queue = 0
 	melee_attack_action = null
 	melee_chain_input_timer = 0.0
 	next_melee_attack_direction = -1
+
+func _start_melee_attack():
+	var profile := melee_attack_action.attack_profile
+	melee_attack_timer = profile.cooldown
+	melee_attack_elapsed = 0.0
+	melee_chain_input_timer = 0.0
+	var mouse_position := get_viewport().get_mouse_position()
+	_melee_ray_origin = camera.project_ray_origin(mouse_position)
+	_melee_ray_direction = camera.project_ray_normal(mouse_position).normalized()
+	_melee_target_runtime_id = combat.acquire_player_target(_melee_ray_origin, _melee_ray_direction, profile)
+	_melee_contact_pending = _melee_target_runtime_id >= 0
+	var attack_direction := next_melee_attack_direction
+	next_melee_attack_direction = -next_melee_attack_direction
+	melee_attack_started.emit(melee_attack_action, attack_direction)
+	if target_has and voxel_world != null and voxel_world.is_solid(target_block):
+		melee_terrain_hit.emit(target_block)
+	if _melee_contact_pending and is_zero_approx(profile.contact_time):
+		_commit_melee_contact()
+
+func _advance_melee_attack(delta: float):
+	if melee_attack_action == null or melee_attack_timer <= 0.0:
+		return
+	var profile := melee_attack_action.attack_profile
+	var previous_elapsed := melee_attack_elapsed
+	melee_attack_elapsed = minf(melee_attack_elapsed + delta, profile.duration)
+	melee_attack_timer = maxf(melee_attack_timer - delta, 0.0)
+	if _melee_contact_pending and previous_elapsed < profile.contact_time and melee_attack_elapsed >= profile.contact_time:
+		_commit_melee_contact()
+
+func _commit_melee_contact():
+	var target_runtime_id := _melee_target_runtime_id
+	_melee_contact_pending = false
+	_melee_target_runtime_id = -1
+	combat.try_commit_player_contact(target_runtime_id, _melee_ray_origin, _melee_ray_direction, melee_attack_action.attack_profile)
 
 func _can_mine_position(pos: Vector3i, action: MiningActionDefinition) -> bool:
 	if action == null or voxel_world == null or motor == null:

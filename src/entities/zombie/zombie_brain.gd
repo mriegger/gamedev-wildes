@@ -42,11 +42,12 @@ func advance(delta: float, self_position: Vector3, player_position: Vector3, pla
 	if distance_squared > _definition.forget_range * _definition.forget_range:
 		_target_memory_remaining = 0.0
 
-	if detected and distance_squared <= _definition.attack_range * _definition.attack_range and _attack_cooldown_remaining <= 0.0:
+	var melee_profile := _definition.melee_profile
+	if detected and distance_squared <= melee_profile.reach * melee_profile.reach and _attack_cooldown_remaining <= 0.0:
 		state = State.ATTACK
 		_attack_started = true
-		_attack_remaining = _definition.attack_duration
-		_attack_cooldown_remaining = _definition.attack_cooldown
+		_attack_remaining = melee_profile.duration
+		_attack_cooldown_remaining = melee_profile.cooldown
 		return
 
 	if detected or _target_memory_remaining > 0.0:

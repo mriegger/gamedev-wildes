@@ -121,9 +121,13 @@ func _make_behavior() -> ZombieBehaviorDefinition:
 	behavior.detection_range = 10.0
 	behavior.forget_range = 15.0
 	behavior.target_memory_seconds = 2.0
-	behavior.attack_range = 1.5
-	behavior.attack_duration = 0.5
-	behavior.attack_cooldown = 1.0
+	var melee_profile := MeleeAttackProfile.new()
+	melee_profile.id = &"test_zombie_melee"
+	melee_profile.reach = 1.5
+	melee_profile.duration = 0.5
+	melee_profile.contact_time = 0.25
+	melee_profile.cooldown = 1.0
+	behavior.melee_profile = melee_profile
 	behavior.wander_radius = 4.0
 	behavior.wander_goal_seconds = 2.0
 	behavior.repath_seconds = 0.5

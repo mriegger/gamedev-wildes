@@ -1,4 +1,4 @@
-[gd_scene load_steps=18 format=3 uid="uid://b22g4me0x1f3h"]
+[gd_scene load_steps=19 format=3 uid="uid://b22g4me0x1f3h"]
 
 [ext_resource type="Script" path="res://game/game.gd" id="1_game"]
 [ext_resource type="PackedScene" path="res://world/world.tscn" id="2_world"]
@@ -17,6 +17,7 @@
 [ext_resource type="Resource" path="res://entities/entity_catalog.tres" id="15_entity_catalog"]
 [ext_resource type="Resource" path="res://player/player_stats.tres" id="16_player_stats"]
 [ext_resource type="PackedScene" path="res://player/debug/player_stats_debug_panel.tscn" id="17_stats_debug"]
+[ext_resource type="Script" path="res://combat/melee_combat_coordinator.gd" id="18_melee_combat"]
 
 [node name="Game" type="Node3D"]
 script = ExtResource("1_game")
@@ -38,6 +39,9 @@ player_stats_definition = ExtResource("16_player_stats")
 
 [node name="Entities" type="Node3D" parent="."]
 script = ExtResource("14_entities")
+
+[node name="MeleeCombat" type="Node" parent="."]
+script = ExtResource("18_melee_combat")
 
 [node name="HUD" parent="." instance=ExtResource("6_hud")]
 

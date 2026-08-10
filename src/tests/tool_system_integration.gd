@@ -7,6 +7,8 @@ var _inventory: InventoryModel
 var _interactor: PlayerInteractor
 var _input_buffer: InputBuffer
 var _voxel_world: VoxelWorld
+var _entity_coordinator: EntityCoordinator
+var _combat: MeleeCombatCoordinator
 var _stone_pos := Vector3i(1, 0, 0)
 var _grass_pos := Vector3i(2, 0, 0)
 var _melee_attack_directions: Array[int] = []
@@ -31,7 +33,7 @@ func _run():
 	_expect(sword.primary_action is MeleeAttackActionDefinition, "sword primary action is not melee")
 	_expect(sword.secondary_action == null, "sword unexpectedly has a secondary action")
 	var sword_action := sword.primary_action as MeleeAttackActionDefinition
-	_expect(is_equal_approx(sword_action.attack_duration, 0.48), "sword attack duration changed")
+	_expect(is_equal_approx(sword_action.attack_profile.duration, 0.48), "sword attack duration changed")
 	_expect(is_equal_approx(sword_action.chain_input_window, 0.26), "sword chain input window changed")
 	var stone := block_catalog.get_definition(BlockId.Type.STONE)
 	_expect(stone.mining_tool_tag == &"pickaxe" and stone.minimum_mining_power == 1, "stone mining requirement changed")
@@ -110,7 +112,12 @@ func _run():
 	await process_frame
 	_input_buffer = InputBuffer.new()
 	_interactor = _player.interactor
-	_interactor.setup(_voxel_world, _camera, _player, _inventory, _input_buffer)
+	_entity_coordinator = EntityCoordinator.new()
+	root.add_child(_entity_coordinator)
+	_combat = MeleeCombatCoordinator.new()
+	root.add_child(_combat)
+	_combat.setup(_voxel_world, _player, _entity_coordinator)
+	_interactor.setup(_voxel_world, _camera, _player, _inventory, _input_buffer, _combat)
 	_interactor.melee_attack_started.connect(_on_melee_attack_started)
 	_interactor.set_physics_process(false)
 	_player.animation_driver.setup(_player, _interactor)
@@ -155,12 +162,12 @@ func _run():
 	_interactor._handle_item_actions(0.0)
 	_expect(_melee_attack_directions == [-1], "single sword click did not start left-to-right")
 	_expect(_player.animation_driver.animator._attacking, "sword attack did not reach the animation driver")
-	_expect(is_equal_approx(_interactor.melee_attack_timer, sword_action.attack_duration), "sword attack timer changed")
+	_expect(is_equal_approx(_interactor.melee_attack_timer, sword_action.attack_profile.cooldown), "sword attack timer changed")
 	_player.on_ground = true
-	_player.animation_driver._process(sword_action.attack_duration * 0.5)
+	_player.animation_driver._process(sword_action.attack_profile.duration * 0.5)
 	_expect(_player.held_item_view.position.is_equal_approx(resting_socket_position + sword_action.held_position_offset), "sword did not move toward the wrist during attack")
 	_expect(is_equal_approx(_player.held_item_view.rotation.x + _player.animation_driver.animator.right_arm_action.rotation.x, resting_socket_rotation.x), "sword did not flatten against the attack arm pitch")
-	_interactor._handle_item_actions(sword_action.attack_duration * 0.5)
+	_interactor._handle_item_actions(sword_action.attack_profile.duration * 0.5)
 	_expect(_melee_attack_directions.size() == 1, "holding primary use repeated the sword attack")
 	_push_primary(false)
 	await process_frame
@@ -173,11 +180,11 @@ func _run():
 	_push_primary(false)
 	await process_frame
 	_input_buffer.poll()
-	_interactor._handle_item_actions(sword_action.attack_duration * 0.5)
+	_interactor._handle_item_actions(sword_action.attack_profile.duration * 0.5)
 	_expect(_melee_attack_directions == [-1, 1], "chained sword click did not reverse direction")
 	_expect(_player.animation_driver.animator._attack_direction == 1, "reversed sword swing did not reach the animator")
 	_expect(not _interactor.is_mining, "sword attack started mining")
-	_interactor._handle_item_actions(sword_action.attack_duration)
+	_interactor._handle_item_actions(sword_action.attack_profile.duration)
 	_push_primary(true)
 	await process_frame
 	_input_buffer.poll()
@@ -192,16 +199,16 @@ func _run():
 	_expect(_interactor.melee_attack_queue == 1, "rapid sword clicks accumulated an attack backlog")
 	_interactor._handle_item_actions(sword_action.chain_input_window + 0.01)
 	_expect(_interactor.melee_attack_queue == 0, "stale sword chain input did not expire")
-	_interactor._handle_item_actions(sword_action.attack_duration)
+	_interactor._handle_item_actions(sword_action.attack_profile.duration)
 	_expect(_melee_attack_directions == [-1, 1, -1], "expired sword clicks were flushed as attacks")
-	_player.animation_driver._process(sword_action.attack_duration)
+	_player.animation_driver._process(sword_action.attack_profile.duration)
 	_expect(_player.held_item_view.position.is_equal_approx(resting_socket_position), "sword position did not recover after attacking")
 	_expect(_player.held_item_view.rotation.is_equal_approx(resting_socket_rotation), "sword rotation did not recover after attacking")
 	_push_primary(true)
 	await process_frame
 	_input_buffer.poll()
 	_interactor._handle_item_actions(0.0)
-	_player.animation_driver._process(sword_action.attack_duration * 0.5)
+	_player.animation_driver._process(sword_action.attack_profile.duration * 0.5)
 	_expect(_player.animation_driver.animator._attacking, "mid-swing cancellation setup did not start")
 	_push_hotbar_key(KEY_1)
 	await process_frame
@@ -268,6 +275,8 @@ func _run():
 
 	_player.queue_free()
 	_camera.queue_free()
+	_combat.queue_free()
+	_entity_coordinator.queue_free()
 	await process_frame
 	await process_frame
 	var orphan_count := int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
