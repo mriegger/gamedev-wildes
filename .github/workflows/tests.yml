@@ -151,6 +151,34 @@ jobs:
             30 "ENTITY_PLACEMENT_INTEGRATION PASS" /tmp/entity_placement.log -- \
             godot --headless --path src --script res://tests/entity_placement_integration.gd
 
+  sheep-behavior-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run sheep behavior integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "SHEEP_BEHAVIOR_INTEGRATION PASS" /tmp/sheep_behavior.log -- \
+            godot --headless --path src --script res://tests/sheep_behavior_integration.gd
+
+  entity-species-population-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run entity species population integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "ENTITY_SPECIES_POPULATION_INTEGRATION PASS" /tmp/entity_species_population.log -- \
+            godot --headless --path src --script res://tests/entity_species_population_integration.gd
+
   hud-integration:
     runs-on: ubuntu-latest
     timeout-minutes: 10

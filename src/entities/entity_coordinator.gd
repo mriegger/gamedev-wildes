@@ -11,6 +11,7 @@ const DESPAWN_DISTANCE: float = 56.0
 const SPATIAL_CELL_SIZE: float = 4.0
 const SEPARATION_RADIUS: float = 1.2
 const SEPARATION_SPEED: float = 1.25
+const MAX_TOTAL_ACTIVE: int = 12
 
 var _catalog: EntityCatalog
 var _voxel_world: VoxelWorld
@@ -53,6 +54,8 @@ func tick(delta: float, player_position: Vector3, time_of_day: float):
 	if _spawn_elapsed < SPAWN_INTERVAL_SECONDS:
 		return
 	_spawn_elapsed = fmod(_spawn_elapsed, SPAWN_INTERVAL_SECONDS)
+	if _active.size() >= MAX_TOTAL_ACTIVE:
+		return
 	var is_day := DayNightProfile.is_day_time(time_of_day)
 	for definition in _catalog.definitions:
 		if definition == null or _count_definition(definition.id) >= definition.max_active:
