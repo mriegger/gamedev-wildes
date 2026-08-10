@@ -48,6 +48,19 @@ func _init():
 	_expect(is_equal_approx(enemy_stats.get_value(&"fire_power"), 25.0), "enemy-specific stat value is incorrect")
 	var invalid_modifier := _modifier(&"invalid_recovery", &"recovery_potion", &"recovery", StatModifier.Operation.ADD, 5.0)
 	_expect(not enemy_stats.add_modifier(invalid_modifier), "modifier created a stat absent from the actor definition")
+	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
+	var inventory := InventoryModel.new(item_catalog)
+	inventory.setup_starter()
+	var player := (load("res://player/player.tscn") as PackedScene).instantiate() as PlayerMotor
+	player.stats = ActorStats.new(player_definition)
+	player._refresh_selected_item_modifiers(inventory)
+	inventory.select_slot(3)
+	player._refresh_selected_item_modifiers(inventory)
+	_expect(is_equal_approx(player.stats.get_value(&"strength"), 15.0), "copper sword did not add five strength")
+	inventory.select_slot(0)
+	player._refresh_selected_item_modifiers(inventory)
+	_expect(is_equal_approx(player.stats.get_value(&"strength"), 10.0), "switching from copper sword retained its strength modifier")
+	player.free()
 	if _errors.is_empty():
 		print("Stats system tests passed")
 		quit(0)

@@ -7,6 +7,7 @@ signal main_menu_requested
 
 @export var pause_menu_scene: PackedScene
 @export var animation_tuning_panel_scene: PackedScene
+@export var player_stats_debug_panel_scene: PackedScene
 @export var block_catalog: BlockCatalog
 @export var item_catalog: ItemCatalog
 @export var entity_catalog: EntityCatalog
@@ -34,6 +35,7 @@ var _save_data: Dictionary = {}
 var _world_state: WorldState
 var _pause_menu: PauseMenu
 var animation_tuning_panel: AnimationTuningPanel = null
+var player_stats_debug_panel: PlayerStatsDebugPanel = null
 var _save_status_timer: float = 0.0
 var _session_active: bool = false
 
@@ -147,6 +149,15 @@ func _physics_process(delta):
 func _unhandled_input(event):
 	if event is InputEventKey and event.pressed and not event.echo:
 		var key_event = event as InputEventKey
+		if OS.is_debug_build() and (key_event.keycode == KEY_F9 or key_event.physical_keycode == KEY_F9):
+			_toggle_player_stats_debug_panel()
+			get_viewport().set_input_as_handled()
+			return
+		if player_stats_debug_panel != null and player_stats_debug_panel.is_open():
+			if key_event.keycode == KEY_ESCAPE or key_event.physical_keycode == KEY_ESCAPE:
+				player_stats_debug_panel.hide_panel()
+				get_viewport().set_input_as_handled()
+				return
 		if animation_tuning_panel != null and animation_tuning_panel.is_open():
 			if key_event.keycode == KEY_ESCAPE or key_event.physical_keycode == KEY_ESCAPE:
 				animation_tuning_panel.hide_panel()
@@ -171,7 +182,17 @@ func _toggle_animation_tuning_panel():
 		animation_tuning_panel.setup(player)
 	animation_tuning_panel.toggle_panel()
 
+func _toggle_player_stats_debug_panel():
+	if player_stats_debug_panel == null:
+		player_stats_debug_panel = player_stats_debug_panel_scene.instantiate() as PlayerStatsDebugPanel
+		add_child(player_stats_debug_panel)
+		player_stats_debug_panel.setup(player_stats)
+	player_stats_debug_panel.toggle_panel()
+
 func _handle_cancel():
+	if player_stats_debug_panel != null and player_stats_debug_panel.is_open():
+		player_stats_debug_panel.hide_panel()
+		return
 	if animation_tuning_panel != null and animation_tuning_panel.is_open():
 		animation_tuning_panel.hide_panel()
 		return

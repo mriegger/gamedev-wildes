@@ -6,24 +6,52 @@ var experience: int
 var current_hp: float
 
 var _definition: ActorStatsDefinition
+var _base_values: Dictionary
 var _modifiers: Dictionary = {}
 var _remaining_duration: Dictionary = {}
 
 func _init(definition: ActorStatsDefinition):
 	_definition = definition
+	_base_values = definition.get_base_stats().duplicate()
 	level = definition.starting_level
 	experience = definition.starting_experience
 	current_hp = get_value(&"hp") if definition.has_stat(&"hp") else 0.0
 
 func has_stat(stat_id: StringName) -> bool:
-	return _definition.has_stat(stat_id)
+	return _base_values.has(stat_id)
+
+func get_stat_ids() -> Array[StringName]:
+	var ids: Array[StringName] = []
+	for stat_id in _base_values:
+		ids.append(stat_id)
+	ids.sort()
+	return ids
+
+func get_base_value(stat_id: StringName) -> float:
+	assert(has_stat(stat_id))
+	return float(_base_values[stat_id])
+
+func set_base_value(stat_id: StringName, value: float) -> bool:
+	if not has_stat(stat_id) or value < 0.0:
+		return false
+	_base_values[stat_id] = value
+	_clamp_current_hp()
+	return true
+
+func set_current_hp(value: float) -> bool:
+	if not has_stat(&"hp") or value < 0.0 or value > get_value(&"hp"):
+		return false
+	current_hp = value
+	return true
+
+func set_progression(p_level: int, p_experience: int) -> bool:
+	return restore_progression({"level": p_level, "experience": p_experience, "current_hp": current_hp})
 
 func get_value(stat_id: StringName) -> float:
 	assert(has_stat(stat_id))
 	return _get_value(stat_id)
 
 func _get_value(stat_id: StringName) -> float:
-	var base_stats := _definition.get_base_stats()
 	var additive := 0.0
 	var multiplier := 1.0
 	var modifier_ids := _modifiers.keys()
@@ -36,7 +64,7 @@ func _get_value(stat_id: StringName) -> float:
 			additive += modifier.amount
 		else:
 			multiplier *= modifier.amount
-	return (float(base_stats[stat_id]) + additive) * multiplier
+	return (float(_base_values[stat_id]) + additive) * multiplier
 
 func add_experience(amount: int) -> int:
 	assert(amount >= 0)
@@ -84,6 +112,28 @@ func add_modifier(modifier: StatModifier) -> bool:
 	_modifiers[modifier.id] = modifier
 	if modifier.duration_seconds > 0.0:
 		_remaining_duration[modifier.id] = modifier.duration_seconds
+	_clamp_current_hp()
+	return true
+
+func replace_item_modifiers(source_item_id: StringName, source_item_instance_id: StringName, modifiers: Array[StatModifier]) -> bool:
+	if source_item_id.is_empty() or source_item_instance_id.is_empty():
+		return false
+	var runtime_modifiers: Array[StatModifier] = []
+	for index in range(modifiers.size()):
+		if modifiers[index] == null:
+			return false
+		var modifier := modifiers[index].duplicate() as StatModifier
+		modifier.id = StringName("%s_%d" % [source_item_instance_id, index])
+		modifier.source_item_id = source_item_id
+		modifier.source_item_instance_id = source_item_instance_id
+		if not modifier.is_valid(_definition):
+			return false
+		runtime_modifiers.append(modifier)
+	remove_modifiers_from_item_instance(source_item_instance_id)
+	for modifier in runtime_modifiers:
+		_modifiers[modifier.id] = modifier
+		if modifier.duration_seconds > 0.0:
+			_remaining_duration[modifier.id] = modifier.duration_seconds
 	_clamp_current_hp()
 	return true
 

@@ -22,6 +22,7 @@ var voxel_world: VoxelWorld = null
 var camera_rig: CameraRig = null
 var _input_buffer: InputBuffer = null
 var stats: ActorStats
+var _active_item_modifier_instance_id: StringName
 
 var on_ground: bool = false
 var is_sprinting: bool = false
@@ -44,6 +45,21 @@ func setup(p_world: WorldController, p_camera_rig: CameraRig, p_inventory: Inven
 	held_item_view.setup(p_inventory)
 	_footsteps.setup(self, animation_driver.animator.profile)
 	_action_audio.setup(animation_driver, interactor)
+	p_inventory.inventory_changed.connect(_refresh_selected_item_modifiers.bind(p_inventory))
+	_refresh_selected_item_modifiers(p_inventory)
+
+func _refresh_selected_item_modifiers(inventory: InventoryModel):
+	if not _active_item_modifier_instance_id.is_empty():
+		stats.remove_modifiers_from_item_instance(_active_item_modifier_instance_id)
+	_active_item_modifier_instance_id = &""
+	var item_id = inventory.get_selected_item_id()
+	if item_id == null:
+		return
+	var definition := inventory.item_catalog.get_definition(item_id)
+	if definition.stat_modifiers.is_empty():
+		return
+	_active_item_modifier_instance_id = StringName("hotbar_%d" % inventory.selected_slot)
+	assert(stats.replace_item_modifiers(definition.id, _active_item_modifier_instance_id, definition.stat_modifiers))
 
 func _physics_process(delta):
 	if voxel_world == null:
