@@ -26,26 +26,26 @@ func _init():
 	var armor_add := _modifier(&"armor_strength", &"copper_armor", &"strength", StatModifier.Operation.ADD, 2.0, 0.0, &"armor_instance_1")
 	var armor_multiply := _modifier(&"armor_strength_scale", &"copper_armor", &"strength", StatModifier.Operation.MULTIPLY, 1.1, 0.0, &"armor_instance_1")
 	_expect(stats.add_modifier(armor_add) and stats.add_modifier(armor_multiply), "item modifiers were rejected")
-	_expect(stats.remove_modifiers_from_item_instance(&"armor_instance_1") == 2, "item modifiers were not removed by instance")
+	_expect(stats.remove_modifiers_from_source_instance(&"armor_instance_1") == 2, "item modifiers were not removed by instance")
 	var equipment_stats := ActorStats.new(player_definition)
 	var equipment_defense := _modifier(&"template_defense", &"copper_helmet", &"defense", StatModifier.Operation.ADD, 2.0)
 	var equipment_modifiers: Array[StatModifier] = [equipment_defense]
-	_expect(equipment_stats.can_replace_item_modifiers(&"copper_helmet", &"equipment_slot_0", equipment_modifiers), "valid equipment modifiers failed preflight")
-	_expect(equipment_stats.replace_item_modifiers(&"copper_helmet", &"equipment_slot_0", equipment_modifiers), "valid equipment modifiers failed replacement")
+	_expect(equipment_stats.can_replace_source_modifiers(&"copper_helmet", &"equipment_slot_0", equipment_modifiers), "valid equipment modifiers failed preflight")
+	_expect(equipment_stats.replace_source_modifiers(&"copper_helmet", &"equipment_slot_0", equipment_modifiers), "valid equipment modifiers failed replacement")
 	_expect(is_equal_approx(equipment_stats.get_value(&"defense"), 2.0), "equipment modifier was not applied")
 	var invalid_equipment := _modifier(&"invalid_template", &"broken_helmet", &"unknown_stat", StatModifier.Operation.ADD, 5.0)
 	var invalid_equipment_modifiers: Array[StatModifier] = [invalid_equipment]
-	_expect(not equipment_stats.can_replace_item_modifiers(&"broken_helmet", &"equipment_slot_0", invalid_equipment_modifiers), "invalid equipment modifiers passed preflight")
-	_expect(not equipment_stats.replace_item_modifiers(&"broken_helmet", &"equipment_slot_0", invalid_equipment_modifiers), "invalid equipment modifiers replaced valid state")
+	_expect(not equipment_stats.can_replace_source_modifiers(&"broken_helmet", &"equipment_slot_0", invalid_equipment_modifiers), "invalid equipment modifiers passed preflight")
+	_expect(not equipment_stats.replace_source_modifiers(&"broken_helmet", &"equipment_slot_0", invalid_equipment_modifiers), "invalid equipment modifiers replaced valid state")
 	_expect(is_equal_approx(equipment_stats.get_value(&"defense"), 2.0), "failed equipment replacement changed stats")
-	_expect(equipment_stats.remove_modifiers_from_item_instance(&"equipment_slot_0") == 1, "equipment modifier removal count changed")
+	_expect(equipment_stats.remove_modifiers_from_source_instance(&"equipment_slot_0") == 1, "equipment modifier removal count changed")
 	_expect(is_equal_approx(equipment_stats.get_value(&"defense"), 0.0), "equipment modifier removal did not restore base defense")
 	var replacement_hp_stats := ActorStats.new(player_definition)
 	var maximum_hp_modifier := _modifier(&"template_hp", &"health_armor", &"hp", StatModifier.Operation.MULTIPLY, 2.0)
 	var maximum_hp_modifiers: Array[StatModifier] = [maximum_hp_modifier]
-	_expect(replacement_hp_stats.replace_item_modifiers(&"health_armor", &"equipment_slot_0", maximum_hp_modifiers), "maximum HP modifier failed replacement")
+	_expect(replacement_hp_stats.replace_source_modifiers(&"health_armor", &"equipment_slot_0", maximum_hp_modifiers), "maximum HP modifier failed replacement")
 	_expect(replacement_hp_stats.set_current_hp(150.0), "modified current HP setup failed")
-	_expect(replacement_hp_stats.replace_item_modifiers(&"health_armor", &"equipment_slot_0", maximum_hp_modifiers), "maximum HP modifier refresh failed")
+	_expect(replacement_hp_stats.replace_source_modifiers(&"health_armor", &"equipment_slot_0", maximum_hp_modifiers), "maximum HP modifier refresh failed")
 	_expect(is_equal_approx(replacement_hp_stats.current_hp, 150.0), "equivalent modifier replacement clamped current HP")
 	var leveled_definition := _definition({&"strength": 10.0}, 1, 100, 2.0, 4)
 	_expect(leveled_definition.validate(), "leveled definition is invalid")
@@ -72,7 +72,7 @@ func _init():
 	var test_totem := item_catalog.get_definition(&"test_totem")
 	_expect(test_totem.stat_modifiers.size() == 3, "test totem modifiers are missing")
 	var equipped_stats := ActorStats.new(player_definition)
-	_expect(equipped_stats.replace_item_modifiers(test_totem.id, &"test_totem_instance", test_totem.stat_modifiers), "test totem modifiers were rejected")
+	_expect(equipped_stats.replace_source_modifiers(test_totem.id, &"test_totem_instance", test_totem.stat_modifiers), "test totem modifiers were rejected")
 	_expect(is_equal_approx(equipped_stats.get_value(&"strength"), 20.0), "test totem strength modifier is incorrect")
 	_expect(is_equal_approx(equipped_stats.get_value(&"mobility"), 5.0), "test totem mobility modifier is incorrect")
 	_expect(is_equal_approx(equipped_stats.get_value(&"hp"), 200.0), "test totem health multiplier is incorrect")
@@ -94,11 +94,11 @@ func _definition(base_stats: Dictionary, starting_level: int = 1, base_experienc
 	definition.maximum_level = maximum_level
 	return definition
 
-func _modifier(id: StringName, source_item_id: StringName, stat_id: StringName, operation: StatModifier.Operation, amount: float, duration_seconds: float = 0.0, source_item_instance_id: StringName = &"") -> StatModifier:
+func _modifier(id: StringName, source_id: StringName, stat_id: StringName, operation: StatModifier.Operation, amount: float, duration_seconds: float = 0.0, source_instance_id: StringName = &"") -> StatModifier:
 	var modifier := StatModifier.new()
 	modifier.id = id
-	modifier.source_item_id = source_item_id
-	modifier.source_item_instance_id = source_item_instance_id
+	modifier.source_id = source_id
+	modifier.source_instance_id = source_instance_id
 	modifier.stat_id = stat_id
 	modifier.operation = operation
 	modifier.amount = amount

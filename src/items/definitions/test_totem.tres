@@ -8,21 +8,21 @@
 [sub_resource type="Resource" id="strength"]
 script = ExtResource("4")
 id = &"test_totem_strength"
-source_item_id = &"test_totem"
+source_id = &"test_totem"
 stat_id = &"strength"
 amount = 10.0
 
 [sub_resource type="Resource" id="mobility"]
 script = ExtResource("4")
 id = &"test_totem_mobility"
-source_item_id = &"test_totem"
+source_id = &"test_totem"
 stat_id = &"mobility"
 amount = -5.0
 
 [sub_resource type="Resource" id="health"]
 script = ExtResource("4")
 id = &"test_totem_health"
-source_item_id = &"test_totem"
+source_id = &"test_totem"
 stat_id = &"hp"
 operation = 1
 amount = 2.0

@@ -79,6 +79,7 @@ func _ensure_lookup() -> void:
 func validate(block_catalog: BlockCatalog) -> bool:
 	_ensure_lookup()
 	var valid := _is_valid
+	var armor_sets_by_id: Dictionary = {}
 	var block_tags: Dictionary = {}
 	var maximum_power_by_tag: Dictionary = {}
 	for block in block_catalog.definitions:
@@ -90,6 +91,15 @@ func validate(block_catalog: BlockCatalog) -> bool:
 		var armor := definition as ArmorDefinition
 		if armor != null:
 			valid = armor.validate(definition.resource_path) and valid
+			var armor_set := armor.armor_set
+			if armor_set != null:
+				if armor_sets_by_id.has(armor_set.id):
+					if armor_sets_by_id[armor_set.id] != armor_set:
+						push_error("[ItemCatalog] Non-canonical armor set %s for %s" % [armor_set.id, definition.id])
+						valid = false
+				else:
+					armor_sets_by_id[armor_set.id] = armor_set
+					valid = armor_set.validate(armor_set.resource_path) and valid
 		var placement := definition.secondary_action as BlockPlacementActionDefinition
 		if placement != null and placement.block != null and BlockId.is_valid(placement.block.id):
 			if block_catalog.get_definition(placement.block.id) != placement.block:

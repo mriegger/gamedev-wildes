@@ -115,15 +115,15 @@ func add_modifier(modifier: StatModifier) -> bool:
 	_clamp_current_hp()
 	return true
 
-func can_replace_item_modifiers(source_item_id: StringName, source_item_instance_id: StringName, modifiers: Array[StatModifier]) -> bool:
+func can_replace_source_modifiers(source_id: StringName, source_instance_id: StringName, modifiers: Array[StatModifier]) -> bool:
 	var runtime_modifiers: Array[StatModifier] = []
-	return _prepare_item_modifiers(source_item_id, source_item_instance_id, modifiers, runtime_modifiers)
+	return _prepare_source_modifiers(source_id, source_instance_id, modifiers, runtime_modifiers)
 
-func replace_item_modifiers(source_item_id: StringName, source_item_instance_id: StringName, modifiers: Array[StatModifier]) -> bool:
+func replace_source_modifiers(source_id: StringName, source_instance_id: StringName, modifiers: Array[StatModifier]) -> bool:
 	var runtime_modifiers: Array[StatModifier] = []
-	if not _prepare_item_modifiers(source_item_id, source_item_instance_id, modifiers, runtime_modifiers):
+	if not _prepare_source_modifiers(source_id, source_instance_id, modifiers, runtime_modifiers):
 		return false
-	_erase_modifiers_from_item_instance(source_item_instance_id)
+	_erase_modifiers_from_source_instance(source_instance_id)
 	for modifier in runtime_modifiers:
 		_modifiers[modifier.id] = modifier
 		if modifier.duration_seconds > 0.0:
@@ -131,16 +131,16 @@ func replace_item_modifiers(source_item_id: StringName, source_item_instance_id:
 	_clamp_current_hp()
 	return true
 
-func _prepare_item_modifiers(source_item_id: StringName, source_item_instance_id: StringName, modifiers: Array[StatModifier], runtime_modifiers: Array[StatModifier]) -> bool:
-	if source_item_id.is_empty() or source_item_instance_id.is_empty():
+func _prepare_source_modifiers(source_id: StringName, source_instance_id: StringName, modifiers: Array[StatModifier], runtime_modifiers: Array[StatModifier]) -> bool:
+	if source_id.is_empty() or source_instance_id.is_empty():
 		return false
 	for index in range(modifiers.size()):
 		if modifiers[index] == null:
 			return false
 		var modifier := modifiers[index].duplicate() as StatModifier
-		modifier.id = StringName("%s_%d" % [source_item_instance_id, index])
-		modifier.source_item_id = source_item_id
-		modifier.source_item_instance_id = source_item_instance_id
+		modifier.id = StringName("%s_%d" % [source_instance_id, index])
+		modifier.source_id = source_id
+		modifier.source_instance_id = source_instance_id
 		if not modifier.is_valid(_definition):
 			return false
 		runtime_modifiers.append(modifier)
@@ -153,19 +153,19 @@ func remove_modifier(modifier_id: StringName) -> bool:
 	_clamp_current_hp()
 	return true
 
-func remove_modifiers_from_item_instance(source_item_instance_id: StringName) -> int:
-	if source_item_instance_id.is_empty():
+func remove_modifiers_from_source_instance(source_instance_id: StringName) -> int:
+	if source_instance_id.is_empty():
 		return 0
-	var removed := _erase_modifiers_from_item_instance(source_item_instance_id)
+	var removed := _erase_modifiers_from_source_instance(source_instance_id)
 	if removed > 0:
 		_clamp_current_hp()
 	return removed
 
-func _erase_modifiers_from_item_instance(source_item_instance_id: StringName) -> int:
+func _erase_modifiers_from_source_instance(source_instance_id: StringName) -> int:
 	var removed := 0
 	for modifier_id in _modifiers.keys():
 		var modifier := _modifiers[modifier_id] as StatModifier
-		if modifier.source_item_instance_id != source_item_instance_id:
+		if modifier.source_instance_id != source_instance_id:
 			continue
 		_modifiers.erase(modifier_id)
 		_remaining_duration.erase(modifier_id)

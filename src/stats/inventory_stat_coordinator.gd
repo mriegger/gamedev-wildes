@@ -2,6 +2,7 @@ extends RefCounted
 class_name InventoryStatCoordinator
 
 const SELECTED_ITEM_INSTANCE_ID: StringName = &"selected_item"
+const ARMOR_SET_INSTANCE_ID: StringName = &"armor_set"
 
 var inventory_model: InventoryModel
 var actor_stats: ActorStats
@@ -9,6 +10,7 @@ var actor_stats: ActorStats
 var _selected_item_id: StringName = &""
 var _selected_slot: int = -1
 var _equipped_item_ids: Array[StringName] = []
+var _equipped_armor_set_id: StringName = &""
 
 func setup(p_inventory_model: InventoryModel, p_actor_stats: ActorStats) -> bool:
 	assert(p_inventory_model != null)
@@ -19,7 +21,7 @@ func setup(p_inventory_model: InventoryModel, p_actor_stats: ActorStats) -> bool
 	actor_stats = p_actor_stats
 	_equipped_item_ids.resize(ArmorDefinition.SLOT_COUNT)
 	_equipped_item_ids.fill(&"")
-	if not _synchronize_selected_item(true) or not _synchronize_equipment(true):
+	if not _synchronize_selected_item(true) or not _synchronize_equipment(true) or not _synchronize_armor_set(true):
 		return false
 	inventory_model.inventory_changed.connect(_on_inventory_changed)
 	return true
@@ -36,11 +38,19 @@ func handle_drop(source_index: int, destination_index: int, drag_count: int) -> 
 		var armor := prepared["armor"] as ArmorDefinition
 		var modifier_instance_id := _get_equipment_instance_id(equipment_index)
 		if armor == null:
-			actor_stats.remove_modifiers_from_item_instance(modifier_instance_id)
+			actor_stats.remove_modifiers_from_source_instance(modifier_instance_id)
 		else:
-			if not actor_stats.replace_item_modifiers(armor.id, modifier_instance_id, armor.stat_modifiers):
+			if not actor_stats.replace_source_modifiers(armor.id, modifier_instance_id, armor.stat_modifiers):
 				return false
 		_equipped_item_ids[equipment_index - InventoryModel.FILLABLE_SIZE] = &"" if armor == null else armor.id
+		var armor_set := prepared["armor_set"] as ArmorSetDefinition
+		var next_armor_set_id: StringName = &"" if armor_set == null else armor_set.id
+		if next_armor_set_id != _equipped_armor_set_id:
+			if armor_set == null:
+				actor_stats.remove_modifiers_from_source_instance(ARMOR_SET_INSTANCE_ID)
+			elif not actor_stats.replace_source_modifiers(armor_set.id, ARMOR_SET_INSTANCE_ID, armor_set.full_set_modifiers):
+				return false
+			_equipped_armor_set_id = next_armor_set_id
 	var moved := inventory_model.handle_drop(source_index, destination_index, drag_count)
 	assert(moved)
 	return moved
@@ -71,18 +81,24 @@ func try_unequip_armor(equipment_index: int) -> bool:
 	return false
 
 func _validate_definitions(p_inventory_model: InventoryModel, p_actor_stats: ActorStats) -> bool:
+	var validated_armor_sets: Dictionary = {}
 	for definition in p_inventory_model.item_catalog.definitions:
-		if definition.stat_modifiers.is_empty():
-			continue
-		var modifier_instance_id := SELECTED_ITEM_INSTANCE_ID
-		if definition.stat_modifier_activation == ItemDefinition.StatModifierActivation.EQUIPPED:
-			var armor := definition as ArmorDefinition
-			if armor == null:
-				push_error("[InventoryStatCoordinator] Equipped modifiers require an armor definition for %s" % definition.id)
+		var armor := definition as ArmorDefinition
+		if not definition.stat_modifiers.is_empty():
+			var modifier_instance_id := SELECTED_ITEM_INSTANCE_ID
+			if definition.stat_modifier_activation == ItemDefinition.StatModifierActivation.EQUIPPED:
+				if armor == null:
+					push_error("[InventoryStatCoordinator] Equipped modifiers require an armor definition for %s" % definition.id)
+					return false
+				modifier_instance_id = _get_equipment_instance_id(InventoryModel.get_equipment_index(armor.armor_slot))
+			if not p_actor_stats.can_replace_source_modifiers(definition.id, modifier_instance_id, definition.stat_modifiers):
+				push_error("[InventoryStatCoordinator] Invalid modifiers for %s" % definition.id)
 				return false
-			modifier_instance_id = _get_equipment_instance_id(InventoryModel.get_equipment_index(armor.armor_slot))
-		if not p_actor_stats.can_replace_item_modifiers(definition.id, modifier_instance_id, definition.stat_modifiers):
-			push_error("[InventoryStatCoordinator] Invalid modifiers for %s" % definition.id)
+		if armor == null or armor.armor_set == null or validated_armor_sets.has(armor.armor_set.id):
+			continue
+		validated_armor_sets[armor.armor_set.id] = true
+		if not p_actor_stats.can_replace_source_modifiers(armor.armor_set.id, ARMOR_SET_INSTANCE_ID, armor.armor_set.full_set_modifiers):
+			push_error("[InventoryStatCoordinator] Invalid full-set modifiers for %s" % armor.armor_set.id)
 			return false
 	return true
 
@@ -92,7 +108,7 @@ func _prepare_drop(source_index: int, destination_index: int, drag_count: int) -
 	var source_is_equipment := InventoryModel.is_equipment_index(source_index)
 	var destination_is_equipment := InventoryModel.is_equipment_index(destination_index)
 	if not source_is_equipment and not destination_is_equipment:
-		return {"equipment_index": -1, "armor": null}
+		return {"equipment_index": -1, "armor": null, "armor_set": null}
 	var equipment_index := destination_index if destination_is_equipment else source_index
 	var resulting_item_id: StringName = &""
 	if destination_is_equipment:
@@ -102,15 +118,19 @@ func _prepare_drop(source_index: int, destination_index: int, drag_count: int) -
 		if destination_stack != null:
 			resulting_item_id = destination_stack.item_id
 	if resulting_item_id.is_empty():
-		return {"equipment_index": equipment_index, "armor": null}
+		return {"equipment_index": equipment_index, "armor": null, "armor_set": _get_complete_armor_set(equipment_index, null)}
 	var armor := inventory_model.item_catalog.get_definition(resulting_item_id) as ArmorDefinition
-	if armor == null or not actor_stats.can_replace_item_modifiers(armor.id, _get_equipment_instance_id(equipment_index), armor.stat_modifiers):
+	if armor == null or not actor_stats.can_replace_source_modifiers(armor.id, _get_equipment_instance_id(equipment_index), armor.stat_modifiers):
 		return {}
-	return {"equipment_index": equipment_index, "armor": armor}
+	var armor_set := _get_complete_armor_set(equipment_index, armor)
+	if armor_set != null and not actor_stats.can_replace_source_modifiers(armor_set.id, ARMOR_SET_INSTANCE_ID, armor_set.full_set_modifiers):
+		return {}
+	return {"equipment_index": equipment_index, "armor": armor, "armor_set": armor_set}
 
 func _on_inventory_changed() -> void:
 	assert(_synchronize_selected_item(false))
 	assert(_synchronize_equipment(false))
+	assert(_synchronize_armor_set(false))
 
 func _synchronize_selected_item(force: bool) -> bool:
 	var next_item_id: StringName = &""
@@ -126,8 +146,8 @@ func _synchronize_selected_item(force: bool) -> bool:
 	if not force and next_item_id == _selected_item_id and next_slot == _selected_slot:
 		return true
 	if definition == null:
-		actor_stats.remove_modifiers_from_item_instance(SELECTED_ITEM_INSTANCE_ID)
-	elif not actor_stats.replace_item_modifiers(definition.id, SELECTED_ITEM_INSTANCE_ID, definition.stat_modifiers):
+		actor_stats.remove_modifiers_from_source_instance(SELECTED_ITEM_INSTANCE_ID)
+	elif not actor_stats.replace_source_modifiers(definition.id, SELECTED_ITEM_INSTANCE_ID, definition.stat_modifiers):
 		return false
 	_selected_item_id = next_item_id
 	_selected_slot = next_slot
@@ -142,11 +162,36 @@ func _synchronize_equipment(force: bool) -> bool:
 		var equipment_index := InventoryModel.get_equipment_index(armor_slot)
 		var modifier_instance_id := _get_equipment_instance_id(equipment_index)
 		if armor == null:
-			actor_stats.remove_modifiers_from_item_instance(modifier_instance_id)
-		elif not actor_stats.replace_item_modifiers(armor.id, modifier_instance_id, armor.stat_modifiers):
+			actor_stats.remove_modifiers_from_source_instance(modifier_instance_id)
+		elif not actor_stats.replace_source_modifiers(armor.id, modifier_instance_id, armor.stat_modifiers):
 			return false
 		_equipped_item_ids[armor_slot] = next_item_id
 	return true
+
+func _synchronize_armor_set(force: bool) -> bool:
+	var armor_set := _get_complete_armor_set()
+	var next_armor_set_id: StringName = &"" if armor_set == null else armor_set.id
+	if not force and _equipped_armor_set_id == next_armor_set_id:
+		return true
+	if armor_set == null:
+		actor_stats.remove_modifiers_from_source_instance(ARMOR_SET_INSTANCE_ID)
+	elif not actor_stats.replace_source_modifiers(armor_set.id, ARMOR_SET_INSTANCE_ID, armor_set.full_set_modifiers):
+		return false
+	_equipped_armor_set_id = next_armor_set_id
+	return true
+
+func _get_complete_armor_set(replacement_equipment_index: int = -1, replacement_armor: ArmorDefinition = null) -> ArmorSetDefinition:
+	var armor_set: ArmorSetDefinition
+	for armor_slot in range(ArmorDefinition.SLOT_COUNT):
+		var equipment_index := InventoryModel.get_equipment_index(armor_slot)
+		var armor := replacement_armor if equipment_index == replacement_equipment_index else inventory_model.get_equipped_armor(armor_slot)
+		if armor == null or armor.armor_set == null:
+			return null
+		if armor_set == null:
+			armor_set = armor.armor_set
+		elif armor.armor_set != armor_set:
+			return null
+	return armor_set
 
 func _get_equipment_instance_id(equipment_index: int) -> StringName:
 	return StringName("equipment_slot_%d" % (equipment_index - InventoryModel.FILLABLE_SIZE))

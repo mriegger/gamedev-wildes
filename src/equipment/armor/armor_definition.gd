@@ -18,6 +18,7 @@ const SLOT_LABELS: Dictionary[int, String] = {
 const SLOT_COUNT: int = Slot.COUNT
 
 @export var armor_slot: Slot = Slot.HEAD
+@export var armor_set: ArmorSetDefinition
 @export var visual_parts: Array[ArmorVisualPart] = []
 
 static func is_valid_slot(value: int) -> bool:

@@ -7,6 +7,7 @@ const ARMOR_IDS: Array[StringName] = [
 	&"copper_shoes",
 ]
 const DEFENSE_VALUES: Array[float] = [1.0, 3.0, 2.0, 1.0]
+const FULL_SET_DEFENSE_BONUS: float = 3.0
 const VISUAL_PART_COUNTS: Array[int] = [5, 3, 2, 2]
 
 var _errors: Array[String] = []
@@ -20,6 +21,7 @@ func _init() -> void:
 	_expect(block_catalog.validate(), "block catalog invalid")
 	_expect(item_catalog.validate(block_catalog), "item catalog invalid")
 	_expect(stats_definition.validate(), "player stats invalid")
+	var copper_armor_set: ArmorSetDefinition
 	for armor_slot in range(ArmorDefinition.SLOT_COUNT):
 		var armor := item_catalog.get_definition(ARMOR_IDS[armor_slot]) as ArmorDefinition
 		_expect(armor != null, "armor definition missing for slot %d" % armor_slot)
@@ -28,6 +30,11 @@ func _init() -> void:
 		_expect(armor.armor_slot == armor_slot, "armor slot mismatch for %s" % armor.id)
 		_expect(armor.max_stack == 1, "armor stack limit mismatch for %s" % armor.id)
 		_expect(armor.stat_modifier_activation == ItemDefinition.StatModifierActivation.EQUIPPED, "armor activation mismatch for %s" % armor.id)
+		_expect(armor.armor_set != null, "armor set missing for %s" % armor.id)
+		if copper_armor_set == null:
+			copper_armor_set = armor.armor_set
+		else:
+			_expect(armor.armor_set == copper_armor_set, "armor set resource mismatch for %s" % armor.id)
 		_expect(armor.stat_modifiers.size() == 1, "armor modifier missing for %s" % armor.id)
 		if armor.stat_modifiers.size() == 1:
 			_expect(armor.stat_modifiers[0].stat_id == &"defense", "armor modifier stat mismatch for %s" % armor.id)
@@ -36,6 +43,13 @@ func _init() -> void:
 		for visual_part in armor.visual_parts:
 			_expect(visual_part != null and visual_part.mesh != null, "armor visual mesh missing for %s" % armor.id)
 		_expect(armor.resource_path.ends_with(".tres"), "armor is not a tres resource for %s" % armor.id)
+	_expect(copper_armor_set != null and copper_armor_set.id == &"copper_armor", "copper armor set ID mismatch")
+	if copper_armor_set != null:
+		_expect(copper_armor_set.resource_path.ends_with(".tres"), "copper armor set is not a tres resource")
+		_expect(copper_armor_set.full_set_modifiers.size() == 1, "copper full-set modifier missing")
+		if copper_armor_set.full_set_modifiers.size() == 1:
+			_expect(copper_armor_set.full_set_modifiers[0].stat_id == &"defense", "copper full-set stat mismatch")
+			_expect(is_equal_approx(copper_armor_set.full_set_modifiers[0].amount, FULL_SET_DEFENSE_BONUS), "copper full-set defense mismatch")
 
 	var selected_armor_inventory := InventoryModel.new(item_catalog)
 	selected_armor_inventory.setup_starter()
@@ -106,11 +120,14 @@ func _init() -> void:
 		_expect(source >= 0, "starter armor missing for slot %d" % armor_slot)
 		_expect(coordinator.try_equip_armor(source), "armor equip failed for slot %d" % armor_slot)
 		expected_defense += DEFENSE_VALUES[armor_slot]
+		if armor_slot == ArmorDefinition.SLOT_COUNT - 1:
+			expected_defense += FULL_SET_DEFENSE_BONUS
 		var equipped := inventory.get_slot(equipment_index)
 		_expect(equipped != null and equipped.item_id == ARMOR_IDS[armor_slot], "equipped item mismatch for slot %d" % armor_slot)
 		_expect(is_equal_approx(stats.get_value(&"defense"), expected_defense), "equipped defense mismatch for slot %d" % armor_slot)
 		_expect(not observed_defense.is_empty() and is_equal_approx(observed_defense.back(), expected_defense), "inventory observer saw stale defense for slot %d" % armor_slot)
 		_expect(stats.has_modifier(StringName("equipment_slot_%d_0" % armor_slot)), "equipment modifier ID missing for slot %d" % armor_slot)
+		_expect(stats.has_modifier(&"armor_set_0") == (armor_slot == ArmorDefinition.SLOT_COUNT - 1), "full-set modifier activation mismatch for slot %d" % armor_slot)
 		_expect(_inventory_change_count == changes_before + 1, "equip emitted the wrong change count for slot %d" % armor_slot)
 
 	var encoded := inventory.to_dict()
@@ -119,7 +136,8 @@ func _init() -> void:
 	var restored_stats := ActorStats.new(stats_definition)
 	var restored_coordinator := InventoryStatCoordinator.new()
 	_expect(restored_coordinator.setup(restored_inventory, restored_stats), "restored equipment coordinator setup failed")
-	_expect(is_equal_approx(restored_stats.get_value(&"defense"), 7.0), "restored armor defense mismatch")
+	_expect(is_equal_approx(restored_stats.get_value(&"defense"), 10.0), "restored armor defense mismatch")
+	_expect(restored_stats.has_modifier(&"armor_set_0"), "restored full-set modifier missing")
 
 	var restored_before_invalid := restored_inventory.to_dict()
 	var wrong_slot_save := encoded.duplicate(true)
@@ -134,10 +152,13 @@ func _init() -> void:
 	for armor_slot in range(ArmorDefinition.SLOT_COUNT):
 		var equipment_index := InventoryModel.get_equipment_index(armor_slot)
 		_expect(restored_coordinator.try_unequip_armor(equipment_index), "armor unequip failed for slot %d" % armor_slot)
+		if armor_slot == 0:
+			expected_defense -= FULL_SET_DEFENSE_BONUS
 		expected_defense -= DEFENSE_VALUES[armor_slot]
 		_expect(restored_inventory.get_slot(equipment_index) == null, "equipment slot not cleared for slot %d" % armor_slot)
 		_expect(_find_item(restored_inventory, ARMOR_IDS[armor_slot]) >= 0, "unequipped armor did not return to inventory for slot %d" % armor_slot)
 		_expect(is_equal_approx(restored_stats.get_value(&"defense"), expected_defense), "unequipped defense mismatch for slot %d" % armor_slot)
+		_expect(not restored_stats.has_modifier(&"armor_set_0"), "full-set modifier remained after slot %d was unequipped" % armor_slot)
 
 	var blocked := InventoryModel.new(item_catalog)
 	blocked.setup_starter()
@@ -156,9 +177,34 @@ func _init() -> void:
 	_expect(blocked.to_dict() == blocked_before, "failed unequip changed inventory")
 	_expect(is_equal_approx(blocked_stats.get_value(&"defense"), 1.0), "failed unequip removed armor defense")
 
-	var invalid_definitions: Array[ItemDefinition] = []
-	for source_definition in item_catalog.definitions:
-		invalid_definitions.append(source_definition.duplicate(true) as ItemDefinition)
+	var invalid_set_definitions := _duplicate_item_definitions(item_catalog)
+	var invalid_set_catalog := ItemCatalog.new()
+	invalid_set_catalog.definitions = invalid_set_definitions
+	var invalid_set := (invalid_set_catalog.get_definition(&"copper_helmet") as ArmorDefinition).armor_set.duplicate(true) as ArmorSetDefinition
+	for definition in invalid_set_catalog.definitions:
+		var armor := definition as ArmorDefinition
+		if armor != null and armor.armor_set != null and armor.armor_set.id == invalid_set.id:
+			armor.armor_set = invalid_set
+	var invalid_set_inventory := InventoryModel.new(invalid_set_catalog)
+	invalid_set_inventory.setup_starter()
+	var invalid_set_stats := ActorStats.new(stats_definition)
+	var invalid_set_coordinator := InventoryStatCoordinator.new()
+	_expect(invalid_set_coordinator.setup(invalid_set_inventory, invalid_set_stats), "valid duplicated armor set setup failed")
+	invalid_set.full_set_modifiers[0].stat_id = &"unknown_stat"
+	for armor_slot in range(ArmorDefinition.SLOT_COUNT - 1):
+		var source := _find_item(invalid_set_inventory, ARMOR_IDS[armor_slot])
+		_expect(invalid_set_coordinator.try_equip_armor(source), "partial invalid-set armor equip failed for slot %d" % armor_slot)
+	var invalid_set_source := _find_item(invalid_set_inventory, ARMOR_IDS.back())
+	var invalid_set_before := invalid_set_inventory.to_dict()
+	_invalid_signal_count = 0
+	invalid_set_inventory.inventory_changed.connect(_on_invalid_inventory_changed)
+	_expect(not invalid_set_coordinator.try_equip_armor(invalid_set_source), "invalid full-set modifiers equipped")
+	_expect(invalid_set_inventory.to_dict() == invalid_set_before, "invalid full-set modifier equip changed inventory")
+	_expect(is_equal_approx(invalid_set_stats.get_value(&"defense"), 6.0), "invalid full-set modifier equip changed stats")
+	_expect(not invalid_set_stats.has_modifier(&"armor_set_0"), "invalid full-set modifier was applied")
+	_expect(_invalid_signal_count == 0, "invalid full-set modifier equip emitted inventory change")
+
+	var invalid_definitions := _duplicate_item_definitions(item_catalog)
 	var invalid_catalog := ItemCatalog.new()
 	invalid_catalog.definitions = invalid_definitions
 	var invalid_inventory := InventoryModel.new(invalid_catalog)
@@ -214,6 +260,12 @@ func _find_item(inventory: InventoryModel, item_id: StringName) -> int:
 		if stack != null and stack.item_id == item_id:
 			return index
 	return -1
+
+func _duplicate_item_definitions(item_catalog: ItemCatalog) -> Array[ItemDefinition]:
+	var definitions: Array[ItemDefinition] = []
+	for source_definition in item_catalog.definitions:
+		definitions.append(source_definition.duplicate(true) as ItemDefinition)
+	return definitions
 
 func _on_inventory_changed() -> void:
 	_inventory_change_count += 1
