@@ -32,13 +32,8 @@ func tick(delta: float, _player_position: Vector3, separation_velocity: Vector3,
 	var desired_velocity := Vector3.ZERO
 	if brain.state != SheepBrain.State.IDLE:
 		desired_velocity = _get_path_velocity(delta, brain.get_movement_goal(), max_speed, navigation_search_budget)
-	desired_velocity += separation_velocity
-	var planar_velocity := Vector2(desired_velocity.x, desired_velocity.z)
-	if planar_velocity.length() > max_speed:
-		planar_velocity = planar_velocity.normalized() * max_speed
-		desired_velocity.x = planar_velocity.x
-		desired_velocity.z = planar_velocity.y
-	_advance_motion(delta, desired_velocity)
+	desired_velocity = limit_planar_velocity(desired_velocity + separation_velocity, max_speed)
+	advance_voxel_motion(delta, desired_velocity, _behavior.gravity)
 
 func record_melee_contact(world_hit_direction: Vector3):
 	assert(brain != null)
@@ -50,24 +45,4 @@ func _get_path_velocity(delta: float, goal: Vector3, speed: float, navigation_se
 	var result := _path_follower.advance(delta, global_position, goal, speed, on_ground, navigation_search_budget)
 	if result.path_failed:
 		brain.reject_movement_goal(global_position)
-	if result.should_jump:
-		velocity.y = _behavior.jump_velocity
-	if result.desired_velocity.is_zero_approx():
-		return Vector3.ZERO
-	var direction := result.desired_velocity.normalized()
-	var target_yaw := atan2(direction.x, direction.z)
-	model_root.rotation.y = lerp_angle(model_root.rotation.y, target_yaw, minf(delta * 8.0, 1.0))
-	return result.desired_velocity
-
-func _advance_motion(delta: float, desired_velocity: Vector3):
-	velocity.x = desired_velocity.x
-	velocity.z = desired_velocity.z
-	if not on_ground:
-		velocity.y -= _behavior.gravity * delta
-	var result := VoxelBodySolver.sweep(voxel_world, global_position, velocity, velocity * delta, definition.body_width, definition.body_height)
-	global_position = result.position
-	velocity = result.velocity
-	var ground_y := VoxelBodySolver.get_ground_y(voxel_world, global_position, definition.body_width)
-	on_ground = velocity.y <= 0.0 and ground_y != VoxelWorld.NO_SURFACE_Y and absf(ground_y - global_position.y) < 0.12
-	if on_ground:
-		velocity.y = 0.0
+	return apply_path_follow_result(result, delta, _behavior.jump_velocity)

@@ -10,7 +10,6 @@ var _body_height: float
 var _repath_seconds: float
 var _path: Array[Vector3i] = []
 var _path_index: int = 0
-var _path_goal: Vector3i = Vector3i.ZERO
 var _repath_remaining: float = 0.0
 
 func _init(p_voxel_world: VoxelWorld, p_body_width: float, p_body_height: float, p_repath_seconds: float):
@@ -50,7 +49,6 @@ func request_repath():
 	_repath_remaining = 0.0
 
 func _rebuild_path(position: Vector3, goal_cell: Vector3i) -> bool:
-	_path_goal = goal_cell
 	_repath_remaining = _repath_seconds
 	var start_cell := _resolve_feet_cell(position)
 	var result := VoxelPathfinder.find_path(_voxel_world, start_cell, goal_cell, _body_width, _body_height, MAX_SEARCH_RADIUS, MAX_SEARCH_NODES)

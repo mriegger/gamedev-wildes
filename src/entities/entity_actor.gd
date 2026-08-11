@@ -81,6 +81,38 @@ func record_melee_contact(world_hit_direction: Vector3):
 	var model_basis := model_root.global_transform.basis.orthonormalized()
 	play_hit(model_basis.inverse() * world_hit_direction)
 
+func apply_path_follow_result(result: VoxelPathFollowResult, delta: float, jump_velocity: float) -> Vector3:
+	if result.should_jump:
+		velocity.y = jump_velocity
+	if result.desired_velocity.is_zero_approx():
+		return Vector3.ZERO
+	var direction := result.desired_velocity.normalized()
+	var target_yaw := atan2(direction.x, direction.z)
+	model_root.rotation.y = lerp_angle(model_root.rotation.y, target_yaw, minf(delta * 8.0, 1.0))
+	return result.desired_velocity
+
+func limit_planar_velocity(desired_velocity: Vector3, speed_limit: float) -> Vector3:
+	var planar_velocity := Vector2(desired_velocity.x, desired_velocity.z)
+	if planar_velocity.length() <= speed_limit:
+		return desired_velocity
+	planar_velocity = planar_velocity.normalized() * speed_limit
+	desired_velocity.x = planar_velocity.x
+	desired_velocity.z = planar_velocity.y
+	return desired_velocity
+
+func advance_voxel_motion(delta: float, desired_velocity: Vector3, gravity: float):
+	velocity.x = desired_velocity.x
+	velocity.z = desired_velocity.z
+	if not on_ground:
+		velocity.y -= gravity * delta
+	var result := VoxelBodySolver.sweep(voxel_world, global_position, velocity, velocity * delta, definition.body_width, definition.body_height)
+	global_position = result.position
+	velocity = result.velocity
+	var ground_y := VoxelBodySolver.get_ground_y(voxel_world, global_position, definition.body_width)
+	on_ground = velocity.y <= 0.0 and ground_y != VoxelWorld.NO_SURFACE_Y and absf(ground_y - global_position.y) < 0.12
+	if on_ground:
+		velocity.y = 0.0
+
 func get_world_bounds() -> AABB:
 	assert(definition != null)
 	var half_width := definition.body_width * 0.5

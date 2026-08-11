@@ -141,7 +141,7 @@ func _test_blocked_motion_keeps_repath_cadence() -> void:
 	actor.global_position = Vector3(0.5, float(FEET_Y), 0.5)
 	actor.setup(20, definition, world, 19)
 	actor._path_follower._repath_remaining = 0.3
-	actor._advance_motion(0.5, Vector3(2.0, 0.0, 0.0))
+	actor.advance_voxel_motion(0.5, Vector3(2.0, 0.0, 0.0), actor._behavior.gravity)
 	_expect(is_zero_approx(actor.velocity.x), "blocked-motion test did not collide with its wall")
 	_expect(is_equal_approx(actor._path_follower._repath_remaining, 0.3), "blocked motion forced an immediate repath")
 	actor.free()
