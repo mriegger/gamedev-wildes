@@ -116,7 +116,7 @@ func _setup_gameplay():
 	var mining_particle_tints := MiningParticleTintPalette.new(block_catalog)
 	mining_break_particles.setup(world.voxel_model, mining_particle_tints)
 	mining_hit_particles.setup(player.animation_driver, player.interactor, mining_particle_tints)
-	camera_rig.reset_right_obstruction()
+	camera_rig.reset_panel_obstruction()
 
 	game_environment.sky_color_changed.connect(world.update_water_tint)
 	game_environment.start_clock()
@@ -254,7 +254,7 @@ func _save_and_request_main_menu():
 		_pause_menu.queue_free()
 	_pause_menu = null
 	hud.close_side_panel_immediate()
-	camera_rig.reset_right_obstruction()
+	camera_rig.reset_panel_obstruction()
 	game_session.shutdown("quit_to_menu")
 	melee_combat.shutdown()
 	entity_coordinator.shutdown()

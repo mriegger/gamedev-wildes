@@ -19,25 +19,33 @@ var target_position: Vector3 = Vector3(100, 0, 100)
 var _follow_target: Node3D = null
 var _input_buffer: InputBuffer = null
 
-var _right_obstruction_progress: float = 0.0
-var _right_obstruction_width: float = 380.0
+var _left_panel_progress: float = 0.0
+var _right_panel_progress: float = 0.0
+var _left_panel_width: float = 0.0
+var _right_panel_width: float = 380.0
 
-func set_right_obstruction_progress(progress: float):
-	_right_obstruction_progress = clamp(progress, 0.0, 1.0)
-	_update_right_obstruction_offset()
+func set_left_panel_obstruction_progress(progress: float):
+	_left_panel_progress = clamp(progress, 0.0, 1.0)
+	_update_panel_obstruction_offset()
 
-func set_right_obstruction_width(width_px: float):
-	_right_obstruction_width = width_px
-	_update_right_obstruction_offset()
+func set_right_panel_obstruction_progress(progress: float):
+	_right_panel_progress = clamp(progress, 0.0, 1.0)
+	_update_panel_obstruction_offset()
 
-func reset_right_obstruction():
-	_right_obstruction_progress = 0.0
-	_update_right_obstruction_offset()
+func set_panel_obstruction_widths(left_width: float, right_width: float):
+	_left_panel_width = maxf(0.0, left_width)
+	_right_panel_width = maxf(0.0, right_width)
+	_update_panel_obstruction_offset()
 
-func _update_right_obstruction_offset():
+func reset_panel_obstruction():
+	_left_panel_progress = 0.0
+	_right_panel_progress = 0.0
+	_update_panel_obstruction_offset()
+
+func _update_panel_obstruction_offset():
 	if camera == null:
 		return
-	if _right_obstruction_progress == 0.0 and camera.h_offset == 0.0:
+	if _left_panel_progress == 0.0 and _right_panel_progress == 0.0 and camera.h_offset == 0.0:
 		return
 	var viewport_size = Vector2(1280, 720)
 	var vp = get_viewport()
@@ -46,7 +54,7 @@ func _update_right_obstruction_offset():
 		if rect.size.y > 1.0:
 			viewport_size = rect.size
 	var world_per_px = camera.size / viewport_size.y if viewport_size.y > 0 else 0.0
-	var pixel_shift = _right_obstruction_width * _right_obstruction_progress * 0.5
+	var pixel_shift = (_right_panel_width * _right_panel_progress - _left_panel_width * _left_panel_progress) * 0.5
 	var world_shift = pixel_shift * world_per_px
 	camera.h_offset = world_shift
 	camera.v_offset = 0.0
@@ -77,7 +85,7 @@ func _ready():
 		camera.near = 0.1
 		camera.far = 1000.0
 		camera.current = true
-	get_viewport().size_changed.connect(_update_right_obstruction_offset)
+	get_viewport().size_changed.connect(_update_panel_obstruction_offset)
 
 func _unhandled_input(event):
 	if event is InputEventMouseButton and event.pressed:
@@ -123,7 +131,7 @@ func _zoom(amount: float):
 	if camera == null:
 		return
 	camera.size = clamp(camera.size + amount, min_ortho_size, max_ortho_size)
-	_update_right_obstruction_offset()
+	_update_panel_obstruction_offset()
 
 func _lerp_angle_deg(from_deg: float, to_deg: float, weight: float) -> float:
 	var from_rad = deg_to_rad(from_deg)

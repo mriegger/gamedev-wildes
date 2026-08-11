@@ -60,12 +60,12 @@ func _ready():
 	_update_hotbar_position(_progress)
 	set_process(false)
 
-func setup(inv: InventoryModel, inventory_stat_coordinator: InventoryStatCoordinator, cam_rig: CameraRig, hb: Hotbar):
+func setup(inv: InventoryModel, inventory_stat_coordinator: InventoryStatCoordinator, cam_rig: CameraRig, hb: Hotbar, left_panel_width: float):
 	inventory_model = inv
 	camera_rig = cam_rig
 	hotbar = hb
 	if camera_rig:
-		camera_rig.set_right_obstruction_width(PANEL_WIDTH)
+		camera_rig.set_panel_obstruction_widths(left_panel_width, PANEL_WIDTH)
 	for id in _slot_groups.keys():
 		for slot in _slot_groups[id] as Array:
 			slot.set_inventory(inv)
@@ -216,7 +216,7 @@ func _apply_fade(progress: float):
 
 func _update_camera():
 	if camera_rig:
-		camera_rig.set_right_obstruction_progress(_progress)
+		camera_rig.set_right_panel_obstruction_progress(_progress)
 
 func _update_hotbar_position(progress: float):
 	if hotbar == null:

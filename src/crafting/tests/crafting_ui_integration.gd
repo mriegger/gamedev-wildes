@@ -9,6 +9,7 @@ var _crafting: CraftingCoordinator
 var _inventory_stats: InventoryStatCoordinator
 var _stats: ActorStats
 var _recipe_catalog: CraftingRecipeCatalog
+var _camera_rig: CameraRig
 
 func _init() -> void:
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
@@ -24,11 +25,13 @@ func _init() -> void:
 	var packed := load("res://ui/hud/hud.tscn") as PackedScene
 	_hud = packed.instantiate() as HUD
 	root.add_child(_hud)
+	_camera_rig = (load("res://player/camera/camera_rig.tscn") as PackedScene).instantiate() as CameraRig
+	root.add_child(_camera_rig)
 
 func _process(_delta: float) -> bool:
 	_frame += 1
 	if _phase == 0 and _frame == 2:
-		_hud.setup_with_camera(_inventory, _inventory_stats, _crafting, _recipe_catalog, null, _stats)
+		_hud.setup_with_camera(_inventory, _inventory_stats, _crafting, _recipe_catalog, _camera_rig, _stats)
 		_hud.toggle_backpack()
 		_phase = 1
 	elif _phase == 1 and _frame == 35:
@@ -36,6 +39,7 @@ func _process(_delta: float) -> bool:
 		_expect(not _hud.crafting_panel.is_open(), "P behavior unexpectedly opened crafting")
 		_expect(_hud.side_panel.get_progress() > 0.95, "backpack-only opening animation did not complete")
 		_expect(_hud.crafting_panel.get_progress() < 0.01, "crafting panel appeared in backpack-only view")
+		_expect(_camera_rig.camera.h_offset > 0.0, "camera did not account for the backpack-only right panel")
 		_expect(_action_uses_key("toggle_backpack", KEY_P), "toggle_backpack was not mapped to P")
 		_expect(_action_uses_key("toggle_crafting", KEY_TAB), "toggle_crafting was not mapped to Tab")
 		_hud.toggle_crafting()
@@ -80,6 +84,7 @@ func _process(_delta: float) -> bool:
 		_expect(_inventory.get_backpack_item_count(&"stone_block") == 7, "closing backpack consumed stone")
 		_expect(_inventory.get_backpack_item_count(&"log_block") == 3, "closing backpack consumed wood")
 		_hud.free()
+		_camera_rig.free()
 		_phase = 7
 	elif _phase == 7 and _frame == 88:
 		_finish()
@@ -91,11 +96,18 @@ func _check_open_state() -> void:
 	_expect(_hud.crafting_panel.get_progress() > 0.95, "crafting panel opening animation did not complete")
 	_expect(_hud.crafting_panel.get_selected_recipe_id() == &"copper_pickaxe", "first recipe was not selected")
 	_expect(_hud.crafting_panel.get_craft_button().is_craft_enabled(), "selected craft button was disabled")
+	_expect(_camera_rig.camera.h_offset < 0.0, "camera framing did not account for the wider left panel")
 	var recipe_scroll := _hud.crafting_panel.get_node("Margin/Content/Body/Recipes/RecipeScroll") as ScrollContainer
 	var recipe_list := _hud.crafting_panel.get_node("Margin/Content/Body/Recipes/RecipeScroll/RecipeList") as VBoxContainer
 	_expect(recipe_scroll != null and recipe_list.get_child_count() == 7, "scrollable recipe list did not contain seven recipes")
 	var ingredient_list := _hud.crafting_panel.get_node("Margin/Content/Body/Details/IngredientList") as VBoxContainer
 	_expect(ingredient_list.get_child_count() == 2, "selected recipe ingredients were not displayed")
+	var crafting_rect := _hud.crafting_panel.get_global_rect()
+	var backpack_rect := _hud.side_panel.get_global_rect()
+	for slot in _hud.hotbar.slot_nodes:
+		var slot_rect := (slot as HotbarSlot).get_global_rect()
+		_expect(not crafting_rect.intersects(slot_rect), "crafting panel covered hotbar slot %d" % (slot as HotbarSlot).slot_index)
+		_expect(not backpack_rect.intersects(slot_rect), "backpack covered hotbar slot %d" % (slot as HotbarSlot).slot_index)
 
 func _finish() -> void:
 	if _errors.is_empty():

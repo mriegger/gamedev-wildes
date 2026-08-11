@@ -3,6 +3,7 @@ class_name CraftingPanel
 
 const PANEL_WIDTH: float = 520.0
 const ANIM_DURATION: float = 0.25
+const HOTBAR_CLEARANCE: float = 112.0
 
 @onready var _background: Panel = $Background as Panel
 @onready var _content: Control = $Margin/Content as Control
@@ -15,6 +16,7 @@ const ANIM_DURATION: float = 0.25
 
 var crafting_coordinator: CraftingCoordinator
 var recipe_catalog: CraftingRecipeCatalog
+var camera_rig: CameraRig
 
 var _recipe_buttons: Dictionary = {}
 var _selected_recipe_id: StringName = &""
@@ -31,15 +33,17 @@ func _ready() -> void:
 	_apply_state()
 	set_process(false)
 
-func setup(p_crafting_coordinator: CraftingCoordinator, p_recipe_catalog: CraftingRecipeCatalog) -> void:
+func setup(p_crafting_coordinator: CraftingCoordinator, p_recipe_catalog: CraftingRecipeCatalog, p_camera_rig: CameraRig = null) -> void:
 	assert(p_crafting_coordinator != null)
 	assert(p_recipe_catalog != null)
 	crafting_coordinator = p_crafting_coordinator
 	recipe_catalog = p_recipe_catalog
+	camera_rig = p_camera_rig
 	crafting_coordinator.state_changed.connect(_on_crafting_state_changed)
 	_build_recipe_list()
 	if not recipe_catalog.definitions.is_empty():
 		_select_recipe(recipe_catalog.definitions[0].id)
+	_update_camera()
 
 func open() -> void:
 	_is_open = true
@@ -184,14 +188,20 @@ func _update_size() -> void:
 	var viewport := get_viewport()
 	if viewport != null and viewport.get_visible_rect().size.x > 10.0:
 		viewport_size = viewport.get_visible_rect().size
-	custom_minimum_size = Vector2(PANEL_WIDTH, viewport_size.y)
-	size = Vector2(PANEL_WIDTH, viewport_size.y)
+	var panel_height := maxf(0.0, viewport_size.y - HOTBAR_CLEARANCE)
+	custom_minimum_size = Vector2(PANEL_WIDTH, panel_height)
+	size = Vector2(PANEL_WIDTH, panel_height)
 
 func _apply_state() -> void:
 	position = Vector2(-PANEL_WIDTH * (1.0 - _progress), 0.0)
 	mouse_filter = Control.MOUSE_FILTER_STOP if _progress > 0.01 else Control.MOUSE_FILTER_IGNORE
 	_content.modulate = Color(1, 1, 1, _progress)
 	WildesStyle.set_frosted_fade(_background, _progress)
+	_update_camera()
+
+func _update_camera() -> void:
+	if camera_rig != null:
+		camera_rig.set_left_panel_obstruction_progress(_progress)
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_RESIZED and is_node_ready():
