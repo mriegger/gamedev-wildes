@@ -42,7 +42,7 @@ func _run():
 		_expect(emitter.gravity.is_equal_approx(Vector3(0, -1.5, 0)), "%s gravity was %s" % [child.name, emitter.gravity])
 		_expect(is_equal_approx(emitter.initial_velocity_min, 1.1), "%s minimum velocity changed" % child.name)
 		_expect(is_equal_approx(emitter.initial_velocity_max, 1.5), "%s maximum velocity changed" % child.name)
-		_expect(emitter.color_ramp.get_color(0).is_equal_approx(Color(0.478431, 0.294118, 0.164706, 1)), "%s brown tint changed" % child.name)
+		_expect(emitter.color_ramp.get_color(0).is_equal_approx(Color.WHITE), "%s fade ramp changed" % child.name)
 		_expect(emitter.mesh != null, "%s mesh missing" % child.name)
 		_expect((emitter.mesh as QuadMesh).size.is_equal_approx(Vector2(1.5, 1.5)), "%s size changed" % child.name)
 		var material := emitter.mesh.surface_get_material(0) as StandardMaterial3D
@@ -50,7 +50,8 @@ func _run():
 
 	var block_catalog := load("res://blocks/block_catalog.tres") as BlockCatalog
 	var voxel_world := VoxelWorld.new(20, 36, 5, 100.0, block_catalog)
-	particles.setup(voxel_world)
+	var tint_palette := MiningParticleTintPalette.new(block_catalog)
+	particles.setup(voxel_world, tint_palette)
 	var placement := voxel_world.try_place_block(Vector3i(1, 8, 3), BlockId.Type.DIRT)
 	_expect(placement.is_success(), "test placement failed")
 	for child in emitters:
@@ -64,6 +65,7 @@ func _run():
 	var first := particles.get_node("Dirt01") as CPUParticles3D
 	_expect(first.emitting, "first emitter did not play")
 	_expect(first.global_position.is_equal_approx(Vector3(4.5, 5.5, 4.5)), "removal position was %s" % first.global_position)
+	_expect(first.color.is_equal_approx(tint_palette.get_tint(BlockId.Type.GRASS)), "terrain removal tint was %s" % first.color)
 	_expect(not (particles.get_node("Dirt02") as CPUParticles3D).emitting, "terrain removal spawned more than one particle")
 	_expect(not (particles.get_node("Dirt03") as CPUParticles3D).emitting, "terrain removal spawned more than one particle")
 

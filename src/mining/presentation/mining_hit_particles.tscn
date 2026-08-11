@@ -1,0 +1,76 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://mining/presentation/mining_hit_particles.gd" id="1_script"]
+
+[sub_resource type="Gradient" id="Gradient_fade"]
+offsets = PackedFloat32Array(0, 0.7, 1)
+colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0)
+
+[sub_resource type="StandardMaterial3D" id="Material_dirt"]
+transparency = 1
+shading_mode = 0
+vertex_color_use_as_albedo = true
+
+[sub_resource type="BoxMesh" id="Mesh_dirt"]
+material = SubResource("Material_dirt")
+size = Vector3(0.08, 0.08, 0.08)
+
+[node name="MiningHitParticles" type="Node3D"]
+script = ExtResource("1_script")
+
+[node name="Burst01" type="CPUParticles3D" parent="."]
+emitting = false
+amount = 8
+lifetime = 0.28
+one_shot = true
+explosiveness = 1.0
+local_coords = false
+direction = Vector3(0, 1, 0)
+spread = 45.0
+gravity = Vector3(0, -3, 0)
+initial_velocity_min = 0.8
+initial_velocity_max = 1.4
+angular_velocity_min = -360.0
+angular_velocity_max = 360.0
+scale_amount_min = 0.65
+scale_amount_max = 1.15
+color_ramp = SubResource("Gradient_fade")
+mesh = SubResource("Mesh_dirt")
+
+[node name="Burst02" type="CPUParticles3D" parent="."]
+emitting = false
+amount = 8
+lifetime = 0.28
+one_shot = true
+explosiveness = 1.0
+local_coords = false
+direction = Vector3(0, 1, 0)
+spread = 45.0
+gravity = Vector3(0, -3, 0)
+initial_velocity_min = 0.8
+initial_velocity_max = 1.4
+angular_velocity_min = -360.0
+angular_velocity_max = 360.0
+scale_amount_min = 0.65
+scale_amount_max = 1.15
+color_ramp = SubResource("Gradient_fade")
+mesh = SubResource("Mesh_dirt")
+
+[node name="Burst03" type="CPUParticles3D" parent="."]
+emitting = false
+amount = 8
+lifetime = 0.28
+one_shot = true
+explosiveness = 1.0
+local_coords = false
+direction = Vector3(0, 1, 0)
+spread = 45.0
+gravity = Vector3(0, -3, 0)
+initial_velocity_min = 0.8
+initial_velocity_max = 1.4
+angular_velocity_min = -360.0
+angular_velocity_max = 360.0
+scale_amount_min = 0.65
+scale_amount_max = 1.15
+color_ramp = SubResource("Gradient_fade")
+mesh = SubResource("Mesh_dirt")

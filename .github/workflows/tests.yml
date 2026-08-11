@@ -160,6 +160,11 @@ jobs:
           bash .github/scripts/run_godot_check.sh \
             30 "MINING_BREAK_PARTICLES PASS" /tmp/mining_break_particles.log -- \
             godot --headless --path src --script res://mining/tests/mining_break_particles_integration.gd
+      - name: Run mining hit particle integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "MINING_HIT_PARTICLES PASS" /tmp/mining_hit_particles.log -- \
+            godot --headless --path src --script res://mining/tests/mining_hit_particles_integration.gd
 
   soak-world-streaming:
     runs-on: ubuntu-latest

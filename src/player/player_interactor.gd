@@ -303,6 +303,21 @@ func get_mine_duration() -> float:
 	var block_id := voxel_world.get_block_id_at(mine_target)
 	return mine_action.get_mine_duration(voxel_world.block_catalog.get_definition(block_id))
 
+func has_mining_impact_target() -> bool:
+	return is_mining and target_has and can_mine_target and mine_target == target_block
+
+func get_mining_impact_position() -> Vector3:
+	assert(has_mining_impact_target())
+	return Vector3(mine_target) + Vector3(0.5, 0.5, 0.5) + Vector3(last_ray_normal) * 0.56
+
+func get_mining_impact_normal() -> Vector3i:
+	assert(has_mining_impact_target())
+	return last_ray_normal
+
+func get_mining_impact_block_id() -> int:
+	assert(has_mining_impact_target())
+	return voxel_world.get_block_id_at(mine_target)
+
 func _can_place(action: BlockPlacementActionDefinition) -> bool:
 	if not placement_has or not can_place_target:
 		return false

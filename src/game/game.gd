@@ -17,6 +17,7 @@ signal main_menu_requested
 @onready var hud: HUD = $HUD as HUD
 @onready var game_session: GameSession = $GameSession as GameSession
 @onready var mining_break_particles: MiningBreakParticles = $MiningBreakParticles as MiningBreakParticles
+@onready var mining_hit_particles: MiningHitParticles = $MiningHitParticles as MiningHitParticles
 @onready var _save_canvas: CanvasLayer = $SaveStatusLayer as CanvasLayer
 @onready var _save_label: Label = $SaveStatusLayer/SaveStatusLabel as Label
 
@@ -82,7 +83,9 @@ func _restore_inventory():
 func _setup_gameplay():
 	camera_rig.setup(player, input_buffer)
 	player.setup(world, camera_rig, inventory_model, input_buffer)
-	mining_break_particles.setup(world.voxel_model)
+	var mining_particle_tints := MiningParticleTintPalette.new(block_catalog)
+	mining_break_particles.setup(world.voxel_model, mining_particle_tints)
+	mining_hit_particles.setup(player.animation_driver, player.interactor, mining_particle_tints)
 	camera_rig.reset_right_obstruction()
 
 	game_environment.sky_color_changed.connect(world.update_water_tint)
