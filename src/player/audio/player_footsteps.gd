@@ -6,9 +6,11 @@ class_name PlayerFootsteps
 var _motor: PlayerMotor
 var _profile: BlockyHumanoidAnimationProfile
 var _step_timer: float = 0.0
-var _last_idx: int = -1
+var _last_stream: AudioStream
+var _water_state_initialized: bool = false
+var _was_in_water: bool = false
 
-var _streams: Array[AudioStream] = [
+var _dirt_streams: Array[AudioStream] = [
 	preload("res://assets/audio/footsteps/dirt/Footstep_Dirt_01.wav"),
 	preload("res://assets/audio/footsteps/dirt/Footstep_Dirt_02.wav"),
 	preload("res://assets/audio/footsteps/dirt/Footstep_Dirt_03.wav"),
@@ -20,19 +22,41 @@ var _streams: Array[AudioStream] = [
 	preload("res://assets/audio/footsteps/dirt/Footstep_Dirt_09.wav"),
 ]
 
+var _water_streams: Array[AudioStream] = [
+	preload("res://assets/audio/footsteps/water/Footstep_Water_00.wav"),
+	preload("res://assets/audio/footsteps/water/Footstep_Water_01.wav"),
+	preload("res://assets/audio/footsteps/water/Footstep_Water_02.wav"),
+	preload("res://assets/audio/footsteps/water/Footstep_Water_03.wav"),
+	preload("res://assets/audio/footsteps/water/Footstep_Water_04.wav"),
+	preload("res://assets/audio/footsteps/water/Footstep_Water_05.wav"),
+	preload("res://assets/audio/footsteps/water/Footstep_Water_06.wav"),
+	preload("res://assets/audio/footsteps/water/Footstep_Water_07.wav"),
+]
+
 const MIN_PLANAR_SPEED: float = 0.2
 
 
 func setup(p_motor: PlayerMotor, p_profile: BlockyHumanoidAnimationProfile):
 	_motor = p_motor
 	_profile = p_profile
-	if _player.stream == null and _streams.size() > 0:
-		_player.stream = _streams[0]
+	_water_state_initialized = false
+	if _player.stream == null and not _dirt_streams.is_empty():
+		_player.stream = _dirt_streams[0]
 
 
 func _process(delta: float):
 	if _motor == null:
 		return
+	var is_in_water := _motor.is_in_water()
+	if not _water_state_initialized:
+		_water_state_initialized = true
+		_was_in_water = is_in_water
+	elif is_in_water != _was_in_water:
+		_was_in_water = is_in_water
+		if is_in_water:
+			_step_timer = 0.0
+			_play_random_stream(_water_streams)
+			return
 	if not _motor.on_ground:
 		_step_timer = 0.0
 		return
@@ -49,14 +73,20 @@ func _process(delta: float):
 
 
 func _play_step():
-	if _streams.is_empty():
+	var streams := _water_streams if _motor.is_in_water() else _dirt_streams
+	_play_random_stream(streams)
+
+
+func _play_random_stream(streams: Array[AudioStream]):
+	if streams.is_empty():
 		return
-	var idx = randi_range(0, _streams.size() - 1)
-	if _streams.size() > 1:
-		while idx == _last_idx:
-			idx = randi_range(0, _streams.size() - 1)
-		_last_idx = idx
-	_player.stream = _streams[idx]
+	var idx := randi_range(0, streams.size() - 1)
+	if streams.size() > 1:
+		while streams[idx] == _last_stream:
+			idx = randi_range(0, streams.size() - 1)
+	_last_stream = streams[idx]
+	_player.stop()
+	_player.stream = _last_stream
 	_player.pitch_scale = randf_range(0.92, 1.08)
 	_player.play()
 
@@ -64,7 +94,11 @@ func _play_step():
 func _exit_tree():
 	_motor = null
 	_profile = null
-	_streams.clear()
+	_last_stream = null
+	_water_state_initialized = false
+	_was_in_water = false
+	_dirt_streams.clear()
+	_water_streams.clear()
 	if _player:
 		_player.stream = null
 		_player.stop()

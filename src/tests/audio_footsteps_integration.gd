@@ -40,25 +40,57 @@ func _run():
 	_expect(asp != null, "FootstepPlayer missing")
 	_expect(asp.bus == &"SFX", "footstep bus not SFX is %s" % asp.bus)
 	_expect(abs(asp.volume_db - (-8.0)) < 0.1, "footstep volume not -8dB got %f" % asp.volume_db)
-	_expect(footsteps._streams.size() == 9, "footstep streams expected 9 got %d" % footsteps._streams.size())
-	for s in footsteps._streams:
-		_expect(s != null, "null stream in footsteps")
+	_expect(footsteps._dirt_streams.size() == 9, "dirt footstep streams expected 9 got %d" % footsteps._dirt_streams.size())
+	_expect(footsteps._water_streams.size() == 8, "water footstep streams expected 8 got %d" % footsteps._water_streams.size())
+	for stream in footsteps._dirt_streams + footsteps._water_streams:
+		_expect(stream != null, "null stream in footsteps")
 
 	var profile = player.animation_driver.animator.profile
 	footsteps.setup(player, profile)
 	await process_frame
 	_expect(asp.stream != null, "setup didn't assign stream")
 
-	var last = -1
+	var last_stream: AudioStream
 	var repeated = false
 	for i in range(30):
-		footsteps._last_idx = last
 		footsteps._play_step()
-		if footsteps._last_idx == last and footsteps._streams.size() > 1 and last != -1:
+		if asp.stream == last_stream and last_stream != null:
 			repeated = true
 		_expect(asp.pitch_scale >= 0.92 and asp.pitch_scale <= 1.08, "footstep pitch out of range %f" % asp.pitch_scale)
-		last = footsteps._last_idx
+		last_stream = asp.stream
 	_expect(not repeated, "footstep repeated same idx immediate")
+
+	var block_catalog := load("res://blocks/block_catalog.tres") as BlockCatalog
+	var voxel_world := VoxelWorld.new(16, 32, 5, 8.0, block_catalog)
+	var water_cell := Vector3i(0, 1, 0)
+	voxel_world.restore_block_edits({water_cell: BlockId.Type.WATER}, {})
+	player.voxel_world = voxel_world
+	player.global_position = Vector3(0.5, 1.0, 0.5)
+	_expect(player.is_in_water(), "player did not detect water at feet")
+	footsteps._play_step()
+	_expect(footsteps._water_streams.has(asp.stream), "water did not select a water footstep")
+	player.global_position = Vector3(1.5, 1.0, 0.5)
+	_expect(not player.is_in_water(), "player detected water in a dry feet cell")
+	footsteps._play_step()
+	_expect(footsteps._dirt_streams.has(asp.stream), "dry ground did not select a dirt footstep")
+
+	player.on_ground = false
+	player.velocity = Vector3(0.0, -4.0, 0.0)
+	footsteps._step_timer = 0.32
+	asp.stop()
+	player.global_position = Vector3(0.5, 1.0, 0.5)
+	footsteps._process(0.1)
+	_expect(asp.playing, "entering water did not play a splash")
+	_expect(footsteps._water_streams.has(asp.stream), "water entry splash did not use a water footstep")
+	_expect(is_equal_approx(footsteps._step_timer, 0.0), "water entry splash did not reset the footstep timer")
+	asp.stop()
+	footsteps._process(0.1)
+	_expect(not asp.playing, "remaining in water replayed the entry splash")
+	player.global_position = Vector3(1.5, 1.0, 0.5)
+	footsteps._process(0.1)
+	player.global_position = Vector3(0.5, 1.0, 0.5)
+	footsteps._process(0.1)
+	_expect(asp.playing, "re-entering water did not play another splash")
 
 	player.on_ground = false
 	player.velocity = Vector3(5.5, 0, 0)
@@ -97,6 +129,9 @@ func _run():
 	footsteps._process(0.1)
 	_expect(_count_nodes(root) == before_count, "footstep _process leaked nodes")
 
+	player.voxel_world = null
+	voxel_world = null
+	block_catalog = null
 	player.queue_free()
 	for _frame_index in range(10):
 		await process_frame

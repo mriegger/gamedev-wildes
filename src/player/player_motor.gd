@@ -52,6 +52,16 @@ func _physics_process(delta):
 		return
 	_handle_movement(delta)
 
+func is_in_water() -> bool:
+	if voxel_world == null:
+		return false
+	var feet_cell := Vector3i(
+		floori(global_position.x),
+		floori(global_position.y + 0.05),
+		floori(global_position.z)
+	)
+	return voxel_world.get_block_id_at(feet_cell) == BlockId.Type.WATER
+
 func _handle_movement(delta):
 	if not on_ground:
 		velocity.y -= gravity * delta
