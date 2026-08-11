@@ -166,6 +166,76 @@ func ensure_backpack_item(item_id: StringName) -> bool:
 			return true
 	return false
 
+func get_backpack_item_count(item_id: StringName) -> int:
+	if not item_catalog.has_definition(item_id):
+		return 0
+	var total := 0
+	for index in range(HOTBAR_SIZE, min(size, FILLABLE_SIZE)):
+		var stack := slots[index]
+		if stack != null and stack.item_id == item_id:
+			total += stack.count
+	return total
+
+func can_exchange_backpack_items(consumed: Dictionary[StringName, int], granted: Dictionary[StringName, int]) -> bool:
+	return not _simulate_backpack_exchange(consumed, granted).is_empty()
+
+func exchange_backpack_items(consumed: Dictionary[StringName, int], granted: Dictionary[StringName, int]) -> bool:
+	var simulated := _simulate_backpack_exchange(consumed, granted)
+	if simulated.is_empty():
+		return false
+	slots = simulated
+	inventory_changed.emit()
+	return true
+
+func _simulate_backpack_exchange(consumed: Dictionary[StringName, int], granted: Dictionary[StringName, int]) -> Array[InventoryStack]:
+	if consumed.is_empty() or granted.is_empty():
+		return []
+	var simulated := _copy_slots()
+	var backpack_end: int = mini(size, FILLABLE_SIZE)
+	for item_id in consumed:
+		var remaining: int = consumed[item_id]
+		if remaining < 1 or not item_catalog.has_definition(item_id):
+			return []
+		for index in range(HOTBAR_SIZE, backpack_end):
+			var stack := simulated[index]
+			if stack == null or stack.item_id != item_id:
+				continue
+			var removed: int = mini(stack.count, remaining)
+			stack.count -= removed
+			remaining -= removed
+			if stack.count == 0:
+				simulated[index] = null
+			if remaining == 0:
+				break
+		if remaining > 0:
+			return []
+	for item_id in granted:
+		var remaining: int = granted[item_id]
+		if remaining < 1 or not item_catalog.has_definition(item_id):
+			return []
+		var max_stack: int = item_catalog.get_definition(item_id).max_stack
+		for index in range(HOTBAR_SIZE, backpack_end):
+			var stack := simulated[index]
+			if stack == null or stack.item_id != item_id or stack.count >= max_stack:
+				continue
+			var added: int = mini(remaining, max_stack - stack.count)
+			stack.count += added
+			remaining -= added
+			if remaining == 0:
+				break
+		while remaining > 0:
+			var empty_index: int = -1
+			for index in range(HOTBAR_SIZE, backpack_end):
+				if simulated[index] == null:
+					empty_index = index
+					break
+			if empty_index == -1:
+				return []
+			var stack_count: int = mini(remaining, max_stack)
+			simulated[empty_index] = InventoryStack.new(item_id, stack_count)
+			remaining -= stack_count
+	return simulated
+
 func _copy_slots() -> Array[InventoryStack]:
 	var copied: Array[InventoryStack] = []
 	copied.resize(size)

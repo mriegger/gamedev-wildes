@@ -42,6 +42,7 @@ local_transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.25, 0)
 [resource]
 script = ExtResource("1_armor")
 id = &"copper_chest_plate"
+display_name = "Copper Chest Plate"
 icon = ExtResource("2_icon")
 max_stack = 1
 stat_modifier_activation = 1

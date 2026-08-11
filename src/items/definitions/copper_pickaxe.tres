@@ -8,6 +8,7 @@
 [resource]
 script = ExtResource("1_definition")
 id = &"copper_pickaxe"
+display_name = "Copper Pickaxe"
 icon = ExtResource("2_icon")
 max_stack = 1
 primary_action = ExtResource("3_action")

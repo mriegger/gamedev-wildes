@@ -7,6 +7,7 @@ enum StatModifierActivation {
 }
 
 @export var id: StringName
+@export var display_name: String
 @export var icon: Texture2D
 @export_range(1, 999) var max_stack: int = 99
 @export var primary_action: ItemActionDefinition

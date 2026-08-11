@@ -33,6 +33,7 @@ local_transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.008, 0.13, 0)
 [resource]
 script = ExtResource("1_armor")
 id = &"copper_pants"
+display_name = "Copper Pants"
 icon = ExtResource("2_icon")
 max_stack = 1
 stat_modifier_activation = 1

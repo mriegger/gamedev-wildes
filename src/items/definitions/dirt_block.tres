@@ -13,6 +13,7 @@ block = ExtResource("3_block")
 [resource]
 script = ExtResource("1_definition")
 id = &"dirt_block"
+display_name = "Dirt"
 icon = ExtResource("2_icon")
 max_stack = 99
 primary_action = ExtResource("4_mining")

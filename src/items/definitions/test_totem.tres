@@ -30,6 +30,7 @@ amount = 2.0
 [resource]
 script = ExtResource("1")
 id = &"test_totem"
+display_name = "Test Totem"
 icon = ExtResource("2")
 max_stack = 1
 held_scene = ExtResource("3")

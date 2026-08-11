@@ -51,6 +51,7 @@ func _make_catalog(max_stack: int, include_nonplaceable: bool = false) -> ItemCa
 	if include_nonplaceable:
 		var nonplaceable := ItemDefinition.new()
 		nonplaceable.id = &"test_tool"
+		nonplaceable.display_name = "Test Tool"
 		nonplaceable.icon = _base_item_catalog.definitions[0].icon
 		nonplaceable.max_stack = 1
 		definitions.append(nonplaceable)

@@ -25,6 +25,9 @@ func _rebuild_lookup() -> void:
 			push_error("[ItemCatalog] Empty item ID at %s" % source)
 			_is_valid = false
 			continue
+		if definition.display_name.is_empty():
+			push_error("[ItemCatalog] Empty display name for %s at %s" % [definition.id, source])
+			_is_valid = false
 		if _definitions_by_id.has(definition.id):
 			push_error("[ItemCatalog] Duplicate item ID %s at %s" % [definition.id, source])
 			_is_valid = false
