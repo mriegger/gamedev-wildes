@@ -44,7 +44,7 @@ func setup(p_world: WorldController, p_camera_rig: CameraRig, p_inventory: Inven
 	animation_driver.setup(self, interactor)
 	held_item_view.setup(p_inventory)
 	_footsteps.setup(self, animation_driver.animator.profile)
-	_action_audio.setup(animation_driver, interactor)
+	_action_audio.setup(animation_driver, interactor, p_inventory, p_combat)
 	armor_view.setup(p_inventory)
 
 func _physics_process(delta):
