@@ -43,7 +43,7 @@ func _run():
 	var input_buffer = InputBuffer.new()
 	player._input_buffer = input_buffer
 	var block_catalog := load("res://blocks/block_catalog.tres") as BlockCatalog
-	player.voxel_world = VoxelWorld.new(16, 32, 5, 8.0, block_catalog)
+	player.voxel_space = VoxelWorld.new(16, 32, 5, 8.0, block_catalog)
 	player.on_ground = true
 	input_buffer.jump_just = true
 	for _frame in range(12):

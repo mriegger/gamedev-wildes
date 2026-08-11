@@ -9,13 +9,15 @@ signal melee_terrain_hit(position: Vector3i)
 @export var place_cooldown: float = 0.18
 @export var unarmed_primary_action: MiningActionDefinition
 
-var voxel_world: VoxelWorld = null
+var voxel_space: VoxelSpace = null
+var editable_voxel_world: VoxelWorld = null
 var camera: Camera3D = null
 var motor: PlayerMotor = null
 var inventory_model: InventoryModel = null
 var combat: MeleeCombatCoordinator = null
 var entity_coordinator: EntityCoordinator = null
 var _input_buffer: InputBuffer = null
+var _is_setup: bool = false
 
 var target_block: Vector3i = Vector3i(-999, -999, -999)
 var target_has: bool = false
@@ -47,15 +49,53 @@ var _melee_ray_origin: Vector3
 var _melee_ray_direction: Vector3
 var _melee_source_item_id: StringName = &""
 
-func setup(p_voxel_world: VoxelWorld, p_camera: Camera3D, p_motor: PlayerMotor, p_inventory: InventoryModel, p_input_buffer: InputBuffer, p_combat: MeleeCombatCoordinator, p_entity_coordinator: EntityCoordinator):
-	assert(p_combat != null and p_entity_coordinator != null)
-	voxel_world = p_voxel_world
+func setup(p_camera: Camera3D, p_motor: PlayerMotor, p_inventory: InventoryModel, p_input_buffer: InputBuffer, p_combat: MeleeCombatCoordinator, p_entity_coordinator: EntityCoordinator):
+	assert(p_camera != null)
+	assert(p_motor != null)
+	assert(p_inventory != null)
+	assert(p_input_buffer != null)
+	assert(p_combat != null)
+	assert(p_entity_coordinator != null)
+	if _is_setup:
+		assert(camera == p_camera)
+		assert(motor == p_motor)
+		assert(inventory_model == p_inventory)
+		assert(_input_buffer == p_input_buffer)
+		assert(combat == p_combat)
+		assert(entity_coordinator == p_entity_coordinator)
+		return
 	camera = p_camera
 	motor = p_motor
 	inventory_model = p_inventory
 	_input_buffer = p_input_buffer
 	combat = p_combat
 	entity_coordinator = p_entity_coordinator
+	_is_setup = true
+
+func bind_space(p_space: VoxelSpace, p_editable_voxel_world: VoxelWorld = null):
+	assert(_is_setup)
+	assert(p_space != null)
+	assert(p_editable_voxel_world == null or p_editable_voxel_world == p_space)
+	_clear_active_state()
+	voxel_space = p_space
+	editable_voxel_world = p_editable_voxel_world
+
+func unbind_space():
+	_clear_active_state()
+	voxel_space = null
+	editable_voxel_world = null
+
+func is_editing_enabled() -> bool:
+	return editable_voxel_world != null
+
+func _clear_active_state():
+	target_has = false
+	placement_has = false
+	can_mine_target = false
+	can_place_target = false
+	_reset_mining()
+	_reset_melee_chain()
+	secondary_use_timer = 0.0
 
 func cancel_actions():
 	_reset_mining()
@@ -67,7 +107,7 @@ func cancel_actions():
 	can_place_target = false
 
 func _physics_process(delta):
-	if voxel_world == null or motor == null or camera == null or inventory_model == null or _input_buffer == null:
+	if voxel_space == null or motor == null or camera == null or inventory_model == null or _input_buffer == null:
 		return
 	if motor.is_defeated():
 		return
@@ -114,7 +154,7 @@ func _handle_raycast():
 	var selected_primary := get_selected_primary_action()
 	can_mine_target = selected_primary is MiningActionDefinition and _can_mine_position(best_hit, selected_primary as MiningActionDefinition)
 
-	if voxel_world.get_block_at(best_place) == null:
+	if editable_voxel_world != null and voxel_space.get_block_at(best_place) == null:
 		if not _placement_collides_player(best_place) and not _placement_collides_entity(best_place):
 			placement_has = true
 			can_place_target = motor_pos.distance_squared_to(Vector3(best_place.x + 0.5, best_place.y + 0.5, best_place.z + 0.5)) <= reach_squared
@@ -127,10 +167,7 @@ func _voxel_raycast(origin: Vector3, dir: Vector3, max_dist: float) -> bool:
 	if dir.length_squared() < 0.0001:
 		return false
 	var current = Vector3i(floor(origin.x), floor(origin.y), floor(origin.z))
-
-	if voxel_world.is_raycast_solid(current):
-		origin = origin + dir * 0.6
-		current = Vector3i(floor(origin.x), floor(origin.y), floor(origin.z))
+	var can_hit := not voxel_space.is_raycast_solid(current)
 
 	var step_x = 1 if dir.x >= 0 else -1
 	var step_y = 1 if dir.y >= 0 else -1
@@ -172,7 +209,8 @@ func _voxel_raycast(origin: Vector3, dir: Vector3, max_dist: float) -> bool:
 	var last_pos = current
 
 	for _i in range(int(max_dist * 2 + 10)):
-		if voxel_world.is_raycast_solid(current):
+		var current_is_solid := voxel_space.is_raycast_solid(current)
+		if current_is_solid and can_hit:
 			var face_normal: Vector3i
 			if last_pos.x != current.x:
 				face_normal = Vector3i(-step_x, 0, 0)
@@ -180,13 +218,16 @@ func _voxel_raycast(origin: Vector3, dir: Vector3, max_dist: float) -> bool:
 				face_normal = Vector3i(0, -step_y, 0)
 			else:
 				face_normal = Vector3i(0, 0, -step_z)
-			var place_pos = last_pos
-			if voxel_world.is_raycast_solid(place_pos):
-				place_pos = current + face_normal
-			_ray_hit_pos = current
-			_ray_place_pos = place_pos
-			_ray_face_normal = face_normal
-			return true
+			if voxel_space.is_face_targetable(current, face_normal):
+				var place_pos = last_pos
+				if voxel_space.is_raycast_solid(place_pos):
+					place_pos = current + face_normal
+				_ray_hit_pos = current
+				_ray_place_pos = place_pos
+				_ray_face_normal = face_normal
+				return true
+		elif not current_is_solid:
+			can_hit = true
 
 		if t_max_x < t_max_y:
 			if t_max_x < t_max_z:
@@ -247,18 +288,18 @@ func _handle_item_actions(delta):
 	if _input_buffer.primary_use_pressed and target_has and can_mine_target and selected_mining != null:
 		if not is_mining:
 			mine_target = target_block
-			mine_target_rev = voxel_world.get_revision(mine_target)
+			mine_target_rev = editable_voxel_world.get_revision(mine_target)
 			mine_timer = 0.0
 			mine_action = selected_mining
 			is_mining = true
 		else:
 			if mine_target != target_block or mine_action != selected_mining:
 				mine_target = target_block
-				mine_target_rev = voxel_world.get_revision(mine_target)
+				mine_target_rev = editable_voxel_world.get_revision(mine_target)
 				mine_timer = 0.0
 				mine_action = selected_mining
 			else:
-				var cur_rev = voxel_world.get_revision(mine_target)
+				var cur_rev = editable_voxel_world.get_revision(mine_target)
 				if cur_rev != mine_target_rev:
 					_reset_mining()
 				else:
@@ -328,7 +369,7 @@ func _start_melee_attack():
 	var attack_direction := next_melee_attack_direction
 	next_melee_attack_direction = -next_melee_attack_direction
 	melee_attack_started.emit(melee_attack_action, attack_direction)
-	if target_has and voxel_world != null and voxel_world.is_solid(target_block):
+	if target_has and voxel_space != null and voxel_space.is_solid(target_block):
 		melee_terrain_hit.emit(target_block)
 	if _melee_contact_pending and is_zero_approx(profile.contact_time):
 		_commit_melee_contacts()
@@ -350,20 +391,20 @@ func _commit_melee_contacts():
 	combat.try_commit_player_contacts(target_runtime_ids, _melee_ray_origin, _melee_ray_direction, melee_attack_action.attack_profile, _melee_source_item_id)
 
 func _can_mine_position(pos: Vector3i, action: MiningActionDefinition) -> bool:
-	if action == null or voxel_world == null or motor == null:
+	if action == null or voxel_space == null or editable_voxel_world == null or motor == null:
 		return false
 	var center := Vector3(pos) + Vector3(0.5, 0.5, 0.5)
 	if motor.global_position.distance_squared_to(center) > reach * reach:
 		return false
-	var block_id := voxel_world.get_block_id_at(pos)
+	var block_id := voxel_space.get_block_id_at(pos)
 	if block_id == BlockId.Type.AIR:
 		return false
-	return action.can_mine(voxel_world.block_catalog.get_definition(block_id))
+	return action.can_mine(voxel_space.block_catalog.get_definition(block_id))
 
 func get_mine_duration() -> float:
 	assert(is_mining and mine_action != null)
-	var block_id := voxel_world.get_block_id_at(mine_target)
-	return mine_action.get_mine_duration(voxel_world.block_catalog.get_definition(block_id))
+	var block_id := voxel_space.get_block_id_at(mine_target)
+	return mine_action.get_mine_duration(voxel_space.block_catalog.get_definition(block_id))
 
 func has_mining_impact_target() -> bool:
 	return is_mining and target_has and can_mine_target and mine_target == target_block
@@ -378,7 +419,7 @@ func get_mining_impact_normal() -> Vector3i:
 
 func get_mining_impact_block_id() -> int:
 	assert(has_mining_impact_target())
-	return voxel_world.get_block_id_at(mine_target)
+	return voxel_space.get_block_id_at(mine_target)
 
 func _can_place(action: BlockPlacementActionDefinition) -> bool:
 	if not placement_has or not can_place_target:
@@ -386,11 +427,11 @@ func _can_place(action: BlockPlacementActionDefinition) -> bool:
 	return _validate_placement(placement_block, action)
 
 func _validate_placement(position: Vector3i, action: BlockPlacementActionDefinition) -> bool:
-	if action == null or voxel_world == null or inventory_model == null or motor == null:
+	if action == null or voxel_space == null or editable_voxel_world == null or inventory_model == null or motor == null:
 		return false
 	if get_selected_placement_action() != action or not inventory_model.can_consume_selected():
 		return false
-	if voxel_world.get_block_id_at(position) != BlockId.Type.AIR:
+	if voxel_space.get_block_id_at(position) != BlockId.Type.AIR:
 		return false
 	var center := Vector3(position) + Vector3(0.5, 0.5, 0.5)
 	if motor.global_position.distance_squared_to(center) > reach * reach:
@@ -402,24 +443,24 @@ func _commit_mine(pos: Vector3i, action: MiningActionDefinition):
 		_reset_mining()
 		return
 	_reset_mining()
-	if voxel_world == null or inventory_model == null:
+	if voxel_space == null or editable_voxel_world == null or inventory_model == null:
 		return
 
-	var preview_id = voxel_world.get_block_id_at(pos)
+	var preview_id = voxel_space.get_block_id_at(pos)
 	if preview_id == BlockId.Type.AIR:
 		return
 
 	var item_ids_to_collect: Array[StringName] = []
 	_append_block_drop(item_ids_to_collect, preview_id)
-	for torch_pos in voxel_world.get_attached_torches(pos):
-		var tid = voxel_world.get_block_id_at(torch_pos)
+	for torch_pos in editable_voxel_world.get_attached_torches(pos):
+		var tid = voxel_space.get_block_id_at(torch_pos)
 		if tid != BlockId.Type.AIR:
 			_append_block_drop(item_ids_to_collect, tid)
 
 	if not inventory_model.can_add_batch(item_ids_to_collect):
 		return
 
-	var batch = voxel_world.try_mine_block(pos)
+	var batch = editable_voxel_world.try_mine_block(pos)
 	if batch is Array and batch.size() > 0 and batch[0] is BlockEdit:
 		if not (batch[0] as BlockEdit).is_success():
 			return
@@ -432,7 +473,7 @@ func _commit_mine(pos: Vector3i, action: MiningActionDefinition):
 	_handle_raycast()
 
 func _append_block_drop(item_ids: Array[StringName], block_id: int):
-	var drop_item_id := voxel_world.block_catalog.get_definition(block_id).drop_item_id
+	var drop_item_id := voxel_space.block_catalog.get_definition(block_id).drop_item_id
 	if not drop_item_id.is_empty():
 		item_ids.append(drop_item_id)
 
@@ -443,7 +484,7 @@ func _commit_place(pos: Vector3i, action: BlockPlacementActionDefinition):
 	var block_id := int(action.block.id)
 
 	var attach_dir = -last_ray_normal if block_id == BlockId.Type.TORCH else Vector3i.ZERO
-	var edit: BlockEdit = voxel_world.try_place_block(pos, block_id, attach_dir)
+	var edit: BlockEdit = editable_voxel_world.try_place_block(pos, block_id, attach_dir)
 
 	if edit.is_success():
 		var consumed := inventory_model.consume_selected()

@@ -1,16 +1,13 @@
-extends RefCounted
+extends VoxelSpace
 class_name VoxelWorld
 
 signal block_edit_committed(edit: BlockEdit)
 signal terrain_chunk_evicted(coord: Vector2i)
 
-const NO_SURFACE_Y: float = -9999.0
-
 var chunk_size: int
 var max_build_y: int
 var water_level: int
 var spawn_search_radius: float
-var block_catalog: BlockCatalog
 
 var type_map_dict: Dictionary = {}
 var height_map_dict: Dictionary = {}
@@ -283,6 +280,9 @@ func is_raycast_solid(p: Vector3i) -> bool:
 	if bt == null:
 		return false
 	return block_catalog.is_raycast_solid(bt)
+
+func is_face_targetable(block_position: Vector3i, _face_normal: Vector3i) -> bool:
+	return is_raycast_solid(block_position)
 
 func get_revision(p: Vector3i) -> int:
 	return cell_revisions.get(p, 0)

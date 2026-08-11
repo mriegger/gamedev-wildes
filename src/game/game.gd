@@ -155,7 +155,7 @@ func _setup_gameplay():
 	melee_combat.melee_outcome_committed.connect(combat_progression_coordinator.record_melee_outcome)
 	melee_combat.melee_outcome_committed.connect(_on_melee_outcome_committed)
 	combat_hit_particles.setup(melee_combat, combat_hit_particle_catalog)
-	player.setup(world, camera_rig, inventory_model, input_buffer, player_stats, melee_combat, entity_coordinator)
+	player.setup(camera_rig, inventory_model, input_buffer, player_stats, melee_combat, entity_coordinator)
 	player_stats.health_depleted.connect(_on_player_defeated)
 	var mining_particle_tints := MiningParticleTintPalette.new(block_catalog)
 	mining_break_particles.setup(world.voxel_model, mining_particle_tints)
@@ -167,11 +167,13 @@ func _setup_gameplay():
 	hud.setup_with_camera(inventory_model, inventory_stat_coordinator, crafting_coordinator, crafting_recipe_catalog, camera_rig, player_stats, item_proficiency)
 	hud.setup_socketing(inventory_model, rune_socketing_coordinator, item_proficiency)
 
+	var world_spawn := world.voxel_model.get_spawn_position()
 	var saved_position = _world_state.player_position
 	if saved_position != Vector3.ZERO:
 		player.global_position = saved_position + Vector3(0, 0.2, 0)
 	else:
-		player.global_position = world.voxel_model.get_spawn_position() + Vector3(0, 0.1, 0)
+		player.global_position = world_spawn + Vector3(0, 0.1, 0)
+	player.bind_space(world.voxel_model, world, world_spawn, world.voxel_model)
 	world.set_player_ref(player)
 	camera_rig.snap_to_follow_target()
 	camera_rig.current_yaw_deg = camera_rig.target_yaw_deg

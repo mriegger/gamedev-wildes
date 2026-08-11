@@ -7,7 +7,7 @@
 [ext_resource type="Shader" path="res://world/materials/water.gdshader" id="6_water_shader"]
 [ext_resource type="Script" path="res://world/chunks/chunk_renderer.gd" id="7_chunk_renderer"]
 [ext_resource type="Script" path="res://world/chunks/chunk_build_scheduler.gd" id="8_chunk_scheduler"]
-[ext_resource type="Script" path="res://world/special_blocks/torch_renderer.gd" id="9_torch_renderer"]
+[ext_resource type="Script" path="res://blocks/presentation/torch_renderer.gd" id="9_torch_renderer"]
 
 [node name="World" type="Node3D"]
 script = ExtResource("1_world")

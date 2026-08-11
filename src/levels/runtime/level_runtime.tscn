@@ -1,0 +1,19 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://levels/runtime/level_runtime.gd" id="1_runtime"]
+[ext_resource type="Script" path="res://blocks/presentation/torch_renderer.gd" id="2_torches"]
+
+[node name="LevelRuntime" type="Node3D"]
+visible = false
+script = ExtResource("1_runtime")
+
+[node name="Geometry" type="MeshInstance3D" parent="."]
+
+[node name="Torches" type="Node3D" parent="."]
+script = ExtResource("2_torches")
+
+[node name="ReturnPoint" type="Marker3D" parent="."]
+
+[node name="ReturnDoor" type="MeshInstance3D" parent="."]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]

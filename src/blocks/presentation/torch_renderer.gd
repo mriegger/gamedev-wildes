@@ -2,9 +2,6 @@ extends Node3D
 class_name TorchRenderer
 
 const TORCH_SHADOW_UPDATE_INTERVAL: float = 0.6
-# Light Y is flame base, independent of wall offset.
-# Stem: size 0.45 centered at 0.05 => spans -0.175 to 0.275
-# Flame: size 0.14 centered at 0.38 => spans 0.31 to 0.45
 const TORCH_LIGHT_Y: float = 0.32
 
 var torch_instances: Dictionary = {}
@@ -51,6 +48,15 @@ func spawn_torch(pos: Vector3i, attach_dir: Vector3i) -> Node3D:
 	var root := _create_torch(pos, attach_dir)
 	_apply_shadow_pool_limit()
 	return root
+
+func spawn_torches(torch_attachments: Dictionary) -> int:
+	var spawned := 0
+	for position in torch_attachments:
+		_create_torch(position as Vector3i, torch_attachments[position] as Vector3i)
+		spawned += 1
+	if spawned > 0:
+		_apply_shadow_pool_limit()
+	return spawned
 
 func _create_torch(pos: Vector3i, attach_dir: Vector3i) -> Node3D:
 	remove_torch(pos)

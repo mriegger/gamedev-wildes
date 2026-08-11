@@ -1,6 +1,7 @@
 extends SceneTree
 
 const CATALOG_PATH: String = "res://levels/content/level_catalog.tres"
+const BLOCK_CATALOG_PATH: String = "res://blocks/block_catalog.tres"
 const LEVEL_ID: StringName = &"stone_dungeon"
 const ENTRANCE_ID: StringName = &"overworld_dungeon_entrance"
 const FUZZ_SEED_COUNT: int = 1000
@@ -27,14 +28,17 @@ const EXPECTED_MODULE_IDS: Array[StringName] = [
 var _failures: int = 0
 var _assertions: int = 0
 var _catalog: LevelCatalog
+var _block_catalog: BlockCatalog
 
 func _init() -> void:
 	call_deferred("_run")
 
 func _run() -> void:
 	_catalog = load(CATALOG_PATH) as LevelCatalog
+	_block_catalog = load(BLOCK_CATALOG_PATH) as BlockCatalog
 	_expect(_catalog != null, "level catalog did not load")
-	if _catalog == null:
+	_expect(_block_catalog != null and _block_catalog.validate(), "block catalog did not load or validate")
+	if _catalog == null or _block_catalog == null:
 		_finish(0, 0)
 		return
 	_test_catalog_and_modules()
@@ -43,6 +47,7 @@ func _run() -> void:
 	var fuzz_started := Time.get_ticks_msec()
 	var successful_seeds := _test_generation_fuzz()
 	var fuzz_msec := Time.get_ticks_msec() - fuzz_started
+	_test_level_state_and_mesher()
 	_finish(successful_seeds, fuzz_msec)
 
 func _test_catalog_and_modules() -> void:
@@ -354,6 +359,92 @@ func _validate_layout(layout: LevelLayout, seed_index: int) -> void:
 		var support := torch.cell + LevelSocketDefinition.vector_for(torch.wall_direction)
 		_expect(LevelCell.is_structure_solid(layout.get_cell(support)), "placed torch has no solid support for %s" % label)
 	_expect(actual_torches == expected_torches, "placed torch set differs from authored markers for %s" % label)
+
+func _test_level_state_and_mesher() -> void:
+	var stone := Vector3i.ZERO
+	var cells: Dictionary = {stone: BlockId.Type.STONE}
+	for direction in DIRECTIONS:
+		if direction == Vector3i.RIGHT:
+			continue
+		var air := stone + direction
+		cells[air] = LevelCell.AIR
+	cells[stone + Vector3i.UP * 2] = LevelCell.AIR
+	var state := LevelState.new(
+		_block_catalog,
+		cells,
+		stone + Vector3i.UP,
+		LevelSocketDefinition.Direction.NORTH,
+		stone + Vector3i.UP,
+		LevelSocketDefinition.Direction.WEST,
+		Vector3i(-1, -1, -1),
+		Vector3i(1, 1, 1)
+	)
+	_expect(state.get_cell_value(stone) == BlockId.Type.STONE, "LevelState lost a solid block")
+	_expect(state.get_cell_value(stone + Vector3i.UP) == LevelCell.AIR, "LevelState lost claimed AIR")
+	_expect(state.get_cell_value(stone + Vector3i.RIGHT) == LevelCell.VOID, "LevelState does not distinguish VOID")
+	_expect(state.get_block_at(stone + Vector3i.UP) == null, "claimed AIR unexpectedly returns a block")
+	_expect(state.get_block_at(stone + Vector3i.RIGHT) == null, "VOID unexpectedly returns a block")
+	_expect(state.get_block_id_at(stone + Vector3i.UP) == BlockId.Type.AIR, "claimed AIR block ID query changed")
+	_expect(state.get_block_id_at(stone + Vector3i.RIGHT) == BlockId.Type.AIR, "voxel query fallback for VOID changed")
+	_expect(state.has_cell(stone) and state.has_cell(stone + Vector3i.UP), "claimed state changed")
+	_expect(not state.has_cell(stone + Vector3i.RIGHT), "VOID is marked claimed")
+	_expect(state.is_solid(stone) and state.is_raycast_solid(stone), "solid collision/raycast query failed")
+	_expect(not state.is_solid(stone + Vector3i.UP), "AIR is solid")
+	_expect(state.is_interior_open(stone + Vector3i.UP), "claimed AIR is not interior-open")
+	_expect(not state.is_interior_open(stone + Vector3i.RIGHT), "VOID is interior-open")
+	_expect(state.is_face_targetable(stone, Vector3i.UP), "interior-facing solid face is not targetable")
+	_expect(not state.is_face_targetable(stone, Vector3i.RIGHT), "VOID-facing solid face is targetable")
+	_expect(state.get_highest_top(0, 0) == 1.0, "highest solid top changed")
+	_expect(state.get_highest_top(20, 20) == VoxelSpace.NO_SURFACE_Y, "empty column reports a surface")
+	_expect(state.get_spawn_position().is_equal_approx(Vector3(0.5, 1.0, 0.5)), "level spawn conversion changed")
+	_expect(state.get_return_door_position().is_equal_approx(Vector3(0.5, 1.0, 0.5)), "return-door conversion changed")
+	var cell_snapshot := state.snapshot_cells()
+	cell_snapshot.clear()
+	_expect(state.get_cell_value(stone) == BlockId.Type.STONE and state.has_cell(stone), "LevelState exposed mutable cell storage")
+	var texture_set := BlockTextureSet.new(_block_catalog)
+	var mesher := LevelMesher.new(texture_set)
+	var data := mesher.build_mesh_data(state) as Dictionary
+	_expect(data != null, "mesher returned no data for interior-facing geometry")
+	if data == null:
+		return
+	var vertices := data["vertices"] as PackedVector3Array
+	var normals := data["normals"] as PackedVector3Array
+	var uvs := data["uvs"] as PackedVector2Array
+	var texture_layers := data["texture_layers"] as PackedVector2Array
+	var indices := data["indices"] as PackedInt32Array
+	_expect(vertices.size() == 20, "interior-only mesher emitted %d vertices instead of 20" % vertices.size())
+	_expect(normals.size() == vertices.size() and uvs.size() == vertices.size() and texture_layers.size() == vertices.size(), "mesh attribute lengths differ")
+	_expect(indices.size() == 30, "interior-only mesher emitted %d indices instead of 30" % indices.size())
+	var direction_counts: Dictionary = {}
+	for normal in normals:
+		var normal_key := Vector3i(roundi(normal.x), roundi(normal.y), roundi(normal.z))
+		direction_counts[normal_key] = int(direction_counts.get(normal_key, 0)) + 1
+	_expect(not direction_counts.has(Vector3i.RIGHT), "mesher emitted a VOID-facing exterior face")
+	for direction in DIRECTIONS:
+		if direction == Vector3i.RIGHT:
+			continue
+		_expect(int(direction_counts.get(direction, 0)) == 4, "mesher omitted or duplicated interior face %s" % direction)
+	for triangle_index in range(0, indices.size(), 3):
+		var first := vertices[indices[triangle_index]]
+		var second := vertices[indices[triangle_index + 1]]
+		var third := vertices[indices[triangle_index + 2]]
+		var supplied_normal := normals[indices[triangle_index]]
+		var winding_normal := (second - first).cross(third - first).normalized()
+		_expect(winding_normal.dot(supplied_normal) < -0.999, "mesh triangle winding disagrees with its supplied normal")
+	for vertex_index in texture_layers.size():
+		var normal := normals[vertex_index]
+		var expected_layer := texture_set.side_layers[BlockId.Type.STONE]
+		if normal == Vector3.UP:
+			expected_layer = texture_set.top_layers[BlockId.Type.STONE]
+		elif normal == Vector3.DOWN:
+			expected_layer = texture_set.bottom_layers[BlockId.Type.STONE]
+		_expect(is_equal_approx(texture_layers[vertex_index].x, float(expected_layer)), "UV2 texture layer does not match the face definition")
+		_expect(is_zero_approx(texture_layers[vertex_index].y), "UV2 secondary layer component changed")
+	var mesh := mesher.create_mesh_from_data(data)
+	_expect(mesh != null and mesh.get_surface_count() == 1, "mesh data did not create one surface")
+	if mesh != null:
+		var arrays := mesh.surface_get_arrays(0)
+		_expect((arrays[Mesh.ARRAY_TEX_UV2] as PackedVector2Array) == texture_layers, "UV2 layers were not installed on the mesh surface")
 
 func _layout_digest(layout: LevelLayout) -> String:
 	var lines := PackedStringArray()

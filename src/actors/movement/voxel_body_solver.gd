@@ -1,7 +1,7 @@
 extends RefCounted
 class_name VoxelBodySolver
 
-static func sweep(voxel_world: VoxelWorld, position: Vector3, velocity: Vector3, motion: Vector3, body_width: float, body_height: float) -> VoxelBodyMotionResult:
+static func sweep(voxel_space: VoxelSpace, position: Vector3, velocity: Vector3, motion: Vector3, body_width: float, body_height: float) -> VoxelBodyMotionResult:
 	var resolved_position := position
 	var resolved_velocity := velocity
 
@@ -10,7 +10,7 @@ static func sweep(voxel_world: VoxelWorld, position: Vector3, velocity: Vector3,
 		var step_x := motion.x / float(steps_x)
 		for _step in range(steps_x):
 			var test_position := resolved_position + Vector3(step_x, 0.0, 0.0)
-			if collides_at(voxel_world, test_position, body_width, body_height, true):
+			if collides_at(voxel_space, test_position, body_width, body_height, true):
 				resolved_velocity.x = 0.0
 				break
 			resolved_position.x = test_position.x
@@ -20,7 +20,7 @@ static func sweep(voxel_world: VoxelWorld, position: Vector3, velocity: Vector3,
 		var step_z := motion.z / float(steps_z)
 		for _step in range(steps_z):
 			var test_position := resolved_position + Vector3(0.0, 0.0, step_z)
-			if collides_at(voxel_world, test_position, body_width, body_height, true):
+			if collides_at(voxel_space, test_position, body_width, body_height, true):
 				resolved_velocity.z = 0.0
 				break
 			resolved_position.z = test_position.z
@@ -30,14 +30,14 @@ static func sweep(voxel_world: VoxelWorld, position: Vector3, velocity: Vector3,
 		var step_y := motion.y / float(steps_y)
 		for _step in range(steps_y):
 			var test_position := resolved_position + Vector3(0.0, step_y, 0.0)
-			var ground_y := get_ground_y(voxel_world, test_position, body_width)
-			if ground_y != VoxelWorld.NO_SURFACE_Y and test_position.y <= ground_y + 0.03 and test_position.y >= ground_y - 0.4:
+			var ground_y := get_ground_y(voxel_space, test_position, body_width)
+			if ground_y != VoxelSpace.NO_SURFACE_Y and test_position.y <= ground_y + 0.03 and test_position.y >= ground_y - 0.4:
 				resolved_position.y = ground_y
 				resolved_velocity.y = 0.0
 				break
-			if collides_at(voxel_world, test_position, body_width, body_height, false):
-				var collision_ground_y := get_ground_y(voxel_world, test_position, body_width)
-				if collision_ground_y != VoxelWorld.NO_SURFACE_Y and abs(collision_ground_y - test_position.y) < 0.15:
+			if collides_at(voxel_space, test_position, body_width, body_height, false):
+				var collision_ground_y := get_ground_y(voxel_space, test_position, body_width)
+				if collision_ground_y != VoxelSpace.NO_SURFACE_Y and abs(collision_ground_y - test_position.y) < 0.15:
 					resolved_position.y = collision_ground_y
 				resolved_velocity.y = 0.0
 				break
@@ -47,14 +47,14 @@ static func sweep(voxel_world: VoxelWorld, position: Vector3, velocity: Vector3,
 		var step_y := motion.y / float(steps_y)
 		for _step in range(steps_y):
 			var test_position := resolved_position + Vector3(0.0, step_y, 0.0)
-			if collides_at(voxel_world, test_position, body_width, body_height, false):
+			if collides_at(voxel_space, test_position, body_width, body_height, false):
 				resolved_velocity.y = 0.0
 				break
 			resolved_position.y = test_position.y
 
 	return VoxelBodyMotionResult.new(resolved_position, resolved_velocity)
 
-static func collides_at(voxel_world: VoxelWorld, position: Vector3, body_width: float, body_height: float, ignore_ground: bool) -> bool:
+static func collides_at(voxel_space: VoxelSpace, position: Vector3, body_width: float, body_height: float, ignore_ground: bool) -> bool:
 	var min_x := int(floor(position.x - body_width * 0.5))
 	var max_x := int(floor(position.x + body_width * 0.5))
 	var min_y := int(floor(position.y))
@@ -64,7 +64,7 @@ static func collides_at(voxel_world: VoxelWorld, position: Vector3, body_width: 
 	for x in range(min_x, max_x + 1):
 		for y in range(min_y, max_y + 1):
 			for z in range(min_z, max_z + 1):
-				if voxel_world.is_solid(Vector3i(x, y, z)):
+				if voxel_space.is_solid(Vector3i(x, y, z)):
 					if ignore_ground:
 						var block_top := float(y) + 1.0
 						if block_top <= position.y + 0.05:
@@ -72,28 +72,28 @@ static func collides_at(voxel_world: VoxelWorld, position: Vector3, body_width: 
 					return true
 	return false
 
-static func get_ground_y(voxel_world: VoxelWorld, position: Vector3, body_width: float) -> float:
+static func get_ground_y(voxel_space: VoxelSpace, position: Vector3, body_width: float) -> float:
 	var footprint := _get_footprint(position, body_width)
-	var best := VoxelWorld.NO_SURFACE_Y
+	var best := VoxelSpace.NO_SURFACE_Y
 	var feet_y := int(floor(position.y + 0.08))
 	for x in range(footprint.position.x, footprint.end.x):
 		for z in range(footprint.position.y, footprint.end.y):
-			var highest_top := voxel_world.get_highest_top(x, z)
-			if highest_top != VoxelWorld.NO_SURFACE_Y and highest_top <= position.y + 0.08 and highest_top >= position.y - 1.2:
+			var highest_top := voxel_space.get_highest_top(x, z)
+			if highest_top != VoxelSpace.NO_SURFACE_Y and highest_top <= position.y + 0.08 and highest_top >= position.y - 1.2:
 				if highest_top > best:
 					best = highest_top
 				continue
 			for depth in range(6):
 				var y := feet_y - depth
-				if voxel_world.is_solid(Vector3i(x, y, z)):
+				if voxel_space.is_solid(Vector3i(x, y, z)):
 					var block_top := float(y) + 1.0
 					if block_top <= position.y + 0.08 and block_top > best:
 						best = block_top
 					break
 	return best
 
-static func get_supporting_block_id(voxel_world: VoxelWorld, position: Vector3, body_width: float, ground_y: float) -> int:
-	if ground_y == VoxelWorld.NO_SURFACE_Y:
+static func get_supporting_block_id(voxel_space: VoxelSpace, position: Vector3, body_width: float, ground_y: float) -> int:
+	if ground_y == VoxelSpace.NO_SURFACE_Y:
 		return BlockId.Type.AIR
 	var footprint := _get_footprint(position, body_width)
 	var block_y := floori(ground_y - 0.001)
@@ -102,7 +102,7 @@ static func get_supporting_block_id(voxel_world: VoxelWorld, position: Vector3, 
 	for x in range(footprint.position.x, footprint.end.x):
 		for z in range(footprint.position.y, footprint.end.y):
 			var cell := Vector3i(x, block_y, z)
-			if not voxel_world.is_solid(cell):
+			if not voxel_space.is_solid(cell):
 				continue
 			var distance := Vector2(
 				position.x - (float(x) + 0.5),
@@ -110,7 +110,7 @@ static func get_supporting_block_id(voxel_world: VoxelWorld, position: Vector3, 
 			).length_squared()
 			if distance < nearest_distance:
 				nearest_distance = distance
-				nearest_block_id = voxel_world.get_block_id_at(cell)
+				nearest_block_id = voxel_space.get_block_id_at(cell)
 	return nearest_block_id
 
 static func _get_footprint(position: Vector3, body_width: float) -> Rect2i:

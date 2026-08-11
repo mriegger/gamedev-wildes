@@ -409,6 +409,20 @@ jobs:
             120 "LEVEL_SYSTEM PASS" /tmp/level_system.log -- \
             godot --headless --path src --script res://tests/level_system.gd
 
+  level-runtime-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run finite level runtime lifecycle tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            60 "LEVEL_RUNTIME PASS" /tmp/level_runtime.log -- \
+            godot --headless --path src --script res://tests/level_runtime_integration.gd
+
   hud-integration:
     runs-on: ubuntu-latest
     timeout-minutes: 10

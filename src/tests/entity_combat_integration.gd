@@ -270,8 +270,9 @@ func _run() -> void:
 	inventory.setup_starter()
 	inventory.select_slot(3)
 	var input_buffer := InputBuffer.new()
-	player.interactor.setup(world, camera, player, inventory, input_buffer, combat, coordinator)
-	player.voxel_world = world
+	player.interactor.setup(camera, player, inventory, input_buffer, combat, coordinator)
+	player.interactor.bind_space(world, world)
+	player.voxel_space = world
 	player.stats = player_stats
 	player._input_buffer = input_buffer
 	var sword_action := item_catalog.get_definition(&"copper_sword").primary_action as MeleeAttackActionDefinition
@@ -851,7 +852,8 @@ func _test_multi_target_interactor_timing(world: VoxelWorld, sword_profile: Mele
 	inventory.setup_starter()
 	inventory.select_slot(3)
 	var input_buffer := InputBuffer.new()
-	player.interactor.setup(world, camera, player, inventory, input_buffer, combat, coordinator)
+	player.interactor.setup(camera, player, inventory, input_buffer, combat, coordinator)
+	player.interactor.bind_space(world, world)
 	var sword_action := item_catalog.get_definition(&"copper_sword").primary_action as MeleeAttackActionDefinition
 	player.interactor.melee_attack_action = sword_action
 	player.interactor.melee_attack_timer = sword_profile.cooldown
