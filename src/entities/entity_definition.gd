@@ -24,10 +24,12 @@ func validate(source: String) -> bool:
 		push_error("[EntityDefinition] Missing actor scene for %s at %s" % [id, source])
 		valid = false
 	else:
-		var state := actor_scene.get_state()
-		if state.get_node_count() == 0 or not ClassDB.is_parent_class(state.get_node_type(0), &"Node3D"):
-			push_error("[EntityDefinition] Actor scene root must be Node3D for %s at %s" % [id, source])
+		var actor_root := actor_scene.instantiate()
+		if not actor_root is EntityActor:
+			push_error("[EntityDefinition] Actor scene root must be EntityActor for %s at %s" % [id, source])
 			valid = false
+		if actor_root != null:
+			actor_root.free()
 	if behavior == null:
 		push_error("[EntityDefinition] Missing behavior for %s at %s" % [id, source])
 		valid = false
