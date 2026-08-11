@@ -40,7 +40,12 @@ func _init() -> void:
 	hotbar_only.slots[1] = InventoryStack.new(&"log_block", 2)
 	var hotbar_coordinator := CraftingCoordinator.new()
 	hotbar_coordinator.setup(hotbar_only, recipe_catalog)
-	_expect(not hotbar_coordinator.can_craft(&"copper_pickaxe"), "hotbar materials counted as backpack ingredients")
+	_expect(hotbar_coordinator.can_craft(&"copper_pickaxe"), "hotbar materials were not available for crafting")
+	_expect(hotbar_coordinator.start(&"copper_pickaxe"), "hotbar-only craft did not start")
+	_expect(hotbar_coordinator.advance_time(2.0), "hotbar-only craft did not complete")
+	_expect(hotbar_only.get_inventory_item_count(&"stone_block") == 0, "hotbar-only craft retained stone")
+	_expect(hotbar_only.get_inventory_item_count(&"log_block") == 0, "hotbar-only craft retained wood")
+	_expect(hotbar_only.get_inventory_item_count(&"copper_pickaxe") == 1, "hotbar-only craft did not add output")
 
 	var inventory := InventoryModel.new(item_catalog)
 	inventory.slots[InventoryModel.HOTBAR_SIZE] = InventoryStack.new(&"stone_block", 3)
@@ -66,7 +71,7 @@ func _init() -> void:
 	_expect(_state_change_count > 0, "coordinator did not announce state changes")
 
 	var crowded := InventoryModel.new(item_catalog)
-	for index in range(InventoryModel.HOTBAR_SIZE, InventoryModel.FILLABLE_SIZE):
+	for index in range(InventoryModel.FILLABLE_SIZE):
 		crowded.slots[index] = InventoryStack.new(&"dirt_block", 1)
 	crowded.slots[InventoryModel.HOTBAR_SIZE] = InventoryStack.new(&"stone_block", 8)
 	crowded.slots[InventoryModel.HOTBAR_SIZE + 1] = InventoryStack.new(&"log_block", 8)

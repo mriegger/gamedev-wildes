@@ -77,8 +77,8 @@ resources, `EntityCatalog` lists entity definitions, and `WorldConfig` reference
 Runtime code does not scan directories or manufacture fallback domain resources.
 
 Crafting recipes reference canonical item definitions. `CraftingCoordinator` owns elapsed crafting
-state, while `InventoryModel` validates and commits ingredient removal and output insertion as one
-backpack transaction. `CraftingPanel` supplies frame time and presents state without mutating
+state, while `InventoryModel` validates and commits ingredient removal and output insertion across
+the backpack and hotbar as one transaction. `CraftingPanel` supplies frame time and presents state without mutating
 inventory slots.
 
 Forward+ is the primary renderer. Runtime rendering-device checks select reduced visual values for GL Compatibility fallback. Features unavailable on GL, including volumetric fog, remain disabled there.

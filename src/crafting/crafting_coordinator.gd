@@ -21,7 +21,7 @@ func can_craft(recipe_id: StringName) -> bool:
 	if not recipe_catalog.has_definition(recipe_id):
 		return false
 	var recipe := recipe_catalog.get_definition(recipe_id)
-	return inventory_model.can_exchange_backpack_items(recipe.get_ingredient_counts(), recipe.get_output_counts())
+	return inventory_model.can_exchange_inventory_items(recipe.get_ingredient_counts(), recipe.get_output_counts())
 
 func start(recipe_id: StringName) -> bool:
 	if is_crafting() or not can_craft(recipe_id):
@@ -46,7 +46,7 @@ func advance_time(delta: float) -> bool:
 	var output_counts := recipe.get_output_counts()
 	_active_recipe_id = &""
 	_elapsed_seconds = 0.0
-	var crafted := inventory_model.exchange_backpack_items(ingredient_counts, output_counts)
+	var crafted := inventory_model.exchange_inventory_items(ingredient_counts, output_counts)
 	assert(crafted)
 	return true
 

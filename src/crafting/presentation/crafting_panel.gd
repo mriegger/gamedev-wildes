@@ -153,7 +153,7 @@ func _refresh_details() -> void:
 		row.add_child(icon)
 		var label := Label.new()
 		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		var available := crafting_coordinator.inventory_model.get_backpack_item_count(ingredient.item.id)
+		var available := crafting_coordinator.inventory_model.get_inventory_item_count(ingredient.item.id)
 		label.text = "%s    %d / %d" % [ingredient.item.display_name, available, ingredient.count]
 		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		label.add_theme_font_size_override("font_size", 14)

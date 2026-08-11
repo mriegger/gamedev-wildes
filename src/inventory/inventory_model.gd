@@ -176,27 +176,37 @@ func get_backpack_item_count(item_id: StringName) -> int:
 			total += stack.count
 	return total
 
-func can_exchange_backpack_items(consumed: Dictionary[StringName, int], granted: Dictionary[StringName, int]) -> bool:
-	return not _simulate_backpack_exchange(consumed, granted).is_empty()
+func get_inventory_item_count(item_id: StringName) -> int:
+	if not item_catalog.has_definition(item_id):
+		return 0
+	var total := 0
+	for index in _get_inventory_indices():
+		var stack := slots[index]
+		if stack != null and stack.item_id == item_id:
+			total += stack.count
+	return total
 
-func exchange_backpack_items(consumed: Dictionary[StringName, int], granted: Dictionary[StringName, int]) -> bool:
-	var simulated := _simulate_backpack_exchange(consumed, granted)
+func can_exchange_inventory_items(consumed: Dictionary[StringName, int], granted: Dictionary[StringName, int]) -> bool:
+	return not _simulate_inventory_exchange(consumed, granted).is_empty()
+
+func exchange_inventory_items(consumed: Dictionary[StringName, int], granted: Dictionary[StringName, int]) -> bool:
+	var simulated := _simulate_inventory_exchange(consumed, granted)
 	if simulated.is_empty():
 		return false
 	slots = simulated
 	inventory_changed.emit()
 	return true
 
-func _simulate_backpack_exchange(consumed: Dictionary[StringName, int], granted: Dictionary[StringName, int]) -> Array[InventoryStack]:
+func _simulate_inventory_exchange(consumed: Dictionary[StringName, int], granted: Dictionary[StringName, int]) -> Array[InventoryStack]:
 	if consumed.is_empty() or granted.is_empty():
 		return []
 	var simulated := _copy_slots()
-	var backpack_end: int = mini(size, FILLABLE_SIZE)
+	var inventory_indices := _get_inventory_indices()
 	for item_id in consumed:
 		var remaining: int = consumed[item_id]
 		if remaining < 1 or not item_catalog.has_definition(item_id):
 			return []
-		for index in range(HOTBAR_SIZE, backpack_end):
+		for index in inventory_indices:
 			var stack := simulated[index]
 			if stack == null or stack.item_id != item_id:
 				continue
@@ -214,7 +224,7 @@ func _simulate_backpack_exchange(consumed: Dictionary[StringName, int], granted:
 		if remaining < 1 or not item_catalog.has_definition(item_id):
 			return []
 		var max_stack: int = item_catalog.get_definition(item_id).max_stack
-		for index in range(HOTBAR_SIZE, backpack_end):
+		for index in inventory_indices:
 			var stack := simulated[index]
 			if stack == null or stack.item_id != item_id or stack.count >= max_stack:
 				continue
@@ -225,7 +235,7 @@ func _simulate_backpack_exchange(consumed: Dictionary[StringName, int], granted:
 				break
 		while remaining > 0:
 			var empty_index: int = -1
-			for index in range(HOTBAR_SIZE, backpack_end):
+			for index in inventory_indices:
 				if simulated[index] == null:
 					empty_index = index
 					break
@@ -235,6 +245,15 @@ func _simulate_backpack_exchange(consumed: Dictionary[StringName, int], granted:
 			simulated[empty_index] = InventoryStack.new(item_id, stack_count)
 			remaining -= stack_count
 	return simulated
+
+func _get_inventory_indices() -> Array[int]:
+	var indices: Array[int] = []
+	# Prefer the backpack so crafting does not disturb hotbar assignments unless needed.
+	for index in range(HOTBAR_SIZE, mini(size, FILLABLE_SIZE)):
+		indices.append(index)
+	for index in range(mini(size, HOTBAR_SIZE)):
+		indices.append(index)
+	return indices
 
 func _copy_slots() -> Array[InventoryStack]:
 	var copied: Array[InventoryStack] = []

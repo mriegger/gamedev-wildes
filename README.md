@@ -66,7 +66,7 @@ fallback values keep GL Compatibility usable at reduced fidelity, without volume
 to play.
 
 **Crafting.** Opening crafting with `Tab` reveals a recipe panel alongside the backpack. Seven data-driven recipes use
-backpack materials, take two seconds to complete, and cancel without consuming ingredients when
+materials from the backpack and hotbar, take two seconds to complete, and cancel without consuming ingredients when
 the panel closes or another recipe is selected.
 
 **UI & saves.** A frosted-glass front-end: main menu, world select over three save slots,
