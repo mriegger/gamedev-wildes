@@ -1,4 +1,4 @@
-[gd_scene load_steps=12 format=3 uid="uid://b22g4me0x1f3h"]
+[gd_scene load_steps=13 format=3 uid="uid://b22g4me0x1f3h"]
 
 [ext_resource type="Script" path="res://game/game.gd" id="1_game"]
 [ext_resource type="PackedScene" path="res://world/world.tscn" id="2_world"]
@@ -11,6 +11,7 @@
 [ext_resource type="Resource" path="res://blocks/block_catalog.tres" id="9_block_catalog"]
 [ext_resource type="Resource" path="res://items/item_catalog.tres" id="10_item_catalog"]
 [ext_resource type="PackedScene" path="res://player/debug/animation_tuning_panel.tscn" id="11_tuning"]
+[ext_resource type="PackedScene" path="res://mining/presentation/mining_break_particles.tscn" id="12_mining_particles"]
 
 [node name="Game" type="Node3D"]
 script = ExtResource("1_game")
@@ -31,6 +32,8 @@ item_catalog = ExtResource("10_item_catalog")
 
 [node name="GameSession" type="Node" parent="."]
 script = ExtResource("7_session")
+
+[node name="MiningBreakParticles" parent="." instance=ExtResource("12_mining_particles")]
 
 [node name="SaveStatusLayer" type="CanvasLayer" parent="."]
 process_mode = 2
