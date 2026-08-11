@@ -15,8 +15,10 @@ func _init() -> void:
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
 	_recipe_catalog = load("res://crafting/crafting_recipe_catalog.tres") as CraftingRecipeCatalog
 	_inventory = InventoryModel.new(item_catalog)
-	_inventory.slots[InventoryModel.HOTBAR_SIZE] = InventoryStack.new(&"stone_block", 10)
-	_inventory.slots[InventoryModel.HOTBAR_SIZE + 1] = InventoryStack.new(&"log_block", 5)
+	_inventory.slots[0] = InventoryStack.new(&"stone_block", 9)
+	_inventory.slots[1] = InventoryStack.new(&"log_block", 4)
+	_inventory.slots[InventoryModel.HOTBAR_SIZE] = InventoryStack.new(&"stone_block", 1)
+	_inventory.slots[InventoryModel.HOTBAR_SIZE + 1] = InventoryStack.new(&"log_block", 1)
 	_stats = ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
 	_inventory_stats = InventoryStatCoordinator.new()
 	_expect(_inventory_stats.setup(_inventory, _stats), "inventory stat setup failed")
@@ -54,21 +56,23 @@ func _process(_delta: float) -> bool:
 	elif _phase == 3 and _frame == 72:
 		var button := _hud.crafting_panel.get_craft_button()
 		_expect(button.get_progress() > 0.49 and button.get_progress() < 0.55, "craft button did not show half progress")
+		_expect(button.get_rendered_progress() > 0.49 and button.get_rendered_progress() < 0.55, "craft button fill did not render half progress")
+		_expect(button.get_node("Fill") is ProgressBar, "craft button fill was not a visible progress bar")
 		_hud.crafting_panel.select_recipe(&"copper_sword")
 		_phase = 4
 	elif _phase == 4 and _frame == 74:
 		_expect(not _crafting.is_crafting(), "recipe selection did not cancel crafting")
 		_expect(is_zero_approx(_hud.crafting_panel.get_craft_button().get_progress()), "recipe selection did not reset button")
-		_expect(_inventory.get_backpack_item_count(&"stone_block") == 10, "recipe selection consumed stone")
-		_expect(_inventory.get_backpack_item_count(&"log_block") == 5, "recipe selection consumed wood")
+		_expect(_inventory.get_inventory_item_count(&"stone_block") == 10, "recipe selection consumed stone")
+		_expect(_inventory.get_inventory_item_count(&"log_block") == 5, "recipe selection consumed wood")
 		_hud.crafting_panel.select_recipe(&"copper_pickaxe")
 		_hud.crafting_panel.get_craft_button().pressed.emit()
 		_crafting.advance_time(2.0)
 		_phase = 5
 	elif _phase == 5 and _frame == 76:
-		_expect(_inventory.get_backpack_item_count(&"copper_pickaxe") == 1, "completed UI craft did not add output")
-		_expect(_inventory.get_backpack_item_count(&"stone_block") == 7, "completed UI craft consumed wrong stone count")
-		_expect(_inventory.get_backpack_item_count(&"log_block") == 3, "completed UI craft consumed wrong wood count")
+		_expect(_inventory.get_inventory_item_count(&"copper_pickaxe") == 1, "completed UI craft did not add output")
+		_expect(_inventory.get_inventory_item_count(&"stone_block") == 7, "completed UI craft consumed wrong stone count")
+		_expect(_inventory.get_inventory_item_count(&"log_block") == 3, "completed UI craft consumed wrong wood count")
 		_hud.crafting_panel.select_recipe(&"copper_helmet")
 		_expect(not _hud.crafting_panel.get_craft_button().is_craft_enabled(), "unavailable recipe button remained enabled")
 		_hud.crafting_panel.select_recipe(&"copper_sword")
@@ -80,9 +84,9 @@ func _process(_delta: float) -> bool:
 	elif _phase == 6 and _frame == 78:
 		_expect(not _crafting.is_crafting(), "closing backpack did not cancel crafting")
 		_expect(not _hud.side_panel.is_open() and not _hud.crafting_panel.is_open(), "HUD panels did not close together")
-		_expect(_inventory.get_backpack_item_count(&"copper_sword") == 0, "canceled sword craft added output")
-		_expect(_inventory.get_backpack_item_count(&"stone_block") == 7, "closing backpack consumed stone")
-		_expect(_inventory.get_backpack_item_count(&"log_block") == 3, "closing backpack consumed wood")
+		_expect(_inventory.get_inventory_item_count(&"copper_sword") == 0, "canceled sword craft added output")
+		_expect(_inventory.get_inventory_item_count(&"stone_block") == 7, "closing backpack consumed stone")
+		_expect(_inventory.get_inventory_item_count(&"log_block") == 3, "closing backpack consumed wood")
 		_hud.free()
 		_camera_rig.free()
 		_phase = 7
@@ -102,6 +106,8 @@ func _check_open_state() -> void:
 	_expect(recipe_scroll != null and recipe_list.get_child_count() == 7, "scrollable recipe list did not contain seven recipes")
 	var ingredient_list := _hud.crafting_panel.get_node("Margin/Content/Body/Details/IngredientList") as VBoxContainer
 	_expect(ingredient_list.get_child_count() == 2, "selected recipe ingredients were not displayed")
+	var stone_count := (ingredient_list.get_child(0) as HBoxContainer).get_child(1) as Label
+	_expect(stone_count.text.contains("10 / 3"), "ingredient display did not include hotbar materials")
 	var crafting_rect := _hud.crafting_panel.get_global_rect()
 	var backpack_rect := _hud.side_panel.get_global_rect()
 	for slot in _hud.hotbar.slot_nodes:
