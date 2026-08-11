@@ -1,7 +1,6 @@
 extends Node3D
 class_name LevelRuntime
 
-const LEVEL_TERRAIN_SHADER := preload("res://levels/presentation/level_terrain.gdshader")
 const DUNGEON_TORCH_SHADOW_FADE_SECONDS: float = 0.45
 
 @onready var _geometry: MeshInstance3D = $Geometry
@@ -20,6 +19,7 @@ func _ready() -> void:
 
 func setup(
 	layout: LevelLayout,
+	definition: LevelDefinition,
 	block_catalog: BlockCatalog,
 	texture_set: BlockTextureSet,
 	settings: GameSettings
@@ -27,10 +27,12 @@ func setup(
 	assert(is_node_ready())
 	assert(_state == null)
 	assert(layout != null)
+	assert(definition != null and definition.presentation != null)
+	var presentation := definition.presentation
 	_state = LevelState.from_layout(layout, block_catalog)
-	_level_environment = _create_environment()
+	_level_environment = _create_environment(presentation)
 	_terrain_material = ShaderMaterial.new()
-	_terrain_material.shader = LEVEL_TERRAIN_SHADER
+	_terrain_material.shader = presentation.terrain_shader
 	_terrain_material.set_shader_parameter("terrain_textures", texture_set.texture_array)
 	var mesher := LevelMesher.new(texture_set)
 	_geometry.mesh = mesher.create_mesh(_state)
@@ -43,7 +45,7 @@ func setup(
 		torch_attachments[torch.cell] = LevelSocketDefinition.vector_for(torch.wall_direction)
 	_torch_renderer.spawn_torches(torch_attachments)
 	_return_point.position = _state.get_return_door_position()
-	_setup_return_door(block_catalog)
+	_setup_return_door(block_catalog, presentation.return_door_block_id)
 
 func _process(delta: float) -> void:
 	_torch_renderer.update_shadow_culling(delta)
@@ -76,7 +78,7 @@ func set_player_ref(player: Node3D) -> void:
 func apply_settings(settings: GameSettings) -> void:
 	_torch_renderer.set_max_shadow_torches(settings.dungeon_torch_shadow_count)
 
-func _setup_return_door(block_catalog: BlockCatalog) -> void:
+func _setup_return_door(block_catalog: BlockCatalog, door_block_id: int) -> void:
 	var mesh := BoxMesh.new()
 	mesh.size = Vector3(1.35, 2.4, 0.15)
 	_return_door.mesh = mesh
@@ -85,19 +87,19 @@ func _setup_return_door(block_catalog: BlockCatalog) -> void:
 	if direction.x != 0:
 		_return_door.rotation.y = PI * 0.5
 	var material := StandardMaterial3D.new()
-	material.albedo_texture = block_catalog.get_definition(BlockId.Type.LOG).side_texture
+	material.albedo_texture = block_catalog.get_definition(door_block_id).side_texture
 	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 	material.roughness = 0.9
 	_return_door.material_override = material
 
-func _create_environment() -> Environment:
+func _create_environment(presentation: LevelPresentationDefinition) -> Environment:
 	var environment := Environment.new()
 	environment.background_mode = Environment.BG_COLOR
-	environment.background_color = Color(0.002, 0.003, 0.005, 1.0)
-	environment.background_energy_multiplier = 0.1
+	environment.background_color = presentation.background_color
+	environment.background_energy_multiplier = presentation.background_energy_multiplier
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	environment.ambient_light_color = Color(0.42, 0.44, 0.48, 1.0)
-	environment.ambient_light_energy = 0.28
+	environment.ambient_light_color = presentation.ambient_light_color
+	environment.ambient_light_energy = presentation.ambient_light_energy
 	environment.ambient_light_sky_contribution = 0.0
 	environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	environment.tonemap_exposure = 1.0

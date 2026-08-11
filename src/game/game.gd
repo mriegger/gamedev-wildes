@@ -1,8 +1,6 @@
 extends Node3D
 class_name Game
 
-const LEVEL_ID: StringName = &"stone_dungeon"
-const ENTRANCE_ID: StringName = &"meadow_dungeon"
 const LEVEL_FADE_SECONDS: float = 0.18
 
 signal loading_progress(stage: String, percent: float, details: String)
@@ -20,6 +18,7 @@ signal main_menu_requested
 @export var combat_hit_particle_catalog: CombatHitParticleCatalog
 @export var player_stats_definition: CombatStatsDefinition
 @export var level_catalog: LevelCatalog
+@export var level_entrance_definition: LevelEntranceDefinition
 @export var level_runtime_scene: PackedScene
 
 @onready var world: WorldController = $World as WorldController
@@ -81,7 +80,8 @@ func _ready():
 	var combat_particle_catalog_valid := combat_hit_particle_catalog.validate(entity_catalog)
 	var player_stats_valid := player_stats_definition.validate()
 	var level_catalog_valid := level_catalog.validate()
-	if not block_catalog_valid or not item_catalog_valid or not crafting_catalog_valid or not entity_catalog_valid or not combat_particle_catalog_valid or not player_stats_valid or not level_catalog_valid:
+	var level_entrance_valid := level_catalog_valid and level_entrance_definition != null and level_entrance_definition.validate(level_catalog)
+	if not block_catalog_valid or not item_catalog_valid or not crafting_catalog_valid or not entity_catalog_valid or not combat_particle_catalog_valid or not player_stats_valid or not level_catalog_valid or not level_entrance_valid:
 		push_error("[Game] Catalog validation failed")
 		return
 	settings.apply_display(get_viewport())
@@ -250,7 +250,7 @@ func _setup_level_entrance():
 	world.voxel_model.protect_edit_cells(LevelEntrancePlacement.get_protected_cells(position))
 	_level_entrance = LevelEntrance.new()
 	add_child(_level_entrance)
-	_level_entrance.setup(position, world_spawn, block_catalog)
+	_level_entrance.setup(position, world_spawn, block_catalog, level_entrance_definition)
 	_show_world_level_interaction()
 
 func _on_generation_progress(stage: String, percent: float, details: String):
@@ -299,7 +299,7 @@ func _on_level_interaction_requested():
 func _enter_level():
 	_level_transitioning = true
 	level_interaction.clear_target()
-	var result := LevelGenerator.new().generate(level_catalog, LEVEL_ID, world.config.seed_value, ENTRANCE_ID, _entrance_coordinate)
+	var result := LevelGenerator.new().generate(level_catalog, level_entrance_definition.level_id, world.config.seed_value, level_entrance_definition.entrance_id, _entrance_coordinate)
 	if not result.succeeded:
 		_show_save_status("Dungeon unavailable")
 		_show_world_level_interaction()
@@ -307,7 +307,8 @@ func _enter_level():
 		return
 	var next_runtime := level_runtime_scene.instantiate() as LevelRuntime
 	add_child(next_runtime)
-	next_runtime.setup(result.layout, block_catalog, world.block_texture_set, settings)
+	var definition := level_catalog.get_level(level_entrance_definition.level_id)
+	next_runtime.setup(result.layout, definition, block_catalog, world.block_texture_set, settings)
 	next_runtime.set_player_ref(player)
 	var return_position := player.global_position
 	player.set_physics_process(false)
@@ -325,7 +326,7 @@ func _enter_level():
 	player.global_position = level_spawn
 	player.bind_space(_level_runtime.get_voxel_space(), _level_runtime, level_spawn)
 	_reset_camera_position()
-	level_interaction.set_target(_level_runtime.get_return_door_position(), "F  Return to Wildes")
+	level_interaction.set_target(_level_runtime.get_return_door_position(), level_entrance_definition.return_prompt)
 	await _fade_to(0.0)
 	player.set_physics_process(true)
 	_level_transitioning = false
@@ -356,7 +357,7 @@ func _exit_level():
 
 func _show_world_level_interaction():
 	if _level_entrance != null:
-		level_interaction.set_target(_level_entrance.interaction_position, "F  Enter Dungeon")
+		level_interaction.set_target(_level_entrance.interaction_position, level_entrance_definition.enter_prompt)
 
 func _reset_camera_position():
 	camera_rig.snap_to_follow_target()

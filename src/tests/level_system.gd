@@ -2,6 +2,7 @@ extends SceneTree
 
 const CATALOG_PATH: String = "res://levels/content/level_catalog.tres"
 const BLOCK_CATALOG_PATH: String = "res://blocks/block_catalog.tres"
+const ENTRANCE_DEFINITION_PATH: String = "res://levels/content/meadow_dungeon_entrance.tres"
 const LEVEL_ID: StringName = &"stone_dungeon"
 const ENTRANCE_ID: StringName = &"overworld_dungeon_entrance"
 const FUZZ_SEED_COUNT: int = 1000
@@ -75,6 +76,14 @@ func _test_catalog_and_modules() -> void:
 	_expect(_catalog.has_level(LEVEL_ID), "stone dungeon definition is missing")
 	var definition := _catalog.get_level(LEVEL_ID)
 	_expect(definition.validate(), "stone dungeon definition is invalid")
+	_expect(definition.presentation != null and definition.presentation.terrain_shader != null, "stone dungeon presentation is missing")
+	_expect(definition.presentation.terrain_shader.resource_path == "res://levels/presentation/level_terrain.gdshader", "stone dungeon terrain shader is not content-driven")
+	_expect(definition.presentation.return_door_block_id == BlockId.Type.LOG, "stone dungeon return-door block changed")
+	var entrance_definition := load(ENTRANCE_DEFINITION_PATH) as LevelEntranceDefinition
+	_expect(entrance_definition != null and entrance_definition.validate(_catalog), "meadow dungeon entrance definition is invalid")
+	if entrance_definition != null:
+		_expect(entrance_definition.entrance_id == &"meadow_dungeon" and entrance_definition.level_id == LEVEL_ID, "meadow entrance IDs changed")
+		_expect(entrance_definition.arch_block_id == BlockId.Type.STONE and entrance_definition.door_block_id == BlockId.Type.LOG, "meadow entrance blocks changed")
 	_expect(definition.start_module_id == &"dungeon_start_chamber", "start module ID changed")
 	_expect(definition.minimum_module_count == 8 and definition.maximum_module_count == 12, "module-count range must remain 8-12")
 	_expect(definition.maximum_extent == Vector3i(96, 16, 96), "level extent bound changed")

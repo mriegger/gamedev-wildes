@@ -6,6 +6,7 @@ const HARD_MAX_EXPLORED_STATES: int = 10000
 const HARD_MAX_MODULE_COUNT: int = 64
 
 @export var level_id: StringName
+@export var presentation: LevelPresentationDefinition
 @export var start_module_id: StringName
 @export var expansion_module_ids: Array[StringName] = []
 @export var cap_module_ids: Array[StringName] = []
@@ -21,6 +22,9 @@ func validate() -> bool:
 		source = String(level_id)
 	if level_id.is_empty():
 		push_error("[LevelDefinition] Empty level ID at %s" % source)
+		valid = false
+	if presentation == null or not presentation.validate(source):
+		push_error("[LevelDefinition] Invalid presentation for %s" % source)
 		valid = false
 	if start_module_id.is_empty():
 		push_error("[LevelDefinition] Empty start module ID for %s" % source)

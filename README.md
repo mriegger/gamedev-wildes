@@ -51,6 +51,8 @@ globally and survive unload/reload.
 dungeon assembled from authored chambers, halls, junctions, and dead ends. The finite interior
 uses cutaway-facing geometry, a black void, and authored torch light. The overworld stays loaded
 but its streaming and presentation are suspended until you return through the dungeon door.
+Doorway selection, module pools, terrain presentation, ambient lighting, and return-door materials
+are configured through typed level resources rather than hardcoded dungeon IDs.
 
 **Blocks.** Grass, dirt, sand, stone, wood, leaves, cobblestone, mossy stone bricks, stone bricks,
 terracotta bricks, and wood planks are minable and placeable. Copper is minable but not placeable.

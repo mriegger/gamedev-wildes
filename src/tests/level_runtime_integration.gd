@@ -44,12 +44,13 @@ func _run() -> void:
 		call_deferred("_finish", 0)
 		return
 	var texture_set := BlockTextureSet.new(block_catalog)
+	var definition := catalog.get_level(&"stone_dungeon")
 	var settings := GameSettings.new()
 	settings.dungeon_torch_shadow_count = 0
 	var root_child_baseline := root.get_child_count()
 	var orphan_baseline := int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
 	for iteration in range(LIFECYCLE_ITERATIONS):
-		await _run_runtime_lifecycle(runtime_scene, generation.layout, block_catalog, texture_set, settings, iteration)
+		await _run_runtime_lifecycle(runtime_scene, generation.layout, definition, block_catalog, texture_set, settings, iteration)
 	_expect(root.get_child_count() == root_child_baseline, "runtime lifecycle left children attached to SceneTree root")
 	await _test_world_suspension(world_scene)
 	await _test_game_transitions(catalog, block_catalog, runtime_scene)
@@ -62,6 +63,7 @@ func _run() -> void:
 func _run_runtime_lifecycle(
 	runtime_scene: PackedScene,
 	layout: LevelLayout,
+	definition: LevelDefinition,
 	block_catalog: BlockCatalog,
 	texture_set: BlockTextureSet,
 	settings: GameSettings,
@@ -76,7 +78,7 @@ func _run_runtime_lifecycle(
 	await process_frame
 	_expect(runtime.is_node_ready(), "runtime was not ready before setup at iteration %d" % iteration)
 	_expect(not runtime.visible and not runtime.is_processing(), "runtime starts active at iteration %d" % iteration)
-	runtime.setup(layout, block_catalog, texture_set, settings)
+	runtime.setup(layout, definition, block_catalog, texture_set, settings)
 	var state := runtime.get_voxel_space() as LevelState
 	_expect(state != null, "runtime did not expose LevelState at iteration %d" % iteration)
 	if state != null:
@@ -91,6 +93,7 @@ func _run_runtime_lifecycle(
 	var geometry := runtime.get_node("Geometry") as MeshInstance3D
 	var environment_node := runtime.get_node("WorldEnvironment") as WorldEnvironment
 	var torch_renderer := runtime.get_node("Torches") as TorchRenderer
+	var return_door := runtime.get_node("ReturnDoor") as MeshInstance3D
 	_expect(geometry != null and geometry.mesh != null and geometry.mesh.get_surface_count() == 1, "runtime geometry was not built at iteration %d" % iteration)
 	_expect(geometry.material_override is ShaderMaterial, "runtime terrain material is not shader-backed at iteration %d" % iteration)
 	if geometry.material_override is ShaderMaterial:
@@ -98,12 +101,15 @@ func _run_runtime_lifecycle(
 		_expect(terrain_material.shader != null and terrain_material.shader.resource_path == "res://levels/presentation/level_terrain.gdshader", "runtime terrain shader changed at iteration %d" % iteration)
 		_expect(terrain_material.get_shader_parameter("terrain_textures") == texture_set.texture_array, "runtime terrain texture array changed at iteration %d" % iteration)
 	_expect(torch_renderer.torch_instances.size() == layout.torches.size(), "runtime spawned %d/%d authored torches at iteration %d" % [torch_renderer.torch_instances.size(), layout.torches.size(), iteration])
+	_expect((return_door.material_override as StandardMaterial3D).albedo_texture == block_catalog.get_definition(definition.presentation.return_door_block_id).side_texture, "runtime ignored the authored return-door block at iteration %d" % iteration)
 	for torch in layout.torches:
 		_expect(torch_renderer.has_torch(torch.cell), "runtime omitted authored torch %s at iteration %d" % [torch.cell, iteration])
 	for cycle in range(3):
 		runtime.activate()
 		_expect(runtime.visible and runtime.is_processing(), "activate failed at iteration %d cycle %d" % [iteration, cycle])
 		_expect(environment_node.environment != null, "activate did not install the level environment at iteration %d cycle %d" % [iteration, cycle])
+		_expect(environment_node.environment.background_color == definition.presentation.background_color, "runtime ignored the authored background color at iteration %d cycle %d" % [iteration, cycle])
+		_expect(environment_node.environment.ambient_light_color == definition.presentation.ambient_light_color, "runtime ignored the authored ambient light at iteration %d cycle %d" % [iteration, cycle])
 		runtime.apply_settings(settings)
 		for light in torch_renderer.torch_light_nodes.values():
 			_expect(not (light as OmniLight3D).shadow_enabled, "zero-shadow setting left a torch shadow enabled at iteration %d cycle %d" % [iteration, cycle])
@@ -173,6 +179,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	game.entity_catalog = load("res://entities/entity_catalog.tres") as EntityCatalog
 	game.player_stats_definition = load("res://player/player_stats.tres") as CombatStatsDefinition
 	game.level_catalog = catalog
+	game.level_entrance_definition = load("res://levels/content/meadow_dungeon_entrance.tres") as LevelEntranceDefinition
 	game.level_runtime_scene = runtime_scene
 	var world := (load(WORLD_SCENE) as PackedScene).instantiate() as WorldController
 	var player := (load("res://player/player.tscn") as PackedScene).instantiate() as PlayerMotor

@@ -158,10 +158,24 @@ and edit capabilities when the active space changes. Dungeon levels never become
 owners: saves receive an explicit overworld position while retaining the version-five format,
 version-four migration, and item proficiency state.
 
+Dungeon content is selected through stable typed resources. `LevelEntranceDefinition` maps a
+doorway ID to a level ID and owns its current doorway presentation. `LevelDefinition` selects its
+module pools and `LevelPresentationDefinition`; `LevelCatalog` resolves the stable IDs. Generated
+torch placements remain presentation-owned, while `LevelState` contains only finite voxel-space
+truth, bounds, and entry/return geometry.
+
+Handmade structure tooling should export validated `LevelModuleDefinition` resources and add them
+explicitly to `LevelCatalog`; runtime generation does not consume editor drafts or scan folders.
+Each future content family, such as containers or encounters, adds its typed authored definition,
+transformed placement, state owner, runtime coordinator, and real caller together. Generic marker
+payloads, module graphs, persistent placement IDs, and new socket profiles wait until a feature
+actually consumes them.
+
 Serialized configuration is explicit and typed. `BlockCatalog` lists `BlockDefinition` resources,
 `ItemCatalog` lists item resources and their action definitions, `BiomeLibrary` lists biome
-resources, `EntityCatalog` lists entity definitions, and `WorldConfig` references the biome library.
-Runtime code does not scan directories or manufacture fallback domain resources.
+resources, `EntityCatalog` lists entity definitions, `LevelCatalog` lists dungeon modules and levels,
+and `WorldConfig` references the biome library. Runtime code does not scan directories or
+manufacture fallback domain resources.
 
 Crafting recipes reference canonical item definitions. `CraftingCoordinator` asks `InventoryModel`
 to validate and commit ingredient removal and output insertion across the backpack and hotbar as one
