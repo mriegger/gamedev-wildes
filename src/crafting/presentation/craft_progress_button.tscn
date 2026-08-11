@@ -25,6 +25,7 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 show_percentage = false
+fill_mode = 0
 
 [node name="Button" type="Button" parent="."]
 layout_mode = 1

@@ -224,36 +224,57 @@ func _simulate_inventory_exchange(consumed: Dictionary[StringName, int], granted
 		if remaining < 1 or not item_catalog.has_definition(item_id):
 			return []
 		var max_stack: int = item_catalog.get_definition(item_id).max_stack
-		for index in inventory_indices:
-			var stack := simulated[index]
-			if stack == null or stack.item_id != item_id or stack.count >= max_stack:
-				continue
-			var added: int = mini(remaining, max_stack - stack.count)
-			stack.count += added
-			remaining -= added
-			if remaining == 0:
-				break
-		while remaining > 0:
-			var empty_index: int = -1
-			for index in inventory_indices:
-				if simulated[index] == null:
-					empty_index = index
-					break
-			if empty_index == -1:
-				return []
-			var stack_count: int = mini(remaining, max_stack)
-			simulated[empty_index] = InventoryStack.new(item_id, stack_count)
-			remaining -= stack_count
+		remaining = _grant_item_to_indices(simulated, item_id, remaining, max_stack, _get_backpack_indices())
+		if remaining > 0:
+			remaining = _grant_item_to_indices(simulated, item_id, remaining, max_stack, _get_hotbar_indices())
+		if remaining > 0:
+			return []
 	return simulated
 
 func _get_inventory_indices() -> Array[int]:
+	var indices := _get_backpack_indices()
+	indices.append_array(_get_hotbar_indices())
+	return indices
+
+func _get_backpack_indices() -> Array[int]:
 	var indices: Array[int] = []
 	# Prefer the backpack so crafting does not disturb hotbar assignments unless needed.
 	for index in range(HOTBAR_SIZE, mini(size, FILLABLE_SIZE)):
 		indices.append(index)
+	return indices
+
+func _get_hotbar_indices() -> Array[int]:
+	var indices: Array[int] = []
 	for index in range(mini(size, HOTBAR_SIZE)):
 		indices.append(index)
 	return indices
+
+func _grant_item_to_indices(
+	simulated: Array[InventoryStack],
+	item_id: StringName,
+	count: int,
+	max_stack: int,
+	indices: Array[int],
+) -> int:
+	var remaining := count
+	for index in indices:
+		var stack := simulated[index]
+		if stack == null or stack.item_id != item_id or stack.count >= max_stack:
+			continue
+		var added: int = mini(remaining, max_stack - stack.count)
+		stack.count += added
+		remaining -= added
+		if remaining == 0:
+			return 0
+	for index in indices:
+		if simulated[index] != null:
+			continue
+		var stack_count: int = mini(remaining, max_stack)
+		simulated[index] = InventoryStack.new(item_id, stack_count)
+		remaining -= stack_count
+		if remaining == 0:
+			return 0
+	return remaining
 
 func _copy_slots() -> Array[InventoryStack]:
 	var copied: Array[InventoryStack] = []

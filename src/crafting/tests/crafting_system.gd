@@ -47,6 +47,17 @@ func _init() -> void:
 	_expect(hotbar_only.get_inventory_item_count(&"log_block") == 0, "hotbar-only craft retained wood")
 	_expect(hotbar_only.get_inventory_item_count(&"copper_pickaxe") == 1, "hotbar-only craft did not add output")
 
+	var backpack_first := InventoryModel.new(item_catalog)
+	backpack_first.slots[0] = InventoryStack.new(&"torch", 1)
+	backpack_first.slots[InventoryModel.HOTBAR_SIZE] = InventoryStack.new(&"log_block", 2)
+	backpack_first.slots[InventoryModel.HOTBAR_SIZE + 1] = InventoryStack.new(&"leaves_block", 2)
+	var backpack_first_coordinator := CraftingCoordinator.new()
+	backpack_first_coordinator.setup(backpack_first, recipe_catalog)
+	_expect(backpack_first_coordinator.start(&"torch_bundle"), "backpack-first craft did not start")
+	_expect(backpack_first_coordinator.advance_time(2.0), "backpack-first craft did not complete")
+	_expect(backpack_first.get_slot(0).count == 1, "crafted output changed a hotbar stack despite backpack capacity")
+	_expect(backpack_first.get_backpack_item_count(&"torch") == 4, "crafted output did not prefer the backpack")
+
 	var inventory := InventoryModel.new(item_catalog)
 	inventory.slots[InventoryModel.HOTBAR_SIZE] = InventoryStack.new(&"stone_block", 3)
 	inventory.slots[InventoryModel.HOTBAR_SIZE + 1] = InventoryStack.new(&"log_block", 2)

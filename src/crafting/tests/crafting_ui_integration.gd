@@ -57,12 +57,19 @@ func _process(_delta: float) -> bool:
 		var button := _hud.crafting_panel.get_craft_button()
 		_expect(button.get_progress() > 0.49 and button.get_progress() < 0.55, "craft button did not show half progress")
 		_expect(button.get_rendered_progress() > 0.49 and button.get_rendered_progress() < 0.55, "craft button fill did not render half progress")
-		_expect(button.get_node("Fill") is ProgressBar, "craft button fill was not a visible progress bar")
+		var fill := button.get_node("Fill") as ProgressBar
+		_expect(fill != null and fill.visible, "craft button fill was not visible while crafting")
+		_expect(fill.fill_mode == ProgressBar.FILL_BEGIN_TO_END, "craft button fill did not move left-to-right")
+		var fill_style := fill.get_theme_stylebox("fill") as StyleBoxFlat
+		var base_style := (button.get_node("Base") as Panel).get_theme_stylebox("panel") as StyleBoxFlat
+		_expect(fill_style.bg_color.get_luminance() > base_style.bg_color.get_luminance(), "craft button fill was not lighter than its background")
 		_hud.crafting_panel.select_recipe(&"copper_sword")
 		_phase = 4
 	elif _phase == 4 and _frame == 74:
 		_expect(not _crafting.is_crafting(), "recipe selection did not cancel crafting")
 		_expect(is_zero_approx(_hud.crafting_panel.get_craft_button().get_progress()), "recipe selection did not reset button")
+		_expect(is_zero_approx(_hud.crafting_panel.get_craft_button().get_rendered_progress()), "recipe selection did not reset rendered fill")
+		_expect(not (_hud.crafting_panel.get_craft_button().get_node("Fill") as ProgressBar).visible, "recipe selection did not hide rendered fill")
 		_expect(_inventory.get_inventory_item_count(&"stone_block") == 10, "recipe selection consumed stone")
 		_expect(_inventory.get_inventory_item_count(&"log_block") == 5, "recipe selection consumed wood")
 		_hud.crafting_panel.select_recipe(&"copper_pickaxe")
