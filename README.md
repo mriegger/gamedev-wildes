@@ -59,8 +59,8 @@ of each deposit stays underground, while some deposits expose up to three blocks
 Stone and the other common blocks are hand-minable. Copper requires a stone or copper pickaxe,
 while the masonry blocks require a copper pickaxe. Torches are placeable blocks that you can walk
 through — each is an omni light with a 9-block radius.
-Torch shadows are configurable for the nearest 0, 1, 2, or 4 lights and default to the nearest
-one.
+Overworld torch shadows are configurable for the nearest 0, 1, 2, or 4 lights and default to the
+nearest one.
 
 **Tools.** New worlds start with an empty inventory, while the first pickaxe is crafted from stone and
 wood. Item actions are data-driven: stone and copper pickaxes can mine copper, while the sword uses
@@ -92,9 +92,11 @@ panel includes a trash drop target that accepts backpack, hotbar, and equipped i
 frosted-glass front-end provides the main menu, world select over three save slots, create-world
 and hold-3-seconds-to-delete modals, a chunk-progress loading screen, and a pause menu that freezes
 the game. The pause menu exposes persistent frame-rate, 3D resolution,
-anti-aliasing, fog, sun-shadow, shadow-range, torch-shadow, and ambient-audio settings. Saves live in
-`user://saves/` and autosave every 30 seconds, plus shortly after any block edit. Saving inside a
-dungeon records its overworld return position because dungeon layouts are recreated on entry.
+anti-aliasing, fog, sun-shadow, shadow-range, overworld and dungeon torch-shadow, and
+ambient-audio settings. Dungeon shadows default to the nearest six authored torches and fade
+between active casters. Saves live in `user://saves/` and autosave every 30 seconds, plus shortly
+after any block edit. Saving inside a dungeon records its overworld return position because
+dungeon layouts are recreated on entry.
 
 ## Project Structure
 

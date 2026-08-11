@@ -45,7 +45,7 @@ func _run() -> void:
 		return
 	var texture_set := BlockTextureSet.new(block_catalog)
 	var settings := GameSettings.new()
-	settings.torch_shadow_count = 0
+	settings.dungeon_torch_shadow_count = 0
 	var root_child_baseline := root.get_child_count()
 	var orphan_baseline := int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
 	for iteration in range(LIFECYCLE_ITERATIONS):
@@ -235,7 +235,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	manager.setup(world.config, voxel_world, world.chunk_scheduler, world.chunk_renderer)
 	world.chunk_manager = manager
 	var settings := GameSettings.new()
-	settings.torch_shadow_count = 0
+	settings.dungeon_torch_shadow_count = 0
 	settings.birds_enabled = false
 	game.settings = settings
 	world.configure_settings(settings)

@@ -79,7 +79,7 @@ func _setup_systems():
 	chunk_mesher = ChunkMesher.new(config.chunk_size, config.max_build_y, config.seed_value, config.enable_ao, block_texture_set)
 	chunk_scheduler.setup(chunk_mesher, terrain_generator, voxel_model, config.chunk_size, config.max_build_y)
 	chunk_renderer.setup(chunk_mesher, terrain_material, water_block_material, voxel_model, _settings.get_shadow_chunk_radius())
-	torch_renderer.setup(block_catalog, _settings.torch_shadow_count)
+	torch_renderer.setup(block_catalog, _settings.torch_shadow_count, 0.0)
 	chunk_manager = ChunkManager.new()
 	chunk_manager.setup(config, voxel_model, chunk_scheduler, chunk_renderer)
 	chunk_manager.chunk_loaded.connect(_on_chunk_loaded)

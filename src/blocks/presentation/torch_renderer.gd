@@ -3,6 +3,7 @@ class_name TorchRenderer
 
 const TORCH_SHADOW_UPDATE_INTERVAL: float = 0.6
 const TORCH_LIGHT_Y: float = 0.32
+const DEFAULT_SHADOW_OPACITY: float = 0.5
 
 var torch_instances: Dictionary = {}
 var torch_light_nodes: Dictionary = {}
@@ -14,13 +15,26 @@ var torch_flame_mesh: BoxMesh
 
 var _shadow_update_timer: float = 0.5
 var _max_shadow_torches: int
+var _shadow_transition_seconds: float
+var _shadow_target_positions: Dictionary = {}
+var _ordered_shadow_targets: Array[Vector3i] = []
+var _shadow_strengths: Dictionary = {}
+var _shadow_transition_active: bool = false
 var player_ref: Node3D
 
 var block_catalog: BlockCatalog
 
-func setup(p_block_catalog: BlockCatalog, max_shadow_torches: int):
+func setup(p_block_catalog: BlockCatalog, max_shadow_torches: int, shadow_transition_seconds: float):
+	assert(p_block_catalog != null)
+	assert(max_shadow_torches >= 0)
+	assert(shadow_transition_seconds >= 0.0)
 	block_catalog = p_block_catalog
 	_max_shadow_torches = max_shadow_torches
+	_shadow_transition_seconds = shadow_transition_seconds
+	_shadow_target_positions.clear()
+	_ordered_shadow_targets.clear()
+	_shadow_strengths.clear()
+	_shadow_transition_active = false
 	_setup_materials_and_meshes()
 
 func _setup_materials_and_meshes():
@@ -46,7 +60,8 @@ func _setup_materials_and_meshes():
 
 func spawn_torch(pos: Vector3i, attach_dir: Vector3i) -> Node3D:
 	var root := _create_torch(pos, attach_dir)
-	_apply_shadow_pool_limit()
+	_refresh_shadow_targets()
+	_update_shadow_transitions(0.0)
 	return root
 
 func spawn_torches(torch_attachments: Dictionary) -> int:
@@ -55,7 +70,8 @@ func spawn_torches(torch_attachments: Dictionary) -> int:
 		_create_torch(position as Vector3i, torch_attachments[position] as Vector3i)
 		spawned += 1
 	if spawned > 0:
-		_apply_shadow_pool_limit()
+		_refresh_shadow_targets()
+		_update_shadow_transitions(0.0)
 	return spawned
 
 func _create_torch(pos: Vector3i, attach_dir: Vector3i) -> Node3D:
@@ -92,13 +108,14 @@ func _create_torch(pos: Vector3i, attach_dir: Vector3i) -> Node3D:
 	light.shadow_reverse_cull_face = false
 	light.shadow_bias = 0.03
 	light.shadow_normal_bias = 0.2
-	light.shadow_opacity = 0.5
+	light.shadow_opacity = 0.0
 	light.shadow_blur = 1.0
 	light.position = Vector3(0, TORCH_LIGHT_Y, 0)
 	root.add_child(light)
 
 	torch_instances[pos] = root
 	torch_light_nodes[pos] = light
+	_shadow_strengths[pos] = 0.0
 	return root
 
 func remove_torch(pos: Vector3i) -> bool:
@@ -108,8 +125,14 @@ func remove_torch(pos: Vector3i) -> bool:
 			n.queue_free()
 		torch_instances.erase(pos)
 		torch_light_nodes.erase(pos)
+		_shadow_target_positions.erase(pos)
+		_ordered_shadow_targets.erase(pos)
+		_shadow_strengths.erase(pos)
 		return true
 	torch_light_nodes.erase(pos)
+	_shadow_target_positions.erase(pos)
+	_ordered_shadow_targets.erase(pos)
+	_shadow_strengths.erase(pos)
 	return false
 
 func has_torch(pos: Vector3i) -> bool:
@@ -140,53 +163,144 @@ func load_torches_for_chunk(cx: int, cz: int, p_chunk_size: int, torch_attachmen
 			_create_torch(torch_pos, dir)
 			loaded += 1
 	if loaded > 0:
-		_apply_shadow_pool_limit()
+		_refresh_shadow_targets()
+		_update_shadow_transitions(0.0)
 	return loaded
 
 func update_shadow_culling(delta: float) -> void:
-	_shadow_update_timer -= delta
-	if _shadow_update_timer > 0:
-		return
-	_shadow_update_timer = TORCH_SHADOW_UPDATE_INTERVAL
-
 	if torch_instances.is_empty():
 		return
-	if DisplayServer.get_name() == "headless":
-		return
+	_shadow_update_timer -= delta
+	if _shadow_update_timer <= 0.0:
+		_shadow_update_timer = TORCH_SHADOW_UPDATE_INTERVAL
+		_refresh_shadow_targets()
+	_update_shadow_transitions(delta)
 
-	_apply_shadow_pool_limit()
+func _refresh_shadow_targets() -> void:
+	var previous_targets := _shadow_target_positions
+	_shadow_target_positions = {}
+	_ordered_shadow_targets.clear()
+	if _max_shadow_torches <= 0 or torch_light_nodes.is_empty():
+		_finish_shadow_target_refresh(previous_targets)
+		return
+	if player_ref == null and not is_zero_approx(_shadow_transition_seconds):
+		_finish_shadow_target_refresh(previous_targets)
+		return
+	var positions: Array[Vector3i] = []
+	for position in torch_light_nodes:
+		positions.append(position as Vector3i)
+	if player_ref != null:
+		var player_position := player_ref.global_position
+		positions.sort_custom(func(a: Vector3i, b: Vector3i) -> bool:
+			if is_zero_approx(_shadow_transition_seconds):
+				var immediate_a_distance := player_position.distance_squared_to(Vector3(a))
+				var immediate_b_distance := player_position.distance_squared_to(Vector3(b))
+				return immediate_a_distance < immediate_b_distance
+			var a_light := torch_light_nodes.get(a) as OmniLight3D
+			var b_light := torch_light_nodes.get(b) as OmniLight3D
+			var a_distance := player_position.distance_squared_to(a_light.global_position)
+			var b_distance := player_position.distance_squared_to(b_light.global_position)
+			if not is_equal_approx(a_distance, b_distance):
+				return a_distance < b_distance
+			return _cell_less(a, b)
+		)
+	elif is_zero_approx(_shadow_transition_seconds) and positions.size() <= _max_shadow_torches:
+		positions.sort_custom(_cell_less)
+	else:
+		_shadow_target_positions = previous_targets
+		return
+	var target_count := mini(_max_shadow_torches, positions.size())
+	for index in target_count:
+		var position := positions[index]
+		_ordered_shadow_targets.append(position)
+		_shadow_target_positions[position] = true
+	_finish_shadow_target_refresh(previous_targets)
 
-func _apply_shadow_pool_limit():
-	if _max_shadow_torches == 0:
-		for pos in torch_light_nodes:
-			var disabled_light = torch_light_nodes.get(pos) as OmniLight3D
-			if disabled_light and is_instance_valid(disabled_light):
-				disabled_light.shadow_enabled = false
+func _finish_shadow_target_refresh(previous_targets: Dictionary) -> void:
+	if is_zero_approx(_shadow_transition_seconds):
+		_apply_immediate_shadow_targets()
+		_shadow_transition_active = false
 		return
-	if torch_light_nodes.size() <= _max_shadow_torches:
-		for pos in torch_light_nodes:
-			var enabled_light = torch_light_nodes.get(pos) as OmniLight3D
-			if enabled_light and is_instance_valid(enabled_light):
-				enabled_light.shadow_enabled = true
-		return
-	if player_ref == null:
-		return
-	var positions = torch_light_nodes.keys()
-	var player_position = player_ref.global_position
-	positions.sort_custom(func(a, b):
-		return player_position.distance_squared_to(Vector3(a)) < player_position.distance_squared_to(Vector3(b))
-	)
-	for i in range(positions.size()):
-		var pos = positions[i] as Vector3i
-		var light = torch_light_nodes.get(pos) as OmniLight3D
-		if not light or not is_instance_valid(light):
+	if not _target_sets_match(previous_targets):
+		_shadow_transition_active = true
+
+func _target_sets_match(other_targets: Dictionary) -> bool:
+	if _shadow_target_positions.size() != other_targets.size():
+		return false
+	for position in _shadow_target_positions:
+		if not other_targets.has(position):
+			return false
+	return true
+
+func _apply_immediate_shadow_targets() -> void:
+	for position in torch_light_nodes:
+		var light := torch_light_nodes.get(position) as OmniLight3D
+		if light == null or not is_instance_valid(light):
 			continue
-		light.shadow_enabled = i < _max_shadow_torches
+		var enabled := _shadow_target_positions.has(position)
+		light.shadow_enabled = enabled
+		_shadow_strengths[position] = 1.0 if enabled else 0.0
+		light.shadow_opacity = DEFAULT_SHADOW_OPACITY if enabled else 0.0
+
+func _update_shadow_transitions(delta: float) -> void:
+	if is_zero_approx(_shadow_transition_seconds) or not _shadow_transition_active:
+		return
+	var fade_step := clampf(delta / _shadow_transition_seconds, 0.0, 1.0)
+	var transition_remains := false
+	for position in torch_light_nodes:
+		var light := torch_light_nodes.get(position) as OmniLight3D
+		if light == null or not is_instance_valid(light) or not light.shadow_enabled:
+			continue
+		if _shadow_target_positions.has(position):
+			continue
+		var strength := maxf(float(_shadow_strengths.get(position, 0.0)) - fade_step, 0.0)
+		_set_shadow_strength(position as Vector3i, light, strength)
+		if is_zero_approx(strength):
+			light.shadow_enabled = false
+		else:
+			transition_remains = true
+	var active_count := 0
+	for light_value in torch_light_nodes.values():
+		var active_light := light_value as OmniLight3D
+		if active_light != null and is_instance_valid(active_light) and active_light.shadow_enabled:
+			active_count += 1
+	for position in _ordered_shadow_targets:
+		if active_count >= _max_shadow_torches:
+			break
+		var light := torch_light_nodes.get(position) as OmniLight3D
+		if light == null or not is_instance_valid(light) or light.shadow_enabled:
+			continue
+		light.shadow_enabled = true
+		_set_shadow_strength(position, light, 0.0)
+		active_count += 1
+	for position in _ordered_shadow_targets:
+		var light := torch_light_nodes.get(position) as OmniLight3D
+		if light == null or not is_instance_valid(light) or not light.shadow_enabled:
+			continue
+		var strength := minf(float(_shadow_strengths.get(position, 0.0)) + fade_step, 1.0)
+		_set_shadow_strength(position, light, strength)
+		if strength < 1.0:
+			transition_remains = true
+	_shadow_transition_active = transition_remains
+
+func _set_shadow_strength(position: Vector3i, light: OmniLight3D, strength: float) -> void:
+	_shadow_strengths[position] = strength
+	light.shadow_opacity = DEFAULT_SHADOW_OPACITY * strength
+
+func _cell_less(a: Vector3i, b: Vector3i) -> bool:
+	if a.x != b.x:
+		return a.x < b.x
+	if a.y != b.y:
+		return a.y < b.y
+	return a.z < b.z
 
 func set_max_shadow_torches(count: int):
+	assert(count >= 0)
 	_max_shadow_torches = count
-	_apply_shadow_pool_limit()
+	_refresh_shadow_targets()
+	_update_shadow_transitions(0.0)
 
 func set_player_ref(p: Node3D):
 	player_ref = p
-	_apply_shadow_pool_limit()
+	_refresh_shadow_targets()
+	_update_shadow_transitions(0.0)

@@ -2,6 +2,7 @@ extends Node3D
 class_name LevelRuntime
 
 const LEVEL_TERRAIN_SHADER := preload("res://levels/presentation/level_terrain.gdshader")
+const DUNGEON_TORCH_SHADOW_FADE_SECONDS: float = 0.45
 
 @onready var _geometry: MeshInstance3D = $Geometry
 @onready var _world_environment: WorldEnvironment = $WorldEnvironment
@@ -36,7 +37,7 @@ func setup(
 	assert(_geometry.mesh != null)
 	_geometry.material_override = _terrain_material
 	_geometry.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
-	_torch_renderer.setup(block_catalog, settings.torch_shadow_count)
+	_torch_renderer.setup(block_catalog, settings.dungeon_torch_shadow_count, DUNGEON_TORCH_SHADOW_FADE_SECONDS)
 	var torch_attachments: Dictionary = {}
 	for torch in layout.torches:
 		torch_attachments[torch.cell] = LevelSocketDefinition.vector_for(torch.wall_direction)
@@ -73,7 +74,7 @@ func set_player_ref(player: Node3D) -> void:
 	_torch_renderer.set_player_ref(player)
 
 func apply_settings(settings: GameSettings) -> void:
-	_torch_renderer.set_max_shadow_torches(settings.torch_shadow_count)
+	_torch_renderer.set_max_shadow_torches(settings.dungeon_torch_shadow_count)
 
 func _setup_return_door(block_catalog: BlockCatalog) -> void:
 	var mesh := BoxMesh.new()
