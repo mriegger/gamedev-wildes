@@ -9,6 +9,7 @@ enum Result {
 	FAIL_INVALID_POS = 7,
 	FAIL_Y_OUT_OF_RANGE = 8,
 	FAIL_NO_TORCH_SUPPORT = 9,
+	FAIL_PROTECTED = 10,
 }
 
 enum Operation {
@@ -24,6 +25,7 @@ const RESULT_MESSAGES: Dictionary = {
 	Result.FAIL_INVALID_POS: "Invalid position",
 	Result.FAIL_Y_OUT_OF_RANGE: "Y out of build range",
 	Result.FAIL_NO_TORCH_SUPPORT: "Torch requires adjacent opaque block",
+	Result.FAIL_PROTECTED: "Protected structure",
 }
 
 var operation: Operation = Operation.PLACE

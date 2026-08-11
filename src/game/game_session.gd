@@ -10,10 +10,11 @@ var slot_id: int = -1
 var save_data: Dictionary = {}
 
 var _world: WorldController
-var _player: PlayerMotor
+var _player_stats: ActorStats
 var _inventory: InventoryModel
 var _item_proficiency: ItemProficiency
 var _environment: GameEnvironment
+var _persisted_position_query: Callable
 var _auto_save_elapsed: float = 0.0
 var _edit_idle_elapsed: float = 0.0
 var _playtime_accum: float = 0.0
@@ -23,15 +24,21 @@ var _saving_suspended: bool = false
 func _ready():
 	set_process(false)
 
-func setup(p_slot_id: int, p_save_data: Dictionary, p_world: WorldController, p_player: PlayerMotor, p_inventory: InventoryModel, p_item_proficiency: ItemProficiency, p_environment: GameEnvironment):
+func setup(p_slot_id: int, p_save_data: Dictionary, p_world: WorldController, p_player_stats: ActorStats, p_inventory: InventoryModel, p_item_proficiency: ItemProficiency, p_environment: GameEnvironment, p_persisted_position_query: Callable):
+	assert(p_world != null)
+	assert(p_player_stats != null)
+	assert(p_inventory != null)
 	assert(p_item_proficiency != null)
+	assert(p_environment != null)
+	assert(p_persisted_position_query.is_valid())
 	slot_id = p_slot_id
 	save_data = p_save_data
 	_world = p_world
-	_player = p_player
+	_player_stats = p_player_stats
 	_inventory = p_inventory
 	_item_proficiency = p_item_proficiency
 	_environment = p_environment
+	_persisted_position_query = p_persisted_position_query
 	_auto_save_elapsed = 0.0
 	_edit_idle_elapsed = 0.0
 	_playtime_accum = 0.0
@@ -66,7 +73,8 @@ func save(reason: String) -> bool:
 	if slot_id == -1 or _is_save_blocked():
 		return false
 	var time_to_save = _environment.get_time_of_day()
-	var success = SaveManager.save_world_state(slot_id, save_data, _world.voxel_model, _player, _inventory, _item_proficiency, _playtime_accum, time_to_save)
+	var persisted_position := _persisted_position_query.call() as Vector3
+	var success = SaveManager.save_world_state(slot_id, save_data, _world.voxel_model, persisted_position, _player_stats, _inventory, _item_proficiency, _playtime_accum, time_to_save)
 	if success:
 		_auto_save_elapsed = 0.0
 		_edit_idle_elapsed = 0.0
@@ -87,7 +95,7 @@ func is_saving_suspended() -> bool:
 	return _saving_suspended
 
 func _is_save_blocked() -> bool:
-	return _saving_suspended or _player.stats.is_dead()
+	return _saving_suspended or _player_stats.is_dead()
 
 func get_summary() -> String:
 	if slot_id == -1:

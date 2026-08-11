@@ -154,7 +154,7 @@ func _handle_raycast():
 	var selected_primary := get_selected_primary_action()
 	can_mine_target = selected_primary is MiningActionDefinition and _can_mine_position(best_hit, selected_primary as MiningActionDefinition)
 
-	if editable_voxel_world != null and voxel_space.get_block_at(best_place) == null:
+	if editable_voxel_world != null and not editable_voxel_world.is_edit_protected(best_place) and voxel_space.get_block_at(best_place) == null:
 		if not _placement_collides_player(best_place) and not _placement_collides_entity(best_place):
 			placement_has = true
 			can_place_target = motor_pos.distance_squared_to(Vector3(best_place.x + 0.5, best_place.y + 0.5, best_place.z + 0.5)) <= reach_squared
@@ -393,6 +393,8 @@ func _commit_melee_contacts():
 func _can_mine_position(pos: Vector3i, action: MiningActionDefinition) -> bool:
 	if action == null or voxel_space == null or editable_voxel_world == null or motor == null:
 		return false
+	if editable_voxel_world.is_edit_protected(pos):
+		return false
 	var center := Vector3(pos) + Vector3(0.5, 0.5, 0.5)
 	if motor.global_position.distance_squared_to(center) > reach * reach:
 		return false
@@ -428,6 +430,8 @@ func _can_place(action: BlockPlacementActionDefinition) -> bool:
 
 func _validate_placement(position: Vector3i, action: BlockPlacementActionDefinition) -> bool:
 	if action == null or voxel_space == null or editable_voxel_world == null or inventory_model == null or motor == null:
+		return false
+	if editable_voxel_world.is_edit_protected(position):
 		return false
 	if get_selected_placement_action() != action or not inventory_model.can_consume_selected():
 		return false

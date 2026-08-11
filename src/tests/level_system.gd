@@ -44,10 +44,12 @@ func _run() -> void:
 	_test_catalog_and_modules()
 	_test_rotations()
 	_test_seed_identity_and_failures()
+	_test_entrance_placement_stability()
 	var fuzz_started := Time.get_ticks_msec()
 	var successful_seeds := _test_generation_fuzz()
 	var fuzz_msec := Time.get_ticks_msec() - fuzz_started
 	_test_level_state_and_mesher()
+	_test_gameplay_location_state()
 	_finish(successful_seeds, fuzz_msec)
 
 func _test_catalog_and_modules() -> void:
@@ -201,6 +203,45 @@ func _test_seed_identity_and_failures() -> void:
 	var probe_text := "\n".join(PackedStringArray(probe_output))
 	_expect(probe_exit == 0, "malformed typed catalog probe exited %d" % probe_exit)
 	_expect(probe_text.contains("LEVEL_MALFORMED_PROBE PASS"), "malformed typed catalog probe did not return the expected failure")
+
+func _test_entrance_placement_stability() -> void:
+	var voxel_world := VoxelWorld.new(20, 36, 5, 12.0, _block_catalog)
+	for x in range(-16, 17):
+		for z in range(-16, 17):
+			voxel_world.height_map_dict[Vector2i(x, z)] = 4
+			voxel_world.type_map_dict[Vector2i(x, z)] = BlockId.Type.GRASS
+	var spawn := Vector3(0.5, 5.0, 0.5)
+	var entrance_seed := 1729
+	var initial: Variant = LevelEntrancePlacement.find_position(voxel_world, spawn, entrance_seed)
+	_expect(initial is Vector3, "flat meadow did not produce an entrance position")
+	if not initial is Vector3:
+		return
+	var initial_position := initial as Vector3
+	var horizontal_offset := Vector2(initial_position.x - spawn.x, initial_position.z - spawn.z)
+	_expect(horizontal_offset.length() >= 6.0 and horizontal_offset.length() <= 13.0, "entrance escaped its configured spawn radius")
+	var center := Vector3i(floori(initial_position.x), floori(initial_position.y), floori(initial_position.z))
+	voxel_world.restore_block_edits({center: BlockId.Type.STONE}, {})
+	var after_placement: Variant = LevelEntrancePlacement.find_position(voxel_world, spawn, entrance_seed)
+	_expect(after_placement is Vector3 and (after_placement as Vector3).is_equal_approx(initial_position), "placed block changed the stable entrance coordinate")
+	_expect(LevelEntrancePlacement.has_edit_conflict(voxel_world, initial_position), "placed edit in entrance footprint was not reported as a conflict")
+	voxel_world.restore_block_edits({}, {center + Vector3i.DOWN: true})
+	var after_removal: Variant = LevelEntrancePlacement.find_position(voxel_world, spawn, entrance_seed)
+	_expect(after_removal is Vector3 and (after_removal as Vector3).is_equal_approx(initial_position), "removed terrain changed the stable entrance coordinate")
+	_expect(LevelEntrancePlacement.has_edit_conflict(voxel_world, initial_position), "removed edit in entrance footprint was not reported as a conflict")
+	voxel_world.restore_block_edits({}, {})
+	_expect(not LevelEntrancePlacement.has_edit_conflict(voxel_world, initial_position), "clean entrance footprint was reported as conflicted")
+	var protected_cells := LevelEntrancePlacement.get_protected_cells(initial_position)
+	var protected_set: Dictionary = {}
+	for cell in protected_cells:
+		protected_set[cell] = true
+	_expect(protected_cells.size() == 45 and protected_set.size() == 45, "entrance protection volume is not a unique 3x5x3 prism")
+	_expect(protected_set.has(center) and protected_set.has(center + Vector3i.DOWN), "entrance protection omits doorway or foundation cells")
+	voxel_world.protect_edit_cells(protected_cells)
+	var blocked_placement := voxel_world.try_place_block(center, BlockId.Type.STONE)
+	var blocked_mining := voxel_world.try_mine_block(center + Vector3i.DOWN)
+	_expect(not blocked_placement.is_success() and blocked_placement.result == BlockEdit.Result.FAIL_PROTECTED, "entrance headspace accepted a block placement")
+	_expect(blocked_mining.size() == 1 and not blocked_mining[0].is_success() and blocked_mining[0].result == BlockEdit.Result.FAIL_PROTECTED, "entrance foundation accepted mining")
+	_expect(voxel_world.get_block_edit_count() == 0, "rejected entrance edits changed voxel state")
 
 func _test_generation_fuzz() -> int:
 	var saw_minimum := false
@@ -445,6 +486,35 @@ func _test_level_state_and_mesher() -> void:
 	if mesh != null:
 		var arrays := mesh.surface_get_arrays(0)
 		_expect((arrays[Mesh.ARRAY_TEX_UV2] as PackedVector2Array) == texture_layers, "UV2 layers were not installed on the mesh surface")
+
+func _test_gameplay_location_state() -> void:
+	var initial := Vector3(2.5, 9.0, -3.5)
+	var location := GameplayLocationState.new(initial)
+	_expect(not location.is_in_level(), "location starts inside a level")
+	_expect(location.get_persisted_position().is_equal_approx(initial), "initial overworld position changed")
+	var walking_position := Vector3(8.0, 10.0, 4.0)
+	location.update_world_position(walking_position)
+	_expect(location.get_persisted_position().is_equal_approx(walking_position), "world movement did not update persisted position")
+	var doorway_position := Vector3(11.5, 12.0, -7.5)
+	location.enter_level(doorway_position)
+	_expect(location.is_in_level(), "enter_level did not change active location")
+	_expect(location.get_persisted_position().is_equal_approx(doorway_position), "doorway return anchor was not persisted")
+	location.update_world_position(Vector3(400.0, 2.0, 400.0))
+	_expect(location.get_persisted_position().is_equal_approx(doorway_position), "level-local movement overwrote the persisted overworld anchor")
+	location.return_to_world()
+	_expect(not location.is_in_level(), "return_to_world did not restore world location")
+	location.update_world_position(initial)
+	_expect(location.get_persisted_position().is_equal_approx(initial), "world updates did not resume after leaving the level")
+	var probe_output: Array = []
+	var probe_exit := OS.execute(
+		OS.get_executable_path(),
+		["--headless", "--path", ProjectSettings.globalize_path("res://"), "--script", "res://tests/level_save_probe.gd"],
+		probe_output,
+		true
+	)
+	var probe_text := "\n".join(PackedStringArray(probe_output))
+	_expect(probe_exit == 0, "isolated current-version save probe exited %d" % probe_exit)
+	_expect(probe_text.contains("LEVEL_SAVE_PROBE PASS"), "isolated current-version save probe did not persist the overworld anchor")
 
 func _layout_digest(layout: LevelLayout) -> String:
 	var lines := PackedStringArray()

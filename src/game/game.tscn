@@ -1,4 +1,4 @@
-[gd_scene load_steps=23 format=3 uid="uid://b22g4me0x1f3h"]
+[gd_scene load_steps=26 format=3 uid="uid://b22g4me0x1f3h"]
 
 [ext_resource type="Script" path="res://game/game.gd" id="1_game"]
 [ext_resource type="PackedScene" path="res://world/world.tscn" id="2_world"]
@@ -22,6 +22,9 @@
 [ext_resource type="PackedScene" path="res://ui/screens/death/player_death_screen.tscn" id="20_death_screen"]
 [ext_resource type="PackedScene" path="res://combat/particles/combat_hit_particles.tscn" id="21_combat_particles"]
 [ext_resource type="Resource" path="res://combat/particles/combat_hit_particle_catalog.tres" id="22_combat_particle_catalog"]
+[ext_resource type="Resource" path="res://levels/content/level_catalog.tres" id="23_level_catalog"]
+[ext_resource type="PackedScene" path="res://levels/runtime/level_runtime.tscn" id="24_level_runtime"]
+[ext_resource type="Script" path="res://levels/entrance/level_interaction_coordinator.gd" id="25_level_interaction"]
 
 [node name="Game" type="Node3D"]
 script = ExtResource("1_game")
@@ -35,6 +38,8 @@ crafting_recipe_catalog = ExtResource("19_crafting_catalog")
 entity_catalog = ExtResource("15_entity_catalog")
 combat_hit_particle_catalog = ExtResource("22_combat_particle_catalog")
 player_stats_definition = ExtResource("16_player_stats")
+level_catalog = ExtResource("23_level_catalog")
+level_runtime_scene = ExtResource("24_level_runtime")
 
 [node name="World" parent="." instance=ExtResource("2_world")]
 
@@ -61,6 +66,9 @@ script = ExtResource("7_session")
 
 [node name="MiningHitParticles" parent="." instance=ExtResource("13_mining_hit_particles")]
 
+[node name="LevelInteractionCoordinator" type="Node" parent="."]
+script = ExtResource("25_level_interaction")
+
 [node name="SaveStatusLayer" type="CanvasLayer" parent="."]
 process_mode = 2
 visible = false
@@ -73,3 +81,17 @@ offset_right = 420.0
 offset_bottom = 36.0
 theme_override_colors/font_color = Color(1, 1, 1, 0.85)
 theme_override_font_sizes/font_size = 14
+
+[node name="TransitionLayer" type="CanvasLayer" parent="."]
+process_mode = 3
+layer = 200
+
+[node name="Fade" type="ColorRect" parent="TransitionLayer"]
+visible = false
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0, 0, 0, 0)

@@ -4,7 +4,7 @@ Wildes uses scene composition and explicit dependency injection. There are no au
 
 `app/app.tscn` is the application entry point. `App` owns menu, world-selection, loading, and gameplay transitions. Screens emit intent signals; they do not change scenes or reach into gameplay state.
 
-`game/game.tscn` is the gameplay composition root. It packages the world, player, camera, environment, HUD, and game session. `Game` wires those systems with `setup()` calls after world initialization. `GameSession` owns save cadence and persistence, while `Game` owns gameplay lifecycle and pause flow.
+`game/game.tscn` is the gameplay composition root. It packages the world, player, camera, environment, HUD, level interaction, and game session. `Game` wires those systems with `setup()` calls after world initialization. `GameSession` owns save cadence and persistence, while `Game` owns gameplay location, transitions, and pause flow.
 
 The source tree follows feature ownership:
 
@@ -12,13 +12,14 @@ The source tree follows feature ownership:
 actors/                      reusable procedural animation
 app/                         application navigation
 game/                        gameplay composition and session lifecycle
-blocks/                      block domain resources and rules
+blocks/                      block domain resources, voxel query contract, and shared presentation
 combat/                      melee profiles, contacts, targeting, and validation
 crafting/                    recipe definitions, inventory coordination, and presentation
 entities/                    content, AI, navigation, populations, and presentation
 environment/                 packaged environment and day/night feature
 inventory/                   inventory model and inventory-owned UI
 items/                       item resources, actions, catalogs, and held scenes
+levels/                      finite dungeon content, generation, runtime, entrance, and presentation
 player/                      player behavior, camera, and visuals
 progression/                 combat rewards and shared item proficiency
 save/                        save encoding and storage
@@ -30,7 +31,6 @@ world/
   materials/                 world shaders and material profiles
   model/                     voxel state and edits
   settings/                  serialized world configuration
-  special_blocks/            non-chunk-rendered block visuals
 tests/                       headless verification
 ```
 
@@ -149,6 +149,13 @@ failed-search retry budgets. The spatial index contains only active actors, and 
 chunk-streaming loss removes actors and index entries together. Block placement queries that index
 and revalidates world, inventory, reach, player overlap, and active-entity overlap immediately
 before committing.
+
+## Voxel spaces and levels
+
+`VoxelSpace` is the read-only query boundary shared by the streamed `VoxelWorld` and immutable
+`LevelState`. Player setup is one-time; `Game` atomically rebinds movement, collision, targeting,
+and edit capabilities when the active space changes. Dungeon levels never become save-state
+owners: saves receive an explicit overworld position and keep the existing version-4 format.
 
 Serialized configuration is explicit and typed. `BlockCatalog` lists `BlockDefinition` resources,
 `ItemCatalog` lists item resources and their action definitions, `BiomeLibrary` lists biome

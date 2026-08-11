@@ -14,6 +14,11 @@ A chunk enters `visible_chunks` only after its mesh is restored or applied. Torc
 
 Worker threads only produce data. Godot scene nodes, `ArrayMesh` assignment, pooling, and signal-driven visual updates remain on the main thread. Shutdown stops and joins workers before clearing renderer-owned nodes.
 
+Entering a finite dungeon suspends `WorldController`, `ChunkManager`, and `ChunkBuildScheduler`.
+Loaded chunk nodes and caches remain owned by the world, queued jobs stop being dequeued, and at
+most the two already-running builds may finish without being applied. Resume releases those
+workers and continues streaming around the unchanged overworld player anchor.
+
 `VoxelWorld` indexes placed blocks, removed blocks, generated tree blocks, and seeded copper deposits
 by chunk. A full chunk build derives copper from the world seed and chunk origin after base terrain
 exists; terrain-only preloads do not generate it. Deposits and empty-chunk markers stay in memory

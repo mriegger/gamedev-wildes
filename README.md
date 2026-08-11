@@ -19,6 +19,7 @@ world time. Copper deposits regenerate deterministically from the world seed.
 | Mouse wheel / pinch | Zoom |
 | Left-click / hold | Use the selected item's primary action; hold to mine, click to attack |
 | Right-click | Place the selected block |
+| `F` | Enter or leave a nearby dungeon |
 | `1`–`9` | Select hotbar slot; while the backpack is open, assign the hovered item to that slot |
 | `Tab` | Toggle backpack and crafting |
 | `P` | Toggle backpack only |
@@ -45,6 +46,11 @@ and fill with water up to level 5.
 **Streaming.** Chunks load in a radius of 4 around you (9×9 = 81 chunks) and unload two chunks
 further out. Meshing runs on background threads so movement doesn't hitch; edits are stored
 globally and survive unload/reload.
+
+**Dungeon levels.** A doorway near the meadow spawn leads to a deterministic 8–12-module stone
+dungeon assembled from authored chambers, halls, junctions, and dead ends. The finite interior
+uses cutaway-facing geometry, a black void, and authored torch light. The overworld stays loaded
+but its streaming and presentation are suspended until you return through the dungeon door.
 
 **Blocks.** Grass, dirt, sand, stone, wood, leaves, cobblestone, mossy stone bricks, stone bricks,
 terracotta bricks, and wood planks are minable and placeable. Copper is minable but not placeable.
@@ -87,7 +93,8 @@ frosted-glass front-end provides the main menu, world select over three save slo
 and hold-3-seconds-to-delete modals, a chunk-progress loading screen, and a pause menu that freezes
 the game. The pause menu exposes persistent frame-rate, 3D resolution,
 anti-aliasing, fog, sun-shadow, shadow-range, torch-shadow, and ambient-audio settings. Saves live in
-`user://saves/` and autosave every 30 seconds, plus shortly after any block edit.
+`user://saves/` and autosave every 30 seconds, plus shortly after any block edit. Saving inside a
+dungeon records its overworld return position because dungeon layouts are recreated on entry.
 
 ## Project Structure
 
@@ -96,13 +103,13 @@ src/                    Godot project. Entry scene: app/app.tscn
 ├── actors/             Shared procedural animation state, profiles, and humanoid animator
 ├── app/                Application shell and screen/session transitions
 ├── game/               Gameplay composition root and session persistence
-├── world/              Coordinator plus chunks/, generation/, materials/, model/, settings/,
-│                       and special_blocks/
-├── blocks/             Block ids, definitions, catalog, and torch placement rules
+├── world/              Coordinator plus chunks/, generation/, materials/, model/, and settings/
+├── blocks/             Block domain, voxel query contract, and shared block presentation
 ├── combat/             Melee contacts, profiles, targeting, and validation
 ├── crafting/           Recipe resources, inventory coordination, presentation, and tests
 ├── dev_console/        Developer commands, bottom-screen console presentation, and tests
 ├── entities/           Entity catalog, AI, voxel navigation, populations, and custom presentation
+├── levels/             Dungeon content, definitions, generation, runtime, entrance, and presentation
 ├── items/              Item catalog, action definitions, and held-item scenes
 ├── mining/             Mining-owned presentation and focused tests
 ├── player/             Motor, interaction, targeting, input, animation, camera/, debug/, and visuals/

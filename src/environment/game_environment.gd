@@ -24,6 +24,15 @@ func start_clock():
 	_ambient_soundscape.start()
 	_clock.start()
 
+func set_outdoor_presentation_enabled(enabled: bool):
+	_world_environment.environment = _values.env if enabled else null
+	_sun.visible = enabled
+	_sun_fill.visible = enabled
+	if enabled:
+		_ambient_soundscape.start()
+	else:
+		_ambient_soundscape.stop()
+
 func apply_settings(settings: GameSettings):
 	_values.volumetric_fog_enabled = settings.volumetric_fog_enabled
 	_values.set_shadow_enabled(settings.sun_shadows_enabled)

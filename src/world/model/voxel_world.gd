@@ -33,6 +33,7 @@ var _removed_edits_by_chunk: Dictionary = {}
 var cell_revisions: Dictionary = {}
 var _highest_cache: Dictionary = {}
 var torch_attachments: Dictionary = {}
+var _protected_edit_cells: Dictionary = {}
 
 func _init(p_chunk_size: int, p_max_build_y: int, p_water_level: int, p_spawn_search_radius: float, p_block_catalog: BlockCatalog):
 	chunk_size = p_chunk_size
@@ -58,6 +59,16 @@ func snapshot_block_edits() -> Dictionary:
 
 func get_block_edit_count() -> int:
 	return _placed_blocks.size() + _removed_blocks.size()
+
+func has_persisted_edit(position: Vector3i) -> bool:
+	return _placed_blocks.has(position) or _removed_blocks.has(position) or torch_attachments.has(position)
+
+func protect_edit_cells(cells: Array[Vector3i]) -> void:
+	for cell in cells:
+		_protected_edit_cells[cell] = true
+
+func is_edit_protected(position: Vector3i) -> bool:
+	return _protected_edit_cells.has(position)
 
 func _rebuild_edit_index(edits: Dictionary, index: Dictionary) -> void:
 	index.clear()
@@ -321,10 +332,20 @@ func get_highest_top(x: int, z: int) -> float:
 	if y == -1:
 		return NO_SURFACE_Y
 	return float(y) + 1.0
-
 func get_terrain_surface_y(x: int, z: int) -> float:
 	var height: Variant = height_map_dict.get(Vector2i(x, z), null)
 	return float(height) if height is int else NO_SURFACE_Y
+
+func get_terrain_surface_top(x: int, z: int) -> float:
+	ensure_column_generated(x, z)
+	var height: Variant = height_map_dict.get(Vector2i(x, z), null)
+	if height == null:
+		return NO_SURFACE_Y
+	return float(height as int) + 1.0
+
+func get_terrain_surface_block_id(x: int, z: int) -> int:
+	ensure_column_generated(x, z)
+	return int(type_map_dict.get(Vector2i(x, z), BlockId.Type.AIR))
 
 func is_occupied(p: Vector3i) -> bool:
 	var bt = get_block_at(p)
@@ -339,6 +360,11 @@ func get_attached_torches(support_pos: Vector3i) -> Array[Vector3i]:
 	return attached
 
 func try_mine_block(p: Vector3i) -> Array:
+	if is_edit_protected(p):
+		return [BlockEdit.fail(p, BlockEdit.Operation.MINE, BlockEdit.Result.FAIL_PROTECTED)]
+	for torch_position in get_attached_torches(p):
+		if is_edit_protected(torch_position):
+			return [BlockEdit.fail(p, BlockEdit.Operation.MINE, BlockEdit.Result.FAIL_PROTECTED)]
 	if not is_breakable(p):
 		return [BlockEdit.fail(p, BlockEdit.Operation.MINE, BlockEdit.Result.FAIL_NOT_BREAKABLE)]
 	var old_id = get_block_id_at(p)
@@ -386,6 +412,8 @@ func try_mine_block(p: Vector3i) -> Array:
 	return batch
 
 func try_place_block(p: Vector3i, block_type: int, attach_dir: Vector3i = Vector3i.ZERO) -> BlockEdit:
+	if is_edit_protected(p):
+		return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_PROTECTED)
 	if block_type == BlockId.Type.AIR:
 		return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_INVALID_POS, "AIR not placeable")
 	if not BlockId.is_valid(block_type):

@@ -8,6 +8,7 @@ class_name HUD
 @onready var crafting_panel: CraftingPanel = $CraftingPanel as CraftingPanel
 @onready var dev_console: DevConsole = $DevConsole as DevConsole
 @onready var player_hit_vignette: PlayerHitVignette = $PlayerHitVignette as PlayerHitVignette
+@onready var interaction_prompt: Label = $InteractionPrompt as Label
 
 func setup_with_camera(p_inventory: InventoryModel, p_inventory_stat_coordinator: InventoryStatCoordinator, p_crafting_coordinator: CraftingCoordinator, p_recipe_catalog: CraftingRecipeCatalog, cam_rig: CameraRig, stats: ActorStats, item_proficiency: ItemProficiency):
 	hotbar.setup(p_inventory, p_inventory_stat_coordinator, item_proficiency)
@@ -61,3 +62,10 @@ func close_side_panel_immediate():
 
 func play_player_hit():
 	player_hit_vignette.play()
+
+func show_interaction_prompt(text: String):
+	interaction_prompt.text = text
+	interaction_prompt.visible = true
+
+func hide_interaction_prompt():
+	interaction_prompt.visible = false

@@ -24,6 +24,7 @@ var _settings: GameSettings
 
 var _start_state: WorldState
 var _player_ref: Node3D
+var _suspended: bool = false
 
 func _ready():
 	set_process(false)
@@ -123,6 +124,8 @@ func _prepare_materials():
 	water_block_material.set_shader_parameter("water_normal", normal_texture)
 
 func _process(delta: float):
+	if _suspended:
+		return
 	chunk_manager.tick(_player_ref.global_position)
 	chunk_manager.poll_completed()
 	voxel_model.prune_terrain_cache(2)
@@ -157,8 +160,13 @@ func is_position_streamed(position: Vector3) -> bool:
 
 func apply_settings(settings: GameSettings):
 	_settings = settings
-	chunk_renderer.set_shadow_render_distance(settings.get_shadow_chunk_radius())
-	torch_renderer.set_max_shadow_torches(settings.torch_shadow_count)
+	if _suspended:
+		return
+	_apply_renderer_settings()
+
+func _apply_renderer_settings():
+	chunk_renderer.set_shadow_render_distance(_settings.get_shadow_chunk_radius())
+	torch_renderer.set_max_shadow_torches(_settings.torch_shadow_count)
 
 func update_water_tint(sky_color: Color):
 	var sky_luminance: float = (sky_color.r + sky_color.g + sky_color.b) / 3.0
@@ -168,6 +176,24 @@ func update_water_tint(sky_color: Color):
 	tint.y = maxf(tint.y, 0.12)
 	tint.z = maxf(tint.z, 0.25)
 	water_block_material.set_shader_parameter("tint_color", tint)
+
+func suspend():
+	if _suspended:
+		return
+	_suspended = true
+	chunk_manager.suspend()
+	visible = false
+
+func resume():
+	if not _suspended:
+		return
+	chunk_manager.resume()
+	_apply_renderer_settings()
+	visible = true
+	_suspended = false
+
+func is_suspended() -> bool:
+	return _suspended
 
 func shutdown():
 	set_process(false)

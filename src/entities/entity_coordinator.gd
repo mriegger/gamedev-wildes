@@ -39,6 +39,7 @@ var _actor_tick_start_index: int = 0
 var _prepared_definition_cursor: int = 0
 var _preparation_needed: bool = false
 var _next_retirement_sequence: int = 0
+var _suspended: bool = false
 
 func setup(p_catalog: EntityCatalog, p_voxel_world: VoxelWorld, world_seed: int, p_position_ready: Callable):
 	assert(p_catalog != null and p_catalog.validate())
@@ -57,9 +58,12 @@ func setup(p_catalog: EntityCatalog, p_voxel_world: VoxelWorld, world_seed: int,
 	_clear_prepared_actors()
 	_prepare_initial_actors()
 	_preparation_needed = false
+	_suspended = false
+	visible = true
 
 func tick(delta: float, player_position: Vector3, time_of_day: float):
 	assert(_catalog != null and _voxel_world != null)
+	assert(not _suspended)
 	_prepare_one_actor()
 	_advance_retiring(delta)
 	_despawn_distant(player_position)
@@ -315,12 +319,15 @@ func get_active_count() -> int:
 
 func get_active_actors() -> Array[EntityActor]:
 	var actors: Array[EntityActor] = []
+	if _suspended:
+		return actors
 	for actor in _active.values():
 		if is_instance_valid(actor):
 			actors.append(actor as EntityActor)
 	return actors
-
 func get_actor(runtime_id: int) -> EntityActor:
+	if _suspended:
+		return null
 	var actor := _active.get(runtime_id) as EntityActor
 	return actor if is_instance_valid(actor) else null
 
@@ -359,6 +366,21 @@ func record_melee_outcome(outcome: MeleeOutcome):
 func _on_actor_melee_contact_reached(source_runtime_id: int, profile: MeleeAttackProfile):
 	entity_melee_contact_reached.emit(source_runtime_id, profile)
 
+func suspend():
+	if _suspended:
+		return
+	_suspended = true
+	visible = false
+
+func resume():
+	if not _suspended:
+		return
+	visible = true
+	_suspended = false
+
+func is_suspended() -> bool:
+	return _suspended
+
 func shutdown():
 	for runtime_id in _active.keys():
 		var actor := _active[runtime_id] as EntityActor
@@ -379,3 +401,4 @@ func shutdown():
 	_actor_tick_start_index = 0
 	_preparation_needed = false
 	_next_retirement_sequence = 0
+	_suspended = false
