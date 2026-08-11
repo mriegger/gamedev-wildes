@@ -232,6 +232,7 @@ func _resume_from_pause():
 	get_tree().paused = false
 
 func _save_and_request_main_menu():
+	_deactivate_session()
 	get_tree().paused = false
 	if _pause_menu and is_instance_valid(_pause_menu):
 		_pause_menu.queue_free()
@@ -242,13 +243,17 @@ func _save_and_request_main_menu():
 	melee_combat.shutdown()
 	entity_coordinator.shutdown()
 	world.shutdown()
-	_session_active = false
 	main_menu_requested.emit()
 
 func _notification(what):
 	if what == NOTIFICATION_WM_CLOSE_REQUEST and _session_active:
-		_session_active = false
+		_deactivate_session()
 		game_session.shutdown("close")
 		melee_combat.shutdown()
 		entity_coordinator.shutdown()
 		world.shutdown()
+
+func _deactivate_session():
+	set_physics_process(false)
+	set_process_unhandled_input(false)
+	_session_active = false

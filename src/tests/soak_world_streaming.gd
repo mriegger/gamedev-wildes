@@ -794,8 +794,11 @@ func _check_final() -> void:
 	if not _texture_pipeline_verified or not _lighting_pipeline_verified or not _item_round_trip_verified:
 		_fail("texture, lighting, or item round-trip verification missing")
 		return
-	if _world:
-		_world.shutdown()
+	if _game:
+		_game._save_and_request_main_menu()
+		if _game.is_physics_processing() or _game.is_processing_unhandled_input():
+			_fail("game callbacks remained active after session shutdown")
+			return
 	if _errors.is_empty():
 		_game.queue_free()
 		await create_timer(0.25).timeout
