@@ -53,12 +53,13 @@ func _run():
 	var last_stream: AudioStream
 	var repeated = false
 	for i in range(30):
-		footsteps._play_step()
-		if asp.stream == last_stream and last_stream != null:
+		var selected_stream: AudioStream = footsteps._select_random_stream(footsteps._dirt_streams)
+		if selected_stream == last_stream and last_stream != null:
 			repeated = true
-		_expect(asp.pitch_scale >= 0.92 and asp.pitch_scale <= 1.08, "footstep pitch out of range %f" % asp.pitch_scale)
-		last_stream = asp.stream
+		last_stream = selected_stream
 	_expect(not repeated, "footstep repeated same idx immediate")
+	footsteps._play_step()
+	_expect(asp.pitch_scale >= 0.92 and asp.pitch_scale <= 1.08, "footstep pitch out of range %f" % asp.pitch_scale)
 
 	var block_catalog := load("res://blocks/block_catalog.tres") as BlockCatalog
 	var voxel_world := VoxelWorld.new(16, 32, 5, 8.0, block_catalog)

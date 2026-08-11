@@ -78,17 +78,24 @@ func _play_step():
 
 
 func _play_random_stream(streams: Array[AudioStream]):
-	if streams.is_empty():
+	var stream := _select_random_stream(streams)
+	if stream == null:
 		return
+	_player.stop()
+	_player.stream = stream
+	_player.pitch_scale = randf_range(0.92, 1.08)
+	_player.play()
+
+
+func _select_random_stream(streams: Array[AudioStream]) -> AudioStream:
+	if streams.is_empty():
+		return null
 	var idx := randi_range(0, streams.size() - 1)
 	if streams.size() > 1:
 		while streams[idx] == _last_stream:
 			idx = randi_range(0, streams.size() - 1)
 	_last_stream = streams[idx]
-	_player.stop()
-	_player.stream = _last_stream
-	_player.pitch_scale = randf_range(0.92, 1.08)
-	_player.play()
+	return _last_stream
 
 
 func _exit_tree():
@@ -100,5 +107,5 @@ func _exit_tree():
 	_dirt_streams.clear()
 	_water_streams.clear()
 	if _player:
-		_player.stream = null
 		_player.stop()
+		_player.stream = null
