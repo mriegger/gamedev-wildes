@@ -10,6 +10,7 @@ signal main_menu_requested
 @export var player_stats_debug_panel_scene: PackedScene
 @export var block_catalog: BlockCatalog
 @export var item_catalog: ItemCatalog
+@export var crafting_recipe_catalog: CraftingRecipeCatalog
 @export var entity_catalog: EntityCatalog
 @export var player_stats_definition: CombatStatsDefinition
 
@@ -29,6 +30,7 @@ signal main_menu_requested
 var inventory_model: InventoryModel
 var player_stats: ActorStats
 var inventory_stat_coordinator: InventoryStatCoordinator
+var crafting_coordinator: CraftingCoordinator
 var input_buffer: InputBuffer = InputBuffer.new()
 var settings: GameSettings
 
@@ -52,9 +54,10 @@ func _ready():
 	set_process_unhandled_input(false)
 	var block_catalog_valid := block_catalog.validate()
 	var item_catalog_valid := item_catalog.validate(block_catalog)
+	var crafting_catalog_valid := crafting_recipe_catalog.validate(item_catalog)
 	var entity_catalog_valid := entity_catalog.validate()
 	var player_stats_valid := player_stats_definition.validate()
-	if not block_catalog_valid or not item_catalog_valid or not entity_catalog_valid or not player_stats_valid:
+	if not block_catalog_valid or not item_catalog_valid or not crafting_catalog_valid or not entity_catalog_valid or not player_stats_valid:
 		push_error("[Game] Catalog validation failed")
 		return
 	settings.apply_display(get_viewport())
@@ -69,6 +72,8 @@ func _ready():
 	if not inventory_stat_coordinator.setup(inventory_model, player_stats):
 		push_error("[Game] Equipment modifiers are invalid")
 		return
+	crafting_coordinator = CraftingCoordinator.new()
+	crafting_coordinator.setup(inventory_model, crafting_recipe_catalog)
 	_restore_player_stats()
 	world.configure_start_state(_world_state)
 	world.generation_progress.connect(_on_generation_progress)
@@ -115,7 +120,7 @@ func _setup_gameplay():
 
 	game_environment.sky_color_changed.connect(world.update_water_tint)
 	game_environment.start_clock()
-	hud.setup_with_camera(inventory_model, inventory_stat_coordinator, camera_rig, player_stats)
+	hud.setup_with_camera(inventory_model, inventory_stat_coordinator, crafting_coordinator, crafting_recipe_catalog, camera_rig, player_stats)
 
 	var saved_position = _world_state.player_position
 	if saved_position != Vector3.ZERO:
@@ -175,7 +180,11 @@ func _unhandled_input(event):
 			get_viewport().set_input_as_handled()
 			return
 	if event.is_action_pressed("toggle_backpack"):
-		hud.toggle_side_panel()
+		hud.toggle_backpack()
+		get_viewport().set_input_as_handled()
+		return
+	if event.is_action_pressed("toggle_crafting"):
+		hud.toggle_crafting()
 		get_viewport().set_input_as_handled()
 		return
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:

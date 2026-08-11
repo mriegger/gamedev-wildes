@@ -39,6 +39,34 @@ jobs:
             120 "ALL PASS" /tmp/inventory_fuzz.log -- \
             godot --headless --path src --script res://tests/inventory_fuzz_runner.gd -- --seqs=20000 --ops=20
 
+  crafting-system:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run crafting system tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "CRAFTING_SYSTEM PASS" /tmp/crafting_system.log -- \
+            godot --headless --path src --script res://crafting/tests/crafting_system.gd
+
+  crafting-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run crafting UI integration tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "CRAFTING_UI PASS" /tmp/crafting_ui.log -- \
+            godot --headless --path src --script res://crafting/tests/crafting_ui_integration.gd
+
   stats-system:
     runs-on: ubuntu-latest
     timeout-minutes: 10

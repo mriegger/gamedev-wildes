@@ -7,6 +7,8 @@ var _inv: InventoryModel = null
 var _item_catalog: ItemCatalog = null
 var _stats: ActorStats = null
 var _inventory_stat_coordinator: InventoryStatCoordinator = null
+var _crafting_coordinator: CraftingCoordinator = null
+var _crafting_recipe_catalog: CraftingRecipeCatalog = null
 var _errors: Array[String] = []
 var _orphan_before: int = 0
 var _src_center: Vector2 = Vector2.ZERO
@@ -32,6 +34,9 @@ func _init() -> void:
 	_inventory_stat_coordinator = InventoryStatCoordinator.new()
 	if not _inventory_stat_coordinator.setup(_inv, _stats):
 		_fail("equipment coordinator setup failed")
+	_crafting_recipe_catalog = load("res://crafting/crafting_recipe_catalog.tres") as CraftingRecipeCatalog
+	_crafting_coordinator = CraftingCoordinator.new()
+	_crafting_coordinator.setup(_inv, _crafting_recipe_catalog)
 	_orphan_before = int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
 	print("[hud_integration] orphan before %d" % _orphan_before)
 
@@ -47,7 +52,7 @@ func _process(_delta: float) -> bool:
 			_fail("hud instantiate null")
 			return false
 		root.add_child(_hud)
-		_hud.setup_with_camera(_inv, _inventory_stat_coordinator, null, _stats)
+		_hud.setup_with_camera(_inv, _inventory_stat_coordinator, _crafting_coordinator, _crafting_recipe_catalog, null, _stats)
 		print("[hud_integration] hud added orphan=%d" % int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT)))
 		_phase = 1
 	elif _phase == 1 and _frame == 4:

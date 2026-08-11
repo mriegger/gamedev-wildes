@@ -1,0 +1,35 @@
+[gd_scene load_steps=2 format=3 uid="uid://c4ftpr0gr3ssscn"]
+
+[ext_resource type="Script" path="res://crafting/presentation/craft_progress_button.gd" id="1_script"]
+
+[node name="CraftProgressButton" type="Control"]
+custom_minimum_size = Vector2(0, 52)
+mouse_filter = 1
+script = ExtResource("1_script")
+
+[node name="Base" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Fill" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = 12
+anchor_bottom = 1.0
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Button" type="Button" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+focus_mode = 0
+mouse_default_cursor_shape = 2
+text = "CRAFT"

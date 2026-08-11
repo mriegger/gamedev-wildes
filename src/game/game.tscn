@@ -1,4 +1,4 @@
-[gd_scene load_steps=19 format=3 uid="uid://b22g4me0x1f3h"]
+[gd_scene load_steps=20 format=3 uid="uid://b22g4me0x1f3h"]
 
 [ext_resource type="Script" path="res://game/game.gd" id="1_game"]
 [ext_resource type="PackedScene" path="res://world/world.tscn" id="2_world"]
@@ -18,6 +18,7 @@
 [ext_resource type="Resource" path="res://player/player_stats.tres" id="16_player_stats"]
 [ext_resource type="PackedScene" path="res://player/debug/player_stats_debug_panel.tscn" id="17_stats_debug"]
 [ext_resource type="Script" path="res://combat/melee_combat_coordinator.gd" id="18_melee_combat"]
+[ext_resource type="Resource" path="res://crafting/crafting_recipe_catalog.tres" id="19_crafting_catalog"]
 
 [node name="Game" type="Node3D"]
 script = ExtResource("1_game")
@@ -26,6 +27,7 @@ animation_tuning_panel_scene = ExtResource("11_tuning")
 player_stats_debug_panel_scene = ExtResource("17_stats_debug")
 block_catalog = ExtResource("9_block_catalog")
 item_catalog = ExtResource("10_item_catalog")
+crafting_recipe_catalog = ExtResource("19_crafting_catalog")
 entity_catalog = ExtResource("15_entity_catalog")
 player_stats_definition = ExtResource("16_player_stats")
 

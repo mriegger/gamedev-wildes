@@ -41,7 +41,6 @@ func advance_time(delta: float) -> bool:
 	var recipe := recipe_catalog.get_definition(_active_recipe_id)
 	_elapsed_seconds = minf(_elapsed_seconds + delta, recipe.duration_seconds)
 	if _elapsed_seconds < recipe.duration_seconds:
-		state_changed.emit()
 		return false
 	var ingredient_counts := recipe.get_ingredient_counts()
 	var output_counts := recipe.get_output_counts()
@@ -49,7 +48,6 @@ func advance_time(delta: float) -> bool:
 	_elapsed_seconds = 0.0
 	var crafted := inventory_model.exchange_backpack_items(ingredient_counts, output_counts)
 	assert(crafted)
-	state_changed.emit()
 	return true
 
 func cancel() -> bool:

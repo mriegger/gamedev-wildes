@@ -20,7 +20,8 @@ world time.
 | Left-click / hold | Use the selected item's primary action; hold to mine, click to attack |
 | Right-click | Place the selected block |
 | `1`–`9` | Select hotbar slot; while the backpack is open, assign the hovered item to that slot |
-| `P` | Toggle backpack |
+| `Tab` | Toggle backpack and crafting |
+| `P` | Toggle backpack only |
 | `F10` | Toggle player animation tuner |
 | `Esc` | Pause |
 
@@ -64,6 +65,10 @@ fallback values keep GL Compatibility usable at reduced fidelity, without volume
 06:00–19:00; sunrise and sundown get their own warm color keys, and nights stay bright enough
 to play.
 
+**Crafting.** Opening crafting with `Tab` reveals a recipe panel alongside the backpack. Seven data-driven recipes use
+backpack materials, take two seconds to complete, and cancel without consuming ingredients when
+the panel closes or another recipe is selected.
+
 **UI & saves.** A frosted-glass front-end: main menu, world select over three save slots,
 create-world and hold-3-seconds-to-delete modals, a chunk-progress loading screen, and a pause
 menu that freezes the game. The pause menu exposes persistent frame-rate, 3D resolution,
@@ -81,6 +86,7 @@ src/                    Godot project. Entry scene: app/app.tscn
 │                       and special_blocks/
 ├── blocks/             Block ids, definitions, catalog, and torch placement rules
 ├── combat/             Melee contacts, profiles, targeting, and validation
+├── crafting/           Recipe resources, inventory coordination, presentation, and tests
 ├── entities/           Entity catalog, AI, voxel navigation, populations, and custom presentation
 ├── items/              Item catalog, action definitions, and held-item scenes
 ├── mining/             Mining-owned presentation and focused tests

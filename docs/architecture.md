@@ -14,6 +14,7 @@ app/                         application navigation
 game/                        gameplay composition and session lifecycle
 blocks/                      block domain resources and rules
 combat/                      melee profiles, contacts, targeting, and validation
+crafting/                    recipe definitions, inventory coordination, and presentation
 entities/                    content, AI, navigation, populations, and presentation
 environment/                 packaged environment and day/night feature
 inventory/                   inventory model and inventory-owned UI
@@ -74,5 +75,10 @@ Serialized configuration is explicit and typed. `BlockCatalog` lists `BlockDefin
 `ItemCatalog` lists item resources and their action definitions, `BiomeLibrary` lists biome
 resources, `EntityCatalog` lists entity definitions, and `WorldConfig` references the biome library.
 Runtime code does not scan directories or manufacture fallback domain resources.
+
+Crafting recipes reference canonical item definitions. `CraftingCoordinator` owns elapsed crafting
+state, while `InventoryModel` validates and commits ingredient removal and output insertion as one
+backpack transaction. `CraftingPanel` supplies frame time and presents state without mutating
+inventory slots.
 
 Forward+ is the primary renderer. Runtime rendering-device checks select reduced visual values for GL Compatibility fallback. Features unavailable on GL, including volumetric fog, remain disabled there.
