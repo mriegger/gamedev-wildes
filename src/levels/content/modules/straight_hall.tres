@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="LevelModuleDefinition" load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://levels/definitions/level_module_definition.gd" id="1_module"]
+[ext_resource type="Script" path="res://levels/definitions/level_socket_definition.gd" id="2_socket"]
+[ext_resource type="Script" path="res://levels/definitions/level_torch_definition.gd" id="3_torch"]
+
+[sub_resource type="Resource" id="SocketNorth"]
+script = ExtResource("2_socket")
+socket_id = &"north"
+cell = Vector3i(2, 1, 0)
+direction = 0
+
+[sub_resource type="Resource" id="SocketSouth"]
+script = ExtResource("2_socket")
+socket_id = &"south"
+cell = Vector3i(2, 1, 6)
+direction = 2
+
+[sub_resource type="Resource" id="TorchWest"]
+script = ExtResource("3_torch")
+cell = Vector3i(1, 2, 3)
+wall_direction = 3
+
+[resource]
+script = ExtResource("1_module")
+module_id = &"dungeon_straight_hall"
+size = Vector3i(5, 4, 7)
+weight = 4.0
+cells = PackedInt32Array(4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 0, 4, 4, 4, 0, 0, 0, 4, 4, 0, 0, 0, 4, 4, 0, 0, 0, 4, 4, 0, 0, 0, 4, 4, 0, 0, 0, 4, 4, 4, 0, 4, 4, 4, 4, 0, 4, 4, 4, 0, 0, 0, 4, 4, 0, 0, 0, 4, 4, 0, 0, 0, 4, 4, 0, 0, 0, 4, 4, 0, 0, 0, 4, 4, 4, 0, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4)
+sockets = Array[ExtResource("2_socket")]([SubResource("SocketNorth"), SubResource("SocketSouth")])
+torches = Array[ExtResource("3_torch")]([SubResource("TorchWest")])

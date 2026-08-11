@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="LevelCatalog" load_steps=13 format=3]
+
+[ext_resource type="Script" path="res://levels/definitions/level_catalog.gd" id="1_catalog"]
+[ext_resource type="Script" path="res://levels/definitions/level_module_definition.gd" id="2_module"]
+[ext_resource type="Script" path="res://levels/definitions/level_definition.gd" id="3_level"]
+[ext_resource type="Resource" path="res://levels/content/modules/start_chamber.tres" id="4_start"]
+[ext_resource type="Resource" path="res://levels/content/modules/straight_hall.tres" id="5_straight"]
+[ext_resource type="Resource" path="res://levels/content/modules/corner_hall.tres" id="6_corner"]
+[ext_resource type="Resource" path="res://levels/content/modules/small_room.tres" id="7_small"]
+[ext_resource type="Resource" path="res://levels/content/modules/large_room.tres" id="8_large"]
+[ext_resource type="Resource" path="res://levels/content/modules/t_junction.tres" id="9_t_junction"]
+[ext_resource type="Resource" path="res://levels/content/modules/compact_dead_end.tres" id="10_compact_cap"]
+[ext_resource type="Resource" path="res://levels/content/modules/dead_end_chamber.tres" id="11_chamber_cap"]
+[ext_resource type="Resource" path="res://levels/content/stone_dungeon.tres" id="12_dungeon"]
+
+[resource]
+script = ExtResource("1_catalog")
+modules = Array[ExtResource("2_module")]([ExtResource("4_start"), ExtResource("5_straight"), ExtResource("6_corner"), ExtResource("7_small"), ExtResource("8_large"), ExtResource("9_t_junction"), ExtResource("10_compact_cap"), ExtResource("11_chamber_cap")])
+levels = Array[ExtResource("3_level")]([ExtResource("12_dungeon")])
