@@ -2,7 +2,7 @@ extends Resource
 class_name CraftingIngredient
 
 @export var item: ItemDefinition
-@export_range(1, 999) var count: int = 1
+@export_range(1, 999, 1, "or_greater") var count: int = 1
 
 func validate(item_catalog: ItemCatalog, source: String) -> bool:
 	if item == null:

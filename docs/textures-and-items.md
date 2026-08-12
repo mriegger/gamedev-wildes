@@ -30,9 +30,9 @@ Set `BlockDefinition.drop_item_id` to the stable item ID produced by mining. Lea
 
 Create and register an `ItemDefinition` in the same way. Assign only the actions that the item supports. An item without a placement action can still be stored, stacked, saved, displayed, and dragged, but it does not produce a placement ghost or send an item ID into the voxel world.
 
-Item IDs are `StringName` values at runtime and JSON strings in version 3 saves. `BlockId` integers remain limited to world generation, voxel edits, meshing, and world persistence.
+Item IDs are `StringName` values at runtime and JSON strings in saves. `BlockId` integers remain limited to world generation, voxel edits, meshing, and world persistence.
 
-Inventory slots contain typed `InventoryStack` objects at runtime. Version 3 saves keep the same `{item_id, count}` stack shape. When a pre-tool save is restored, a one-time migration preserves every existing stack and inserts the starter copper tools when fillable inventory space is available.
+Inventory slots contain typed `InventoryStack` objects at runtime. Saves keep the same `{item_id, count}` stack shape. When a pre-tool save is restored, a one-time migration preserves every existing stack and inserts the starter copper tools when fillable inventory space is available.
 
 ## Add a mining tool
 

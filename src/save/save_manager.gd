@@ -134,7 +134,7 @@ static func _deserialize_vector2i_dict(dict: Dictionary) -> Dictionary:
 			out[Vector2i(int(parts[0]), int(parts[1]))] = dict[key]
 	return out
 
-static func _deserialize_placed_blocks(dict: Dictionary) -> Dictionary:
+static func _deserialize_block_ids(dict: Dictionary) -> Dictionary:
 	var out := {}
 	for key in dict:
 		var pos = _try_parse_vector3i(key)
@@ -173,11 +173,11 @@ static func decode_world_state(data: Dictionary) -> WorldState:
 			position = decoded
 	return WorldState.new(
 		int(data.get("seed", -1)),
-		_deserialize_placed_blocks(placed_raw) if placed_raw is Dictionary else {},
+		_deserialize_block_ids(placed_raw) if placed_raw is Dictionary else {},
 		_deserialize_removed_blocks(removed_raw) if removed_raw is Dictionary else {},
 		_deserialize_torch_attachments(torch_raw) if torch_raw is Dictionary else {},
 		position,
-		_deserialize_placed_blocks(copper_raw) if copper_raw is Dictionary else {},
+		_deserialize_block_ids(copper_raw) if copper_raw is Dictionary else {},
 		_deserialize_vector2i_dict(generated_copper_raw) if generated_copper_raw is Dictionary else {}
 	)
 

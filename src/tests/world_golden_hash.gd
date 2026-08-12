@@ -40,7 +40,7 @@ func _init():
 			"seed": SEED,
 			"region": {"x0": REGION_X0, "x1": REGION_X1, "z0": REGION_Z0, "z1": REGION_Z1, "y0": REGION_Y0, "y1": REGION_Y1},
 			"digest": digest,
-			"description": "SHA256 over 32-bit little-endian block IDs (voxel_world.get_block_id_at) for fixed region, seed 1337 with jittered WorldConfig. Any noise/spline/biome/lake/river change that reshapes existing worlds must update this digest.",
+			"description": "SHA256 over deterministic base-terrain and tree block IDs (voxel_world.get_block_id_at) for fixed region, seed 1337 with jittered WorldConfig. Random post-terrain copper deposits are covered separately and intentionally excluded. Any noise/spline/biome/lake/river change that reshapes existing worlds must update this digest.",
 			"generated_by": "src/tests/world_golden_hash.gd --update"
 		}
 		var json_str = JSON.stringify(out, "\t")

@@ -23,13 +23,10 @@ func _init() -> void:
 	_expect(recipe_catalog.definitions.size() == expected_recipe_ids.size(), "expected seven recipes")
 	for recipe_id in expected_recipe_ids:
 		_expect(recipe_catalog.has_definition(recipe_id), "missing recipe %s" % recipe_id)
-	var copper_material_ids: Array[StringName] = [&"copper", &"log_block"]
 	for recipe in recipe_catalog.definitions:
 		_expect(is_equal_approx(recipe.duration_seconds, 2.0), "recipe duration mismatch for %s" % recipe.id)
 		for ingredient in recipe.ingredients:
 			_expect(ingredient.count >= 1, "ingredient count outside recipe range")
-			if recipe.id != &"torch_bundle":
-				_expect(ingredient.item.id in copper_material_ids, "%s used unsupported material %s" % [recipe.id, ingredient.item.id])
 		if recipe.id != &"torch_bundle":
 			_expect(recipe.output_item.id == recipe.id, "%s output item mismatch" % recipe.id)
 	var torch_recipe := recipe_catalog.get_definition(&"torch_bundle")

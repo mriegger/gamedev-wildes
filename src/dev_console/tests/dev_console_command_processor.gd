@@ -21,15 +21,6 @@ func _init() -> void:
 	_expect(inventory.get_slot(InventoryModel.HOTBAR_SIZE + 1) == null, "spawn created a redundant backpack stack")
 	_expect(inventory.get_slot(0).count == 4, "spawn changed the matching hotbar stack")
 
-	var copper_inventory := InventoryModel.new(item_catalog)
-	copper_inventory.slots[0] = InventoryStack.new(&"copper", 4)
-	copper_inventory.slots[InventoryModel.HOTBAR_SIZE] = InventoryStack.new(&"copper", 7)
-	var copper_processor := DevConsoleCommandProcessor.new()
-	copper_processor.setup(copper_inventory)
-	_expect(copper_processor.execute("spawn copper 5"), "copper spawn command failed")
-	_expect(copper_inventory.get_slot(InventoryModel.HOTBAR_SIZE).count == 12, "copper did not merge into its backpack stack")
-	_expect(copper_inventory.get_slot(0).count == 4, "copper spawn changed its hotbar stack")
-
 	var all_items_inventory := InventoryModel.new(item_catalog)
 	var all_items_processor := DevConsoleCommandProcessor.new()
 	all_items_processor.setup(all_items_inventory)

@@ -5,8 +5,8 @@ endless procedurally generated world under an orthographic isometric camera, min
 a nine-slot hotbar, and build with them. The loop is explore → mine → build, on terrain that
 streams in around you as you walk, under a running day/night cycle.
 
-Worlds are saved to three local slots and persist your seed, edits, inventory, position, and
-world time.
+Worlds are saved to three local slots and persist your seed, edits, generated copper deposits,
+inventory, position, and world time.
 
 ## Controls
 
