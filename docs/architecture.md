@@ -35,23 +35,29 @@ tests/                       headless verification
 ## Entities and combat
 
 `EntityCatalog` is the authoritative list of stable entity content IDs. Each `EntityDefinition`
-references an actor scene that validates compatibility with its typed behavior resource.
-`EntityCoordinator` owns transient runtime IDs, spawn/despawn lifecycle, the bounded spatial index,
-and active and prepared actor nodes. Zombies and sheep own only their deterministic behavior state;
-the shared voxel solver and bounded path follower own reusable movement calculations. Their custom
-animation drivers present actor state without deciding gameplay outcomes. Spawned actors fade in
-through instance-local geometry transparency. Despawn removes gameplay state immediately, then a
-separately bounded retiring-visual set fades the actor out before freeing its scene node.
+references an actor scene, typed behavior, and validated combat stats. `EntityCoordinator` owns a
+fresh `ActorStats` instance for every runtime ID alongside spawn/despawn lifecycle, the bounded
+spatial index, and active and prepared actor nodes. Zombies and sheep own only their deterministic
+behavior state; the shared voxel solver and bounded path follower own reusable movement
+calculations. Their custom animation drivers present actor state without deciding gameplay
+outcomes. Spawned actors fade in through instance-local geometry transparency. Despawn or lethal
+damage removes stats, active state, targeting, and spatial entries together, then a separately
+bounded retiring-visual set fades the actor out before freeing its scene node.
 
 `MeleeCombatCoordinator` validates cursor targeting, range, voxel visibility, target existence, and
-contact timing. A successful physical hit produces an immutable `MeleeContact` with stable actor and
-attack IDs, world contact position, and normalized direction. `Game` explicitly connects completed
-contacts to entity reactions. An effects presenter can consume the same signal without changing AI
-or combat rules.
+contact timing before changing health. `MeleeAttackProfile` owns base damage and calculates
+`max(1, base damage + attacker strength - target defense)`. A successful physical hit applies that
+damage through the target state owner, then produces an immutable `MeleeContact` with stable actor
+and attack IDs, world contact position, and normalized direction. Rejected contacts change no
+health. `Game` explicitly connects completed contacts to entity reactions, and an effects presenter
+can consume the same signal without changing AI or combat rules.
 
-Health, armor, attributes, death resolution, and XP are not implemented. Validated contacts feed
-the current entity reaction consumer without introducing temporary health state or unused combat
-interfaces.
+`Game` owns player stats and handles the combat coordinator's completed defeat signal. Defeat
+restores full player HP, cancels current actions and motion, returns the player to world spawn, and
+snaps the camera to the restored position without changing inventory. The HUD observes player stats
+and presents current and maximum HP without owning either value. Entity HP is transient and is not
+serialized. Drops, XP rewards, enemy health bars, regeneration, knockback, death animations, and
+post-respawn invulnerability remain outside the combat system.
 
 Entity populations are transient and bounded to six per species and twelve total. Spawning makes
 four attempts every two seconds in an 18–36 block annulus. Voxel A* has fixed radius, node, and
