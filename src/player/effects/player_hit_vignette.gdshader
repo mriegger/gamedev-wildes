@@ -12,6 +12,6 @@ void fragment() {
 	float inner_edge = 0.205 + irregularity;
 	float body = smoothstep(inner_edge, inner_edge + 0.235, radius);
 	float outline = smoothstep(inner_edge, inner_edge + 0.055, radius) * (1.0 - smoothstep(inner_edge + 0.16, inner_edge + 0.29, radius));
-	float alpha = (body * 0.48 + outline * 0.24) * intensity;
+	float alpha = (body * 0.31 + outline * 0.15) * intensity;
 	COLOR = vec4(hit_color.rgb, alpha * hit_color.a);
 }
