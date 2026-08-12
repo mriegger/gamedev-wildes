@@ -32,6 +32,8 @@ func _init() -> void:
 	_inv = InventoryModel.new(_item_catalog)
 	_inv.setup_starter()
 	_stats = ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
+	if not _stats.set_progression(1, 0):
+		_fail("player progression setup failed")
 	_inventory_stat_coordinator = InventoryStatCoordinator.new()
 	if not _inventory_stat_coordinator.setup(_inv, _stats):
 		_fail("equipment coordinator setup failed")
@@ -59,12 +61,18 @@ func _process(_delta: float) -> bool:
 	elif _phase == 1 and _frame == 4:
 		_check_health_bar_geometry()
 		_check_health_bar(100.0, 100.0)
+		_check_experience_bar_geometry()
+		_check_experience_bar(1, 0, 100)
+		_stats.add_experience(50)
 		_stats.damage(25.0)
 	elif _phase == 1 and _frame == 5:
 		_check_health_bar(75.0, 100.0)
+		_check_experience_bar(1, 50, 100)
+		_stats.add_experience(50)
 		_stats.heal(10.0)
 	elif _phase == 1 and _frame == 6:
 		_check_health_bar(85.0, 100.0)
+		_check_experience_bar(2, 0, 125)
 		var maximum_hp_modifier := StatModifier.new()
 		maximum_hp_modifier.id = &"hud_test_hp"
 		maximum_hp_modifier.source_id = &"hud_test"
@@ -85,20 +93,24 @@ func _process(_delta: float) -> bool:
 		root.size = Vector2i(684, 480)
 	elif _phase == 1 and _frame == 10:
 		_check_health_bar_panel_clearance(0.0, "684px closed")
+		_check_experience_bar_geometry()
 		_hud.side_panel.open()
 		_hud.side_panel._process(1.0)
 		_check_health_bar_panel_clearance(1.0, "684px open")
 		root.size = Vector2i(640, 480)
 	elif _phase == 1 and _frame == 12:
 		_check_health_bar_panel_clearance(1.0, "640px open")
+		_check_experience_bar_geometry()
 		root.size = Vector2i(1024, 640)
 	elif _phase == 1 and _frame == 14:
 		_check_health_bar_panel_clearance(1.0, "1024px open")
+		_check_experience_bar_geometry()
 		root.size = _original_window_size
 	elif _phase == 1 and _frame == 16:
 		_check_health_bar_panel_clearance(1.0, "restored open")
 		_hud.side_panel.close_immediate()
 		_check_health_bar_panel_clearance(0.0, "restored immediate close")
+		_check_experience_bar_geometry()
 	elif _phase == 1 and _frame == 122:
 		if _hud == null or not is_instance_valid(_hud):
 			_fail("hud invalid")
@@ -244,6 +256,64 @@ func _check_health_bar(current_hp: float, maximum_hp: float) -> void:
 		return
 	if _hud.health_bar.value_label.text != expected_text:
 		_fail("health bar hover text expected %s got %s" % [expected_text, _hud.health_bar.value_label.text])
+
+func _check_experience_bar(level: int, experience: int, required_experience: int) -> void:
+	if _hud.experience_bar == null:
+		_fail("experience bar missing")
+		return
+	var progress_bar := _hud.experience_bar.progress_bar
+	var expected_text := "Level %d - %d / %d XP" % [level, experience, required_experience]
+	if not is_equal_approx(progress_bar.value, experience):
+		_fail("experience bar current XP expected %d got %.1f" % [experience, progress_bar.value])
+		return
+	if not is_equal_approx(progress_bar.max_value, required_experience):
+		_fail("experience bar required XP expected %d got %.1f" % [required_experience, progress_bar.max_value])
+		return
+	if _hud.experience_bar.value_label.text != expected_text:
+		_fail("experience bar text expected %s got %s" % [expected_text, _hud.experience_bar.value_label.text])
+
+func _check_experience_bar_geometry() -> void:
+	if _hud.experience_bar == null:
+		_fail("experience bar missing for geometry check")
+		return
+	var viewport_size := root.get_visible_rect().size
+	var root_rect := _hud.experience_bar.get_global_rect()
+	var progress_bar := _hud.experience_bar.progress_bar
+	var progress_rect := progress_bar.get_global_rect()
+	var right_inset := SidePanel.PANEL_WIDTH * _hud.side_panel.get_progress()
+	var expected_width := minf(PlayerExperienceBar.PREFERRED_WIDTH, maxf(viewport_size.x - right_inset - PlayerExperienceBar.EDGE_MARGIN * 2.0, 0.0))
+	var expected_position := Vector2((viewport_size.x - right_inset - expected_width) * 0.5, viewport_size.y - PlayerExperienceBar.HOTBAR_TOP_INSET - PlayerExperienceBar.BAR_HEIGHT)
+	if not root_rect.position.is_equal_approx(Vector2.ZERO) or not root_rect.size.is_equal_approx(viewport_size):
+		_fail("experience bar root does not cover the viewport")
+		return
+	if not progress_rect.position.is_equal_approx(expected_position):
+		_fail("experience bar expected position %s got %s" % [str(expected_position), str(progress_rect.position)])
+		return
+	if not progress_rect.size.is_equal_approx(Vector2(expected_width, PlayerExperienceBar.BAR_HEIGHT)):
+		_fail("experience bar expected responsive size got %s" % str(progress_rect.size))
+		return
+	if not is_equal_approx(progress_rect.end.y, viewport_size.y - PlayerExperienceBar.HOTBAR_TOP_INSET):
+		_fail("experience bar is not directly above the hotbar")
+		return
+	if not is_equal_approx(progress_rect.get_center().x, _hud.hotbar.get_global_rect().get_center().x):
+		_fail("experience bar is not centered above the shifted hotbar")
+		return
+	if progress_rect.end.x > viewport_size.x - right_inset - PlayerExperienceBar.EDGE_MARGIN + 0.001:
+		_fail("experience bar overlaps the side panel")
+		return
+	if _hud.experience_bar.mouse_filter != Control.MOUSE_FILTER_IGNORE or progress_bar.mouse_filter != Control.MOUSE_FILTER_IGNORE or _hud.experience_bar.value_label.mouse_filter != Control.MOUSE_FILTER_IGNORE:
+		_fail("experience bar presentation intercepts mouse input")
+		return
+	var track := progress_bar.get_theme_stylebox(&"background") as StyleBoxFlat
+	var fill := progress_bar.get_theme_stylebox(&"fill") as StyleBoxFlat
+	if track == null or track.bg_color.a >= 1.0 or track.bg_color.r >= 0.2:
+		_fail("experience bar track is not dark and translucent")
+		return
+	if fill == null or fill.bg_color.g <= fill.bg_color.r or fill.bg_color.g <= fill.bg_color.b:
+		_fail("experience bar fill is not green")
+		return
+	if _hud.experience_bar.value_label.horizontal_alignment != HORIZONTAL_ALIGNMENT_CENTER or _hud.experience_bar.value_label.vertical_alignment != VERTICAL_ALIGNMENT_CENTER:
+		_fail("experience bar value text is not centered")
 
 func _check_health_bar_geometry() -> void:
 	if _hud.health_bar == null:
