@@ -83,6 +83,13 @@ func _run() -> void:
 		return
 	var near_actor := actors[0]
 	var far_actor := actors[1]
+	_expect(is_equal_approx(coordinator.get_current_hp(near_actor.runtime_id), 80.0), "first zombie did not spawn at full HP")
+	_expect(is_equal_approx(coordinator.get_current_hp(far_actor.runtime_id), 80.0), "second zombie did not spawn at full HP")
+	_expect(is_equal_approx(coordinator.get_stat_value(near_actor.runtime_id, &"strength"), 5.0), "zombie strength changed")
+	_expect(is_equal_approx(coordinator.get_stat_value(near_actor.runtime_id, &"defense"), 4.0), "zombie defense changed")
+	_expect(coordinator.try_apply_damage(near_actor.runtime_id, 1.0), "direct entity damage was rejected")
+	_expect(is_equal_approx(coordinator.get_current_hp(near_actor.runtime_id), 79.0), "direct entity damage changed the wrong amount")
+	_expect(is_equal_approx(coordinator.get_current_hp(far_actor.runtime_id), 80.0), "entity runtime stats were shared between instances")
 	var ray_origin := Vector3(0.5, FEET_Y + 0.9, 6.0)
 	var ray_direction := Vector3.FORWARD
 

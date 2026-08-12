@@ -20,6 +20,7 @@ var _voxel_world: VoxelWorld
 var _position_ready: Callable
 var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 var _active: Dictionary = {}
+var _stats_by_runtime_id: Dictionary = {}
 var _retiring: Dictionary = {}
 var _spatial_index: EntitySpatialIndex = EntitySpatialIndex.new(SPATIAL_CELL_SIZE)
 var _prepared_actors: Dictionary = {}
@@ -42,6 +43,7 @@ func setup(p_catalog: EntityCatalog, p_voxel_world: VoxelWorld, world_seed: int,
 	_actor_tick_start_index = 0
 	_prepared_definition_cursor = 0
 	_spatial_index.clear()
+	_stats_by_runtime_id.clear()
 	_clear_prepared_actors()
 	_prepare_initial_actors()
 	_preparation_needed = false
@@ -112,6 +114,7 @@ func _try_spawn(definition: EntityDefinition, player_position: Vector3) -> bool:
 		var runtime_id := _next_runtime_id
 		_next_runtime_id += 1
 		_active[runtime_id] = actor
+		_stats_by_runtime_id[runtime_id] = ActorStats.new(definition.stats_definition)
 		actor.visible = true
 		actor.global_position = spawn_position
 		actor.setup(runtime_id, definition, _voxel_world, int(_rng.randi()))
@@ -207,6 +210,7 @@ func _despawn(runtime_id: int):
 		return
 	var actor := _active[runtime_id] as EntityActor
 	_active.erase(runtime_id)
+	_stats_by_runtime_id.erase(runtime_id)
 	_spatial_index.remove(runtime_id)
 	_preparation_needed = true
 	if is_instance_valid(actor):
@@ -282,6 +286,27 @@ func get_actor(runtime_id: int) -> EntityActor:
 	var actor := _active.get(runtime_id) as EntityActor
 	return actor if is_instance_valid(actor) else null
 
+func get_current_hp(runtime_id: int) -> float:
+	return _get_stats(runtime_id).current_hp
+
+func get_stat_value(runtime_id: int, stat_id: StringName) -> float:
+	return _get_stats(runtime_id).get_value(stat_id)
+
+func try_apply_damage(runtime_id: int, amount: float) -> bool:
+	assert(is_finite(amount) and amount > 0.0)
+	var stats := _stats_by_runtime_id.get(runtime_id) as ActorStats
+	if stats == null:
+		return false
+	stats.damage(amount)
+	if stats.is_dead():
+		_despawn(runtime_id)
+	return true
+
+func _get_stats(runtime_id: int) -> ActorStats:
+	var stats := _stats_by_runtime_id.get(runtime_id) as ActorStats
+	assert(stats != null)
+	return stats
+
 func has_entity_overlap(bounds: AABB) -> bool:
 	return not _spatial_index.query_overlapping(bounds).is_empty()
 
@@ -302,6 +327,7 @@ func shutdown():
 		if is_instance_valid(actor):
 			(actor as EntityActor).queue_free()
 	_active.clear()
+	_stats_by_runtime_id.clear()
 	_retiring.clear()
 	_spatial_index.clear()
 	_clear_prepared_actors()
