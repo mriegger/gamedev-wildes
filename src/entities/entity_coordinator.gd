@@ -114,7 +114,9 @@ func _try_spawn(definition: EntityDefinition, player_position: Vector3) -> bool:
 		var runtime_id := _next_runtime_id
 		_next_runtime_id += 1
 		_active[runtime_id] = actor
-		_stats_by_runtime_id[runtime_id] = ActorStats.new(definition.stats_definition)
+		var stats := ActorStats.new(definition.stats_definition)
+		stats.health_depleted.connect(_despawn.bind(runtime_id))
+		_stats_by_runtime_id[runtime_id] = stats
 		actor.visible = true
 		actor.global_position = spawn_position
 		actor.setup(runtime_id, definition, _voxel_world, int(_rng.randi()))
@@ -298,8 +300,6 @@ func try_apply_damage(runtime_id: int, amount: float) -> bool:
 	if stats == null:
 		return false
 	stats.damage(amount)
-	if stats.is_dead():
-		_despawn(runtime_id)
 	return true
 
 func _get_stats(runtime_id: int) -> ActorStats:

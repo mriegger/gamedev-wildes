@@ -96,7 +96,7 @@ func _run() -> void:
 	coordinator.entity_melee_contact_reached.connect(combat.try_commit_entity_contact)
 	combat.melee_contact_committed.connect(coordinator.record_melee_contact)
 	combat.melee_contact_committed.connect(_on_melee_contact)
-	combat.player_defeated.connect(_on_player_defeated)
+	player_stats.health_depleted.connect(_on_player_defeated)
 	coordinator.tick(EntityCoordinator.SPAWN_INTERVAL_SECONDS, player.global_position, 20.0)
 	coordinator.tick(EntityCoordinator.SPAWN_INTERVAL_SECONDS, player.global_position, 20.0)
 	var actors := coordinator.get_active_actors()

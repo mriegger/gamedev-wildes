@@ -9,7 +9,6 @@ const MeleeContactType := preload("res://combat/melee_contact.gd")
 const VoxelLineOfSightType := preload("res://combat/voxel_line_of_sight.gd")
 
 signal melee_contact_committed(contact: MeleeContactType)
-signal player_defeated
 
 var _voxel_world: VoxelWorld
 var _player: PlayerMotor
@@ -133,7 +132,6 @@ func shutdown() -> void:
 
 func _commit_contact(contact: MeleeContactType, profile: MeleeAttackProfileType) -> bool:
 	assert(contact.attack_id == profile.id)
-	var defeated_player := false
 	var damage: float
 	if contact.source_runtime_id == PLAYER_RUNTIME_ID:
 		if _player_stats.is_dead():
@@ -158,10 +156,7 @@ func _commit_contact(contact: MeleeContactType, profile: MeleeAttackProfileType)
 			_player_stats.get_value(&"defense"),
 		)
 		_player_stats.damage(damage)
-		defeated_player = _player_stats.is_dead()
 	melee_contact_committed.emit(contact)
-	if defeated_player:
-		player_defeated.emit()
 	return true
 
 func _is_valid_player_geometry(

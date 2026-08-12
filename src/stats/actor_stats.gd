@@ -1,21 +1,26 @@
 extends RefCounted
 class_name ActorStats
 
+signal health_depleted
+
 var level: int
 var experience: int
-var current_hp: float
+var current_hp: float:
+	get:
+		return _current_hp
 
 var _definition: ActorStatsDefinition
 var _base_values: Dictionary
 var _modifiers: Dictionary = {}
 var _remaining_duration: Dictionary = {}
+var _current_hp: float
 
 func _init(definition: ActorStatsDefinition):
 	_definition = definition
 	_base_values = definition.get_base_stats().duplicate()
 	level = definition.starting_level
 	experience = definition.starting_experience
-	current_hp = get_value(&"hp") if definition.has_stat(&"hp") else 0.0
+	_current_hp = get_value(&"hp") if definition.has_stat(&"hp") else 0.0
 
 func has_stat(stat_id: StringName) -> bool:
 	return _base_values.has(stat_id)
@@ -32,16 +37,20 @@ func get_base_value(stat_id: StringName) -> float:
 	return float(_base_values[stat_id])
 
 func set_base_value(stat_id: StringName, value: float) -> bool:
-	if not has_stat(stat_id) or value < 0.0:
+	if not has_stat(stat_id) or not _is_valid_stat_value(stat_id, value):
 		return false
+	var previous: float = float(_base_values[stat_id])
 	_base_values[stat_id] = value
+	if not _has_valid_modifier_values(_modifiers):
+		_base_values[stat_id] = previous
+		return false
 	_clamp_current_hp()
 	return true
 
 func set_current_hp(value: float) -> bool:
-	if not has_stat(&"hp") or value < 0.0 or value > get_value(&"hp"):
+	if not has_stat(&"hp") or not is_finite(value) or value < 0.0 or value > get_value(&"hp"):
 		return false
-	current_hp = value
+	_commit_current_hp(value)
 	return true
 
 func is_dead() -> bool:
@@ -55,12 +64,15 @@ func get_value(stat_id: StringName) -> float:
 	return _get_value(stat_id)
 
 func _get_value(stat_id: StringName) -> float:
+	return _get_value_with_modifiers(stat_id, _modifiers)
+
+func _get_value_with_modifiers(stat_id: StringName, modifiers: Dictionary) -> float:
 	var additive := 0.0
 	var multiplier := 1.0
-	var modifier_ids := _modifiers.keys()
+	var modifier_ids := modifiers.keys()
 	modifier_ids.sort()
 	for modifier_id in modifier_ids:
-		var modifier := _modifiers[modifier_id] as StatModifier
+		var modifier := modifiers[modifier_id] as StatModifier
 		if modifier.stat_id != stat_id:
 			continue
 		if modifier.operation == StatModifier.Operation.ADD:
@@ -96,25 +108,36 @@ func is_at_maximum_level() -> bool:
 	return _definition.maximum_level > 0 and level >= _definition.maximum_level
 
 func damage(amount: float) -> float:
-	assert(amount >= 0.0)
+	assert(is_finite(amount) and amount >= 0.0)
 	assert(has_stat(&"hp"))
 	var previous := current_hp
-	current_hp = maxf(0.0, current_hp - amount)
-	return previous - current_hp
+	var next := maxf(0.0, current_hp - amount)
+	var applied := previous - next
+	_commit_current_hp(next)
+	return applied
 
 func heal(amount: float) -> float:
-	assert(amount >= 0.0)
+	assert(is_finite(amount) and amount >= 0.0)
 	assert(has_stat(&"hp"))
 	var previous := current_hp
-	current_hp = minf(get_value(&"hp"), current_hp + amount)
-	return current_hp - previous
+	var next := minf(get_value(&"hp"), current_hp + amount)
+	var applied := next - previous
+	_commit_current_hp(next)
+	return applied
 
 func add_modifier(modifier: StatModifier) -> bool:
-	if modifier == null or not modifier.is_valid(_definition) or _modifiers.has(modifier.id):
+	if modifier == null or _modifiers.has(modifier.id):
 		return false
-	_modifiers[modifier.id] = modifier
-	if modifier.duration_seconds > 0.0:
-		_remaining_duration[modifier.id] = modifier.duration_seconds
+	var runtime_modifier := modifier.duplicate() as StatModifier
+	if runtime_modifier == null or not runtime_modifier.is_valid(_definition):
+		return false
+	var projected := _modifiers.duplicate()
+	projected[runtime_modifier.id] = runtime_modifier
+	if not _has_valid_modifier_values(projected):
+		return false
+	_modifiers[runtime_modifier.id] = runtime_modifier
+	if runtime_modifier.duration_seconds > 0.0:
+		_remaining_duration[runtime_modifier.id] = runtime_modifier.duration_seconds
 	_clamp_current_hp()
 	return true
 
@@ -147,17 +170,36 @@ func _prepare_source_modifiers(source_id: StringName, source_instance_id: String
 		if not modifier.is_valid(_definition):
 			return false
 		runtime_modifiers.append(modifier)
-	return true
+	var projected := _modifiers.duplicate()
+	for modifier_id in projected.keys():
+		var existing := projected[modifier_id] as StatModifier
+		if existing.source_instance_id == source_instance_id:
+			projected.erase(modifier_id)
+	for modifier in runtime_modifiers:
+		projected[modifier.id] = modifier
+	return _has_valid_modifier_values(projected)
 
 func remove_modifier(modifier_id: StringName) -> bool:
-	if not _modifiers.erase(modifier_id):
+	if not _modifiers.has(modifier_id):
 		return false
+	var projected := _modifiers.duplicate()
+	projected.erase(modifier_id)
+	if not _has_valid_modifier_values(projected):
+		return false
+	_modifiers.erase(modifier_id)
 	_remaining_duration.erase(modifier_id)
 	_clamp_current_hp()
 	return true
 
 func remove_modifiers_from_source_instance(source_instance_id: StringName) -> int:
 	if source_instance_id.is_empty():
+		return 0
+	var projected := _modifiers.duplicate()
+	for modifier_id in projected.keys():
+		var modifier := projected[modifier_id] as StatModifier
+		if modifier.source_instance_id == source_instance_id:
+			projected.erase(modifier_id)
+	if not _has_valid_modifier_values(projected):
 		return 0
 	var removed := _erase_modifiers_from_source_instance(source_instance_id)
 	if removed > 0:
@@ -210,13 +252,42 @@ func restore_progression(snapshot: Dictionary) -> bool:
 		return false
 	var maximum_hp := get_value(&"hp") if has_stat(&"hp") else 0.0
 	var restored_hp := float(snapshot.get("current_hp", maximum_hp))
-	if restored_hp < 0.0:
+	if not is_finite(restored_hp) or restored_hp < 0.0:
 		return false
 	level = restored_level
 	experience = restored_experience
-	current_hp = minf(restored_hp, maximum_hp)
+	_commit_current_hp(minf(restored_hp, maximum_hp))
 	return true
 
 func _clamp_current_hp():
 	if has_stat(&"hp"):
-		current_hp = minf(current_hp, get_value(&"hp"))
+		_commit_current_hp(minf(current_hp, get_value(&"hp")))
+
+func _commit_current_hp(value: float):
+	assert(is_finite(value) and value >= 0.0)
+	var was_alive := has_stat(&"hp") and _current_hp > 0.0
+	_current_hp = value
+	if was_alive and _current_hp <= 0.0:
+		health_depleted.emit()
+
+func _has_valid_modifier_values(modifiers: Dictionary) -> bool:
+	for stat_id in _base_values:
+		if not _is_valid_stat_value(stat_id, _get_value_with_modifiers(stat_id, modifiers)):
+			return false
+		var minimum_additive := 0.0
+		var minimum_multiplier := 1.0
+		for modifier in modifiers.values():
+			var stat_modifier := modifier as StatModifier
+			if stat_modifier.stat_id != stat_id:
+				continue
+			if stat_modifier.operation == StatModifier.Operation.ADD:
+				minimum_additive += minf(stat_modifier.amount, 0.0)
+			else:
+				minimum_multiplier *= minf(stat_modifier.amount, 1.0)
+		var minimum_value := (float(_base_values[stat_id]) + minimum_additive) * minimum_multiplier
+		if not _is_valid_stat_value(stat_id, minimum_value):
+			return false
+	return true
+
+func _is_valid_stat_value(stat_id: StringName, value: float) -> bool:
+	return is_finite(value) and value >= 0.0 and (stat_id != &"hp" or value > 0.0)

@@ -44,6 +44,10 @@ outcomes. Spawned actors fade in through instance-local geometry transparency. D
 damage removes stats, active state, targeting, and spatial entries together, then a separately
 bounded retiring-visual set fades the actor out before freeing its scene node.
 
+`ActorStats` owns current HP, validates prospective modifier values before committing them, and
+emits one health-depleted transition when a living actor reaches zero HP. `EntityCoordinator`
+consumes that transition for entity retirement, while `Game` consumes the player transition.
+
 `MeleeCombatCoordinator` validates cursor targeting, range, voxel visibility, target existence, and
 contact timing before changing health. `MeleeAttackProfile` owns base damage and calculates
 `max(1, base damage + attacker strength - target defense)`. A successful physical hit applies that
@@ -52,10 +56,10 @@ and attack IDs, world contact position, and normalized direction. Rejected conta
 health. `Game` explicitly connects completed contacts to entity reactions, and an effects presenter
 can consume the same signal without changing AI or combat rules.
 
-`Game` owns player stats and handles the combat coordinator's completed defeat signal. Defeat
-restores full player HP, cancels current actions and motion, returns the player to world spawn, and
-snaps the camera to the restored position without changing inventory. The HUD observes player stats
-and presents current and maximum HP without owning either value. Entity HP is transient and is not
+`Game` owns player stats and handles their completed health-depleted transition. Defeat restores
+full player HP, cancels current actions and motion, returns the player to world spawn, and snaps the
+camera to the restored position without changing inventory. The HUD observes player stats and
+presents current and maximum HP without owning either value. Entity HP is transient and is not
 serialized. Drops, XP rewards, enemy health bars, regeneration, knockback, death animations, and
 post-respawn invulnerability remain outside the combat system.
 
