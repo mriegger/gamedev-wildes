@@ -17,6 +17,7 @@ var _auto_save_elapsed: float = 0.0
 var _edit_idle_elapsed: float = 0.0
 var _playtime_accum: float = 0.0
 var _pending_edit_save: bool = false
+var _saving_suspended: bool = false
 
 func _ready():
 	set_process(false)
@@ -32,14 +33,17 @@ func setup(p_slot_id: int, p_save_data: Dictionary, p_world: WorldController, p_
 	_edit_idle_elapsed = 0.0
 	_playtime_accum = 0.0
 	_pending_edit_save = false
+	_saving_suspended = false
 	set_process(slot_id != -1)
 	if slot_id != -1:
 		SaveManager.update_last_played(slot_id, save_data)
 		_world.voxel_model.block_edit_committed.connect(_on_world_edit)
 
 func _process(delta):
-	_auto_save_elapsed += delta
 	_playtime_accum += delta
+	if _is_save_blocked():
+		return
+	_auto_save_elapsed += delta
 	if _pending_edit_save:
 		_edit_idle_elapsed += delta
 	if _pending_edit_save and _edit_idle_elapsed >= EDIT_SAVE_DEBOUNCE:
@@ -56,7 +60,7 @@ func _on_world_edit(_edit: BlockEdit):
 	save_status_changed.emit("Pending save...")
 
 func save(reason: String) -> bool:
-	if slot_id == -1:
+	if slot_id == -1 or _is_save_blocked():
 		return false
 	var time_to_save = _environment.get_time_of_day()
 	var success = SaveManager.save_world_state(slot_id, save_data, _world.voxel_model, _player, _inventory, _playtime_accum, time_to_save)
@@ -69,6 +73,18 @@ func save(reason: String) -> bool:
 	else:
 		save_status_changed.emit("Save FAILED slot %d" % slot_id)
 	return success
+
+func suspend_saving():
+	_saving_suspended = true
+
+func resume_saving():
+	_saving_suspended = false
+
+func is_saving_suspended() -> bool:
+	return _saving_suspended
+
+func _is_save_blocked() -> bool:
+	return _saving_suspended or _player.stats.is_dead()
 
 func get_summary() -> String:
 	if slot_id == -1:

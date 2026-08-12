@@ -77,6 +77,12 @@ available viewport when necessary. Entity HP is transient and is not serialized.
 regeneration, knockback, death audio, and post-respawn invulnerability remain outside the combat
 system.
 
+`GameSession` owns save suspension as part of the gameplay lifecycle. Suspension or authoritative
+zero HP blocks manual, periodic, and edit-debounce writes while session playtime continues
+accumulating. Respawn, Main Menu, and window close restore a living player at world spawn before
+saving resumes; exit paths then use the normal final-save and shutdown flow so zero HP is never
+persisted.
+
 Entity populations are transient and bounded to six per species and twelve total. Spawning makes
 four attempts every two seconds in an 18–36 block annulus. Voxel A* has fixed radius, node, and
 failed-search retry budgets. The spatial index contains only active actors, and distance or

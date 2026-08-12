@@ -137,6 +137,7 @@ func _setup_gameplay():
 func _on_player_defeated():
 	if _death_screen != null and is_instance_valid(_death_screen):
 		return
+	game_session.suspend_saving()
 	player.enter_defeated_state()
 	camera_rig.set_gameplay_input_enabled(false)
 	hud.close_side_panel_immediate()
@@ -157,11 +158,16 @@ func _on_respawn_requested():
 		return
 	var completed_screen := _death_screen
 	_death_screen = null
-	player.respawn_at(world.voxel_model.get_spawn_position() + Vector3(0.0, 0.1, 0.0))
-	camera_rig.snap_to_follow_target()
+	_restore_player_from_defeat()
+	completed_screen.queue_free()
+
+func _restore_player_from_defeat():
+	if player.is_defeated() or player.stats.is_dead():
+		player.respawn_at(world.voxel_model.get_spawn_position() + Vector3(0.0, 0.1, 0.0))
+		camera_rig.snap_to_follow_target()
 	camera_rig.set_gameplay_input_enabled(true)
 	game_environment.restore_debug_panel_input()
-	completed_screen.queue_free()
+	game_session.resume_saving()
 
 func _on_generation_progress(stage: String, percent: float, details: String):
 	loading_progress.emit(stage, percent, details)
@@ -284,6 +290,7 @@ func _resume_from_pause():
 	get_tree().paused = false
 
 func _save_and_request_main_menu():
+	_restore_player_from_defeat()
 	_deactivate_session()
 	get_tree().paused = false
 	if _pause_menu and is_instance_valid(_pause_menu):
@@ -299,6 +306,7 @@ func _save_and_request_main_menu():
 
 func _notification(what):
 	if what == NOTIFICATION_WM_CLOSE_REQUEST and _session_active:
+		_restore_player_from_defeat()
 		_deactivate_session()
 		game_session.shutdown("close")
 		melee_combat.shutdown()

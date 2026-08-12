@@ -31,6 +31,8 @@ var _panel_toggle_msec: int = 0
 var _streaming_race_position: Vector3
 var _edited_chunk: Vector2i
 var _forced_evictions: Array[Vector2i] = []
+var _test_save_slot_id: int
+var _test_close_save_slot_id: int
 
 const MOVEMENT_FRAMES: int = 900
 const STREAMING_RACE_TIMEOUT_MSEC: int = 30000
@@ -43,6 +45,10 @@ const SAVED_TORCH_POSITIONS: Array[Vector3i] = [
 ]
 
 func _init() -> void:
+	var process_slot_base := 1000000 + OS.get_process_id() * 2
+	_test_save_slot_id = process_slot_base
+	_test_close_save_slot_id = process_slot_base + 1
+	_cleanup_test_saves()
 	print("[soak] starting headless game soak")
 	_orphan_before = int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
 	print("[soak] orphan before %d" % _orphan_before)
@@ -63,7 +69,7 @@ func _process(_delta: float) -> bool:
 			return false
 		var settings := GameSettings.new()
 		settings.torch_shadow_count = 1
-		_game.configure_session(-1, _make_saved_world(), settings)
+		_game.configure_session(_test_save_slot_id, _make_saved_world(), settings)
 		_game.session_ready.connect(_on_session_ready)
 		root.add_child(_game)
 		print("[soak] game added frame %d" % _frame)
@@ -208,6 +214,9 @@ func _make_saved_world() -> Dictionary:
 		placed_blocks[key] = BlockId.Type.TORCH
 		torch_attachments[key] = "-1,0,0"
 	return {
+		"version": SaveManager.CURRENT_SAVE_VERSION,
+		"world_name": "World Soak Test",
+		"playtime_seconds": 0.0,
 		"seed": 1337,
 		"time_of_day": 16.25,
 		"player_position": [SAVED_PLAYER_POSITION.x, SAVED_PLAYER_POSITION.y, SAVED_PLAYER_POSITION.z],
@@ -796,21 +805,88 @@ func _check_final() -> void:
 		return
 	if not _verify_player_defeat_flow():
 		return
-	if _game:
-		_game._save_and_request_main_menu()
-		if _game.is_physics_processing() or _game.is_processing_unhandled_input():
-			_fail("game callbacks remained active after session shutdown")
-			return
+	if not _verify_dead_main_menu_save():
+		return
+	var completed_game := _game
+	_game = null
+	_world = null
+	_player = null
+	completed_game.queue_free()
+	await create_timer(0.25).timeout
+	if not await _verify_dead_window_close_save():
+		return
+	_cleanup_test_saves()
 	if _errors.is_empty():
-		_game.queue_free()
-		await create_timer(0.25).timeout
+		var final_orphan := int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
+		if final_orphan != 0:
+			_fail("death exit verification left %d orphan nodes" % final_orphan)
+			return
 		print("SOAK PASS frames=%d movement_frames=%d data_max=%d vis_max=%d terrain_max=%d orphan_max=%d edits=%d" % [_frame, _movement_frames, _max_data_chunks, _max_visible_chunks, _max_terrain_chunks, _max_orphan, _mine_place_count])
 		quit(0)
 	else:
 		print("SOAK FAIL %s" % str(_errors))
 		quit(1)
 
+func _verify_alive_save_timers() -> bool:
+	var session := _game.game_session
+	if session.is_saving_suspended():
+		_fail("alive session began with saving suspended")
+		return false
+	session._pending_edit_save = false
+	session._edit_idle_elapsed = 0.0
+	session._auto_save_elapsed = GameSession.AUTO_SAVE_INTERVAL - 0.05
+	var auto_save_position := _player.global_position
+	session._process(0.1)
+	if not is_zero_approx(session._auto_save_elapsed):
+		_fail("alive autosave timer did not commit")
+		return false
+	var auto_save := SaveManager.load_slot(_test_save_slot_id)
+	if not _saved_position_matches(auto_save, auto_save_position):
+		_fail("alive autosave did not persist the player position")
+		return false
+	var auto_stats = auto_save.get("player_stats", null)
+	if not auto_stats is Dictionary or not is_equal_approx(float((auto_stats as Dictionary).get("current_hp", -1.0)), _game.player_stats.current_hp):
+		_fail("alive autosave did not persist player HP")
+		return false
+	var edit_save_position := auto_save_position + Vector3(0.25, 0.0, 0.25)
+	_player.global_position = edit_save_position
+	session._on_world_edit(BlockEdit.new(BlockEdit.Operation.PLACE, Vector3i.ZERO))
+	session._edit_idle_elapsed = GameSession.EDIT_SAVE_DEBOUNCE - 0.05
+	session._process(0.1)
+	if session._pending_edit_save or not is_zero_approx(session._edit_idle_elapsed):
+		_fail("alive edit-debounce timer did not commit")
+		return false
+	var edit_save := SaveManager.load_slot(_test_save_slot_id)
+	if not _saved_position_matches(edit_save, edit_save_position):
+		_fail("alive edit-debounce save did not persist the player position")
+		return false
+	return true
+
+func _saved_position_matches(save_data: Dictionary, expected_position: Vector3) -> bool:
+	var encoded = save_data.get("player_position", null)
+	if not encoded is Array or (encoded as Array).size() != 3:
+		return false
+	var position := Vector3(float(encoded[0]), float(encoded[1]), float(encoded[2]))
+	return position.is_equal_approx(expected_position)
+
+func _saved_state_is_living_spawn(save_data: Dictionary, spawn_position: Vector3, maximum_hp: float, inventory_snapshot: Dictionary, item_catalog: ItemCatalog) -> bool:
+	if not _saved_position_matches(save_data, spawn_position):
+		return false
+	var stats_data = save_data.get("player_stats", null)
+	if not stats_data is Dictionary or not is_equal_approx(float((stats_data as Dictionary).get("current_hp", -1.0)), maximum_hp):
+		return false
+	var inventory_data = save_data.get("inventory", null)
+	if not inventory_data is Dictionary:
+		return false
+	var restored_inventory := InventoryModel.new(item_catalog)
+	if not restored_inventory.from_dict(inventory_data as Dictionary):
+		return false
+	return restored_inventory.to_dict() == inventory_snapshot
+
 func _verify_player_defeat_flow() -> bool:
+	if not _verify_alive_save_timers():
+		return false
+	var session := _game.game_session
 	var inventory_before := _game.inventory_model.to_dict()
 	_game.hud.side_panel.open()
 	_game.hud.side_panel._process(1.0)
@@ -831,13 +907,33 @@ func _verify_player_defeat_flow() -> bool:
 	_game.input_buffer.move_dir = Vector2.ONE
 	_game.input_buffer.sprint_pressed = true
 	_game.input_buffer.primary_use_pressed = true
+	session._auto_save_elapsed = GameSession.AUTO_SAVE_INTERVAL - 0.05
+	session._on_world_edit(BlockEdit.new(BlockEdit.Operation.PLACE, Vector3i.ZERO))
+	session._edit_idle_elapsed = GameSession.EDIT_SAVE_DEBOUNCE - 0.05
+	var auto_elapsed_before := session._auto_save_elapsed
+	var edit_elapsed_before := session._edit_idle_elapsed
+	var playtime_before := session._playtime_accum
+	var save_data_before := session.save_data.duplicate(true)
+	var persisted_playtime_before := float(session.save_data.get("playtime_seconds", 0.0))
 	if not _game.player_stats.set_current_hp(0.0):
 		_fail("player defeat flow could not set lethal HP")
 		return false
-	_game.melee_combat.player_defeated.emit()
 	var death_screen := _game._death_screen
 	if death_screen == null or not is_instance_valid(death_screen):
 		_fail("player defeat did not open the death screen")
+		return false
+	if not session.is_saving_suspended():
+		_fail("player defeat did not suspend saving synchronously")
+		return false
+	session._process(1.0)
+	if not is_equal_approx(session._playtime_accum, playtime_before + 1.0):
+		_fail("save suspension stopped session playtime")
+		return false
+	if not is_equal_approx(session._auto_save_elapsed, auto_elapsed_before) or not is_equal_approx(session._edit_idle_elapsed, edit_elapsed_before) or not session._pending_edit_save:
+		_fail("save suspension consumed an autosave or pending edit timer")
+		return false
+	if session.save("defeated_test") or session.save_data != save_data_before:
+		_fail("suspended session accepted a save write")
 		return false
 	if not _player.is_defeated() or not _player.velocity.is_zero_approx() or _player.is_sprinting:
 		_fail("player defeat did not stop the player")
@@ -858,7 +954,7 @@ func _verify_player_defeat_flow() -> bool:
 	if debug_clock_panel.is_open():
 		_fail("defeated debug clock panel processed its toggle input")
 		return false
-	_game.melee_combat.player_defeated.emit()
+	_game._on_player_defeated()
 	if _game._death_screen != death_screen:
 		_fail("duplicate player defeat created another death screen")
 		return false
@@ -916,6 +1012,9 @@ func _verify_player_defeat_flow() -> bool:
 	if _game._death_screen != null or _player.is_defeated():
 		_fail("Respawn did not clear the death screen and defeated state")
 		return false
+	if session.is_saving_suspended():
+		_fail("Respawn did not resume saving")
+		return false
 	if not _player.global_position.is_equal_approx(expected_spawn) or not _game.camera_rig.global_position.is_equal_approx(expected_spawn):
 		_fail("Respawn did not restore spawn and camera positions")
 		return false
@@ -924,6 +1023,17 @@ func _verify_player_defeat_flow() -> bool:
 		return false
 	if _game.inventory_model.to_dict() != inventory_before:
 		_fail("player defeat or Respawn changed inventory")
+		return false
+	session._process(0.1)
+	if session._pending_edit_save:
+		_fail("resumed edit-debounce save did not commit")
+		return false
+	var respawn_save := SaveManager.load_slot(_test_save_slot_id)
+	if not _saved_state_is_living_spawn(respawn_save, expected_spawn, _game.player_stats.get_value(&"hp"), inventory_before, _game.item_catalog):
+		_fail("resumed edit-debounce save did not persist the living Respawn state")
+		return false
+	if float(respawn_save.get("playtime_seconds", 0.0)) < persisted_playtime_before + 1.0:
+		_fail("resumed save omitted playtime accumulated while dead")
 		return false
 	_game.camera_rig._unhandled_input(blocked_wheel)
 	if not _game.input_buffer.wheel_up:
@@ -937,6 +1047,112 @@ func _verify_player_defeat_flow() -> bool:
 	debug_clock_panel.hide_panel()
 	return true
 
+func _verify_dead_main_menu_save() -> bool:
+	var session := _game.game_session
+	var inventory_before := _game.inventory_model.to_dict()
+	session._pending_edit_save = false
+	session._edit_idle_elapsed = 0.0
+	session._auto_save_elapsed = GameSession.AUTO_SAVE_INTERVAL - 0.05
+	_player.global_position += Vector3(5.0, 3.0, -4.0)
+	if not _game.player_stats.set_current_hp(0.0):
+		_fail("dead Main Menu setup could not set lethal HP")
+		return false
+	if not _player.is_defeated() or not session.is_saving_suspended():
+		_fail("dead Main Menu setup did not enter suspended defeat")
+		return false
+	var auto_elapsed_before := session._auto_save_elapsed
+	var playtime_before := session._playtime_accum
+	session._process(1.0)
+	if not is_equal_approx(session._auto_save_elapsed, auto_elapsed_before):
+		_fail("defeated autosave timer advanced")
+		return false
+	if not is_equal_approx(session._playtime_accum, playtime_before + 1.0):
+		_fail("defeated autosave suspension stopped playtime")
+		return false
+	if session.save("defeated_auto_test"):
+		_fail("defeated autosave suspension accepted a direct save")
+		return false
+	var death_screen := _game._death_screen
+	if death_screen == null or not is_instance_valid(death_screen):
+		_fail("dead Main Menu setup did not retain the death screen")
+		return false
+	death_screen.main_menu_button.pressed.emit()
+	var expected_spawn := _world.voxel_model.get_spawn_position() + Vector3(0.0, 0.1, 0.0)
+	if _player.is_defeated() or session.is_saving_suspended():
+		_fail("Main Menu did not normalize defeated save state")
+		return false
+	if not _player.global_position.is_equal_approx(expected_spawn) or not _game.camera_rig.global_position.is_equal_approx(expected_spawn):
+		_fail("Main Menu did not normalize player and camera positions")
+		return false
+	if not _game.camera_rig._gameplay_input_enabled or not _game.game_environment._debug_clock_panel._input_enabled:
+		_fail("Main Menu did not restore defeated input state")
+		return false
+	if _game._session_active or _game.is_physics_processing() or _game.is_processing_unhandled_input():
+		_fail("Main Menu left gameplay callbacks active after shutdown")
+		return false
+	var saved_state := SaveManager.load_slot(_test_save_slot_id)
+	if not _saved_state_is_living_spawn(saved_state, expected_spawn, _game.player_stats.get_value(&"hp"), inventory_before, _game.item_catalog):
+		_fail("dead Main Menu did not save a living spawn state with preserved inventory")
+		return false
+	return true
+
+func _verify_dead_window_close_save() -> bool:
+	var packed := load("res://game/game.tscn") as PackedScene
+	var close_game := packed.instantiate() as Game
+	var settings := GameSettings.new()
+	settings.torch_shadow_count = 1
+	close_game.configure_session(_test_close_save_slot_id, _make_saved_world(), settings)
+	var close_ready: Array[bool] = [false]
+	close_game.session_ready.connect(func(): close_ready[0] = true)
+	root.add_child(close_game)
+	var ready_deadline := Time.get_ticks_msec() + 30000
+	while not close_ready[0]:
+		if Time.get_ticks_msec() >= ready_deadline:
+			close_game.queue_free()
+			_fail("window-close save verification timed out during world setup")
+			return false
+		await process_frame
+	var inventory_before := close_game.inventory_model.to_dict()
+	close_game.player.global_position += Vector3(-6.0, 4.0, 5.0)
+	if not close_game.player_stats.set_current_hp(0.0):
+		close_game.queue_free()
+		_fail("window-close setup could not set lethal HP")
+		return false
+	if not close_game.player.is_defeated() or not close_game.game_session.is_saving_suspended():
+		close_game.queue_free()
+		_fail("window-close setup did not enter suspended defeat")
+		return false
+	close_game._notification(close_game.NOTIFICATION_WM_CLOSE_REQUEST)
+	var expected_spawn := close_game.world.voxel_model.get_spawn_position() + Vector3(0.0, 0.1, 0.0)
+	if close_game.player.is_defeated() or close_game.game_session.is_saving_suspended():
+		close_game.queue_free()
+		_fail("window close did not normalize defeated save state")
+		return false
+	if not close_game.player.global_position.is_equal_approx(expected_spawn) or not close_game.camera_rig.global_position.is_equal_approx(expected_spawn):
+		close_game.queue_free()
+		_fail("window close did not normalize player and camera positions")
+		return false
+	if not close_game.camera_rig._gameplay_input_enabled or not close_game.game_environment._debug_clock_panel._input_enabled:
+		close_game.queue_free()
+		_fail("window close did not restore defeated input state")
+		return false
+	if close_game._session_active or close_game.is_physics_processing() or close_game.is_processing_unhandled_input():
+		close_game.queue_free()
+		_fail("window close left gameplay callbacks active after shutdown")
+		return false
+	var saved_state := SaveManager.load_slot(_test_close_save_slot_id)
+	if not _saved_state_is_living_spawn(saved_state, expected_spawn, close_game.player_stats.get_value(&"hp"), inventory_before, close_game.item_catalog):
+		close_game.queue_free()
+		_fail("dead window close did not save a living spawn state with preserved inventory")
+		return false
+	close_game.queue_free()
+	await create_timer(0.25).timeout
+	return true
+
+func _cleanup_test_saves():
+	SaveManager.delete_slot(_test_save_slot_id)
+	SaveManager.delete_slot(_test_close_save_slot_id)
+
 func _warn(msg: String) -> void:
 	print("[soak] %s" % msg)
 
@@ -947,6 +1163,7 @@ func _fail(msg: String) -> void:
 	_error(msg)
 	print("FAIL: %s" % msg)
 	_errors.append(msg)
+	_cleanup_test_saves()
 	quit(1)
 
 func _on_session_ready():
