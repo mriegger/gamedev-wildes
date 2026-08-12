@@ -21,6 +21,14 @@ var _thread_noises: Dictionary = {}
 const RIVER_WIDE_WEIGHT: float = 0.42
 const LAKE_GRID_CACHE_MAX: int = 1024
 const LAKE_GRID_CACHE_KEEP: int = 768
+const COPPER_GROWTH_DIRECTIONS: Array[Vector3i] = [
+	Vector3i.LEFT,
+	Vector3i.RIGHT,
+	Vector3i.DOWN,
+	Vector3i.UP,
+	Vector3i.FORWARD,
+	Vector3i.BACK,
+]
 
 func _init(p_config: WorldConfig):
 	config = p_config
@@ -455,6 +463,89 @@ func _compute_type_with_biome(x: int, z: int, h: int, biome: Biome, lake_factor:
 		return biome.shore_block
 	return biome.surface_block
 
+func _generate_copper_deposit(
+	origin_x: int,
+	origin_z: int,
+	chunk_size: int,
+	size_y: int,
+	cache_z: int,
+	height_dict: Dictionary,
+	cache: PackedInt32Array
+) -> Dictionary:
+	var deposit: Dictionary = {}
+	if not config.copper_deposits_enabled or chunk_size < 6:
+		return deposit
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	if rng.randf() > config.copper_deposit_chance_per_chunk:
+		return deposit
+
+	var seed_pos := Vector3i.ZERO
+	var found_seed := false
+	for _attempt in range(16):
+		var x := rng.randi_range(origin_x + 2, origin_x + chunk_size - 3)
+		var z := rng.randi_range(origin_z + 2, origin_z + chunk_size - 3)
+		var surface_y := height_dict.get(Vector2i(x, z), -1) as int
+		if surface_y <= config.water_level + 1 or surface_y >= size_y:
+			continue
+		var expose_surface := config.copper_max_surface_blocks > 0 and rng.randf() <= config.copper_surface_exposure_chance
+		var y := surface_y if expose_surface else surface_y - rng.randi_range(1, 4)
+		if y < 1:
+			continue
+		seed_pos = Vector3i(x, y, z)
+		found_seed = true
+		break
+	if not found_seed:
+		return deposit
+
+	var target_size := rng.randi_range(config.copper_deposit_min_blocks, config.copper_deposit_max_blocks)
+	var seed_surface := height_dict[Vector2i(seed_pos.x, seed_pos.z)] as int
+	var has_outcrop := seed_pos.y == seed_surface
+	var surface_limit := 0
+	if has_outcrop:
+		surface_limit = mini(config.copper_max_surface_blocks, maxi(1, int(target_size / 5)))
+	var surface_count := 1 if has_outcrop else 0
+	deposit[seed_pos] = BlockId.Type.COPPER
+
+	var attempts := 0
+	var max_attempts := target_size * 400
+	while deposit.size() < target_size and attempts < max_attempts:
+		attempts += 1
+		var positions := deposit.keys()
+		var anchor := positions[rng.randi_range(0, positions.size() - 1)] as Vector3i
+		var direction := COPPER_GROWTH_DIRECTIONS[rng.randi_range(0, COPPER_GROWTH_DIRECTIONS.size() - 1)]
+		var candidate := anchor + direction
+		if deposit.has(candidate):
+			continue
+		if candidate.x < origin_x + 1 or candidate.x >= origin_x + chunk_size - 1:
+			continue
+		if candidate.z < origin_z + 1 or candidate.z >= origin_z + chunk_size - 1:
+			continue
+		if candidate.y < 1 or candidate.y >= size_y:
+			continue
+		var offset := candidate - seed_pos
+		if offset.length_squared() > 12:
+			continue
+		var column_surface := height_dict.get(Vector2i(candidate.x, candidate.z), -1) as int
+		if column_surface < candidate.y:
+			continue
+		var is_surface := candidate.y == column_surface
+		if is_surface and (surface_count >= surface_limit or column_surface <= config.water_level):
+			continue
+		var lx := candidate.x - origin_x + 1
+		var lz := candidate.z - origin_z + 1
+		var idx := lx * size_y * cache_z + candidate.y * cache_z + lz
+		var existing_block := cache[idx]
+		if existing_block not in [BlockId.Type.GRASS, BlockId.Type.DIRT, BlockId.Type.SAND, BlockId.Type.STONE]:
+			continue
+		deposit[candidate] = BlockId.Type.COPPER
+		if is_surface:
+			surface_count += 1
+
+	if deposit.size() != target_size:
+		deposit.clear()
+	return deposit
+
 func build_cache_with_generation(
 	origin_x: int,
 	origin_z: int,
@@ -463,7 +554,9 @@ func build_cache_with_generation(
 	placed_snap: Dictionary,
 	removed_snap: Dictionary,
 	existing_tree_snap: Dictionary,
-	terrain_only: bool = false
+	terrain_only: bool = false,
+	existing_copper_snap: Dictionary = {},
+	generate_copper: bool = false
 ) -> Dictionary:
 	if noise_continentalness == null:
 		setup_noises()
@@ -625,6 +718,7 @@ func build_cache_with_generation(
 				out_tree_fast[top] = BlockId.Type.LEAVES
 
 	var cache_dict = null
+	var out_copper_fast: Dictionary = {}
 	if not terrain_only:
 		var cache = PackedInt32Array()
 		cache.resize(cache_x * size_y * cache_z)
@@ -655,9 +749,10 @@ func build_cache_with_generation(
 					if lf > 0.01 or rf > 0.01 or base_top_t == BlockId.Type.SAND:
 						for ly in range(base_h + 1, min(config.water_level, size_y - 1) + 1):
 							cache[column_offset + ly * cache_z + lz] = BlockId.Type.WATER
-		var overlays: Array[Dictionary] = [existing_tree_snap, out_tree_fast, removed_snap, placed_snap]
-		for overlay_index in range(overlays.size()):
-			var overlay = overlays[overlay_index]
+		if generate_copper:
+			out_copper_fast = _generate_copper_deposit(origin_x, origin_z, cs, size_y, cache_z, height_dict, cache)
+		var overlays: Array[Dictionary] = [existing_copper_snap, out_copper_fast, existing_tree_snap, out_tree_fast]
+		for overlay in overlays:
 			for position in overlay:
 				if not position is Vector3i:
 					continue
@@ -667,7 +762,21 @@ func build_cache_with_generation(
 				if lx < 0 or lx >= cache_x or p.y < 0 or p.y >= size_y or lz < 0 or lz >= cache_z:
 					continue
 				var idx = lx * size_y * cache_z + p.y * cache_z + lz
-				cache[idx] = -1 if overlay_index == 2 else overlay[position]
+				cache[idx] = overlay[position]
+		for position in removed_snap:
+			if position is Vector3i:
+				var p = position as Vector3i
+				var lx = p.x - origin_x + 1
+				var lz = p.z - origin_z + 1
+				if lx >= 0 and lx < cache_x and p.y >= 0 and p.y < size_y and lz >= 0 and lz < cache_z:
+					cache[lx * size_y * cache_z + p.y * cache_z + lz] = -1
+		for position in placed_snap:
+			if position is Vector3i:
+				var p = position as Vector3i
+				var lx = p.x - origin_x + 1
+				var lz = p.z - origin_z + 1
+				if lx >= 0 and lx < cache_x and p.y >= 0 and p.y < size_y and lz >= 0 and lz < cache_z:
+					cache[lx * size_y * cache_z + p.y * cache_z + lz] = placed_snap[position]
 		cache_dict = {
 			"cache": cache,
 			"origin_x": origin_x,
@@ -684,6 +793,7 @@ func build_cache_with_generation(
 		"height": height_dict,
 		"type": type_dict,
 		"tree_block_fast": out_tree_fast,
+		"copper_block_fast": out_copper_fast,
 		"positions": tree_positions,
 	}
 	return result

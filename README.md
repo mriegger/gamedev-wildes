@@ -46,8 +46,10 @@ and fill with water up to level 5.
 further out. Meshing runs on background threads so movement doesn't hitch; edits are stored
 globally and survive unload/reload.
 
-**Blocks.** Grass, dirt, sand, stone, wood, and leaves are minable and placeable. Stone requires
-the starter copper pickaxe; other current blocks remain hand-minable. Torches are
+**Blocks.** Grass, dirt, sand, stone, wood, and leaves are minable and placeable. Random copper
+deposits generate after the surrounding terrain as connected 5–30 block blobs. Most of each
+deposit stays underground, while some deposits expose up to three blocks at the surface. Stone
+and copper require the starter copper pickaxe; other current blocks remain hand-minable. Torches are
 a seventh placeable that you can walk through — each is an omni light with a 9-block radius.
 Torch shadows are configurable for the nearest 0, 1, 2, or 4 lights and default to the nearest
 one.
@@ -74,8 +76,8 @@ the panel closes or another recipe is selected.
 `spawn <item> <count>` command adds any catalog item directly to the backpack for testing. Item
 IDs and display names are accepted; equipment IDs remain material-qualified, such as
 `copper_pickaxe` and `copper_sword`. Press `/` again or `Esc` to close the console without
-opening the pause menu. Copper is currently an inventory-only resource available through
-`spawn copper <count>`; it does not generate in the world yet.
+opening the pause menu. Copper can be mined from deposits or added directly with
+`spawn copper <count>`.
 
 **UI & saves.** A frosted-glass front-end: main menu, world select over three save slots,
 create-world and hold-3-seconds-to-delete modals, a chunk-progress loading screen, and a pause

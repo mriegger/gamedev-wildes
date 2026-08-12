@@ -23,6 +23,14 @@ var max_build_y: int:
 @export var tree_trunk_max: int = 4
 @export var tree_spacing: float = 4.5
 
+@export_group("Copper Deposits")
+@export var copper_deposits_enabled: bool = true
+@export_range(0.0, 1.0) var copper_deposit_chance_per_chunk: float = 0.22
+@export_range(1, 100) var copper_deposit_min_blocks: int = 5
+@export_range(1, 100) var copper_deposit_max_blocks: int = 30
+@export_range(0.0, 1.0) var copper_surface_exposure_chance: float = 0.55
+@export_range(0, 10) var copper_max_surface_blocks: int = 3
+
 @export_group("Noise - Continentalness")
 @export var continentalness_frequency: float = 0.0018
 @export var continentalness_octaves: int = 4
@@ -171,6 +179,21 @@ func validate() -> bool:
 		return false
 	if tree_spacing < 0.1:
 		push_error("[WorldConfig] tree_spacing too small")
+		return false
+	if copper_deposit_chance_per_chunk < 0.0 or copper_deposit_chance_per_chunk > 1.0:
+		push_error("[WorldConfig] copper_deposit_chance_per_chunk must be 0..1")
+		return false
+	if copper_deposit_min_blocks < 1 or copper_deposit_min_blocks > 100:
+		push_error("[WorldConfig] copper_deposit_min_blocks must be 1..100")
+		return false
+	if copper_deposit_max_blocks < copper_deposit_min_blocks or copper_deposit_max_blocks > 100:
+		push_error("[WorldConfig] copper_deposit_max_blocks must be >= min and <=100")
+		return false
+	if copper_surface_exposure_chance < 0.0 or copper_surface_exposure_chance > 1.0:
+		push_error("[WorldConfig] copper_surface_exposure_chance must be 0..1")
+		return false
+	if copper_max_surface_blocks < 0 or copper_max_surface_blocks > 10:
+		push_error("[WorldConfig] copper_max_surface_blocks must be 0..10")
 		return false
 	if render_distance < 1 or render_distance > 20:
 		push_error("[WorldConfig] render_distance %d invalid, must be 1..20" % render_distance)

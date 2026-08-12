@@ -135,7 +135,9 @@ func _create_job(coord: Vector2i, generation: int, terrain_only: bool) -> ChunkB
 		terrain_only,
 		edits.get("placed", {}) as Dictionary,
 		edits.get("removed", {}) as Dictionary,
-		edits.get("trees", {}) as Dictionary
+		edits.get("trees", {}) as Dictionary,
+		edits.get("copper", {}) as Dictionary,
+		not terrain_only and not _voxel_model.generated_copper_chunks.has(coord)
 	)
 
 func _ensure_workers():
@@ -197,7 +199,9 @@ func _build(job: ChunkBuildJob) -> ChunkBuildResult:
 		job.placed_blocks,
 		job.removed_blocks,
 		job.tree_blocks,
-		job.terrain_only
+		job.terrain_only,
+		job.copper_blocks,
+		job.generate_copper
 	)
 	if job.generation != 0 and not _is_current(job.coord, job.generation):
 		return null

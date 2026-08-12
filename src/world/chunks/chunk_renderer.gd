@@ -44,7 +44,7 @@ func _should_cast_shadow(coord: Vector2i) -> bool:
 	return maxi(abs(offset.x), abs(offset.y)) <= _shadow_render_distance
 
 func apply_result(result: ChunkBuildResult):
-	_apply_generation(result.coord, result.generation_payload)
+	_apply_generation(result.coord, result.generation_payload, not result.terrain_only)
 	if result.terrain_only:
 		return
 	var terrain_mesh := _mesher.create_mesh_from_data(result.terrain_mesh_data)
@@ -101,7 +101,7 @@ func clear():
 	_mesh_cache.clear()
 	_mesh_cache_order.clear()
 
-func _apply_generation(coord: Vector2i, payload: Dictionary):
+func _apply_generation(coord: Vector2i, payload: Dictionary, include_copper: bool):
 	var height := payload.get("height", {}) as Dictionary
 	if not height.is_empty():
 		_voxel_model.apply_chunk_gen_for_coord(coord, {
@@ -111,6 +111,10 @@ func _apply_generation(coord: Vector2i, payload: Dictionary):
 	_voxel_model.apply_tree_chunk_for_coord(coord, {
 		"tree_block_fast": payload.get("tree_block_fast", {}) as Dictionary,
 	})
+	if include_copper:
+		_voxel_model.apply_copper_chunk_for_coord(coord, {
+			"copper_block_fast": payload.get("copper_block_fast", {}) as Dictionary,
+		})
 
 func _touch_cache(coord: Vector2i):
 	_mesh_cache_order.erase(coord)

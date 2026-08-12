@@ -11,7 +11,8 @@ enum Type {
 	LEAVES = 6,
 	TORCH = 7,
 	WATER = 8,
-	COUNT = 9,
+	COPPER = 9,
+	COUNT = 10,
 }
 
 const DISPLAY_NAMES: Dictionary = {
@@ -24,6 +25,7 @@ const DISPLAY_NAMES: Dictionary = {
 	Type.LEAVES: "Leaves",
 	Type.TORCH: "Torch",
 	Type.WATER: "Water",
+	Type.COPPER: "Copper",
 }
 
 static func get_display_name(id: Type) -> String:

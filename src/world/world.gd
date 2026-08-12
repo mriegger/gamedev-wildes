@@ -68,6 +68,7 @@ func _create_world_model(generation: Dictionary):
 	voxel_model.set_generator_ref(terrain_generator)
 	voxel_model.apply_chunk_gen(generation)
 	voxel_model.apply_tree_chunk(generation)
+	voxel_model.restore_copper_generation(_start_state.copper_blocks, _start_state.generated_copper_chunks)
 	voxel_model.restore_block_edits(_start_state.placed_blocks, _start_state.removed_blocks)
 	voxel_model.torch_attachments = _start_state.torch_attachments.duplicate()
 	for pos in _start_state.removed_blocks:

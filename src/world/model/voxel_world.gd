@@ -21,6 +21,9 @@ var tree_block_fast: Dictionary = {}
 var tree_chunks_fast: Dictionary = {}
 var generated_tree_chunks: Dictionary = {}
 var generated_terrain_chunks: Dictionary = {}
+var copper_block_fast: Dictionary = {}
+var copper_chunks_fast: Dictionary = {}
+var generated_copper_chunks: Dictionary = {}
 
 var _terrain_chunk_lru: Dictionary = {}
 var max_terrain_cache_chunks: int = 257
@@ -54,6 +57,25 @@ func snapshot_block_edits() -> Dictionary:
 	return {
 		"placed": _placed_blocks.duplicate(),
 		"removed": _removed_blocks.duplicate(),
+	}
+
+func restore_copper_generation(blocks: Dictionary, chunks: Dictionary) -> void:
+	copper_block_fast = blocks.duplicate()
+	generated_copper_chunks = chunks.duplicate()
+	copper_chunks_fast.clear()
+	for position in copper_block_fast:
+		if not position is Vector3i:
+			continue
+		var coord := ChunkCoord.world_to_chunk_vec3i(position, chunk_size)
+		if not copper_chunks_fast.has(coord):
+			copper_chunks_fast[coord] = {}
+		(copper_chunks_fast[coord] as Dictionary)[position] = copper_block_fast[position]
+		generated_copper_chunks[coord] = true
+
+func snapshot_copper_generation() -> Dictionary:
+	return {
+		"blocks": copper_block_fast.duplicate(),
+		"chunks": generated_copper_chunks.duplicate(),
 	}
 
 func get_block_edit_count() -> int:
@@ -216,6 +238,19 @@ func apply_tree_chunk_for_coord(coord: Vector2i, tree_data: Dictionary):
 			tree_chunks_fast[coord][k] = fast[k]
 	generated_tree_chunks[coord] = true
 
+func apply_copper_chunk_for_coord(coord: Vector2i, copper_data: Dictionary):
+	if generated_copper_chunks.has(coord):
+		return
+	var fast := copper_data.get("copper_block_fast", {}) as Dictionary
+	var chunk_copper: Dictionary = {}
+	for position in fast:
+		if position is Vector3i:
+			copper_block_fast[position] = fast[position]
+			chunk_copper[position] = fast[position]
+	if not chunk_copper.is_empty():
+		copper_chunks_fast[coord] = chunk_copper
+	generated_copper_chunks[coord] = true
+
 func get_block_at(p: Vector3i):
 	if _placed_blocks.has(p):
 		return _placed_blocks[p]
@@ -223,6 +258,8 @@ func get_block_at(p: Vector3i):
 		return null
 	if tree_block_fast.has(p):
 		return tree_block_fast[p]
+	if copper_block_fast.has(p):
+		return copper_block_fast[p]
 	var key = Vector2i(p.x, p.z)
 	if not height_map_dict.has(key):
 		return null
@@ -435,16 +472,22 @@ func snapshot_edits_for_chunk(origin_x: int, origin_z: int) -> Dictionary:
 	_copy_indexed_edits(_placed_edits_by_chunk, placed_snap, min_coord, max_coord, ox_min, ox_max, oz_min, oz_max)
 	_copy_indexed_edits(_removed_edits_by_chunk, removed_snap, min_coord, max_coord, ox_min, ox_max, oz_min, oz_max)
 	var tree_snap: Dictionary = {}
+	var copper_snap: Dictionary = {}
 	for cx in range(min_coord.x, max_coord.x + 1):
 		for cz in range(min_coord.y, max_coord.y + 1):
 			var c = Vector2i(cx, cz)
 			if tree_chunks_fast.has(c):
-				var dict = tree_chunks_fast[c] as Dictionary
-				for pos in dict.keys():
+				var tree_dict = tree_chunks_fast[c] as Dictionary
+				for pos in tree_dict.keys():
 					if pos is Vector3i:
 						if pos.x >= ox_min and pos.x <= ox_max and pos.z >= oz_min and pos.z <= oz_max:
-							tree_snap[pos] = dict[pos]
-	return {"placed": placed_snap, "removed": removed_snap, "trees": tree_snap}
+							tree_snap[pos] = tree_dict[pos]
+			if copper_chunks_fast.has(c):
+				var copper_dict = copper_chunks_fast[c] as Dictionary
+				for pos in copper_dict:
+					if pos is Vector3i and pos.x >= ox_min and pos.x <= ox_max and pos.z >= oz_min and pos.z <= oz_max:
+						copper_snap[pos] = copper_dict[pos]
+	return {"placed": placed_snap, "removed": removed_snap, "trees": tree_snap, "copper": copper_snap}
 
 func _copy_indexed_edits(index: Dictionary, target: Dictionary, min_coord: Vector2i, max_coord: Vector2i, min_x: int, max_x: int, min_z: int, max_z: int) -> void:
 	for cx in range(min_coord.x, max_coord.x + 1):
