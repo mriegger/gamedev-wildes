@@ -20,6 +20,7 @@ environment/                 packaged environment and day/night feature
 inventory/                   inventory model and inventory-owned UI
 items/                       item resources, actions, catalogs, and held scenes
 player/                      player behavior, camera, and visuals
+progression/                 combat rewards and shared item proficiency
 save/                        save encoding and storage
 settings/                    persistent display and rendering configuration
 ui/                          app screens, HUD, shared controls, and theme
@@ -60,22 +61,35 @@ attack start, then independently revalidate every locked target at contact; a ze
 retains exact single-target ray selection, while a full-circle sweep is independent of planar cursor
 aim. The profile calculates
 `max(1, base damage + attacker strength - target defense)`. Each successful physical hit applies
-that damage through the target state owner, then produces an immutable `MeleeContact` with stable
-actor and attack IDs, world contact position, and normalized direction. Rejected contacts change
-no health. `Game` explicitly connects completed contacts to entity reactions, and an effects
-presenter can consume the same signal without changing AI or combat rules.
+that damage through the target state owner, then produces an immutable `MeleeOutcome` containing
+the contact, exact applied damage, source item ID, and lethal result. Rejected contacts change no
+health and produce no outcome. `Game` explicitly connects completed outcomes to entity reactions,
+progression, and presentation without making combat own those policies.
+
+`ActorStats` owns the player's level and current-level experience. `CombatProgressionCoordinator`
+awards the reward authored on an `EntityDefinition` exactly once for a player-caused defeat.
+Zombie and sheep rewards are currently ten experience and remain content values for later tuning.
+The same coordinator translates each target's applied player damage into weapon proficiency and
+each incoming damage result into full proficiency credit for every equipped armor piece. These
+policy methods are isolated from combat resolution so their earning rules can change independently.
+`ItemProficiency` owns deterministic progress keyed by stable item definition ID, so every copy of
+an item type shares progress. Each item directly references a `ProficiencyDefinition` resource with
+explicit per-level requirements and slot unlock levels; zero is an initially free slot. Current
+Common combat gear unlocks its one slot at proficiency level one after one hundred damage. Rune
+contents and enchantment effects are not part of this system.
 
 `Game` owns player stats and handles their completed health-depleted transition. Defeat puts
 the player motor into an input-blocking stopped state, closes inventory and debug panels, and
 presents a high-layer death screen without pausing world time or entity simulation. The screen
 emits respawn or main-menu intent back to `Game`; respawn restores full HP at world spawn, snaps the
 camera, and removes the modal without changing inventory. The HUD observes player stats and
-presents current and maximum HP without owning either value. `SidePanel` owns its animation
+presents health plus level progress without owning either value.
+`SidePanel` owns its animation
 progress and reports committed progress changes to `HUD`, which translates that value into the
 right inset so presentation state stays clear of the inventory panel and narrows within the
-available viewport when necessary. Entity HP is transient and is not serialized. Drops, XP rewards,
-regeneration, knockback, death audio, and post-respawn invulnerability remain outside the combat
-system.
+available viewport when necessary. Entity HP is transient and is not serialized. Drops, enemy
+health bars, regeneration, knockback, death audio, and post-respawn invulnerability remain
+outside the combat system.
 
 `GameSession` owns save suspension as part of the gameplay lifecycle. Suspension or authoritative
 zero HP blocks manual, periodic, and edit-debounce writes while session playtime continues
@@ -83,6 +97,8 @@ accumulating. Respawn, Main Menu, and window close restore a living player at wo
 saving resumes; exit paths then use the normal final-save and shutdown flow so zero HP is never
 persisted. Loading a historical zero-HP snapshot restores full health at world spawn before gameplay
 begins and immediately replaces the stored snapshot with that living state.
+Save version five stores item proficiency separately from player stats and inventory. Version-four
+saves migrate with empty item proficiency while preserving their existing player and world state.
 
 Entity populations are transient and bounded to six per species and twelve total. Spawning makes
 four attempts every two seconds in an 18–36 block annulus. Voxel A* has fixed radius, node, and
