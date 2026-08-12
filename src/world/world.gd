@@ -46,8 +46,7 @@ func initialize_world_async() -> void:
 	generation_progress.emit("terrain", 0.1, "Generating terrain")
 	terrain_generator = TerrainGenerator.new(config)
 	var generation := terrain_generator.generate_all()
-	var tree_count := (generation.get("tree_block_fast", {}) as Dictionary).size()
-	generation_progress.emit("terrain", 0.3, "Terrain: %d tree blocks" % tree_count)
+	generation_progress.emit("terrain", 0.3, "Terrain prepared")
 	await get_tree().process_frame
 
 	generation_progress.emit("model", 0.4, "Building voxel model")

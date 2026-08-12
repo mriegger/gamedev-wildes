@@ -693,10 +693,11 @@ func generate_all() -> Dictionary:
 	var init_radius = int(config.meadow_radius + 20)
 	var size = init_radius * 2
 	var payload = build_cache_with_generation(-init_radius, -init_radius, size, config.max_build_y, {}, {}, {}, true)
-	var tree_block_fast = payload.get("tree_block_fast", {}) as Dictionary
+	# Tree placement is seeded by chunk origin. Applying trees from this larger
+	# startup region would conflict with the layouts produced by chunk builds.
 	return {
 		"height": payload.get("height", {}),
 		"type": payload.get("type", {}),
-		"tree_block_fast": tree_block_fast,
-		"positions": payload.get("positions", []),
+		"tree_block_fast": {},
+		"positions": [],
 	}

@@ -151,6 +151,20 @@ jobs:
             60 "GOLDEN PASS" /tmp/world_golden_hash.log -- \
             godot --headless --path src --script res://tests/world_golden_hash.gd
 
+  tree-targeting-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run tree targeting integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "TREE_TARGETING PASS" /tmp/tree_targeting.log -- \
+            godot --headless --path src --script res://tests/tree_targeting_integration.gd
+
   world-edit-index:
     runs-on: ubuntu-latest
     timeout-minutes: 10
