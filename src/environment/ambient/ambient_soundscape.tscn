@@ -7,3 +7,6 @@ script = ExtResource("1")
 
 [node name="BirdsPlayer" type="AudioStreamPlayer" parent="."]
 bus = &"Ambient"
+
+[node name="NightPlayer" type="AudioStreamPlayer" parent="."]
+bus = &"Ambient"

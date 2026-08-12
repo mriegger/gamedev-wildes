@@ -33,9 +33,12 @@ func _run():
 	await process_frame
 
 	var birds = amb.get_node("BirdsPlayer") as AudioStreamPlayer
+	var night = amb.get_node("NightPlayer") as AudioStreamPlayer
 
 	_expect(birds != null, "BirdsPlayer missing")
+	_expect(night != null, "NightPlayer missing")
 	_expect(birds.bus == &"Ambient", "birds bus not Ambient is %s" % birds.bus)
+	_expect(night.bus == &"Ambient", "night bus not Ambient is %s" % night.bus)
 
 	var clock = GameClock.new()
 	root.add_child(clock)
@@ -44,6 +47,7 @@ func _run():
 	await process_frame
 
 	_expect(birds.stream != null, "birds stream null after setup")
+	_expect(night.stream != null, "night stream null after setup")
 	_expect(clock.time_changed.get_connections().size() >= 1, "clock time_changed not connected")
 
 	var settings = GameSettings.new()
@@ -84,6 +88,7 @@ func _run():
 	_expect(amb._get_day_factor(18.0) > 0.4 and amb._get_day_factor(18.0) < 0.6, "day_factor 18 ~0.5 got %f" % amb._get_day_factor(18.0))
 	_expect(is_equal_approx(amb._get_day_factor(19.0), 0.0), "day_factor 19")
 	_expect(is_equal_approx(amb._get_day_factor(20.0), 0.0), "day_factor 20")
+	_expect(is_equal_approx(amb._night_factor, 0.0), "night factor did not initialize from noon")
 
 	restored_settings.ambient_volume = 1.0
 	amb.apply_settings(restored_settings)
@@ -92,15 +97,33 @@ func _run():
 	await process_frame
 	_expect(birds.volume_db > -8.0 and birds.volume_db < -4.0, "birds vol at noon not ~-6dB got %f" % birds.volume_db)
 	_expect(birds.playing, "birds did not start during daytime")
+	_expect(night.volume_db <= -79.0, "night ambience should mute at noon")
+	_expect(not night.playing, "night ambience started during daytime")
 
 	clock.set_time_of_day(2.0)
 	_expect(is_equal_approx(amb._day_factor, 0.0), "night day_factor not 0")
+	_expect(is_equal_approx(amb._night_factor, 1.0), "night factor not 1")
 	_expect(birds.volume_db <= -79.0, "birds should mute at night")
 	_expect(not birds.playing, "birds did not stop at night")
+	_expect(night.volume_db > -28.0 and night.volume_db < -24.0, "night ambience vol not ~-26dB got %f" % night.volume_db)
+	_expect(night.playing, "night ambience did not start at night")
+	amb.set_birds_enabled(false)
+	_expect(night.playing, "disabling birds stopped night ambience")
+	_expect(night.volume_db > -28.0 and night.volume_db < -24.0, "disabling birds changed night ambience volume")
+	amb.set_birds_enabled(true)
+
+	clock.set_time_of_day(18.0)
+	_expect(amb._day_factor > 0.4 and amb._day_factor < 0.6, "sundown day factor not ~0.5")
+	_expect(amb._night_factor > 0.4 and amb._night_factor < 0.6, "sundown night factor not ~0.5")
+	_expect(birds.playing, "birds did not play during sundown crossfade")
+	_expect(night.playing, "night ambience did not play during sundown crossfade")
+	_expect(birds.volume_db > -14.0 and birds.volume_db < -10.0, "birds sundown volume not ~-12dB")
+	_expect(night.volume_db > -34.0 and night.volume_db < -30.0, "night sundown volume not ~-32dB")
 
 	amb.stop()
 	amb.stop()
 	_expect(not birds.playing, "birds still playing after stop")
+	_expect(not night.playing, "night ambience still playing after stop")
 	amb.start()
 	_expect(clock.time_changed.is_connected(amb._on_time_changed), "stop disconnected clock")
 	amb.stop()
