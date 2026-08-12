@@ -2,7 +2,7 @@ extends Control
 class_name PlayerHealthBar
 
 const PREFERRED_WIDTH: float = 280.0
-const BAR_HEIGHT: float = 32.0
+const BAR_HEIGHT: float = 16.0
 const EDGE_MARGIN: float = 24.0
 
 @onready var progress_bar: ProgressBar = $ProgressBar as ProgressBar
