@@ -88,6 +88,13 @@ func _run():
 	_expect(amb._get_day_factor(18.0) > 0.4 and amb._get_day_factor(18.0) < 0.6, "day_factor 18 ~0.5 got %f" % amb._get_day_factor(18.0))
 	_expect(is_equal_approx(amb._get_day_factor(19.0), 0.0), "day_factor 19")
 	_expect(is_equal_approx(amb._get_day_factor(20.0), 0.0), "day_factor 20")
+	_expect(is_equal_approx(amb._get_night_factor(0.0), 1.0), "night_factor 0")
+	_expect(is_equal_approx(amb._get_night_factor(5.0), 1.0), "night_factor 5")
+	_expect(amb._get_night_factor(5.5) > 0.4 and amb._get_night_factor(5.5) < 0.6, "night_factor 5.5")
+	_expect(is_equal_approx(amb._get_night_factor(6.0), 0.0), "night_factor 6")
+	_expect(is_equal_approx(amb._get_night_factor(17.0), 0.0), "night_factor 17")
+	_expect(amb._get_night_factor(18.0) > 0.4 and amb._get_night_factor(18.0) < 0.6, "night_factor 18")
+	_expect(is_equal_approx(amb._get_night_factor(19.0), 1.0), "night_factor 19")
 	_expect(is_equal_approx(amb._night_factor, 0.0), "night factor did not initialize from noon")
 
 	restored_settings.ambient_volume = 1.0
@@ -111,6 +118,13 @@ func _run():
 	_expect(night.playing, "disabling birds stopped night ambience")
 	_expect(night.volume_db > -28.0 and night.volume_db < -24.0, "disabling birds changed night ambience volume")
 	amb.set_birds_enabled(true)
+	clock.set_time_of_day(5.5)
+	_expect(not birds.playing, "birds started before sunrise")
+	_expect(night.playing, "night ambience stopped during predawn fade")
+	_expect(night.volume_db > -34.0 and night.volume_db < -30.0, "predawn night volume not ~-32dB")
+	clock.set_time_of_day(6.0)
+	_expect(not birds.playing, "birds played at zero sunrise factor")
+	_expect(not night.playing, "night ambience did not stop at sunrise")
 
 	clock.set_time_of_day(18.0)
 	_expect(amb._day_factor > 0.4 and amb._day_factor < 0.6, "sundown day factor not ~0.5")

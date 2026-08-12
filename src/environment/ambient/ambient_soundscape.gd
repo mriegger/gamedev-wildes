@@ -22,7 +22,7 @@ func setup(p_clock: GameClock):
 	_clock = p_clock
 	_clock.time_changed.connect(_on_time_changed)
 	_day_factor = _get_day_factor(_clock.get_time_of_day())
-	_night_factor = 1.0 - _day_factor
+	_night_factor = _get_night_factor(_clock.get_time_of_day())
 	if _birds_player.stream == null:
 		_birds_player.stream = _birds_stream
 	if _night_player.stream == null:
@@ -33,7 +33,7 @@ func setup(p_clock: GameClock):
 func start():
 	_running = true
 	_day_factor = _get_day_factor(_clock.get_time_of_day())
-	_night_factor = 1.0 - _day_factor
+	_night_factor = _get_night_factor(_clock.get_time_of_day())
 	_apply_volumes()
 	_sync_playback()
 
@@ -76,7 +76,7 @@ func apply_settings(settings: GameSettings):
 
 func _on_time_changed(new_time: float):
 	_day_factor = _get_day_factor(new_time)
-	_night_factor = 1.0 - _day_factor
+	_night_factor = _get_night_factor(new_time)
 	_apply_volumes()
 	if not _running:
 		return
@@ -111,3 +111,13 @@ func _get_day_factor(t: float) -> float:
 	if t < 17.0:
 		return 1.0
 	return 1.0 - inverse_lerp(17.0, 19.0, t)
+
+
+func _get_night_factor(t: float) -> float:
+	if t < 5.0 or t >= 19.0:
+		return 1.0
+	if t < 6.0:
+		return 1.0 - inverse_lerp(5.0, 6.0, t)
+	if t < 17.0:
+		return 0.0
+	return inverse_lerp(17.0, 19.0, t)
