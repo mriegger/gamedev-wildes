@@ -56,6 +56,15 @@ func setup(p_voxel_world: VoxelWorld, p_camera: Camera3D, p_motor: PlayerMotor, 
 	combat = p_combat
 	entity_coordinator = p_entity_coordinator
 
+func cancel_actions():
+	_reset_mining()
+	_reset_melee_chain()
+	secondary_use_timer = 0.0
+	target_has = false
+	placement_has = false
+	can_mine_target = false
+	can_place_target = false
+
 func _physics_process(delta):
 	if voxel_world == null or motor == null or camera == null or inventory_model == null or _input_buffer == null:
 		return

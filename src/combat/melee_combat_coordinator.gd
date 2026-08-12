@@ -9,21 +9,29 @@ const MeleeContactType := preload("res://combat/melee_contact.gd")
 const VoxelLineOfSightType := preload("res://combat/voxel_line_of_sight.gd")
 
 signal melee_contact_committed(contact: MeleeContactType)
+signal player_defeated
 
 var _voxel_world: VoxelWorld
 var _player: PlayerMotor
+var _player_stats: ActorStats
 var _entity_coordinator: EntityCoordinator
 
 func setup(
 	p_voxel_world: VoxelWorld,
 	p_player: PlayerMotor,
+	p_player_stats: ActorStats,
 	p_entity_coordinator: EntityCoordinator,
 ) -> void:
 	assert(p_voxel_world != null)
 	assert(p_player != null)
+	assert(p_player_stats != null)
+	assert(p_player_stats.has_stat(&"hp"))
+	assert(p_player_stats.has_stat(&"strength"))
+	assert(p_player_stats.has_stat(&"defense"))
 	assert(p_entity_coordinator != null)
 	_voxel_world = p_voxel_world
 	_player = p_player
+	_player_stats = p_player_stats
 	_entity_coordinator = p_entity_coordinator
 
 func acquire_player_target(ray_origin: Vector3, ray_direction: Vector3, profile: MeleeAttackProfileType) -> int:
@@ -84,7 +92,7 @@ func try_commit_player_contact(
 		hit_position,
 		hit_direction,
 	)
-	return _commit_contact(contact)
+	return _commit_contact(contact, profile)
 
 func try_commit_entity_contact(source_runtime_id: int, profile: MeleeAttackProfileType) -> bool:
 	assert(_is_setup())
@@ -115,15 +123,45 @@ func try_commit_entity_contact(source_runtime_id: int, profile: MeleeAttackProfi
 		hit as Vector3,
 		hit_direction,
 	)
-	return _commit_contact(contact)
+	return _commit_contact(contact, profile)
 
 func shutdown() -> void:
 	_voxel_world = null
 	_player = null
+	_player_stats = null
 	_entity_coordinator = null
 
-func _commit_contact(contact: MeleeContactType) -> bool:
+func _commit_contact(contact: MeleeContactType, profile: MeleeAttackProfileType) -> bool:
+	assert(contact.attack_id == profile.id)
+	var defeated_player := false
+	var damage: float
+	if contact.source_runtime_id == PLAYER_RUNTIME_ID:
+		if _player_stats.is_dead():
+			return false
+		var target := _entity_coordinator.get_actor(contact.target_runtime_id)
+		if target == null or target.definition.id != contact.target_definition_id:
+			return false
+		damage = profile.calculate_damage(
+			_player_stats.get_value(&"strength"),
+			_entity_coordinator.get_stat_value(contact.target_runtime_id, &"defense"),
+		)
+		if not _entity_coordinator.try_apply_damage(contact.target_runtime_id, damage):
+			return false
+	else:
+		if contact.target_runtime_id != PLAYER_RUNTIME_ID or contact.target_definition_id != PLAYER_DEFINITION_ID or _player_stats.is_dead():
+			return false
+		var source := _entity_coordinator.get_actor(contact.source_runtime_id)
+		if source == null or source.definition.id != contact.source_definition_id:
+			return false
+		damage = profile.calculate_damage(
+			_entity_coordinator.get_stat_value(contact.source_runtime_id, &"strength"),
+			_player_stats.get_value(&"defense"),
+		)
+		_player_stats.damage(damage)
+		defeated_player = _player_stats.is_dead()
 	melee_contact_committed.emit(contact)
+	if defeated_player:
+		player_defeated.emit()
 	return true
 
 func _is_valid_player_geometry(
@@ -150,4 +188,4 @@ func _get_bounds_center(bounds: AABB) -> Vector3:
 	return bounds.position + bounds.size * 0.5
 
 func _is_setup() -> bool:
-	return _voxel_world != null and _player != null and _entity_coordinator != null
+	return _voxel_world != null and _player != null and _player_stats != null and _entity_coordinator != null

@@ -9,3 +9,4 @@ duration = 0.65
 contact_time = 0.35
 cooldown = 1.2
 reach = 1.4
+base_damage = 15.0

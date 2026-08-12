@@ -107,7 +107,8 @@ func _route_sheep_contact(coordinator: EntityCoordinator, world: VoxelWorld) -> 
 	sheep.on_ground = true
 	var combat := MeleeCombatCoordinator.new()
 	get_root().add_child(combat)
-	combat.setup(world, player, coordinator)
+	var player_stats := ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
+	combat.setup(world, player, player_stats, coordinator)
 	combat.melee_contact_committed.connect(coordinator.record_melee_contact)
 	var profile := load("res://combat/profiles/copper_sword_melee.tres") as MeleeAttackProfile
 	var player_center := player.global_position + Vector3.UP * (player.player_height * 0.5)

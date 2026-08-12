@@ -58,6 +58,11 @@ func setup(p_follow_target: Node3D, p_input_buffer: InputBuffer):
 	set_process(true)
 	set_process_unhandled_input(true)
 
+func snap_to_follow_target():
+	assert(_follow_target != null)
+	target_position = _follow_target.global_position
+	global_position = target_position
+
 func _ready():
 	set_process(false)
 	set_process_unhandled_input(false)

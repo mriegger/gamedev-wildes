@@ -47,6 +47,26 @@ func setup(p_world: WorldController, p_camera_rig: CameraRig, p_inventory: Inven
 	_action_audio.setup(animation_driver, interactor, p_inventory, p_combat)
 	armor_view.setup(p_inventory)
 
+func respawn_at(spawn_position: Vector3):
+	assert(spawn_position.is_finite())
+	assert(stats != null and stats.has_stat(&"hp"))
+	assert(_input_buffer != null)
+	_reset_motion_at(spawn_position)
+	is_sprinting = false
+	interactor.cancel_actions()
+	_input_buffer.clear_gameplay()
+	var health_restored := stats.set_current_hp(stats.get_value(&"hp"))
+	assert(health_restored)
+
+func _reset_motion_at(position: Vector3):
+	global_position = position
+	velocity = Vector3.ZERO
+	ground_y = VoxelBodySolver.get_ground_y(voxel_world, global_position, player_width)
+	on_ground = false
+	_jump_windup_remaining = 0.0
+	_jump_ready = false
+	jump_anticipation = 0.0
+
 func _physics_process(delta):
 	if voxel_world == null:
 		return
@@ -127,10 +147,4 @@ func _handle_movement(delta):
 		jump_anticipation = 0.0
 
 	if global_position.y < -10:
-		global_position = voxel_world.get_spawn_position()
-		ground_y = VoxelBodySolver.get_ground_y(voxel_world, global_position, player_width)
-		velocity = Vector3.ZERO
-		on_ground = false
-		_jump_windup_remaining = 0.0
-		_jump_ready = false
-		jump_anticipation = 0.0
+		_reset_motion_at(voxel_world.get_spawn_position())

@@ -103,9 +103,10 @@ func _restore_player_stats():
 func _setup_gameplay():
 	camera_rig.setup(player, input_buffer)
 	entity_coordinator.setup(entity_catalog, world.voxel_model, world.config.seed_value, world.is_position_streamed)
-	melee_combat.setup(world.voxel_model, player, entity_coordinator)
+	melee_combat.setup(world.voxel_model, player, player_stats, entity_coordinator)
 	entity_coordinator.entity_melee_contact_reached.connect(melee_combat.try_commit_entity_contact)
 	melee_combat.melee_contact_committed.connect(entity_coordinator.record_melee_contact)
+	melee_combat.player_defeated.connect(_on_player_defeated)
 	player.setup(world, camera_rig, inventory_model, input_buffer, player_stats, melee_combat, entity_coordinator)
 	var mining_particle_tints := MiningParticleTintPalette.new(block_catalog)
 	mining_break_particles.setup(world.voxel_model, mining_particle_tints)
@@ -122,10 +123,13 @@ func _setup_gameplay():
 	else:
 		player.global_position = world.voxel_model.get_spawn_position() + Vector3(0, 0.1, 0)
 	world.set_player_ref(player)
-	camera_rig.target_position = player.global_position
-	camera_rig.global_position = player.global_position
+	camera_rig.snap_to_follow_target()
 	camera_rig.current_yaw_deg = camera_rig.target_yaw_deg
 	camera_rig.camera.current = true
+
+func _on_player_defeated():
+	player.respawn_at(world.voxel_model.get_spawn_position() + Vector3(0.0, 0.1, 0.0))
+	camera_rig.snap_to_follow_target()
 
 func _on_generation_progress(stage: String, percent: float, details: String):
 	loading_progress.emit(stage, percent, details)
