@@ -45,7 +45,7 @@ func setup(
 	_selected_item_id = _get_selected_item_id()
 	_animation_driver.mining_impact.connect(_on_mining_impact)
 	_interactor.melee_terrain_hit.connect(_on_melee_terrain_hit)
-	_combat.melee_contact_committed.connect(_on_melee_contact_committed)
+	_combat.melee_outcome_committed.connect(_on_melee_outcome_committed)
 	_inventory.inventory_changed.connect(_on_inventory_changed)
 	if _clunk_player.stream == null and not _clunk_streams.is_empty():
 		_clunk_player.stream = _clunk_streams[0]
@@ -59,8 +59,8 @@ func _on_melee_terrain_hit(_pos: Vector3i):
 	_play_clunk(-4.0)
 
 
-func _on_melee_contact_committed(contact: MeleeContact):
-	if contact.source_runtime_id != MeleeCombatCoordinator.PLAYER_RUNTIME_ID:
+func _on_melee_outcome_committed(outcome: MeleeOutcome):
+	if outcome.contact.source_runtime_id != MeleeCombatCoordinator.PLAYER_RUNTIME_ID:
 		return
 	_last_creature_hit_idx = _play_random(_creature_hit_player, _creature_hit_streams, _last_creature_hit_idx, 0.94, 1.06)
 
@@ -116,8 +116,8 @@ func _exit_tree():
 	if _interactor != null:
 		if _interactor.melee_terrain_hit.is_connected(_on_melee_terrain_hit):
 			_interactor.melee_terrain_hit.disconnect(_on_melee_terrain_hit)
-	if _combat != null and _combat.melee_contact_committed.is_connected(_on_melee_contact_committed):
-		_combat.melee_contact_committed.disconnect(_on_melee_contact_committed)
+	if _combat != null and _combat.melee_outcome_committed.is_connected(_on_melee_outcome_committed):
+		_combat.melee_outcome_committed.disconnect(_on_melee_outcome_committed)
 	if _inventory != null and _inventory.inventory_changed.is_connected(_on_inventory_changed):
 		_inventory.inventory_changed.disconnect(_on_inventory_changed)
 	_animation_driver = null

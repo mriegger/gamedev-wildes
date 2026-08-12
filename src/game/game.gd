@@ -30,8 +30,10 @@ signal main_menu_requested
 
 var inventory_model: InventoryModel
 var player_stats: ActorStats
+var item_proficiency: ItemProficiency
 var inventory_stat_coordinator: InventoryStatCoordinator
 var crafting_coordinator: CraftingCoordinator
+var combat_progression_coordinator: CombatProgressionCoordinator
 var input_buffer: InputBuffer = InputBuffer.new()
 var settings: GameSettings
 
@@ -70,6 +72,7 @@ func _ready():
 	world.configure_settings(settings)
 	inventory_model = InventoryModel.new(item_catalog)
 	player_stats = ActorStats.new(player_stats_definition)
+	item_proficiency = ItemProficiency.new(item_catalog)
 	_restore_inventory()
 	inventory_stat_coordinator = InventoryStatCoordinator.new()
 	if not inventory_stat_coordinator.setup(inventory_model, player_stats):
@@ -78,13 +81,16 @@ func _ready():
 	crafting_coordinator = CraftingCoordinator.new()
 	crafting_coordinator.setup(inventory_model, crafting_recipe_catalog)
 	_restore_player_stats()
+	_restore_item_proficiency()
+	combat_progression_coordinator = CombatProgressionCoordinator.new()
+	combat_progression_coordinator.setup(player_stats, inventory_model, entity_catalog, item_proficiency)
 	world.configure_start_state(_world_state)
 	world.generation_progress.connect(_on_generation_progress)
 	await world.initialize_world_async()
 	world.generation_progress.disconnect(_on_generation_progress)
 	_setup_gameplay()
 	game_session.save_status_changed.connect(_show_save_status)
-	game_session.setup(_slot_id, _save_data, world, player, inventory_model, game_environment)
+	game_session.setup(_slot_id, _save_data, world, player, inventory_model, item_proficiency, game_environment)
 	if _recovered_defeated_save and _slot_id != -1 and not game_session.save("defeated_save_recovery"):
 		push_error("[Game] Failed to persist recovered player state")
 	_recovered_defeated_save = false
@@ -122,12 +128,18 @@ func _restore_player_stats():
 	_save_data["player_position"] = null
 	_save_data["player_stats"] = player_stats.snapshot_progression()
 
+func _restore_item_proficiency():
+	var saved_proficiency = _save_data.get("item_proficiency", null)
+	if saved_proficiency is Dictionary and not item_proficiency.restore(saved_proficiency):
+		push_error("[Game] Saved item proficiency is invalid; using base proficiency")
+
 func _setup_gameplay():
 	camera_rig.setup(player, input_buffer)
 	entity_coordinator.setup(entity_catalog, world.voxel_model, world.config.seed_value, world.is_position_streamed)
 	melee_combat.setup(world.voxel_model, player, player_stats, entity_coordinator)
 	entity_coordinator.entity_melee_contact_reached.connect(melee_combat.try_commit_entity_contact)
-	melee_combat.melee_contact_committed.connect(entity_coordinator.record_melee_contact)
+	melee_combat.melee_outcome_committed.connect(entity_coordinator.record_melee_outcome)
+	melee_combat.melee_outcome_committed.connect(combat_progression_coordinator.record_melee_outcome)
 	player.setup(world, camera_rig, inventory_model, input_buffer, player_stats, melee_combat, entity_coordinator)
 	player_stats.health_depleted.connect(_on_player_defeated)
 	var mining_particle_tints := MiningParticleTintPalette.new(block_catalog)

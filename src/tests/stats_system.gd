@@ -72,6 +72,7 @@ func _init():
 	var leveled_stats := ActorStats.new(leveled_definition)
 	_expect(leveled_stats.add_experience(350) == 2, "experience did not support multiple level-ups")
 	_expect(leveled_stats.level == 3 and leveled_stats.experience == 50, "level or carried experience is incorrect")
+	_expect(leveled_stats.get_total_experience() == 350, "total experience did not include completed levels")
 	_expect(is_equal_approx(leveled_stats.get_value(&"strength"), 10.0), "level unexpectedly changed stats")
 	var progression := leveled_stats.snapshot_progression()
 	var restored_stats := ActorStats.new(leveled_definition)

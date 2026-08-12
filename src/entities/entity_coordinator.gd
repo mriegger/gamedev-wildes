@@ -330,13 +330,13 @@ func get_current_hp(runtime_id: int) -> float:
 func get_stat_value(runtime_id: int, stat_id: StringName) -> float:
 	return _get_stats(runtime_id).get_value(stat_id)
 
-func try_apply_damage(runtime_id: int, amount: float) -> bool:
+func try_apply_damage(runtime_id: int, amount: float) -> EntityDamageResult:
 	assert(is_finite(amount) and amount > 0.0)
 	var stats := _stats_by_runtime_id.get(runtime_id) as ActorStats
 	if stats == null:
-		return false
-	stats.damage(amount)
-	return true
+		return null
+	var applied_damage := stats.damage(amount)
+	return EntityDamageResult.new(applied_damage, stats.is_dead())
 
 func _get_stats(runtime_id: int) -> ActorStats:
 	var stats := _stats_by_runtime_id.get(runtime_id) as ActorStats
@@ -351,10 +351,10 @@ func get_active_runtime_ids_overlapping(bounds: AABB) -> Array[int]:
 	assert(bounds.size.x > 0.0 and bounds.size.y > 0.0 and bounds.size.z > 0.0)
 	return _spatial_index.query_overlapping(bounds)
 
-func record_melee_contact(contact: MeleeContact):
-	var target := get_actor(contact.target_runtime_id)
+func record_melee_outcome(outcome: MeleeOutcome):
+	var target := get_actor(outcome.contact.target_runtime_id)
 	if target != null:
-		target.record_melee_contact(contact.hit_direction)
+		target.record_melee_contact(outcome.contact.hit_direction)
 
 func _on_actor_melee_contact_reached(source_runtime_id: int, profile: MeleeAttackProfile):
 	entity_melee_contact_reached.emit(source_runtime_id, profile)

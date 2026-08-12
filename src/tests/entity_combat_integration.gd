@@ -8,6 +8,7 @@ const MeleeContactType := preload("res://combat/melee_contact.gd")
 
 var _failures: int = 0
 var _contacts: Array[MeleeContactType] = []
+var _outcomes: Array[MeleeOutcome] = []
 var _player_defeat_count: int = 0
 
 func _init() -> void:
@@ -79,11 +80,12 @@ func _make_combat_fixture(world: VoxelWorld, zombie_count: int, sheep_count: int
 	player.set_physics_process(false)
 	player.interactor.set_physics_process(false)
 	player.animation_driver.set_process(false)
-	coordinator.setup(_make_combat_catalog(zombie_count, sheep_count), world, seed, _always_ready)
+	var entity_catalog := _make_combat_catalog(zombie_count, sheep_count)
+	coordinator.setup(entity_catalog, world, seed, _always_ready)
 	var player_stats := ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
 	combat.setup(world, player, player_stats, coordinator)
-	combat.melee_contact_committed.connect(coordinator.record_melee_contact)
-	combat.melee_contact_committed.connect(_on_melee_contact)
+	combat.melee_outcome_committed.connect(coordinator.record_melee_outcome)
+	combat.melee_outcome_committed.connect(_on_melee_contact)
 	for _index in range(sheep_count):
 		coordinator.tick(EntityCoordinator.SPAWN_INTERVAL_SECONDS, player.global_position, 12.0)
 	for _index in range(zombie_count):
@@ -92,7 +94,9 @@ func _make_combat_fixture(world: VoxelWorld, zombie_count: int, sheep_count: int
 		"camera": camera,
 		"combat": combat,
 		"coordinator": coordinator,
+		"entity_catalog": entity_catalog,
 		"player": player,
+		"player_stats": player_stats,
 	}
 
 func _get_sorted_actors(coordinator: EntityCoordinator) -> Array[EntityActor]:
@@ -120,8 +124,9 @@ func _active_ids(actors: Array[EntityActor]) -> Array[int]:
 		result.append(actor.runtime_id)
 	return result
 
-func _on_melee_contact(contact: MeleeContactType) -> void:
-	_contacts.append(contact)
+func _on_melee_contact(outcome: MeleeOutcome) -> void:
+	_outcomes.append(outcome)
+	_contacts.append(outcome.contact)
 
 func _on_player_defeated() -> void:
 	_player_defeat_count += 1
@@ -176,8 +181,8 @@ func _run() -> void:
 	_expect(player_stats.set_base_value(&"defense", 4.0), "player defense setup failed")
 	combat.setup(world, player, player_stats, coordinator)
 	coordinator.entity_melee_contact_reached.connect(combat.try_commit_entity_contact)
-	combat.melee_contact_committed.connect(coordinator.record_melee_contact)
-	combat.melee_contact_committed.connect(_on_melee_contact)
+	combat.melee_outcome_committed.connect(coordinator.record_melee_outcome)
+	combat.melee_outcome_committed.connect(_on_melee_contact)
 	player_stats.health_depleted.connect(_on_player_defeated)
 	coordinator.tick(EntityCoordinator.SPAWN_INTERVAL_SECONDS, player.global_position, 20.0)
 	coordinator.tick(EntityCoordinator.SPAWN_INTERVAL_SECONDS, player.global_position, 20.0)
@@ -194,7 +199,7 @@ func _run() -> void:
 	_expect(is_equal_approx(coordinator.get_current_hp(far_actor.runtime_id), 80.0), "second zombie did not spawn at full HP")
 	_expect(is_equal_approx(coordinator.get_stat_value(near_actor.runtime_id, &"strength"), 5.0), "zombie strength changed")
 	_expect(is_equal_approx(coordinator.get_stat_value(near_actor.runtime_id, &"defense"), 4.0), "zombie defense changed")
-	_expect(coordinator.try_apply_damage(near_actor.runtime_id, 1.0), "direct entity damage was rejected")
+	_expect(coordinator.try_apply_damage(near_actor.runtime_id, 1.0) != null, "direct entity damage was rejected")
 	_expect(is_equal_approx(coordinator.get_current_hp(near_actor.runtime_id), 79.0), "direct entity damage changed the wrong amount")
 	_expect(is_equal_approx(coordinator.get_current_hp(far_actor.runtime_id), 80.0), "entity runtime stats were shared between instances")
 	var sword_damage := sword_profile.calculate_damage(player_stats.get_value(&"strength"), coordinator.get_stat_value(far_actor.runtime_id, &"defense"))
@@ -209,7 +214,7 @@ func _run() -> void:
 	var sweep_target_ids := combat.acquire_player_targets(ray_origin, ray_direction, sword_profile)
 	_expect(sweep_target_ids == [near_actor.runtime_id, far_actor.runtime_id], "sword sweep did not lock both aligned actors")
 	var contact_count_before := _contacts.size()
-	_expect(combat.try_commit_player_contacts(sweep_target_ids, ray_origin, ray_direction, sword_profile), "sword sweep did not commit its locked targets")
+	_expect(combat.try_commit_player_contacts(sweep_target_ids, ray_origin, ray_direction, sword_profile, &"copper_sword"), "sword sweep did not commit its locked targets")
 	_expect(_contacts.size() == contact_count_before + 2, "sword sweep did not emit one contact per target")
 	_expect(_contacts[contact_count_before].target_runtime_id == near_actor.runtime_id and _contacts[contact_count_before + 1].target_runtime_id == far_actor.runtime_id, "sword sweep contacts were not emitted in runtime-ID order")
 	_expect(is_equal_approx(coordinator.get_current_hp(near_actor.runtime_id), 63.0), "sword sweep applied incorrect damage to the first target")
@@ -234,7 +239,7 @@ func _run() -> void:
 	_expect(moved_target_ids == [near_actor.runtime_id], "moved-target setup did not lock the near actor")
 	near_actor.global_position = Vector3(3.5, FEET_Y, -1.0)
 	contact_count_before = _contacts.size()
-	_expect(not combat.try_commit_player_contacts(moved_target_ids, ray_origin, ray_direction, sword_profile), "contact committed after the locked target moved outside the sweep")
+	_expect(not combat.try_commit_player_contacts(moved_target_ids, ray_origin, ray_direction, sword_profile, &"copper_sword"), "contact committed after the locked target moved outside the sweep")
 	_expect(_contacts.size() == contact_count_before, "moved target emitted a contact")
 	_expect(is_equal_approx(coordinator.get_current_hp(near_actor.runtime_id), 63.0), "moved target took damage from a rejected contact")
 
@@ -243,14 +248,14 @@ func _run() -> void:
 	var despawned_target_ids := combat.acquire_player_targets(ray_origin, ray_direction, sword_profile)
 	near_actor.global_position = Vector3(EntityCoordinator.DESPAWN_DISTANCE + 1.0, FEET_Y, 0.5)
 	coordinator.tick(0.0, player.global_position, 20.0)
-	_expect(not combat.try_commit_player_contacts(despawned_target_ids, ray_origin, ray_direction, sword_profile), "contact committed after the locked target despawned")
+	_expect(not combat.try_commit_player_contacts(despawned_target_ids, ray_origin, ray_direction, sword_profile, &"copper_sword"), "contact committed after the locked target despawned")
 	_expect(_contacts.size() == contact_count_before, "despawned target emitted a contact")
 	_expect(is_equal_approx(coordinator.get_current_hp(far_actor.runtime_id), 64.0), "stale contact changed another entity's HP")
 
 	far_actor.global_position = Vector3(0.5, FEET_Y, -1.0)
 	var target_id := far_actor.runtime_id
 	contact_count_before = _contacts.size()
-	_expect(combat.try_commit_player_contacts(_single_target(target_id), ray_origin, ray_direction, sword_profile), "accepted player contact did not commit")
+	_expect(combat.try_commit_player_contacts(_single_target(target_id), ray_origin, ray_direction, sword_profile, &"copper_sword"), "accepted player contact did not commit")
 	_expect(_contacts.size() == contact_count_before + 1, "accepted player contact was not emitted")
 	_expect(is_equal_approx(coordinator.get_current_hp(target_id), 64.0 - sword_damage), "accepted player contact applied incorrect damage")
 	var accepted_contact: MeleeContactType = _contacts.back()
@@ -275,6 +280,7 @@ func _run() -> void:
 	player.interactor.melee_attack_elapsed = 0.0
 	player.interactor._melee_target_runtime_ids = [target_id]
 	player.interactor._melee_contact_pending = true
+	player.interactor._melee_source_item_id = &"copper_sword"
 	player.interactor._melee_ray_origin = ray_origin
 	player.interactor._melee_ray_direction = ray_direction
 	contact_count_before = _contacts.size()
@@ -385,14 +391,14 @@ func _run() -> void:
 	_expect(inventory.to_dict() == inventory_before_defeat, "player defeat or respawn changed inventory")
 
 	for expected_hp in [16.0]:
-		_expect(combat.try_commit_player_contacts(_single_target(target_id), ray_origin, ray_direction, sword_profile), "nonlethal zombie hit did not commit")
+		_expect(combat.try_commit_player_contacts(_single_target(target_id), ray_origin, ray_direction, sword_profile, &"copper_sword"), "nonlethal zombie hit did not commit")
 		_expect(is_equal_approx(coordinator.get_current_hp(target_id), expected_hp), "zombie did not retain the expected HP before its fifth hit")
 	var retiring_actor: WeakRef = weakref(far_actor)
 	zombie_actor._arm_melee_contact(zombie_profile)
 	zombie_actor.velocity = Vector3(1.0, 2.0, 3.0)
 	contact_count_before = _contacts.size()
 	player_hp_before = player_stats.current_hp
-	_expect(combat.try_commit_player_contacts(_single_target(target_id), ray_origin, ray_direction, sword_profile), "fifth zombie hit did not commit")
+	_expect(combat.try_commit_player_contacts(_single_target(target_id), ray_origin, ray_direction, sword_profile, &"copper_sword"), "fifth zombie hit did not commit")
 	_expect(_contacts.size() == contact_count_before + 1, "lethal player contact was not emitted")
 	_expect(coordinator.get_actor(target_id) == null, "lethal damage left the zombie active")
 	_expect(coordinator.get_active_count() == 0, "lethal damage left an unexpected active entity")
@@ -479,8 +485,15 @@ func _test_sheep_damage(world: VoxelWorld, sword_profile: MeleeAttackProfile) ->
 	coordinator.setup(_make_one_sheep_catalog(), world, 7331, _always_ready)
 	var player_stats := ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
 	combat.setup(world, player, player_stats, coordinator)
-	combat.melee_contact_committed.connect(coordinator.record_melee_contact)
-	combat.melee_contact_committed.connect(_on_melee_contact)
+	combat.melee_outcome_committed.connect(coordinator.record_melee_outcome)
+	combat.melee_outcome_committed.connect(_on_melee_contact)
+	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
+	var inventory := InventoryModel.new(item_catalog)
+	inventory.setup_starter()
+	var item_proficiency := ItemProficiency.new(item_catalog)
+	var progression := CombatProgressionCoordinator.new()
+	progression.setup(player_stats, inventory, load("res://entities/entity_catalog.tres") as EntityCatalog, item_proficiency)
+	combat.melee_outcome_committed.connect(progression.record_melee_outcome)
 	coordinator.tick(EntityCoordinator.SPAWN_INTERVAL_SECONDS, player.global_position, 12.0)
 	var actors := coordinator.get_active_actors()
 	_expect(actors.size() == 1 and actors[0] is SheepActor, "sheep damage test did not spawn one sheep")
@@ -500,15 +513,20 @@ func _test_sheep_damage(world: VoxelWorld, sword_profile: MeleeAttackProfile) ->
 	var ray_origin := player_center + Vector3(0.0, 6.0, 5.5)
 	var ray_direction := (aim_point - ray_origin).normalized()
 	var contact_count_before := _contacts.size()
-	_expect(combat.try_commit_player_contacts(_single_target(target_id), ray_origin, ray_direction, sword_profile), "first sheep hit did not commit")
+	_expect(combat.try_commit_player_contacts(_single_target(target_id), ray_origin, ray_direction, sword_profile, &"copper_sword"), "first sheep hit did not commit")
 	_expect(_contacts.size() == contact_count_before + 1, "first sheep hit was not emitted")
 	_expect(is_equal_approx(coordinator.get_current_hp(target_id), 20.0), "first sheep hit did not leave 20 HP")
+	_expect(is_equal_approx(item_proficiency.get_experience(&"copper_sword"), 20.0), "first sheep hit awarded incorrect weapon proficiency")
+	_expect(player_stats.get_total_experience() == 0, "nonlethal sheep hit awarded player experience")
 	_expect(sheep.brain.state == SheepBrain.State.FLEE, "nonlethal sheep hit did not start flee behavior")
 	var retiring_actor: WeakRef = weakref(sheep)
 	contact_count_before = _contacts.size()
-	_expect(combat.try_commit_player_contacts(_single_target(target_id), ray_origin, ray_direction, sword_profile), "second sheep hit did not commit")
+	_expect(combat.try_commit_player_contacts(_single_target(target_id), ray_origin, ray_direction, sword_profile, &"copper_sword"), "second sheep hit did not commit")
 	_expect(_contacts.size() == contact_count_before + 1, "second sheep hit was not emitted")
 	_expect(coordinator.get_actor(target_id) == null and coordinator.get_active_count() == 0, "second sheep hit was not lethal")
+	_expect(_outcomes.back().target_defeated and is_equal_approx(_outcomes.back().applied_damage, 20.0), "lethal sheep outcome is incorrect")
+	_expect(is_equal_approx(item_proficiency.get_experience(&"copper_sword"), 40.0), "lethal sheep hit awarded incorrect weapon proficiency")
+	_expect(player_stats.get_total_experience() == 10, "lethal sheep hit did not award configured player experience")
 	_expect(coordinator._spatial_index.get_entry_count() == 0, "dead sheep remained in the spatial index")
 	_expect(coordinator._retiring.has(target_id), "dead sheep did not enter death retirement")
 	_expect(sheep._sheep_animation.get_current_state() == SheepAnimationDriver.DEATH, "lethal damage did not start the sheep death pose")
@@ -543,7 +561,7 @@ func _test_zero_degree_compatibility(world: VoxelWorld, sword_profile: MeleeAtta
 	var locked_ids := combat.acquire_player_targets(ray_origin, ray_direction, profile)
 	_expect(locked_ids == [actors[0].runtime_id], "zero-degree ray did not lock only the nearest aligned actor")
 	var contact_count_before := _contacts.size()
-	_expect(combat.try_commit_player_contacts(locked_ids, ray_origin, ray_direction, profile), "zero-degree nearest contact did not commit")
+	_expect(combat.try_commit_player_contacts(locked_ids, ray_origin, ray_direction, profile, &"copper_sword"), "zero-degree nearest contact did not commit")
 	_expect(_contacts.size() == contact_count_before + 1, "zero-degree contact did not emit exactly once")
 	_expect(is_equal_approx(coordinator.get_current_hp(actors[0].runtime_id), 64.0), "zero-degree contact damaged the nearest actor incorrectly")
 	_expect(is_equal_approx(coordinator.get_current_hp(actors[1].runtime_id), 80.0), "zero-degree contact damaged the farther actor")
@@ -556,7 +574,7 @@ func _test_zero_degree_compatibility(world: VoxelWorld, sword_profile: MeleeAtta
 	locked_ids = combat.acquire_player_targets(ray_origin, ray_direction, profile)
 	actors[0].global_position = Vector3(player.global_position.x + 1.0, FEET_Y, player.global_position.z - 1.0)
 	contact_count_before = _contacts.size()
-	_expect(not combat.try_commit_player_contacts(locked_ids, ray_origin, ray_direction, profile), "zero-degree contact accepted a target that moved off its locked ray")
+	_expect(not combat.try_commit_player_contacts(locked_ids, ray_origin, ray_direction, profile, &"copper_sword"), "zero-degree contact accepted a target that moved off its locked ray")
 	_expect(_contacts.size() == contact_count_before and is_equal_approx(coordinator.get_current_hp(actors[0].runtime_id), 64.0), "moved zero-degree target took damage")
 	await _cleanup(combat, coordinator, player, fixture["camera"] as Camera3D)
 
@@ -618,7 +636,7 @@ func _test_full_circle_directionless(world: VoxelWorld, sword_profile: MeleeAtta
 	var locked_ids := combat.acquire_player_targets(ray_origin, ray_direction, profile)
 	_expect(locked_ids == _active_ids(actors), "vertical cursor ray did not lock every full-circle target")
 	var contact_count_before := _contacts.size()
-	_expect(combat.try_commit_player_contacts(locked_ids, ray_origin, ray_direction, profile), "directionless full-circle contacts did not commit")
+	_expect(combat.try_commit_player_contacts(locked_ids, ray_origin, ray_direction, profile, &"copper_sword"), "directionless full-circle contacts did not commit")
 	_expect(_contacts.size() == contact_count_before + actors.size(), "full-circle sweep did not emit one contact per target")
 	for index in range(actors.size()):
 		_expect(_contacts[contact_count_before + index].target_runtime_id == actors[index].runtime_id, "full-circle contacts were not emitted in runtime-ID order")
@@ -648,7 +666,7 @@ func _test_overlapping_and_vertical_geometry(world: VoxelWorld, sword_profile: M
 	var locked_ids := combat.acquire_player_targets(ray[0], ray[1], sword_profile)
 	_expect(locked_ids == [actors[0].runtime_id], "sweep did not distinguish overlapping planar and vertically aligned targets")
 	var contact_count_before := _contacts.size()
-	_expect(combat.try_commit_player_contacts(locked_ids, ray[0], ray[1], sword_profile), "overlapping target contact did not commit")
+	_expect(combat.try_commit_player_contacts(locked_ids, ray[0], ray[1], sword_profile, &"copper_sword"), "overlapping target contact did not commit")
 	_expect(_contacts.size() == contact_count_before + 1 and is_equal_approx(coordinator.get_current_hp(actors[0].runtime_id), 64.0), "overlapping target did not take one full hit")
 	_expect(is_equal_approx(coordinator.get_current_hp(actors[1].runtime_id), 80.0), "vertically aligned zero-planar target took damage")
 	await _cleanup(combat, coordinator, player, fixture["camera"] as Camera3D)
@@ -672,13 +690,13 @@ func _test_sweep_reach_and_locking(world: VoxelWorld, sword_profile: MeleeAttack
 	var locked_ids := combat.acquire_player_targets(ray[0], ray[1], sword_profile)
 	_expect(locked_ids == [actors[0].runtime_id], "sweep did not distinguish exact reach from beyond reach")
 	var contact_count_before := _contacts.size()
-	_expect(combat.try_commit_player_contacts(locked_ids, ray[0], ray[1], sword_profile), "target at exact reach did not commit")
+	_expect(combat.try_commit_player_contacts(locked_ids, ray[0], ray[1], sword_profile, &"copper_sword"), "target at exact reach did not commit")
 	_expect(_contacts.size() == contact_count_before + 1 and is_equal_approx(coordinator.get_current_hp(actors[0].runtime_id), 64.0), "exact-reach contact applied incorrectly")
 	locked_ids = combat.acquire_player_targets(ray[0], ray[1], sword_profile)
 	actors[0].global_position.z -= 0.02
 	actors[1].global_position = Vector3(player.global_position.x, FEET_Y, player.global_position.z - 1.0)
 	contact_count_before = _contacts.size()
-	_expect(not combat.try_commit_player_contacts(locked_ids, ray[0], ray[1], sword_profile), "contact accepted a locked target that moved beyond reach")
+	_expect(not combat.try_commit_player_contacts(locked_ids, ray[0], ray[1], sword_profile, &"copper_sword"), "contact accepted a locked target that moved beyond reach")
 	_expect(_contacts.size() == contact_count_before, "moved-beyond target emitted a contact")
 	_expect(is_equal_approx(coordinator.get_current_hp(actors[0].runtime_id), 64.0), "moved-beyond target took damage")
 	_expect(is_equal_approx(coordinator.get_current_hp(actors[1].runtime_id), 80.0), "post-start entrant was hit without being locked")
@@ -688,7 +706,7 @@ func _test_sweep_reach_and_locking(world: VoxelWorld, sword_profile: MeleeAttack
 	locked_ids = combat.acquire_player_targets(ray[0], ray[1], sword_profile)
 	player.global_position += Vector3.RIGHT * 4.0
 	contact_count_before = _contacts.size()
-	_expect(not combat.try_commit_player_contacts(locked_ids, ray[0], ray[1], sword_profile), "contact accepted after the player moved beyond reach")
+	_expect(not combat.try_commit_player_contacts(locked_ids, ray[0], ray[1], sword_profile, &"copper_sword"), "contact accepted after the player moved beyond reach")
 	_expect(_contacts.size() == contact_count_before and is_equal_approx(coordinator.get_current_hp(actors[0].runtime_id), 64.0), "player movement did not reject the locked contact")
 	await _cleanup(combat, coordinator, player, fixture["camera"] as Camera3D)
 
@@ -719,7 +737,7 @@ func _test_independent_contact_revalidation(world: VoxelWorld, sword_profile: Me
 	actors[4].global_position = Vector3(player.global_position.x, FEET_Y, player.global_position.z - 1.0)
 	world.restore_block_edits({Vector3i(1, int(FEET_Y), -1): BlockId.Type.STONE}, {})
 	var contact_count_before := _contacts.size()
-	_expect(combat.try_commit_player_contacts(locked_ids, ray[0], ray[1], sword_profile), "valid target did not commit beside stale, moved, and occluded targets")
+	_expect(combat.try_commit_player_contacts(locked_ids, ray[0], ray[1], sword_profile, &"copper_sword"), "valid target did not commit beside stale, moved, and occluded targets")
 	_expect(_contacts.size() == contact_count_before + 1, "independent revalidation committed the wrong number of targets")
 	_expect(_contacts.back().target_runtime_id == actors[3].runtime_id, "independent revalidation committed the wrong target")
 	_expect(coordinator.get_actor(stale_runtime_id) == null, "stale-target setup did not despawn its actor")
@@ -727,7 +745,7 @@ func _test_independent_contact_revalidation(world: VoxelWorld, sword_profile: Me
 	_expect(is_equal_approx(coordinator.get_current_hp(actors[2].runtime_id), 80.0), "newly occluded target took damage")
 	_expect(is_equal_approx(coordinator.get_current_hp(actors[3].runtime_id), 64.0), "visible locked target took incorrect damage")
 	_expect(is_equal_approx(coordinator.get_current_hp(actors[4].runtime_id), 80.0), "post-start entrant took damage")
-	_expect(not combat.try_commit_player_contacts(_single_target(stale_runtime_id), ray[0], ray[1], sword_profile), "all-stale contact command reported success")
+	_expect(not combat.try_commit_player_contacts(_single_target(stale_runtime_id), ray[0], ray[1], sword_profile, &"copper_sword"), "all-stale contact command reported success")
 	world.restore_block_edits({}, {})
 	await _cleanup(combat, coordinator, player, fixture["camera"] as Camera3D)
 
@@ -736,6 +754,21 @@ func _test_uncapped_mixed_damage(world: VoxelWorld, sword_profile: MeleeAttackPr
 	var coordinator := fixture["coordinator"] as EntityCoordinator
 	var combat := fixture["combat"] as MeleeCombatCoordinator
 	var player := fixture["player"] as PlayerMotor
+	var player_stats := fixture["player_stats"] as ActorStats
+	var source_sword := load("res://items/definitions/copper_sword.tres") as ItemDefinition
+	var progression_sword := source_sword.duplicate(true) as ItemDefinition
+	var progression_definition := ProficiencyDefinition.new()
+	progression_definition.experience_requirements = PackedFloat64Array([1000.0])
+	progression_definition.slot_unlock_levels = PackedInt32Array([1])
+	progression_sword.proficiency = progression_definition
+	var progression_item_catalog := ItemCatalog.new()
+	var progression_definitions: Array[ItemDefinition] = [progression_sword]
+	progression_item_catalog.definitions = progression_definitions
+	var progression_inventory := InventoryModel.new(progression_item_catalog)
+	var item_proficiency := ItemProficiency.new(progression_item_catalog)
+	var progression := CombatProgressionCoordinator.new()
+	progression.setup(player_stats, progression_inventory, fixture["entity_catalog"] as EntityCatalog, item_proficiency)
+	combat.melee_outcome_committed.connect(progression.record_melee_outcome)
 	var actors := _get_sorted_actors(coordinator)
 	_expect(actors.size() == 6, "mixed-damage fixture did not spawn six entities")
 	if actors.size() != 6:
@@ -757,7 +790,8 @@ func _test_uncapped_mixed_damage(world: VoxelWorld, sword_profile: MeleeAttackPr
 	unsorted_ids.append(locked_ids[2])
 	unsorted_ids.append(locked_ids[0])
 	var contact_count_before := _contacts.size()
-	_expect(combat.try_commit_player_contacts(unsorted_ids, ray[0], ray[1], sword_profile), "uncapped mixed sweep did not commit")
+	var outcome_count_before := _outcomes.size()
+	_expect(combat.try_commit_player_contacts(unsorted_ids, ray[0], ray[1], sword_profile, &"copper_sword"), "uncapped mixed sweep did not commit")
 	_expect(_contacts.size() == contact_count_before + actors.size(), "uncapped sweep did not emit exactly one contact per unique target")
 	if _contacts.size() != contact_count_before + actors.size():
 		await _cleanup(combat, coordinator, player, fixture["camera"] as Camera3D)
@@ -768,8 +802,15 @@ func _test_uncapped_mixed_damage(world: VoxelWorld, sword_profile: MeleeAttackPr
 		_expect(contact.world_position.is_finite() and is_equal_approx(contact.hit_direction.length(), 1.0), "mixed sweep emitted an invalid contact payload")
 		var expected_hp := 20.0 if actors[index].definition.id == &"sheep" else 64.0
 		_expect(is_equal_approx(coordinator.get_current_hp(actors[index].runtime_id), expected_hp), "%s received incorrect full sweep damage" % actors[index].definition.id)
+	var first_sweep_applied_damage := 0.0
+	for outcome_index in range(outcome_count_before, _outcomes.size()):
+		first_sweep_applied_damage += _outcomes[outcome_index].applied_damage
+	var first_sweep_proficiency := item_proficiency.get_experience(&"copper_sword")
+	_expect(is_equal_approx(first_sweep_proficiency, first_sweep_applied_damage), "first mixed sweep proficiency expected %.1f got %.1f" % [first_sweep_applied_damage, first_sweep_proficiency])
+	_expect(player_stats.get_total_experience() == 0, "nonlethal mixed sweep awarded player experience")
 	contact_count_before = _contacts.size()
-	_expect(combat.try_commit_player_contacts(locked_ids, ray[0], ray[1], sword_profile), "mixed lethal sweep did not commit")
+	outcome_count_before = _outcomes.size()
+	_expect(combat.try_commit_player_contacts(locked_ids, ray[0], ray[1], sword_profile, &"copper_sword"), "mixed lethal sweep did not commit")
 	_expect(_contacts.size() == contact_count_before + actors.size(), "early lethal targets prevented later contacts")
 	var defeated_count := 0
 	for actor in actors:
@@ -779,6 +820,13 @@ func _test_uncapped_mixed_damage(world: VoxelWorld, sword_profile: MeleeAttackPr
 		else:
 			_expect(is_equal_approx(coordinator.get_current_hp(actor.runtime_id), 48.0), "nonlethal zombie did not take the second full-damage hit")
 	_expect(defeated_count == 3 and coordinator.get_active_count() == 3, "mixed sweep did not produce three simultaneous kills")
+	var second_sweep_applied_damage := 0.0
+	for outcome_index in range(outcome_count_before, _outcomes.size()):
+		second_sweep_applied_damage += _outcomes[outcome_index].applied_damage
+	var expected_total_proficiency := first_sweep_applied_damage + second_sweep_applied_damage
+	var total_sweep_proficiency := item_proficiency.get_experience(&"copper_sword")
+	_expect(is_equal_approx(total_sweep_proficiency, expected_total_proficiency), "mixed lethal sweep proficiency expected %.1f got %.1f" % [expected_total_proficiency, total_sweep_proficiency])
+	_expect(player_stats.get_total_experience() == 30, "mixed lethal sweep did not award one reward per defeated target")
 	await _cleanup(combat, coordinator, player, fixture["camera"] as Camera3D)
 
 func _test_multi_target_interactor_timing(world: VoxelWorld, sword_profile: MeleeAttackProfile) -> void:
@@ -810,6 +858,7 @@ func _test_multi_target_interactor_timing(world: VoxelWorld, sword_profile: Mele
 	player.interactor.melee_attack_elapsed = 0.0
 	player.interactor._melee_target_runtime_ids = locked_ids
 	player.interactor._melee_contact_pending = true
+	player.interactor._melee_source_item_id = &"copper_sword"
 	player.interactor._melee_ray_origin = ray[0]
 	player.interactor._melee_ray_direction = ray[1]
 	var contact_count_before := _contacts.size()
@@ -828,6 +877,7 @@ func _test_multi_target_interactor_timing(world: VoxelWorld, sword_profile: Mele
 	player.interactor.melee_attack_elapsed = 0.0
 	player.interactor._melee_target_runtime_ids = locked_ids
 	player.interactor._melee_contact_pending = true
+	player.interactor._melee_source_item_id = &"copper_sword"
 	player.interactor._melee_ray_origin = ray[0]
 	player.interactor._melee_ray_direction = ray[1]
 	player.interactor.cancel_actions()

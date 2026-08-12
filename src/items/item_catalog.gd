@@ -38,6 +38,9 @@ func _rebuild_lookup() -> void:
 		if definition.max_stack < 1:
 			push_error("[ItemCatalog] Invalid max stack for %s at %s" % [definition.id, source])
 			_is_valid = false
+		if definition.proficiency != null and not definition.proficiency.validate():
+			push_error("[ItemCatalog] Invalid proficiency for %s at %s" % [definition.id, source])
+			_is_valid = false
 		if definition.stat_modifier_activation == ItemDefinition.StatModifierActivation.EQUIPPED and not definition is ArmorDefinition:
 			push_error("[ItemCatalog] Equipped modifiers require armor for %s at %s" % [definition.id, source])
 			_is_valid = false
@@ -92,6 +95,9 @@ func validate(block_catalog: BlockCatalog) -> bool:
 		if definition == null:
 			continue
 		var armor := definition as ArmorDefinition
+		if (armor != null or definition.primary_action is MeleeAttackActionDefinition) and definition.proficiency == null:
+			push_error("[ItemCatalog] Missing proficiency for combat item %s" % definition.id)
+			valid = false
 		if armor != null:
 			valid = armor.validate(definition.resource_path) and valid
 			var armor_set := armor.armor_set

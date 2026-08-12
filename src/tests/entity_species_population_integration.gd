@@ -112,7 +112,7 @@ func _route_sheep_contact(coordinator: EntityCoordinator, world: VoxelWorld) -> 
 	get_root().add_child(combat)
 	var player_stats := ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
 	combat.setup(world, player, player_stats, coordinator)
-	combat.melee_contact_committed.connect(coordinator.record_melee_contact)
+	combat.melee_outcome_committed.connect(coordinator.record_melee_outcome)
 	var profile := load("res://combat/profiles/copper_sword_melee.tres") as MeleeAttackProfile
 	var player_center := player.global_position + Vector3.UP * (player.player_height * 0.5)
 	var target_bounds := sheep.get_world_bounds()
@@ -120,7 +120,7 @@ func _route_sheep_contact(coordinator: EntityCoordinator, world: VoxelWorld) -> 
 	var aim_point := Vector3(target_center.x, player_center.y, target_center.z)
 	var ray_origin := player_center + Vector3(0.0, 6.0, 5.5)
 	var ray_direction := (aim_point - ray_origin).normalized()
-	var committed := combat.try_commit_player_contacts(_single_target(sheep.runtime_id), ray_origin, ray_direction, profile)
+	var committed := combat.try_commit_player_contacts(_single_target(sheep.runtime_id), ray_origin, ray_direction, profile, &"copper_sword")
 	_expect(committed, "player contact did not commit through MeleeCombatCoordinator")
 	_expect(sheep.brain.state == SheepBrain.State.FLEE, "coordinator-routed contact did not start sheep flee")
 	var animation := sheep.animation_driver as SheepAnimationDriver

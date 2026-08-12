@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="ArmorDefinition" load_steps=10 format=3]
+[gd_resource type="Resource" script_class="ArmorDefinition" load_steps=11 format=3]
 
 [ext_resource type="Script" path="res://equipment/armor/armor_definition.gd" id="1_armor"]
 [ext_resource type="Texture2D" path="res://equipment/armor/sets/copper/icons/copper_shoes.svg" id="2_icon"]
@@ -6,6 +6,7 @@
 [ext_resource type="Script" path="res://equipment/armor/armor_visual_part.gd" id="4_visual"]
 [ext_resource type="Material" path="res://equipment/armor/sets/copper/copper_armor_material.tres" id="5_material"]
 [ext_resource type="Resource" path="res://equipment/armor/sets/copper/copper_armor_set.tres" id="6_set"]
+[ext_resource type="Resource" path="res://progression/definitions/common.tres" id="7_proficiency"]
 
 [sub_resource type="Resource" id="defense"]
 script = ExtResource("3_modifier")
@@ -36,6 +37,7 @@ id = &"copper_shoes"
 display_name = "Copper Shoes"
 icon = ExtResource("2_icon")
 max_stack = 1
+proficiency = ExtResource("7_proficiency")
 stat_modifier_activation = 1
 stat_modifiers = Array[ExtResource("3_modifier")]([SubResource("defense")])
 armor_slot = 3

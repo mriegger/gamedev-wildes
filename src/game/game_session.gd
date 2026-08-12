@@ -12,6 +12,7 @@ var save_data: Dictionary = {}
 var _world: WorldController
 var _player: PlayerMotor
 var _inventory: InventoryModel
+var _item_proficiency: ItemProficiency
 var _environment: GameEnvironment
 var _auto_save_elapsed: float = 0.0
 var _edit_idle_elapsed: float = 0.0
@@ -22,12 +23,14 @@ var _saving_suspended: bool = false
 func _ready():
 	set_process(false)
 
-func setup(p_slot_id: int, p_save_data: Dictionary, p_world: WorldController, p_player: PlayerMotor, p_inventory: InventoryModel, p_environment: GameEnvironment):
+func setup(p_slot_id: int, p_save_data: Dictionary, p_world: WorldController, p_player: PlayerMotor, p_inventory: InventoryModel, p_item_proficiency: ItemProficiency, p_environment: GameEnvironment):
+	assert(p_item_proficiency != null)
 	slot_id = p_slot_id
 	save_data = p_save_data
 	_world = p_world
 	_player = p_player
 	_inventory = p_inventory
+	_item_proficiency = p_item_proficiency
 	_environment = p_environment
 	_auto_save_elapsed = 0.0
 	_edit_idle_elapsed = 0.0
@@ -63,7 +66,7 @@ func save(reason: String) -> bool:
 	if slot_id == -1 or _is_save_blocked():
 		return false
 	var time_to_save = _environment.get_time_of_day()
-	var success = SaveManager.save_world_state(slot_id, save_data, _world.voxel_model, _player, _inventory, _playtime_accum, time_to_save)
+	var success = SaveManager.save_world_state(slot_id, save_data, _world.voxel_model, _player, _inventory, _item_proficiency, _playtime_accum, time_to_save)
 	if success:
 		_auto_save_elapsed = 0.0
 		_edit_idle_elapsed = 0.0

@@ -45,6 +45,7 @@ var _melee_target_runtime_ids: Array[int] = []
 var _melee_contact_pending: bool = false
 var _melee_ray_origin: Vector3
 var _melee_ray_direction: Vector3
+var _melee_source_item_id: StringName = &""
 
 func setup(p_voxel_world: VoxelWorld, p_camera: Camera3D, p_motor: PlayerMotor, p_inventory: InventoryModel, p_input_buffer: InputBuffer, p_combat: MeleeCombatCoordinator, p_entity_coordinator: EntityCoordinator):
 	assert(p_combat != null and p_entity_coordinator != null)
@@ -303,6 +304,7 @@ func _reset_mining():
 func _reset_melee_chain():
 	_melee_contact_pending = false
 	_melee_target_runtime_ids.clear()
+	_melee_source_item_id = &""
 	melee_attack_timer = 0.0
 	melee_attack_elapsed = 0.0
 	melee_attack_queue = 0
@@ -312,6 +314,9 @@ func _reset_melee_chain():
 
 func _start_melee_attack():
 	var profile := melee_attack_action.attack_profile
+	var selected_item_id = inventory_model.get_selected_item_id()
+	assert(selected_item_id is StringName)
+	_melee_source_item_id = selected_item_id
 	melee_attack_timer = profile.cooldown
 	melee_attack_elapsed = 0.0
 	melee_chain_input_timer = 0.0
@@ -342,7 +347,7 @@ func _commit_melee_contacts():
 	var target_runtime_ids := _melee_target_runtime_ids
 	_melee_contact_pending = false
 	_melee_target_runtime_ids = []
-	combat.try_commit_player_contacts(target_runtime_ids, _melee_ray_origin, _melee_ray_direction, melee_attack_action.attack_profile)
+	combat.try_commit_player_contacts(target_runtime_ids, _melee_ray_origin, _melee_ray_direction, melee_attack_action.attack_profile, _melee_source_item_id)
 
 func _can_mine_position(pos: Vector3i, action: MiningActionDefinition) -> bool:
 	if action == null or voxel_world == null or motor == null:

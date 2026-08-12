@@ -109,6 +109,25 @@ jobs:
             30 "Stats system tests passed" /tmp/stats_system.log -- \
             godot --headless --path src --script res://tests/stats_system.gd
 
+  progression-system:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run item proficiency tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "ITEM_PROFICIENCY PASS" /tmp/item_proficiency.log -- \
+            godot --headless --path src --script res://progression/tests/item_proficiency.gd
+      - name: Run combat progression tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "COMBAT_PROGRESSION PASS" /tmp/combat_progression.log -- \
+            godot --headless --path src --script res://progression/tests/combat_progression.gd
+
   armor-system:
     runs-on: ubuntu-latest
     timeout-minutes: 10

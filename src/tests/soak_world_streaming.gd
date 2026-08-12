@@ -913,6 +913,9 @@ func _verify_player_defeat_flow() -> bool:
 	var auto_elapsed_before := session._auto_save_elapsed
 	var edit_elapsed_before := session._edit_idle_elapsed
 	var playtime_before := session._playtime_accum
+	if not _game.player_stats.set_progression(2, 1):
+		_fail("player defeat flow could not set progression")
+		return false
 	var save_data_before := session.save_data.duplicate(true)
 	var persisted_playtime_before := float(session.save_data.get("playtime_seconds", 0.0))
 	if not _game.player_stats.set_current_hp(0.0):
@@ -924,6 +927,9 @@ func _verify_player_defeat_flow() -> bool:
 		return false
 	if not session.is_saving_suspended():
 		_fail("player defeat did not suspend saving synchronously")
+		return false
+	if _game.player_stats.level != 2 or _game.player_stats.experience != 1:
+		_fail("player defeat changed progression")
 		return false
 	session._process(1.0)
 	if not is_equal_approx(session._playtime_accum, playtime_before + 1.0):
@@ -1031,6 +1037,10 @@ func _verify_player_defeat_flow() -> bool:
 	var respawn_save := SaveManager.load_slot(_test_save_slot_id)
 	if not _saved_state_is_living_spawn(respawn_save, expected_spawn, _game.player_stats.get_value(&"hp"), inventory_before, _game.item_catalog):
 		_fail("resumed edit-debounce save did not persist the living Respawn state")
+		return false
+	var respawn_stats := respawn_save.get("player_stats", {}) as Dictionary
+	if int(respawn_stats.get("level", 0)) != 2 or int(respawn_stats.get("experience", -1)) != 1:
+		_fail("Respawn save changed player progression")
 		return false
 	if float(respawn_save.get("playtime_seconds", 0.0)) < persisted_playtime_before + 1.0:
 		_fail("resumed save omitted playtime accumulated while dead")

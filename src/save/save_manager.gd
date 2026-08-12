@@ -3,7 +3,8 @@ class_name SaveManager
 
 const SAVE_DIR: String = "user://saves"
 const SLOT_COUNT: int = 3
-const CURRENT_SAVE_VERSION: int = 4
+const CURRENT_SAVE_VERSION: int = 5
+const MIGRATABLE_SAVE_VERSION: int = 4
 
 static func ensure_save_dir() -> void:
 	if not DirAccess.dir_exists_absolute(SAVE_DIR):
@@ -76,6 +77,7 @@ static func create_new_world(slot_id: int, seed_value: int, world_name: String) 
 		"torch_attachments": {},
 		"player_position": null,
 		"player_stats": null,
+		"item_proficiency": {},
 		"inventory": null,
 		"playtime_seconds": 0,
 		"time_of_day": 6.0,
@@ -163,7 +165,7 @@ static func load_slot(slot_id: int) -> Dictionary:
 	var info = get_slot_info(slot_id)
 	if not info.get("exists", false):
 		return info
-	if int(info.get("version", 0)) != CURRENT_SAVE_VERSION:
+	if not _migrate_save_data(info):
 		info["incompatible"] = true
 		return info
 	if not info.has("seed"):
@@ -182,9 +184,20 @@ static func load_slot(slot_id: int) -> Dictionary:
 		info["playtime_seconds"] = 0
 	if not info.has("player_stats"):
 		info["player_stats"] = null
+	if not info.has("item_proficiency"):
+		info["item_proficiency"] = {}
 	return info
 
-static func save_world_state(slot_id: int, current_data: Dictionary, voxel_model: VoxelWorld, player: PlayerMotor, inventory: InventoryModel, extra_seconds: float, time_of_day: float) -> bool:
+static func _migrate_save_data(data: Dictionary) -> bool:
+	var version := int(data.get("version", 0))
+	if version == MIGRATABLE_SAVE_VERSION:
+		data["item_proficiency"] = {}
+		data["version"] = CURRENT_SAVE_VERSION
+		return true
+	return version == CURRENT_SAVE_VERSION
+
+static func save_world_state(slot_id: int, current_data: Dictionary, voxel_model: VoxelWorld, player: PlayerMotor, inventory: InventoryModel, item_proficiency: ItemProficiency, extra_seconds: float, time_of_day: float) -> bool:
+	assert(item_proficiency != null)
 	var updated = current_data.duplicate()
 	updated["last_played"] = _now_str()
 	updated["version"] = CURRENT_SAVE_VERSION
@@ -198,6 +211,7 @@ static func save_world_state(slot_id: int, current_data: Dictionary, voxel_model
 	updated["player_position"] = [p.x, p.y, p.z]
 	updated["player_stats"] = player.stats.snapshot_progression()
 	updated["inventory"] = inventory.to_dict()
+	updated["item_proficiency"] = item_proficiency.snapshot()
 	updated["time_of_day"] = fmod(time_of_day, GameClock.HOURS_PER_DAY)
 
 	if not _save_dict_to_file(slot_id, updated):

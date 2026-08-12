@@ -98,10 +98,15 @@ func add_experience(amount: int) -> int:
 		experience = 0
 	return levels_gained
 
+func get_total_experience() -> int:
+	var total := experience
+	for completed_level in range(1, level):
+		total += _definition.get_experience_requirement(completed_level)
+	return total
+
 func get_experience_to_next_level() -> int:
 	if is_at_maximum_level():
 		return 0
-	# Revisit the experience curve when progression design is finalized.
 	return _definition.get_experience_requirement(level)
 
 func is_at_maximum_level() -> bool:

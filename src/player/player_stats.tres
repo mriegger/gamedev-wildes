@@ -4,4 +4,4 @@
 
 [resource]
 script = ExtResource("1")
-starting_level = 10
+starting_level = 1

@@ -11,6 +11,7 @@ id = &"sheep"
 actor_scene = ExtResource("2_scene")
 behavior = ExtResource("3_behavior")
 stats_definition = ExtResource("4_stats")
+experience_reward = 10
 body_width = 0.8
 body_height = 1.4
 spawn_phase = 0

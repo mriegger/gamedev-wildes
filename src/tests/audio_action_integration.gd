@@ -73,7 +73,7 @@ func _run():
 	for c in interactor.melee_attack_started.get_connections():
 		if c["callable"].get_object() == action_audio:
 			has_swing = true
-	for c in combat.melee_contact_committed.get_connections():
+	for c in combat.melee_outcome_committed.get_connections():
 		if c["callable"].get_object() == action_audio:
 			has_creature_hit = true
 	for c in inventory.inventory_changed.get_connections():
@@ -82,7 +82,7 @@ func _run():
 	_expect(has_mining, "mining impact not connected to action audio")
 	_expect(has_terrain_hit, "melee_terrain_hit not connected")
 	_expect(not has_swing, "melee_attack_started still connected to action audio")
-	_expect(has_creature_hit, "melee_contact_committed not connected")
+	_expect(has_creature_hit, "melee_outcome_committed not connected")
 	_expect(has_inventory, "inventory_changed not connected")
 	_expect(draw.stream == null, "initial selected item played a draw sound")
 
@@ -105,14 +105,14 @@ func _run():
 
 	var sword_action := item_catalog.get_definition(&"copper_sword").primary_action as MeleeAttackActionDefinition
 	var player_contact := MeleeContact.new(MeleeCombatCoordinator.PLAYER_RUNTIME_ID, &"player", 1, &"zombie", sword_action.attack_profile.id, Vector3.ONE, Vector3.RIGHT)
-	combat.melee_contact_committed.emit(player_contact)
+	combat.melee_outcome_committed.emit(MeleeOutcome.new(player_contact, &"copper_sword", 1.0, false))
 	await process_frame
 	_expect(action_audio._creature_hit_streams.has(creature_hit.stream), "confirmed player contact did not select a creature hit sound")
 	_expect(creature_hit.pitch_scale >= 0.94 and creature_hit.pitch_scale <= 1.06, "creature hit pitch out of range %f" % creature_hit.pitch_scale)
 	creature_hit.stop()
 	creature_hit.stream = null
 	var entity_contact := MeleeContact.new(1, &"zombie", 0, &"player", &"zombie_melee", Vector3.ONE, Vector3.LEFT)
-	combat.melee_contact_committed.emit(entity_contact)
+	combat.melee_outcome_committed.emit(MeleeOutcome.new(entity_contact, &"", 1.0, false))
 	_expect(creature_hit.stream == null, "non-player contact played the player's creature hit sound")
 
 	_expect(inventory.select_slot(3), "sword selection failed")
