@@ -11,6 +11,7 @@ var _entity_coordinator: EntityCoordinator
 var _combat: MeleeCombatCoordinator
 var _stone_pos := Vector3i(1, 0, 0)
 var _grass_pos := Vector3i(2, 0, 0)
+var _copper_pos := Vector3i(3, 0, 0)
 var _melee_attack_directions: Array[int] = []
 
 func _init():
@@ -21,13 +22,23 @@ func _run():
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
 	_expect(block_catalog.validate(), "block catalog invalid")
 	_expect(item_catalog.validate(block_catalog), "item catalog invalid")
-	var pickaxe := item_catalog.get_definition(&"copper_pickaxe")
-	_expect(pickaxe.max_stack == 1, "pickaxe stack limit changed")
-	_expect(pickaxe.primary_action is MiningActionDefinition, "pickaxe primary action is not mining")
-	_expect(pickaxe.secondary_action == null, "pickaxe unexpectedly has a secondary action")
-	var pickaxe_action := pickaxe.primary_action as MiningActionDefinition
+	var stone_pickaxe := item_catalog.get_definition(&"stone_pickaxe")
+	_expect(stone_pickaxe.max_stack == 1, "stone pickaxe stack limit changed")
+	_expect(stone_pickaxe.primary_action is MiningActionDefinition, "stone pickaxe primary action is not mining")
+	_expect(stone_pickaxe.secondary_action == null, "stone pickaxe unexpectedly has a secondary action")
+	var pickaxe_action := stone_pickaxe.primary_action as MiningActionDefinition
 	var pickaxe_stat := pickaxe_action.get_tool_stat(&"pickaxe")
-	_expect(pickaxe_stat != null and pickaxe_stat.power == 1 and is_equal_approx(pickaxe_stat.speed_multiplier, 2.0), "pickaxe mining stats changed")
+	_expect(pickaxe_stat != null and pickaxe_stat.power == 1 and is_equal_approx(pickaxe_stat.speed_multiplier, 1.5), "stone pickaxe mining stats changed")
+	var copper_pickaxe := item_catalog.get_definition(&"copper_pickaxe")
+	var copper_pickaxe_action := copper_pickaxe.primary_action as MiningActionDefinition
+	var copper_pickaxe_stat := copper_pickaxe_action.get_tool_stat(&"pickaxe")
+	_expect(copper_pickaxe_stat != null and copper_pickaxe_stat.power == 2 and is_equal_approx(copper_pickaxe_stat.speed_multiplier, 2.0), "copper pickaxe mining stats changed")
+	_expect(stone_pickaxe.icon.resource_path == "res://assets/textures/tools/pickaxe/stone_pickaxe.png", "stone pickaxe uses the wrong texture")
+	var stone_pickaxe_image := stone_pickaxe.icon.get_image()
+	var copper_pickaxe_image := copper_pickaxe.icon.get_image()
+	_expect(stone_pickaxe_image.get_size() == Vector2i(16, 16), "stone pickaxe texture is not 16x16")
+	_expect(stone_pickaxe_image.get_pixel(3, 1).to_html() == "d8dde2ff", "stone pickaxe head is not light gray")
+	_expect(stone_pickaxe_image.get_pixel(5, 5) == copper_pickaxe_image.get_pixel(5, 5), "stone pickaxe recolor changed the wooden handle")
 	var sword := item_catalog.get_definition(&"copper_sword")
 	_expect(sword.max_stack == 1, "sword stack limit changed")
 	_expect(sword.primary_action is MeleeAttackActionDefinition, "sword primary action is not melee")
@@ -36,9 +47,16 @@ func _run():
 	_expect(is_equal_approx(sword_action.attack_profile.duration, 0.48), "sword attack duration changed")
 	_expect(is_equal_approx(sword_action.chain_input_window, 0.26), "sword chain input window changed")
 	var stone := block_catalog.get_definition(BlockId.Type.STONE)
-	_expect(stone.mining_tool_tag == &"pickaxe" and stone.minimum_mining_power == 1, "stone mining requirement changed")
+	var copper := block_catalog.get_definition(BlockId.Type.COPPER)
+	var unarmed_action := load("res://items/actions/definitions/unarmed_mining.tres") as MiningActionDefinition
+	_expect(stone.mining_tool_tag == &"pickaxe" and stone.minimum_mining_power == 0, "stone is not hand-mineable")
 	_expect(stone.drop_item_id == &"stone_block", "stone drop item changed")
-	_expect(is_equal_approx(pickaxe_action.get_mine_duration(stone), 0.35), "pickaxe stone duration changed")
+	_expect(unarmed_action.can_mine(stone), "unarmed action cannot mine stone")
+	_expect(copper.mining_tool_tag == &"pickaxe" and copper.minimum_mining_power == 1, "copper mining requirement changed")
+	_expect(not unarmed_action.can_mine(copper), "unarmed action can mine copper")
+	_expect(pickaxe_action.can_mine(copper), "stone pickaxe cannot mine copper")
+	_expect(copper_pickaxe_action.can_mine(copper), "copper pickaxe cannot mine copper")
+	_expect(copper_pickaxe_action.get_mine_duration(copper) < pickaxe_action.get_mine_duration(copper), "copper pickaxe is not faster than stone pickaxe")
 	var grass_placement := item_catalog.get_definition(&"grass_block").secondary_action
 	_expect(not item_catalog._is_supported_primary_action(grass_placement), "placement action was accepted as a primary action")
 	_expect(not item_catalog._is_supported_secondary_action(pickaxe_action), "mining action was accepted as a secondary action")
@@ -51,54 +69,65 @@ func _run():
 
 	_inventory = InventoryModel.new(item_catalog)
 	_inventory.setup_starter()
-	_expect(_inventory.get_slot(0) is InventoryStack and _inventory.get_slot(0).item_id == &"copper_pickaxe", "starter pickaxe missing")
+	_expect(_inventory.get_slot(0) == null, "new inventory still grants a copper pickaxe")
 	_expect(_inventory.get_slot(3) is InventoryStack and _inventory.get_slot(3).item_id == &"copper_sword", "starter sword missing")
 	var test_totem_slot := InventoryModel.FILLABLE_SIZE - 1
 	_expect(_inventory.get_slot(test_totem_slot) is InventoryStack and _inventory.get_slot(test_totem_slot).item_id == &"test_totem", "test totem is not in the starter backpack")
 	var encoded := _inventory.to_dict()
 	var restored := InventoryModel.new(item_catalog)
 	_expect(restored.from_dict(encoded), "typed inventory did not restore")
-	_expect(restored.get_slot(0) is InventoryStack and restored.get_slot(0).item_id == &"copper_pickaxe", "restored pickaxe missing")
+	_expect(restored.get_slot(0) == null, "restored new inventory gained a copper pickaxe")
 	_expect(restored.get_slot(3) is InventoryStack and restored.get_slot(3).item_id == &"copper_sword", "restored sword missing")
 	_expect(restored.get_slot(test_totem_slot) is InventoryStack and restored.get_slot(test_totem_slot).item_id == &"test_totem", "restored test totem missing")
 	_expect(restored.starter_item_migration_version == InventoryModel.STARTER_ITEM_MIGRATION_VERSION, "starter item migration version did not restore")
+	var existing_pickaxe_encoded := encoded.duplicate(true)
+	existing_pickaxe_encoded["regions"]["hotbar"][0] = {"item_id": "copper_pickaxe", "count": 1}
+	existing_pickaxe_encoded.erase("starter_item_migration_version")
+	var existing_pickaxe_save := InventoryModel.new(item_catalog)
+	_expect(existing_pickaxe_save.from_dict(existing_pickaxe_encoded), "existing copper pickaxe save did not restore")
+	_expect(existing_pickaxe_save.migrate_starter_items(), "existing copper pickaxe save did not migrate")
+	_expect(existing_pickaxe_save.get_slot(0) != null and existing_pickaxe_save.get_slot(0).item_id == &"copper_pickaxe", "existing copper pickaxe was not preserved")
 	var legacy_encoded := encoded.duplicate(true)
-	legacy_encoded["regions"]["hotbar"][0] = null
 	legacy_encoded["regions"]["hotbar"][3] = null
 	legacy_encoded.erase("starter_item_migration_version")
 	var legacy := InventoryModel.new(item_catalog)
 	_expect(legacy.from_dict(legacy_encoded), "legacy inventory did not restore")
 	_expect(legacy.migrate_starter_items(), "legacy inventory could not receive starter items")
-	_expect(legacy.get_slot(0) != null and legacy.get_slot(0).item_id == &"copper_pickaxe", "legacy pickaxe was not placed in hotbar")
-	_expect(legacy.get_slot(3) != null and legacy.get_slot(3).item_id == &"copper_sword", "legacy sword was not placed in hotbar")
+	_expect(legacy.get_inventory_item_count(&"copper_pickaxe") == 0, "legacy migration granted a copper pickaxe")
+	_expect(legacy.get_inventory_item_count(&"copper_sword") == 1, "legacy migration did not restore the sword")
 	var restore_game := Game.new()
 	restore_game.item_catalog = item_catalog
 	restore_game.inventory_model = InventoryModel.new(item_catalog)
 	restore_game._save_data = {"inventory": legacy_encoded}
 	restore_game._restore_inventory()
-	_expect(restore_game.inventory_model.get_slot(0).item_id == &"copper_pickaxe", "game restore did not execute pickaxe migration")
-	_expect(restore_game.inventory_model.get_slot(3).item_id == &"copper_sword", "game restore did not execute sword migration")
+	_expect(restore_game.inventory_model.get_inventory_item_count(&"copper_pickaxe") == 0, "game restore granted a copper pickaxe")
+	_expect(restore_game.inventory_model.get_inventory_item_count(&"copper_sword") == 1, "game restore did not execute sword migration")
 	restore_game.free()
-	legacy.slots[3] = null
+	for index in range(legacy.size):
+		if legacy.slots[index] != null and legacy.slots[index].item_id == &"copper_sword":
+			legacy.slots[index] = null
+			break
 	_expect(legacy.migrate_starter_items(), "completed starter migration did not remain complete")
-	_expect(legacy.get_slot(3) == null, "completed starter migration re-granted a removed sword")
+	_expect(legacy.get_inventory_item_count(&"copper_sword") == 0, "completed starter migration re-granted a removed sword")
 	var crowded := InventoryModel.new(item_catalog)
 	var grass_id := item_catalog.get_item_for_block(BlockId.Type.GRASS).id
 	for index in range(InventoryModel.HOTBAR_SIZE):
 		crowded.slots[index] = InventoryStack.new(grass_id, index + 1)
-	_expect(crowded.ensure_item(&"copper_pickaxe"), "full legacy hotbar could not receive pickaxe")
-	_expect(crowded.get_slot(0).item_id == &"copper_pickaxe" and crowded.get_slot(InventoryModel.HOTBAR_SIZE).count == 1, "legacy hotbar migration lost its displaced stack")
+	_expect(crowded.ensure_item(&"copper_pickaxe"), "full hotbar could not receive a pickaxe")
+	_expect(crowded.get_slot(0).item_id == &"copper_pickaxe" and crowded.get_slot(InventoryModel.HOTBAR_SIZE).count == 1, "adding a pickaxe lost its displaced stack")
 	var full := InventoryModel.new(item_catalog)
 	for index in range(InventoryModel.FILLABLE_SIZE):
 		full.slots[index] = InventoryStack.new(grass_id, 1)
 	_expect(not full.migrate_starter_items(), "full inventory unexpectedly accepted starter items")
 	for index in range(InventoryModel.FILLABLE_SIZE, InventoryModel.TOTAL_SIZE):
 		_expect(full.slots[index] == null, "starter migration used reserved equipment slot %d" % index)
+	_inventory.slots[0] = InventoryStack.new(&"stone_pickaxe", 1)
 
 	_voxel_world = VoxelWorld.new(20, 36, 5, 12.0, block_catalog)
 	_voxel_world.restore_block_edits({
 		_stone_pos: BlockId.Type.STONE,
 		_grass_pos: BlockId.Type.GRASS,
+		_copper_pos: BlockId.Type.COPPER,
 	}, {})
 	_player = (load("res://player/player.tscn") as PackedScene).instantiate() as PlayerMotor
 	root.add_child(_player)
@@ -127,6 +156,7 @@ func _run():
 	_expect(_player.held_item_view.held_node is PixelExtrudedItem, "pickaxe held scene missing")
 	_expect(is_equal_approx(_player.held_item_view.rotation.x, PI * 0.25), "held-item socket does not pitch items downward")
 	var held_pickaxe := _player.held_item_view.held_node as PixelExtrudedItem
+	_expect(held_pickaxe.texture == stone_pickaxe.icon, "held stone pickaxe used the wrong texture")
 	_expect(is_equal_approx(held_pickaxe.rotation.y, PI * 0.5), "pickaxe does not point toward the player's front")
 	_expect(held_pickaxe.mesh_instance.mesh.get_surface_count() == 1, "pickaxe mesh surface count changed")
 	var pickaxe_material := held_pickaxe.mesh_instance.mesh.surface_get_material(0) as StandardMaterial3D
@@ -228,14 +258,17 @@ func _run():
 	_expect(_inventory.selected_slot == 1, "grass hotbar selection failed")
 	_expect(_player.held_item_view.held_node == null, "held pickaxe did not clear")
 	var unarmed := _interactor.get_selected_primary_action() as MiningActionDefinition
-	_expect(unarmed != null and not unarmed.can_mine(stone), "unarmed mining bypasses stone requirement")
+	_expect(unarmed != null and unarmed.can_mine(stone), "unarmed mining cannot mine stone")
+	_expect(not unarmed.can_mine(copper), "unarmed mining bypasses copper requirement")
 	_prepare_target(_stone_pos, unarmed)
+	_expect(_interactor.can_mine_target, "unarmed action cannot target stone")
 	_push_primary(true)
 	await process_frame
 	_input_buffer.poll()
-	_interactor._handle_item_actions(0.8)
-	_expect(not _interactor.is_mining, "blocked stone mining started")
-	_expect(_voxel_world.get_block_id_at(_stone_pos) == BlockId.Type.STONE, "blocked stone was removed")
+	_interactor._handle_item_actions(0.0)
+	_interactor._handle_item_actions(0.71)
+	_expect(_voxel_world.get_block_id_at(_stone_pos) == BlockId.Type.AIR, "unarmed action did not mine stone")
+	_expect(_inventory.get_slot(2).count == 9, "stone drop did not use explicit block drop data")
 	_push_primary(false)
 	await process_frame
 	_input_buffer.poll()
@@ -244,16 +277,16 @@ func _run():
 	await process_frame
 	_expect(_inventory.selected_slot == 0, "pickaxe hotbar selection failed")
 	_expect(_player.held_item_view.held_node is PixelExtrudedItem, "pickaxe did not reappear")
-	_prepare_target(_stone_pos, pickaxe_action)
-	_expect(_interactor.can_mine_target, "pickaxe cannot target stone")
+	_prepare_target(_copper_pos, pickaxe_action)
+	_expect(_interactor.can_mine_target, "stone pickaxe cannot target copper")
 	_push_primary(true)
 	await process_frame
 	_input_buffer.poll()
 	_expect(_input_buffer.primary_use_pressed, "primary input did not reach buffer")
 	_interactor._handle_item_actions(0.0)
-	_interactor._handle_item_actions(0.36)
-	_expect(_voxel_world.get_block_id_at(_stone_pos) == BlockId.Type.AIR, "pickaxe did not mine stone")
-	_expect(_inventory.get_slot(2).count == 9, "stone drop did not use explicit block drop data")
+	_interactor._handle_item_actions(0.61)
+	_expect(_voxel_world.get_block_id_at(_copper_pos) == BlockId.Type.AIR, "stone pickaxe did not mine copper")
+	_expect(_inventory.get_inventory_item_count(&"copper") == 1, "mined copper did not enter inventory")
 	_push_primary(false)
 	await process_frame
 	_input_buffer.poll()

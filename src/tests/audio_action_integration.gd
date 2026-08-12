@@ -51,6 +51,7 @@ func _run():
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
 	var inventory := InventoryModel.new(item_catalog)
 	inventory.setup_starter()
+	inventory.slots[0] = InventoryStack.new(&"stone_pickaxe", 1)
 	var combat := MeleeCombatCoordinator.new()
 	root.add_child(combat)
 

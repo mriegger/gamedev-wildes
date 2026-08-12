@@ -16,7 +16,6 @@ const DEFAULT_SIZE: int = TOTAL_SIZE
 const FILLABLE_SIZE: int = HOTBAR_SIZE + BACKPACK_SIZE
 const STARTER_ITEM_MIGRATION_VERSION: int = 3
 const STARTER_ITEMS_BY_SLOT: Dictionary[int, StringName] = {
-	0: &"copper_pickaxe",
 	3: &"copper_sword",
 	FILLABLE_SIZE - 5: &"copper_helmet",
 	FILLABLE_SIZE - 4: &"copper_chest_plate",

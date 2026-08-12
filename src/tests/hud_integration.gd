@@ -568,7 +568,7 @@ func _check_left_drag_result() -> void:
 		_fail("left drag: inventory icon mismatch")
 		return
 	var totals: Dictionary = _totals(_inv)
-	if totals.get(&"copper_pickaxe", 0) != 1 or totals.get(&"copper_sword", 0) != 1 or totals.get(grass_id, 0) != 12 or totals.get(stone_id, 0) != 8 or totals.get(torch_id, 0) != 16:
+	if totals.get(&"copper_pickaxe", 0) != 0 or totals.get(&"copper_sword", 0) != 1 or totals.get(grass_id, 0) != 12 or totals.get(stone_id, 0) != 8 or totals.get(torch_id, 0) != 16:
 		_fail("left drag: totals changed %s" % str(totals))
 		return
 	print("[hud_integration] left drag ok")

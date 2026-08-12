@@ -295,7 +295,7 @@ func _run_edge_cases() -> bool:
 	_assert(saved_helmet_source >= 0, "starter helmet missing")
 	_assert(saved_source.handle_drop(saved_helmet_source, InventoryModel.get_equipment_index(ArmorDefinition.Slot.HEAD), 1), "starter helmet equip before save failed")
 	var encoded := saved_source.to_dict()
-	var encoded_slot = encoded["regions"]["hotbar"][0]
+	var encoded_slot = encoded["regions"]["hotbar"][3]
 	_assert(encoded_slot["item_id"] is String, "save item ID is string")
 	_assert(not encoded_slot.has("type"), "old save key absent")
 	_assert(saved_source.get_slot(3).item_id == &"copper_sword", "starter sword missing")

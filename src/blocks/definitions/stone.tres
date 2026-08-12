@@ -13,7 +13,6 @@ is_breakable = true
 is_replaceable = false
 mine_duration = 0.7
 mining_tool_tag = &"pickaxe"
-minimum_mining_power = 1
 drop_item_id = &"stone_block"
 top_texture = ExtResource("2_texture")
 side_texture = ExtResource("2_texture")

@@ -49,15 +49,15 @@ globally and survive unload/reload.
 **Blocks.** Grass, dirt, sand, stone, wood, and leaves are minable and placeable. Seeded copper
 deposits generate after the surrounding terrain as connected 5–30 block blobs. Most of each
 deposit stays underground, while some deposits expose up to three blocks at the surface. Stone
-and copper require the starter copper pickaxe; other current blocks remain hand-minable. Torches are
-a seventh placeable that you can walk through — each is an omni light with a 9-block radius.
+and the other common blocks are hand-minable. Copper requires a stone or copper pickaxe. Torches
+are a seventh placeable that you can walk through — each is an omni light with a 9-block radius.
 Torch shadows are configurable for the nearest 0, 1, 2, or 4 lights and default to the nearest
 one.
 
-**Tools.** New worlds start with a copper pickaxe and copper sword. Item actions are data-driven:
-the pickaxe satisfies stone's mining requirement, while the sword uses click-triggered,
-alternating melee swings. Pixel-art held tools are extruded into shaded 3D silhouette meshes at
-runtime.
+**Tools.** New worlds start with a copper sword, while the first pickaxe is crafted from stone and
+wood. Item actions are data-driven: stone and copper pickaxes can mine copper, while the sword uses
+click-triggered, alternating melee swings. Pixel-art held tools are extruded into shaded 3D
+silhouette meshes at runtime.
 
 **Lighting.** Per-vertex ambient occlusion is baked into chunk meshes. A directional sun plus a
 fill light drive real-time shadows, and a keyframed day/night profile interpolates sky, ambient,
@@ -68,9 +68,9 @@ fallback values keep GL Compatibility usable at reduced fidelity, without volume
 06:00–19:00; sunrise and sundown get their own warm color keys, and nights stay bright enough
 to play.
 
-**Crafting.** Opening crafting with `Tab` reveals a recipe panel alongside the backpack. Seven data-driven recipes use
-materials from the backpack and hotbar, take two seconds to complete, and cancel without consuming ingredients when
-the panel closes or another recipe is selected.
+**Crafting.** Opening crafting with `Tab` reveals a recipe panel alongside the backpack. Eight
+data-driven recipes use materials from the backpack and hotbar, take two seconds to complete, and
+cancel without consuming ingredients when the panel closes or another recipe is selected.
 
 **Developer console.** Press `/` to open a command line at the bottom of the screen. The
 `spawn <item> <count>` command adds any catalog item directly to the backpack for testing. Item

@@ -18,6 +18,7 @@ func _init() -> void:
 	_inventory = InventoryModel.new(item_catalog)
 	_inventory.slots[0] = InventoryStack.new(&"copper", 20)
 	_inventory.slots[1] = InventoryStack.new(&"log_block", 4)
+	_inventory.slots[2] = InventoryStack.new(&"stone_block", 10)
 	_inventory.slots[InventoryModel.HOTBAR_SIZE] = InventoryStack.new(&"copper", 5)
 	_inventory.slots[InventoryModel.HOTBAR_SIZE + 1] = InventoryStack.new(&"log_block", 6)
 	_stats = ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
@@ -126,16 +127,16 @@ func _check_open_state() -> void:
 	_expect(_hud.side_panel.is_open(), "backpack did not open")
 	_expect(_hud.crafting_panel.is_open(), "crafting panel did not open with backpack")
 	_expect(_hud.crafting_panel.get_progress() > 0.95, "crafting panel opening animation did not complete")
-	_expect(_hud.crafting_panel.get_selected_recipe_id() == &"copper_pickaxe", "first recipe was not selected")
+	_expect(_hud.crafting_panel.get_selected_recipe_id() == &"stone_pickaxe", "stone pickaxe was not selected first")
 	_expect(_hud.crafting_panel.get_craft_button().is_craft_enabled(), "selected craft button was disabled")
 	_expect(_camera_rig.camera.h_offset < 0.0, "camera framing did not account for the wider left panel")
 	var recipe_scroll := _hud.crafting_panel.get_node("Margin/Content/Body/Recipes/RecipeScroll") as ScrollContainer
 	var recipe_list := _hud.crafting_panel.get_node("Margin/Content/Body/Recipes/RecipeScroll/RecipeList") as VBoxContainer
-	_expect(recipe_scroll != null and recipe_list.get_child_count() == 7, "scrollable recipe list did not contain seven recipes")
+	_expect(recipe_scroll != null and recipe_list.get_child_count() == 8, "scrollable recipe list did not contain eight recipes")
 	var ingredient_list := _hud.crafting_panel.get_node("Margin/Content/Body/Details/IngredientList") as VBoxContainer
 	_expect(ingredient_list.get_child_count() == 2, "selected recipe ingredients were not displayed")
-	var copper_count := (ingredient_list.get_child(0) as HBoxContainer).get_child(1) as Label
-	_expect(copper_count.text.contains("25 / 10"), "ingredient display did not include hotbar materials")
+	var stone_count := (ingredient_list.get_child(0) as HBoxContainer).get_child(1) as Label
+	_expect(stone_count.text.contains("10 / 10"), "stone pickaxe ingredient display did not include hotbar materials")
 	var crafting_rect := _hud.crafting_panel.get_global_rect()
 	var backpack_rect := _hud.side_panel.get_global_rect()
 	for slot in _hud.hotbar.slot_nodes:

@@ -566,8 +566,8 @@ func _verify_item_block_round_trip() -> bool:
 	key_one.keycode = KEY_1
 	key_one.pressed = true
 	root.push_input(key_one, true)
-	if inventory.selected_slot != 0 or inventory.get_slot(0).item_id != &"copper_pickaxe":
-		_fail("hotbar key input did not restore copper pickaxe")
+	if inventory.selected_slot != 0 or inventory.get_slot(0) != null:
+		_fail("hotbar key input did not select the empty first slot")
 		return false
 	_item_round_trip_verified = true
 	return true

@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="ItemCatalog" load_steps=18 format=3]
+[gd_resource type="Resource" script_class="ItemCatalog" load_steps=19 format=3]
 
 [ext_resource type="Script" path="res://items/item_catalog.gd" id="1_catalog"]
 [ext_resource type="Script" path="res://items/item_definition.gd" id="2_definition"]
@@ -17,7 +17,8 @@
 [ext_resource type="Resource" path="res://equipment/armor/sets/copper/copper_pants.tres" id="15_pants"]
 [ext_resource type="Resource" path="res://equipment/armor/sets/copper/copper_shoes.tres" id="16_shoes"]
 [ext_resource type="Resource" path="res://items/definitions/copper.tres" id="17_copper"]
+[ext_resource type="Resource" path="res://items/definitions/stone_pickaxe.tres" id="18_stone_pickaxe"]
 
 [resource]
 script = ExtResource("1_catalog")
-definitions = Array[ExtResource("2_definition")]([ExtResource("3_grass"), ExtResource("4_dirt"), ExtResource("5_sand"), ExtResource("6_stone"), ExtResource("7_log"), ExtResource("8_leaves"), ExtResource("17_copper"), ExtResource("9_torch"), ExtResource("10_pickaxe"), ExtResource("11_sword"), ExtResource("12_test_totem"), ExtResource("13_helmet"), ExtResource("14_chest_plate"), ExtResource("15_pants"), ExtResource("16_shoes")])
+definitions = Array[ExtResource("2_definition")]([ExtResource("3_grass"), ExtResource("4_dirt"), ExtResource("5_sand"), ExtResource("6_stone"), ExtResource("7_log"), ExtResource("8_leaves"), ExtResource("17_copper"), ExtResource("9_torch"), ExtResource("18_stone_pickaxe"), ExtResource("10_pickaxe"), ExtResource("11_sword"), ExtResource("12_test_totem"), ExtResource("13_helmet"), ExtResource("14_chest_plate"), ExtResource("15_pants"), ExtResource("16_shoes")])

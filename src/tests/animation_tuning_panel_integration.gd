@@ -17,6 +17,7 @@ func _run():
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
 	var inventory := InventoryModel.new(item_catalog)
 	inventory.setup_starter()
+	inventory.slots[0] = InventoryStack.new(&"stone_pickaxe", 1)
 	player.held_item_view.setup(inventory)
 	player.animation_driver.setup(player, player.interactor)
 	panel.setup(player)
@@ -141,7 +142,7 @@ func _run():
 	_expect(pause_button.disabled and not progress_slider.editable, "attack playback controls stayed enabled outside attack preview")
 	_expect(player.held_item_view.held_node is PixelExtrudedItem, "leaving attack preview did not restore the selected held item")
 	var restored_pickaxe := player.held_item_view.held_node as PixelExtrudedItem
-	_expect(restored_pickaxe.texture == item_catalog.get_definition(&"copper_pickaxe").icon, "leaving attack preview did not restore the pickaxe")
+	_expect(restored_pickaxe.texture == item_catalog.get_definition(&"stone_pickaxe").icon, "leaving attack preview did not restore the stone pickaxe")
 	_expect(player.held_item_view.position.is_equal_approx(resting_socket_position), "leaving attack preview did not restore the held-item position")
 	_expect(player.held_item_view.rotation.is_equal_approx(resting_socket_rotation), "leaving attack preview did not restore the held-item rotation")
 	var export_path = ProjectSettings.globalize_path("user://animation_tuning_panel_test.json")
