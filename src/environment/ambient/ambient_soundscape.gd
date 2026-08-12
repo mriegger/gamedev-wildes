@@ -114,10 +114,10 @@ func _get_day_factor(t: float) -> float:
 
 
 func _get_night_factor(t: float) -> float:
-	if t < 5.0 or t >= 19.0:
+	if t < 5.0 or t >= 21.0:
 		return 1.0
 	if t < 6.0:
 		return 1.0 - inverse_lerp(5.0, 6.0, t)
-	if t < 17.0:
+	if t < 20.0:
 		return 0.0
-	return inverse_lerp(17.0, 19.0, t)
+	return inverse_lerp(20.0, 21.0, t)
