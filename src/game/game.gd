@@ -153,6 +153,7 @@ func _setup_gameplay():
 	entity_coordinator.entity_melee_contact_reached.connect(melee_combat.try_commit_entity_contact)
 	melee_combat.melee_outcome_committed.connect(entity_coordinator.record_melee_outcome)
 	melee_combat.melee_outcome_committed.connect(combat_progression_coordinator.record_melee_outcome)
+	melee_combat.melee_outcome_committed.connect(_on_melee_outcome_committed)
 	combat_hit_particles.setup(melee_combat, combat_hit_particle_catalog)
 	player.setup(world, camera_rig, inventory_model, input_buffer, player_stats, melee_combat, entity_coordinator)
 	player_stats.health_depleted.connect(_on_player_defeated)
@@ -210,6 +211,10 @@ func _restore_player_from_defeat():
 	camera_rig.set_gameplay_input_enabled(true)
 	game_environment.restore_debug_panel_input()
 	game_session.resume_saving()
+
+func _on_melee_outcome_committed(outcome: MeleeOutcome):
+	if outcome.contact.target_runtime_id == MeleeCombatCoordinator.PLAYER_RUNTIME_ID:
+		hud.play_player_hit()
 
 func _on_generation_progress(stage: String, percent: float, details: String):
 	loading_progress.emit(stage, percent, details)
