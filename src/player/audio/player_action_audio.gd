@@ -3,6 +3,7 @@ class_name PlayerActionAudio
 
 @onready var _clunk_player: AudioStreamPlayer = $ClunkPlayer
 @onready var _creature_hit_player: AudioStreamPlayer = $CreatureHitPlayer
+@onready var _player_hit_player: AudioStreamPlayer = $PlayerHitPlayer
 @onready var _equip_player: AudioStreamPlayer = $EquipPlayer
 
 var _interactor: PlayerInteractor
@@ -21,8 +22,12 @@ var _creature_hit_streams: Array[AudioStream] = [
 	preload("res://assets/audio/combat/impacts/creature/Stab_Knife_01.wav"),
 	preload("res://assets/audio/combat/impacts/creature/Stab_Knife_02.wav"),
 ]
+var _player_hit_streams: Array[AudioStream] = [
+	preload("res://assets/audio/combat/impacts/player/player_hit.wav"),
+]
 var _last_clunk_idx: int = -1
 var _last_creature_hit_idx: int = -1
+var _last_player_hit_idx: int = -1
 var _last_equip_indices: Dictionary = {}
 
 
@@ -54,9 +59,12 @@ func _on_melee_terrain_hit(_pos: Vector3i):
 
 
 func _on_melee_outcome_committed(outcome: MeleeOutcome):
-	if outcome.contact.source_runtime_id != MeleeCombatCoordinator.PLAYER_RUNTIME_ID:
+	var contact := outcome.contact
+	if contact.source_runtime_id == MeleeCombatCoordinator.PLAYER_RUNTIME_ID:
+		_last_creature_hit_idx = _play_random(_creature_hit_player, _creature_hit_streams, _last_creature_hit_idx, 0.94, 1.06)
 		return
-	_last_creature_hit_idx = _play_random(_creature_hit_player, _creature_hit_streams, _last_creature_hit_idx, 0.94, 1.06)
+	if contact.target_runtime_id == MeleeCombatCoordinator.PLAYER_RUNTIME_ID:
+		_last_player_hit_idx = _play_random(_player_hit_player, _player_hit_streams, _last_player_hit_idx, 0.96, 1.04)
 
 
 func _on_inventory_changed():
@@ -124,9 +132,11 @@ func _exit_tree():
 	_combat = null
 	_release_player(_clunk_player)
 	_release_player(_creature_hit_player)
+	_release_player(_player_hit_player)
 	_release_player(_equip_player)
 	_clunk_streams.clear()
 	_creature_hit_streams.clear()
+	_player_hit_streams.clear()
 	_last_equip_indices.clear()
 
 

@@ -34,18 +34,22 @@ func _run():
 	_expect(action_audio != null, "ActionAudio node missing")
 	var clunk = action_audio.get_node_or_null("ClunkPlayer") as AudioStreamPlayer
 	var creature_hit = action_audio.get_node_or_null("CreatureHitPlayer") as AudioStreamPlayer
+	var player_hit = action_audio.get_node_or_null("PlayerHitPlayer") as AudioStreamPlayer
 	var equip = action_audio.get_node_or_null("EquipPlayer") as AudioStreamPlayer
 	_expect(clunk != null, "ClunkPlayer missing")
 	_expect(action_audio.get_node_or_null("SwingPlayer") == null, "SwingPlayer still present")
 	_expect(creature_hit != null, "CreatureHitPlayer missing")
+	_expect(player_hit != null, "PlayerHitPlayer missing")
 	_expect(equip != null, "EquipPlayer missing")
 	_expect(action_audio.get_node_or_null("DrawPlayer") == null, "legacy DrawPlayer still present")
 	_expect(clunk.bus == &"SFX", "clunk bus not SFX is %s" % clunk.bus)
 	_expect(creature_hit.bus == &"SFX", "creature hit bus not SFX is %s" % creature_hit.bus)
+	_expect(player_hit.bus == &"SFX", "player hit bus not SFX is %s" % player_hit.bus)
 	_expect(equip.bus == &"SFX", "equip bus not SFX is %s" % equip.bus)
 	_expect(action_audio._clunk_streams.size() == 4, "clunk streams expected 4 got %d" % action_audio._clunk_streams.size())
 	_expect(action_audio._creature_hit_streams.size() == 3, "creature hit streams expected 3 got %d" % action_audio._creature_hit_streams.size())
-	for stream in action_audio._clunk_streams + action_audio._creature_hit_streams:
+	_expect(action_audio._player_hit_streams.size() == 1, "player hit streams expected 1 got %d" % action_audio._player_hit_streams.size())
+	for stream in action_audio._clunk_streams + action_audio._creature_hit_streams + action_audio._player_hit_streams:
 		_expect(stream != null, "action audio stream is null")
 
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
@@ -118,11 +122,14 @@ func _run():
 	await process_frame
 	_expect(action_audio._creature_hit_streams.has(creature_hit.stream), "confirmed player contact did not select a creature hit sound")
 	_expect(creature_hit.pitch_scale >= 0.94 and creature_hit.pitch_scale <= 1.06, "creature hit pitch out of range %f" % creature_hit.pitch_scale)
+	_expect(player_hit.stream == null, "outgoing player contact played the incoming player hit sound")
 	creature_hit.stop()
 	creature_hit.stream = null
 	var entity_contact := MeleeContact.new(1, &"zombie", 0, &"player", &"zombie_melee", Vector3.ONE, Vector3.LEFT)
 	combat.melee_outcome_committed.emit(MeleeOutcome.new(entity_contact, &"", 1.0, false))
 	_expect(creature_hit.stream == null, "non-player contact played the player's creature hit sound")
+	_expect(action_audio._player_hit_streams.has(player_hit.stream), "confirmed enemy contact did not select a player hit sound")
+	_expect(player_hit.pitch_scale >= 0.96 and player_hit.pitch_scale <= 1.04, "player hit pitch out of range %f" % player_hit.pitch_scale)
 
 	_expect(inventory.select_slot(3), "sword selection failed")
 	_expect(sword_equip_profile.streams.has(equip.stream), "selecting the sword did not play a draw sound")
