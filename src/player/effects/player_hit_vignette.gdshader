@@ -9,9 +9,9 @@ void fragment() {
 	float angle = atan(vignette_uv.y, vignette_uv.x);
 	float irregularity = sin(angle * 5.0 + 0.7) * 0.018 + sin(angle * 9.0 - 1.2) * 0.011;
 	float radius = length(vignette_uv);
-	float inner_edge = 0.205 + irregularity;
-	float body = smoothstep(inner_edge, inner_edge + 0.235, radius);
-	float outline = smoothstep(inner_edge, inner_edge + 0.055, radius) * (1.0 - smoothstep(inner_edge + 0.16, inner_edge + 0.29, radius));
+	float inner_edge = 0.3 + irregularity;
+	float body = smoothstep(inner_edge, inner_edge + 0.18, radius);
+	float outline = smoothstep(inner_edge, inner_edge + 0.05, radius) * (1.0 - smoothstep(inner_edge + 0.14, inner_edge + 0.24, radius));
 	float alpha = (body * 0.31 + outline * 0.15) * intensity;
 	COLOR = vec4(hit_color.rgb, alpha * hit_color.a);
 }
