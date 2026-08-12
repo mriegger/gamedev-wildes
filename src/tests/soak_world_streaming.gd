@@ -1101,7 +1101,13 @@ func _verify_dead_window_close_save() -> bool:
 	var close_game := packed.instantiate() as Game
 	var settings := GameSettings.new()
 	settings.torch_shadow_count = 1
-	close_game.configure_session(_test_close_save_slot_id, _make_saved_world(), settings)
+	var defeated_save := _make_saved_world()
+	defeated_save["player_stats"] = {
+		"level": 1,
+		"experience": 0,
+		"current_hp": 0.0,
+	}
+	close_game.configure_session(_test_close_save_slot_id, defeated_save, settings)
 	var close_ready: Array[bool] = [false]
 	close_game.session_ready.connect(func(): close_ready[0] = true)
 	root.add_child(close_game)
@@ -1113,6 +1119,20 @@ func _verify_dead_window_close_save() -> bool:
 			return false
 		await process_frame
 	var inventory_before := close_game.inventory_model.to_dict()
+	var expected_spawn := close_game.world.voxel_model.get_spawn_position() + Vector3(0.0, 0.1, 0.0)
+	if close_game.player_stats.is_dead() or close_game.player.is_defeated() or close_game.game_session.is_saving_suspended() or close_game._death_screen != null:
+		close_game.queue_free()
+		_fail("zero-HP save recovery entered the defeated runtime state")
+		return false
+	if not close_game.player.global_position.is_equal_approx(expected_spawn) or not close_game.camera_rig.global_position.is_equal_approx(expected_spawn):
+		close_game.queue_free()
+		_fail("zero-HP save recovery did not place the player and camera at spawn")
+		return false
+	var recovered_save := SaveManager.load_slot(_test_close_save_slot_id)
+	if not _saved_state_is_living_spawn(recovered_save, expected_spawn, close_game.player_stats.get_value(&"hp"), inventory_before, close_game.item_catalog):
+		close_game.queue_free()
+		_fail("zero-HP save recovery did not immediately persist a living spawn state")
+		return false
 	close_game.player.global_position += Vector3(-6.0, 4.0, 5.0)
 	if not close_game.player_stats.set_current_hp(0.0):
 		close_game.queue_free()
@@ -1123,7 +1143,6 @@ func _verify_dead_window_close_save() -> bool:
 		_fail("window-close setup did not enter suspended defeat")
 		return false
 	close_game._notification(close_game.NOTIFICATION_WM_CLOSE_REQUEST)
-	var expected_spawn := close_game.world.voxel_model.get_spawn_position() + Vector3(0.0, 0.1, 0.0)
 	if close_game.player.is_defeated() or close_game.game_session.is_saving_suspended():
 		close_game.queue_free()
 		_fail("window close did not normalize defeated save state")

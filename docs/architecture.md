@@ -81,7 +81,8 @@ system.
 zero HP blocks manual, periodic, and edit-debounce writes while session playtime continues
 accumulating. Respawn, Main Menu, and window close restore a living player at world spawn before
 saving resumes; exit paths then use the normal final-save and shutdown flow so zero HP is never
-persisted.
+persisted. Loading a historical zero-HP snapshot restores full health at world spawn before gameplay
+begins and immediately replaces the stored snapshot with that living state.
 
 Entity populations are transient and bounded to six per species and twelve total. Spawning makes
 four attempts every two seconds in an 18–36 block annulus. Voxel A* has fixed radius, node, and

@@ -44,6 +44,7 @@ var animation_tuning_panel: AnimationTuningPanel = null
 var player_stats_debug_panel: PlayerStatsDebugPanel = null
 var _save_status_timer: float = 0.0
 var _session_active: bool = false
+var _recovered_defeated_save: bool = false
 
 func configure_session(slot_id: int, save_data: Dictionary, p_settings: GameSettings):
 	_slot_id = slot_id
@@ -84,6 +85,9 @@ func _ready():
 	_setup_gameplay()
 	game_session.save_status_changed.connect(_show_save_status)
 	game_session.setup(_slot_id, _save_data, world, player, inventory_model, game_environment)
+	if _recovered_defeated_save and _slot_id != -1 and not game_session.save("defeated_save_recovery"):
+		push_error("[Game] Failed to persist recovered player state")
+	_recovered_defeated_save = false
 	_session_active = true
 	_refresh_save_label()
 	set_physics_process(true)
@@ -104,8 +108,19 @@ func _restore_inventory():
 
 func _restore_player_stats():
 	var saved_stats = _save_data.get("player_stats", null)
-	if saved_stats is Dictionary and not player_stats.restore_progression(saved_stats):
+	if not saved_stats is Dictionary:
+		return
+	if not player_stats.restore_progression(saved_stats):
 		push_error("[Game] Saved player stats are invalid; using base progression")
+		return
+	if not player_stats.is_dead():
+		return
+	var health_restored := player_stats.set_current_hp(player_stats.get_value(&"hp"))
+	assert(health_restored)
+	_recovered_defeated_save = true
+	_world_state.player_position = Vector3.ZERO
+	_save_data["player_position"] = null
+	_save_data["player_stats"] = player_stats.snapshot_progression()
 
 func _setup_gameplay():
 	camera_rig.setup(player, input_buffer)
