@@ -15,6 +15,14 @@ const MAX_TOTAL_ACTIVE: int = 12
 const MAX_RETIRING_VISUALS: int = 12
 const MAX_NAVIGATION_SEARCHES_PER_TICK: int = 1
 
+class Retirement:
+	var actor: EntityActor
+	var sequence: int
+
+	func _init(p_actor: EntityActor, p_sequence: int):
+		actor = p_actor
+		sequence = p_sequence
+
 var _catalog: EntityCatalog
 var _voxel_world: VoxelWorld
 var _position_ready: Callable
@@ -30,6 +38,7 @@ var _navigation_search_budget: NavigationSearchBudget = NavigationSearchBudget.n
 var _actor_tick_start_index: int = 0
 var _prepared_definition_cursor: int = 0
 var _preparation_needed: bool = false
+var _next_retirement_sequence: int = 0
 
 func setup(p_catalog: EntityCatalog, p_voxel_world: VoxelWorld, world_seed: int, p_position_ready: Callable):
 	assert(p_catalog != null and p_catalog.validate())
@@ -42,6 +51,7 @@ func setup(p_catalog: EntityCatalog, p_voxel_world: VoxelWorld, world_seed: int,
 	_spawn_elapsed = 0.0
 	_actor_tick_start_index = 0
 	_prepared_definition_cursor = 0
+	_next_retirement_sequence = 0
 	_spatial_index.clear()
 	_stats_by_runtime_id.clear()
 	_clear_prepared_actors()
@@ -237,29 +247,38 @@ func _remove_active_actor(runtime_id: int) -> EntityActor:
 
 func _retain_retiring_actor(runtime_id: int, actor: EntityActor):
 	_make_retiring_capacity()
-	_retiring[runtime_id] = actor
+	_retiring[runtime_id] = Retirement.new(actor, _next_retirement_sequence)
+	_next_retirement_sequence += 1
 
 func _make_retiring_capacity():
 	if _retiring.size() < MAX_RETIRING_VISUALS:
 		return
-	var runtime_ids: Array = _retiring.keys()
-	runtime_ids.sort()
-	_finish_retiring(runtime_ids[0])
+	var oldest_runtime_id: int = -1
+	var oldest_sequence: int = -1
+	for runtime_id in _retiring:
+		var retirement := _retiring[runtime_id] as Retirement
+		if oldest_runtime_id == -1 or retirement.sequence < oldest_sequence:
+			oldest_runtime_id = runtime_id
+			oldest_sequence = retirement.sequence
+	assert(oldest_runtime_id >= 0)
+	_finish_retiring(oldest_runtime_id)
 
 func _advance_retiring(delta: float):
 	var completed_ids: Array[int] = []
 	var runtime_ids: Array = _retiring.keys()
 	runtime_ids.sort()
 	for runtime_id in runtime_ids:
-		var actor := _retiring[runtime_id] as EntityActor
+		var retirement := _retiring[runtime_id] as Retirement
+		var actor := retirement.actor
 		if not is_instance_valid(actor) or actor.advance_retirement(delta):
 			completed_ids.append(runtime_id)
 	for runtime_id in completed_ids:
 		_finish_retiring(runtime_id)
 
 func _finish_retiring(runtime_id: int):
-	var actor := _retiring.get(runtime_id) as EntityActor
+	var retirement := _retiring.get(runtime_id) as Retirement
 	_retiring.erase(runtime_id)
+	var actor := retirement.actor if retirement != null else null
 	if is_instance_valid(actor):
 		actor.queue_free()
 
@@ -340,9 +359,10 @@ func shutdown():
 		var actor := _active[runtime_id] as EntityActor
 		if is_instance_valid(actor):
 			actor.queue_free()
-	for actor in _retiring.values():
+	for value in _retiring.values():
+		var actor := (value as Retirement).actor
 		if is_instance_valid(actor):
-			(actor as EntityActor).queue_free()
+			actor.queue_free()
 	_active.clear()
 	_stats_by_runtime_id.clear()
 	_retiring.clear()
@@ -353,3 +373,4 @@ func shutdown():
 	_position_ready = Callable()
 	_actor_tick_start_index = 0
 	_preparation_needed = false
+	_next_retirement_sequence = 0

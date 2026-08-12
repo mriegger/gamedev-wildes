@@ -46,7 +46,7 @@ damage removes stats, active state, targeting, and spatial entries together. Let
 plays the species-owned death pose, then starts an actor-owned one-shot smoke poof and model fade
 together; the scene is freed only after both complete. Ordinary distance and streaming retirement
 uses only the fade. The retiring-visual cap bounds actors, fades, and their child particle effects
-to twelve concurrent presentations.
+to twelve concurrent presentations and evicts the earliest retained presentation first.
 
 Stat definitions validate every declared base value as finite and nonnegative. `ActorStats` owns
 current HP, validates every removable subset of prospective modifiers before committing them, and

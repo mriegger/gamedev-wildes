@@ -274,11 +274,12 @@ func _test_retiring_bound_and_population_independence(catalog: EntityCatalog, wo
 	_expect(coordinator.get_active_count() == EntityCoordinator.MAX_TOTAL_ACTIVE, "retiring-cap setup did not reach twelve active entities")
 	var actors := coordinator.get_active_actors()
 	actors.sort_custom(func(left: EntityActor, right: EntityActor) -> bool: return left.runtime_id < right.runtime_id)
-	var oldest_actor := actors[0]
-	var oldest_runtime_id := oldest_actor.runtime_id
-	for index in range(actors.size()):
-		actors[index].global_position = player_position + Vector3(EntityCoordinator.DESPAWN_DISTANCE + 1.0 + float(index), 0.0, 0.0)
-	coordinator.tick(0.0, player_position, 20.0)
+	var first_retired_actor := actors[1]
+	var first_retired_runtime_id := first_retired_actor.runtime_id
+	var newest_at_capacity := actors[0]
+	for index in range(1, actors.size()):
+		coordinator._despawn(actors[index].runtime_id)
+	coordinator._despawn(newest_at_capacity.runtime_id)
 	_expect(coordinator.get_active_count() == 0, "mass retirement retained active entities")
 	_expect(coordinator._retiring.size() == EntityCoordinator.MAX_RETIRING_VISUALS, "mass retirement did not fill the visual bound")
 	coordinator._spawn_elapsed = EntityCoordinator.SPAWN_INTERVAL_SECONDS - 0.1
@@ -288,10 +289,11 @@ func _test_retiring_bound_and_population_independence(catalog: EntityCatalog, wo
 	replacement.global_position = player_position + Vector3(EntityCoordinator.DESPAWN_DISTANCE + 1.0, 0.0, 0.0)
 	coordinator.tick(0.0, player_position, 20.0)
 	_expect(coordinator._retiring.size() == EntityCoordinator.MAX_RETIRING_VISUALS, "thirteenth retirement exceeded the visual bound")
-	_expect(not coordinator._retiring.has(oldest_runtime_id), "retiring bound did not evict the oldest visual")
+	_expect(not coordinator._retiring.has(first_retired_runtime_id), "retiring bound did not evict the earliest retained visual")
+	_expect(coordinator._retiring.has(newest_at_capacity.runtime_id), "retiring bound evicted by runtime ID instead of retirement age")
 	_expect(coordinator._retiring.has(replacement.runtime_id), "retiring bound dropped the newest visual")
 	await process_frame
-	_expect(not is_instance_valid(oldest_actor), "evicted retiring visual was not freed")
+	_expect(not is_instance_valid(first_retired_actor), "evicted retiring visual was not freed")
 	coordinator.shutdown()
 	coordinator.queue_free()
 	await process_frame
