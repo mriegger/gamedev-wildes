@@ -37,6 +37,9 @@ func validate(source: String) -> bool:
 static func is_valid_sweep_degrees(value: float) -> bool:
 	return is_finite(value) and value >= 0.0 and value <= 360.0
 
+func requires_planar_aim() -> bool:
+	return sweep_degrees > 0.0 and sweep_degrees < 360.0
+
 func calculate_damage(attacker_strength: float, target_defense: float) -> float:
 	assert(is_finite(attacker_strength) and attacker_strength >= 0.0)
 	assert(is_finite(target_defense) and target_defense >= 0.0)

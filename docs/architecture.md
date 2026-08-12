@@ -57,7 +57,8 @@ consumes that transition for entity retirement, while `Game` consumes the player
 existence, and contact timing before changing health. `MeleeAttackProfile` owns base damage and an
 optional sweep angle. Player swings lock sorted spatial-index candidates from the cursor ray at
 attack start, then independently revalidate every locked target at contact; a zero-degree sweep
-retains exact single-target ray selection. The profile calculates
+retains exact single-target ray selection, while a full-circle sweep is independent of planar cursor
+aim. The profile calculates
 `max(1, base damage + attacker strength - target defense)`. Each successful physical hit applies
 that damage through the target state owner, then produces an immutable `MeleeContact` with stable
 actor and attack IDs, world contact position, and normalized direction. Rejected contacts change

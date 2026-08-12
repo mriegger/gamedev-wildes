@@ -45,9 +45,11 @@ func acquire_player_targets(ray_origin: Vector3, ray_direction: Vector3, profile
 	var reach_extent := Vector3.ONE * (profile.reach + GEOMETRY_EPSILON)
 	var candidate_ids := _entity_coordinator.get_active_runtime_ids_overlapping(AABB(player_origin - reach_extent, reach_extent * 2.0))
 	if profile.sweep_degrees > 0.0:
-		var planar_aim := _get_planar_aim(ray_origin, direction, player_origin)
-		if planar_aim.is_zero_approx():
-			return result
+		var planar_aim := Vector3.ZERO
+		if profile.requires_planar_aim():
+			planar_aim = _get_planar_aim(ray_origin, direction, player_origin)
+			if planar_aim.is_zero_approx():
+				return result
 		for runtime_id in candidate_ids:
 			var actor := _entity_coordinator.get_actor(runtime_id)
 			if actor != null and _get_valid_player_hit(actor, ray_origin, direction, planar_aim, profile) is Vector3:
@@ -86,7 +88,7 @@ func try_commit_player_contacts(
 	var direction := locked_ray_direction.normalized()
 	var player_origin := _get_player_center()
 	var planar_aim := Vector3.ZERO
-	if profile.sweep_degrees > 0.0:
+	if profile.requires_planar_aim():
 		planar_aim = _get_planar_aim(locked_ray_origin, direction, player_origin)
 		if planar_aim.is_zero_approx():
 			return false
@@ -213,9 +215,10 @@ func _get_valid_player_hit(
 		planar_target.y = 0.0
 		if planar_target.is_zero_approx():
 			return null
-		var minimum_dot := cos(deg_to_rad(profile.sweep_degrees * 0.5))
-		if planar_aim.dot(planar_target.normalized()) + GEOMETRY_EPSILON < minimum_dot:
-			return null
+		if profile.requires_planar_aim():
+			var minimum_dot := cos(deg_to_rad(profile.sweep_degrees * 0.5))
+			if planar_aim.dot(planar_target.normalized()) + GEOMETRY_EPSILON < minimum_dot:
+				return null
 		var target_direction := target_center - player_origin
 		if target_direction.is_zero_approx():
 			return null

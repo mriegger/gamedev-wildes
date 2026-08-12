@@ -142,6 +142,10 @@ func _run() -> void:
 	_expect(not MeleeAttackProfile.is_valid_sweep_degrees(-0.1), "negative sweep validation was accepted")
 	_expect(not MeleeAttackProfile.is_valid_sweep_degrees(360.1), "over-full-circle sweep validation was accepted")
 	_expect(not MeleeAttackProfile.is_valid_sweep_degrees(INF), "non-finite sweep validation was accepted")
+	var full_circle_profile := sword_profile.duplicate(true) as MeleeAttackProfile
+	full_circle_profile.sweep_degrees = 360.0
+	_expect(not full_circle_profile.requires_planar_aim(), "full-circle sweep required a planar aim")
+	_expect(sword_profile.requires_planar_aim(), "directional sword sweep did not require a planar aim")
 	_expect(is_equal_approx(sword_profile.calculate_damage(10.0, 4.0), 16.0), "sword damage formula is incorrect")
 	_expect(is_equal_approx(zombie_profile.calculate_damage(5.0, 4.0), 16.0), "zombie damage formula is incorrect")
 	_expect(is_equal_approx(sword_profile.calculate_damage(0.0, 100.0), 1.0), "damage did not clamp to its minimum")
@@ -396,6 +400,7 @@ func _run() -> void:
 	await _test_sheep_damage(world, sword_profile)
 	await _test_zero_degree_compatibility(world, sword_profile)
 	await _test_sweep_geometry(world, sword_profile)
+	await _test_full_circle_directionless(world, sword_profile)
 	await _test_overlapping_and_vertical_geometry(world, sword_profile)
 	await _test_sweep_reach_and_locking(world, sword_profile)
 	await _test_independent_contact_revalidation(world, sword_profile)
@@ -534,6 +539,37 @@ func _test_sweep_geometry(world: VoxelWorld, sword_profile: MeleeAttackProfile) 
 	_expect(combat.acquire_player_targets(player_center, Vector3.ZERO, sword_profile).is_empty(), "zero cursor ray produced sweep targets")
 	_expect(actors[3].runtime_id not in forward_ids and actors[4].runtime_id not in forward_ids, "sweep accepted a target beyond a ±60-degree boundary")
 	_expect(actors[5].runtime_id not in forward_ids, "sweep accepted a target behind the player")
+	await _cleanup(combat, coordinator, player, fixture["camera"] as Camera3D)
+
+func _test_full_circle_directionless(world: VoxelWorld, sword_profile: MeleeAttackProfile) -> void:
+	var fixture := _make_combat_fixture(world, 4, 0, 8018)
+	var coordinator := fixture["coordinator"] as EntityCoordinator
+	var combat := fixture["combat"] as MeleeCombatCoordinator
+	var player := fixture["player"] as PlayerMotor
+	var actors := _get_sorted_actors(coordinator)
+	_expect(actors.size() == 4, "full-circle fixture did not spawn four zombies")
+	if actors.size() != 4:
+		await _cleanup(combat, coordinator, player, fixture["camera"] as Camera3D)
+		return
+	var profile := sword_profile.duplicate(true) as MeleeAttackProfile
+	profile.id = &"full_circle_test"
+	profile.sweep_degrees = 360.0
+	_expect(profile.validate("full_circle_test"), "full-circle profile was invalid")
+	var angles: Array[float] = [0.0, 90.0, 180.0, -90.0]
+	for index in range(actors.size()):
+		_place_at_angle(actors[index], player.global_position, angles[index], 1.5)
+	coordinator.tick(0.0, player.global_position, 20.0)
+	var player_center := player.global_position + Vector3.UP * (player.player_height * 0.5)
+	var ray_origin := player_center + Vector3.UP * 5.0
+	var ray_direction := Vector3.DOWN
+	var locked_ids := combat.acquire_player_targets(ray_origin, ray_direction, profile)
+	_expect(locked_ids == _active_ids(actors), "vertical cursor ray did not lock every full-circle target")
+	var contact_count_before := _contacts.size()
+	_expect(combat.try_commit_player_contacts(locked_ids, ray_origin, ray_direction, profile), "directionless full-circle contacts did not commit")
+	_expect(_contacts.size() == contact_count_before + actors.size(), "full-circle sweep did not emit one contact per target")
+	for index in range(actors.size()):
+		_expect(_contacts[contact_count_before + index].target_runtime_id == actors[index].runtime_id, "full-circle contacts were not emitted in runtime-ID order")
+		_expect(is_equal_approx(coordinator.get_current_hp(actors[index].runtime_id), 64.0), "full-circle target took incorrect damage")
 	await _cleanup(combat, coordinator, player, fixture["camera"] as Camera3D)
 
 func _test_overlapping_and_vertical_geometry(world: VoxelWorld, sword_profile: MeleeAttackProfile) -> void:
