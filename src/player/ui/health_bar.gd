@@ -6,7 +6,6 @@ const BAR_HEIGHT: float = 16.0
 const EDGE_MARGIN: float = 24.0
 
 @onready var progress_bar: ProgressBar = $ProgressBar as ProgressBar
-@onready var value_label: Label = $ProgressBar/ValueLabel as Label
 
 var _stats: ActorStats
 var _right_inset: float = 0.0
@@ -44,7 +43,7 @@ func _refresh():
 	var maximum_hp := _stats.get_value(&"hp")
 	progress_bar.max_value = maximum_hp
 	progress_bar.value = _stats.current_hp
-	value_label.text = "HP %s / %s" % [_format_value(_stats.current_hp), _format_value(maximum_hp)]
+	progress_bar.tooltip_text = "HP %s / %s" % [_format_value(_stats.current_hp), _format_value(maximum_hp)]
 
 func _format_value(value: float) -> String:
 	if is_equal_approx(value, roundf(value)):
