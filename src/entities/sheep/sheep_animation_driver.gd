@@ -5,7 +5,9 @@ const IDLE: StringName = &"Idle"
 const WALK: StringName = &"Walk"
 const FLEE: StringName = &"Flee"
 const HIT: StringName = &"Hit"
+const DEATH: StringName = &"Death"
 const HIT_SECONDS: float = 0.2
+const DEATH_SECONDS: float = 0.6
 const WALK_CYCLE_SECONDS: float = 0.64
 const FLEE_CYCLE_SECONDS: float = 0.34
 
@@ -25,6 +27,8 @@ var _elapsed: float = 0.0
 var _gait_phase: float = 0.0
 var _hit_elapsed: float = HIT_SECONDS
 var _hit_direction: Vector3 = Vector3.BACK
+var _dying: bool = false
+var _death_elapsed: float = 0.0
 var _previous_yaw: float = 0.0
 var _rig_origin_position: Vector3
 var _rig_origin_rotation: Vector3
@@ -70,13 +74,34 @@ func set_fleeing(active: bool):
 	_fleeing = active
 
 func play_hit(local_hit_direction: Vector3 = Vector3.BACK):
+	if _dying:
+		return
 	_hit_direction = local_hit_direction.normalized() if not local_hit_direction.is_zero_approx() else Vector3.BACK
 	_hit_elapsed = 0.0
+
+func play_death():
+	_dying = true
+	_death_elapsed = 0.0
+	_fleeing = false
+	_hit_elapsed = HIT_SECONDS
+	_current_state = DEATH
+
+func is_death_complete() -> bool:
+	return _dying and _death_elapsed >= DEATH_SECONDS
+
+func get_death_time_remaining() -> float:
+	assert(_dying)
+	return maxf(DEATH_SECONDS - _death_elapsed, 0.0)
 
 func advance(delta: float):
 	assert(actor != null and _visual != null)
 	_elapsed += delta
 	_reset_pose()
+	if _dying:
+		_death_elapsed = minf(_death_elapsed + delta, DEATH_SECONDS)
+		_apply_death_pose()
+		_current_state = DEATH
+		return
 	var world_velocity: Vector3 = actor.get(&"velocity")
 	var model_basis := model_root.global_transform.basis.orthonormalized()
 	var local_velocity := model_basis.inverse() * world_velocity
@@ -162,6 +187,14 @@ func _apply_hit_pose():
 		-deg_to_rad(12.0) * _hit_direction.x * weight
 	)
 	_body_pivot.scale = _body_origin_scale * Vector3(1.0 + 0.07 * weight, 1.0 - 0.1 * weight, 1.0 + 0.07 * weight)
+
+func _apply_death_pose():
+	var progress := smoothstep(0.0, 1.0, _death_elapsed / DEATH_SECONDS)
+	_rig_root.position = _rig_origin_position + Vector3(0.12 * progress, 0.38 * progress, 0.0)
+	_rig_root.rotation = _rig_origin_rotation + Vector3(0.0, 0.0, deg_to_rad(90.0) * progress)
+	for index in range(_leg_pivots.size()):
+		var side := -1.0 if index in [0, 2] else 1.0
+		_leg_pivots[index].rotation.x = _leg_origins[index].x + deg_to_rad(22.0) * side * progress
 
 func _select_state(planar_speed: float):
 	if _hit_elapsed < HIT_SECONDS:

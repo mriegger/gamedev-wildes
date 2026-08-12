@@ -115,7 +115,7 @@ func _try_spawn(definition: EntityDefinition, player_position: Vector3) -> bool:
 		_next_runtime_id += 1
 		_active[runtime_id] = actor
 		var stats := ActorStats.new(definition.stats_definition)
-		stats.health_depleted.connect(_despawn.bind(runtime_id))
+		stats.health_depleted.connect(_retire_defeated.bind(runtime_id))
 		_stats_by_runtime_id[runtime_id] = stats
 		actor.visible = true
 		actor.global_position = spawn_position
@@ -208,8 +208,22 @@ func _despawn_distant(player_position: Vector3):
 		_despawn(runtime_id)
 
 func _despawn(runtime_id: int):
-	if not _active.has(runtime_id):
+	var actor := _remove_active_actor(runtime_id)
+	if actor == null:
 		return
+	_retain_retiring_actor(runtime_id, actor)
+	actor.begin_despawn_fade()
+
+func _retire_defeated(runtime_id: int):
+	var actor := _remove_active_actor(runtime_id)
+	if actor == null:
+		return
+	_retain_retiring_actor(runtime_id, actor)
+	actor.begin_death_retirement()
+
+func _remove_active_actor(runtime_id: int) -> EntityActor:
+	if not _active.has(runtime_id):
+		return null
 	var actor := _active[runtime_id] as EntityActor
 	_active.erase(runtime_id)
 	_stats_by_runtime_id.erase(runtime_id)
@@ -218,9 +232,12 @@ func _despawn(runtime_id: int):
 	if is_instance_valid(actor):
 		if actor.melee_contact_reached.is_connected(_on_actor_melee_contact_reached):
 			actor.melee_contact_reached.disconnect(_on_actor_melee_contact_reached)
-		_make_retiring_capacity()
-		_retiring[runtime_id] = actor
-		actor.begin_despawn_fade()
+		return actor
+	return null
+
+func _retain_retiring_actor(runtime_id: int, actor: EntityActor):
+	_make_retiring_capacity()
+	_retiring[runtime_id] = actor
 
 func _make_retiring_capacity():
 	if _retiring.size() < MAX_RETIRING_VISUALS:
@@ -235,7 +252,7 @@ func _advance_retiring(delta: float):
 	runtime_ids.sort()
 	for runtime_id in runtime_ids:
 		var actor := _retiring[runtime_id] as EntityActor
-		if not is_instance_valid(actor) or actor.advance_visual_fade(delta):
+		if not is_instance_valid(actor) or actor.advance_retirement(delta):
 			completed_ids.append(runtime_id)
 	for runtime_id in completed_ids:
 		_finish_retiring(runtime_id)

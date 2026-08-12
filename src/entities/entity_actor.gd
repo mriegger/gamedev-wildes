@@ -16,6 +16,8 @@ var on_ground: bool = true
 var max_speed: float = 1.0
 var animation_driver: EntityAnimationDriver
 var visual_fader: EntityVisualFader
+var _death_retirement: bool = false
+var _death_fade_started: bool = false
 
 func _ready():
 	set_process(false)
@@ -63,8 +65,33 @@ func advance_visual_fade(delta: float) -> bool:
 
 func begin_despawn_fade():
 	assert(visual_fader != null)
+	_death_retirement = false
+	_death_fade_started = true
 	set_process(false)
 	visual_fader.begin_fade_out()
+
+func begin_death_retirement():
+	assert(animation_driver != null and visual_fader != null)
+	velocity = Vector3.ZERO
+	_death_retirement = true
+	_death_fade_started = false
+	set_process(false)
+	animation_driver.play_death()
+
+func advance_retirement(delta: float) -> bool:
+	assert(is_finite(delta) and delta >= 0.0)
+	assert(animation_driver != null and visual_fader != null)
+	if _death_retirement and not _death_fade_started:
+		var death_delta := minf(delta, animation_driver.get_death_time_remaining())
+		animation_driver.advance(death_delta)
+		delta -= death_delta
+		if not animation_driver.is_death_complete():
+			return false
+		_death_fade_started = true
+		visual_fader.begin_fade_out()
+		if is_zero_approx(delta):
+			return false
+	return visual_fader.advance(delta)
 
 func get_visual_opacity() -> float:
 	assert(visual_fader != null)

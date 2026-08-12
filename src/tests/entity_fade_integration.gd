@@ -133,6 +133,64 @@ func _test_instance_isolation(catalog: EntityCatalog, world: VoxelWorld) -> void
 	first.free()
 	second.free()
 
+func _test_species_death_retirement(catalog: EntityCatalog, world: VoxelWorld) -> void:
+	var definition_ids: Array[StringName] = [&"zombie", &"sheep"]
+	for index in range(definition_ids.size()):
+		var definition := catalog.get_definition(definition_ids[index])
+		var actor := definition.actor_scene.instantiate() as EntityActor
+		get_root().add_child(actor)
+		actor.global_position = Vector3(float(index) + 0.5, FEET_Y, 2.5)
+		actor.setup(index + 20, definition, world, 200 + index)
+		actor.advance_visual_fade(actor.visual_fader.fade_in_seconds)
+		actor.velocity = Vector3(1.0, 2.0, 3.0)
+		actor.play_hit(Vector3.RIGHT)
+		var death_seconds := SheepAnimationDriver.DEATH_SECONDS
+		if actor is ZombieActor:
+			var zombie := actor as ZombieActor
+			zombie._arm_melee_contact((definition.behavior as ZombieBehaviorDefinition).melee_profile)
+			death_seconds = ZombieAnimationDriver.DEATH_SECONDS
+		actor.begin_death_retirement()
+		_expect(not actor.is_processing(), "%s kept normal animation processing after lethal retirement" % definition.id)
+		_expect(actor.velocity.is_zero_approx(), "%s retained movement velocity after lethal retirement" % definition.id)
+		var death_state := (actor.animation_driver as ZombieAnimationDriver).get_current_state() if actor is ZombieActor else (actor.animation_driver as SheepAnimationDriver).get_current_state()
+		_expect(death_state == &"Death", "%s did not enter its death state" % definition.id)
+		_expect(not actor.animation_driver.is_death_complete(), "%s death pose completed at retirement start" % definition.id)
+		_expect(is_equal_approx(actor.get_visual_opacity(), 1.0), "%s death pose began with an opacity change" % definition.id)
+		if actor is ZombieActor:
+			_expect(not (actor as ZombieActor)._melee_contact_pending, "zombie retained a pending attack after lethal retirement")
+		_expect(not actor.advance_retirement(death_seconds * 0.5), "%s retirement completed during its death pose" % definition.id)
+		_expect(not actor.animation_driver.is_death_complete(), "%s death pose completed before its configured duration" % definition.id)
+		_expect(is_equal_approx(actor.get_visual_opacity(), 1.0), "%s faded before its death pose completed" % definition.id)
+		if actor is ZombieActor:
+			var zombie_animation := actor.animation_driver as ZombieAnimationDriver
+			_expect(absf(zombie_animation.animator.rotation.x - zombie_animation._visual_origin_rotation.x) > deg_to_rad(1.0), "zombie did not buckle into its fall pose")
+		else:
+			var sheep_animation := actor.animation_driver as SheepAnimationDriver
+			_expect(absf(sheep_animation._rig_root.rotation.z - sheep_animation._rig_origin_rotation.z) > deg_to_rad(1.0), "sheep did not rotate into its side-collapse pose")
+		actor.play_hit(Vector3.LEFT)
+		_expect(not actor.advance_retirement(death_seconds * 0.5), "%s retirement completed before fade-out" % definition.id)
+		_expect(actor.animation_driver.is_death_complete(), "%s death pose did not complete at its configured duration" % definition.id)
+		death_state = (actor.animation_driver as ZombieAnimationDriver).get_current_state() if actor is ZombieActor else (actor.animation_driver as SheepAnimationDriver).get_current_state()
+		_expect(death_state == &"Death", "%s hit reaction replaced its death pose" % definition.id)
+		var fade_out_seconds := actor.visual_fader.fade_out_seconds
+		_expect(not actor.advance_retirement(fade_out_seconds * 0.5), "%s fade completed before its configured duration" % definition.id)
+		_expect(is_equal_approx(actor.get_visual_opacity(), 0.5), "%s death fade midpoint was not smoothstep-balanced" % definition.id)
+		_expect(actor.advance_retirement(fade_out_seconds * 0.5), "%s death retirement did not complete" % definition.id)
+		actor.free()
+
+func _test_oversized_death_retirement_delta(catalog: EntityCatalog, world: VoxelWorld) -> void:
+	var definition := catalog.get_definition(&"zombie")
+	var actor := definition.actor_scene.instantiate() as EntityActor
+	get_root().add_child(actor)
+	actor.global_position = Vector3(0.5, FEET_Y, 3.5)
+	actor.setup(30, definition, world, 300)
+	actor.advance_visual_fade(actor.visual_fader.fade_in_seconds)
+	actor.begin_death_retirement()
+	var retirement_seconds := ZombieAnimationDriver.DEATH_SECONDS + actor.visual_fader.fade_out_seconds
+	_expect(actor.advance_retirement(retirement_seconds), "oversized death-retirement delta did not complete the lifecycle")
+	_expect(is_zero_approx(actor.get_visual_opacity()), "oversized death-retirement delta did not finish transparent")
+	actor.free()
+
 func _test_coordinator_retirement(catalog: EntityCatalog, world: VoxelWorld) -> void:
 	var coordinator := EntityCoordinator.new()
 	get_root().add_child(coordinator)
@@ -211,6 +269,8 @@ func _run() -> void:
 	var world := _make_world()
 	_test_species_visual_fades(catalog, world)
 	_test_instance_isolation(catalog, world)
+	_test_species_death_retirement(catalog, world)
+	_test_oversized_death_retirement_delta(catalog, world)
 	await _test_coordinator_retirement(catalog, world)
 	await _test_retiring_bound_and_population_independence(catalog, world)
 	var orphan_count := int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))

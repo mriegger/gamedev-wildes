@@ -18,3 +18,14 @@ func play_attack(_duration: float):
 
 func play_hit(_local_hit_direction: Vector3 = Vector3.BACK):
 	assert(false)
+
+func play_death():
+	assert(false)
+
+func is_death_complete() -> bool:
+	assert(false)
+	return false
+
+func get_death_time_remaining() -> float:
+	assert(false)
+	return 0.0

@@ -97,6 +97,12 @@ func _emit_melee_contact():
 	_melee_profile = null
 	melee_contact_reached.emit(runtime_id, profile)
 
+func begin_death_retirement():
+	_melee_contact_pending = false
+	_melee_profile = null
+	_melee_elapsed = 0.0
+	super.begin_death_retirement()
+
 func _get_path_velocity(delta: float, goal: Vector3, speed: float, navigation_search_budget: NavigationSearchBudget) -> Vector3:
 	var result := _path_follower.advance(delta, global_position, goal, speed, on_ground, navigation_search_budget)
 	if result.path_failed:

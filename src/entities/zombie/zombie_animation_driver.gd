@@ -6,7 +6,9 @@ const WALK: StringName = &"Walk"
 const CHASE: StringName = &"Chase"
 const ATTACK: StringName = &"Attack"
 const HIT: StringName = &"Hit"
+const DEATH: StringName = &"Death"
 const HIT_SECONDS: float = 0.22
+const DEATH_SECONDS: float = 0.65
 
 var animator: BlockyHumanoidAnimator
 var _animation_state: ActorAnimationState = ActorAnimationState.new()
@@ -18,6 +20,8 @@ var _attack_duration: float = 0.0
 var _attack_direction: int = 1
 var _hit_elapsed: float = HIT_SECONDS
 var _hit_direction: Vector3 = Vector3.BACK
+var _dying: bool = false
+var _death_elapsed: float = 0.0
 var _previous_yaw: float = 0.0
 var _visual_origin_position: Vector3
 var _visual_origin_rotation: Vector3
@@ -42,6 +46,8 @@ func set_chasing(active: bool):
 
 func play_attack(duration: float):
 	assert(duration > 0.0)
+	if _dying:
+		return
 	_attacking = true
 	_attack_elapsed = 0.0
 	_attack_duration = duration
@@ -50,6 +56,8 @@ func play_attack(duration: float):
 	animator.play_attack(duration, _attack_direction)
 
 func play_hit(local_hit_direction: Vector3 = Vector3.BACK):
+	if _dying:
+		return
 	_hit_direction = local_hit_direction.normalized() if not local_hit_direction.is_zero_approx() else Vector3.BACK
 	_hit_elapsed = 0.0
 	_attacking = false
@@ -57,9 +65,34 @@ func play_hit(local_hit_direction: Vector3 = Vector3.BACK):
 	_attack_duration = 0.0
 	animator.cancel_attack()
 
+func play_death():
+	_dying = true
+	_death_elapsed = 0.0
+	_chasing = false
+	_attacking = false
+	_attack_elapsed = 0.0
+	_attack_duration = 0.0
+	_hit_elapsed = HIT_SECONDS
+	_current_state = DEATH
+	animator.cancel_attack()
+
+func is_death_complete() -> bool:
+	return _dying and _death_elapsed >= DEATH_SECONDS
+
+func get_death_time_remaining() -> float:
+	assert(_dying)
+	return maxf(DEATH_SECONDS - _death_elapsed, 0.0)
+
 func advance(delta: float):
 	assert(actor != null and animator != null)
 	_reset_visual_transform()
+	if _dying:
+		_death_elapsed = minf(_death_elapsed + delta, DEATH_SECONDS)
+		_animation_state.set_motion(Vector3.ZERO, 0.0, false, true, 0.0, 0.0, false, Vector3.ZERO)
+		animator.advance_animation(delta)
+		_apply_death_pose()
+		_current_state = DEATH
+		return
 	var world_velocity: Vector3 = actor.get(&"velocity")
 	var model_basis := model_root.global_transform.basis.orthonormalized()
 	var local_velocity := model_basis.inverse() * world_velocity
@@ -109,6 +142,15 @@ func _apply_hit_pose():
 		-deg_to_rad(11.0) * _hit_direction.x * weight
 	)
 	animator.scale = _visual_origin_scale * Vector3(1.0 + 0.05 * weight, 1.0 - 0.08 * weight, 1.0 + 0.05 * weight)
+
+func _apply_death_pose():
+	var progress := smoothstep(0.0, 1.0, _death_elapsed / DEATH_SECONDS)
+	var buckle := smoothstep(0.0, 1.0, minf(progress / 0.45, 1.0))
+	var fall := smoothstep(0.0, 1.0, maxf((progress - 0.25) / 0.75, 0.0))
+	var buckle_only := buckle * (1.0 - fall)
+	animator.position = _visual_origin_position + Vector3(0.0, lerpf(-0.18, 0.12, fall) * buckle, 0.18 * fall)
+	animator.rotation = _visual_origin_rotation + Vector3(deg_to_rad(82.0) * fall, 0.0, deg_to_rad(7.0) * buckle_only)
+	animator.scale = _visual_origin_scale * Vector3(1.0 + 0.05 * buckle_only, 1.0 - 0.18 * buckle_only, 1.0 + 0.05 * buckle_only)
 
 func _select_state(planar_speed: float):
 	if _hit_elapsed < HIT_SECONDS:
