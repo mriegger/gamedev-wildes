@@ -3,20 +3,21 @@
 [ext_resource type="Script" path="res://crafting/crafting_recipe_definition.gd" id="1_recipe"]
 [ext_resource type="Script" path="res://crafting/crafting_ingredient.gd" id="2_ingredient"]
 [ext_resource type="Resource" path="res://items/definitions/copper_sword.tres" id="3_output"]
-[ext_resource type="Resource" path="res://items/definitions/stone_block.tres" id="4_stone"]
+[ext_resource type="Resource" path="res://items/definitions/copper.tres" id="4_copper"]
 [ext_resource type="Resource" path="res://items/definitions/log_block.tres" id="5_wood"]
 
-[sub_resource type="Resource" id="stone"]
+[sub_resource type="Resource" id="copper"]
 script = ExtResource("2_ingredient")
-item = ExtResource("4_stone")
-count = 4
+item = ExtResource("4_copper")
+count = 15
 
 [sub_resource type="Resource" id="wood"]
 script = ExtResource("2_ingredient")
 item = ExtResource("5_wood")
+count = 5
 
 [resource]
 script = ExtResource("1_recipe")
 id = &"copper_sword"
 output_item = ExtResource("3_output")
-ingredients = Array[ExtResource("2_ingredient")]([SubResource("stone"), SubResource("wood")])
+ingredients = Array[ExtResource("2_ingredient")]([SubResource("copper"), SubResource("wood")])

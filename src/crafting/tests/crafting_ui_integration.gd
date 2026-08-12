@@ -16,10 +16,10 @@ func _init() -> void:
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
 	_recipe_catalog = load("res://crafting/crafting_recipe_catalog.tres") as CraftingRecipeCatalog
 	_inventory = InventoryModel.new(item_catalog)
-	_inventory.slots[0] = InventoryStack.new(&"stone_block", 9)
+	_inventory.slots[0] = InventoryStack.new(&"copper", 20)
 	_inventory.slots[1] = InventoryStack.new(&"log_block", 4)
-	_inventory.slots[InventoryModel.HOTBAR_SIZE] = InventoryStack.new(&"stone_block", 1)
-	_inventory.slots[InventoryModel.HOTBAR_SIZE + 1] = InventoryStack.new(&"log_block", 1)
+	_inventory.slots[InventoryModel.HOTBAR_SIZE] = InventoryStack.new(&"copper", 5)
+	_inventory.slots[InventoryModel.HOTBAR_SIZE + 1] = InventoryStack.new(&"log_block", 6)
 	_stats = ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
 	_item_proficiency = ItemProficiency.new(item_catalog)
 	_inventory_stats = InventoryStatCoordinator.new()
@@ -85,20 +85,20 @@ func _process(_delta: float) -> bool:
 		_expect((_hud.crafting_panel.get_node("CraftingImpactTimer") as Timer).is_stopped(), "recipe selection did not stop crafting audio timer")
 		_expect(not (_hud.crafting_panel.get_node("CraftingImpactPlayer") as AudioStreamPlayer).playing, "recipe selection did not stop crafting audio")
 		_expect(not (_hud.crafting_panel.get_node("CraftingCompletePlayer") as AudioStreamPlayer).playing, "recipe cancellation played completion audio")
-		_expect(_inventory.get_inventory_item_count(&"stone_block") == 10, "recipe selection consumed stone")
-		_expect(_inventory.get_inventory_item_count(&"log_block") == 5, "recipe selection consumed wood")
+		_expect(_inventory.get_inventory_item_count(&"copper") == 25, "recipe selection consumed copper")
+		_expect(_inventory.get_inventory_item_count(&"log_block") == 10, "recipe selection consumed wood")
 		_hud.crafting_panel.select_recipe(&"copper_pickaxe")
 		_hud.crafting_panel.get_craft_button().pressed.emit()
 		_crafting.advance_time(2.0)
 		_phase = 5
 	elif _phase == 5 and _frame == 76:
 		_expect(_inventory.get_inventory_item_count(&"copper_pickaxe") == 1, "completed UI craft did not add output")
-		_expect(_inventory.get_inventory_item_count(&"stone_block") == 7, "completed UI craft consumed wrong stone count")
-		_expect(_inventory.get_inventory_item_count(&"log_block") == 3, "completed UI craft consumed wrong wood count")
+		_expect(_inventory.get_inventory_item_count(&"copper") == 15, "completed UI craft consumed wrong copper count")
+		_expect(_inventory.get_inventory_item_count(&"log_block") == 5, "completed UI craft consumed wrong wood count")
 		_expect((_hud.crafting_panel.get_node("CraftingImpactTimer") as Timer).is_stopped(), "completed craft did not stop crafting audio timer")
 		_expect(not (_hud.crafting_panel.get_node("CraftingImpactPlayer") as AudioStreamPlayer).playing, "completed craft did not stop crafting audio")
 		_expect((_hud.crafting_panel.get_node("CraftingCompletePlayer") as AudioStreamPlayer).playing, "completed craft did not play completion audio")
-		_hud.crafting_panel.select_recipe(&"copper_helmet")
+		_hud.crafting_panel.select_recipe(&"torch_bundle")
 		_expect(not _hud.crafting_panel.get_craft_button().is_craft_enabled(), "unavailable recipe button remained enabled")
 		_hud.crafting_panel.select_recipe(&"copper_sword")
 		_expect(_hud.crafting_panel.get_craft_button().is_craft_enabled(), "available recipe button was disabled")
@@ -113,8 +113,8 @@ func _process(_delta: float) -> bool:
 		_expect(not (_hud.crafting_panel.get_node("CraftingImpactPlayer") as AudioStreamPlayer).playing, "closing backpack did not stop crafting audio")
 		_expect(not (_hud.crafting_panel.get_node("CraftingCompletePlayer") as AudioStreamPlayer).playing, "closing backpack did not stop completion audio")
 		_expect(_inventory.get_inventory_item_count(&"copper_sword") == 0, "canceled sword craft added output")
-		_expect(_inventory.get_inventory_item_count(&"stone_block") == 7, "closing backpack consumed stone")
-		_expect(_inventory.get_inventory_item_count(&"log_block") == 3, "closing backpack consumed wood")
+		_expect(_inventory.get_inventory_item_count(&"copper") == 15, "closing backpack consumed copper")
+		_expect(_inventory.get_inventory_item_count(&"log_block") == 5, "closing backpack consumed wood")
 		_hud.free()
 		_camera_rig.free()
 		_phase = 7
@@ -134,8 +134,8 @@ func _check_open_state() -> void:
 	_expect(recipe_scroll != null and recipe_list.get_child_count() == 7, "scrollable recipe list did not contain seven recipes")
 	var ingredient_list := _hud.crafting_panel.get_node("Margin/Content/Body/Details/IngredientList") as VBoxContainer
 	_expect(ingredient_list.get_child_count() == 2, "selected recipe ingredients were not displayed")
-	var stone_count := (ingredient_list.get_child(0) as HBoxContainer).get_child(1) as Label
-	_expect(stone_count.text.contains("10 / 3"), "ingredient display did not include hotbar materials")
+	var copper_count := (ingredient_list.get_child(0) as HBoxContainer).get_child(1) as Label
+	_expect(copper_count.text.contains("25 / 10"), "ingredient display did not include hotbar materials")
 	var crafting_rect := _hud.crafting_panel.get_global_rect()
 	var backpack_rect := _hud.side_panel.get_global_rect()
 	for slot in _hud.hotbar.slot_nodes:
