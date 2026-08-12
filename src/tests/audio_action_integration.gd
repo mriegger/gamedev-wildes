@@ -48,7 +48,7 @@ func _run():
 	_expect(equip.bus == &"SFX", "equip bus not SFX is %s" % equip.bus)
 	_expect(action_audio._clunk_streams.size() == 4, "clunk streams expected 4 got %d" % action_audio._clunk_streams.size())
 	_expect(action_audio._creature_hit_streams.size() == 3, "creature hit streams expected 3 got %d" % action_audio._creature_hit_streams.size())
-	_expect(action_audio._player_hit_streams.size() == 1, "player hit streams expected 1 got %d" % action_audio._player_hit_streams.size())
+	_expect(action_audio._player_hit_streams.size() == 3, "player hit streams expected 3 got %d" % action_audio._player_hit_streams.size())
 	for stream in action_audio._clunk_streams + action_audio._creature_hit_streams + action_audio._player_hit_streams:
 		_expect(stream != null, "action audio stream is null")
 
@@ -130,6 +130,10 @@ func _run():
 	_expect(creature_hit.stream == null, "non-player contact played the player's creature hit sound")
 	_expect(action_audio._player_hit_streams.has(player_hit.stream), "confirmed enemy contact did not select a player hit sound")
 	_expect(player_hit.pitch_scale >= 0.96 and player_hit.pitch_scale <= 1.04, "player hit pitch out of range %f" % player_hit.pitch_scale)
+	_expect(abs(player_hit.volume_db - (-11.0)) < 0.1, "player hit volume expected -11 got %f" % player_hit.volume_db)
+	var first_player_hit: AudioStream = player_hit.stream
+	combat.melee_outcome_committed.emit(MeleeOutcome.new(entity_contact, &"", 1.0, false))
+	_expect(player_hit.stream != first_player_hit, "consecutive player hits repeated the same sound")
 
 	_expect(inventory.select_slot(3), "sword selection failed")
 	_expect(sword_equip_profile.streams.has(equip.stream), "selecting the sword did not play a draw sound")
