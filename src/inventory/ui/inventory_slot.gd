@@ -6,7 +6,10 @@ var item_id = null
 var item_count: int = 0
 var inventory_model: InventoryModel = null
 var inventory_stat_coordinator: InventoryStatCoordinator = null
+var item_proficiency: ItemProficiency = null
 var empty_label: String = ""
+
+@export var gear_tooltip_scene: PackedScene
 
 var _normal_style: StyleBoxFlat
 var _empty_style: StyleBoxFlat
@@ -28,6 +31,10 @@ func set_inventory(p_inv: InventoryModel):
 func set_inventory_stat_coordinator(coordinator: InventoryStatCoordinator):
 	inventory_stat_coordinator = coordinator
 
+func set_item_proficiency(proficiency: ItemProficiency):
+	item_proficiency = proficiency
+	_update_tooltip_text()
+
 func set_inventory_styles(normal_style: StyleBoxFlat, empty_style: StyleBoxFlat):
 	_normal_style = normal_style
 	_empty_style = empty_style
@@ -37,7 +44,7 @@ func set_slot_index(idx: int):
 
 func set_empty_label(label: String):
 	empty_label = label
-	tooltip_text = label
+	_update_tooltip_text()
 	if is_node_ready():
 		refresh_visuals()
 
@@ -46,7 +53,39 @@ func set_item(p_item_id, count: int):
 		return
 	item_id = p_item_id
 	item_count = count
+	_update_tooltip_text()
 	refresh_visuals()
+
+func _update_tooltip_text() -> void:
+	if item_id == null or item_count <= 0:
+		tooltip_text = empty_label
+		return
+	if inventory_model == null or item_proficiency == null:
+		tooltip_text = ""
+		return
+	var definition := _get_gear_tooltip_definition()
+	tooltip_text = definition.display_name if definition != null else ""
+
+func _make_custom_tooltip(_for_text: String) -> Object:
+	var definition := _get_gear_tooltip_definition()
+	if tooltip_text.is_empty() or definition == null:
+		return null
+	assert(gear_tooltip_scene != null)
+	var tooltip := gear_tooltip_scene.instantiate() as GearTooltip
+	assert(tooltip != null)
+	tooltip.setup(definition, item_proficiency)
+	return tooltip
+
+func _get_gear_tooltip_definition() -> ItemDefinition:
+	if item_id == null or item_count <= 0 or inventory_model == null or item_proficiency == null:
+		return null
+	var catalog := inventory_model.item_catalog
+	if not catalog.is_combat_item(item_id):
+		return null
+	var definition := catalog.get_definition(item_id)
+	if definition.rarity == null or definition.proficiency == null or not item_proficiency.has_proficiency(item_id):
+		return null
+	return definition
 
 func refresh_visuals():
 	if item_id == null or item_count <= 0:

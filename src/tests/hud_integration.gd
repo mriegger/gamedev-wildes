@@ -6,6 +6,7 @@ var _hud: HUD = null
 var _inv: InventoryModel = null
 var _item_catalog: ItemCatalog = null
 var _stats: ActorStats = null
+var _item_proficiency: ItemProficiency = null
 var _inventory_stat_coordinator: InventoryStatCoordinator = null
 var _crafting_coordinator: CraftingCoordinator = null
 var _crafting_recipe_catalog: CraftingRecipeCatalog = null
@@ -32,6 +33,7 @@ func _init() -> void:
 	_inv = InventoryModel.new(_item_catalog)
 	_inv.setup_starter()
 	_stats = ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
+	_item_proficiency = ItemProficiency.new(_item_catalog)
 	if not _stats.set_progression(1, 0):
 		_fail("player progression setup failed")
 	_inventory_stat_coordinator = InventoryStatCoordinator.new()
@@ -55,7 +57,7 @@ func _process(_delta: float) -> bool:
 			_fail("hud instantiate null")
 			return false
 		root.add_child(_hud)
-		_hud.setup_with_camera(_inv, _inventory_stat_coordinator, _crafting_coordinator, _crafting_recipe_catalog, null, _stats)
+		_hud.setup_with_camera(_inv, _inventory_stat_coordinator, _crafting_coordinator, _crafting_recipe_catalog, null, _stats, _item_proficiency)
 		print("[hud_integration] hud added orphan=%d" % int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT)))
 		_phase = 1
 	elif _phase == 1 and _frame == 4:

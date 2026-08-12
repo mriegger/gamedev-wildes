@@ -8,11 +8,11 @@ class_name HUD
 @onready var crafting_panel: CraftingPanel = $CraftingPanel as CraftingPanel
 @onready var dev_console: DevConsole = $DevConsole as DevConsole
 
-func setup_with_camera(p_inventory: InventoryModel, p_inventory_stat_coordinator: InventoryStatCoordinator, p_crafting_coordinator: CraftingCoordinator, p_recipe_catalog: CraftingRecipeCatalog, cam_rig: CameraRig, stats: ActorStats):
-	hotbar.setup(p_inventory, p_inventory_stat_coordinator)
+func setup_with_camera(p_inventory: InventoryModel, p_inventory_stat_coordinator: InventoryStatCoordinator, p_crafting_coordinator: CraftingCoordinator, p_recipe_catalog: CraftingRecipeCatalog, cam_rig: CameraRig, stats: ActorStats, item_proficiency: ItemProficiency):
+	hotbar.setup(p_inventory, p_inventory_stat_coordinator, item_proficiency)
 	health_bar.setup(stats)
 	experience_bar.setup(stats)
-	side_panel.setup(p_inventory, p_inventory_stat_coordinator, cam_rig, hotbar, CraftingPanel.PANEL_WIDTH)
+	side_panel.setup(p_inventory, p_inventory_stat_coordinator, item_proficiency, cam_rig, hotbar, CraftingPanel.PANEL_WIDTH)
 	crafting_panel.setup(p_crafting_coordinator, p_recipe_catalog, cam_rig)
 	dev_console.setup(p_inventory)
 	side_panel.progress_changed.connect(_on_side_panel_progress_changed)

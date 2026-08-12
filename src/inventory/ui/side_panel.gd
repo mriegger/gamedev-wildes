@@ -63,7 +63,7 @@ func _ready():
 	_update_hotbar_position(_progress)
 	set_process(false)
 
-func setup(inv: InventoryModel, inventory_stat_coordinator: InventoryStatCoordinator, cam_rig: CameraRig, hb: Hotbar, left_panel_width: float):
+func setup(inv: InventoryModel, inventory_stat_coordinator: InventoryStatCoordinator, item_proficiency: ItemProficiency, cam_rig: CameraRig, hb: Hotbar, left_panel_width: float):
 	inventory_model = inv
 	camera_rig = cam_rig
 	hotbar = hb
@@ -73,6 +73,7 @@ func setup(inv: InventoryModel, inventory_stat_coordinator: InventoryStatCoordin
 		for slot in _slot_groups[id] as Array:
 			slot.set_inventory(inv)
 			slot.set_inventory_stat_coordinator(inventory_stat_coordinator)
+			slot.set_item_proficiency(item_proficiency)
 	inventory_model.inventory_changed.connect(_on_inventory_changed)
 	_inventory_dirty = true
 	_update_hotbar_position(_progress)

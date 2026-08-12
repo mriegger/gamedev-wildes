@@ -8,6 +8,7 @@ var _inventory: InventoryModel
 var _crafting: CraftingCoordinator
 var _inventory_stats: InventoryStatCoordinator
 var _stats: ActorStats
+var _item_proficiency: ItemProficiency
 var _recipe_catalog: CraftingRecipeCatalog
 var _camera_rig: CameraRig
 
@@ -20,6 +21,7 @@ func _init() -> void:
 	_inventory.slots[InventoryModel.HOTBAR_SIZE] = InventoryStack.new(&"stone_block", 1)
 	_inventory.slots[InventoryModel.HOTBAR_SIZE + 1] = InventoryStack.new(&"log_block", 1)
 	_stats = ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
+	_item_proficiency = ItemProficiency.new(item_catalog)
 	_inventory_stats = InventoryStatCoordinator.new()
 	_expect(_inventory_stats.setup(_inventory, _stats), "inventory stat setup failed")
 	_crafting = CraftingCoordinator.new()
@@ -33,7 +35,7 @@ func _init() -> void:
 func _process(_delta: float) -> bool:
 	_frame += 1
 	if _phase == 0 and _frame == 2:
-		_hud.setup_with_camera(_inventory, _inventory_stats, _crafting, _recipe_catalog, _camera_rig, _stats)
+		_hud.setup_with_camera(_inventory, _inventory_stats, _crafting, _recipe_catalog, _camera_rig, _stats, _item_proficiency)
 		_hud.toggle_backpack()
 		_phase = 1
 	elif _phase == 1 and _frame == 35:

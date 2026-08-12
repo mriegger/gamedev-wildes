@@ -16,12 +16,13 @@ func _ready():
 	_slot_selected_style = WildesStyle.make_panel(Color(0.20, 0.20, 0.16, 0.48), 8, Color(1, 1, 0.55, 0.85), 2)
 	_build_slots()
 
-func setup(inv: InventoryModel, inventory_stat_coordinator: InventoryStatCoordinator):
+func setup(inv: InventoryModel, inventory_stat_coordinator: InventoryStatCoordinator, item_proficiency: ItemProficiency):
 	_inv_model = inv
 	_inv_model.inventory_changed.connect(refresh)
 	for slot in slot_nodes:
 		slot.set_inventory(_inv_model)
 		slot.set_inventory_stat_coordinator(inventory_stat_coordinator)
+		slot.set_item_proficiency(item_proficiency)
 	refresh()
 
 func _build_slots():
