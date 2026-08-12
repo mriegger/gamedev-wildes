@@ -29,10 +29,13 @@ func validate(source: String) -> bool:
 	if not is_finite(base_damage) or base_damage <= 0.0:
 		push_error("[MeleeAttackProfile] Invalid base damage at %s" % source)
 		valid = false
-	if not is_finite(sweep_degrees) or sweep_degrees < 0.0 or sweep_degrees > 360.0:
+	if not is_valid_sweep_degrees(sweep_degrees):
 		push_error("[MeleeAttackProfile] Invalid sweep at %s" % source)
 		valid = false
 	return valid
+
+static func is_valid_sweep_degrees(value: float) -> bool:
+	return is_finite(value) and value >= 0.0 and value <= 360.0
 
 func calculate_damage(attacker_strength: float, target_defense: float) -> float:
 	assert(is_finite(attacker_strength) and attacker_strength >= 0.0)
