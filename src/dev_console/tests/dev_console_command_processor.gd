@@ -4,6 +4,12 @@ var _errors: Array[String] = []
 
 func _init() -> void:
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
+	_expect(item_catalog.has_definition(&"copper"), "copper item was missing from the catalog")
+	var copper := item_catalog.get_definition(&"copper")
+	_expect(copper.display_name == "Copper", "copper display name mismatch")
+	_expect(copper.max_stack == 99, "copper stack limit mismatch")
+	_expect(copper.icon != null and copper.icon.resource_path == "res://assets/textures/blocks/copper.png", "copper texture mismatch")
+	_expect(copper.icon != null and copper.icon.get_width() == 16 and copper.icon.get_height() == 16, "copper texture was not 16x16")
 	var inventory := InventoryModel.new(item_catalog)
 	inventory.slots[0] = InventoryStack.new(&"stone_block", 4)
 	inventory.slots[InventoryModel.HOTBAR_SIZE] = InventoryStack.new(&"stone_block", 10)
@@ -14,6 +20,15 @@ func _init() -> void:
 	_expect(inventory.get_slot(InventoryModel.HOTBAR_SIZE).count == 15, "spawn did not add to the existing backpack stack")
 	_expect(inventory.get_slot(InventoryModel.HOTBAR_SIZE + 1) == null, "spawn created a redundant backpack stack")
 	_expect(inventory.get_slot(0).count == 4, "spawn changed the matching hotbar stack")
+
+	var copper_inventory := InventoryModel.new(item_catalog)
+	copper_inventory.slots[0] = InventoryStack.new(&"copper", 4)
+	copper_inventory.slots[InventoryModel.HOTBAR_SIZE] = InventoryStack.new(&"copper", 7)
+	var copper_processor := DevConsoleCommandProcessor.new()
+	copper_processor.setup(copper_inventory)
+	_expect(copper_processor.execute("spawn copper 5"), "copper spawn command failed")
+	_expect(copper_inventory.get_slot(InventoryModel.HOTBAR_SIZE).count == 12, "copper did not merge into its backpack stack")
+	_expect(copper_inventory.get_slot(0).count == 4, "copper spawn changed its hotbar stack")
 
 	var all_items_inventory := InventoryModel.new(item_catalog)
 	var all_items_processor := DevConsoleCommandProcessor.new()

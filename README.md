@@ -74,7 +74,8 @@ the panel closes or another recipe is selected.
 `spawn <item> <count>` command adds any catalog item directly to the backpack for testing. Item
 IDs and display names are accepted; equipment IDs remain material-qualified, such as
 `copper_pickaxe` and `copper_sword`. Press `/` again or `Esc` to close the console without
-opening the pause menu.
+opening the pause menu. Copper is currently an inventory-only resource available through
+`spawn copper <count>`; it does not generate in the world yet.
 
 **UI & saves.** A frosted-glass front-end: main menu, world select over three save slots,
 create-world and hold-3-seconds-to-delete modals, a chunk-progress loading screen, and a pause
