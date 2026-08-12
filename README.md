@@ -22,6 +22,7 @@ world time.
 | `1`–`9` | Select hotbar slot; while the backpack is open, assign the hovered item to that slot |
 | `Tab` | Toggle backpack and crafting |
 | `P` | Toggle backpack only |
+| `/` | Toggle the developer command console |
 | `F10` | Toggle player animation tuner |
 | `Esc` | Pause |
 
@@ -69,6 +70,12 @@ to play.
 materials from the backpack and hotbar, take two seconds to complete, and cancel without consuming ingredients when
 the panel closes or another recipe is selected.
 
+**Developer console.** Press `/` to open a command line at the bottom of the screen. The
+`spawn <item> <count>` command adds any catalog item directly to the backpack for testing. Item
+IDs and display names are accepted; equipment IDs remain material-qualified, such as
+`copper_pickaxe` and `copper_sword`. Press `/` again or `Esc` to close the console without
+opening the pause menu.
+
 **UI & saves.** A frosted-glass front-end: main menu, world select over three save slots,
 create-world and hold-3-seconds-to-delete modals, a chunk-progress loading screen, and a pause
 menu that freezes the game. The pause menu exposes persistent frame-rate, 3D resolution,
@@ -87,6 +94,7 @@ src/                    Godot project. Entry scene: app/app.tscn
 ├── blocks/             Block ids, definitions, catalog, and torch placement rules
 ├── combat/             Melee contacts, profiles, targeting, and validation
 ├── crafting/           Recipe resources, inventory coordination, presentation, and tests
+├── dev_console/        Developer commands, bottom-screen console presentation, and tests
 ├── entities/           Entity catalog, AI, voxel navigation, populations, and custom presentation
 ├── items/              Item catalog, action definitions, and held-item scenes
 ├── mining/             Mining-owned presentation and focused tests

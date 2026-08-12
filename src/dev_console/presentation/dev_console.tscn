@@ -1,0 +1,70 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://dev_console/presentation/dev_console.gd" id="1_script"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_console"]
+bg_color = Color(0.01, 0.01, 0.012, 0.97)
+content_margin_left = 12.0
+content_margin_right = 12.0
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.25, 0.25, 0.27, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_input"]
+bg_color = Color(0, 0, 0, 0)
+content_margin_left = 4.0
+content_margin_top = 6.0
+content_margin_right = 4.0
+content_margin_bottom = 6.0
+
+[sub_resource type="SystemFont" id="SystemFont_mono"]
+font_names = PackedStringArray("Menlo", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "monospace")
+
+[node name="DevConsole" type="CanvasLayer"]
+layer = 20
+script = ExtResource("1_script")
+
+[node name="ConsoleRoot" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+
+[node name="ConsolePanel" type="PanelContainer" parent="ConsoleRoot"]
+layout_mode = 1
+anchors_preset = 12
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -46.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_styles/panel = SubResource("StyleBox_console")
+
+[node name="CommandRow" type="HBoxContainer" parent="ConsoleRoot/ConsolePanel"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="Prompt" type="Label" parent="ConsoleRoot/ConsolePanel/CommandRow"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.94, 0.94, 0.94, 1)
+theme_override_font_sizes/font_size = 18
+theme_override_fonts/font = SubResource("SystemFont_mono")
+text = "> "
+vertical_alignment = 1
+
+[node name="CommandInput" type="LineEdit" parent="ConsoleRoot/ConsolePanel/CommandRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.94, 0.94, 0.94, 1)
+theme_override_font_sizes/font_size = 18
+theme_override_fonts/font = SubResource("SystemFont_mono")
+theme_override_styles/normal = SubResource("StyleBox_input")
+theme_override_styles/focus = SubResource("StyleBox_input")
+keep_editing_on_text_submit = true
+caret_blink = true
+caret_blink_interval = 0.5

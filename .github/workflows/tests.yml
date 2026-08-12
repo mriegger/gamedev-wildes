@@ -67,6 +67,34 @@ jobs:
             30 "CRAFTING_UI PASS" /tmp/crafting_ui.log -- \
             godot --headless --path src --script res://crafting/tests/crafting_ui_integration.gd
 
+  dev-console-command:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run developer console command tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "DEV_CONSOLE_COMMAND PASS" /tmp/dev_console_command.log -- \
+            godot --headless --path src --script res://dev_console/tests/dev_console_command_processor.gd
+
+  dev-console-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run developer console UI integration tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "DEV_CONSOLE_UI PASS" /tmp/dev_console_ui.log -- \
+            godot --headless --path src --script res://dev_console/tests/dev_console_ui_integration.gd
+
   stats-system:
     runs-on: ubuntu-latest
     timeout-minutes: 10

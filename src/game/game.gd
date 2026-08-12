@@ -158,7 +158,7 @@ func _physics_process(delta):
 	if OS.is_debug_build() and Input.is_action_just_pressed("toggle_animation_tuner"):
 		_toggle_animation_tuning_panel()
 	input_buffer.poll()
-	if animation_tuning_panel != null and animation_tuning_panel.is_open():
+	if hud.dev_console.is_open() or (animation_tuning_panel != null and animation_tuning_panel.is_open()):
 		input_buffer.clear_gameplay()
 	entity_coordinator.tick(delta, player.global_position, game_environment.get_time_of_day())
 
@@ -210,6 +210,9 @@ func _toggle_player_stats_debug_panel():
 	player_stats_debug_panel.toggle_panel()
 
 func _handle_cancel():
+	if hud.dev_console.is_open():
+		hud.dev_console.close()
+		return
 	if player_stats_debug_panel != null and player_stats_debug_panel.is_open():
 		player_stats_debug_panel.hide_panel()
 		return
