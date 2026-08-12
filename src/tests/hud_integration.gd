@@ -56,6 +56,7 @@ func _process(_delta: float) -> bool:
 		print("[hud_integration] hud added orphan=%d" % int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT)))
 		_phase = 1
 	elif _phase == 1 and _frame == 4:
+		_check_health_bar_geometry()
 		_check_health_bar(100.0, 100.0)
 		_stats.damage(25.0)
 	elif _phase == 1 and _frame == 5:
@@ -222,6 +223,47 @@ func _check_health_bar(current_hp: float, maximum_hp: float) -> void:
 		return
 	if _hud.health_bar.value_label.text != expected_text:
 		_fail("health bar text expected %s got %s" % [expected_text, _hud.health_bar.value_label.text])
+
+func _check_health_bar_geometry() -> void:
+	if _hud.health_bar == null:
+		_fail("health bar missing for geometry check")
+		return
+	var viewport_size := root.get_visible_rect().size
+	var root_rect := _hud.health_bar.get_global_rect()
+	var progress_bar := _hud.health_bar.progress_bar
+	var progress_rect := progress_bar.get_global_rect()
+	var expected_position := Vector2(viewport_size.x - 304.0, 24.0)
+	if not root_rect.position.is_equal_approx(Vector2.ZERO) or not root_rect.size.is_equal_approx(viewport_size):
+		_fail("health bar root does not cover the viewport")
+		return
+	if not progress_rect.position.is_equal_approx(expected_position):
+		_fail("health bar expected position %s got %s" % [str(expected_position), str(progress_rect.position)])
+		return
+	if not progress_rect.size.is_equal_approx(Vector2(280.0, 32.0)):
+		_fail("health bar expected size (280, 32) got %s" % str(progress_rect.size))
+		return
+	if not is_equal_approx(viewport_size.x - progress_rect.end.x, 24.0) or not is_equal_approx(progress_rect.position.y, 24.0):
+		_fail("health bar does not preserve its 24-pixel top-right margins")
+		return
+	if _hud.health_bar.mouse_filter != Control.MOUSE_FILTER_IGNORE or progress_bar.mouse_filter != Control.MOUSE_FILTER_IGNORE or _hud.health_bar.value_label.mouse_filter != Control.MOUSE_FILTER_IGNORE:
+		_fail("health bar presentation intercepts mouse input")
+		return
+	var track := progress_bar.get_theme_stylebox(&"background") as StyleBoxFlat
+	var fill := progress_bar.get_theme_stylebox(&"fill") as StyleBoxFlat
+	if track == null or track.bg_color.a >= 1.0 or track.bg_color.r >= 0.2:
+		_fail("health bar track is not dark and translucent")
+		return
+	if track.border_width_left != 1 or track.border_width_top != 1 or track.border_width_right != 1 or track.border_width_bottom != 1:
+		_fail("health bar track border is not subtle and uniform")
+		return
+	if fill == null or fill.bg_color.r <= fill.bg_color.g or fill.bg_color.r <= fill.bg_color.b:
+		_fail("health bar fill is not red")
+		return
+	if fill.border_width_left != 1 or fill.border_width_top != 1 or fill.border_width_right != 1 or fill.border_width_bottom != 1:
+		_fail("health bar fill border is not uniform")
+		return
+	if _hud.health_bar.value_label.horizontal_alignment != HORIZONTAL_ALIGNMENT_CENTER or _hud.health_bar.value_label.vertical_alignment != VERTICAL_ALIGNMENT_CENTER:
+		_fail("health bar value text is not centered")
 
 func _start_left_drag(src: Vector2, dst: Vector2) -> void:
 	print("[hud_integration] left drag start")

@@ -3,23 +3,28 @@
 [ext_resource type="Script" path="res://player/ui/health_bar.gd" id="1_health_bar"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_background"]
-bg_color = Color(0.08, 0.09, 0.11, 0.82)
-corner_radius_top_left = 7
-corner_radius_top_right = 7
-corner_radius_bottom_right = 7
-corner_radius_bottom_left = 7
+bg_color = Color(0.045, 0.05, 0.065, 0.84)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
 border_width_left = 1
 border_width_top = 1
 border_width_right = 1
 border_width_bottom = 1
-border_color = Color(1, 1, 1, 0.24)
+border_color = Color(1, 1, 1, 0.2)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_fill"]
-bg_color = Color(0.72, 0.16, 0.18, 0.92)
-corner_radius_top_left = 6
-corner_radius_top_right = 6
-corner_radius_bottom_right = 6
-corner_radius_bottom_left = 6
+bg_color = Color(0.78, 0.12, 0.15, 0.96)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.42, 0.045, 0.06, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
 
 [node name="HealthBar" type="Control"]
 layout_mode = 3
@@ -31,28 +36,24 @@ grow_vertical = 2
 mouse_filter = 2
 script = ExtResource("1_health_bar")
 
-[node name="CenterContainer" type="CenterContainer" parent="."]
+[node name="ProgressBar" type="ProgressBar" parent="."]
+custom_minimum_size = Vector2(280, 32)
 layout_mode = 1
-anchors_preset = 12
-anchor_top = 1.0
+anchors_preset = 1
+anchor_left = 1.0
 anchor_right = 1.0
-anchor_bottom = 1.0
-offset_top = -124.0
-offset_bottom = -100.0
-grow_horizontal = 2
-grow_vertical = 0
-mouse_filter = 2
-
-[node name="ProgressBar" type="ProgressBar" parent="CenterContainer"]
-custom_minimum_size = Vector2(260, 24)
-layout_mode = 2
+offset_left = -304.0
+offset_top = 24.0
+offset_right = -24.0
+offset_bottom = 56.0
+grow_horizontal = 0
 mouse_filter = 2
 theme_override_styles/background = SubResource("StyleBoxFlat_background")
 theme_override_styles/fill = SubResource("StyleBoxFlat_fill")
 value = 100.0
 show_percentage = false
 
-[node name="ValueLabel" type="Label" parent="CenterContainer/ProgressBar"]
+[node name="ValueLabel" type="Label" parent="ProgressBar"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -64,7 +65,7 @@ theme_override_colors/font_color = Color(1, 0.97, 0.94, 1)
 theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.75)
 theme_override_constants/shadow_offset_x = 1
 theme_override_constants/shadow_offset_y = 1
-theme_override_font_sizes/font_size = 12
+theme_override_font_sizes/font_size = 13
 text = "HP 0 / 0"
 horizontal_alignment = 1
 vertical_alignment = 1

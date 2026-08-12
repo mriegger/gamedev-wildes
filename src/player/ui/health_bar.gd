@@ -1,8 +1,8 @@
 extends Control
 class_name PlayerHealthBar
 
-@onready var progress_bar: ProgressBar = $CenterContainer/ProgressBar as ProgressBar
-@onready var value_label: Label = $CenterContainer/ProgressBar/ValueLabel as Label
+@onready var progress_bar: ProgressBar = $ProgressBar as ProgressBar
+@onready var value_label: Label = $ProgressBar/ValueLabel as Label
 
 var _stats: ActorStats
 
