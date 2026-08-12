@@ -13,6 +13,7 @@ signal main_menu_requested
 @export var item_catalog: ItemCatalog
 @export var crafting_recipe_catalog: CraftingRecipeCatalog
 @export var entity_catalog: EntityCatalog
+@export var combat_hit_particle_catalog: CombatHitParticleCatalog
 @export var player_stats_definition: CombatStatsDefinition
 
 @onready var world: WorldController = $World as WorldController
@@ -21,6 +22,7 @@ signal main_menu_requested
 @onready var game_environment: GameEnvironment = $Environment as GameEnvironment
 @onready var entity_coordinator: EntityCoordinator = $Entities as EntityCoordinator
 @onready var melee_combat: MeleeCombatCoordinator = $MeleeCombat as MeleeCombatCoordinator
+@onready var combat_hit_particles: CombatHitParticles = $CombatHitParticles as CombatHitParticles
 @onready var hud: HUD = $HUD as HUD
 @onready var game_session: GameSession = $GameSession as GameSession
 @onready var mining_break_particles: MiningBreakParticles = $MiningBreakParticles as MiningBreakParticles
@@ -63,8 +65,9 @@ func _ready():
 	var item_catalog_valid := item_catalog.validate(block_catalog)
 	var crafting_catalog_valid := crafting_recipe_catalog.validate(item_catalog)
 	var entity_catalog_valid := entity_catalog.validate()
+	var combat_particle_catalog_valid := combat_hit_particle_catalog.validate(entity_catalog)
 	var player_stats_valid := player_stats_definition.validate()
-	if not block_catalog_valid or not item_catalog_valid or not crafting_catalog_valid or not entity_catalog_valid or not player_stats_valid:
+	if not block_catalog_valid or not item_catalog_valid or not crafting_catalog_valid or not entity_catalog_valid or not combat_particle_catalog_valid or not player_stats_valid:
 		push_error("[Game] Catalog validation failed")
 		return
 	settings.apply_display(get_viewport())
@@ -150,6 +153,7 @@ func _setup_gameplay():
 	entity_coordinator.entity_melee_contact_reached.connect(melee_combat.try_commit_entity_contact)
 	melee_combat.melee_outcome_committed.connect(entity_coordinator.record_melee_outcome)
 	melee_combat.melee_outcome_committed.connect(combat_progression_coordinator.record_melee_outcome)
+	combat_hit_particles.setup(melee_combat, combat_hit_particle_catalog)
 	player.setup(world, camera_rig, inventory_model, input_buffer, player_stats, melee_combat, entity_coordinator)
 	player_stats.health_depleted.connect(_on_player_defeated)
 	var mining_particle_tints := MiningParticleTintPalette.new(block_catalog)
