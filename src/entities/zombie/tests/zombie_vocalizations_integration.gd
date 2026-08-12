@@ -17,11 +17,16 @@ func _expect(condition: bool, message: String):
 func _run():
 	var block_catalog := load("res://blocks/block_catalog.tres") as BlockCatalog
 	var world := VoxelWorld.new(8, 16, 3, 4.0, block_catalog)
-	var player := (load("res://player/player.tscn") as PackedScene).instantiate() as PlayerMotor
-	get_root().add_child(player)
-	var listener := player.get_node_or_null(^"AudioListener3D") as AudioListener3D
-	_expect(listener != null, "player audio listener missing")
-	_expect(listener.is_current(), "player audio listener was not current")
+	var camera_rig := (load("res://player/camera/camera_rig.tscn") as PackedScene).instantiate() as CameraRig
+	get_root().add_child(camera_rig)
+	var listener := camera_rig.get_node_or_null(^"AudioListener3D") as AudioListener3D
+	_expect(listener != null, "camera audio listener missing")
+	_expect(listener.is_current(), "camera audio listener was not current")
+	_expect(listener.get_parent() == camera_rig, "audio listener was not centered on the camera rig")
+	var listener_forward := -listener.global_transform.basis.z
+	camera_rig.rotation_degrees.y += 45.0
+	var rotated_listener_forward := -listener.global_transform.basis.z
+	_expect(listener_forward.dot(rotated_listener_forward) < 0.9, "audio listener did not follow camera yaw")
 	var entity_catalog := load("res://entities/entity_catalog.tres") as EntityCatalog
 	var definition := entity_catalog.get_definition(&"zombie")
 	var actor := definition.actor_scene.instantiate() as ZombieActor
@@ -71,7 +76,7 @@ func _run():
 	_expect(not vocalizations.playing, "vocalizations kept playing during despawn")
 	_expect(vocalizations.stream == null, "vocalization stream remained assigned during despawn")
 	actor.queue_free()
-	player.queue_free()
+	camera_rig.queue_free()
 	for _frame_index in range(10):
 		await process_frame
 	var orphan_count := int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))

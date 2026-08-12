@@ -13,6 +13,10 @@ yaw_lerp_speed = 5.5
 pitch_deg = -45.0
 orbit_distance = 70.0
 
+[node name="AudioListener3D" type="AudioListener3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.4, 0)
+current = true
+
 [node name="Pitch" type="Node3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 0.707107, 0.707107, 0, -0.707107, 0.707107, 0, 0, 0)
 
