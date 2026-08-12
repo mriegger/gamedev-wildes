@@ -176,6 +176,18 @@ func get_backpack_item_count(item_id: StringName) -> int:
 			total += stack.count
 	return total
 
+func add_backpack_item(item_id: StringName, count: int) -> bool:
+	if count < 1 or not item_catalog.has_definition(item_id):
+		return false
+	var simulated := _copy_slots()
+	var max_stack: int = item_catalog.get_definition(item_id).max_stack
+	var remaining := _grant_item_to_indices(simulated, item_id, count, max_stack, _get_backpack_indices())
+	if remaining > 0:
+		return false
+	slots = simulated
+	inventory_changed.emit()
+	return true
+
 func get_inventory_item_count(item_id: StringName) -> int:
 	if not item_catalog.has_definition(item_id):
 		return 0
