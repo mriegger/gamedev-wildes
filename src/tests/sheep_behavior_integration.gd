@@ -45,6 +45,7 @@ func _make_definition(behavior: SheepBehaviorDefinition) -> EntityDefinition:
 	definition.id = &"sheep"
 	definition.actor_scene = load("res://entities/sheep/sheep.tscn") as PackedScene
 	definition.behavior = behavior
+	definition.stats_definition = load("res://entities/sheep/sheep_stats.tres") as CombatStatsDefinition
 	definition.body_width = BODY_WIDTH
 	definition.body_height = BODY_HEIGHT
 	definition.spawn_phase = EntityDefinition.SpawnPhase.DAY

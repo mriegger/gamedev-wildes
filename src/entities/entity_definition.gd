@@ -9,6 +9,7 @@ enum SpawnPhase {
 @export var id: StringName
 @export var actor_scene: PackedScene
 @export var behavior: EntityBehaviorDefinition
+@export var stats_definition: CombatStatsDefinition
 @export_range(0.1, 4.0, 0.01) var body_width: float = 0.6
 @export_range(0.1, 4.0, 0.01) var body_height: float = 1.8
 @export var spawn_phase: SpawnPhase = SpawnPhase.NIGHT
@@ -27,6 +28,12 @@ func validate(source: String) -> bool:
 		push_error("[EntityDefinition] Missing behavior for %s at %s" % [id, source])
 		valid = false
 	elif not behavior.validate(source):
+		valid = false
+	if stats_definition == null:
+		push_error("[EntityDefinition] Missing stats definition for %s at %s" % [id, source])
+		valid = false
+	elif not stats_definition.validate():
+		push_error("[EntityDefinition] Invalid stats definition for %s at %s" % [id, source])
 		valid = false
 	if actor_scene != null and behavior != null and not is_actor_compatible():
 		push_error("[EntityDefinition] Actor scene and behavior are incompatible for %s at %s" % [id, source])

@@ -11,7 +11,7 @@ signal main_menu_requested
 @export var block_catalog: BlockCatalog
 @export var item_catalog: ItemCatalog
 @export var entity_catalog: EntityCatalog
-@export var player_stats_definition: ActorStatsDefinition
+@export var player_stats_definition: CombatStatsDefinition
 
 @onready var world: WorldController = $World as WorldController
 @onready var player: PlayerMotor = $Player as PlayerMotor

@@ -11,6 +11,20 @@ var _errors: Array[String] = []
 func _init():
 	var player_definition := load("res://player/player_stats.tres") as ActorStatsDefinition
 	_expect(player_definition.validate(), "player stats definition is invalid")
+	_expect(player_definition is CombatStatsDefinition, "player stats do not extend the shared combat definition")
+	var combat_definition := CombatStatsDefinition.new()
+	_expect(combat_definition.validate(), "default combat stats definition is invalid")
+	_expect(is_equal_approx(combat_definition.get_base_stats()[&"hp"], 100.0), "combat HP is missing")
+	_expect(is_equal_approx(combat_definition.get_base_stats()[&"defense"], 0.0), "combat defense is missing")
+	_expect(is_equal_approx(combat_definition.get_base_stats()[&"strength"], 10.0), "combat strength is missing")
+	combat_definition.maximum_hp = 0.0
+	_expect(not combat_definition.validate(), "zero maximum HP passed combat stats validation")
+	combat_definition.maximum_hp = 100.0
+	combat_definition.defense = -1.0
+	_expect(not combat_definition.validate(), "negative defense passed combat stats validation")
+	combat_definition.defense = 0.0
+	combat_definition.strength = -1.0
+	_expect(not combat_definition.validate(), "negative strength passed combat stats validation")
 	var stats := ActorStats.new(player_definition)
 	_expect(stats.has_stat(&"strength"), "player strength is missing")
 	_expect(not stats.has_stat(&"fire_power"), "player unexpectedly has an enemy-specific stat")
@@ -58,9 +72,16 @@ func _init():
 	_expect(restored_stats.restore_progression(progression), "valid progression did not restore")
 	_expect(restored_stats.level == 3 and restored_stats.experience == 50, "restored progression changed")
 	var hp_stats := ActorStats.new(player_definition)
+	_expect(not hp_stats.is_dead(), "new actor stats started dead")
 	_expect(is_equal_approx(hp_stats.damage(30.0), 30.0), "damage did not change runtime HP")
 	_expect(is_equal_approx(hp_stats.current_hp, 70.0), "runtime HP is incorrect after damage")
 	_expect(is_equal_approx(hp_stats.heal(100.0), 30.0), "healing did not clamp to maximum HP")
+	_expect(is_equal_approx(hp_stats.damage(100.0), 100.0), "exact lethal damage was not applied")
+	_expect(hp_stats.is_dead(), "zero HP actor is not dead")
+	_expect(is_equal_approx(hp_stats.damage(50.0), 0.0), "damage changed HP below zero")
+	_expect(hp_stats.is_dead(), "overkill damage revived the actor")
+	_expect(is_equal_approx(hp_stats.heal(1.0), 1.0), "dead actor could not be healed")
+	_expect(not hp_stats.is_dead(), "positive HP actor remained dead")
 	var enemy_definition := _definition({&"fire_power": 25.0})
 	_expect(enemy_definition.validate(), "enemy-specific definition is invalid")
 	var enemy_stats := ActorStats.new(enemy_definition)

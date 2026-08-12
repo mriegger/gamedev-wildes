@@ -44,6 +44,9 @@ func set_current_hp(value: float) -> bool:
 	current_hp = value
 	return true
 
+func is_dead() -> bool:
+	return has_stat(&"hp") and current_hp <= 0.0
+
 func set_progression(p_level: int, p_experience: int) -> bool:
 	return restore_progression({"level": p_level, "experience": p_experience, "current_hp": current_hp})
 
