@@ -29,6 +29,7 @@ var values: DayNightValues
 @onready var fade_value: Label = $DebugPanel/VBox/ShadowGrid/FadeValue
 var _dragging: bool = false
 var _syncing_shadows: bool = false
+var _input_enabled: bool = false
 
 func _ready():
 	set_process_unhandled_input(false)
@@ -157,18 +158,46 @@ func _update_ui():
 		energy_label.text = "Norm: %.3f | Paused: %s" % [clock.get_normalized(), clock.is_paused()]
 
 func _unhandled_input(event):
+	if not _input_enabled:
+		return
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_EQUAL or "=" in event.as_text():
 			if visible:
-				visible = false
-				clock.time_changed.disconnect(_on_clock_time_changed)
+				hide_panel()
 			else:
-				clock.time_changed.connect(_on_clock_time_changed)
-				visible = true
-				_update_ui()
+				show_panel()
+
+func show_panel():
+	assert(clock != null)
+	if not clock.time_changed.is_connected(_on_clock_time_changed):
+		clock.time_changed.connect(_on_clock_time_changed)
+	visible = true
+	_update_ui()
+
+func hide_panel():
+	visible = false
+	if clock == null:
+		return
+	if _dragging:
+		_dragging = false
+		clock.set_dragging(false)
+	if clock.time_changed.is_connected(_on_clock_time_changed):
+		clock.time_changed.disconnect(_on_clock_time_changed)
+
+func is_open() -> bool:
+	return visible
+
+func disable_input():
+	hide_panel()
+	_input_enabled = false
+	set_process_unhandled_input(false)
+
+func enable_input():
+	_input_enabled = true
+	set_process_unhandled_input(true)
 
 func inject(clock_node: GameClock, values_node: DayNightValues):
 	clock = clock_node
 	values = values_node
 	_sync_shadow_controls()
-	set_process_unhandled_input(true)
+	enable_input()

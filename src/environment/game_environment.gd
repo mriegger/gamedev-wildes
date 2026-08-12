@@ -35,3 +35,12 @@ func get_time_of_day() -> float:
 
 func get_formatted_time() -> String:
 	return _clock.get_formatted()
+
+func close_debug_panel():
+	_debug_clock_panel.disable_input()
+
+func restore_debug_panel_input():
+	_debug_clock_panel.enable_input()
+
+func is_debug_panel_open() -> bool:
+	return _debug_clock_panel.is_open()

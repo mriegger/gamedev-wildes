@@ -68,6 +68,8 @@ func cancel_actions():
 func _physics_process(delta):
 	if voxel_world == null or motor == null or camera == null or inventory_model == null or _input_buffer == null:
 		return
+	if motor.is_defeated():
+		return
 	pointer_over_ui = UiUtils.is_pointer_over_ui(get_viewport())
 	if pointer_over_ui:
 		target_has = false
@@ -468,6 +470,8 @@ func get_selected_placement_action() -> BlockPlacementActionDefinition:
 	return action as BlockPlacementActionDefinition
 
 func _unhandled_input(event):
+	if motor != null and motor.is_defeated():
+		return
 	if event is InputEventKey and event.pressed:
 		if event.keycode >= KEY_1 and event.keycode < KEY_1 + InventoryModel.HOTBAR_SIZE:
 			var idx = event.keycode - KEY_1

@@ -32,6 +32,7 @@ var jump_anticipation: float = 0.0
 
 var _jump_windup_remaining: float = 0.0
 var _jump_ready: bool = false
+var _defeated: bool = false
 
 func setup(p_world: WorldController, p_camera_rig: CameraRig, p_inventory: InventoryModel, p_input_buffer: InputBuffer, p_stats: ActorStats, p_combat: MeleeCombatCoordinator, p_entity_coordinator: EntityCoordinator):
 	voxel_world = p_world.voxel_model
@@ -57,6 +58,24 @@ func respawn_at(spawn_position: Vector3):
 	_input_buffer.clear_gameplay()
 	var health_restored := stats.set_current_hp(stats.get_value(&"hp"))
 	assert(health_restored)
+	_defeated = false
+
+func enter_defeated_state():
+	assert(_input_buffer != null)
+	assert(stats != null and stats.is_dead())
+	if _defeated:
+		return
+	_defeated = true
+	velocity = Vector3.ZERO
+	is_sprinting = false
+	_jump_windup_remaining = 0.0
+	_jump_ready = false
+	jump_anticipation = 0.0
+	interactor.cancel_actions()
+	_input_buffer.clear_gameplay()
+
+func is_defeated() -> bool:
+	return _defeated
 
 func _reset_motion_at(position: Vector3):
 	global_position = position
@@ -68,7 +87,7 @@ func _reset_motion_at(position: Vector3):
 	jump_anticipation = 0.0
 
 func _physics_process(delta):
-	if voxel_world == null:
+	if voxel_world == null or _defeated:
 		return
 	_handle_movement(delta)
 

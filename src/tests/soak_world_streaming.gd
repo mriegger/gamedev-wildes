@@ -794,6 +794,8 @@ func _check_final() -> void:
 	if not _texture_pipeline_verified or not _lighting_pipeline_verified or not _item_round_trip_verified:
 		_fail("texture, lighting, or item round-trip verification missing")
 		return
+	if not _verify_player_defeat_flow():
+		return
 	if _game:
 		_game._save_and_request_main_menu()
 		if _game.is_physics_processing() or _game.is_processing_unhandled_input():
@@ -807,6 +809,133 @@ func _check_final() -> void:
 	else:
 		print("SOAK FAIL %s" % str(_errors))
 		quit(1)
+
+func _verify_player_defeat_flow() -> bool:
+	var inventory_before := _game.inventory_model.to_dict()
+	_game.hud.side_panel.open()
+	_game.hud.side_panel._process(1.0)
+	_game.animation_tuning_panel.show_panel()
+	_game._toggle_player_stats_debug_panel()
+	var debug_clock_panel := _game.game_environment._debug_clock_panel
+	debug_clock_panel.show_panel()
+	if not _game.hud.is_side_panel_open() or not _game.animation_tuning_panel.is_open() or not _game.player_stats_debug_panel.is_open() or not _game.game_environment.is_debug_panel_open():
+		_fail("player defeat panel setup did not open every gameplay panel")
+		return false
+	_player.velocity = Vector3(2.0, 3.0, 4.0)
+	_player.is_sprinting = true
+	_player._jump_windup_remaining = 0.5
+	_player.jump_anticipation = 0.5
+	_player.interactor.is_mining = true
+	_player.interactor.melee_attack_queue = 1
+	_player.interactor.target_has = true
+	_game.input_buffer.move_dir = Vector2.ONE
+	_game.input_buffer.sprint_pressed = true
+	_game.input_buffer.primary_use_pressed = true
+	if not _game.player_stats.set_current_hp(0.0):
+		_fail("player defeat flow could not set lethal HP")
+		return false
+	_game.melee_combat.player_defeated.emit()
+	var death_screen := _game._death_screen
+	if death_screen == null or not is_instance_valid(death_screen):
+		_fail("player defeat did not open the death screen")
+		return false
+	if not _player.is_defeated() or not _player.velocity.is_zero_approx() or _player.is_sprinting:
+		_fail("player defeat did not stop the player")
+		return false
+	if _player.interactor.is_mining or _player.interactor.melee_attack_queue != 0 or _player.interactor.target_has:
+		_fail("player defeat did not cancel interactions")
+		return false
+	if _game.hud.is_side_panel_open() or _game.animation_tuning_panel.is_open() or _game.player_stats_debug_panel.is_open() or _game.game_environment.is_debug_panel_open():
+		_fail("player defeat left a gameplay or debug panel open")
+		return false
+	if debug_clock_panel.clock.time_changed.is_connected(debug_clock_panel._on_clock_time_changed):
+		_fail("player defeat left the debug clock time signal connected")
+		return false
+	var blocked_debug_key := InputEventKey.new()
+	blocked_debug_key.pressed = true
+	blocked_debug_key.keycode = KEY_EQUAL
+	debug_clock_panel._unhandled_input(blocked_debug_key)
+	if debug_clock_panel.is_open():
+		_fail("defeated debug clock panel processed its toggle input")
+		return false
+	_game.melee_combat.player_defeated.emit()
+	if _game._death_screen != death_screen:
+		_fail("duplicate player defeat created another death screen")
+		return false
+	var selected_slot_before := _game.inventory_model.selected_slot
+	var blocked_number_key := InputEventKey.new()
+	blocked_number_key.pressed = true
+	blocked_number_key.keycode = KEY_1
+	_player.interactor._unhandled_input(blocked_number_key)
+	if _game.inventory_model.selected_slot != selected_slot_before:
+		_fail("defeated player processed a number-key selection")
+		return false
+	_game.input_buffer.clear_gameplay()
+	var blocked_wheel := InputEventMouseButton.new()
+	blocked_wheel.pressed = true
+	blocked_wheel.button_index = MOUSE_BUTTON_WHEEL_UP
+	_game.camera_rig._unhandled_input(blocked_wheel)
+	if _game.input_buffer.wheel_up:
+		_fail("defeated camera processed direct wheel input")
+		return false
+	var camera_size_before := _game.camera_rig.camera.size
+	var blocked_magnify := InputEventMagnifyGesture.new()
+	blocked_magnify.factor = 0.5
+	_game.camera_rig._unhandled_input(blocked_magnify)
+	if not is_equal_approx(_game.camera_rig.camera.size, camera_size_before):
+		_fail("defeated camera processed direct gesture input")
+		return false
+	_game.input_buffer.move_dir = Vector2.ONE
+	_game.input_buffer.primary_use_pressed = true
+	_game.entity_coordinator._spawn_elapsed = 0.25
+	_game._physics_process(0.1)
+	if _game.input_buffer.move_dir != Vector2.ZERO or _game.input_buffer.primary_use_pressed:
+		_fail("defeated game retained buffered gameplay input")
+		return false
+	if not is_equal_approx(_game.entity_coordinator._spawn_elapsed, 0.35):
+		_fail("entity simulation stopped while the player was defeated")
+		return false
+	var game_clock := _game.game_environment._clock
+	if not game_clock._running or game_clock.is_paused() or paused:
+		_fail("world time stopped while the player was defeated")
+		return false
+	var defeated_time := game_clock.time_of_day
+	game_clock._process(0.1)
+	if is_equal_approx(game_clock.time_of_day, defeated_time):
+		_fail("world clock did not advance while the player was defeated")
+		return false
+	var escape := InputEventKey.new()
+	escape.pressed = true
+	escape.keycode = KEY_ESCAPE
+	_game._unhandled_input(escape)
+	if _game._death_screen != death_screen or _game._pause_menu != null:
+		_fail("Escape dismissed the death screen or opened pause")
+		return false
+	death_screen.respawn_button.pressed.emit()
+	var expected_spawn := _world.voxel_model.get_spawn_position() + Vector3(0.0, 0.1, 0.0)
+	if _game._death_screen != null or _player.is_defeated():
+		_fail("Respawn did not clear the death screen and defeated state")
+		return false
+	if not _player.global_position.is_equal_approx(expected_spawn) or not _game.camera_rig.global_position.is_equal_approx(expected_spawn):
+		_fail("Respawn did not restore spawn and camera positions")
+		return false
+	if not is_equal_approx(_game.player_stats.current_hp, _game.player_stats.get_value(&"hp")):
+		_fail("Respawn did not restore full player HP")
+		return false
+	if _game.inventory_model.to_dict() != inventory_before:
+		_fail("player defeat or Respawn changed inventory")
+		return false
+	_game.camera_rig._unhandled_input(blocked_wheel)
+	if not _game.input_buffer.wheel_up:
+		_fail("Respawn did not restore camera gameplay input")
+		return false
+	_game.input_buffer.clear_gameplay()
+	debug_clock_panel._unhandled_input(blocked_debug_key)
+	if not debug_clock_panel.is_open():
+		_fail("Respawn did not restore debug clock input")
+		return false
+	debug_clock_panel.hide_panel()
+	return true
 
 func _warn(msg: String) -> void:
 	print("[soak] %s" % msg)

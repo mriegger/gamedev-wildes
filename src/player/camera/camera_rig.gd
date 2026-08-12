@@ -18,6 +18,7 @@ var target_position: Vector3 = Vector3(100, 0, 100)
 
 var _follow_target: Node3D = null
 var _input_buffer: InputBuffer = null
+var _gameplay_input_enabled: bool = true
 
 var _left_panel_progress: float = 0.0
 var _right_panel_progress: float = 0.0
@@ -66,6 +67,9 @@ func setup(p_follow_target: Node3D, p_input_buffer: InputBuffer):
 	set_process(true)
 	set_process_unhandled_input(true)
 
+func set_gameplay_input_enabled(enabled: bool):
+	_gameplay_input_enabled = enabled
+
 func snap_to_follow_target():
 	assert(_follow_target != null)
 	target_position = _follow_target.global_position
@@ -88,6 +92,8 @@ func _ready():
 	get_viewport().size_changed.connect(_update_panel_obstruction_offset)
 
 func _unhandled_input(event):
+	if not _gameplay_input_enabled:
+		return
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
 			_input_buffer.set_wheel(true)

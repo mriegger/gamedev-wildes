@@ -353,14 +353,36 @@ func _run() -> void:
 	input_buffer.move_dir = Vector2.ONE
 	input_buffer.sprint_pressed = true
 	input_buffer.primary_use_pressed = true
+	var inventory_before_defeat := inventory.to_dict()
+	player.enter_defeated_state()
+	_expect(player.is_defeated(), "player did not enter its defeated state")
+	_expect(player.velocity.is_zero_approx() and not player.is_sprinting, "player defeat did not stop locomotion")
+	_expect(is_zero_approx(player._jump_windup_remaining) and is_zero_approx(player.jump_anticipation), "player defeat did not reset jump state")
+	_expect(not player.interactor.is_mining and player.interactor.melee_attack_action == null and player.interactor.melee_attack_queue == 0, "player defeat did not cancel actions")
+	_expect(not player.interactor.target_has and input_buffer.move_dir == Vector2.ZERO and not input_buffer.sprint_pressed and not input_buffer.primary_use_pressed, "player defeat did not clear targeting or buffered input")
+	var defeated_position := player.global_position
+	contact_count_before = _contacts.size()
+	input_buffer.move_dir = Vector2.ONE
+	input_buffer.primary_use_just = true
+	player._physics_process(0.25)
+	player.interactor._physics_process(0.25)
+	var blocked_number_key := InputEventKey.new()
+	blocked_number_key.pressed = true
+	blocked_number_key.keycode = KEY_1
+	player.interactor._unhandled_input(blocked_number_key)
+	_expect(player.global_position.is_equal_approx(defeated_position) and player.velocity.is_zero_approx(), "defeated player processed movement input")
+	_expect(player.interactor.melee_attack_action == null and _contacts.size() == contact_count_before, "defeated player processed action input")
+	_expect(inventory.selected_slot == 3, "defeated player processed number-key input")
 	var respawn_position := Vector3(0.5, FEET_Y, 0.5)
 	player.respawn_at(respawn_position)
+	_expect(not player.is_defeated(), "player respawn did not clear the defeated state")
 	_expect(player.global_position.is_equal_approx(respawn_position), "player respawn did not restore the spawn position")
 	_expect(player.velocity.is_zero_approx() and not player.on_ground and not player.is_sprinting, "player respawn did not reset locomotion")
 	_expect(is_zero_approx(player._jump_windup_remaining) and is_zero_approx(player.jump_anticipation), "player respawn did not reset jump state")
 	_expect(not player.interactor.is_mining and player.interactor.melee_attack_action == null and player.interactor.melee_attack_queue == 0, "player respawn did not cancel actions")
 	_expect(not player.interactor.target_has and input_buffer.move_dir == Vector2.ZERO and not input_buffer.sprint_pressed and not input_buffer.primary_use_pressed, "player respawn did not clear targeting or buffered input")
 	_expect(is_equal_approx(player_stats.current_hp, player_stats.get_value(&"hp")), "player respawn did not restore full HP")
+	_expect(inventory.to_dict() == inventory_before_defeat, "player defeat or respawn changed inventory")
 
 	for expected_hp in [16.0]:
 		_expect(combat.try_commit_player_contacts(_single_target(target_id), ray_origin, ray_direction, sword_profile), "nonlethal zombie hit did not commit")
@@ -406,9 +428,40 @@ func _run() -> void:
 	await _test_independent_contact_revalidation(world, sword_profile)
 	await _test_uncapped_mixed_damage(world, sword_profile)
 	await _test_multi_target_interactor_timing(world, sword_profile)
+	await _test_player_death_screen()
 	var orphan_count := int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
 	_expect(orphan_count == 0, "orphan count ended at %d" % orphan_count)
 	_finish()
+
+func _test_player_death_screen() -> void:
+	var scene := load("res://ui/screens/death/player_death_screen.tscn") as PackedScene
+	var screen := scene.instantiate() as PlayerDeathScreen
+	var respawn_emissions: Array[int] = [0]
+	var main_menu_emissions: Array[int] = [0]
+	screen.respawn_requested.connect(func(): respawn_emissions[0] += 1)
+	screen.main_menu_requested.connect(func(): main_menu_emissions[0] += 1)
+	root.add_child(screen)
+	await process_frame
+	await process_frame
+	var modal_root := screen.get_node("ModalRoot") as Control
+	_expect(screen.layer == 300, "player death screen is not on its high presentation layer")
+	_expect(modal_root.mouse_filter == Control.MOUSE_FILTER_STOP, "player death screen does not block full-screen pointer input")
+	_expect(screen.panel.material is ShaderMaterial, "player death screen panel is not frosted")
+	_expect(screen.title_label.text == "YOU DIED!", "player death screen title changed")
+	_expect(screen.respawn_button.button_text == "RESPAWN" and screen.main_menu_button.button_text == "MAIN MENU", "player death screen button labels changed")
+	_expect(screen.respawn_button._button.has_focus(), "player death screen did not focus Respawn")
+	var escape := InputEventKey.new()
+	escape.pressed = true
+	escape.keycode = KEY_ESCAPE
+	screen._unhandled_input(escape)
+	_expect(screen.is_inside_tree() and screen.visible, "Escape dismissed the player death screen")
+	_expect(respawn_emissions[0] == 0 and main_menu_emissions[0] == 0, "Escape emitted a player death screen intent")
+	screen.respawn_button.pressed.emit()
+	_expect(respawn_emissions[0] == 1 and main_menu_emissions[0] == 0, "Respawn emitted the wrong player death screen intent")
+	screen.main_menu_button.pressed.emit()
+	_expect(respawn_emissions[0] == 1 and main_menu_emissions[0] == 1, "Main Menu emitted the wrong player death screen intent")
+	screen.queue_free()
+	await process_frame
 
 func _test_sheep_damage(world: VoxelWorld, sword_profile: MeleeAttackProfile) -> void:
 	var coordinator := EntityCoordinator.new()

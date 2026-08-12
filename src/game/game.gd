@@ -8,6 +8,7 @@ signal main_menu_requested
 @export var pause_menu_scene: PackedScene
 @export var animation_tuning_panel_scene: PackedScene
 @export var player_stats_debug_panel_scene: PackedScene
+@export var player_death_screen_scene: PackedScene
 @export var block_catalog: BlockCatalog
 @export var item_catalog: ItemCatalog
 @export var crafting_recipe_catalog: CraftingRecipeCatalog
@@ -38,6 +39,7 @@ var _slot_id: int = -1
 var _save_data: Dictionary = {}
 var _world_state: WorldState
 var _pause_menu: PauseMenu
+var _death_screen: PlayerDeathScreen
 var animation_tuning_panel: AnimationTuningPanel = null
 var player_stats_debug_panel: PlayerStatsDebugPanel = null
 var _save_status_timer: float = 0.0
@@ -133,8 +135,33 @@ func _setup_gameplay():
 	camera_rig.camera.current = true
 
 func _on_player_defeated():
+	if _death_screen != null and is_instance_valid(_death_screen):
+		return
+	player.enter_defeated_state()
+	camera_rig.set_gameplay_input_enabled(false)
+	hud.close_side_panel_immediate()
+	hud.dev_console.close()
+	game_environment.close_debug_panel()
+	if animation_tuning_panel != null and animation_tuning_panel.is_open():
+		animation_tuning_panel.hide_panel()
+	if player_stats_debug_panel != null and player_stats_debug_panel.is_open():
+		player_stats_debug_panel.hide_panel()
+	_death_screen = player_death_screen_scene.instantiate() as PlayerDeathScreen
+	assert(_death_screen != null)
+	_death_screen.respawn_requested.connect(_on_respawn_requested)
+	_death_screen.main_menu_requested.connect(_save_and_request_main_menu)
+	add_child(_death_screen)
+
+func _on_respawn_requested():
+	if _death_screen == null or not is_instance_valid(_death_screen):
+		return
+	var completed_screen := _death_screen
+	_death_screen = null
 	player.respawn_at(world.voxel_model.get_spawn_position() + Vector3(0.0, 0.1, 0.0))
 	camera_rig.snap_to_follow_target()
+	camera_rig.set_gameplay_input_enabled(true)
+	game_environment.restore_debug_panel_input()
+	completed_screen.queue_free()
 
 func _on_generation_progress(stage: String, percent: float, details: String):
 	loading_progress.emit(stage, percent, details)
@@ -155,14 +182,20 @@ func _process(delta):
 		_save_canvas.visible = false
 
 func _physics_process(delta):
-	if OS.is_debug_build() and Input.is_action_just_pressed("toggle_animation_tuner"):
-		_toggle_animation_tuning_panel()
-	input_buffer.poll()
-	if hud.dev_console.is_open() or (animation_tuning_panel != null and animation_tuning_panel.is_open()):
+	if player.is_defeated():
 		input_buffer.clear_gameplay()
+	else:
+		if OS.is_debug_build() and Input.is_action_just_pressed("toggle_animation_tuner"):
+			_toggle_animation_tuning_panel()
+		input_buffer.poll()
+		if hud.dev_console.is_open() or (animation_tuning_panel != null and animation_tuning_panel.is_open()):
+			input_buffer.clear_gameplay()
 	entity_coordinator.tick(delta, player.global_position, game_environment.get_time_of_day())
 
 func _unhandled_input(event):
+	if _death_screen != null and is_instance_valid(_death_screen):
+		get_viewport().set_input_as_handled()
+		return
 	if event is InputEventKey and event.pressed and not event.echo:
 		var key_event = event as InputEventKey
 		if OS.is_debug_build() and (key_event.keycode == KEY_F9 or key_event.physical_keycode == KEY_F9):
