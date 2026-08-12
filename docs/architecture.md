@@ -78,6 +78,18 @@ explicit per-level requirements and slot unlock levels; zero is an initially fre
 Common combat gear unlocks its one slot at proficiency level one after one hundred damage. Rune
 contents and enchantment effects are not part of this system.
 
+Combat items also reference an `ItemRarityDefinition` with a stable ID, display name, and display
+color. `ItemCatalog` requires rarity and proficiency definitions for melee weapons and armor and
+rejects different rarity resources that reuse one ID. Rarity remains classification metadata;
+attack profiles, stat modifiers, and proficiency definitions stay authoritative for combat values,
+equipment bonuses, and unlock thresholds.
+
+`InventorySlot` presents combat-item details for hotbar, backpack, and equipped slots through one
+custom `GearTooltip`. `Game` passes `ItemProficiency` through `HUD`, `Hotbar`, and `SidePanel` into
+each slot, and a visible tooltip queries current progress without owning it. Weapon rows read the
+item's melee attack profile, while armor rows read its slot and stat modifiers, so presentation
+does not own or duplicate gear state.
+
 `Game` owns player stats and handles their completed health-depleted transition. Defeat puts
 the player motor into an input-blocking stopped state, closes inventory and debug panels, and
 presents a high-layer death screen without pausing world time or entity simulation. The screen

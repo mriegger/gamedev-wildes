@@ -128,6 +128,7 @@ func _process(_delta: float) -> bool:
 		if hotbar_grass.icon.texture != grass_item.icon:
 			_fail("grass hotbar icon mismatch")
 			return false
+		_check_hotbar_gear_tooltips()
 		_hud.side_panel.open()
 		print("[hud_integration] side panel open progress %f" % _hud.side_panel.get_progress())
 		_phase = 2
@@ -142,6 +143,7 @@ func _process(_delta: float) -> bool:
 		if inv_slots.is_empty():
 			_fail("no inventory slots")
 			return false
+		_check_backpack_gear_tooltip(inv_slots)
 		_left_destination_ui_index = _find_empty_inventory_ui_index(inv_slots)
 		if _left_destination_ui_index < 0:
 			_fail("no empty inventory slot for left drag")
@@ -798,6 +800,62 @@ func _start_armor_equip() -> void:
 		return
 	_push_double_click(_helmet_inventory_slot)
 
+func _check_hotbar_gear_tooltips() -> void:
+	var sword_slot := _hud.hotbar.slot_nodes[3]
+	if sword_slot.tooltip_text != "Copper Sword":
+		_fail("sword hotbar slot did not expose its gear tooltip")
+		return
+	var tooltip := _create_gear_tooltip(sword_slot, "sword hotbar")
+	if tooltip == null:
+		return
+	if tooltip.item_name_label.text != "Copper Sword" or tooltip.rarity_label.text != "Common":
+		_fail("sword tooltip identity is incorrect")
+	if tooltip.rarity_label.get_theme_color("font_color") != _item_catalog.get_definition(&"copper_sword").rarity.display_color:
+		_fail("sword tooltip rarity color is incorrect")
+	if tooltip.proficiency_level_label.text != "Proficiency Level 0 / 1" or tooltip.proficiency_experience_label.text != "Proficiency XP: 0 / 100":
+		_fail("sword tooltip initial proficiency is incorrect")
+	for expected_stat in ["Base Damage: 10", "Reach: 2.5", "Cooldown: 0.48s", "Sweep: 120°"]:
+		if not tooltip.stats_label.text.contains(expected_stat):
+			_fail("sword tooltip is missing %s" % expected_stat)
+	if _item_proficiency.add_experience(&"copper_sword", 100.0) != 1:
+		_fail("sword tooltip test could not reach maximum proficiency")
+		tooltip.free()
+		return
+	tooltip._process(0.0)
+	if tooltip.proficiency_level_label.text != "Proficiency Level 1 / 1" or tooltip.proficiency_experience_label.text != "Proficiency XP: Max":
+		_fail("visible sword tooltip did not refresh maximum proficiency")
+	tooltip.free()
+	var grass_slot := _hud.hotbar.slot_nodes[1]
+	if not grass_slot.tooltip_text.is_empty() or grass_slot._make_custom_tooltip("") != null:
+		_fail("ordinary block exposed a gear tooltip")
+
+func _check_backpack_gear_tooltip(slots: Array[InventorySlot]) -> void:
+	for slot in slots:
+		if slot.item_id == &"copper_helmet":
+			_check_helmet_tooltip(slot, "backpack")
+			return
+	_fail("helmet backpack tooltip slot is missing")
+
+func _check_helmet_tooltip(slot: InventorySlot, context: String) -> void:
+	var tooltip := _create_gear_tooltip(slot, context)
+	if tooltip == null:
+		return
+	if tooltip.item_name_label.text != "Copper Helmet" or tooltip.rarity_label.text != "Common":
+		_fail("%s helmet tooltip identity is incorrect" % context)
+	if tooltip.proficiency_level_label.text != "Proficiency Level 0 / 1" or tooltip.proficiency_experience_label.text != "Proficiency XP: 0 / 100":
+		_fail("%s helmet tooltip proficiency is incorrect" % context)
+	if not tooltip.stats_label.text.contains("Slot: Head") or not tooltip.stats_label.text.contains("Defense: +1"):
+		_fail("%s helmet tooltip stats are incorrect" % context)
+	tooltip.free()
+
+func _create_gear_tooltip(slot: InventorySlot, context: String) -> GearTooltip:
+	var tooltip := slot._make_custom_tooltip(slot.tooltip_text) as GearTooltip
+	if tooltip == null:
+		_fail("%s gear tooltip was not created" % context)
+		return null
+	root.add_child(tooltip)
+	return tooltip
+
 func _check_armor_equipped_and_open_tab() -> void:
 	var equipped := _inv.get_equipped_armor(ArmorDefinition.Slot.HEAD)
 	if equipped == null or equipped.id != &"copper_helmet":
@@ -811,6 +869,7 @@ func _check_armor_equipped_and_open_tab() -> void:
 		if equipment_slots[armor_slot].empty_label != ArmorDefinition.get_slot_label(armor_slot):
 			_fail("equipment label mismatch for slot %d" % armor_slot)
 			return
+	_check_helmet_tooltip(equipment_slots[ArmorDefinition.Slot.HEAD], "equipment")
 	var button := _hud.side_panel.get_node("Margin/Content/ActionButtons/EquipmentButton/Button") as Control
 	_push_left_click(button)
 
