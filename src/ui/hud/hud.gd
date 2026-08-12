@@ -2,10 +2,12 @@ extends CanvasLayer
 class_name HUD
 
 @onready var hotbar: Hotbar = $Hotbar as Hotbar
+@onready var health_bar: PlayerHealthBar = $HealthBar as PlayerHealthBar
 @onready var side_panel: SidePanel = $SidePanel as SidePanel
 
-func setup_with_camera(p_inventory: InventoryModel, p_inventory_stat_coordinator: InventoryStatCoordinator, cam_rig: CameraRig):
+func setup_with_camera(p_inventory: InventoryModel, p_inventory_stat_coordinator: InventoryStatCoordinator, cam_rig: CameraRig, stats: ActorStats):
 	hotbar.setup(p_inventory, p_inventory_stat_coordinator)
+	health_bar.setup(stats)
 	side_panel.setup(p_inventory, p_inventory_stat_coordinator, cam_rig, hotbar)
 
 func is_side_panel_open() -> bool:

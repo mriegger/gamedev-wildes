@@ -47,9 +47,31 @@ func _process(_delta: float) -> bool:
 			_fail("hud instantiate null")
 			return false
 		root.add_child(_hud)
-		_hud.setup_with_camera(_inv, _inventory_stat_coordinator, null)
+		_hud.setup_with_camera(_inv, _inventory_stat_coordinator, null, _stats)
 		print("[hud_integration] hud added orphan=%d" % int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT)))
 		_phase = 1
+	elif _phase == 1 and _frame == 4:
+		_check_health_bar(100.0, 100.0)
+		_stats.damage(25.0)
+	elif _phase == 1 and _frame == 5:
+		_check_health_bar(75.0, 100.0)
+		_stats.heal(10.0)
+	elif _phase == 1 and _frame == 6:
+		_check_health_bar(85.0, 100.0)
+		var maximum_hp_modifier := StatModifier.new()
+		maximum_hp_modifier.id = &"hud_test_hp"
+		maximum_hp_modifier.source_id = &"hud_test"
+		maximum_hp_modifier.stat_id = &"hp"
+		maximum_hp_modifier.operation = StatModifier.Operation.ADD
+		maximum_hp_modifier.amount = 50.0
+		if not _stats.add_modifier(maximum_hp_modifier):
+			_fail("health bar maximum HP modifier was rejected")
+	elif _phase == 1 and _frame == 7:
+		_check_health_bar(85.0, 150.0)
+		if not _stats.remove_modifier(&"hud_test_hp"):
+			_fail("health bar maximum HP modifier was not removed")
+		_stats.heal(100.0)
+		print("[hud_integration] health bar ok")
 	elif _phase == 1 and _frame == 122:
 		if _hud == null or not is_instance_valid(_hud):
 			_fail("hud invalid")
@@ -180,6 +202,21 @@ func _process(_delta: float) -> bool:
 	elif _phase == 26 and _frame == 217:
 		_check_final_and_quit()
 	return false
+
+func _check_health_bar(current_hp: float, maximum_hp: float) -> void:
+	if _hud.health_bar == null:
+		_fail("health bar missing")
+		return
+	var progress_bar := _hud.health_bar.progress_bar
+	var expected_text := "HP %d / %d" % [roundi(current_hp), roundi(maximum_hp)]
+	if not is_equal_approx(progress_bar.value, current_hp):
+		_fail("health bar current HP expected %.1f got %.1f" % [current_hp, progress_bar.value])
+		return
+	if not is_equal_approx(progress_bar.max_value, maximum_hp):
+		_fail("health bar maximum HP expected %.1f got %.1f" % [maximum_hp, progress_bar.max_value])
+		return
+	if _hud.health_bar.value_label.text != expected_text:
+		_fail("health bar text expected %s got %s" % [expected_text, _hud.health_bar.value_label.text])
 
 func _start_left_drag(src: Vector2, dst: Vector2) -> void:
 	print("[hud_integration] left drag start")

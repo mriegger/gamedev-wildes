@@ -115,7 +115,7 @@ func _setup_gameplay():
 
 	game_environment.sky_color_changed.connect(world.update_water_tint)
 	game_environment.start_clock()
-	hud.setup_with_camera(inventory_model, inventory_stat_coordinator, camera_rig)
+	hud.setup_with_camera(inventory_model, inventory_stat_coordinator, camera_rig, player_stats)
 
 	var saved_position = _world_state.player_position
 	if saved_position != Vector3.ZERO:
