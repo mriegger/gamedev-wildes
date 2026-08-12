@@ -76,8 +76,13 @@ func _run():
 	incomplete_visual_fader.name = &"VisualFader"
 	incomplete_actor.add_child(incomplete_visual_fader)
 	incomplete_visual_fader.owner = incomplete_actor
+	var incomplete_death_poof := EntityDeathPoof.new()
+	incomplete_death_poof.name = &"DeathPoof"
+	incomplete_actor.add_child(incomplete_death_poof)
+	incomplete_death_poof.owner = incomplete_actor
 	incomplete_actor.animation_driver_path = ^"AnimationDriver"
 	incomplete_actor.visual_fader_path = ^"VisualFader"
+	incomplete_actor.death_poof_path = ^"DeathPoof"
 	var incomplete_scene := PackedScene.new()
 	_expect(incomplete_scene.pack(incomplete_actor) == OK, "incomplete actor scene could not be packed")
 	incomplete_actor.free()

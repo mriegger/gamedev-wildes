@@ -42,8 +42,11 @@ spatial index, and active and prepared actor nodes. Zombies and sheep own only t
 behavior state; the shared voxel solver and bounded path follower own reusable movement
 calculations. Their custom animation drivers present actor state without deciding gameplay
 outcomes. Spawned actors fade in through instance-local geometry transparency. Despawn or lethal
-damage removes stats, active state, targeting, and spatial entries together, then a separately
-bounded retiring-visual set fades the actor out before freeing its scene node.
+damage removes stats, active state, targeting, and spatial entries together. Lethal retirement
+plays the species-owned death pose, then starts an actor-owned one-shot smoke poof and model fade
+together; the scene is freed only after both complete. Ordinary distance and streaming retirement
+uses only the fade. The retiring-visual cap bounds actors, fades, and their child particle effects
+to twelve concurrent presentations.
 
 Stat definitions validate every declared base value as finite and nonnegative. `ActorStats` owns
 current HP, validates every removable subset of prospective modifiers before committing them, and
@@ -62,7 +65,7 @@ can consume the same signal without changing AI or combat rules.
 full player HP, cancels current actions and motion, returns the player to world spawn, and snaps the
 camera to the restored position without changing inventory. The HUD observes player stats and
 presents current and maximum HP without owning either value. Entity HP is transient and is not
-serialized. Drops, XP rewards, enemy health bars, regeneration, knockback, death animations, and
+serialized. Drops, XP rewards, enemy health bars, regeneration, knockback, death audio, and
 post-respawn invulnerability remain outside the combat system.
 
 Entity populations are transient and bounded to six per species and twelve total. Spawning makes

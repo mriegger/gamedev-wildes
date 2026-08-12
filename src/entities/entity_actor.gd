@@ -5,6 +5,7 @@ signal melee_contact_reached(source_runtime_id: int, profile: MeleeAttackProfile
 
 @export_node_path("Node") var animation_driver_path: NodePath
 @export_node_path("Node") var visual_fader_path: NodePath
+@export_node_path("CPUParticles3D") var death_poof_path: NodePath
 
 @onready var model_root: Node3D = $ModelRoot as Node3D
 
@@ -16,6 +17,7 @@ var on_ground: bool = true
 var max_speed: float = 1.0
 var animation_driver: EntityAnimationDriver
 var visual_fader: EntityVisualFader
+var death_poof: EntityDeathPoof
 var _death_retirement: bool = false
 var _death_fade_started: bool = false
 
@@ -31,8 +33,10 @@ func setup(p_runtime_id: int, p_definition: EntityDefinition, p_voxel_world: Vox
 	voxel_world = p_voxel_world
 	animation_driver = get_node(animation_driver_path) as EntityAnimationDriver
 	visual_fader = get_node(visual_fader_path) as EntityVisualFader
+	death_poof = get_node(death_poof_path) as EntityDeathPoof
 	assert(animation_driver != null)
 	assert(visual_fader != null)
+	assert(death_poof != null)
 	animation_driver.setup(self)
 	visual_fader.setup(model_root)
 	set_process(true)
@@ -44,15 +48,17 @@ func supports_behavior(_behavior: EntityBehaviorDefinition) -> bool:
 	return false
 
 func has_valid_presentation() -> bool:
-	if animation_driver_path.is_empty() or visual_fader_path.is_empty():
+	if animation_driver_path.is_empty() or visual_fader_path.is_empty() or death_poof_path.is_empty():
 		return false
 	var visual_root := get_node_or_null(^"ModelRoot") as Node3D
 	var candidate_animation_driver := get_node_or_null(animation_driver_path) as EntityAnimationDriver
 	var candidate_visual_fader := get_node_or_null(visual_fader_path) as EntityVisualFader
+	var candidate_death_poof := get_node_or_null(death_poof_path) as EntityDeathPoof
 	return (
 		visual_root != null
 		and candidate_animation_driver != null
 		and candidate_visual_fader != null
+		and candidate_death_poof != null
 		and candidate_visual_fader.can_fade(visual_root)
 	)
 
@@ -71,7 +77,7 @@ func begin_despawn_fade():
 	visual_fader.begin_fade_out()
 
 func begin_death_retirement():
-	assert(animation_driver != null and visual_fader != null)
+	assert(animation_driver != null and visual_fader != null and death_poof != null)
 	velocity = Vector3.ZERO
 	_death_retirement = true
 	_death_fade_started = false
@@ -80,7 +86,7 @@ func begin_death_retirement():
 
 func advance_retirement(delta: float) -> bool:
 	assert(is_finite(delta) and delta >= 0.0)
-	assert(animation_driver != null and visual_fader != null)
+	assert(animation_driver != null and visual_fader != null and death_poof != null)
 	if _death_retirement and not _death_fade_started:
 		var death_delta := minf(delta, animation_driver.get_death_time_remaining())
 		animation_driver.advance(death_delta)
@@ -89,9 +95,14 @@ func advance_retirement(delta: float) -> bool:
 			return false
 		_death_fade_started = true
 		visual_fader.begin_fade_out()
+		death_poof.play()
 		if is_zero_approx(delta):
 			return false
-	return visual_fader.advance(delta)
+	var fade_complete := visual_fader.advance(delta)
+	if not _death_retirement:
+		return fade_complete
+	var poof_complete := death_poof.advance(delta)
+	return fade_complete and poof_complete
 
 func get_visual_opacity() -> float:
 	assert(visual_fader != null)

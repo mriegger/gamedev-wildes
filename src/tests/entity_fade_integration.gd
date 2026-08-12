@@ -81,7 +81,7 @@ func _test_species_visual_fades(catalog: EntityCatalog, world: VoxelWorld) -> vo
 	for index in range(definition_ids.size()):
 		var definition := catalog.get_definition(definition_ids[index])
 		var actor := definition.actor_scene.instantiate() as EntityActor
-		var geometries := _get_geometries(actor)
+		var geometries := _get_geometries(actor.get_node(^"ModelRoot"))
 		var baselines := _get_transparencies(geometries)
 		var baseline_shadows := _get_shadow_settings(geometries)
 		var material_colors := _get_material_colors(geometries)
@@ -89,6 +89,12 @@ func _test_species_visual_fades(catalog: EntityCatalog, world: VoxelWorld) -> vo
 		get_root().add_child(actor)
 		actor.global_position = Vector3(float(index) + 0.5, FEET_Y, 0.5)
 		actor.setup(index + 1, definition, world, 100 + index)
+		var poof := actor.death_poof
+		_expect(poof.amount == 12, "%s death poof amount is not twelve" % definition.id)
+		_expect(is_equal_approx(poof.lifetime, 0.35), "%s death poof lifetime is not 0.35 seconds" % definition.id)
+		_expect(poof.one_shot and is_equal_approx(poof.explosiveness, 1.0), "%s death poof is not a one-shot burst" % definition.id)
+		_expect(poof.color.r >= 0.75 and poof.color.g >= 0.75 and poof.color.b >= 0.75, "%s death poof is not pale" % definition.id)
+		_expect(not poof.emitting and not poof.has_played(), "%s death poof began before lethal retirement" % definition.id)
 		_expect(is_zero_approx(actor.get_visual_opacity()), "%s did not begin fully faded out" % definition.id)
 		_expect_opacity(geometries, baselines, 0.0, "%s spawn start" % definition.id)
 		_expect_shadows_disabled(geometries, "%s spawn start" % definition.id)
@@ -105,6 +111,7 @@ func _test_species_visual_fades(catalog: EntityCatalog, world: VoxelWorld) -> vo
 		_expect(actor.is_processing(), "%s stopped animation before retirement" % definition.id)
 		actor.begin_despawn_fade()
 		_expect(not actor.is_processing(), "%s kept animation processing during retirement" % definition.id)
+		_expect(not poof.emitting and not poof.has_played(), "%s ordinary despawn emitted a death poof" % definition.id)
 		_expect_shadows_disabled(geometries, "%s retirement start" % definition.id)
 		_expect(is_equal_approx(actor.get_visual_opacity(), 1.0), "%s despawn began with an opacity jump" % definition.id)
 		var fade_out_seconds := actor.visual_fader.fade_out_seconds
@@ -113,6 +120,7 @@ func _test_species_visual_fades(catalog: EntityCatalog, world: VoxelWorld) -> vo
 		_expect_opacity(geometries, baselines, 0.5, "%s despawn midpoint" % definition.id)
 		_expect_shadows_disabled(geometries, "%s despawn midpoint" % definition.id)
 		_expect(actor.advance_visual_fade(fade_out_seconds * 0.5), "%s despawn did not complete" % definition.id)
+		_expect(not poof.emitting and not poof.has_played(), "%s completed ordinary despawn emitted a death poof" % definition.id)
 		_expect(is_zero_approx(actor.get_visual_opacity()), "%s did not finish fully transparent" % definition.id)
 		_expect_opacity(geometries, baselines, 0.0, "%s despawn completion" % definition.id)
 		actor.free()
@@ -121,8 +129,8 @@ func _test_instance_isolation(catalog: EntityCatalog, world: VoxelWorld) -> void
 	var definition := catalog.get_definition(&"zombie")
 	var first := definition.actor_scene.instantiate() as EntityActor
 	var second := definition.actor_scene.instantiate() as EntityActor
-	var first_geometries := _get_geometries(first)
-	var second_geometries := _get_geometries(second)
+	var first_geometries := _get_geometries(first.get_node(^"ModelRoot"))
+	var second_geometries := _get_geometries(second.get_node(^"ModelRoot"))
 	get_root().add_child(first)
 	get_root().add_child(second)
 	first.setup(10, definition, world, 10)
@@ -156,11 +164,13 @@ func _test_species_death_retirement(catalog: EntityCatalog, world: VoxelWorld) -
 		_expect(death_state == &"Death", "%s did not enter its death state" % definition.id)
 		_expect(not actor.animation_driver.is_death_complete(), "%s death pose completed at retirement start" % definition.id)
 		_expect(is_equal_approx(actor.get_visual_opacity(), 1.0), "%s death pose began with an opacity change" % definition.id)
+		_expect(not actor.death_poof.emitting and not actor.death_poof.has_played(), "%s death poof began before the pose completed" % definition.id)
 		if actor is ZombieActor:
 			_expect(not (actor as ZombieActor)._melee_contact_pending, "zombie retained a pending attack after lethal retirement")
 		_expect(not actor.advance_retirement(death_seconds * 0.5), "%s retirement completed during its death pose" % definition.id)
 		_expect(not actor.animation_driver.is_death_complete(), "%s death pose completed before its configured duration" % definition.id)
 		_expect(is_equal_approx(actor.get_visual_opacity(), 1.0), "%s faded before its death pose completed" % definition.id)
+		_expect(not actor.death_poof.emitting and not actor.death_poof.has_played(), "%s death poof began during the pose" % definition.id)
 		if actor is ZombieActor:
 			var zombie_animation := actor.animation_driver as ZombieAnimationDriver
 			_expect(absf(zombie_animation.animator.rotation.x - zombie_animation._visual_origin_rotation.x) > deg_to_rad(1.0), "zombie did not buckle into its fall pose")
@@ -170,13 +180,35 @@ func _test_species_death_retirement(catalog: EntityCatalog, world: VoxelWorld) -
 		actor.play_hit(Vector3.LEFT)
 		_expect(not actor.advance_retirement(death_seconds * 0.5), "%s retirement completed before fade-out" % definition.id)
 		_expect(actor.animation_driver.is_death_complete(), "%s death pose did not complete at its configured duration" % definition.id)
+		_expect(actor.death_poof.emitting and actor.death_poof.has_played(), "%s death pose completion did not emit its poof" % definition.id)
+		_expect(is_zero_approx(actor.death_poof._elapsed), "%s death poof did not begin with the fade" % definition.id)
 		death_state = (actor.animation_driver as ZombieAnimationDriver).get_current_state() if actor is ZombieActor else (actor.animation_driver as SheepAnimationDriver).get_current_state()
 		_expect(death_state == &"Death", "%s hit reaction replaced its death pose" % definition.id)
 		var fade_out_seconds := actor.visual_fader.fade_out_seconds
 		_expect(not actor.advance_retirement(fade_out_seconds * 0.5), "%s fade completed before its configured duration" % definition.id)
 		_expect(is_equal_approx(actor.get_visual_opacity(), 0.5), "%s death fade midpoint was not smoothstep-balanced" % definition.id)
+		var poof_elapsed := actor.death_poof._elapsed
+		_expect(is_equal_approx(poof_elapsed, fade_out_seconds * 0.5), "%s death poof did not advance with the fade" % definition.id)
+		_expect(not actor.advance_retirement(0.0) and is_equal_approx(actor.death_poof._elapsed, poof_elapsed), "%s death poof restarted during retirement" % definition.id)
 		_expect(actor.advance_retirement(fade_out_seconds * 0.5), "%s death retirement did not complete" % definition.id)
 		actor.free()
+
+func _test_retirement_waits_for_poof(catalog: EntityCatalog, world: VoxelWorld) -> void:
+	var definition := catalog.get_definition(&"sheep")
+	var actor := definition.actor_scene.instantiate() as EntityActor
+	get_root().add_child(actor)
+	actor.global_position = Vector3(1.5, FEET_Y, 3.5)
+	actor.setup(29, definition, world, 299)
+	actor.advance_visual_fade(actor.visual_fader.fade_in_seconds)
+	actor.visual_fader.fade_out_seconds = 0.15
+	actor.begin_death_retirement()
+	_expect(not actor.advance_retirement(SheepAnimationDriver.DEATH_SECONDS), "sheep retirement completed when the poof began")
+	_expect(not actor.advance_retirement(actor.visual_fader.fade_out_seconds), "sheep retirement completed before its poof")
+	_expect(is_zero_approx(actor.get_visual_opacity()), "sheep model remained visible after its shortened fade")
+	_expect(actor.death_poof._elapsed < actor.death_poof.lifetime, "sheep poof completed before its lifetime")
+	var remaining_poof_time := actor.death_poof.lifetime - actor.visual_fader.fade_out_seconds
+	_expect(actor.advance_retirement(remaining_poof_time), "sheep retirement did not complete after both presentations")
+	actor.free()
 
 func _test_oversized_death_retirement_delta(catalog: EntityCatalog, world: VoxelWorld) -> void:
 	var definition := catalog.get_definition(&"zombie")
@@ -186,7 +218,7 @@ func _test_oversized_death_retirement_delta(catalog: EntityCatalog, world: Voxel
 	actor.setup(30, definition, world, 300)
 	actor.advance_visual_fade(actor.visual_fader.fade_in_seconds)
 	actor.begin_death_retirement()
-	var retirement_seconds := ZombieAnimationDriver.DEATH_SECONDS + actor.visual_fader.fade_out_seconds
+	var retirement_seconds := ZombieAnimationDriver.DEATH_SECONDS + maxf(actor.visual_fader.fade_out_seconds, actor.death_poof.lifetime)
 	_expect(actor.advance_retirement(retirement_seconds), "oversized death-retirement delta did not complete the lifecycle")
 	_expect(is_zero_approx(actor.get_visual_opacity()), "oversized death-retirement delta did not finish transparent")
 	actor.free()
@@ -217,6 +249,7 @@ func _test_coordinator_retirement(catalog: EntityCatalog, world: VoxelWorld) -> 
 	_expect(not coordinator.has_entity_overlap(former_bounds), "retiring actor still blocked placement")
 	_expect(coordinator._retiring.size() == 1 and is_instance_valid(actor), "retiring visual was not retained")
 	_expect(is_equal_approx(actor.get_visual_opacity(), interrupted_opacity), "interrupted fade-out changed opacity at transition")
+	_expect(not actor.death_poof.has_played(), "ordinary coordinator despawn emitted a death poof")
 	var fade_out_seconds := actor.visual_fader.fade_out_seconds
 	coordinator.tick(fade_out_seconds * 0.5, player_position, 20.0)
 	_expect(actor.get_visual_opacity() < interrupted_opacity and actor.get_visual_opacity() > 0.0, "retiring visual did not fade gradually")
@@ -270,6 +303,7 @@ func _run() -> void:
 	_test_species_visual_fades(catalog, world)
 	_test_instance_isolation(catalog, world)
 	_test_species_death_retirement(catalog, world)
+	_test_retirement_waits_for_poof(catalog, world)
 	_test_oversized_death_retirement_delta(catalog, world)
 	await _test_coordinator_retirement(catalog, world)
 	await _test_retiring_bound_and_population_independence(catalog, world)
