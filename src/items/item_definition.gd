@@ -13,6 +13,7 @@ enum StatModifierActivation {
 @export var primary_action: ItemActionDefinition
 @export var secondary_action: ItemActionDefinition
 @export var held_scene: PackedScene
+@export var rarity: ItemRarityDefinition
 @export var proficiency: ProficiencyDefinition
 @export var stat_modifier_activation: StatModifierActivation = StatModifierActivation.SELECTED
 @export var stat_modifiers: Array[StatModifier]

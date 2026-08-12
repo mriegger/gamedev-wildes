@@ -86,6 +86,7 @@ func validate(block_catalog: BlockCatalog) -> bool:
 	_ensure_lookup()
 	var valid := _is_valid
 	var armor_sets_by_id: Dictionary = {}
+	var rarities_by_id: Dictionary = {}
 	var block_tags: Dictionary = {}
 	var maximum_power_by_tag: Dictionary = {}
 	for block in block_catalog.definitions:
@@ -95,9 +96,24 @@ func validate(block_catalog: BlockCatalog) -> bool:
 		if definition == null:
 			continue
 		var armor := definition as ArmorDefinition
-		if (armor != null or definition.primary_action is MeleeAttackActionDefinition) and definition.proficiency == null:
+		var combat_item := _is_combat_definition(definition)
+		if combat_item and definition.proficiency == null:
 			push_error("[ItemCatalog] Missing proficiency for combat item %s" % definition.id)
 			valid = false
+		if combat_item and definition.rarity == null:
+			push_error("[ItemCatalog] Missing rarity for combat item %s" % definition.id)
+			valid = false
+		var rarity := definition.rarity
+		if rarity != null:
+			if not rarity.validate():
+				push_error("[ItemCatalog] Invalid rarity for %s" % definition.id)
+				valid = false
+			elif rarities_by_id.has(rarity.id):
+				if rarities_by_id[rarity.id] != rarity:
+					push_error("[ItemCatalog] Non-canonical rarity %s for %s" % [rarity.id, definition.id])
+					valid = false
+			else:
+				rarities_by_id[rarity.id] = rarity
 		if armor != null:
 			valid = armor.validate(definition.resource_path) and valid
 			var armor_set := armor.armor_set
@@ -138,6 +154,14 @@ func validate(block_catalog: BlockCatalog) -> bool:
 func has_definition(id: StringName) -> bool:
 	_ensure_lookup()
 	return _definitions_by_id.has(id)
+
+func is_combat_item(id: StringName) -> bool:
+	if not has_definition(id):
+		return false
+	return _is_combat_definition(get_definition(id))
+
+func _is_combat_definition(definition: ItemDefinition) -> bool:
+	return definition is ArmorDefinition or definition.primary_action is MeleeAttackActionDefinition
 
 func get_definition(id: StringName) -> ItemDefinition:
 	_ensure_lookup()
