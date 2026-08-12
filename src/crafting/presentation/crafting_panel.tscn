@@ -12,6 +12,17 @@ custom_minimum_size = Vector2(520, 0)
 mouse_filter = 2
 script = ExtResource("1_script")
 
+[node name="CraftingImpactPlayer" type="AudioStreamPlayer" parent="."]
+volume_db = -6.0
+bus = &"SFX"
+
+[node name="CraftingCompletePlayer" type="AudioStreamPlayer" parent="."]
+volume_db = -6.0
+bus = &"SFX"
+
+[node name="CraftingImpactTimer" type="Timer" parent="."]
+wait_time = 0.5
+
 [node name="Background" type="Panel" parent="."]
 layout_mode = 1
 anchors_preset = 15

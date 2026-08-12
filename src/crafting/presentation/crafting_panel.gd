@@ -4,6 +4,7 @@ class_name CraftingPanel
 const PANEL_WIDTH: float = 520.0
 const ANIM_DURATION: float = 0.25
 const HOTBAR_CLEARANCE: float = 112.0
+const CRAFTING_IMPACT_INTERVAL: float = 0.5
 
 @onready var _background: Panel = $Background as Panel
 @onready var _content: Control = $Margin/Content as Control
@@ -13,6 +14,9 @@ const HOTBAR_CLEARANCE: float = 112.0
 @onready var _output_count: Label = $Margin/Content/Body/Details/Output/Text/Count as Label
 @onready var _ingredient_list: VBoxContainer = $Margin/Content/Body/Details/IngredientList as VBoxContainer
 @onready var _craft_button: CraftProgressButton = $Margin/Content/Body/Details/CraftProgressButton as CraftProgressButton
+@onready var _crafting_impact_player: AudioStreamPlayer = $CraftingImpactPlayer as AudioStreamPlayer
+@onready var _crafting_complete_player: AudioStreamPlayer = $CraftingCompletePlayer as AudioStreamPlayer
+@onready var _crafting_impact_timer: Timer = $CraftingImpactTimer as Timer
 
 var crafting_coordinator: CraftingCoordinator
 var recipe_catalog: CraftingRecipeCatalog
@@ -23,12 +27,18 @@ var _selected_recipe_id: StringName = &""
 var _progress: float = 0.0
 var _target_progress: float = 0.0
 var _is_open: bool = false
+var _crafting_impact_stream: AudioStream = preload("res://assets/audio/sfx/tools/impactGeneric_light_003.ogg")
+var _crafting_complete_stream: AudioStream = preload("res://assets/audio/sfx/tools/impactGeneric_light_004.ogg")
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	visible = true
 	WildesStyle.apply_frosted_panel(_background, WildesStyle.make_panel(Color(0.14, 0.16, 0.18, 0.32), 0, Color(1, 1, 1, 0.12), 1), 5.0, false)
 	_craft_button.pressed.connect(_on_craft_pressed)
+	_crafting_impact_player.stream = _crafting_impact_stream
+	_crafting_complete_player.stream = _crafting_complete_stream
+	_crafting_impact_timer.wait_time = CRAFTING_IMPACT_INTERVAL
+	_crafting_impact_timer.timeout.connect(_on_crafting_impact_timeout)
 	_update_size()
 	_apply_state()
 	set_process(false)
@@ -40,6 +50,7 @@ func setup(p_crafting_coordinator: CraftingCoordinator, p_recipe_catalog: Crafti
 	recipe_catalog = p_recipe_catalog
 	camera_rig = p_camera_rig
 	crafting_coordinator.state_changed.connect(_on_crafting_state_changed)
+	crafting_coordinator.craft_completed.connect(_on_craft_completed)
 	_build_recipe_list()
 	if not recipe_catalog.definitions.is_empty():
 		_select_recipe(recipe_catalog.definitions[0].id)
@@ -56,6 +67,7 @@ func close() -> void:
 	_target_progress = 0.0
 	if crafting_coordinator != null:
 		crafting_coordinator.cancel()
+	_stop_all_crafting_audio()
 	set_process(true)
 
 func close_immediate() -> void:
@@ -64,6 +76,7 @@ func close_immediate() -> void:
 	_target_progress = 0.0
 	if crafting_coordinator != null:
 		crafting_coordinator.cancel()
+	_stop_all_crafting_audio()
 	_update_size()
 	_apply_state()
 	set_process(false)
@@ -182,6 +195,46 @@ func _on_crafting_state_changed() -> void:
 	_refresh_details()
 	if crafting_coordinator.is_crafting():
 		set_process(true)
+	_sync_crafting_audio()
+
+func _sync_crafting_audio() -> void:
+	if crafting_coordinator != null and crafting_coordinator.is_crafting():
+		if _crafting_impact_timer.is_stopped():
+			_crafting_complete_player.stop()
+			_crafting_impact_player.play()
+			_crafting_impact_timer.start()
+		return
+	_stop_crafting_audio()
+
+func _stop_crafting_audio() -> void:
+	_crafting_impact_timer.stop()
+	_crafting_impact_player.stop()
+
+func _on_crafting_impact_timeout() -> void:
+	if not _is_open or crafting_coordinator == null or not crafting_coordinator.is_crafting():
+		_stop_crafting_audio()
+		return
+	_crafting_impact_player.play()
+
+func _on_craft_completed(_recipe_id: StringName) -> void:
+	if _is_open:
+		_crafting_complete_player.play()
+
+func _stop_all_crafting_audio() -> void:
+	_stop_crafting_audio()
+	_crafting_complete_player.stop()
+
+func _exit_tree() -> void:
+	if _crafting_impact_timer != null:
+		_crafting_impact_timer.stop()
+	if _crafting_impact_player != null:
+		_crafting_impact_player.stop()
+		_crafting_impact_player.stream = null
+	if _crafting_complete_player != null:
+		_crafting_complete_player.stop()
+		_crafting_complete_player.stream = null
+	_crafting_impact_stream = null
+	_crafting_complete_stream = null
 
 func _update_size() -> void:
 	var viewport_size := Vector2(1280, 720)

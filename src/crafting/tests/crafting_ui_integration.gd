@@ -51,6 +51,16 @@ func _process(_delta: float) -> bool:
 		_phase = 2
 	elif _phase == 2 and _frame == 70:
 		_expect(_crafting.is_crafting(), "craft button did not start selected recipe")
+		var impact_player := _hud.crafting_panel.get_node("CraftingImpactPlayer") as AudioStreamPlayer
+		var complete_player := _hud.crafting_panel.get_node("CraftingCompletePlayer") as AudioStreamPlayer
+		var impact_timer := _hud.crafting_panel.get_node("CraftingImpactTimer") as Timer
+		_expect(impact_player.stream.resource_path == "res://assets/audio/sfx/tools/impactGeneric_light_003.ogg", "crafting used the wrong repeating impact sound")
+		_expect(complete_player.stream.resource_path == "res://assets/audio/sfx/tools/impactGeneric_light_004.ogg", "crafting used the wrong completion sound")
+		_expect(impact_player.bus == &"SFX", "crafting impact did not use the SFX bus")
+		_expect(complete_player.bus == &"SFX", "crafting completion did not use the SFX bus")
+		_expect(impact_player.playing, "crafting impact did not play when crafting started")
+		_expect(not complete_player.playing, "crafting completion played before crafting completed")
+		_expect(not impact_timer.is_stopped() and is_equal_approx(impact_timer.wait_time, 0.5), "crafting impact did not repeat twice per second")
 		_crafting.advance_time(1.0)
 		_phase = 3
 	elif _phase == 3 and _frame == 72:
@@ -70,6 +80,9 @@ func _process(_delta: float) -> bool:
 		_expect(is_zero_approx(_hud.crafting_panel.get_craft_button().get_progress()), "recipe selection did not reset button")
 		_expect(is_zero_approx(_hud.crafting_panel.get_craft_button().get_rendered_progress()), "recipe selection did not reset rendered fill")
 		_expect(not (_hud.crafting_panel.get_craft_button().get_node("Fill") as ProgressBar).visible, "recipe selection did not hide rendered fill")
+		_expect((_hud.crafting_panel.get_node("CraftingImpactTimer") as Timer).is_stopped(), "recipe selection did not stop crafting audio timer")
+		_expect(not (_hud.crafting_panel.get_node("CraftingImpactPlayer") as AudioStreamPlayer).playing, "recipe selection did not stop crafting audio")
+		_expect(not (_hud.crafting_panel.get_node("CraftingCompletePlayer") as AudioStreamPlayer).playing, "recipe cancellation played completion audio")
 		_expect(_inventory.get_inventory_item_count(&"stone_block") == 10, "recipe selection consumed stone")
 		_expect(_inventory.get_inventory_item_count(&"log_block") == 5, "recipe selection consumed wood")
 		_hud.crafting_panel.select_recipe(&"copper_pickaxe")
@@ -80,6 +93,9 @@ func _process(_delta: float) -> bool:
 		_expect(_inventory.get_inventory_item_count(&"copper_pickaxe") == 1, "completed UI craft did not add output")
 		_expect(_inventory.get_inventory_item_count(&"stone_block") == 7, "completed UI craft consumed wrong stone count")
 		_expect(_inventory.get_inventory_item_count(&"log_block") == 3, "completed UI craft consumed wrong wood count")
+		_expect((_hud.crafting_panel.get_node("CraftingImpactTimer") as Timer).is_stopped(), "completed craft did not stop crafting audio timer")
+		_expect(not (_hud.crafting_panel.get_node("CraftingImpactPlayer") as AudioStreamPlayer).playing, "completed craft did not stop crafting audio")
+		_expect((_hud.crafting_panel.get_node("CraftingCompletePlayer") as AudioStreamPlayer).playing, "completed craft did not play completion audio")
 		_hud.crafting_panel.select_recipe(&"copper_helmet")
 		_expect(not _hud.crafting_panel.get_craft_button().is_craft_enabled(), "unavailable recipe button remained enabled")
 		_hud.crafting_panel.select_recipe(&"copper_sword")
@@ -91,6 +107,9 @@ func _process(_delta: float) -> bool:
 	elif _phase == 6 and _frame == 78:
 		_expect(not _crafting.is_crafting(), "closing backpack did not cancel crafting")
 		_expect(not _hud.side_panel.is_open() and not _hud.crafting_panel.is_open(), "HUD panels did not close together")
+		_expect((_hud.crafting_panel.get_node("CraftingImpactTimer") as Timer).is_stopped(), "closing backpack did not stop crafting audio timer")
+		_expect(not (_hud.crafting_panel.get_node("CraftingImpactPlayer") as AudioStreamPlayer).playing, "closing backpack did not stop crafting audio")
+		_expect(not (_hud.crafting_panel.get_node("CraftingCompletePlayer") as AudioStreamPlayer).playing, "closing backpack did not stop completion audio")
 		_expect(_inventory.get_inventory_item_count(&"copper_sword") == 0, "canceled sword craft added output")
 		_expect(_inventory.get_inventory_item_count(&"stone_block") == 7, "closing backpack consumed stone")
 		_expect(_inventory.get_inventory_item_count(&"log_block") == 3, "closing backpack consumed wood")

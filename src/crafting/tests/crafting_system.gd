@@ -2,6 +2,7 @@ extends SceneTree
 
 var _errors: Array[String] = []
 var _state_change_count: int = 0
+var _craft_completed_count: int = 0
 
 func _init() -> void:
 	var block_catalog := load("res://blocks/block_catalog.tres") as BlockCatalog
@@ -64,17 +65,20 @@ func _init() -> void:
 	var coordinator := CraftingCoordinator.new()
 	coordinator.setup(inventory, recipe_catalog)
 	coordinator.state_changed.connect(_on_state_changed)
+	coordinator.craft_completed.connect(_on_craft_completed)
 	_expect(coordinator.can_craft(&"copper_pickaxe"), "available pickaxe recipe disabled")
 	_expect(coordinator.start(&"copper_pickaxe"), "pickaxe craft did not start")
 	_expect(not coordinator.advance_time(1.9), "pickaxe completed before two seconds")
 	_expect(coordinator.is_crafting(), "pickaxe craft stopped early")
 	_expect(is_equal_approx(coordinator.get_progress(), 0.95), "craft progress mismatch")
 	_expect(coordinator.cancel(), "active craft did not cancel")
+	_expect(_craft_completed_count == 0, "canceled craft emitted completion")
 	_expect(not coordinator.is_crafting() and is_zero_approx(coordinator.get_progress()), "cancel did not reset progress")
 	_expect(inventory.get_backpack_item_count(&"stone_block") == 3, "cancel consumed stone")
 	_expect(inventory.get_backpack_item_count(&"log_block") == 2, "cancel consumed wood")
 	_expect(coordinator.start(&"copper_pickaxe"), "second pickaxe craft did not start")
 	_expect(coordinator.advance_time(2.0), "pickaxe did not complete at two seconds")
+	_expect(_craft_completed_count == 1, "completed craft did not emit completion exactly once")
 	_expect(inventory.get_backpack_item_count(&"stone_block") == 0, "completed craft retained stone")
 	_expect(inventory.get_backpack_item_count(&"log_block") == 0, "completed craft retained wood")
 	_expect(inventory.get_backpack_item_count(&"copper_pickaxe") == 1, "completed craft did not add output")
@@ -103,6 +107,9 @@ func _init() -> void:
 
 func _on_state_changed() -> void:
 	_state_change_count += 1
+
+func _on_craft_completed(_recipe_id: StringName) -> void:
+	_craft_completed_count += 1
 
 func _expect(condition: bool, message: String) -> void:
 	if not condition:

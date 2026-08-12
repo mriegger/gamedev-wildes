@@ -2,6 +2,7 @@ extends RefCounted
 class_name CraftingCoordinator
 
 signal state_changed
+signal craft_completed(recipe_id: StringName)
 
 var inventory_model: InventoryModel
 var recipe_catalog: CraftingRecipeCatalog
@@ -48,6 +49,7 @@ func advance_time(delta: float) -> bool:
 	_elapsed_seconds = 0.0
 	var crafted := inventory_model.exchange_inventory_items(ingredient_counts, output_counts)
 	assert(crafted)
+	craft_completed.emit(recipe.id)
 	return true
 
 func cancel() -> bool:
