@@ -47,3 +47,38 @@ theme_override_styles/background = SubResource("StyleBoxFlat_background")
 theme_override_styles/fill = SubResource("StyleBoxFlat_fill")
 value = 100.0
 show_percentage = false
+
+[node name="HoverPanel" type="Panel" parent="ProgressBar"]
+visible = false
+custom_minimum_size = Vector2(144, 36)
+layout_mode = 1
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -72.0
+offset_top = 8.0
+offset_right = 72.0
+offset_bottom = 44.0
+grow_horizontal = 2
+mouse_filter = 2
+z_index = 1
+
+[node name="ValueLabel" type="Label" parent="ProgressBar/HoverPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 10.0
+offset_right = -10.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(1, 0.97, 0.94, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.75)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+theme_override_font_sizes/font_size = 13
+text = "HP 0 / 0"
+horizontal_alignment = 1
+vertical_alignment = 1

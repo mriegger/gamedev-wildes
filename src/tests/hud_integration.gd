@@ -242,8 +242,8 @@ func _check_health_bar(current_hp: float, maximum_hp: float) -> void:
 	if not is_equal_approx(progress_bar.max_value, maximum_hp):
 		_fail("health bar maximum HP expected %.1f got %.1f" % [maximum_hp, progress_bar.max_value])
 		return
-	if progress_bar.tooltip_text != expected_text:
-		_fail("health bar tooltip expected %s got %s" % [expected_text, progress_bar.tooltip_text])
+	if _hud.health_bar.value_label.text != expected_text:
+		_fail("health bar hover text expected %s got %s" % [expected_text, _hud.health_bar.value_label.text])
 
 func _check_health_bar_geometry() -> void:
 	if _hud.health_bar == null:
@@ -266,8 +266,23 @@ func _check_health_bar_geometry() -> void:
 	if not is_equal_approx(viewport_size.x - progress_rect.end.x, PlayerHealthBar.EDGE_MARGIN) or not is_equal_approx(progress_rect.position.y, PlayerHealthBar.EDGE_MARGIN):
 		_fail("health bar does not preserve its 24-pixel top-right margins")
 		return
-	if _hud.health_bar.mouse_filter != Control.MOUSE_FILTER_IGNORE or progress_bar.mouse_filter != Control.MOUSE_FILTER_PASS:
+	if _hud.health_bar.mouse_filter != Control.MOUSE_FILTER_IGNORE or progress_bar.mouse_filter != Control.MOUSE_FILTER_PASS or _hud.health_bar.hover_panel.mouse_filter != Control.MOUSE_FILTER_IGNORE or _hud.health_bar.value_label.mouse_filter != Control.MOUSE_FILTER_IGNORE:
 		_fail("health bar hover target has incorrect mouse filtering")
+		return
+	if _hud.health_bar.hover_panel.visible:
+		_fail("health bar hover panel is visible without a hover")
+		return
+	progress_bar.mouse_entered.emit()
+	if not _hud.health_bar.hover_panel.visible:
+		_fail("health bar hover panel did not appear immediately")
+		return
+	progress_bar.mouse_exited.emit()
+	if _hud.health_bar.hover_panel.visible:
+		_fail("health bar hover panel remained visible after exit")
+		return
+	var hover_style := _hud.health_bar.hover_panel.get_theme_stylebox(&"panel") as StyleBoxFlat
+	if hover_style == null or not (_hud.health_bar.hover_panel.material is ShaderMaterial):
+		_fail("health bar hover panel is not frosted")
 		return
 	var track := progress_bar.get_theme_stylebox(&"background") as StyleBoxFlat
 	var fill := progress_bar.get_theme_stylebox(&"fill") as StyleBoxFlat

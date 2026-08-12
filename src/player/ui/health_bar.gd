@@ -6,12 +6,22 @@ const BAR_HEIGHT: float = 16.0
 const EDGE_MARGIN: float = 24.0
 
 @onready var progress_bar: ProgressBar = $ProgressBar as ProgressBar
+@onready var hover_panel: Panel = $ProgressBar/HoverPanel as Panel
+@onready var value_label: Label = $ProgressBar/HoverPanel/ValueLabel as Label
 
 var _stats: ActorStats
 var _right_inset: float = 0.0
 
 func _ready():
 	set_process(false)
+	WildesStyle.apply_frosted_panel(
+		hover_panel,
+		WildesStyle.make_panel(Color(0.12, 0.14, 0.18, 0.58), 8, Color(1.0, 1.0, 1.0, 0.2), 1),
+		4.0,
+		false,
+	)
+	progress_bar.mouse_entered.connect(_show_hover_panel)
+	progress_bar.mouse_exited.connect(_hide_hover_panel)
 	get_viewport().size_changed.connect(_apply_layout)
 	_apply_layout()
 
@@ -43,7 +53,13 @@ func _refresh():
 	var maximum_hp := _stats.get_value(&"hp")
 	progress_bar.max_value = maximum_hp
 	progress_bar.value = _stats.current_hp
-	progress_bar.tooltip_text = "HP %s / %s" % [_format_value(_stats.current_hp), _format_value(maximum_hp)]
+	value_label.text = "HP %s / %s" % [_format_value(_stats.current_hp), _format_value(maximum_hp)]
+
+func _show_hover_panel():
+	hover_panel.visible = true
+
+func _hide_hover_panel():
+	hover_panel.visible = false
 
 func _format_value(value: float) -> String:
 	if is_equal_approx(value, roundf(value)):
