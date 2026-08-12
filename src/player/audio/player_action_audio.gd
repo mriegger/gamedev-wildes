@@ -24,8 +24,6 @@ var _creature_hit_streams: Array[AudioStream] = [
 ]
 var _player_hit_streams: Array[AudioStream] = [
 	preload("res://assets/audio/combat/impacts/player/player_hit.wav"),
-	preload("res://assets/audio/combat/impacts/player/player_hit_2.wav"),
-	preload("res://assets/audio/combat/impacts/player/player_hit_3.wav"),
 ]
 var _last_clunk_idx: int = -1
 var _last_creature_hit_idx: int = -1
