@@ -346,6 +346,11 @@ func _get_stats(runtime_id: int) -> ActorStats:
 func has_entity_overlap(bounds: AABB) -> bool:
 	return not _spatial_index.query_overlapping(bounds).is_empty()
 
+func get_active_runtime_ids_overlapping(bounds: AABB) -> Array[int]:
+	assert(bounds.position.is_finite() and bounds.size.is_finite())
+	assert(bounds.size.x > 0.0 and bounds.size.y > 0.0 and bounds.size.z > 0.0)
+	return _spatial_index.query_overlapping(bounds)
+
 func record_melee_contact(contact: MeleeContact):
 	var target := get_actor(contact.target_runtime_id)
 	if target != null:

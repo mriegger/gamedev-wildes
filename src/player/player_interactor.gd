@@ -41,7 +41,7 @@ var secondary_use_timer: float = 0.0
 var _ray_hit_pos: Vector3i
 var _ray_place_pos: Vector3i
 var _ray_face_normal: Vector3i
-var _melee_target_runtime_id: int = -1
+var _melee_target_runtime_ids: Array[int] = []
 var _melee_contact_pending: bool = false
 var _melee_ray_origin: Vector3
 var _melee_ray_direction: Vector3
@@ -300,7 +300,7 @@ func _reset_mining():
 
 func _reset_melee_chain():
 	_melee_contact_pending = false
-	_melee_target_runtime_id = -1
+	_melee_target_runtime_ids.clear()
 	melee_attack_timer = 0.0
 	melee_attack_elapsed = 0.0
 	melee_attack_queue = 0
@@ -316,15 +316,15 @@ func _start_melee_attack():
 	var mouse_position := get_viewport().get_mouse_position()
 	_melee_ray_origin = camera.project_ray_origin(mouse_position)
 	_melee_ray_direction = camera.project_ray_normal(mouse_position).normalized()
-	_melee_target_runtime_id = combat.acquire_player_target(_melee_ray_origin, _melee_ray_direction, profile)
-	_melee_contact_pending = _melee_target_runtime_id >= 0
+	_melee_target_runtime_ids = combat.acquire_player_targets(_melee_ray_origin, _melee_ray_direction, profile)
+	_melee_contact_pending = not _melee_target_runtime_ids.is_empty()
 	var attack_direction := next_melee_attack_direction
 	next_melee_attack_direction = -next_melee_attack_direction
 	melee_attack_started.emit(melee_attack_action, attack_direction)
 	if target_has and voxel_world != null and voxel_world.is_solid(target_block):
 		melee_terrain_hit.emit(target_block)
 	if _melee_contact_pending and is_zero_approx(profile.contact_time):
-		_commit_melee_contact()
+		_commit_melee_contacts()
 
 func _advance_melee_attack(delta: float):
 	if melee_attack_action == null or melee_attack_timer <= 0.0:
@@ -334,13 +334,13 @@ func _advance_melee_attack(delta: float):
 	melee_attack_elapsed = minf(melee_attack_elapsed + delta, profile.duration)
 	melee_attack_timer = maxf(melee_attack_timer - delta, 0.0)
 	if _melee_contact_pending and previous_elapsed < profile.contact_time and melee_attack_elapsed >= profile.contact_time:
-		_commit_melee_contact()
+		_commit_melee_contacts()
 
-func _commit_melee_contact():
-	var target_runtime_id := _melee_target_runtime_id
+func _commit_melee_contacts():
+	var target_runtime_ids := _melee_target_runtime_ids
 	_melee_contact_pending = false
-	_melee_target_runtime_id = -1
-	combat.try_commit_player_contact(target_runtime_id, _melee_ray_origin, _melee_ray_direction, melee_attack_action.attack_profile)
+	_melee_target_runtime_ids = []
+	combat.try_commit_player_contacts(target_runtime_ids, _melee_ray_origin, _melee_ray_direction, melee_attack_action.attack_profile)
 
 func _can_mine_position(pos: Vector3i, action: MiningActionDefinition) -> bool:
 	if action == null or voxel_world == null or motor == null:

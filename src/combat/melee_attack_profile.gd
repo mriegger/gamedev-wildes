@@ -7,6 +7,7 @@ class_name MeleeAttackProfile
 @export_range(0.0, 10.0, 0.01, "or_greater") var cooldown: float = 0.48
 @export_range(0.01, 32.0, 0.01, "or_greater") var reach: float = 2.5
 @export_range(0.01, 999999.0, 0.01, "or_greater") var base_damage: float = 1.0
+@export_range(0.0, 360.0, 0.1) var sweep_degrees: float = 0.0
 
 func validate(source: String) -> bool:
 	var valid := true
@@ -27,6 +28,9 @@ func validate(source: String) -> bool:
 		valid = false
 	if not is_finite(base_damage) or base_damage <= 0.0:
 		push_error("[MeleeAttackProfile] Invalid base damage at %s" % source)
+		valid = false
+	if not is_finite(sweep_degrees) or sweep_degrees < 0.0 or sweep_degrees > 360.0:
+		push_error("[MeleeAttackProfile] Invalid sweep at %s" % source)
 		valid = false
 	return valid
 

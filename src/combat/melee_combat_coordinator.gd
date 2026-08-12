@@ -3,6 +3,7 @@ class_name MeleeCombatCoordinator
 
 const PLAYER_RUNTIME_ID: int = 0
 const PLAYER_DEFINITION_ID: StringName = &"player"
+const GEOMETRY_EPSILON: float = 0.000001
 
 const MeleeAttackProfileType := preload("res://combat/melee_attack_profile.gd")
 const MeleeContactType := preload("res://combat/melee_contact.gd")
@@ -33,65 +34,92 @@ func setup(
 	_player_stats = p_player_stats
 	_entity_coordinator = p_entity_coordinator
 
-func acquire_player_target(ray_origin: Vector3, ray_direction: Vector3, profile: MeleeAttackProfileType) -> int:
+func acquire_player_targets(ray_origin: Vector3, ray_direction: Vector3, profile: MeleeAttackProfileType) -> Array[int]:
 	assert(_is_setup())
 	assert(profile != null)
+	var result: Array[int] = []
 	if not ray_origin.is_finite() or not ray_direction.is_finite() or ray_direction.is_zero_approx():
-		return -1
+		return result
 	var direction := ray_direction.normalized()
 	var player_origin := _get_player_center()
+	var reach_extent := Vector3.ONE * (profile.reach + GEOMETRY_EPSILON)
+	var candidate_ids := _entity_coordinator.get_active_runtime_ids_overlapping(AABB(player_origin - reach_extent, reach_extent * 2.0))
+	if profile.sweep_degrees > 0.0:
+		var planar_aim := _get_planar_aim(ray_origin, direction, player_origin)
+		if planar_aim.is_zero_approx():
+			return result
+		for runtime_id in candidate_ids:
+			var actor := _entity_coordinator.get_actor(runtime_id)
+			if actor != null and _get_valid_player_hit(actor, ray_origin, direction, planar_aim, profile) is Vector3:
+				result.append(runtime_id)
+		return result
 	var nearest_runtime_id := -1
 	var nearest_distance_squared := INF
-	for actor in _entity_coordinator.get_active_actors():
-		if not is_instance_valid(actor) or actor.definition == null:
+	for runtime_id in candidate_ids:
+		var actor := _entity_coordinator.get_actor(runtime_id)
+		if actor == null or actor.definition == null:
 			continue
-		var hit: Variant = actor.get_world_bounds().intersects_ray(ray_origin, direction)
+		var hit: Variant = _get_valid_player_hit(actor, ray_origin, direction, Vector3.ZERO, profile)
 		if not hit is Vector3:
 			continue
 		var hit_position: Vector3 = hit
-		if not _is_valid_player_geometry(player_origin, ray_origin, hit_position, profile):
-			continue
 		var distance_squared := ray_origin.distance_squared_to(hit_position)
 		if distance_squared < nearest_distance_squared or (is_equal_approx(distance_squared, nearest_distance_squared) and actor.runtime_id < nearest_runtime_id):
 			nearest_runtime_id = actor.runtime_id
 			nearest_distance_squared = distance_squared
-	return nearest_runtime_id
+	if nearest_runtime_id > PLAYER_RUNTIME_ID:
+		result.append(nearest_runtime_id)
+	return result
 
-func try_commit_player_contact(
-	target_runtime_id: int,
+func try_commit_player_contacts(
+	target_runtime_ids: Array[int],
 	locked_ray_origin: Vector3,
 	locked_ray_direction: Vector3,
 	profile: MeleeAttackProfileType,
 ) -> bool:
 	assert(_is_setup())
 	assert(profile != null)
-	if target_runtime_id <= PLAYER_RUNTIME_ID:
+	if target_runtime_ids.is_empty():
 		return false
 	if not locked_ray_origin.is_finite() or not locked_ray_direction.is_finite() or locked_ray_direction.is_zero_approx():
 		return false
-	var actor: EntityActor = _entity_coordinator.get_actor(target_runtime_id)
-	if not is_instance_valid(actor) or actor.definition == null:
-		return false
-	var hit: Variant = actor.get_world_bounds().intersects_ray(locked_ray_origin, locked_ray_direction.normalized())
-	if not hit is Vector3:
-		return false
-	var hit_position: Vector3 = hit
+	var direction := locked_ray_direction.normalized()
 	var player_origin := _get_player_center()
-	if not _is_valid_player_geometry(player_origin, locked_ray_origin, hit_position, profile):
-		return false
-	var hit_direction := hit_position - player_origin
-	if hit_direction.is_zero_approx():
-		return false
-	var contact := MeleeContactType.new(
-		PLAYER_RUNTIME_ID,
-		PLAYER_DEFINITION_ID,
-		actor.runtime_id,
-		actor.definition.id,
-		profile.id,
-		hit_position,
-		hit_direction,
-	)
-	return _commit_contact(contact, profile)
+	var planar_aim := Vector3.ZERO
+	if profile.sweep_degrees > 0.0:
+		planar_aim = _get_planar_aim(locked_ray_origin, direction, player_origin)
+		if planar_aim.is_zero_approx():
+			return false
+	var sorted_runtime_ids := target_runtime_ids.duplicate()
+	sorted_runtime_ids.sort()
+	var previous_runtime_id := -1
+	var committed := false
+	for target_runtime_id in sorted_runtime_ids:
+		if target_runtime_id <= PLAYER_RUNTIME_ID or target_runtime_id == previous_runtime_id:
+			continue
+		previous_runtime_id = target_runtime_id
+		var actor := _entity_coordinator.get_actor(target_runtime_id)
+		if actor == null or actor.definition == null:
+			continue
+		var hit: Variant = _get_valid_player_hit(actor, locked_ray_origin, direction, planar_aim, profile)
+		if not hit is Vector3:
+			continue
+		var hit_position: Vector3 = hit
+		var hit_direction := hit_position - player_origin
+		if hit_direction.is_zero_approx():
+			continue
+		var contact := MeleeContactType.new(
+			PLAYER_RUNTIME_ID,
+			PLAYER_DEFINITION_ID,
+			actor.runtime_id,
+			actor.definition.id,
+			profile.id,
+			hit_position,
+			hit_direction,
+		)
+		if _commit_contact(contact, profile):
+			committed = true
+	return committed
 
 func try_commit_entity_contact(source_runtime_id: int, profile: MeleeAttackProfileType) -> bool:
 	assert(_is_setup())
@@ -168,6 +196,57 @@ func _is_valid_player_geometry(
 	if player_origin.distance_squared_to(hit_position) > profile.reach * profile.reach:
 		return false
 	return VoxelLineOfSightType.has_clear_path(_voxel_world, ray_origin, hit_position) and VoxelLineOfSightType.has_clear_path(_voxel_world, player_origin, hit_position)
+
+func _get_valid_player_hit(
+	actor: EntityActor,
+	ray_origin: Vector3,
+	ray_direction: Vector3,
+	planar_aim: Vector3,
+	profile: MeleeAttackProfileType,
+) -> Variant:
+	var bounds := actor.get_world_bounds()
+	var player_origin := _get_player_center()
+	var hit: Variant
+	if profile.sweep_degrees > 0.0:
+		var target_center := _get_bounds_center(bounds)
+		var planar_target := target_center - player_origin
+		planar_target.y = 0.0
+		if planar_target.is_zero_approx():
+			return null
+		var minimum_dot := cos(deg_to_rad(profile.sweep_degrees * 0.5))
+		if planar_aim.dot(planar_target.normalized()) + GEOMETRY_EPSILON < minimum_dot:
+			return null
+		var target_direction := target_center - player_origin
+		if target_direction.is_zero_approx():
+			return null
+		hit = target_center if bounds.has_point(player_origin) else bounds.intersects_ray(player_origin, target_direction.normalized())
+	else:
+		hit = bounds.intersects_ray(ray_origin, ray_direction)
+	if not hit is Vector3:
+		return null
+	var hit_position: Vector3 = hit
+	if profile.sweep_degrees > 0.0:
+		if player_origin.distance_squared_to(hit_position) > profile.reach * profile.reach:
+			return null
+		if not VoxelLineOfSightType.has_clear_path(_voxel_world, player_origin, hit_position):
+			return null
+	elif not _is_valid_player_geometry(player_origin, ray_origin, hit_position, profile):
+		return null
+	return hit_position
+
+func _get_planar_aim(ray_origin: Vector3, ray_direction: Vector3, player_origin: Vector3) -> Vector3:
+	var planar_aim: Vector3
+	if absf(ray_direction.y) > GEOMETRY_EPSILON:
+		var intersection_distance := (player_origin.y - ray_origin.y) / ray_direction.y
+		if intersection_distance < 0.0:
+			return Vector3.ZERO
+		planar_aim = ray_origin + ray_direction * intersection_distance - player_origin
+		planar_aim.y = 0.0
+	else:
+		planar_aim = Vector3(ray_direction.x, 0.0, ray_direction.z)
+	if not planar_aim.is_finite() or planar_aim.is_zero_approx():
+		return Vector3.ZERO
+	return planar_aim.normalized()
 
 func _get_player_bounds() -> AABB:
 	var half_width := _player.player_width * 0.5

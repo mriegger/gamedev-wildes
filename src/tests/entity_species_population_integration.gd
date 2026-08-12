@@ -18,6 +18,9 @@ func _expect(condition: bool, message: String) -> void:
 	_failures += 1
 	push_error("[entity_species_population_integration] FAIL: %s" % message)
 
+func _single_target(runtime_id: int) -> Array[int]:
+	return [runtime_id]
+
 func _make_flat_world() -> VoxelWorld:
 	var block_catalog := load("res://blocks/block_catalog.tres") as BlockCatalog
 	var world := VoxelWorld.new(16, 32, 5, 8.0, block_catalog)
@@ -114,8 +117,10 @@ func _route_sheep_contact(coordinator: EntityCoordinator, world: VoxelWorld) -> 
 	var player_center := player.global_position + Vector3.UP * (player.player_height * 0.5)
 	var target_bounds := sheep.get_world_bounds()
 	var target_center := target_bounds.position + target_bounds.size * 0.5
-	var ray_direction := (target_center - player_center).normalized()
-	var committed := combat.try_commit_player_contact(sheep.runtime_id, player_center, ray_direction, profile)
+	var aim_point := Vector3(target_center.x, player_center.y, target_center.z)
+	var ray_origin := player_center + Vector3(0.0, 6.0, 5.5)
+	var ray_direction := (aim_point - ray_origin).normalized()
+	var committed := combat.try_commit_player_contacts(_single_target(sheep.runtime_id), ray_origin, ray_direction, profile)
 	_expect(committed, "player contact did not commit through MeleeCombatCoordinator")
 	_expect(sheep.brain.state == SheepBrain.State.FLEE, "coordinator-routed contact did not start sheep flee")
 	var animation := sheep.animation_driver as SheepAnimationDriver

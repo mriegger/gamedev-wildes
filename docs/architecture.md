@@ -53,13 +53,16 @@ current HP, validates every removable subset of prospective modifiers before com
 emits one health-depleted transition when a living actor reaches zero HP. `EntityCoordinator`
 consumes that transition for entity retirement, while `Game` consumes the player transition.
 
-`MeleeCombatCoordinator` validates cursor targeting, range, voxel visibility, target existence, and
-contact timing before changing health. `MeleeAttackProfile` owns base damage and calculates
-`max(1, base damage + attacker strength - target defense)`. A successful physical hit applies that
-damage through the target state owner, then produces an immutable `MeleeContact` with stable actor
-and attack IDs, world contact position, and normalized direction. Rejected contacts change no
-health. `Game` explicitly connects completed contacts to entity reactions, and an effects presenter
-can consume the same signal without changing AI or combat rules.
+`MeleeCombatCoordinator` validates cursor targeting, range, sweep arc, voxel visibility, target
+existence, and contact timing before changing health. `MeleeAttackProfile` owns base damage and an
+optional sweep angle. Player swings lock sorted spatial-index candidates from the cursor ray at
+attack start, then independently revalidate every locked target at contact; a zero-degree sweep
+retains exact single-target ray selection. The profile calculates
+`max(1, base damage + attacker strength - target defense)`. Each successful physical hit applies
+that damage through the target state owner, then produces an immutable `MeleeContact` with stable
+actor and attack IDs, world contact position, and normalized direction. Rejected contacts change
+no health. `Game` explicitly connects completed contacts to entity reactions, and an effects
+presenter can consume the same signal without changing AI or combat rules.
 
 `Game` owns player stats and handles their completed health-depleted transition. Defeat restores
 full player HP, cancels current actions and motion, returns the player to world spawn, and snaps the
