@@ -314,6 +314,11 @@ jobs:
           bash .github/scripts/run_godot_check.sh \
             30 "AUDIO_ACTION PASS" /tmp/audio_action.log -- \
             godot --headless --path src --script res://tests/audio_action_integration.gd
+      - name: Run zombie vocalizations integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "ZOMBIE_VOCALIZATIONS PASS" /tmp/zombie_vocalizations.log -- \
+            godot --headless --path src --script res://entities/zombie/tests/zombie_vocalizations_integration.gd
 
   mining-effects-integration:
     runs-on: ubuntu-latest

@@ -1,0 +1,84 @@
+extends SceneTree
+
+var _failures: int = 0
+
+
+func _init():
+	call_deferred(&"_run")
+
+
+func _expect(condition: bool, message: String):
+	if condition:
+		return
+	_failures += 1
+	push_error("[zombie_vocalizations_integration] FAIL: %s" % message)
+
+
+func _run():
+	var block_catalog := load("res://blocks/block_catalog.tres") as BlockCatalog
+	var world := VoxelWorld.new(8, 16, 3, 4.0, block_catalog)
+	var player := (load("res://player/player.tscn") as PackedScene).instantiate() as PlayerMotor
+	get_root().add_child(player)
+	var listener := player.get_node_or_null(^"AudioListener3D") as AudioListener3D
+	_expect(listener != null, "player audio listener missing")
+	_expect(listener.is_current(), "player audio listener was not current")
+	var entity_catalog := load("res://entities/entity_catalog.tres") as EntityCatalog
+	var definition := entity_catalog.get_definition(&"zombie")
+	var actor := definition.actor_scene.instantiate() as ZombieActor
+	get_root().add_child(actor)
+	actor.setup(7, definition, world, 12345)
+	var vocalizations := actor.get_node_or_null(actor.vocalizations_path) as ZombieVocalizations
+	_expect(vocalizations != null, "zombie vocalizations missing")
+	_expect(vocalizations.bus == &"SFX", "vocalizations bus was %s" % vocalizations.bus)
+	_expect(is_equal_approx(vocalizations.volume_db, -6.0), "vocalizations volume was %.2f" % vocalizations.volume_db)
+	_expect(is_equal_approx(vocalizations.unit_size, 4.0), "vocalizations unit size was %.2f" % vocalizations.unit_size)
+	_expect(is_equal_approx(vocalizations.max_distance, 26.0), "vocalizations max distance was %.2f" % vocalizations.max_distance)
+	_expect(vocalizations._streams.size() == 6, "expected 6 vocalizations, got %d" % vocalizations._streams.size())
+	for stream in vocalizations._streams:
+		_expect(stream != null, "vocalization stream was null")
+	_expect(
+		vocalizations._remaining_seconds >= ZombieVocalizations.INITIAL_DELAY_MIN_SECONDS
+		and vocalizations._remaining_seconds <= ZombieVocalizations.INITIAL_DELAY_MAX_SECONDS,
+		"initial delay was %.2f" % vocalizations._remaining_seconds,
+	)
+
+	vocalizations._remaining_seconds = 0.0
+	vocalizations._process(0.0)
+	_expect(vocalizations._streams.has(vocalizations.stream), "due vocalization did not select a stream")
+	_expect(
+		vocalizations.pitch_scale >= ZombieVocalizations.PITCH_MIN
+		and vocalizations.pitch_scale <= ZombieVocalizations.PITCH_MAX,
+		"vocalization pitch was %.3f" % vocalizations.pitch_scale,
+	)
+	_expect(
+		vocalizations._remaining_seconds >= ZombieVocalizations.INTERVAL_MIN_SECONDS
+		and vocalizations._remaining_seconds <= ZombieVocalizations.INTERVAL_MAX_SECONDS,
+		"next interval was %.2f" % vocalizations._remaining_seconds,
+	)
+	var first_index := vocalizations._last_stream_index
+	vocalizations.stop()
+	vocalizations._remaining_seconds = 0.0
+	vocalizations._process(0.0)
+	_expect(vocalizations._last_stream_index != first_index, "vocalization immediately repeated")
+	var active_stream := vocalizations.stream
+	var active_interval := vocalizations._remaining_seconds
+	vocalizations._process(active_interval + 1.0)
+	_expect(vocalizations.stream == active_stream, "active vocalization was replaced")
+	_expect(is_equal_approx(vocalizations._remaining_seconds, active_interval), "active vocalization consumed its silence interval")
+
+	actor.begin_despawn_fade()
+	_expect(not vocalizations.is_processing(), "vocalizations kept processing during despawn")
+	_expect(not vocalizations.playing, "vocalizations kept playing during despawn")
+	_expect(vocalizations.stream == null, "vocalization stream remained assigned during despawn")
+	actor.queue_free()
+	player.queue_free()
+	for _frame_index in range(10):
+		await process_frame
+	var orphan_count := int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
+	_expect(orphan_count == 0, "vocalization test ended with %d orphan nodes" % orphan_count)
+	if _failures == 0:
+		print("ZOMBIE_VOCALIZATIONS PASS orphan=%d" % orphan_count)
+		quit(0)
+	else:
+		print("ZOMBIE_VOCALIZATIONS FAIL failures=%d" % _failures)
+		quit(1)
