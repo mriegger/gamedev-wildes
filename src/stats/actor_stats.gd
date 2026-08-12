@@ -274,18 +274,25 @@ func _has_valid_modifier_values(modifiers: Dictionary) -> bool:
 	for stat_id in _base_values:
 		if not _is_valid_stat_value(stat_id, _get_value_with_modifiers(stat_id, modifiers)):
 			return false
-		var minimum_additive := 0.0
+		var minimum_additive_value := float(_base_values[stat_id])
+		var maximum_additive_value := float(_base_values[stat_id])
 		var minimum_multiplier := 1.0
+		var maximum_multiplier := 1.0
 		for modifier in modifiers.values():
 			var stat_modifier := modifier as StatModifier
 			if stat_modifier.stat_id != stat_id:
 				continue
 			if stat_modifier.operation == StatModifier.Operation.ADD:
-				minimum_additive += minf(stat_modifier.amount, 0.0)
+				minimum_additive_value += minf(stat_modifier.amount, 0.0)
+				maximum_additive_value += maxf(stat_modifier.amount, 0.0)
 			else:
 				minimum_multiplier *= minf(stat_modifier.amount, 1.0)
-		var minimum_value := (float(_base_values[stat_id]) + minimum_additive) * minimum_multiplier
-		if not _is_valid_stat_value(stat_id, minimum_value):
+				maximum_multiplier *= maxf(stat_modifier.amount, 1.0)
+		if not _is_valid_stat_value(stat_id, minimum_additive_value):
+			return false
+		if not _is_valid_stat_value(stat_id, minimum_additive_value * minimum_multiplier):
+			return false
+		if not _is_valid_stat_value(stat_id, maximum_additive_value * maximum_multiplier):
 			return false
 	return true
 

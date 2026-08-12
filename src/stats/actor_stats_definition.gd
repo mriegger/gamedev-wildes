@@ -15,7 +15,16 @@ func validate() -> bool:
 		valid = valid and starting_experience == 0
 	else:
 		valid = valid and starting_experience < get_experience_requirement(starting_level)
-	return valid and not get_base_stats().is_empty()
+	var base_stats := get_base_stats()
+	if not valid or base_stats.is_empty():
+		return false
+	for stat_id in base_stats:
+		if typeof(stat_id) != TYPE_STRING_NAME or StringName(stat_id).is_empty():
+			return false
+		var value = base_stats[stat_id]
+		if (typeof(value) != TYPE_INT and typeof(value) != TYPE_FLOAT) or not is_finite(float(value)) or float(value) < 0.0:
+			return false
+	return true
 
 func get_experience_requirement(for_level: int) -> int:
 	return maxi(1, int(round(float(base_experience_to_level) * pow(experience_growth, for_level - 1))))

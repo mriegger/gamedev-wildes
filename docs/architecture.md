@@ -44,7 +44,8 @@ outcomes. Spawned actors fade in through instance-local geometry transparency. D
 damage removes stats, active state, targeting, and spatial entries together, then a separately
 bounded retiring-visual set fades the actor out before freeing its scene node.
 
-`ActorStats` owns current HP, validates prospective modifier values before committing them, and
+Stat definitions validate every declared base value as finite and nonnegative. `ActorStats` owns
+current HP, validates every removable subset of prospective modifiers before committing them, and
 emits one health-depleted transition when a living actor reaches zero HP. `EntityCoordinator`
 consumes that transition for entity retirement, while `Game` consumes the player transition.
 
