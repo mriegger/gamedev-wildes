@@ -88,11 +88,14 @@ func _process(_delta: float) -> bool:
 		_hud.side_panel.open()
 		_hud.side_panel._process(1.0)
 		_check_health_bar_panel_clearance(1.0, "684px open")
-		root.size = Vector2i(1024, 640)
+		root.size = Vector2i(640, 480)
 	elif _phase == 1 and _frame == 12:
+		_check_health_bar_panel_clearance(1.0, "640px open")
+		root.size = Vector2i(1024, 640)
+	elif _phase == 1 and _frame == 14:
 		_check_health_bar_panel_clearance(1.0, "1024px open")
 		root.size = _original_window_size
-	elif _phase == 1 and _frame == 14:
+	elif _phase == 1 and _frame == 16:
 		_check_health_bar_panel_clearance(1.0, "restored open")
 		_hud.side_panel.close_immediate()
 		_check_health_bar_panel_clearance(0.0, "restored immediate close")
@@ -250,17 +253,17 @@ func _check_health_bar_geometry() -> void:
 	var root_rect := _hud.health_bar.get_global_rect()
 	var progress_bar := _hud.health_bar.progress_bar
 	var progress_rect := progress_bar.get_global_rect()
-	var expected_position := Vector2(viewport_size.x - 304.0, 24.0)
+	var expected_position := Vector2(viewport_size.x - PlayerHealthBar.EDGE_MARGIN - PlayerHealthBar.PREFERRED_WIDTH, PlayerHealthBar.EDGE_MARGIN)
 	if not root_rect.position.is_equal_approx(Vector2.ZERO) or not root_rect.size.is_equal_approx(viewport_size):
 		_fail("health bar root does not cover the viewport")
 		return
 	if not progress_rect.position.is_equal_approx(expected_position):
 		_fail("health bar expected position %s got %s" % [str(expected_position), str(progress_rect.position)])
 		return
-	if not progress_rect.size.is_equal_approx(Vector2(280.0, 32.0)):
-		_fail("health bar expected size (280, 32) got %s" % str(progress_rect.size))
+	if not progress_rect.size.is_equal_approx(Vector2(PlayerHealthBar.PREFERRED_WIDTH, PlayerHealthBar.BAR_HEIGHT)):
+		_fail("health bar expected preferred size got %s" % str(progress_rect.size))
 		return
-	if not is_equal_approx(viewport_size.x - progress_rect.end.x, 24.0) or not is_equal_approx(progress_rect.position.y, 24.0):
+	if not is_equal_approx(viewport_size.x - progress_rect.end.x, PlayerHealthBar.EDGE_MARGIN) or not is_equal_approx(progress_rect.position.y, PlayerHealthBar.EDGE_MARGIN):
 		_fail("health bar does not preserve its 24-pixel top-right margins")
 		return
 	if _hud.health_bar.mouse_filter != Control.MOUSE_FILTER_IGNORE or progress_bar.mouse_filter != Control.MOUSE_FILTER_IGNORE or _hud.health_bar.value_label.mouse_filter != Control.MOUSE_FILTER_IGNORE:
@@ -304,8 +307,9 @@ func _check_health_bar_panel_transitions() -> void:
 func _check_health_bar_panel_clearance(progress: float, context: String) -> void:
 	var viewport_size := root.get_visible_rect().size
 	var expected_inset := SidePanel.PANEL_WIDTH * progress
-	var expected_right_offset := -(PlayerHealthBar.RIGHT_MARGIN + expected_inset)
-	var expected_left_offset := -(PlayerHealthBar.RIGHT_MARGIN + expected_inset + PlayerHealthBar.BAR_WIDTH)
+	var expected_width := minf(PlayerHealthBar.PREFERRED_WIDTH, maxf(viewport_size.x - expected_inset - PlayerHealthBar.EDGE_MARGIN * 2.0, 0.0))
+	var expected_right_offset := -(PlayerHealthBar.EDGE_MARGIN + expected_inset)
+	var expected_left_offset := expected_right_offset - expected_width
 	var progress_bar := _hud.health_bar.progress_bar
 	var progress_rect := progress_bar.get_global_rect()
 	var panel_rect := _hud.side_panel.get_global_rect()
@@ -318,10 +322,13 @@ func _check_health_bar_panel_clearance(progress: float, context: String) -> void
 	if not is_equal_approx(progress_rect.end.x, viewport_size.x + expected_right_offset):
 		_fail("%s health bar right edge does not match its authoritative inset" % context)
 		return
+	if not is_equal_approx(progress_rect.size.x, expected_width):
+		_fail("%s health bar width did not fit the unobstructed viewport" % context)
+		return
 	if not is_equal_approx(panel_rect.position.x, viewport_size.x - expected_inset):
 		_fail("%s side panel position does not match its authoritative progress" % context)
 		return
-	if not is_equal_approx(panel_rect.position.x - progress_rect.end.x, PlayerHealthBar.RIGHT_MARGIN):
+	if not is_equal_approx(panel_rect.position.x - progress_rect.end.x, PlayerHealthBar.EDGE_MARGIN):
 		_fail("%s health bar did not preserve its 24-pixel panel gap" % context)
 		return
 	if progress_rect.end.x > panel_rect.position.x or progress_rect.position.x < -0.001:

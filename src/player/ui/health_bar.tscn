@@ -37,15 +37,10 @@ mouse_filter = 2
 script = ExtResource("1_health_bar")
 
 [node name="ProgressBar" type="ProgressBar" parent="."]
-custom_minimum_size = Vector2(280, 32)
 layout_mode = 1
 anchors_preset = 1
 anchor_left = 1.0
 anchor_right = 1.0
-offset_left = -304.0
-offset_top = 24.0
-offset_right = -24.0
-offset_bottom = 56.0
 grow_horizontal = 0
 mouse_filter = 2
 theme_override_styles/background = SubResource("StyleBoxFlat_background")
