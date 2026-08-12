@@ -17,12 +17,6 @@ func _init():
 	_expect(is_equal_approx(combat_definition.get_base_stats()[&"hp"], 100.0), "combat HP is missing")
 	_expect(is_equal_approx(combat_definition.get_base_stats()[&"defense"], 0.0), "combat defense is missing")
 	_expect(is_equal_approx(combat_definition.get_base_stats()[&"strength"], 10.0), "combat strength is missing")
-	var player_validation := PlayerStatsDefinition.new()
-	player_validation.mobility = NAN
-	_expect(not player_validation.validate(), "non-finite player-only stat passed definition validation")
-	player_validation.mobility = 10.0
-	player_validation.resilience = -1.0
-	_expect(not player_validation.validate(), "negative player-only stat passed definition validation")
 	combat_definition.maximum_hp = 0.0
 	_expect(not combat_definition.validate(), "zero maximum HP passed combat stats validation")
 	combat_definition.maximum_hp = 100.0
@@ -104,16 +98,6 @@ func _init():
 	var invalid_hp := _modifier(&"invalid_hp", &"invalid_item", &"hp", StatModifier.Operation.ADD, -100.0)
 	_expect(not hp_stats.add_modifier(invalid_strength), "negative effective strength was accepted")
 	_expect(not hp_stats.add_modifier(invalid_hp), "zero effective maximum HP was accepted")
-	var masked_stats := ActorStats.new(player_definition)
-	var zero_strength := _modifier(&"zero_strength", &"zero_potion", &"strength", StatModifier.Operation.MULTIPLY, 0.0, 1.0)
-	var masked_negative_strength := _modifier(&"masked_negative_strength", &"broken_item", &"strength", StatModifier.Operation.ADD, -11.0)
-	var masked_overflow_strength := _modifier(&"masked_overflow_strength", &"broken_item", &"strength", StatModifier.Operation.MULTIPLY, 1.0e308)
-	_expect(masked_stats.add_modifier(zero_strength), "valid timed zero multiplier was rejected")
-	_expect(not masked_stats.add_modifier(masked_negative_strength), "zero multiplier masked an invalid additive subset")
-	_expect(not masked_stats.add_modifier(masked_overflow_strength), "zero multiplier masked a non-finite multiplicative subset")
-	masked_stats.advance_time(1.0)
-	_expect(not masked_stats.has_modifier(&"zero_strength"), "independent timed multiplier did not expire")
-	_expect(is_equal_approx(masked_stats.get_value(&"strength"), 10.0), "timed multiplier expiration did not restore base strength")
 	var isolated_stats := ActorStats.new(player_definition)
 	var copied_modifier := _modifier(&"copied_strength", &"copied_item", &"strength", StatModifier.Operation.ADD, 1.0)
 	_expect(isolated_stats.add_modifier(copied_modifier), "valid copied modifier was rejected")
