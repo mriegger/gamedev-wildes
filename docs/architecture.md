@@ -68,9 +68,12 @@ presenter can consume the same signal without changing AI or combat rules.
 `Game` owns player stats and handles their completed health-depleted transition. Defeat restores
 full player HP, cancels current actions and motion, returns the player to world spawn, and snaps the
 camera to the restored position without changing inventory. The HUD observes player stats and
-presents current and maximum HP without owning either value. Entity HP is transient and is not
-serialized. Drops, XP rewards, enemy health bars, regeneration, knockback, death audio, and
-post-respawn invulnerability remain outside the combat system.
+presents current and maximum HP without owning either value. `SidePanel` owns its animation
+progress and reports committed progress changes to `HUD`, which translates that value into the
+health bar's right inset so presentation state stays clear of the inventory panel at every viewport
+size. Entity HP is transient and is not serialized. Drops, XP rewards, enemy health bars,
+regeneration, knockback, death audio, and post-respawn invulnerability remain outside the combat
+system.
 
 Entity populations are transient and bounded to six per species and twelve total. Spawning makes
 four attempts every two seconds in an 18–36 block annulus. Voxel A* has fixed radius, node, and

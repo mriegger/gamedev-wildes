@@ -1,6 +1,8 @@
 extends Control
 class_name SidePanel
 
+signal progress_changed(progress: float)
+
 const PANEL_WIDTH: float = 380.0
 const ANIM_DURATION: float = 0.25
 const TAB_TITLES: Dictionary = {
@@ -53,6 +55,7 @@ func _ready():
 	_build_slot_grid_for_region("equipment", _equipment_grid, equipment_slots)
 	_equipment_button.pressed.connect(_on_tab_button_pressed.bind("equipment"))
 	_switch_to_tab_id(_current_tab_id)
+	get_viewport().size_changed.connect(_on_viewport_size_changed)
 	_update_size()
 	_update_layout(0.0)
 	_cache_frosted_panels()
@@ -161,19 +164,22 @@ func _apply_state():
 func _process(delta):
 	if abs(_progress - _target_progress) < 0.001:
 		if _progress != _target_progress:
-			_progress = _target_progress
-			_apply_state()
+			_set_progress(_target_progress)
 		set_process(false)
 		return
 	var k = 3.5 / ANIM_DURATION
 	var t = 1.0 - exp(-k * delta)
-	_progress = lerp(_progress, _target_progress, t)
-	if abs(_progress - _target_progress) < 0.001:
-		_progress = _target_progress
-	_progress = clamp(_progress, 0.0, 1.0)
-	_apply_state()
+	var next_progress: float = lerp(_progress, _target_progress, t)
+	if abs(next_progress - _target_progress) < 0.001:
+		next_progress = _target_progress
+	_set_progress(next_progress)
 	if _progress == _target_progress:
 		set_process(false)
+
+func _set_progress(progress: float):
+	_progress = clamp(progress, 0.0, 1.0)
+	_apply_state()
+	progress_changed.emit(_progress)
 
 func _update_size():
 	var vp_size = Vector2(1280, 720)
@@ -269,15 +275,13 @@ func _cancel_drag_if_needed():
 		vp.gui_cancel_drag()
 
 func close_immediate():
-	_progress = 0.0
 	_target_progress = 0.0
 	_is_open = false
 	_update_size()
-	_apply_state()
+	_set_progress(0.0)
 	_cancel_drag_if_needed()
 	set_process(false)
 
-func _notification(what):
-	if what == NOTIFICATION_RESIZED:
-		_update_size()
-		_update_layout(_progress)
+func _on_viewport_size_changed():
+	_update_size()
+	_update_layout(_progress)

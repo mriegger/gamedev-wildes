@@ -13,6 +13,11 @@ func setup_with_camera(p_inventory: InventoryModel, p_inventory_stat_coordinator
 	side_panel.setup(p_inventory, p_inventory_stat_coordinator, cam_rig, hotbar, CraftingPanel.PANEL_WIDTH)
 	crafting_panel.setup(p_crafting_coordinator, p_recipe_catalog, cam_rig)
 	dev_console.setup(p_inventory)
+	side_panel.progress_changed.connect(_on_side_panel_progress_changed)
+	_on_side_panel_progress_changed(side_panel.get_progress())
+
+func _on_side_panel_progress_changed(progress: float):
+	health_bar.set_right_inset(SidePanel.PANEL_WIDTH * progress)
 
 func is_side_panel_open() -> bool:
 	return side_panel.is_open() or side_panel.get_progress() > 0.01 or crafting_panel.get_progress() > 0.01

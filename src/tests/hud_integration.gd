@@ -24,6 +24,7 @@ var _right_destination_ui_index: int = -1
 var _hotbar_click_destination_index: int = -1
 var _hotbar_click_destination_ui_index: int = -1
 var _helmet_inventory_slot: InventorySlot = null
+var _original_window_size: Vector2i
 
 func _init() -> void:
 	print("[hud_integration] starting")
@@ -78,6 +79,23 @@ func _process(_delta: float) -> bool:
 			_fail("health bar maximum HP modifier was not removed")
 		_stats.heal(100.0)
 		print("[hud_integration] health bar ok")
+	elif _phase == 1 and _frame == 8:
+		_original_window_size = root.size
+		_check_health_bar_panel_transitions()
+		root.size = Vector2i(684, 480)
+	elif _phase == 1 and _frame == 10:
+		_check_health_bar_panel_clearance(0.0, "684px closed")
+		_hud.side_panel.open()
+		_hud.side_panel._process(1.0)
+		_check_health_bar_panel_clearance(1.0, "684px open")
+		root.size = Vector2i(1024, 640)
+	elif _phase == 1 and _frame == 12:
+		_check_health_bar_panel_clearance(1.0, "1024px open")
+		root.size = _original_window_size
+	elif _phase == 1 and _frame == 14:
+		_check_health_bar_panel_clearance(1.0, "restored open")
+		_hud.side_panel.close_immediate()
+		_check_health_bar_panel_clearance(0.0, "restored immediate close")
 	elif _phase == 1 and _frame == 122:
 		if _hud == null or not is_instance_valid(_hud):
 			_fail("hud invalid")
@@ -264,6 +282,50 @@ func _check_health_bar_geometry() -> void:
 		return
 	if _hud.health_bar.value_label.horizontal_alignment != HORIZONTAL_ALIGNMENT_CENTER or _hud.health_bar.value_label.vertical_alignment != VERTICAL_ALIGNMENT_CENTER:
 		_fail("health bar value text is not centered")
+
+func _check_health_bar_panel_transitions() -> void:
+	_hud.side_panel.open()
+	_hud.side_panel._process(0.02)
+	var opening_progress := _hud.side_panel.get_progress()
+	if opening_progress <= 0.0 or opening_progress >= 1.0:
+		_fail("side panel opening did not produce intermediate progress")
+		return
+	_check_health_bar_panel_clearance(opening_progress, "opening")
+	_hud.side_panel.close()
+	_hud.side_panel._process(0.02)
+	var closing_progress := _hud.side_panel.get_progress()
+	if closing_progress <= 0.0 or closing_progress >= opening_progress:
+		_fail("side panel closing did not produce lower intermediate progress")
+		return
+	_check_health_bar_panel_clearance(closing_progress, "closing")
+	_hud.side_panel.close_immediate()
+	_check_health_bar_panel_clearance(0.0, "immediate close")
+
+func _check_health_bar_panel_clearance(progress: float, context: String) -> void:
+	var viewport_size := root.get_visible_rect().size
+	var expected_inset := SidePanel.PANEL_WIDTH * progress
+	var expected_right_offset := -(PlayerHealthBar.RIGHT_MARGIN + expected_inset)
+	var expected_left_offset := -(PlayerHealthBar.RIGHT_MARGIN + expected_inset + PlayerHealthBar.BAR_WIDTH)
+	var progress_bar := _hud.health_bar.progress_bar
+	var progress_rect := progress_bar.get_global_rect()
+	var panel_rect := _hud.side_panel.get_global_rect()
+	if not is_equal_approx(_hud.side_panel.get_progress(), progress):
+		_fail("%s side panel progress changed before layout assertion" % context)
+		return
+	if not is_equal_approx(progress_bar.offset_right, expected_right_offset) or not is_equal_approx(progress_bar.offset_left, expected_left_offset):
+		_fail("%s health offsets do not equal 380 times panel progress" % context)
+		return
+	if not is_equal_approx(progress_rect.end.x, viewport_size.x + expected_right_offset):
+		_fail("%s health bar right edge does not match its authoritative inset" % context)
+		return
+	if not is_equal_approx(panel_rect.position.x, viewport_size.x - expected_inset):
+		_fail("%s side panel position does not match its authoritative progress" % context)
+		return
+	if not is_equal_approx(panel_rect.position.x - progress_rect.end.x, PlayerHealthBar.RIGHT_MARGIN):
+		_fail("%s health bar did not preserve its 24-pixel panel gap" % context)
+		return
+	if progress_rect.end.x > panel_rect.position.x or progress_rect.position.x < -0.001:
+		_fail("%s health bar overlaps the inventory panel or viewport edge" % context)
 
 func _start_left_drag(src: Vector2, dst: Vector2) -> void:
 	print("[hud_integration] left drag start")
