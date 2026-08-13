@@ -19,8 +19,9 @@ func _init() -> void:
 		&"copper_chest_plate",
 		&"copper_pants",
 		&"copper_shoes",
+		&"basic_rune",
 	]
-	_expect(recipe_catalog.definitions.size() == expected_recipe_ids.size(), "expected eight recipes")
+	_expect(recipe_catalog.definitions.size() == expected_recipe_ids.size(), "expected nine recipes")
 	_expect(recipe_catalog.definitions[0].id == &"stone_pickaxe", "stone pickaxe is not the first recipe")
 	for recipe_id in expected_recipe_ids:
 		_expect(recipe_catalog.has_definition(recipe_id), "missing recipe %s" % recipe_id)
@@ -43,6 +44,7 @@ func _init() -> void:
 	for recipe_id in expected_copper_recipes:
 		_expect(recipe_catalog.get_definition(recipe_id).get_ingredient_counts() == expected_copper_recipes[recipe_id], "%s ingredients mismatch" % recipe_id)
 	_expect(recipe_catalog.get_definition(&"stone_pickaxe").get_ingredient_counts() == {&"stone_block": 10, &"log_block": 5}, "stone pickaxe ingredients mismatch")
+	_expect(recipe_catalog.get_definition(&"basic_rune").get_ingredient_counts() == {&"sand_block": 32}, "basic rune ingredients mismatch")
 	var progression_inventory := InventoryModel.new(item_catalog)
 	progression_inventory.slots[InventoryModel.HOTBAR_SIZE] = InventoryStack.new(&"stone_block", 10)
 	progression_inventory.slots[InventoryModel.HOTBAR_SIZE + 1] = InventoryStack.new(&"log_block", 5)

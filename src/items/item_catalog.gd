@@ -96,6 +96,7 @@ func validate(block_catalog: BlockCatalog) -> bool:
 		if definition == null:
 			continue
 		var armor := definition as ArmorDefinition
+		var rune := definition as RuneDefinition
 		var combat_item := _is_combat_definition(definition)
 		if combat_item and definition.proficiency == null:
 			push_error("[ItemCatalog] Missing proficiency for combat item %s" % definition.id)
@@ -125,6 +126,8 @@ func validate(block_catalog: BlockCatalog) -> bool:
 				else:
 					armor_sets_by_id[armor_set.id] = armor_set
 					valid = armor_set.validate(armor_set.resource_path) and valid
+		if rune != null:
+			valid = rune.validate(definition.resource_path) and valid
 		var placement := definition.secondary_action as BlockPlacementActionDefinition
 		if placement != null and placement.block != null and BlockId.is_valid(placement.block.id):
 			if block_catalog.get_definition(placement.block.id) != placement.block:

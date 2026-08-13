@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="CraftingRecipeCatalog" load_steps=11 format=3]
+[gd_resource type="Resource" script_class="CraftingRecipeCatalog" load_steps=12 format=3]
 
 [ext_resource type="Script" path="res://crafting/crafting_recipe_catalog.gd" id="1_catalog"]
 [ext_resource type="Script" path="res://crafting/crafting_recipe_definition.gd" id="2_definition"]
@@ -10,7 +10,8 @@
 [ext_resource type="Resource" path="res://crafting/recipes/copper_pants.tres" id="8_pants"]
 [ext_resource type="Resource" path="res://crafting/recipes/copper_shoes.tres" id="9_shoes"]
 [ext_resource type="Resource" path="res://crafting/recipes/stone_pickaxe.tres" id="10_stone_pickaxe"]
+[ext_resource type="Resource" path="res://crafting/recipes/basic_rune.tres" id="11_basic_rune"]
 
 [resource]
 script = ExtResource("1_catalog")
-definitions = Array[ExtResource("2_definition")]([ExtResource("10_stone_pickaxe"), ExtResource("3_pickaxe"), ExtResource("4_sword"), ExtResource("5_helmet"), ExtResource("6_chest"), ExtResource("8_pants"), ExtResource("9_shoes"), ExtResource("7_torches")])
+definitions = Array[ExtResource("2_definition")]([ExtResource("10_stone_pickaxe"), ExtResource("3_pickaxe"), ExtResource("4_sword"), ExtResource("5_helmet"), ExtResource("6_chest"), ExtResource("8_pants"), ExtResource("9_shoes"), ExtResource("7_torches"), ExtResource("11_basic_rune")])
