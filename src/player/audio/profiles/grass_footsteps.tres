@@ -11,3 +11,4 @@
 script = ExtResource("1_profile")
 surface_block_id = 1
 streams = Array[AudioStream]([ExtResource("2_step_00"), ExtResource("3_step_01"), ExtResource("4_step_02"), ExtResource("5_step_03"), ExtResource("6_step_04")])
+volume_offset_db = -6.0206

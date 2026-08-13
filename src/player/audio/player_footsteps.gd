@@ -11,8 +11,13 @@ var _step_timer: float = 0.0
 var _last_stream: AudioStream
 var _water_state_initialized: bool = false
 var _was_in_water: bool = false
+var _base_volume_db: float
 
 const MIN_PLANAR_SPEED: float = 0.2
+
+
+func _ready():
+	_base_volume_db = _player.volume_db
 
 
 func setup(p_motor: PlayerMotor, p_profile: BlockyHumanoidAnimationProfile):
@@ -21,7 +26,9 @@ func setup(p_motor: PlayerMotor, p_profile: BlockyHumanoidAnimationProfile):
 	_profile = p_profile
 	_water_state_initialized = false
 	if _player.stream == null:
-		_player.stream = catalog.fallback_profile.streams[0]
+		var fallback_profile := catalog.fallback_profile
+		_player.stream = fallback_profile.streams[0]
+		_player.volume_db = _base_volume_db + fallback_profile.volume_offset_db
 
 
 func _process(delta: float):
@@ -35,7 +42,7 @@ func _process(delta: float):
 		_was_in_water = is_in_water
 		if is_in_water:
 			_step_timer = 0.0
-			_play_random_stream(catalog.get_profile(BlockId.Type.WATER).streams)
+			_play_random_stream(catalog.get_profile(BlockId.Type.WATER))
 			return
 	if not _motor.on_ground:
 		_step_timer = 0.0
@@ -54,15 +61,16 @@ func _process(delta: float):
 
 func _play_step():
 	var profile := catalog.get_profile(_motor.get_footstep_surface_block_id())
-	_play_random_stream(profile.streams)
+	_play_random_stream(profile)
 
 
-func _play_random_stream(streams: Array[AudioStream]):
-	var stream := _select_random_stream(streams)
+func _play_random_stream(profile: FootstepAudioProfile):
+	var stream := _select_random_stream(profile.streams)
 	if stream == null:
 		return
 	_player.stop()
 	_player.stream = stream
+	_player.volume_db = _base_volume_db + profile.volume_offset_db
 	_player.pitch_scale = randf_range(0.92, 1.08)
 	_player.play()
 
@@ -87,3 +95,4 @@ func _exit_tree():
 	if _player:
 		_player.stop()
 		_player.stream = null
+		_player.volume_db = _base_volume_db
