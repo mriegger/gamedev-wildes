@@ -319,8 +319,10 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	environment.start_clock()
 	game.inventory_model = InventoryModel.new(game.item_catalog)
 	game.inventory_model.setup_starter()
+	game.player_stats = ActorStats.new(game.player_stats_definition)
 	dev_console.setup(
 		game.inventory_model,
+		game.player_stats,
 		pumpkin_patch,
 		Callable(game, "_request_new_structure"),
 		Callable(game, "_request_import_structure"),
@@ -329,7 +331,6 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	)
 	dev_console.open_state_changed.connect(game._on_dev_console_open_state_changed)
 	structure_dialogs.open_state_changed.connect(game._on_structure_dialog_open_state_changed)
-	game.player_stats = ActorStats.new(game.player_stats_definition)
 	camera_rig.setup(player, game.input_buffer)
 	entities.setup(game.entity_catalog, voxel_world, 1337, _position_ready)
 	combat.setup(voxel_world, player, game.player_stats, entities.get_runtime())

@@ -113,15 +113,16 @@ func _ready():
 	world.block_catalog = block_catalog
 	world.configure_settings(settings)
 	inventory_model = InventoryModel.new(item_catalog)
+	player_stats = ActorStats.new(player_stats_definition)
 	dev_console.setup(
 		inventory_model,
+		player_stats,
 		pumpkin_patch,
 		Callable(self, "_request_new_structure"),
 		Callable(self, "_request_import_structure"),
 		Callable(self, "_request_export_structure"),
 		Callable(self, "_request_exit_structure")
 	)
-	player_stats = ActorStats.new(player_stats_definition)
 	player_perks = PlayerPerks.new(player_perk_rules)
 	item_proficiency = ItemProficiency.new(item_catalog)
 	_restore_inventory()

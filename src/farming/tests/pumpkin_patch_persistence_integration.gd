@@ -128,8 +128,9 @@ func _run() -> void:
 
 	_state_changed_count = 0
 	var processor := DevConsoleCommandProcessor.new()
+	var actor_stats := ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
 	var structure_command := Callable(self, "_accept_structure_command")
-	processor.setup(InventoryModel.new(load("res://items/item_catalog.tres") as ItemCatalog), pumpkin_patch, structure_command, structure_command, structure_command, structure_command)
+	processor.setup(InventoryModel.new(load("res://items/item_catalog.tres") as ItemCatalog), actor_stats, pumpkin_patch, structure_command, structure_command, structure_command, structure_command)
 	_expect(processor.execute("spawn pumpkin_patch") == DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN, "pumpkin patch console command failed")
 	_expect(_state_changed_count == 1, "persistent pumpkin patch change was not announced")
 	_expect(_count_state(pumpkin_patch.snapshot(), &"crop") >= 3, "spawned patch generated fewer than three harvestable pumpkins")
