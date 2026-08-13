@@ -66,8 +66,12 @@ func setup(p_crafting_coordinator: CraftingCoordinator, p_recipe_catalog: Crafti
 		_select_recipe(recipe_catalog.definitions[0].id)
 	_update_camera()
 
-func setup_socketing(inventory: InventoryModel, socketing_coordinator: RuneSocketingCoordinator) -> void:
-	_rune_socketing_panel.setup(inventory, socketing_coordinator)
+func setup_socketing(
+	inventory: InventoryModel,
+	socketing_coordinator: RuneSocketingCoordinator,
+	item_proficiency: ItemProficiency,
+) -> void:
+	_rune_socketing_panel.setup(inventory, socketing_coordinator, item_proficiency)
 
 func open() -> void:
 	_is_open = true

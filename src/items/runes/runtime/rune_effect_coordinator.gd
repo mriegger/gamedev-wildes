@@ -40,7 +40,8 @@ func _validate_rune_definitions(item_catalog: ItemCatalog, p_actor_stats: ActorS
 	return true
 
 func _on_inventory_changed() -> void:
-	assert(_synchronize_active_runes(false))
+	var synchronized := _synchronize_active_runes(false)
+	assert(synchronized)
 
 func _synchronize_active_runes(force: bool) -> bool:
 	var next_fingerprint := _get_active_rune_ids()

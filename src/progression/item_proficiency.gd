@@ -1,6 +1,8 @@
 extends RefCounted
 class_name ItemProficiency
 
+signal progress_changed(item_id: StringName)
+
 var _item_catalog: ItemCatalog
 var _progress_by_item_id: Dictionary = {}
 
@@ -137,11 +139,12 @@ func _commit_progress(item_id: StringName, level: int, experience: float) -> voi
 	assert(_is_valid_progress(item_id, level, experience))
 	if level == 0 and experience == 0.0:
 		_progress_by_item_id.erase(item_id)
-		return
-	_progress_by_item_id[item_id] = {
-		"level": level,
-		"experience": experience,
-	}
+	else:
+		_progress_by_item_id[item_id] = {
+			"level": level,
+			"experience": experience,
+		}
+	progress_changed.emit(item_id)
 
 func _is_valid_progress(item_id: StringName, level: int, experience: float) -> bool:
 	if not is_finite(experience) or experience < 0.0:

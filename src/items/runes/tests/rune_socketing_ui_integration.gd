@@ -32,7 +32,7 @@ func _process(_delta: float) -> bool:
 	_frame += 1
 	if _frame == 1:
 		_panel.setup(_crafting, _recipe_catalog)
-		_panel.setup_socketing(_inventory, _socketing)
+		_panel.setup_socketing(_inventory, _socketing, _proficiency)
 	elif _frame == 3:
 		_start_workspace_test()
 	elif _frame == 5:
@@ -63,9 +63,7 @@ func _test_workspace_and_slot_states() -> void:
 	_expect(rune_slots[1].get_state() == RuneSocketingSlot.State.UNAVAILABLE, "second unavailable slot was not rendered")
 	_expect(rune_slots[2].get_state() == RuneSocketingSlot.State.UNAVAILABLE, "third unavailable slot was not rendered")
 	_expect(_proficiency.add_experience(&"copper_sword", 100.0) == 1, "fixture did not unlock the common rune slot")
-	rune_panel.clear_gear_reference()
-	rune_panel.get_gear_slot()._drop_data(Vector2.ZERO, gear_payload)
-	_expect(rune_slots[0].get_state() == RuneSocketingSlot.State.EMPTY, "unlocked empty rune slot was not rendered")
+	_expect(rune_slots[0].get_state() == RuneSocketingSlot.State.EMPTY, "proficiency unlock did not refresh the rune slot")
 
 func _test_socket_and_unsocket() -> void:
 	var rune_panel := _panel.get_rune_socketing_panel()

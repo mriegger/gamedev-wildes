@@ -13,6 +13,7 @@ const VISIBLE_SLOT_COUNT: int = ProficiencyDefinition.MAXIMUM_SLOT_COUNT
 
 var _inventory: InventoryModel
 var _socketing_coordinator: RuneSocketingCoordinator
+var _item_proficiency: ItemProficiency
 var _selected_gear_index: int = -1
 var _selected_gear_item_id: StringName = &""
 
@@ -27,14 +28,23 @@ func _ready() -> void:
 		slot.unsocket_requested.connect(_unsocket_rune.bind(slot_index))
 	_refresh()
 
-func setup(inventory: InventoryModel, socketing_coordinator: RuneSocketingCoordinator) -> void:
+func setup(
+	inventory: InventoryModel,
+	socketing_coordinator: RuneSocketingCoordinator,
+	item_proficiency: ItemProficiency,
+) -> void:
 	assert(inventory != null)
 	assert(socketing_coordinator != null)
+	assert(item_proficiency != null)
 	if _inventory != null and _inventory.inventory_changed.is_connected(_on_inventory_changed):
 		_inventory.inventory_changed.disconnect(_on_inventory_changed)
+	if _item_proficiency != null and _item_proficiency.progress_changed.is_connected(_on_proficiency_changed):
+		_item_proficiency.progress_changed.disconnect(_on_proficiency_changed)
 	_inventory = inventory
 	_socketing_coordinator = socketing_coordinator
+	_item_proficiency = item_proficiency
 	_inventory.inventory_changed.connect(_on_inventory_changed)
+	_item_proficiency.progress_changed.connect(_on_proficiency_changed)
 	clear_gear_reference()
 
 func clear_gear_reference() -> void:
@@ -94,6 +104,10 @@ func _on_inventory_changed() -> void:
 			_selected_gear_index = -1
 			_selected_gear_item_id = &""
 	_refresh()
+
+func _on_proficiency_changed(item_id: StringName) -> void:
+	if item_id == _selected_gear_item_id:
+		_refresh()
 
 func _refresh() -> void:
 	if not is_node_ready():
