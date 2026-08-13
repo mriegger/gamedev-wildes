@@ -79,3 +79,15 @@ Label every finding:
 - **[P2] Nits:** Misspellings, import ordering, minor naming inconsistencies, trivial simplifications, or optional documentation polish.
 
 Only report findings supported by the diff and repository evidence. Do not report speculative problems or personal preferences, and combine findings that share the same root cause.
+
+Your findings should be concise and easy for an engineer to digest without needing to sift through verbosity.
+
+For example:
+
+- **[P0] Blocking (file:line_number(s))** [concrete problem]. we should [required change].
+- **[P1] Non-blocking (file:line_number(s))** [observation and consequence]. we could [suggestion].
+- **[P1] Non-blocking (file:line_number(s))** Confirm this is intentional. [consequence].
+- **[P2] Nit (file:line_number(s))** [symbo] has no callers. we should remove it.
+- **[P0] Blocking (file:line_number(s))** The PR description says [claim], but the implementation [actual behavior]. Update it to [accurate wording].
+
+These examples illustrate tone and structure only; they are not standardized templates. Write each comment naturally and originally for its specific context while keeping it concise, direct, and actionable.
