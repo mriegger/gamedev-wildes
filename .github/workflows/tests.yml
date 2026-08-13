@@ -128,6 +128,40 @@ jobs:
             30 "COMBAT_PROGRESSION PASS" /tmp/combat_progression.log -- \
             godot --headless --path src --script res://progression/tests/combat_progression.gd
 
+  rune-system:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Validate rune content
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "RUNE_DEFINITION PASS" /tmp/rune_definition.log -- \
+            godot --headless --path src --script res://items/runes/tests/rune_definition.gd
+      - name: Validate socket persistence
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "INVENTORY_SOCKET_PERSISTENCE PASS" /tmp/inventory_socket_persistence.log -- \
+            godot --headless --path src --script res://items/runes/tests/inventory_socket_persistence.gd
+      - name: Validate socket commands
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "RUNE_SOCKETING PASS" /tmp/rune_socketing.log -- \
+            godot --headless --path src --script res://items/runes/tests/rune_socketing.gd
+      - name: Validate active rune effects
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "RUNE_EFFECT_COORDINATOR PASS" /tmp/rune_effects.log -- \
+            godot --headless --path src --script res://items/runes/tests/rune_effect_coordinator.gd
+      - name: Validate rune socketing UI
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "RUNE_SOCKETING_UI PASS" /tmp/rune_socketing_ui.log -- \
+            godot --headless --path src --script res://items/runes/tests/rune_socketing_ui_integration.gd
+
   armor-system:
     runs-on: ubuntu-latest
     timeout-minutes: 10
