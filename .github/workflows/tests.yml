@@ -427,6 +427,11 @@ jobs:
           bash .github/scripts/run_godot_check.sh \
             30 "ZOMBIE_VOCALIZATIONS PASS" /tmp/zombie_vocalizations.log -- \
             godot --headless --path src --script res://entities/zombie/tests/zombie_vocalizations_integration.gd
+      - name: Run sheep vocalizations integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "SHEEP_VOCALIZATIONS PASS" /tmp/sheep_vocalizations.log -- \
+            godot --headless --path src --script res://entities/sheep/tests/sheep_vocalizations_integration.gd
 
   mining-effects-integration:
     runs-on: ubuntu-latest

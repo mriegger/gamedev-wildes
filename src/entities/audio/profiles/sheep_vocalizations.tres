@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="EntityVocalizationProfile" load_steps=9 format=3]
+
+[ext_resource type="Script" path="res://entities/audio/entity_vocalization_profile.gd" id="1_profile"]
+[ext_resource type="AudioStream" path="res://assets/audio/entities/sheep/vocalizations/real_sheep_close_01.wav" id="2_voice"]
+[ext_resource type="AudioStream" path="res://assets/audio/entities/sheep/vocalizations/real_sheep_close_02.wav" id="3_voice"]
+[ext_resource type="AudioStream" path="res://assets/audio/entities/sheep/vocalizations/real_sheep_close_03.wav" id="4_voice"]
+[ext_resource type="AudioStream" path="res://assets/audio/entities/sheep/vocalizations/real_sheep_close_04.wav" id="5_voice"]
+[ext_resource type="AudioStream" path="res://assets/audio/entities/sheep/vocalizations/real_sheep_lamb.wav" id="6_voice"]
+[ext_resource type="AudioStream" path="res://assets/audio/entities/sheep/vocalizations/real_sheep_lamb_02.wav" id="7_voice"]
+[ext_resource type="AudioStream" path="res://assets/audio/entities/sheep/vocalizations/real_sheep_ram_low.wav" id="8_voice"]
+
+[resource]
+script = ExtResource("1_profile")
+streams = Array[AudioStream]([ExtResource("2_voice"), ExtResource("3_voice"), ExtResource("4_voice"), ExtResource("5_voice"), ExtResource("6_voice"), ExtResource("7_voice"), ExtResource("8_voice")])
+initial_delay_min_seconds = 1.5
+initial_delay_max_seconds = 7.0
+interval_min_seconds = 8.0
+interval_max_seconds = 18.0
+rng_salt = 88183417
