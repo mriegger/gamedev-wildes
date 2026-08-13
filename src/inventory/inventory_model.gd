@@ -498,3 +498,9 @@ func setup_starter():
 	selected_slot = 0
 	starter_item_migration_version = STARTER_ITEM_MIGRATION_VERSION
 	inventory_changed.emit()
+
+func setup_empty():
+	slots.fill(null)
+	selected_slot = 0
+	starter_item_migration_version = STARTER_ITEM_MIGRATION_VERSION
+	inventory_changed.emit()

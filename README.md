@@ -54,7 +54,7 @@ are a seventh placeable that you can walk through — each is an omni light with
 Torch shadows are configurable for the nearest 0, 1, 2, or 4 lights and default to the nearest
 one.
 
-**Tools.** New worlds start with a copper sword, while the first pickaxe is crafted from stone and
+**Tools.** New worlds start with an empty inventory, while the first pickaxe is crafted from stone and
 wood. Item actions are data-driven: stone and copper pickaxes can mine copper, while the sword uses
 click-triggered, alternating melee swings. Pixel-art held tools are extruded into shaded 3D
 silhouette meshes at runtime.

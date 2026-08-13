@@ -104,13 +104,13 @@ func _restore_inventory():
 	var saved_inventory = _save_data.get("inventory", null)
 	if saved_inventory is Dictionary and not saved_inventory.is_empty():
 		if not inventory_model.from_dict(saved_inventory):
-			push_error("[Game] Saved inventory is invalid; using starter inventory")
-			inventory_model.setup_starter()
+			push_error("[Game] Saved inventory is invalid; using an empty inventory")
+			inventory_model.setup_empty()
 			return
 		if not inventory_model.migrate_starter_items():
 			push_warning("[Game] Starter item migration deferred because inventory is full")
 	else:
-		inventory_model.setup_starter()
+		inventory_model.setup_empty()
 
 func _restore_player_stats():
 	var saved_stats = _save_data.get("player_stats", null)

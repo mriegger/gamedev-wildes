@@ -103,6 +103,20 @@ func _run():
 	_expect(restore_game.inventory_model.get_inventory_item_count(&"copper_pickaxe") == 0, "game restore granted a copper pickaxe")
 	_expect(restore_game.inventory_model.get_inventory_item_count(&"copper_sword") == 1, "game restore did not execute sword migration")
 	restore_game.free()
+	var new_game := Game.new()
+	new_game.item_catalog = item_catalog
+	new_game.inventory_model = InventoryModel.new(item_catalog)
+	new_game._save_data = {"inventory": null}
+	new_game._restore_inventory()
+	for index in range(new_game.inventory_model.size):
+		_expect(new_game.inventory_model.get_slot(index) == null, "new world inventory contains an item in slot %d" % index)
+	_expect(new_game.inventory_model.starter_item_migration_version == InventoryModel.STARTER_ITEM_MIGRATION_VERSION, "new world inventory can receive legacy starter items after reload")
+	var reloaded_new_world := InventoryModel.new(item_catalog)
+	_expect(reloaded_new_world.from_dict(new_game.inventory_model.to_dict()), "new world inventory did not survive save serialization")
+	_expect(reloaded_new_world.migrate_starter_items(), "new world inventory migration state did not survive reload")
+	for index in range(reloaded_new_world.size):
+		_expect(reloaded_new_world.get_slot(index) == null, "reloaded new world gained an item in slot %d" % index)
+	new_game.free()
 	for index in range(legacy.size):
 		if legacy.slots[index] != null and legacy.slots[index].item_id == &"copper_sword":
 			legacy.slots[index] = null
