@@ -249,6 +249,7 @@ func _setup_gameplay() -> bool:
 	game_environment.start_clock()
 	hud.setup_with_camera(inventory_model, inventory_stat_coordinator, crafting_coordinator, crafting_recipe_catalog, camera_rig, player_stats, item_proficiency)
 	hud.setup_socketing(inventory_model, rune_socketing_coordinator, item_proficiency)
+	hud.setup_progression(player_stats, player_perk_coordinator)
 	world.set_player_ref(player)
 	camera_rig.snap_to_follow_target()
 	camera_rig.current_yaw_deg = camera_rig.target_yaw_deg

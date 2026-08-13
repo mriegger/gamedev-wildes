@@ -10,15 +10,18 @@ const RECIPE_SCROLL_STEP: float = 61.0
 const RECIPE_PAN_SCROLL_SCALE: float = 32.0
 const CRAFTING_WORKSPACE_ID: StringName = &"crafting"
 const RUNES_WORKSPACE_ID: StringName = &"runes"
+const PROGRESSION_WORKSPACE_ID: StringName = &"progression"
 
 @onready var _background: Panel = $Background as Panel
 @onready var _content: Control = $Margin/Content as Control
 @onready var _title_label: Label = $Margin/Content/Title as Label
 @onready var _crafting_tab: Button = $Margin/Content/WorkspaceTabs/Crafting as Button
 @onready var _runes_tab: Button = $Margin/Content/WorkspaceTabs/Runes as Button
+@onready var _progression_tab: Button = $Margin/Content/WorkspaceTabs/Progression as Button
 @onready var _crafting_body: Control = $Margin/Content/Body as Control
 @onready var _rune_socketing_panel: RuneSocketingPanel = $Margin/Content/RuneSocketingPanel as RuneSocketingPanel
 @onready var _recipe_scroll: ScrollContainer = $Margin/Content/Body/Recipes/RecipeScroll as ScrollContainer
+@onready var _progression_panel: ProgressionPanel = $Margin/Content/ProgressionPanel as ProgressionPanel
 @onready var _recipe_list: VBoxContainer = $Margin/Content/Body/Recipes/RecipeScroll/RecipeList as VBoxContainer
 @onready var _output_icon: TextureRect = $Margin/Content/Body/Details/Output/IconFrame/Icon as TextureRect
 @onready var _output_name: Label = $Margin/Content/Body/Details/Output/Text/Name as Label
@@ -47,6 +50,7 @@ func _ready() -> void:
 	_recipe_scroll.gui_input.connect(_on_recipe_scroll_gui_input)
 	_crafting_tab.pressed.connect(_switch_workspace.bind(CRAFTING_WORKSPACE_ID))
 	_runes_tab.pressed.connect(_switch_workspace.bind(RUNES_WORKSPACE_ID))
+	_progression_tab.pressed.connect(_switch_workspace.bind(PROGRESSION_WORKSPACE_ID))
 	_style_workspace_tabs()
 	_apply_workspace()
 	_crafting_sound_player.stream = _crafting_sound_stream
@@ -73,6 +77,9 @@ func setup_socketing(
 ) -> void:
 	_rune_socketing_panel.setup(inventory, socketing_coordinator, item_proficiency)
 
+func setup_progression(actor_stats: ActorStats, perk_coordinator: PlayerPerkCoordinator) -> void:
+	_progression_panel.setup(actor_stats, perk_coordinator)
+
 func open() -> void:
 	_is_open = true
 	_target_progress = 1.0
@@ -85,6 +92,7 @@ func close() -> void:
 	_target_progress = 0.0
 	_rune_socketing_panel.clear_gear_reference()
 	_crafting_sound_player.stop()
+	_apply_workspace()
 	set_process(true)
 
 func close_immediate() -> void:
@@ -93,6 +101,7 @@ func close_immediate() -> void:
 	_target_progress = 0.0
 	_rune_socketing_panel.clear_gear_reference()
 	_crafting_sound_player.stop()
+	_apply_workspace()
 	_update_size()
 	_apply_state()
 	set_process(false)
@@ -118,10 +127,17 @@ func get_current_workspace_id() -> StringName:
 func get_rune_socketing_panel() -> RuneSocketingPanel:
 	return _rune_socketing_panel
 
+func get_progression_panel() -> ProgressionPanel:
+	return _progression_panel
+
 func _switch_workspace(workspace_id: StringName) -> void:
-	if workspace_id != CRAFTING_WORKSPACE_ID and workspace_id != RUNES_WORKSPACE_ID:
+	if (
+		workspace_id != CRAFTING_WORKSPACE_ID
+		and workspace_id != RUNES_WORKSPACE_ID
+		and workspace_id != PROGRESSION_WORKSPACE_ID
+	):
 		return
-	if workspace_id == RUNES_WORKSPACE_ID:
+	if workspace_id != CRAFTING_WORKSPACE_ID:
 		_crafting_sound_player.stop()
 	_current_workspace_id = workspace_id
 	_apply_workspace()
@@ -130,14 +146,24 @@ func _apply_workspace() -> void:
 	if not is_node_ready():
 		return
 	var crafting_visible := _current_workspace_id == CRAFTING_WORKSPACE_ID
+	var runes_visible := _current_workspace_id == RUNES_WORKSPACE_ID
+	var progression_visible := _current_workspace_id == PROGRESSION_WORKSPACE_ID
 	_crafting_body.visible = crafting_visible
-	_rune_socketing_panel.visible = not crafting_visible
-	_title_label.text = "CRAFTING" if crafting_visible else "RUNES"
+	_rune_socketing_panel.visible = runes_visible
+	_progression_panel.visible = progression_visible
+	_progression_panel.set_workspace_active(_is_open and progression_visible)
+	if crafting_visible:
+		_title_label.text = "CRAFTING"
+	elif runes_visible:
+		_title_label.text = "RUNES"
+	else:
+		_title_label.text = "PROGRESSION"
 	_crafting_tab.set_pressed_no_signal(crafting_visible)
-	_runes_tab.set_pressed_no_signal(not crafting_visible)
+	_runes_tab.set_pressed_no_signal(runes_visible)
+	_progression_tab.set_pressed_no_signal(progression_visible)
 
 func _style_workspace_tabs() -> void:
-	for tab in [_crafting_tab, _runes_tab]:
+	for tab in [_crafting_tab, _runes_tab, _progression_tab]:
 		tab.add_theme_font_override(&"font", WildesStyle.BOLD_FONT)
 		tab.add_theme_font_size_override(&"font_size", 13)
 		tab.add_theme_stylebox_override(&"normal", WildesStyle.make_panel(Color(0.10, 0.12, 0.14, 0.42), 7, Color(1, 1, 1, 0.10), 1))

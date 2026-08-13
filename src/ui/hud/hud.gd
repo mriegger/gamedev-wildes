@@ -25,6 +25,9 @@ func setup_socketing(
 ) -> void:
 	crafting_panel.setup_socketing(inventory, socketing_coordinator, item_proficiency)
 
+func setup_progression(actor_stats: ActorStats, perk_coordinator: PlayerPerkCoordinator) -> void:
+	crafting_panel.setup_progression(actor_stats, perk_coordinator)
+
 func _on_side_panel_progress_changed(progress: float):
 	var right_inset := SidePanel.PANEL_WIDTH * progress
 	health_bar.set_right_inset(right_inset)

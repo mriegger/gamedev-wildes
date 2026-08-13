@@ -1,9 +1,10 @@
-[gd_scene load_steps=6 format=3 uid="uid://c4ft1ngp4n3lscn"]
+[gd_scene load_steps=7 format=3 uid="uid://c4ft1ngp4n3lscn"]
 
 [ext_resource type="Script" path="res://crafting/presentation/crafting_panel.gd" id="1_script"]
 [ext_resource type="FontFile" path="res://assets/fonts/RobotoSlab-Bold.ttf" id="2_bold"]
 [ext_resource type="PackedScene" path="res://crafting/presentation/craft_button.tscn" id="3_craft_button"]
 [ext_resource type="PackedScene" path="res://items/runes/presentation/rune_socketing_panel.tscn" id="4_rune_panel"]
+[ext_resource type="PackedScene" path="res://progression/presentation/progression_panel.tscn" id="5_progression_panel"]
 
 [sub_resource type="StyleBoxFlat" id="separator"]
 bg_color = Color(1, 1, 1, 0.12)
@@ -65,6 +66,14 @@ size_flags_horizontal = 3
 focus_mode = 0
 toggle_mode = true
 text = "RUNES"
+
+[node name="Progression" type="Button" parent="Margin/Content/WorkspaceTabs"]
+custom_minimum_size = Vector2(0, 38)
+layout_mode = 2
+size_flags_horizontal = 3
+focus_mode = 0
+toggle_mode = true
+text = "PROGRESSION"
 
 [node name="Title" type="Label" parent="Margin/Content"]
 layout_mode = 2
@@ -177,6 +186,11 @@ layout_mode = 2
 size_flags_horizontal = 3
 
 [node name="RuneSocketingPanel" parent="Margin/Content" instance=ExtResource("4_rune_panel")]
+visible = false
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="ProgressionPanel" parent="Margin/Content" instance=ExtResource("5_progression_panel")]
 visible = false
 layout_mode = 2
 size_flags_vertical = 3

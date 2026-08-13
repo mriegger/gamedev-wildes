@@ -1,0 +1,101 @@
+[gd_scene load_steps=5 format=3 uid="uid://bpr0gr3ssp4n3l"]
+
+[ext_resource type="Script" path="res://progression/presentation/progression_panel.gd" id="1_script"]
+[ext_resource type="FontFile" path="res://assets/fonts/RobotoSlab-Bold.ttf" id="2_bold"]
+
+[sub_resource type="StyleBoxFlat" id="experience_background"]
+bg_color = Color(0.045, 0.05, 0.065, 0.84)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 0.2)
+corner_radius_top_left = 7
+corner_radius_top_right = 7
+corner_radius_bottom_right = 7
+corner_radius_bottom_left = 7
+
+[sub_resource type="StyleBoxFlat" id="experience_fill"]
+bg_color = Color(0.26, 0.68, 0.3, 0.96)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.08, 0.3, 0.1, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[node name="ProgressionPanel" type="VBoxContainer"]
+mouse_filter = 2
+theme_override_constants/separation = 12
+script = ExtResource("1_script")
+
+[node name="Overview" type="VBoxContainer" parent="."]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 7
+
+[node name="Level" type="Label" parent="Overview"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.96, 0.95, 0.9, 1)
+theme_override_fonts/font = ExtResource("2_bold")
+theme_override_font_sizes/font_size = 22
+text = "LEVEL 1"
+horizontal_alignment = 1
+
+[node name="ExperienceBar" type="ProgressBar" parent="Overview"]
+custom_minimum_size = Vector2(0, 28)
+layout_mode = 2
+mouse_filter = 2
+theme_override_styles/background = SubResource("experience_background")
+theme_override_styles/fill = SubResource("experience_fill")
+max_value = 100.0
+show_percentage = false
+
+[node name="Value" type="Label" parent="Overview/ExperienceBar"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.95, 1, 0.94, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.75)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+theme_override_fonts/font = ExtResource("2_bold")
+theme_override_font_sizes/font_size = 12
+text = "XP 0 / 100"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="AvailablePoints" type="Label" parent="."]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.72, 0.92, 0.76, 1)
+theme_override_fonts/font = ExtResource("2_bold")
+theme_override_font_sizes/font_size = 15
+text = "AVAILABLE POINTS: 0"
+horizontal_alignment = 1
+
+[node name="PerksHeading" type="Label" parent="."]
+layout_mode = 2
+mouse_filter = 2
+theme_override_fonts/font = ExtResource("2_bold")
+theme_override_font_sizes/font_size = 14
+text = "PERKS"
+
+[node name="PerkScroll" type="ScrollContainer" parent="."]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="PerkList" type="VBoxContainer" parent="PerkScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_override_constants/separation = 8

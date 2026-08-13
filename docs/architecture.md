@@ -86,6 +86,11 @@ source. Allocation preflights both the rank change and projected stat modifiers 
 and maximum-HP changes preserve the current health percentage. `Game` creates, restores, and wires
 these owners explicitly. Unspent points remain derived rather than becoming a second mutable
 ledger.
+`ProgressionPanel` presents live level, XP, available points, authored perk effects, and bounded
+allocation commands without owning progression state. It polls only while its workspace is visible
+and sends allocation requests through `PlayerPerkCoordinator`. `CraftingPanel` is the shared shell
+for the Crafting, Runes, and Progression workspaces. Crafting commits immediately, so workspace
+switches only change presentation, and reopening always returns to Crafting.
 The same coordinator translates each target's applied player damage into weapon proficiency and
 each incoming damage result into full proficiency credit for every equipped armor piece. These
 policy methods are isolated from combat resolution so their earning rules can change independently.

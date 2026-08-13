@@ -310,6 +310,8 @@ Presentation displays state and sends commands; it does not own progression or i
 Implemented UI includes:
 
 - the player level and XP bar above the hotbar;
+- a Progression workspace showing live level, XP, available points, perk effects, ranks, and
+  allocation controls;
 - gear proficiency, rarity, and stats in item tooltips;
 - rune compatibility and modifiers in rune tooltips;
 - the Runes workspace with three socket positions and four visual states;
@@ -317,7 +319,6 @@ Implemented UI includes:
 
 Planned UI includes:
 
-- a Progression workspace showing level, XP, available points, and bounded perk allocation;
 - milestone presentation;
 - an enchanting interface with gear eligibility, available choices, exact XP cost, current XP, and
   a preview of the committed result;

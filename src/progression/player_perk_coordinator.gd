@@ -14,17 +14,9 @@ func setup(player_perks: PlayerPerks, actor_stats: ActorStats) -> bool:
 	_actor_stats = actor_stats
 	return _apply_allocations()
 
-func get_perk_ids() -> Array[StringName]:
-	assert(_player_perks != null)
-	return _player_perks.get_perk_ids()
-
 func get_definitions() -> Array[PlayerPerkDefinition]:
 	assert(_player_perks != null)
 	return _player_perks.get_definitions()
-
-func get_definition(perk_id: StringName) -> PlayerPerkDefinition:
-	assert(_player_perks != null)
-	return _player_perks.get_definition(perk_id)
 
 func get_rank(perk_id: StringName) -> int:
 	assert(_player_perks != null)
@@ -33,10 +25,6 @@ func get_rank(perk_id: StringName) -> int:
 func get_earned_point_count() -> int:
 	assert(_player_perks != null and _actor_stats != null)
 	return _player_perks.get_earned_point_count(_actor_stats.level)
-
-func get_spent_point_count() -> int:
-	assert(_player_perks != null)
-	return _player_perks.get_spent_point_count()
 
 func get_unspent_point_count() -> int:
 	assert(_player_perks != null and _actor_stats != null)
