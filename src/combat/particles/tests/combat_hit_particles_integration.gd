@@ -54,8 +54,8 @@ func _run():
 	var guts := particles._bursts[0]
 	var guts_profile := particle_catalog.get_profile(&"player", &"zombie")
 	_expect(guts.global_position.is_equal_approx(player_zombie.world_position), "guts burst position changed")
-	_expect(guts_profile.primary_color.is_equal_approx(Color(0.23, 0.38, 0.07, 1.0)), "guts palette became too bright")
-	_expect(guts_profile.accent_color.is_equal_approx(Color(0.27, 0.08, 0.045, 1.0)), "guts accent palette changed")
+	_expect(guts_profile.primary_color.is_equal_approx(Color(0.19, 0.32, 0.055, 1.0)), "guts palette became too bright")
+	_expect(guts_profile.accent_color.is_equal_approx(Color(0.22, 0.065, 0.035, 1.0)), "guts accent palette changed")
 	_expect((guts.get_node("Primary") as CPUParticles3D).emitting and (guts.get_node("Accent") as CPUParticles3D).emitting, "guts burst did not emit")
 	_expect((guts.get_node("Primary") as CPUParticles3D).color.is_equal_approx(guts_profile.primary_color), "guts primary color changed")
 	_expect((guts.get_node("Accent") as CPUParticles3D).color.is_equal_approx(guts_profile.accent_color), "guts accent color changed")
