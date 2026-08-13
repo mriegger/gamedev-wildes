@@ -74,6 +74,19 @@ func _test_socket_and_unsocket() -> void:
 	_expect(slot.get_state() == RuneSocketingSlot.State.FILLED, "socketed rune slot was not rendered as filled")
 	_expect(_inventory.get_socketed_rune_ids(GEAR_INDEX) == _rune_ids([&"basic_rune"]), "rune UI did not socket the rune")
 	_expect(_inventory.get_slot(RUNE_INDEX).count == 1, "rune UI consumed the wrong count")
+	var rune_tooltip := slot._make_custom_tooltip(slot.tooltip_text) as ItemTooltip
+	_expect(rune_tooltip != null, "filled rune slot did not create a tooltip")
+	if rune_tooltip != null:
+		root.add_child(rune_tooltip)
+		_expect(rune_tooltip.stats_label.text.contains("HP: +100"), "filled rune tooltip did not show its stat")
+		rune_tooltip.free()
+	var gear_slot := rune_panel.get_gear_slot()
+	var gear_tooltip := gear_slot._make_custom_tooltip(gear_slot.tooltip_text) as ItemTooltip
+	_expect(gear_tooltip != null, "socketed gear target did not create a tooltip")
+	if gear_tooltip != null:
+		root.add_child(gear_tooltip)
+		_expect(gear_tooltip.rune_stats_label.text == "(+100 HP)", "socketed gear target did not show its rune bonus")
+		gear_tooltip.free()
 	var click := InputEventMouseButton.new()
 	click.button_index = MOUSE_BUTTON_RIGHT
 	click.pressed = true
@@ -81,6 +94,15 @@ func _test_socket_and_unsocket() -> void:
 	_expect(slot.get_state() == RuneSocketingSlot.State.EMPTY, "unsocketed rune slot did not return to empty")
 	_expect(_inventory.get_socketed_rune_ids(GEAR_INDEX).is_empty(), "rune UI did not unsocket the rune")
 	_expect(_inventory.get_inventory_item_count(&"basic_rune") == 2, "unsocket did not return the rune")
+	_expect(slot.tooltip_text.is_empty(), "unsocketed rune slot retained tooltip text")
+	_expect(slot._make_custom_tooltip(slot.tooltip_text) == null, "unsocketed rune slot retained tooltip data")
+	var unsocketed_gear_tooltip := gear_slot._make_custom_tooltip(gear_slot.tooltip_text) as ItemTooltip
+	_expect(unsocketed_gear_tooltip != null, "unsocketed gear target lost its tooltip")
+	if unsocketed_gear_tooltip != null:
+		root.add_child(unsocketed_gear_tooltip)
+		_expect(not unsocketed_gear_tooltip.rune_stats_label.visible, "unsocketed gear target retained its rune bonus")
+		_expect(unsocketed_gear_tooltip.rune_stats_label.text.is_empty(), "unsocketed gear target retained rune bonus text")
+		unsocketed_gear_tooltip.free()
 
 func _test_close_and_reopen() -> void:
 	_panel.close_immediate()

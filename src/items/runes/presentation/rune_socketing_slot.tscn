@@ -1,12 +1,14 @@
-[gd_scene load_steps=3 format=3 uid="uid://crun3s0ck3tsl0t"]
+[gd_scene load_steps=4 format=3 uid="uid://crun3s0ck3tsl0t"]
 
 [ext_resource type="Script" path="res://items/runes/presentation/rune_socketing_slot.gd" id="1_script"]
 [ext_resource type="FontFile" path="res://assets/fonts/RobotoSlab-Bold.ttf" id="2_bold"]
+[ext_resource type="PackedScene" path="res://inventory/ui/item_tooltip.tscn" id="3_tooltip"]
 
 [node name="RuneSocketingSlot" type="Panel"]
 custom_minimum_size = Vector2(112, 112)
 mouse_filter = 0
 script = ExtResource("1_script")
+item_tooltip_scene = ExtResource("3_tooltip")
 
 [node name="Margin" type="MarginContainer" parent="."]
 layout_mode = 1

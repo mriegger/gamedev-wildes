@@ -1,6 +1,6 @@
 [gd_scene load_steps=4 format=3]
 
-[ext_resource type="Script" path="res://inventory/ui/gear_tooltip.gd" id="1_script"]
+[ext_resource type="Script" path="res://inventory/ui/item_tooltip.gd" id="1_script"]
 [ext_resource type="FontFile" path="res://assets/fonts/RobotoSlab-Bold.ttf" id="2_bold"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
@@ -15,7 +15,7 @@ corner_radius_top_right = 6
 corner_radius_bottom_right = 6
 corner_radius_bottom_left = 6
 
-[node name="GearTooltip" type="PanelContainer"]
+[node name="ItemTooltip" type="PanelContainer"]
 custom_minimum_size = Vector2(250, 0)
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
@@ -93,4 +93,10 @@ text = "STATS"
 layout_mode = 2
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.86, 0.87, 0.89, 1)
+theme_override_font_sizes/font_size = 12
+
+[node name="RuneStats" type="Label" parent="Margin/Content"]
+visible = false
+layout_mode = 2
+mouse_filter = 2
 theme_override_font_sizes/font_size = 12

@@ -926,8 +926,8 @@ func _check_helmet_tooltip(slot: InventorySlot, context: String) -> void:
 		_fail("%s helmet tooltip stats are incorrect" % context)
 	tooltip.free()
 
-func _create_gear_tooltip(slot: InventorySlot, context: String) -> GearTooltip:
-	var tooltip := slot._make_custom_tooltip(slot.tooltip_text) as GearTooltip
+func _create_gear_tooltip(slot: InventorySlot, context: String) -> ItemTooltip:
+	var tooltip := slot._make_custom_tooltip(slot.tooltip_text) as ItemTooltip
 	if tooltip == null:
 		_fail("%s gear tooltip was not created" % context)
 		return null

@@ -83,14 +83,14 @@ rejects different rarity resources that reuse one ID. Rarity remains classificat
 attack profiles, stat modifiers, and proficiency definitions stay authoritative for combat values,
 equipment bonuses, and unlock thresholds.
 
-`InventorySlot` presents combat-item details for hotbar, backpack, and equipped slots through one
-custom `GearTooltip`. `Game` passes `ItemProficiency` through `HUD`, `Hotbar`, and `SidePanel` into
-each slot, and a visible tooltip queries current progress without owning it. Weapon rows read the
-item's melee attack profile, while armor rows read its slot and stat modifiers, so presentation
-does not own or duplicate gear state. During a left-button drag, the source slot owns the adjustable
-drag count and consumes wheel input before gameplay camera handling. `InventoryModel` remains the
-authority for partial moves and discards, while the source and drag-preview visuals show the pending
-split without mutating inventory until a drop succeeds.
+`InventorySlot` presents combat-item and rune details for hotbar, backpack, and equipped slots
+through one custom `ItemTooltip`. `Game` passes `ItemProficiency` through `HUD`, `Hotbar`, and
+`SidePanel` into each slot, and a visible tooltip queries current progress without owning it.
+Weapon rows read the item's melee attack profile, while armor rows read its slot and stat
+modifiers, so presentation does not own or duplicate gear state. During a left-button drag, the
+source slot owns the adjustable drag count and consumes wheel input before gameplay camera handling.
+`InventoryModel` remains the authority for partial moves and discards, while the source and
+drag-preview visuals show the pending split without mutating inventory until a drop succeeds.
 
 ## Runes and socketing
 

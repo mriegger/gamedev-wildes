@@ -161,6 +161,11 @@ jobs:
           bash .github/scripts/run_godot_check.sh \
             30 "RUNE_SOCKETING_UI PASS" /tmp/rune_socketing_ui.log -- \
             godot --headless --path src --script res://items/runes/tests/rune_socketing_ui_integration.gd
+      - name: Validate rune tooltips
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "RUNE_TOOLTIP PASS" /tmp/rune_tooltip.log -- \
+            godot --headless --path src --script res://items/runes/tests/rune_tooltip_integration.gd
 
   armor-system:
     runs-on: ubuntu-latest

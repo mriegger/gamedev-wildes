@@ -9,7 +9,7 @@ var inventory_stat_coordinator: InventoryStatCoordinator = null
 var item_proficiency: ItemProficiency = null
 var empty_label: String = ""
 
-@export var gear_tooltip_scene: PackedScene
+@export var item_tooltip_scene: PackedScene
 
 var _normal_style: StyleBoxFlat
 var _empty_style: StyleBoxFlat
@@ -64,26 +64,33 @@ func _update_tooltip_text() -> void:
 	if inventory_model == null or item_proficiency == null:
 		tooltip_text = ""
 		return
-	var definition := _get_gear_tooltip_definition()
+	var definition := _get_tooltip_definition()
 	tooltip_text = definition.display_name if definition != null else ""
 
 func _make_custom_tooltip(_for_text: String) -> Object:
-	var definition := _get_gear_tooltip_definition()
+	var definition := _get_tooltip_definition()
 	if tooltip_text.is_empty() or definition == null:
 		return null
-	assert(gear_tooltip_scene != null)
-	var tooltip := gear_tooltip_scene.instantiate() as GearTooltip
+	assert(item_tooltip_scene != null)
+	var tooltip := item_tooltip_scene.instantiate() as ItemTooltip
 	assert(tooltip != null)
-	tooltip.setup(definition, item_proficiency)
+	tooltip.setup(
+		definition,
+		item_proficiency,
+		inventory_model.item_catalog,
+		inventory_model.get_socketed_rune_ids(slot_index),
+	)
 	return tooltip
 
-func _get_gear_tooltip_definition() -> ItemDefinition:
+func _get_tooltip_definition() -> ItemDefinition:
 	if item_id == null or item_count <= 0 or inventory_model == null or item_proficiency == null:
 		return null
 	var catalog := inventory_model.item_catalog
+	var definition := catalog.get_definition(item_id)
+	if definition is RuneDefinition:
+		return definition
 	if not catalog.is_combat_item(item_id):
 		return null
-	var definition := catalog.get_definition(item_id)
 	if definition.rarity == null or definition.proficiency == null or not item_proficiency.has_proficiency(item_id):
 		return null
 	return definition

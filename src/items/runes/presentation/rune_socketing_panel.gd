@@ -136,6 +136,12 @@ func _refresh_gear_slot() -> void:
 		rarity_text,
 		rarity_color
 	)
+	_gear_slot.set_item_tooltip(
+		definition,
+		_item_proficiency,
+		_inventory.item_catalog,
+		_inventory.get_socketed_rune_ids(_selected_gear_index),
+	)
 	_status_label.text = "Drop a rune into an unlocked slot. Click a filled slot to remove it."
 
 func _refresh_rune_slots() -> void:
@@ -160,3 +166,4 @@ func _refresh_rune_slots() -> void:
 		var rarity_text := definition.rarity.display_name if definition.rarity != null else "Socketed"
 		var rarity_color := definition.rarity.display_color if definition.rarity != null else Color.WHITE
 		slot.present(RuneSocketingSlot.State.FILLED, definition.icon, definition.display_name, rarity_text, rarity_color)
+		slot.set_item_tooltip(definition, _item_proficiency, _inventory.item_catalog)

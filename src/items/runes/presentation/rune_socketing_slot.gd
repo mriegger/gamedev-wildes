@@ -17,8 +17,14 @@ enum State {
 @onready var _title: Label = $Margin/Content/Title as Label
 @onready var _detail: Label = $Margin/Content/Detail as Label
 
+@export var item_tooltip_scene: PackedScene
+
 var _state: State = State.UNAVAILABLE
 var _drop_validator: Callable
+var _tooltip_definition: ItemDefinition
+var _tooltip_proficiency: ItemProficiency
+var _tooltip_catalog: ItemCatalog
+var _tooltip_socketed_rune_ids: Array[StringName] = []
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
@@ -31,6 +37,7 @@ func set_drop_validator(validator: Callable) -> void:
 
 func present(state: State, texture: Texture2D, title: String, detail: String, color: Color = Color.WHITE) -> void:
 	_state = state
+	_clear_item_tooltip()
 	_icon.texture = texture
 	_icon.visible = texture != null
 	_title.text = title
@@ -40,6 +47,42 @@ func present(state: State, texture: Texture2D, title: String, detail: String, co
 
 func get_state() -> State:
 	return _state
+
+func set_item_tooltip(
+	definition: ItemDefinition,
+	item_proficiency: ItemProficiency,
+	item_catalog: ItemCatalog,
+	socketed_rune_ids: Array[StringName] = [],
+) -> void:
+	assert(definition != null)
+	assert(item_proficiency != null)
+	assert(item_catalog != null)
+	_tooltip_definition = definition
+	_tooltip_proficiency = item_proficiency
+	_tooltip_catalog = item_catalog
+	_tooltip_socketed_rune_ids = socketed_rune_ids.duplicate()
+	tooltip_text = definition.display_name
+
+func _make_custom_tooltip(_for_text: String) -> Object:
+	if tooltip_text.is_empty() or _tooltip_definition == null:
+		return null
+	assert(item_tooltip_scene != null)
+	var tooltip := item_tooltip_scene.instantiate() as ItemTooltip
+	assert(tooltip != null)
+	tooltip.setup(
+		_tooltip_definition,
+		_tooltip_proficiency,
+		_tooltip_catalog,
+		_tooltip_socketed_rune_ids,
+	)
+	return tooltip
+
+func _clear_item_tooltip() -> void:
+	_tooltip_definition = null
+	_tooltip_proficiency = null
+	_tooltip_catalog = null
+	_tooltip_socketed_rune_ids.clear()
+	tooltip_text = ""
 
 func _can_drop_data(_at_position: Vector2, data: Variant) -> bool:
 	var source_index := _get_source_index(data)
