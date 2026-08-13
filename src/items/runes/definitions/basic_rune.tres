@@ -1,7 +1,7 @@
 [gd_resource type="Resource" script_class="RuneDefinition" load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://items/runes/rune_definition.gd" id="1_definition"]
-[ext_resource type="Texture2D" path="res://assets/textures/blocks/sand.png" id="2_icon"]
+[ext_resource type="Texture2D" path="res://assets/textures/items/basic_rune.svg" id="2_icon"]
 [ext_resource type="Resource" path="res://items/rarity/definitions/common.tres" id="3_rarity"]
 [ext_resource type="Script" path="res://stats/stat_modifier.gd" id="4_modifier"]
 
