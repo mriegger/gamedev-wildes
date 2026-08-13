@@ -32,7 +32,16 @@ Create and register an `ItemDefinition` in the same way. Assign only the actions
 
 Item IDs are `StringName` values at runtime and JSON strings in saves. `BlockId` integers remain limited to world generation, voxel edits, meshing, and world persistence.
 
-Inventory slots contain typed `InventoryStack` objects at runtime. Saves keep the same `{item_id, count}` stack shape. New worlds begin with every inventory region empty and record the current starter-item migration version so a reload cannot grant legacy items. When a pre-tool save is restored, its one-time migration still preserves every existing stack and inserts the historical starter items when fillable inventory space is available. Previously saved tools remain untouched even when they are no longer granted to new worlds.
+Inventory slots contain typed `InventoryStack` objects at runtime. Saves encode each stack as `{item_id, count, socketed_rune_ids}`. The rune IDs are empty for ordinary stacks and preserve the installed runes on each physical gear copy. New worlds begin with every inventory region empty and record the current starter-item migration version so a reload cannot grant legacy items. When a pre-tool save is restored, its one-time migration still preserves every existing stack and inserts the historical starter items when fillable inventory space is available. Previously saved tools remain untouched even when they are no longer granted to new worlds.
+
+## Add a rune
+
+Create a `RuneDefinition` under `src/items/runes/definitions`, assign a stable item ID, icon,
+stack size, canonical rarity, compatibility flags, and permanent socket modifiers. Armor-compatible
+runes must also declare the supported head, chest, legs, or feet slots. Register the resource in
+`src/items/item_catalog.tres`; acquisition remains separate content, such as a canonical crafting
+recipe. Rune modifiers do not belong in the inherited selected-item modifier list because they are
+activated only through socketed gear.
 
 ## Add a mining tool
 

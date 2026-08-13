@@ -75,8 +75,7 @@ policy methods are isolated from combat resolution so their earning rules can ch
 `ItemProficiency` owns deterministic progress keyed by stable item definition ID, so every copy of
 an item type shares progress. Each item directly references a `ProficiencyDefinition` resource with
 explicit per-level requirements and slot unlock levels; zero is an initially free slot. Current
-Common combat gear unlocks its one slot at proficiency level one after one hundred damage. Rune
-contents and enchantment effects are not part of this system.
+Common combat gear unlocks its one slot at proficiency level one after one hundred damage.
 
 Combat items also reference an `ItemRarityDefinition` with a stable ID, display name, and display
 color. `ItemCatalog` requires rarity and proficiency definitions for melee weapons and armor and
@@ -92,6 +91,32 @@ does not own or duplicate gear state. During a left-button drag, the source slot
 drag count and consumes wheel input before gameplay camera handling. `InventoryModel` remains the
 authority for partial moves and discards, while the source and drag-preview visuals show the pending
 split without mutating inventory until a drop succeeds.
+
+## Runes and socketing
+
+`RuneDefinition` is typed item content with rarity, weapon and armor compatibility, optional armor
+slot restrictions, and socket-only stat modifiers. The Basic Rune is Common, is compatible with
+every melee weapon and armor slot, and adds one hundred maximum HP. Its crafting recipe exchanges
+thirty-two Sand for one stackable rune. Enchantments remain outside the implemented system.
+
+Each `InventoryStack` owns the stable rune IDs installed on that physical gear copy. The array
+preserves physical slot positions, permits an empty value between filled positions, and omits
+trailing empty positions. `InventoryModel` preserves that state across full-stack moves and save
+round trips. It commits socketing as one transaction that consumes exactly one inventory rune and
+updates the target copy. Unsocketing updates the copy and returns the rune together, or rejects the
+whole command when the inventory has no capacity.
+
+`RuneSocketingCoordinator` combines the target item's `ProficiencyDefinition`, shared
+`ItemProficiency`, and `RuneDefinition` compatibility into the socket command and query API. It
+does not own inventory state. The Rune workspace presents one referenced inventory gear slot and
+three physical rune slots; it delegates every mutation to the coordinator and keeps the backpack
+visible as the drag source.
+
+`RuneEffectCoordinator` derives active modifiers from socketed runes on the selected melee weapon
+and all equipped armor. It replaces one bounded `ActorStats` modifier source whenever that active
+loadout changes, so duplicate runes stack without accumulating stale runtime modifiers. Maximum-HP
+changes preserve the player's current health percentage. Runes on unselected weapons and unequipped
+armor remain persisted but inactive.
 
 `Game` owns player stats and handles their completed health-depleted transition. Defeat puts
 the player motor into an input-blocking stopped state, closes inventory and debug panels, and
@@ -112,8 +137,10 @@ accumulating. Respawn, Main Menu, and window close restore a living player at wo
 saving resumes; exit paths then use the normal final-save and shutdown flow so zero HP is never
 persisted. Loading a historical zero-HP snapshot restores full health at world spawn before gameplay
 begins and immediately replaces the stored snapshot with that living state.
-Save version five stores item proficiency separately from player stats and inventory. Version-four
-saves migrate with empty item proficiency while preserving their existing player and world state.
+Save version six stores item proficiency separately and includes per-stack socket IDs in inventory.
+Version-four saves first gain empty item proficiency, and version-five inventory stacks then gain
+empty socket arrays. The migration chain operates on a copy and commits only after every region is
+valid, preserving the original data on failure.
 
 Entity populations are transient and bounded to six per species and twelve total. Spawning makes
 four attempts every two seconds in an 18–36 block annulus. Voxel A* has fixed radius, node, and
