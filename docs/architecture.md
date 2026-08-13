@@ -21,7 +21,7 @@ inventory/                   inventory model and inventory-owned UI
 items/                       item resources, actions, catalogs, and held scenes
 levels/                      finite dungeon content, generation, runtime, entrance, and presentation
 player/                      player behavior, camera, and visuals
-progression/                 combat rewards and shared item proficiency
+progression/                 player leveling, perks, item proficiency, and presentation
 save/                        save encoding and storage
 settings/                    persistent display and rendering configuration
 structures/                  generic definitions, drafts, root-file storage, runtime, and presentation
@@ -102,6 +102,9 @@ source slot owns the adjustable drag count and consumes wheel input before gamep
 drag-preview visuals show the pending split without mutating inventory until a drop succeeds.
 
 ## Runes and socketing
+
+See [Progression, runes, and enchanting](progression-runes-enchanting.md) for the player-facing
+design, current implementation status, and planned enchantment rules.
 
 `RuneDefinition` is typed item content with rarity, weapon and armor compatibility, optional armor
 slot restrictions, and socket-only stat modifiers. The Basic Rune is Common, is compatible with
