@@ -60,7 +60,7 @@ func _run():
 	_expect((guts.get_node("Primary") as CPUParticles3D).emitting and (guts.get_node("Accent") as CPUParticles3D).emitting, "guts burst did not emit")
 	_expect((guts.get_node("Primary") as CPUParticles3D).color.is_equal_approx(guts_profile.primary_color), "guts primary color changed")
 	_expect((guts.get_node("Accent") as CPUParticles3D).color.is_equal_approx(guts_profile.accent_color), "guts accent color changed")
-	var expected_direction := (Vector3.LEFT + Vector3.UP * CombatHitParticleBurst.UPWARD_BIAS).normalized()
+	var expected_direction := (Vector3.RIGHT + Vector3.UP * CombatHitParticleBurst.UPWARD_BIAS).normalized()
 	_expect((guts.get_node("Primary") as CPUParticles3D).direction.is_equal_approx(expected_direction), "guts direction changed")
 	var zombie_player := MeleeContact.new(1, &"zombie", 0, &"player", &"zombie_melee", Vector3(2.0, 3.0, 4.0), Vector3.LEFT)
 	_emit_outcome(combat, zombie_player)

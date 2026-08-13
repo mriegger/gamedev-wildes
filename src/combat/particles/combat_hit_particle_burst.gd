@@ -10,9 +10,10 @@ const SURFACE_OFFSET: float = 0.1
 func play(position: Vector3, hit_direction: Vector3, primary_color: Color, accent_color: Color):
 	assert(position.is_finite())
 	assert(hit_direction.is_finite() and not hit_direction.is_zero_approx())
-	var outward_direction := -hit_direction.normalized()
+	var attack_direction := hit_direction.normalized()
+	var outward_direction := -attack_direction
 	global_position = position + outward_direction * SURFACE_OFFSET
-	var launch_direction := (outward_direction + Vector3.UP * UPWARD_BIAS).normalized()
+	var launch_direction := (attack_direction + Vector3.UP * UPWARD_BIAS).normalized()
 	_play_emitter(_primary, launch_direction, primary_color)
 	_play_emitter(_accent, launch_direction, accent_color)
 
