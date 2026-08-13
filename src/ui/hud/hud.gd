@@ -18,6 +18,9 @@ func setup_with_camera(p_inventory: InventoryModel, p_inventory_stat_coordinator
 	side_panel.progress_changed.connect(_on_side_panel_progress_changed)
 	_on_side_panel_progress_changed(side_panel.get_progress())
 
+func setup_socketing(inventory: InventoryModel, socketing_coordinator: RuneSocketingCoordinator) -> void:
+	crafting_panel.setup_socketing(inventory, socketing_coordinator)
+
 func _on_side_panel_progress_changed(progress: float):
 	var right_inset := SidePanel.PANEL_WIDTH * progress
 	health_bar.set_right_inset(right_inset)

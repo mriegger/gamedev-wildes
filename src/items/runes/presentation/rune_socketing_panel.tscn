@@ -1,0 +1,78 @@
+[gd_scene load_steps=4 format=3 uid="uid://crun3s0ck3tp4n"]
+
+[ext_resource type="Script" path="res://items/runes/presentation/rune_socketing_panel.gd" id="1_script"]
+[ext_resource type="FontFile" path="res://assets/fonts/RobotoSlab-Bold.ttf" id="2_bold"]
+[ext_resource type="PackedScene" path="res://items/runes/presentation/rune_socketing_slot.tscn" id="3_slot"]
+
+[node name="RuneSocketingPanel" type="VBoxContainer"]
+mouse_filter = 2
+theme_override_constants/separation = 16
+script = ExtResource("1_script")
+
+[node name="GearSection" type="VBoxContainer" parent="."]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 8
+alignment = 1
+
+[node name="Heading" type="Label" parent="GearSection"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_fonts/font = ExtResource("2_bold")
+theme_override_font_sizes/font_size = 14
+text = "WEAPON OR ARMOR"
+horizontal_alignment = 1
+
+[node name="GearSlot" parent="GearSection" instance=ExtResource("3_slot")]
+custom_minimum_size = Vector2(220, 126)
+layout_mode = 2
+size_flags_horizontal = 4
+
+[node name="Flow" type="Label" parent="."]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.62, 0.86, 0.69, 1)
+theme_override_font_sizes/font_size = 20
+text = "↓"
+horizontal_alignment = 1
+
+[node name="RuneSection" type="VBoxContainer" parent="."]
+layout_mode = 2
+size_flags_vertical = 3
+mouse_filter = 2
+theme_override_constants/separation = 10
+
+[node name="Heading" type="Label" parent="RuneSection"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_fonts/font = ExtResource("2_bold")
+theme_override_font_sizes/font_size = 14
+text = "RUNE SLOTS"
+horizontal_alignment = 1
+
+[node name="RuneSlots" type="HBoxContainer" parent="RuneSection"]
+layout_mode = 2
+size_flags_horizontal = 4
+mouse_filter = 2
+theme_override_constants/separation = 12
+alignment = 1
+
+[node name="RuneSlot1" parent="RuneSection/RuneSlots" instance=ExtResource("3_slot")]
+layout_mode = 2
+
+[node name="RuneSlot2" parent="RuneSection/RuneSlots" instance=ExtResource("3_slot")]
+layout_mode = 2
+
+[node name="RuneSlot3" parent="RuneSection/RuneSlots" instance=ExtResource("3_slot")]
+layout_mode = 2
+
+[node name="Status" type="Label" parent="."]
+custom_minimum_size = Vector2(0, 34)
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.7, 0.72, 0.74, 1)
+theme_override_font_sizes/font_size = 11
+text = "Choose a gear item from your inventory."
+horizontal_alignment = 1
+vertical_alignment = 1
+autowrap_mode = 2

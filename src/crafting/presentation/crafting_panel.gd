@@ -8,9 +8,16 @@ const ITEM_ICON_SIZE: float = 32.0
 const RECIPE_ICON_FRAME_SIZE: float = 54.0
 const RECIPE_SCROLL_STEP: float = 61.0
 const RECIPE_PAN_SCROLL_SCALE: float = 32.0
+const CRAFTING_WORKSPACE_ID: StringName = &"crafting"
+const RUNES_WORKSPACE_ID: StringName = &"runes"
 
 @onready var _background: Panel = $Background as Panel
 @onready var _content: Control = $Margin/Content as Control
+@onready var _title_label: Label = $Margin/Content/Title as Label
+@onready var _crafting_tab: Button = $Margin/Content/WorkspaceTabs/Crafting as Button
+@onready var _runes_tab: Button = $Margin/Content/WorkspaceTabs/Runes as Button
+@onready var _crafting_body: Control = $Margin/Content/Body as Control
+@onready var _rune_socketing_panel: RuneSocketingPanel = $Margin/Content/RuneSocketingPanel as RuneSocketingPanel
 @onready var _recipe_scroll: ScrollContainer = $Margin/Content/Body/Recipes/RecipeScroll as ScrollContainer
 @onready var _recipe_list: VBoxContainer = $Margin/Content/Body/Recipes/RecipeScroll/RecipeList as VBoxContainer
 @onready var _output_icon: TextureRect = $Margin/Content/Body/Details/Output/IconFrame/Icon as TextureRect
@@ -29,6 +36,7 @@ var _selected_recipe_id: StringName = &""
 var _progress: float = 0.0
 var _target_progress: float = 0.0
 var _is_open: bool = false
+var _current_workspace_id: StringName = CRAFTING_WORKSPACE_ID
 var _crafting_sound_stream: AudioStream = preload("res://assets/audio/sfx/tools/impactGeneric_light_004.ogg")
 
 func _ready() -> void:
@@ -37,6 +45,10 @@ func _ready() -> void:
 	WildesStyle.apply_frosted_panel(_background, WildesStyle.make_panel(Color(0.14, 0.16, 0.18, 0.32), 0, Color(1, 1, 1, 0.12), 1), 5.0, false)
 	_craft_button.pressed.connect(_on_craft_pressed)
 	_recipe_scroll.gui_input.connect(_on_recipe_scroll_gui_input)
+	_crafting_tab.pressed.connect(_switch_workspace.bind(CRAFTING_WORKSPACE_ID))
+	_runes_tab.pressed.connect(_switch_workspace.bind(RUNES_WORKSPACE_ID))
+	_style_workspace_tabs()
+	_apply_workspace()
 	_crafting_sound_player.stream = _crafting_sound_stream
 	_update_size()
 	_apply_state()
@@ -54,21 +66,29 @@ func setup(p_crafting_coordinator: CraftingCoordinator, p_recipe_catalog: Crafti
 		_select_recipe(recipe_catalog.definitions[0].id)
 	_update_camera()
 
+func setup_socketing(inventory: InventoryModel, socketing_coordinator: RuneSocketingCoordinator) -> void:
+	_rune_socketing_panel.setup(inventory, socketing_coordinator)
+
 func open() -> void:
 	_is_open = true
 	_target_progress = 1.0
+	_switch_workspace(CRAFTING_WORKSPACE_ID)
 	_refresh_details()
 	set_process(true)
 
 func close() -> void:
 	_is_open = false
 	_target_progress = 0.0
+	_rune_socketing_panel.clear_gear_reference()
+	_crafting_sound_player.stop()
 	set_process(true)
 
 func close_immediate() -> void:
 	_is_open = false
 	_progress = 0.0
 	_target_progress = 0.0
+	_rune_socketing_panel.clear_gear_reference()
+	_crafting_sound_player.stop()
 	_update_size()
 	_apply_state()
 	set_process(false)
@@ -87,6 +107,38 @@ func select_recipe(recipe_id: StringName) -> void:
 
 func get_craft_button() -> Control:
 	return _craft_button
+
+func get_current_workspace_id() -> StringName:
+	return _current_workspace_id
+
+func get_rune_socketing_panel() -> RuneSocketingPanel:
+	return _rune_socketing_panel
+
+func _switch_workspace(workspace_id: StringName) -> void:
+	if workspace_id != CRAFTING_WORKSPACE_ID and workspace_id != RUNES_WORKSPACE_ID:
+		return
+	if workspace_id == RUNES_WORKSPACE_ID:
+		_crafting_sound_player.stop()
+	_current_workspace_id = workspace_id
+	_apply_workspace()
+
+func _apply_workspace() -> void:
+	if not is_node_ready():
+		return
+	var crafting_visible := _current_workspace_id == CRAFTING_WORKSPACE_ID
+	_crafting_body.visible = crafting_visible
+	_rune_socketing_panel.visible = not crafting_visible
+	_title_label.text = "CRAFTING" if crafting_visible else "RUNES"
+	_crafting_tab.set_pressed_no_signal(crafting_visible)
+	_runes_tab.set_pressed_no_signal(not crafting_visible)
+
+func _style_workspace_tabs() -> void:
+	for tab in [_crafting_tab, _runes_tab]:
+		tab.add_theme_font_override(&"font", WildesStyle.BOLD_FONT)
+		tab.add_theme_font_size_override(&"font_size", 13)
+		tab.add_theme_stylebox_override(&"normal", WildesStyle.make_panel(Color(0.10, 0.12, 0.14, 0.42), 7, Color(1, 1, 1, 0.10), 1))
+		tab.add_theme_stylebox_override(&"hover", WildesStyle.make_panel(Color(1, 1, 1, 0.08), 7, Color(1, 1, 1, 0.18), 1))
+		tab.add_theme_stylebox_override(&"pressed", WildesStyle.make_panel(Color(0.32, 0.48, 0.39, 0.54), 7, Color(0.62, 0.86, 0.69, 0.58), 1))
 
 func _process(delta: float) -> void:
 	if not is_equal_approx(_progress, _target_progress):
