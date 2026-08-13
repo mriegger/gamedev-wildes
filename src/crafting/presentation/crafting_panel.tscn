@@ -100,8 +100,14 @@ layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 10
 
-[node name="Icon" type="TextureRect" parent="Margin/Content/Body/Details/Output"]
-custom_minimum_size = Vector2(58, 58)
+[node name="IconFrame" type="CenterContainer" parent="Margin/Content/Body/Details/Output"]
+custom_minimum_size = Vector2(64, 64)
+layout_mode = 2
+mouse_filter = 2
+
+[node name="Icon" type="TextureRect" parent="Margin/Content/Body/Details/Output/IconFrame"]
+texture_filter = 1
+custom_minimum_size = Vector2(32, 32)
 layout_mode = 2
 mouse_filter = 2
 expand_mode = 1

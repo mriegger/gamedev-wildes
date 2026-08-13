@@ -4,11 +4,16 @@ class_name CraftingPanel
 const PANEL_WIDTH: float = 520.0
 const ANIM_DURATION: float = 0.25
 const HOTBAR_CLEARANCE: float = 112.0
+const ITEM_ICON_SIZE: float = 32.0
+const RECIPE_ICON_FRAME_SIZE: float = 54.0
+const RECIPE_SCROLL_STEP: float = 61.0
+const RECIPE_PAN_SCROLL_SCALE: float = 32.0
 
 @onready var _background: Panel = $Background as Panel
 @onready var _content: Control = $Margin/Content as Control
+@onready var _recipe_scroll: ScrollContainer = $Margin/Content/Body/Recipes/RecipeScroll as ScrollContainer
 @onready var _recipe_list: VBoxContainer = $Margin/Content/Body/Recipes/RecipeScroll/RecipeList as VBoxContainer
-@onready var _output_icon: TextureRect = $Margin/Content/Body/Details/Output/Icon as TextureRect
+@onready var _output_icon: TextureRect = $Margin/Content/Body/Details/Output/IconFrame/Icon as TextureRect
 @onready var _output_name: Label = $Margin/Content/Body/Details/Output/Text/Name as Label
 @onready var _output_count: Label = $Margin/Content/Body/Details/Output/Text/Count as Label
 @onready var _ingredient_list: VBoxContainer = $Margin/Content/Body/Details/IngredientList as VBoxContainer
@@ -31,6 +36,7 @@ func _ready() -> void:
 	visible = true
 	WildesStyle.apply_frosted_panel(_background, WildesStyle.make_panel(Color(0.14, 0.16, 0.18, 0.32), 0, Color(1, 1, 1, 0.12), 1), 5.0, false)
 	_craft_button.pressed.connect(_on_craft_pressed)
+	_recipe_scroll.gui_input.connect(_on_recipe_scroll_gui_input)
 	_crafting_sound_player.stream = _crafting_sound_stream
 	_update_size()
 	_apply_state()
@@ -99,18 +105,44 @@ func _build_recipe_list() -> void:
 	for recipe in recipe_catalog.definitions:
 		var button := Button.new()
 		button.name = String(recipe.id).to_pascal_case()
-		button.custom_minimum_size = Vector2(0, 54)
+		button.custom_minimum_size = Vector2(0, RECIPE_ICON_FRAME_SIZE)
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		button.toggle_mode = true
 		button.focus_mode = Control.FOCUS_NONE
-		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		button.icon = recipe.output_item.icon
-		button.expand_icon = true
-		button.text = recipe.output_item.display_name
+		button.tooltip_text = recipe.output_item.display_name
+		var content := HBoxContainer.new()
+		content.name = "Content"
+		content.anchor_right = 1.0
+		content.anchor_bottom = 1.0
+		content.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		content.add_theme_constant_override("separation", 0)
+		button.add_child(content)
+		var icon_frame := CenterContainer.new()
+		icon_frame.name = "IconFrame"
+		icon_frame.custom_minimum_size = Vector2(RECIPE_ICON_FRAME_SIZE, RECIPE_ICON_FRAME_SIZE)
+		icon_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		content.add_child(icon_frame)
+		var icon := TextureRect.new()
+		icon.name = "Icon"
+		icon.custom_minimum_size = Vector2(ITEM_ICON_SIZE, ITEM_ICON_SIZE)
+		icon.texture = recipe.output_item.icon
+		icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		icon_frame.add_child(icon)
+		var label := Label.new()
+		label.name = "Label"
+		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		label.text = recipe.output_item.display_name
 		if recipe.output_count > 1:
-			button.text += "  ×%d" % recipe.output_count
-		button.add_theme_font_override("font", WildesStyle.BOLD_FONT)
-		button.add_theme_font_size_override("font_size", 13)
+			label.text += "  ×%d" % recipe.output_count
+		label.add_theme_font_override("font", WildesStyle.BOLD_FONT)
+		label.add_theme_font_size_override("font_size", 13)
+		content.add_child(label)
 		button.add_theme_stylebox_override("normal", WildesStyle.make_panel(Color(0.10, 0.12, 0.14, 0.45), 8, Color(1, 1, 1, 0.10), 1))
 		button.add_theme_stylebox_override("hover", WildesStyle.make_panel(Color(1, 1, 1, 0.08), 8, Color(1, 1, 1, 0.18), 1))
 		button.add_theme_stylebox_override("pressed", WildesStyle.make_panel(Color(0.42, 0.58, 0.48, 0.42), 8, Color(0.72, 0.92, 0.76, 0.58), 1))
@@ -126,6 +158,23 @@ func _select_recipe(recipe_id: StringName) -> void:
 		(_recipe_buttons[id] as Button).set_pressed_no_signal(id == recipe_id)
 	_refresh_details()
 
+func _on_recipe_scroll_gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton:
+		var mouse_event := event as InputEventMouseButton
+		if not mouse_event.pressed or mouse_event.button_index not in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
+			return
+		var factor := mouse_event.factor if mouse_event.factor > 0.0 else 1.0
+		var offset := roundi(RECIPE_SCROLL_STEP * factor)
+		if mouse_event.button_index == MOUSE_BUTTON_WHEEL_UP:
+			_recipe_scroll.scroll_vertical -= offset
+		else:
+			_recipe_scroll.scroll_vertical += offset
+		_recipe_scroll.accept_event()
+	elif event is InputEventPanGesture:
+		var pan_event := event as InputEventPanGesture
+		_recipe_scroll.scroll_vertical += roundi(pan_event.delta.y * RECIPE_PAN_SCROLL_SCALE)
+		_recipe_scroll.accept_event()
+
 func _refresh_details() -> void:
 	if recipe_catalog == null or _selected_recipe_id.is_empty():
 		return
@@ -139,8 +188,9 @@ func _refresh_details() -> void:
 		var row := HBoxContainer.new()
 		row.custom_minimum_size.y = 38.0
 		var icon := TextureRect.new()
-		icon.custom_minimum_size = Vector2(32, 32)
+		icon.custom_minimum_size = Vector2(ITEM_ICON_SIZE, ITEM_ICON_SIZE)
 		icon.texture = ingredient.item.icon
+		icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE

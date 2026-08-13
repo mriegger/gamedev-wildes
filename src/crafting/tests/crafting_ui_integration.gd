@@ -1,5 +1,17 @@
 extends SceneTree
 
+class UnhandledInputProbe:
+	extends Node
+
+	var mouse_wheel_count: int = 0
+	var pan_gesture_count: int = 0
+
+	func _unhandled_input(event: InputEvent) -> void:
+		if event is InputEventMouseButton and (event as InputEventMouseButton).button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
+			mouse_wheel_count += 1
+		elif event is InputEventPanGesture:
+			pan_gesture_count += 1
+
 var _frame: int = 0
 var _phase: int = 0
 var _errors: Array[String] = []
@@ -11,6 +23,9 @@ var _stats: ActorStats
 var _item_proficiency: ItemProficiency
 var _recipe_catalog: CraftingRecipeCatalog
 var _camera_rig: CameraRig
+var _camera_follow: Node3D
+var _camera_input_buffer: InputBuffer
+var _unhandled_input_probe: UnhandledInputProbe
 
 func _init() -> void:
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
@@ -32,10 +47,16 @@ func _init() -> void:
 	root.add_child(_hud)
 	_camera_rig = (load("res://player/camera/camera_rig.tscn") as PackedScene).instantiate() as CameraRig
 	root.add_child(_camera_rig)
+	_camera_follow = Node3D.new()
+	root.add_child(_camera_follow)
+	_camera_input_buffer = InputBuffer.new()
+	_unhandled_input_probe = UnhandledInputProbe.new()
+	root.add_child(_unhandled_input_probe)
 
 func _process(_delta: float) -> bool:
 	_frame += 1
 	if _phase == 0 and _frame == 2:
+		_camera_rig.setup(_camera_follow, _camera_input_buffer)
 		_hud.setup_with_camera(_inventory, _inventory_stats, _crafting, _recipe_catalog, _camera_rig, _stats, _item_proficiency)
 		_hud.toggle_backpack()
 		_phase = 1
@@ -85,6 +106,8 @@ func _process(_delta: float) -> bool:
 		_expect(_inventory.get_inventory_item_count(&"log_block") == 0, "closing backpack changed wood")
 		_hud.free()
 		_camera_rig.free()
+		_camera_follow.free()
+		_unhandled_input_probe.free()
 		_phase = 3
 	elif _phase == 3 and _frame == 80:
 		_finish()
@@ -100,8 +123,66 @@ func _check_open_state() -> void:
 	var recipe_scroll := _hud.crafting_panel.get_node("Margin/Content/Body/Recipes/RecipeScroll") as ScrollContainer
 	var recipe_list := _hud.crafting_panel.get_node("Margin/Content/Body/Recipes/RecipeScroll/RecipeList") as VBoxContainer
 	_expect(recipe_scroll != null and recipe_list.get_child_count() == 8, "scrollable recipe list did not contain eight recipes")
+	var recipe_button := recipe_list.get_child(0) as Button
+	var recipe_icon_frame := recipe_button.get_node("Content/IconFrame") as CenterContainer
+	var recipe_icon := recipe_icon_frame.get_node("Icon") as TextureRect
+	_expect(recipe_icon_frame.custom_minimum_size == Vector2(54, 54) and recipe_icon.custom_minimum_size == Vector2(32, 32), "recipe icon padding is incorrect")
+	_expect(recipe_icon.texture_filter == CanvasItem.TEXTURE_FILTER_NEAREST, "recipe icon does not use nearest filtering")
+	var scroll_bar := recipe_scroll.get_v_scroll_bar()
+	scroll_bar.max_value = 200.0
+	scroll_bar.page = 100.0
+	var camera_size_before_scroll := _camera_rig.camera.size
+	var mouse_wheel_count_before := _unhandled_input_probe.mouse_wheel_count
+	var wheel_down := InputEventMouseButton.new()
+	wheel_down.position = recipe_scroll.get_global_rect().get_center()
+	wheel_down.button_index = MOUSE_BUTTON_WHEEL_DOWN
+	wheel_down.pressed = true
+	recipe_scroll.scroll_vertical = 0
+	root.push_input(wheel_down, true)
+	_expect(recipe_scroll.scroll_vertical == 61, "mouse wheel did not scroll the recipe list")
+	var wheel_up := InputEventMouseButton.new()
+	wheel_up.position = recipe_scroll.get_global_rect().get_center()
+	wheel_up.button_index = MOUSE_BUTTON_WHEEL_UP
+	wheel_up.pressed = true
+	root.push_input(wheel_up, true)
+	_expect(recipe_scroll.scroll_vertical == 0, "mouse wheel did not scroll back through the recipe list")
+	recipe_scroll.scroll_vertical = 100
+	root.push_input(wheel_down, true)
+	_camera_rig._process(0.0)
+	_expect(is_equal_approx(_camera_rig.camera.size, camera_size_before_scroll), "scrolling past the final recipe zoomed the camera")
+	recipe_scroll.scroll_vertical = 0
+	root.push_input(wheel_up, true)
+	_camera_rig._process(0.0)
+	_expect(is_equal_approx(_camera_rig.camera.size, camera_size_before_scroll), "scrolling before the first recipe zoomed the camera")
+	_expect(_unhandled_input_probe.mouse_wheel_count == mouse_wheel_count_before, "recipe mouse-wheel scrolling reached unhandled gameplay input")
+	var pan_gesture_count_before := _unhandled_input_probe.pan_gesture_count
+	var pan_down := InputEventPanGesture.new()
+	pan_down.position = recipe_scroll.get_global_rect().get_center()
+	pan_down.delta = Vector2(0, 1)
+	recipe_scroll.scroll_vertical = 0
+	root.push_input(pan_down, true)
+	_expect(recipe_scroll.scroll_vertical == 32, "trackpad gesture did not scroll the recipe list")
+	var pan_up := InputEventPanGesture.new()
+	pan_up.position = recipe_scroll.get_global_rect().get_center()
+	pan_up.delta = Vector2(0, -1)
+	root.push_input(pan_up, true)
+	_expect(recipe_scroll.scroll_vertical == 0, "trackpad gesture did not scroll back through the recipe list")
+	recipe_scroll.scroll_vertical = 100
+	root.push_input(pan_down, true)
+	recipe_scroll.scroll_vertical = 0
+	root.push_input(pan_up, true)
+	_expect(is_equal_approx(_camera_rig.camera.size, camera_size_before_scroll), "recipe trackpad scrolling zoomed the camera")
+	_expect(_unhandled_input_probe.pan_gesture_count == pan_gesture_count_before, "recipe trackpad scrolling reached unhandled gameplay input")
+	var output_icon_frame := _hud.crafting_panel.get_node("Margin/Content/Body/Details/Output/IconFrame") as CenterContainer
+	var output_icon := output_icon_frame.get_node("Icon") as TextureRect
+	_expect(output_icon_frame.custom_minimum_size == Vector2(64, 64) and output_icon.custom_minimum_size == Vector2(32, 32), "output icon does not match inventory padding")
+	_expect(output_icon.texture_filter == CanvasItem.TEXTURE_FILTER_NEAREST, "output icon does not use nearest filtering")
 	var ingredient_list := _hud.crafting_panel.get_node("Margin/Content/Body/Details/IngredientList") as VBoxContainer
 	_expect(ingredient_list.get_child_count() == 2, "selected recipe ingredients were not displayed")
+	var ingredient_row := ingredient_list.get_child(0) as HBoxContainer
+	var ingredient_icon := ingredient_row.get_child(0) as TextureRect
+	_expect(ingredient_row.custom_minimum_size.y == 38.0 and ingredient_icon.custom_minimum_size == Vector2(32, 32), "ingredient icon spacing changed")
+	_expect(ingredient_icon.texture_filter == CanvasItem.TEXTURE_FILTER_NEAREST, "ingredient icon does not use nearest filtering")
 	var stone_count := (ingredient_list.get_child(0) as HBoxContainer).get_child(1) as Label
 	_expect(stone_count.text.contains("10 / 10"), "stone pickaxe ingredient display did not include hotbar materials")
 	var crafting_rect := _hud.crafting_panel.get_global_rect()
