@@ -3,7 +3,7 @@ class_name PlayerActionAudio
 
 @onready var _clunk_player: AudioStreamPlayer = $ClunkPlayer
 @onready var _creature_hit_player: AudioStreamPlayer = $CreatureHitPlayer
-@onready var _draw_player: AudioStreamPlayer = $DrawPlayer
+@onready var _equip_player: AudioStreamPlayer = $EquipPlayer
 
 var _interactor: PlayerInteractor
 var _animation_driver: PlayerAnimationDriver
@@ -21,15 +21,9 @@ var _creature_hit_streams: Array[AudioStream] = [
 	preload("res://assets/audio/combat/impacts/creature/Stab_Knife_01.wav"),
 	preload("res://assets/audio/combat/impacts/creature/Stab_Knife_02.wav"),
 ]
-var _draw_streams: Array[AudioStream] = [
-	preload("res://assets/audio/combat/weapons/sword/draw/drawKnife1.ogg"),
-	preload("res://assets/audio/combat/weapons/sword/draw/drawKnife2.ogg"),
-	preload("res://assets/audio/combat/weapons/sword/draw/drawKnife3.ogg"),
-]
-
 var _last_clunk_idx: int = -1
 var _last_creature_hit_idx: int = -1
-var _last_draw_idx: int = -1
+var _last_equip_indices: Dictionary = {}
 
 
 func setup(
@@ -70,8 +64,7 @@ func _on_inventory_changed():
 	if selected_item_id == _selected_item_id:
 		return
 	_selected_item_id = selected_item_id
-	if _selected_item_is_melee():
-		_last_draw_idx = _play_random(_draw_player, _draw_streams, _last_draw_idx, 0.98, 1.02)
+	_play_selected_item_equip()
 
 
 func _get_selected_item_id() -> StringName:
@@ -79,10 +72,15 @@ func _get_selected_item_id() -> StringName:
 	return StringName(selected_item_id) if selected_item_id != null else &""
 
 
-func _selected_item_is_melee() -> bool:
+func _play_selected_item_equip():
 	if _selected_item_id.is_empty():
-		return false
-	return _inventory.item_catalog.get_definition(_selected_item_id).primary_action is MeleeAttackActionDefinition
+		return
+	var profile := _inventory.item_catalog.get_definition(_selected_item_id).equip_audio
+	if profile == null:
+		return
+	_equip_player.volume_db = profile.volume_db
+	var last_index := int(_last_equip_indices.get(profile, -1))
+	_last_equip_indices[profile] = _play_random(_equip_player, profile.streams, last_index, profile.pitch_min, profile.pitch_max)
 
 
 func _play_clunk(volume_db: float = -6.0):
@@ -126,10 +124,10 @@ func _exit_tree():
 	_combat = null
 	_release_player(_clunk_player)
 	_release_player(_creature_hit_player)
-	_release_player(_draw_player)
+	_release_player(_equip_player)
 	_clunk_streams.clear()
 	_creature_hit_streams.clear()
-	_draw_streams.clear()
+	_last_equip_indices.clear()
 
 
 func _release_player(player: AudioStreamPlayer):

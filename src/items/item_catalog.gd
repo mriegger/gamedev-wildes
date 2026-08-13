@@ -56,6 +56,8 @@ func _rebuild_lookup() -> void:
 			if scene_state.get_node_count() == 0 or not ClassDB.is_parent_class(scene_state.get_node_type(0), &"Node3D"):
 				push_error("[ItemCatalog] Held scene root must be Node3D for %s at %s" % [definition.id, source])
 				_is_valid = false
+		if definition.equip_audio != null:
+			_is_valid = definition.equip_audio.validate(source) and _is_valid
 		for action in [definition.primary_action, definition.secondary_action]:
 			if action == null:
 				continue
