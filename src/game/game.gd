@@ -35,6 +35,7 @@ var inventory_stat_coordinator: InventoryStatCoordinator
 var crafting_coordinator: CraftingCoordinator
 var combat_progression_coordinator: CombatProgressionCoordinator
 var rune_socketing_coordinator: RuneSocketingCoordinator
+var rune_effect_coordinator: RuneEffectCoordinator
 var input_buffer: InputBuffer = InputBuffer.new()
 var settings: GameSettings
 
@@ -83,6 +84,10 @@ func _ready():
 	inventory_stat_coordinator = InventoryStatCoordinator.new()
 	if not inventory_stat_coordinator.setup(inventory_model, player_stats):
 		push_error("[Game] Equipment modifiers are invalid")
+		return
+	rune_effect_coordinator = RuneEffectCoordinator.new()
+	if not rune_effect_coordinator.setup(inventory_model, player_stats):
+		push_error("[Game] Socketed rune modifiers are invalid")
 		return
 	crafting_coordinator = CraftingCoordinator.new()
 	crafting_coordinator.setup(inventory_model, crafting_recipe_catalog)

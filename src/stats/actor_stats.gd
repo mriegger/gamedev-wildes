@@ -151,15 +151,27 @@ func can_replace_source_modifiers(source_id: StringName, source_instance_id: Str
 	return _prepare_source_modifiers(source_id, source_instance_id, modifiers, runtime_modifiers)
 
 func replace_source_modifiers(source_id: StringName, source_instance_id: StringName, modifiers: Array[StatModifier]) -> bool:
+	return _replace_source_modifiers(source_id, source_instance_id, modifiers, false)
+
+func replace_source_modifiers_preserving_health_ratio(source_id: StringName, source_instance_id: StringName, modifiers: Array[StatModifier]) -> bool:
+	return _replace_source_modifiers(source_id, source_instance_id, modifiers, true)
+
+func _replace_source_modifiers(source_id: StringName, source_instance_id: StringName, modifiers: Array[StatModifier], preserve_health_ratio: bool) -> bool:
 	var runtime_modifiers: Array[StatModifier] = []
 	if not _prepare_source_modifiers(source_id, source_instance_id, modifiers, runtime_modifiers):
 		return false
+	var previous_maximum_hp := get_value(&"hp") if preserve_health_ratio and has_stat(&"hp") else 0.0
+	var previous_health_ratio := current_hp / previous_maximum_hp if previous_maximum_hp > 0.0 else 0.0
 	_erase_modifiers_from_source_instance(source_instance_id)
 	for modifier in runtime_modifiers:
 		_modifiers[modifier.id] = modifier
 		if modifier.duration_seconds > 0.0:
 			_remaining_duration[modifier.id] = modifier.duration_seconds
-	_clamp_current_hp()
+	var next_maximum_hp := get_value(&"hp") if preserve_health_ratio and has_stat(&"hp") else 0.0
+	if preserve_health_ratio and previous_maximum_hp != next_maximum_hp:
+		_commit_current_hp(clampf(previous_health_ratio * next_maximum_hp, 0.0, next_maximum_hp))
+	else:
+		_clamp_current_hp()
 	return true
 
 func _prepare_source_modifiers(source_id: StringName, source_instance_id: StringName, modifiers: Array[StatModifier], runtime_modifiers: Array[StatModifier]) -> bool:
