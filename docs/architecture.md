@@ -88,7 +88,10 @@ equipment bonuses, and unlock thresholds.
 custom `GearTooltip`. `Game` passes `ItemProficiency` through `HUD`, `Hotbar`, and `SidePanel` into
 each slot, and a visible tooltip queries current progress without owning it. Weapon rows read the
 item's melee attack profile, while armor rows read its slot and stat modifiers, so presentation
-does not own or duplicate gear state.
+does not own or duplicate gear state. During a left-button drag, the source slot owns the adjustable
+drag count and consumes wheel input before gameplay camera handling. `InventoryModel` remains the
+authority for partial moves and discards, while the source and drag-preview visuals show the pending
+split without mutating inventory until a drop succeeds.
 
 `Game` owns player stats and handles their completed health-depleted transition. Defeat puts
 the player motor into an input-blocking stopped state, closes inventory and debug panels, and
@@ -124,9 +127,9 @@ Serialized configuration is explicit and typed. `BlockCatalog` lists `BlockDefin
 resources, `EntityCatalog` lists entity definitions, and `WorldConfig` references the biome library.
 Runtime code does not scan directories or manufacture fallback domain resources.
 
-Crafting recipes reference canonical item definitions. `CraftingCoordinator` owns elapsed crafting
-state, while `InventoryModel` validates and commits ingredient removal and output insertion across
-the backpack and hotbar as one transaction. `CraftingPanel` supplies frame time and presents state without mutating
-inventory slots.
+Crafting recipes reference canonical item definitions. `CraftingCoordinator` asks `InventoryModel`
+to validate and commit ingredient removal and output insertion across the backpack and hotbar as one
+immediate transaction. `CraftingPanel` presents availability without mutating inventory slots and
+plays one sound only after that transaction succeeds.
 
 Forward+ is the primary renderer. Runtime rendering-device checks select reduced visual values for GL Compatibility fallback. Features unavailable on GL, including volumetric fog, remain disabled there.

@@ -69,8 +69,8 @@ fallback values keep GL Compatibility usable at reduced fidelity, without volume
 to play.
 
 **Crafting.** Opening crafting with `Tab` reveals a recipe panel alongside the backpack. Eight
-data-driven recipes use materials from the backpack and hotbar, take two seconds to complete, and
-cancel without consuming ingredients when the panel closes or another recipe is selected.
+data-driven recipes use materials from the backpack and hotbar and craft immediately when the
+enabled Craft button is pressed, playing one success sound.
 
 **Developer console.** Press `/` to open a command line at the bottom of the screen. The
 `spawn <item> <count>` command adds any catalog item directly to the backpack for testing. Item
@@ -79,9 +79,11 @@ IDs and display names are accepted; equipment IDs remain material-qualified, suc
 opening the pause menu. Copper can be mined from deposits or added directly with
 `spawn copper <count>`.
 
-**UI & saves.** A frosted-glass front-end: main menu, world select over three save slots,
-create-world and hold-3-seconds-to-delete modals, a chunk-progress loading screen, and a pause
-menu that freezes the game. The pause menu exposes persistent frame-rate, 3D resolution,
+**UI & saves.** Backpack and hotbar stacks can be split by scrolling while left-dragging. The side
+panel includes a trash drop target that accepts backpack, hotbar, and equipped items. A
+frosted-glass front-end provides the main menu, world select over three save slots, create-world
+and hold-3-seconds-to-delete modals, a chunk-progress loading screen, and a pause menu that freezes
+the game. The pause menu exposes persistent frame-rate, 3D resolution,
 anti-aliasing, fog, sun-shadow, shadow-range, torch-shadow, and ambient-audio settings. Saves live in
 `user://saves/` and autosave every 30 seconds, plus shortly after any block edit.
 
