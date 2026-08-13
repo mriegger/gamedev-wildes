@@ -86,7 +86,11 @@ func _run():
 	_expect(restored.get_slot(test_totem_slot) is InventoryStack and restored.get_slot(test_totem_slot).item_id == &"test_totem", "restored test totem missing")
 	_expect(restored.starter_item_migration_version == InventoryModel.STARTER_ITEM_MIGRATION_VERSION, "starter item migration version did not restore")
 	var existing_pickaxe_encoded := encoded.duplicate(true)
-	existing_pickaxe_encoded["regions"]["hotbar"][0] = {"item_id": "copper_pickaxe", "count": 1}
+	existing_pickaxe_encoded["regions"]["hotbar"][0] = {
+		"item_id": "copper_pickaxe",
+		"count": 1,
+		"socketed_rune_ids": [],
+	}
 	existing_pickaxe_encoded.erase("starter_item_migration_version")
 	var existing_pickaxe_save := InventoryModel.new(item_catalog)
 	_expect(existing_pickaxe_save.from_dict(existing_pickaxe_encoded), "existing copper pickaxe save did not restore")

@@ -1,6 +1,8 @@
 extends Resource
 class_name ProficiencyDefinition
 
+const MAXIMUM_SLOT_COUNT: int = 3
+
 @export var experience_requirements: PackedFloat64Array
 @export var slot_unlock_levels: PackedInt32Array
 
@@ -9,7 +11,11 @@ var maximum_level: int:
 		return experience_requirements.size()
 
 func validate() -> bool:
-	if experience_requirements.is_empty() or slot_unlock_levels.is_empty():
+	if (
+		experience_requirements.is_empty()
+		or slot_unlock_levels.is_empty()
+		or slot_unlock_levels.size() > MAXIMUM_SLOT_COUNT
+	):
 		return false
 	for requirement in experience_requirements:
 		if not is_finite(requirement) or requirement <= 0.0:

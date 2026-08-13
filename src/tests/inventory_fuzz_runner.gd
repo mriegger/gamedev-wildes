@@ -330,7 +330,7 @@ func _run_edge_cases() -> bool:
 	long_region["regions"]["hotbar"].append(null)
 	_assert(not restored.from_dict(long_region), "long inventory region rejected")
 	var occupied_equipment := encoded.duplicate(true)
-	occupied_equipment["regions"]["equipment"][0] = {"item_id": String(grass_id), "count": 1}
+	occupied_equipment["regions"]["equipment"][0] = {"item_id": String(grass_id), "count": 1, "socketed_rune_ids": []}
 	_assert(not restored.from_dict(occupied_equipment), "non-armor equipment save rejected")
 
 	_assert(_validate_inv(moved), "moved inventory valid")

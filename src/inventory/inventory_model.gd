@@ -53,6 +53,10 @@ func get_selected_item_id():
 		return null
 	return stack.item_id
 
+func get_socketed_rune_ids(idx: int) -> Array[StringName]:
+	var stack := get_slot(idx)
+	return [] if stack == null else stack.socketed_rune_ids.duplicate()
+
 func select_slot(idx: int) -> bool:
 	if not is_hotbar_index(idx):
 		return false
@@ -110,7 +114,11 @@ func move_hotbar_slot_to_backpack(hotbar_idx: int) -> bool:
 	if remaining > 0:
 		for backpack_idx in range(HOTBAR_SIZE, backpack_end):
 			if slots[backpack_idx] == null:
-				slots[backpack_idx] = InventoryStack.new(hotbar_stack.item_id, remaining)
+				if remaining == hotbar_stack.count:
+					slots[backpack_idx] = hotbar_stack
+				else:
+					assert(hotbar_stack.socketed_rune_ids.is_empty())
+					slots[backpack_idx] = InventoryStack.new(hotbar_stack.item_id, remaining)
 				remaining = 0
 				break
 	assert(remaining == 0)
@@ -235,7 +243,7 @@ func _simulate_inventory_exchange(consumed: Dictionary[StringName, int], granted
 			return []
 		for index in inventory_indices:
 			var stack := simulated[index]
-			if stack == null or stack.item_id != item_id:
+			if stack == null or stack.item_id != item_id or not stack.socketed_rune_ids.is_empty():
 				continue
 			var removed: int = mini(stack.count, remaining)
 			stack.count -= removed
@@ -414,6 +422,8 @@ func can_handle_drop(src_idx: int, dst_idx: int, drag_count: int) -> bool:
 		return false
 	if drag_count <= 0 or drag_count > src.count:
 		return false
+	if not src.socketed_rune_ids.is_empty() and drag_count != src.count:
+		return false
 	var drag_item_id := src.item_id
 	if not can_slot_accept_item_id(dst_idx, drag_item_id):
 		return false
@@ -421,6 +431,8 @@ func can_handle_drop(src_idx: int, dst_idx: int, drag_count: int) -> bool:
 	if dst == null:
 		return true
 	if dst.item_id == drag_item_id:
+		if not src.socketed_rune_ids.is_empty() or not dst.socketed_rune_ids.is_empty():
+			return false
 		return dst.count < item_catalog.get_definition(drag_item_id).max_stack
 	return drag_count == src.count and can_slot_accept_item_id(src_idx, dst.item_id)
 
@@ -431,10 +443,13 @@ func handle_drop(src_idx: int, dst_idx: int, drag_count: int) -> bool:
 	var dst := slots[dst_idx]
 	var drag_item_id := src.item_id
 	if dst == null:
-		slots[dst_idx] = InventoryStack.new(drag_item_id, drag_count)
-		src.count -= drag_count
-		if src.count <= 0:
+		if drag_count == src.count:
+			slots[dst_idx] = src
 			slots[src_idx] = null
+		else:
+			assert(src.socketed_rune_ids.is_empty())
+			slots[dst_idx] = InventoryStack.new(drag_item_id, drag_count)
+			src.count -= drag_count
 		inventory_changed.emit()
 		return true
 	if dst.item_id == drag_item_id:
@@ -450,6 +465,216 @@ func handle_drop(src_idx: int, dst_idx: int, drag_count: int) -> bool:
 	slots[dst_idx] = src
 	inventory_changed.emit()
 	return true
+
+func can_commit_socketed_rune(
+	gear_index: int,
+	expected_rune_ids: Array[StringName],
+	next_rune_ids: Array[StringName],
+	rune_source_index: int,
+	rune_id: StringName,
+) -> bool:
+	return not _simulate_socketed_rune(
+		gear_index,
+		expected_rune_ids,
+		next_rune_ids,
+		rune_source_index,
+		rune_id,
+	).is_empty()
+
+func commit_socketed_rune(
+	gear_index: int,
+	expected_rune_ids: Array[StringName],
+	next_rune_ids: Array[StringName],
+	rune_source_index: int,
+	rune_id: StringName,
+) -> bool:
+	var simulated := _simulate_socketed_rune(
+		gear_index,
+		expected_rune_ids,
+		next_rune_ids,
+		rune_source_index,
+		rune_id,
+	)
+	if simulated.is_empty():
+		return false
+	slots = simulated
+	inventory_changed.emit()
+	return true
+
+func _simulate_socketed_rune(
+	gear_index: int,
+	expected_rune_ids: Array[StringName],
+	next_rune_ids: Array[StringName],
+	rune_source_index: int,
+	rune_id: StringName,
+) -> Array[InventoryStack]:
+	if (
+		gear_index < 0
+		or gear_index >= size
+		or rune_source_index < 0
+		or rune_source_index >= min(size, FILLABLE_SIZE)
+		or gear_index == rune_source_index
+		or rune_id.is_empty()
+	):
+		return []
+	var gear := slots[gear_index]
+	var rune_stack := slots[rune_source_index]
+	if (
+		gear == null
+		or gear.count != 1
+		or gear.socketed_rune_ids != expected_rune_ids
+		or not _is_valid_socket_loadout(gear.item_id, expected_rune_ids)
+		or not _is_valid_socket_loadout(gear.item_id, next_rune_ids)
+		or not _is_single_socket_addition(expected_rune_ids, next_rune_ids, rune_id)
+		or rune_stack == null
+		or rune_stack.item_id != rune_id
+		or rune_stack.count < 1
+		or not rune_stack.socketed_rune_ids.is_empty()
+	):
+		return []
+	var simulated := _copy_slots()
+	var simulated_gear := simulated[gear_index]
+	simulated_gear.socketed_rune_ids = next_rune_ids.duplicate()
+	var simulated_rune := simulated[rune_source_index]
+	simulated_rune.count -= 1
+	if simulated_rune.count == 0:
+		simulated[rune_source_index] = null
+	return simulated
+
+func can_commit_unsocketed_rune(
+	gear_index: int,
+	expected_rune_ids: Array[StringName],
+	next_rune_ids: Array[StringName],
+	returned_rune_id: StringName,
+) -> bool:
+	return not _simulate_unsocketed_rune(
+		gear_index,
+		expected_rune_ids,
+		next_rune_ids,
+		returned_rune_id,
+	).is_empty()
+
+func commit_unsocketed_rune(
+	gear_index: int,
+	expected_rune_ids: Array[StringName],
+	next_rune_ids: Array[StringName],
+	returned_rune_id: StringName,
+) -> bool:
+	var simulated := _simulate_unsocketed_rune(
+		gear_index,
+		expected_rune_ids,
+		next_rune_ids,
+		returned_rune_id,
+	)
+	if simulated.is_empty():
+		return false
+	slots = simulated
+	inventory_changed.emit()
+	return true
+
+func _simulate_unsocketed_rune(
+	gear_index: int,
+	expected_rune_ids: Array[StringName],
+	next_rune_ids: Array[StringName],
+	returned_rune_id: StringName,
+) -> Array[InventoryStack]:
+	if (
+		gear_index < 0
+		or gear_index >= size
+		or returned_rune_id.is_empty()
+		or not item_catalog.has_definition(returned_rune_id)
+		or not item_catalog.get_definition(returned_rune_id) is RuneDefinition
+	):
+		return []
+	var gear := slots[gear_index]
+	if (
+		gear == null
+		or gear.count != 1
+		or gear.socketed_rune_ids != expected_rune_ids
+		or not _is_valid_socket_loadout(gear.item_id, expected_rune_ids)
+		or not _is_valid_socket_loadout(gear.item_id, next_rune_ids)
+		or not _is_single_socket_removal(expected_rune_ids, next_rune_ids, returned_rune_id)
+	):
+		return []
+	var simulated := _copy_slots()
+	simulated[gear_index].socketed_rune_ids = next_rune_ids.duplicate()
+	var rune_definition := item_catalog.get_definition(returned_rune_id)
+	var remaining := _grant_item_to_indices(
+		simulated,
+		returned_rune_id,
+		1,
+		rune_definition.max_stack,
+		_get_backpack_indices(),
+	)
+	if remaining > 0:
+		remaining = _grant_item_to_indices(
+			simulated,
+			returned_rune_id,
+			remaining,
+			rune_definition.max_stack,
+			_get_hotbar_indices(),
+		)
+	return [] if remaining > 0 else simulated
+
+func _is_valid_socket_loadout(gear_id: StringName, rune_ids: Array[StringName]) -> bool:
+	if rune_ids.is_empty():
+		return true
+	if (
+		not item_catalog.has_definition(gear_id)
+		or not item_catalog.is_combat_item(gear_id)
+		or rune_ids.size() > ProficiencyDefinition.MAXIMUM_SLOT_COUNT
+	):
+		return false
+	var gear := item_catalog.get_definition(gear_id)
+	if gear.proficiency == null or rune_ids.size() > gear.proficiency.slot_unlock_levels.size():
+		return false
+	if rune_ids.back().is_empty():
+		return false
+	for rune_id in rune_ids:
+		if rune_id.is_empty():
+			continue
+		if not item_catalog.has_definition(rune_id):
+			return false
+		var rune := item_catalog.get_definition(rune_id) as RuneDefinition
+		if rune == null or not rune.is_compatible_with(gear):
+			return false
+	return true
+
+func _is_single_socket_addition(
+	expected_rune_ids: Array[StringName],
+	next_rune_ids: Array[StringName],
+	rune_id: StringName,
+) -> bool:
+	if next_rune_ids.size() < expected_rune_ids.size():
+		return false
+	var additions := 0
+	for index in range(next_rune_ids.size()):
+		var previous_id: StringName = expected_rune_ids[index] if index < expected_rune_ids.size() else &""
+		var next_id := next_rune_ids[index]
+		if previous_id == next_id:
+			continue
+		if not previous_id.is_empty() or next_id != rune_id:
+			return false
+		additions += 1
+	return additions == 1
+
+func _is_single_socket_removal(
+	expected_rune_ids: Array[StringName],
+	next_rune_ids: Array[StringName],
+	rune_id: StringName,
+) -> bool:
+	if next_rune_ids.size() > expected_rune_ids.size():
+		return false
+	var removals := 0
+	for index in range(expected_rune_ids.size()):
+		var next_id: StringName = next_rune_ids[index] if index < next_rune_ids.size() else &""
+		var previous_id := expected_rune_ids[index]
+		if previous_id == next_id:
+			continue
+		if previous_id != rune_id or not next_id.is_empty():
+			return false
+		removals += 1
+	return removals == 1
 
 func to_dict() -> Dictionary:
 	var regions_dict: Dictionary = {}
@@ -485,12 +710,21 @@ func from_dict(data: Dictionary) -> bool:
 				continue
 			if idx >= size:
 				return false
-			if not raw is Dictionary or not raw.has("item_id") or not raw.has("count"):
+			if (
+				not raw is Dictionary
+				or not raw.has("item_id")
+				or not raw.has("count")
+				or not raw.has("socketed_rune_ids")
+			):
 				return false
 			var stack := InventoryStack.from_dict(raw)
+			if stack == null:
+				return false
 			if not can_slot_accept_item_id(idx, stack.item_id):
 				return false
 			if stack.count < 1 or stack.count > item_catalog.get_definition(stack.item_id).max_stack:
+				return false
+			if not _is_valid_socket_loadout(stack.item_id, stack.socketed_rune_ids):
 				return false
 			restored_slots[idx] = stack
 	var restored_migration_version := int(data.get("starter_item_migration_version", 0))
