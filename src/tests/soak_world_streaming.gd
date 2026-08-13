@@ -220,6 +220,7 @@ func _make_saved_world() -> Dictionary:
 		"seed": 1337,
 		"time_of_day": 16.25,
 		"player_position": [SAVED_PLAYER_POSITION.x, SAVED_PLAYER_POSITION.y, SAVED_PLAYER_POSITION.z],
+		"player_perks": {"allocations": {}},
 		"placed_blocks": placed_blocks,
 		"torch_attachments": torch_attachments,
 	}
@@ -853,6 +854,9 @@ func _verify_alive_save_timers() -> bool:
 	var auto_stats = auto_save.get("player_stats", null)
 	if not auto_stats is Dictionary or not is_equal_approx(float((auto_stats as Dictionary).get("current_hp", -1.0)), _game.player_stats.current_hp):
 		_fail("alive autosave did not persist player HP")
+		return false
+	if auto_save.get("player_perks", null) != _game.player_perks.snapshot():
+		_fail("alive autosave did not persist player perks")
 		return false
 	var edit_save_position := auto_save_position + Vector3(0.25, 0.0, 0.25)
 	_player.global_position = edit_save_position

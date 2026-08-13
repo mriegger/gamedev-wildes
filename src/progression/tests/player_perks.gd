@@ -135,6 +135,20 @@ func _init() -> void:
 	_expect(invalid_perks.snapshot() == {"allocations": {}}, "failed modifier transaction retained an allocation")
 	_expect(is_equal_approx(invalid_stats.get_value(&"hp"), 100.0), "failed modifier transaction changed actor stats")
 
+	var restored_game := Game.new()
+	restored_game.player_stats = ActorStats.new(stats_definition)
+	restored_game.player_perks = PlayerPerks.new(rules)
+	restored_game._save_data = {
+		"player_stats": {"level": 6, "experience": 10, "current_hp": 75.0},
+		"player_perks": {"allocations": {"health": 5}},
+	}
+	_expect(restored_game._restore_player_progression(), "game progression restore failed")
+	_expect(restored_game.player_stats.level == 6 and restored_game.player_stats.experience == 10, "game restore changed saved level progress")
+	_expect(restored_game.player_perk_coordinator.get_rank(&"health") == 5, "game restore lost health ranks")
+	_expect(is_equal_approx(restored_game.player_stats.get_value(&"hp"), 150.0), "game restore did not apply perk maximum HP")
+	_expect(is_equal_approx(restored_game.player_stats.current_hp, 75.0), "game restore did not preserve saved current HP")
+	restored_game.free()
+
 	if _errors.is_empty():
 		print("PLAYER_PERKS PASS")
 		quit(0)

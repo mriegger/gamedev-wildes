@@ -79,6 +79,13 @@ Zombie and sheep rewards are currently ten experience and remain content values 
 `ActorStatsDefinition` calculates the next-level requirement as an authored base plus a fixed
 per-level increase. Save version eight preserves completed levels while translating version-seven
 current-level experience proportionally from the previous exponential requirement.
+`PlayerPerkRules` is the canonical catalog and award policy for bounded player perks. `PlayerPerks`
+owns only stable-ID rank allocations, while `PlayerPerkCoordinator` derives available points from
+the current player level and applies all purchased ranks through one bounded `ActorStats` modifier
+source. Allocation preflights both the rank change and projected stat modifiers before committing,
+and maximum-HP changes preserve the current health percentage. `Game` creates, restores, and wires
+these owners explicitly. Unspent points remain derived rather than becoming a second mutable
+ledger.
 The same coordinator translates each target's applied player damage into weapon proficiency and
 each incoming damage result into full proficiency credit for every equipped armor piece. These
 policy methods are isolated from combat resolution so their earning rules can change independently.
@@ -155,10 +162,12 @@ accumulating. Respawn, Main Menu, and window close restore a living player at wo
 saving resumes; exit paths then use the normal final-save and shutdown flow so zero HP is never
 persisted. Loading a historical zero-HP snapshot restores full health at world spawn before gameplay
 begins and immediately replaces the stored snapshot with that living state.
-Save version six stores item proficiency separately and includes per-stack socket IDs in inventory.
-Version-four saves first gain empty item proficiency, and version-five inventory stacks then gain
-empty socket arrays. The migration chain operates on a copy and commits only after every region is
-valid, preserving the original data on failure.
+Save version eight stores perk allocations separately, while item proficiency and per-stack socket
+IDs retain their existing shapes. Version-four saves first gain empty item proficiency,
+version-five inventory stacks then gain empty socket arrays, version-six saves gain an absent
+pumpkin-patch snapshot, and version-seven saves gain empty perk allocations while their
+current-level XP is translated to the linear curve. The migration chain operates on a copy and
+commits only after every step is valid, preserving the original data on failure.
 
 Ambient overworld populations are transient and bounded to six per species and twelve total.
 Spawning makes four attempts every two seconds in an 18–36 block annulus. Voxel A* has fixed radius,

@@ -17,6 +17,7 @@ signal main_menu_requested
 @export var entity_catalog: EntityCatalog
 @export var combat_hit_particle_catalog: CombatHitParticleCatalog
 @export var player_stats_definition: CombatStatsDefinition
+@export var player_perk_rules: PlayerPerkRules
 @export var level_catalog: LevelCatalog
 @export var level_entrance_definition: LevelEntranceDefinition
 @export var level_runtime_scene: PackedScene
@@ -45,6 +46,8 @@ signal main_menu_requested
 
 var inventory_model: InventoryModel
 var player_stats: ActorStats
+var player_perks: PlayerPerks
+var player_perk_coordinator: PlayerPerkCoordinator
 var item_proficiency: ItemProficiency
 var inventory_stat_coordinator: InventoryStatCoordinator
 var crafting_coordinator: CraftingCoordinator
@@ -91,10 +94,11 @@ func _ready():
 	var entity_catalog_valid := entity_catalog.validate()
 	var combat_particle_catalog_valid := combat_hit_particle_catalog.validate(entity_catalog)
 	var player_stats_valid := player_stats_definition.validate()
+	var player_perks_valid := player_perk_rules != null and player_perk_rules.validate(player_stats_definition)
 	var level_catalog_valid := level_catalog.validate()
 	var level_encounter_catalog_valid := level_catalog_valid and entity_catalog_valid and LevelEncounterCatalogValidator.validate(level_catalog, entity_catalog)
 	var level_entrance_valid := level_catalog_valid and level_entrance_definition != null and level_entrance_definition.validate(level_catalog)
-	if not block_catalog_valid or not item_catalog_valid or not crafting_catalog_valid or not entity_catalog_valid or not combat_particle_catalog_valid or not player_stats_valid or not level_catalog_valid or not level_encounter_catalog_valid or not level_entrance_valid:
+	if not block_catalog_valid or not item_catalog_valid or not crafting_catalog_valid or not entity_catalog_valid or not combat_particle_catalog_valid or not player_stats_valid or not player_perks_valid or not level_catalog_valid or not level_encounter_catalog_valid or not level_entrance_valid:
 		push_error("[Game] Catalog validation failed")
 		return
 	var structure_file_store := StructureFileStore.new(ProjectSettings.globalize_path("res://../").simplify_path())
@@ -118,6 +122,7 @@ func _ready():
 		Callable(self, "_request_exit_structure")
 	)
 	player_stats = ActorStats.new(player_stats_definition)
+	player_perks = PlayerPerks.new(player_perk_rules)
 	item_proficiency = ItemProficiency.new(item_catalog)
 	_restore_inventory()
 	_restore_item_proficiency()
@@ -135,7 +140,8 @@ func _ready():
 		return
 	crafting_coordinator = CraftingCoordinator.new()
 	crafting_coordinator.setup(inventory_model, crafting_recipe_catalog)
-	_restore_player_stats()
+	if not _restore_player_progression():
+		return
 	combat_progression_coordinator = CombatProgressionCoordinator.new()
 	combat_progression_coordinator.setup(player_stats, inventory_model, entity_catalog, item_proficiency)
 	world.configure_start_state(_world_state)
@@ -150,7 +156,7 @@ func _ready():
 	level_interaction.interaction_requested.connect(_on_level_interaction_requested)
 	_setup_level_entrance()
 	game_session.save_status_changed.connect(_show_save_status)
-	game_session.setup(_slot_id, _save_data, world, player_stats, inventory_model, item_proficiency, game_environment, pumpkin_patch, _get_persisted_position)
+	game_session.setup(_slot_id, _save_data, world, player_stats, inventory_model, player_perks, item_proficiency, game_environment, pumpkin_patch, _get_persisted_position)
 	if _recovered_defeated_save and _slot_id != -1 and not game_session.save("defeated_save_recovery"):
 		push_error("[Game] Failed to persist recovered player state")
 	_recovered_defeated_save = false
@@ -174,21 +180,34 @@ func _restore_inventory():
 	else:
 		inventory_model.setup_empty()
 
-func _restore_player_stats():
+func _restore_player_progression() -> bool:
 	var saved_stats = _save_data.get("player_stats", null)
-	if not saved_stats is Dictionary:
-		return
-	if not player_stats.restore_progression(saved_stats):
-		push_error("[Game] Saved player stats are invalid; using base progression")
-		return
+	var stats_restored := false
+	if saved_stats is Dictionary:
+		stats_restored = player_stats.restore_progression(saved_stats)
+		if not stats_restored:
+			push_error("[Game] Saved player stats are invalid; using base progression")
+	player_perk_coordinator = PlayerPerkCoordinator.new()
+	if not player_perk_coordinator.setup(player_perks, player_stats):
+		push_error("[Game] Player perk modifiers are invalid")
+		return false
+	var saved_perks = _save_data.get("player_perks", {"allocations": {}})
+	if not saved_perks is Dictionary or not player_perk_coordinator.restore(saved_perks):
+		push_error("[Game] Saved player perks are invalid; using empty allocations")
+		var empty_perks_restored := player_perk_coordinator.restore({"allocations": {}})
+		assert(empty_perks_restored)
+	if stats_restored:
+		var final_stats_restored := player_stats.restore_progression(saved_stats)
+		assert(final_stats_restored)
 	if not player_stats.is_dead():
-		return
+		return true
 	var health_restored := player_stats.set_current_hp(player_stats.get_value(&"hp"))
 	assert(health_restored)
 	_recovered_defeated_save = true
 	_world_state.player_position = Vector3.ZERO
 	_save_data["player_position"] = null
 	_save_data["player_stats"] = player_stats.snapshot_progression()
+	return true
 
 func _restore_item_proficiency():
 	var saved_proficiency = _save_data.get("item_proficiency", null)

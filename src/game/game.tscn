@@ -1,4 +1,4 @@
-[gd_scene load_steps=33 format=3 uid="uid://b22g4me0x1f3h"]
+[gd_scene load_steps=34 format=3 uid="uid://b22g4me0x1f3h"]
 
 [ext_resource type="Script" path="res://game/game.gd" id="1_game"]
 [ext_resource type="PackedScene" path="res://world/world.tscn" id="2_world"]
@@ -32,6 +32,7 @@
 [ext_resource type="PackedScene" path="res://structures/runtime/structure_designer_runtime.tscn" id="30_structure_runtime"]
 [ext_resource type="Shader" path="res://levels/presentation/level_terrain.gdshader" id="31_structure_shader"]
 [ext_resource type="PackedScene" path="res://farming/pumpkin/pumpkin_patch_coordinator.tscn" id="32_pumpkin_patch"]
+[ext_resource type="Resource" path="res://progression/player_perk_rules.tres" id="33_player_perks"]
 
 [node name="Game" type="Node3D"]
 script = ExtResource("1_game")
@@ -45,6 +46,7 @@ crafting_recipe_catalog = ExtResource("19_crafting_catalog")
 entity_catalog = ExtResource("15_entity_catalog")
 combat_hit_particle_catalog = ExtResource("22_combat_particle_catalog")
 player_stats_definition = ExtResource("16_player_stats")
+player_perk_rules = ExtResource("33_player_perks")
 level_catalog = ExtResource("23_level_catalog")
 level_entrance_definition = ExtResource("26_level_entrance")
 level_runtime_scene = ExtResource("24_level_runtime")

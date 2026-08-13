@@ -310,7 +310,8 @@ static func _migrate_inventory_socket_data(data: Dictionary) -> bool:
 			encoded_stack["socketed_rune_ids"] = []
 	return true
 
-static func save_world_state(slot_id: int, current_data: Dictionary, voxel_model: VoxelWorld, persisted_player_position: Vector3, player_stats: ActorStats, inventory: InventoryModel, item_proficiency: ItemProficiency, pumpkin_patch: Dictionary, extra_seconds: float, time_of_day: float) -> bool:
+static func save_world_state(slot_id: int, current_data: Dictionary, voxel_model: VoxelWorld, persisted_player_position: Vector3, player_stats: ActorStats, inventory: InventoryModel, player_perks: PlayerPerks, item_proficiency: ItemProficiency, pumpkin_patch: Dictionary, extra_seconds: float, time_of_day: float) -> bool:
+	assert(player_perks != null)
 	assert(item_proficiency != null)
 	var updated = current_data.duplicate()
 	updated["last_played"] = _now_str()
@@ -326,6 +327,7 @@ static func save_world_state(slot_id: int, current_data: Dictionary, voxel_model
 	var p = persisted_player_position
 	updated["player_position"] = [p.x, p.y, p.z]
 	updated["player_stats"] = player_stats.snapshot_progression()
+	updated["player_perks"] = player_perks.snapshot()
 	updated["inventory"] = inventory.to_dict()
 	updated["item_proficiency"] = item_proficiency.snapshot()
 	updated["pumpkin_patch"] = pumpkin_patch.duplicate(true)
