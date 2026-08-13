@@ -63,6 +63,7 @@ func _init() -> void:
 	_expect(SaveManager._migrate_save_data(version_five_save), "version-five save did not migrate")
 	_expect(version_five_save["version"] == SaveManager.CURRENT_SAVE_VERSION, "version-five save has the wrong migrated version")
 	_expect(version_five_save["pumpkin_patch"] == {"present": false}, "version-five migration added a pumpkin patch")
+	_expect(version_five_save["player_perks"] == {"allocations": {}}, "version-five migration chain did not initialize perks")
 	for region_name in ["hotbar", "backpack", "equipment"]:
 		for raw_stack in version_five_save["inventory"]["regions"][region_name]:
 			if raw_stack is Dictionary:
@@ -71,6 +72,7 @@ func _init() -> void:
 	_expect(SaveManager._migrate_save_data(version_four_save), "version-four migration chain failed")
 	_expect(version_four_save["version"] == SaveManager.CURRENT_SAVE_VERSION and version_four_save["item_proficiency"] == {}, "version-four migration chain lost progression shape")
 	_expect(version_four_save["pumpkin_patch"] == {"present": false}, "version-four migration added a pumpkin patch")
+	_expect(version_four_save["player_perks"] == {"allocations": {}}, "version-four migration chain did not initialize perks")
 	var malformed_save := {"version": 5, "inventory": {"regions": {"hotbar": []}}}
 	var malformed_before := malformed_save.duplicate(true)
 	_expect(not SaveManager._migrate_save_data(malformed_save), "malformed version-five save migrated")

@@ -14,7 +14,7 @@ The status labels used below are:
 
 | System | Status | Scope | Purpose | Persistence and reversibility |
 | --- | --- | --- | --- | --- |
-| Player XP and level | Implemented; linear requirements and spending are targets | Player-wide | Permanent progression, milestone access, and perk awards | Levels are permanent; current-level XP can eventually be spent |
+| Player XP and level | Implemented; spending is a target | Player-wide | Permanent progression, milestone access, and perk awards | Levels are permanent; current-level XP can eventually be spent |
 | Perks | Target | Player-wide | Bounded character specialization | Allocations persist; respec is deferred |
 | Item proficiency | Implemented | Shared by stable item type ID | Rewards gear use and unlocks rune sockets | Persistent, capped by its definition, and never spent |
 | Rarity | Implemented; expanded potential is a target | Item definition | Describes an item's tier and future potential | Permanent content metadata |
@@ -44,20 +44,15 @@ XP. The reward belongs to each entity definition and remains a provisional conte
 The HUD displays the current level and current-level XP above the hotbar. Death and respawn do not
 remove levels or XP. Levels do not yet grant stats, perks, recipes, or other gameplay benefits.
 
-The current level requirement is:
-
-```text
-round(100 * 1.25^(level - 1))
-```
-
-The next progression stack replaces this exponential curve with the linear requirement:
+The level requirement is linear:
 
 ```text
 100 + 25 * (level - 1)
 ```
 
-Both values remain authored configuration. Existing saves preserve their completed level and
-migrate current-level XP proportionally from the old requirement to the new one.
+Both values are authored configuration. Version-seven saves preserve their completed level and
+migrate current-level XP proportionally from the previous exponential requirement to the linear
+one.
 
 ### Target level rewards
 

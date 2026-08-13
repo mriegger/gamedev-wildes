@@ -76,6 +76,9 @@ progression, and presentation without making combat own those policies.
 `ActorStats` owns the player's level and current-level experience. `CombatProgressionCoordinator`
 awards the reward authored on an `EntityDefinition` exactly once for a player-caused defeat.
 Zombie and sheep rewards are currently ten experience and remain content values for later tuning.
+`ActorStatsDefinition` calculates the next-level requirement as an authored base plus a fixed
+per-level increase. Save version eight preserves completed levels while translating version-seven
+current-level experience proportionally from the previous exponential requirement.
 The same coordinator translates each target's applied player damage into weapon proficiency and
 each incoming damage result into full proficiency credit for every equipped armor piece. These
 policy methods are isolated from combat resolution so their earning rules can change independently.
