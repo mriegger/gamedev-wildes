@@ -12,7 +12,12 @@ enum Type {
 	TORCH = 7,
 	WATER = 8,
 	COPPER = 9,
-	COUNT = 10,
+	COBBLESTONE = 10,
+	MOSSY_STONE_BRICKS = 11,
+	STONE_BRICKS = 12,
+	TERRACOTTA_BRICKS = 13,
+	WOOD_PLANKS = 14,
+	COUNT = 15,
 }
 
 const DISPLAY_NAMES: Dictionary = {
@@ -26,6 +31,11 @@ const DISPLAY_NAMES: Dictionary = {
 	Type.TORCH: "Torch",
 	Type.WATER: "Water",
 	Type.COPPER: "Copper",
+	Type.COBBLESTONE: "Cobblestone",
+	Type.MOSSY_STONE_BRICKS: "Mossy Stone Bricks",
+	Type.STONE_BRICKS: "Stone Bricks",
+	Type.TERRACOTTA_BRICKS: "Terracotta Bricks",
+	Type.WOOD_PLANKS: "Wood Planks",
 }
 
 static func get_display_name(id: Type) -> String:

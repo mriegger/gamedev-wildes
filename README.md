@@ -46,11 +46,13 @@ and fill with water up to level 5.
 further out. Meshing runs on background threads so movement doesn't hitch; edits are stored
 globally and survive unload/reload.
 
-**Blocks.** Grass, dirt, sand, stone, wood, and leaves are minable and placeable. Seeded copper
-deposits generate after the surrounding terrain as connected 5–30 block blobs. Most of each
-deposit stays underground, while some deposits expose up to three blocks at the surface. Stone
-and the other common blocks are hand-minable. Copper requires a stone or copper pickaxe. Torches
-are a seventh placeable that you can walk through — each is an omni light with a 9-block radius.
+**Blocks.** Grass, dirt, sand, stone, wood, leaves, cobblestone, mossy stone bricks, stone bricks,
+terracotta bricks, and wood planks are minable and placeable. Copper is minable but not placeable.
+Seeded copper deposits generate after the surrounding terrain as connected 5–30 block blobs. Most
+of each deposit stays underground, while some deposits expose up to three blocks at the surface.
+Stone and the other common blocks are hand-minable. Copper requires a stone or copper pickaxe,
+while the masonry blocks require a copper pickaxe. Torches are placeable blocks that you can walk
+through — each is an omni light with a 9-block radius.
 Torch shadows are configurable for the nearest 0, 1, 2, or 4 lights and default to the nearest
 one.
 

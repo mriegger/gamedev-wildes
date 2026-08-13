@@ -25,6 +25,20 @@ jobs:
             60 "Godot Engine v4.7" /tmp/headless_boot.log -- \
             godot --path src --headless --quit
 
+  block-content:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run block content tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "BLOCK_CONTENT PASS" /tmp/block_content.log -- \
+            godot --headless --path src --script res://blocks/tests/block_content.gd
+
   inventory-fuzz:
     runs-on: ubuntu-latest
     timeout-minutes: 10
