@@ -1,11 +1,12 @@
-[gd_resource type="Resource" script_class="FootstepAudioCatalog" load_steps=5 format=3]
+[gd_resource type="Resource" script_class="FootstepAudioCatalog" load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://player/audio/footstep_audio_catalog.gd" id="1_catalog"]
 [ext_resource type="Script" path="res://player/audio/footstep_audio_profile.gd" id="2_profile"]
 [ext_resource type="Resource" path="res://player/audio/profiles/dirt_footsteps.tres" id="3_dirt"]
+[ext_resource type="Resource" path="res://player/audio/profiles/grass_footsteps.tres" id="4_grass"]
 [ext_resource type="Resource" path="res://player/audio/profiles/water_footsteps.tres" id="5_water"]
 
 [resource]
 script = ExtResource("1_catalog")
 fallback_profile = ExtResource("3_dirt")
-profiles = Array[ExtResource("2_profile")]([ExtResource("3_dirt"), ExtResource("5_water")])
+profiles = Array[ExtResource("2_profile")]([ExtResource("3_dirt"), ExtResource("4_grass"), ExtResource("5_water")])
