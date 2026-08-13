@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" path="res://crafting/presentation/crafting_panel.gd" id="1_script"]
 [ext_resource type="FontFile" path="res://assets/fonts/RobotoSlab-Bold.ttf" id="2_bold"]
-[ext_resource type="PackedScene" path="res://crafting/presentation/craft_progress_button.tscn" id="3_craft_button"]
+[ext_resource type="PackedScene" path="res://crafting/presentation/craft_button.tscn" id="3_craft_button"]
 
 [sub_resource type="StyleBoxFlat" id="separator"]
 bg_color = Color(1, 1, 1, 0.12)
@@ -12,16 +12,9 @@ custom_minimum_size = Vector2(520, 0)
 mouse_filter = 2
 script = ExtResource("1_script")
 
-[node name="CraftingImpactPlayer" type="AudioStreamPlayer" parent="."]
+[node name="CraftingSoundPlayer" type="AudioStreamPlayer" parent="."]
 volume_db = -6.0
 bus = &"SFX"
-
-[node name="CraftingCompletePlayer" type="AudioStreamPlayer" parent="."]
-volume_db = -6.0
-bus = &"SFX"
-
-[node name="CraftingImpactTimer" type="Timer" parent="."]
-wait_time = 0.5
 
 [node name="Background" type="Panel" parent="."]
 layout_mode = 1
@@ -150,6 +143,6 @@ layout_mode = 2
 size_flags_vertical = 3
 mouse_filter = 2
 
-[node name="CraftProgressButton" parent="Margin/Content/Body/Details" instance=ExtResource("3_craft_button")]
+[node name="CraftButton" parent="Margin/Content/Body/Details" instance=ExtResource("3_craft_button")]
 layout_mode = 2
 size_flags_horizontal = 3

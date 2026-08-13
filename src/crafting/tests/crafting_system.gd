@@ -2,7 +2,6 @@ extends SceneTree
 
 var _errors: Array[String] = []
 var _state_change_count: int = 0
-var _craft_completed_count: int = 0
 
 func _init() -> void:
 	var block_catalog := load("res://blocks/block_catalog.tres") as BlockCatalog
@@ -26,7 +25,6 @@ func _init() -> void:
 	for recipe_id in expected_recipe_ids:
 		_expect(recipe_catalog.has_definition(recipe_id), "missing recipe %s" % recipe_id)
 	for recipe in recipe_catalog.definitions:
-		_expect(is_equal_approx(recipe.duration_seconds, 2.0), "recipe duration mismatch for %s" % recipe.id)
 		for ingredient in recipe.ingredients:
 			_expect(ingredient.count >= 1, "ingredient count outside recipe range")
 		if recipe.id != &"torch_bundle":
@@ -50,8 +48,7 @@ func _init() -> void:
 	progression_inventory.slots[InventoryModel.HOTBAR_SIZE + 1] = InventoryStack.new(&"log_block", 5)
 	var progression_coordinator := CraftingCoordinator.new()
 	progression_coordinator.setup(progression_inventory, recipe_catalog)
-	_expect(progression_coordinator.start(&"stone_pickaxe"), "stone pickaxe craft did not start")
-	_expect(progression_coordinator.advance_time(2.0), "stone pickaxe craft did not complete")
+	_expect(progression_coordinator.craft(&"stone_pickaxe"), "stone pickaxe did not craft immediately")
 	_expect(progression_inventory.get_inventory_item_count(&"stone_block") == 0, "stone pickaxe craft retained stone")
 	_expect(progression_inventory.get_inventory_item_count(&"log_block") == 0, "stone pickaxe craft retained wood")
 	_expect(progression_inventory.get_inventory_item_count(&"stone_pickaxe") == 1, "stone pickaxe craft did not add its output")
@@ -62,8 +59,7 @@ func _init() -> void:
 	var hotbar_coordinator := CraftingCoordinator.new()
 	hotbar_coordinator.setup(hotbar_only, recipe_catalog)
 	_expect(hotbar_coordinator.can_craft(&"copper_pickaxe"), "hotbar materials were not available for crafting")
-	_expect(hotbar_coordinator.start(&"copper_pickaxe"), "hotbar-only craft did not start")
-	_expect(hotbar_coordinator.advance_time(2.0), "hotbar-only craft did not complete")
+	_expect(hotbar_coordinator.craft(&"copper_pickaxe"), "hotbar-only craft did not complete immediately")
 	_expect(hotbar_only.get_inventory_item_count(&"copper") == 0, "hotbar-only craft retained copper")
 	_expect(hotbar_only.get_inventory_item_count(&"log_block") == 0, "hotbar-only craft retained wood")
 	_expect(hotbar_only.get_inventory_item_count(&"copper_pickaxe") == 1, "hotbar-only craft did not add output")
@@ -74,8 +70,7 @@ func _init() -> void:
 	backpack_first.slots[InventoryModel.HOTBAR_SIZE + 1] = InventoryStack.new(&"leaves_block", 2)
 	var backpack_first_coordinator := CraftingCoordinator.new()
 	backpack_first_coordinator.setup(backpack_first, recipe_catalog)
-	_expect(backpack_first_coordinator.start(&"torch_bundle"), "backpack-first craft did not start")
-	_expect(backpack_first_coordinator.advance_time(2.0), "backpack-first craft did not complete")
+	_expect(backpack_first_coordinator.craft(&"torch_bundle"), "backpack-first craft did not complete immediately")
 	_expect(backpack_first.get_slot(0).count == 1, "crafted output changed a hotbar stack despite backpack capacity")
 	_expect(backpack_first.get_backpack_item_count(&"torch") == 4, "crafted output did not prefer the backpack")
 
@@ -85,24 +80,13 @@ func _init() -> void:
 	var coordinator := CraftingCoordinator.new()
 	coordinator.setup(inventory, recipe_catalog)
 	coordinator.state_changed.connect(_on_state_changed)
-	coordinator.craft_completed.connect(_on_craft_completed)
 	_expect(coordinator.can_craft(&"copper_pickaxe"), "available pickaxe recipe disabled")
-	_expect(coordinator.start(&"copper_pickaxe"), "pickaxe craft did not start")
-	_expect(not coordinator.advance_time(1.9), "pickaxe completed before two seconds")
-	_expect(coordinator.is_crafting(), "pickaxe craft stopped early")
-	_expect(is_equal_approx(coordinator.get_progress(), 0.95), "craft progress mismatch")
-	_expect(coordinator.cancel(), "active craft did not cancel")
-	_expect(_craft_completed_count == 0, "canceled craft emitted completion")
-	_expect(not coordinator.is_crafting() and is_zero_approx(coordinator.get_progress()), "cancel did not reset progress")
-	_expect(inventory.get_backpack_item_count(&"copper") == 10, "cancel consumed copper")
-	_expect(inventory.get_backpack_item_count(&"log_block") == 5, "cancel consumed wood")
-	_expect(coordinator.start(&"copper_pickaxe"), "second pickaxe craft did not start")
-	_expect(coordinator.advance_time(2.0), "pickaxe did not complete at two seconds")
-	_expect(_craft_completed_count == 1, "completed craft did not emit completion exactly once")
+	_expect(coordinator.craft(&"copper_pickaxe"), "pickaxe did not craft immediately")
 	_expect(inventory.get_backpack_item_count(&"copper") == 0, "completed craft retained copper")
 	_expect(inventory.get_backpack_item_count(&"log_block") == 0, "completed craft retained wood")
 	_expect(inventory.get_backpack_item_count(&"copper_pickaxe") == 1, "completed craft did not add output")
 	_expect(not coordinator.can_craft(&"copper_pickaxe"), "depleted recipe remained enabled")
+	_expect(not coordinator.craft(&"copper_pickaxe"), "depleted recipe crafted")
 	_expect(_state_change_count > 0, "coordinator did not announce state changes")
 
 	var crowded := InventoryModel.new(item_catalog)
@@ -114,7 +98,7 @@ func _init() -> void:
 	var crowded_coordinator := CraftingCoordinator.new()
 	crowded_coordinator.setup(crowded, recipe_catalog)
 	_expect(not crowded_coordinator.can_craft(&"copper_pickaxe"), "recipe enabled without output capacity")
-	_expect(not crowded_coordinator.start(&"copper_pickaxe"), "craft started without output capacity")
+	_expect(not crowded_coordinator.craft(&"copper_pickaxe"), "craft completed without output capacity")
 	_expect(crowded.to_dict() == crowded_before, "failed craft changed crowded inventory")
 
 	if _errors.is_empty():
@@ -127,9 +111,6 @@ func _init() -> void:
 
 func _on_state_changed() -> void:
 	_state_change_count += 1
-
-func _on_craft_completed(_recipe_id: StringName) -> void:
-	_craft_completed_count += 1
 
 func _expect(condition: bool, message: String) -> void:
 	if not condition:

@@ -50,76 +50,43 @@ func _process(_delta: float) -> bool:
 		_hud.toggle_crafting()
 	elif _phase == 1 and _frame == 68:
 		_check_open_state()
+		var sound_player := _hud.crafting_panel.get_node("CraftingSoundPlayer") as AudioStreamPlayer
+		_expect(sound_player.stream.resource_path == "res://assets/audio/sfx/tools/impactGeneric_light_004.ogg", "crafting used the wrong success sound")
+		_expect(sound_player.bus == &"SFX", "crafting success sound did not use the SFX bus")
+		_expect(not sound_player.playing, "crafting sound played before a successful press")
+		_expect(_hud.crafting_panel.get_node_or_null("CraftingImpactPlayer") == null, "repeating crafting sound player still exists")
+		_expect(_hud.crafting_panel.get_node_or_null("CraftingCompletePlayer") == null, "old completion sound player still exists")
+		_expect(_hud.crafting_panel.get_node_or_null("CraftingImpactTimer") == null, "crafting timer still exists")
+		var button := _hud.crafting_panel.get_craft_button()
+		_expect(button.get_node_or_null("Fill") == null, "crafting progress fill still exists")
+		button.pressed.emit()
+		_expect(_inventory.get_inventory_item_count(&"stone_pickaxe") == 1, "button press did not craft stone pickaxe immediately")
+		_expect(_inventory.get_inventory_item_count(&"stone_block") == 0, "immediate craft retained stone")
+		_expect(_inventory.get_inventory_item_count(&"log_block") == 5, "immediate craft consumed wrong wood count")
+		_expect(sound_player.playing, "successful craft did not play its sound")
+		_expect(not button.is_craft_enabled(), "depleted recipe button remained enabled")
+		_hud.crafting_panel.select_recipe(&"copper_pickaxe")
+		_expect(_hud.crafting_panel.get_craft_button().is_craft_enabled(), "available copper pickaxe recipe was disabled")
 		_hud.crafting_panel.get_craft_button().pressed.emit()
+		_expect(_inventory.get_inventory_item_count(&"copper_pickaxe") == 1, "copper pickaxe did not craft immediately")
+		_expect(_inventory.get_inventory_item_count(&"copper") == 15, "copper pickaxe consumed wrong copper count")
+		_expect(_inventory.get_inventory_item_count(&"log_block") == 0, "copper pickaxe retained wood")
+		_hud.crafting_panel.select_recipe(&"copper_sword")
+		_expect(not _hud.crafting_panel.get_craft_button().is_craft_enabled(), "unavailable recipe button remained enabled")
+		sound_player.stop()
+		_hud.crafting_panel.get_craft_button().pressed.emit()
+		_expect(not sound_player.playing, "failed craft played the success sound")
+		_hud.close_side_panel()
 		_phase = 2
 	elif _phase == 2 and _frame == 70:
-		_expect(_crafting.is_crafting(), "craft button did not start selected recipe")
-		var impact_player := _hud.crafting_panel.get_node("CraftingImpactPlayer") as AudioStreamPlayer
-		var complete_player := _hud.crafting_panel.get_node("CraftingCompletePlayer") as AudioStreamPlayer
-		var impact_timer := _hud.crafting_panel.get_node("CraftingImpactTimer") as Timer
-		_expect(impact_player.stream.resource_path == "res://assets/audio/sfx/tools/impactGeneric_light_003.ogg", "crafting used the wrong repeating impact sound")
-		_expect(complete_player.stream.resource_path == "res://assets/audio/sfx/tools/impactGeneric_light_004.ogg", "crafting used the wrong completion sound")
-		_expect(impact_player.bus == &"SFX", "crafting impact did not use the SFX bus")
-		_expect(complete_player.bus == &"SFX", "crafting completion did not use the SFX bus")
-		_expect(impact_player.playing, "crafting impact did not play when crafting started")
-		_expect(not complete_player.playing, "crafting completion played before crafting completed")
-		_expect(not impact_timer.is_stopped() and is_equal_approx(impact_timer.wait_time, 0.5), "crafting impact did not repeat twice per second")
-		_crafting.advance_time(1.0)
-		_phase = 3
-	elif _phase == 3 and _frame == 72:
-		var button := _hud.crafting_panel.get_craft_button()
-		_expect(button.get_progress() > 0.49 and button.get_progress() < 0.55, "craft button did not show half progress")
-		_expect(button.get_rendered_progress() > 0.49 and button.get_rendered_progress() < 0.55, "craft button fill did not render half progress")
-		var fill := button.get_node("Fill") as ProgressBar
-		_expect(fill != null and fill.visible, "craft button fill was not visible while crafting")
-		_expect(fill.fill_mode == ProgressBar.FILL_BEGIN_TO_END, "craft button fill did not move left-to-right")
-		var fill_style := fill.get_theme_stylebox("fill") as StyleBoxFlat
-		var base_style := (button.get_node("Base") as Panel).get_theme_stylebox("panel") as StyleBoxFlat
-		_expect(fill_style.bg_color.get_luminance() > base_style.bg_color.get_luminance(), "craft button fill was not lighter than its background")
-		_hud.crafting_panel.select_recipe(&"copper_sword")
-		_phase = 4
-	elif _phase == 4 and _frame == 74:
-		_expect(not _crafting.is_crafting(), "recipe selection did not cancel crafting")
-		_expect(is_zero_approx(_hud.crafting_panel.get_craft_button().get_progress()), "recipe selection did not reset button")
-		_expect(is_zero_approx(_hud.crafting_panel.get_craft_button().get_rendered_progress()), "recipe selection did not reset rendered fill")
-		_expect(not (_hud.crafting_panel.get_craft_button().get_node("Fill") as ProgressBar).visible, "recipe selection did not hide rendered fill")
-		_expect((_hud.crafting_panel.get_node("CraftingImpactTimer") as Timer).is_stopped(), "recipe selection did not stop crafting audio timer")
-		_expect(not (_hud.crafting_panel.get_node("CraftingImpactPlayer") as AudioStreamPlayer).playing, "recipe selection did not stop crafting audio")
-		_expect(not (_hud.crafting_panel.get_node("CraftingCompletePlayer") as AudioStreamPlayer).playing, "recipe cancellation played completion audio")
-		_expect(_inventory.get_inventory_item_count(&"copper") == 25, "recipe selection consumed copper")
-		_expect(_inventory.get_inventory_item_count(&"log_block") == 10, "recipe selection consumed wood")
-		_hud.crafting_panel.select_recipe(&"copper_pickaxe")
-		_hud.crafting_panel.get_craft_button().pressed.emit()
-		_crafting.advance_time(2.0)
-		_phase = 5
-	elif _phase == 5 and _frame == 76:
-		_expect(_inventory.get_inventory_item_count(&"copper_pickaxe") == 1, "completed UI craft did not add output")
-		_expect(_inventory.get_inventory_item_count(&"copper") == 15, "completed UI craft consumed wrong copper count")
-		_expect(_inventory.get_inventory_item_count(&"log_block") == 5, "completed UI craft consumed wrong wood count")
-		_expect((_hud.crafting_panel.get_node("CraftingImpactTimer") as Timer).is_stopped(), "completed craft did not stop crafting audio timer")
-		_expect(not (_hud.crafting_panel.get_node("CraftingImpactPlayer") as AudioStreamPlayer).playing, "completed craft did not stop crafting audio")
-		_expect((_hud.crafting_panel.get_node("CraftingCompletePlayer") as AudioStreamPlayer).playing, "completed craft did not play completion audio")
-		_hud.crafting_panel.select_recipe(&"torch_bundle")
-		_expect(not _hud.crafting_panel.get_craft_button().is_craft_enabled(), "unavailable recipe button remained enabled")
-		_hud.crafting_panel.select_recipe(&"copper_sword")
-		_expect(_hud.crafting_panel.get_craft_button().is_craft_enabled(), "available recipe button was disabled")
-		_hud.crafting_panel.get_craft_button().pressed.emit()
-		_crafting.advance_time(1.0)
-		_hud.close_side_panel()
-		_phase = 6
-	elif _phase == 6 and _frame == 78:
-		_expect(not _crafting.is_crafting(), "closing backpack did not cancel crafting")
 		_expect(not _hud.side_panel.is_open() and not _hud.crafting_panel.is_open(), "HUD panels did not close together")
-		_expect((_hud.crafting_panel.get_node("CraftingImpactTimer") as Timer).is_stopped(), "closing backpack did not stop crafting audio timer")
-		_expect(not (_hud.crafting_panel.get_node("CraftingImpactPlayer") as AudioStreamPlayer).playing, "closing backpack did not stop crafting audio")
-		_expect(not (_hud.crafting_panel.get_node("CraftingCompletePlayer") as AudioStreamPlayer).playing, "closing backpack did not stop completion audio")
-		_expect(_inventory.get_inventory_item_count(&"copper_sword") == 0, "canceled sword craft added output")
+		_expect(_inventory.get_inventory_item_count(&"copper_sword") == 0, "failed sword craft added output")
 		_expect(_inventory.get_inventory_item_count(&"copper") == 15, "closing backpack consumed copper")
-		_expect(_inventory.get_inventory_item_count(&"log_block") == 5, "closing backpack consumed wood")
+		_expect(_inventory.get_inventory_item_count(&"log_block") == 0, "closing backpack changed wood")
 		_hud.free()
 		_camera_rig.free()
-		_phase = 7
-	elif _phase == 7 and _frame == 88:
+		_phase = 3
+	elif _phase == 3 and _frame == 80:
 		_finish()
 	return false
 

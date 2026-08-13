@@ -1,8 +1,8 @@
-[gd_scene load_steps=2 format=3 uid="uid://c4ftpr0gr3ssscn"]
+[gd_scene load_steps=2 format=3]
 
-[ext_resource type="Script" path="res://crafting/presentation/craft_progress_button.gd" id="1_script"]
+[ext_resource type="Script" path="res://crafting/presentation/craft_button.gd" id="1_script"]
 
-[node name="CraftProgressButton" type="Control"]
+[node name="CraftButton" type="Control"]
 custom_minimum_size = Vector2(0, 52)
 mouse_filter = 1
 script = ExtResource("1_script")
@@ -15,17 +15,6 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-
-[node name="Fill" type="ProgressBar" parent="."]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-show_percentage = false
-fill_mode = 0
 
 [node name="Button" type="Button" parent="."]
 layout_mode = 1

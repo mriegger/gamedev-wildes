@@ -4,7 +4,6 @@ class_name CraftingRecipeDefinition
 @export var id: StringName
 @export var output_item: ItemDefinition
 @export_range(1, 99) var output_count: int = 1
-@export_range(0.1, 60.0, 0.1) var duration_seconds: float = 2.0
 @export var ingredients: Array[CraftingIngredient]
 
 func validate(item_catalog: ItemCatalog, source: String) -> bool:
@@ -18,8 +17,8 @@ func validate(item_catalog: ItemCatalog, source: String) -> bool:
 	elif not item_catalog.has_definition(output_item.id) or item_catalog.get_definition(output_item.id) != output_item:
 		push_error("[CraftingRecipeDefinition] Non-canonical output %s at %s" % [output_item.id, source])
 		valid = false
-	if output_count < 1 or duration_seconds <= 0.0:
-		push_error("[CraftingRecipeDefinition] Invalid output or duration at %s" % source)
+	if output_count < 1:
+		push_error("[CraftingRecipeDefinition] Invalid output count at %s" % source)
 		valid = false
 	if ingredients.is_empty():
 		push_error("[CraftingRecipeDefinition] Missing ingredients at %s" % source)
