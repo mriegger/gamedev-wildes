@@ -5,8 +5,8 @@ endless procedurally generated world under an orthographic isometric camera, min
 a nine-slot hotbar, and build with them. The loop is explore → mine → build, on terrain that
 streams in around you as you walk, under a running day/night cycle.
 
-Worlds are saved to three local slots and persist your seed, edits, generated copper deposits,
-inventory, position, and world time.
+Worlds are saved to three local slots and persist your seed, edits, inventory, position, and
+world time. Copper deposits regenerate deterministically from the world seed.
 
 ## Controls
 
@@ -46,7 +46,7 @@ and fill with water up to level 5.
 further out. Meshing runs on background threads so movement doesn't hitch; edits are stored
 globally and survive unload/reload.
 
-**Blocks.** Grass, dirt, sand, stone, wood, and leaves are minable and placeable. Random copper
+**Blocks.** Grass, dirt, sand, stone, wood, and leaves are minable and placeable. Seeded copper
 deposits generate after the surrounding terrain as connected 5–30 block blobs. Most of each
 deposit stays underground, while some deposits expose up to three blocks at the surface. Stone
 and copper require the starter copper pickaxe; other current blocks remain hand-minable. Torches are

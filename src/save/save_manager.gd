@@ -75,8 +75,6 @@ static func create_new_world(slot_id: int, seed_value: int, world_name: String) 
 		"placed_blocks": {},
 		"removed_blocks": {},
 		"torch_attachments": {},
-		"copper_blocks": {},
-		"generated_copper_chunks": {},
 		"player_position": null,
 		"player_stats": null,
 		"item_proficiency": {},
@@ -120,20 +118,6 @@ static func serialize_vector3i_dict(dict: Dictionary) -> Dictionary:
 			out[key_str] = v
 	return out
 
-static func serialize_vector2i_dict(dict: Dictionary) -> Dictionary:
-	var out := {}
-	for position in dict:
-		out["%d,%d" % [position.x, position.y]] = dict[position]
-	return out
-
-static func _deserialize_vector2i_dict(dict: Dictionary) -> Dictionary:
-	var out := {}
-	for key in dict:
-		var parts := (key as String).split(",")
-		if parts.size() == 2:
-			out[Vector2i(int(parts[0]), int(parts[1]))] = dict[key]
-	return out
-
 static func _deserialize_block_ids(dict: Dictionary) -> Dictionary:
 	var out := {}
 	for key in dict:
@@ -163,8 +147,6 @@ static func decode_world_state(data: Dictionary) -> WorldState:
 	var placed_raw = data.get("placed_blocks", {})
 	var removed_raw = data.get("removed_blocks", {})
 	var torch_raw = data.get("torch_attachments", {})
-	var copper_raw = data.get("copper_blocks", {})
-	var generated_copper_raw = data.get("generated_copper_chunks", {})
 	var position = Vector3.ZERO
 	var position_data = data.get("player_position", null)
 	if position_data is Array and position_data.size() == 3:
@@ -176,9 +158,7 @@ static func decode_world_state(data: Dictionary) -> WorldState:
 		_deserialize_block_ids(placed_raw) if placed_raw is Dictionary else {},
 		_deserialize_removed_blocks(removed_raw) if removed_raw is Dictionary else {},
 		_deserialize_torch_attachments(torch_raw) if torch_raw is Dictionary else {},
-		position,
-		_deserialize_block_ids(copper_raw) if copper_raw is Dictionary else {},
-		_deserialize_vector2i_dict(generated_copper_raw) if generated_copper_raw is Dictionary else {}
+		position
 	)
 
 static func load_slot(slot_id: int) -> Dictionary:
@@ -198,10 +178,8 @@ static func load_slot(slot_id: int) -> Dictionary:
 		info["removed_blocks"] = {}
 	if not info.has("torch_attachments"):
 		info["torch_attachments"] = {}
-	if not info.has("copper_blocks"):
-		info["copper_blocks"] = {}
-	if not info.has("generated_copper_chunks"):
-		info["generated_copper_chunks"] = {}
+	info.erase("copper_blocks")
+	info.erase("generated_copper_chunks")
 	if not info.has("time_of_day"):
 		info["time_of_day"] = 6.0
 	if not info.has("playtime_seconds"):
@@ -231,9 +209,8 @@ static func save_world_state(slot_id: int, current_data: Dictionary, voxel_model
 	updated["placed_blocks"] = serialize_vector3i_dict(block_edits["placed"])
 	updated["removed_blocks"] = serialize_vector3i_dict(block_edits["removed"])
 	updated["torch_attachments"] = serialize_vector3i_dict(voxel_model.torch_attachments)
-	var copper_generation := voxel_model.snapshot_copper_generation()
-	updated["copper_blocks"] = serialize_vector3i_dict(copper_generation["blocks"])
-	updated["generated_copper_chunks"] = serialize_vector2i_dict(copper_generation["chunks"])
+	updated.erase("copper_blocks")
+	updated.erase("generated_copper_chunks")
 	var p = player.global_position
 	updated["player_position"] = [p.x, p.y, p.z]
 	updated["player_stats"] = player.stats.snapshot_progression()

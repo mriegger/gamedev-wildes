@@ -59,25 +59,6 @@ func snapshot_block_edits() -> Dictionary:
 		"removed": _removed_blocks.duplicate(),
 	}
 
-func restore_copper_generation(blocks: Dictionary, chunks: Dictionary) -> void:
-	copper_block_fast = blocks.duplicate()
-	generated_copper_chunks = chunks.duplicate()
-	copper_chunks_fast.clear()
-	for position in copper_block_fast:
-		if not position is Vector3i:
-			continue
-		var coord := ChunkCoord.world_to_chunk_vec3i(position, chunk_size)
-		if not copper_chunks_fast.has(coord):
-			copper_chunks_fast[coord] = {}
-		(copper_chunks_fast[coord] as Dictionary)[position] = copper_block_fast[position]
-		generated_copper_chunks[coord] = true
-
-func snapshot_copper_generation() -> Dictionary:
-	return {
-		"blocks": copper_block_fast.duplicate(),
-		"chunks": generated_copper_chunks.duplicate(),
-	}
-
 func get_block_edit_count() -> int:
 	return _placed_blocks.size() + _removed_blocks.size()
 
@@ -155,6 +136,12 @@ func prune_terrain_cache(max_to_evict: int) -> int:
 				tree_block_fast.erase(tree_pos)
 			tree_chunks_fast.erase(coord)
 		generated_tree_chunks.erase(coord)
+		if copper_chunks_fast.has(coord):
+			var chunk_copper := copper_chunks_fast[coord] as Dictionary
+			for copper_pos in chunk_copper:
+				copper_block_fast.erase(copper_pos)
+			copper_chunks_fast.erase(coord)
+		generated_copper_chunks.erase(coord)
 		evicted.append(coord)
 
 	for coord in evicted:

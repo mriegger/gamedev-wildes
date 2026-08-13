@@ -476,7 +476,7 @@ func _generate_copper_deposit(
 	if not config.copper_deposits_enabled or chunk_size < 6:
 		return deposit
 	var rng := RandomNumberGenerator.new()
-	rng.randomize()
+	rng.seed = config.seed_value + origin_x * 73856093 + origin_z * 19349663 + 486187739
 	if rng.randf() > config.copper_deposit_chance_per_chunk:
 		return deposit
 

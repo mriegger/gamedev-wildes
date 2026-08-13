@@ -3,7 +3,7 @@
 The chunk pipeline lives together under `src/world/chunks` and separates coordination, background work, and scene ownership.
 
 - `ChunkManager` owns desired, retained, visible, dirty, and pending chunk state.
-- `ChunkBuildScheduler` snapshots chunk-local edits, tree blocks, and previously rolled copper deposits, runs terrain and mesh jobs on worker threads, and exposes completed typed results.
+- `ChunkBuildScheduler` snapshots chunk-local edits and retained generated blocks, runs terrain and mesh jobs on worker threads, and exposes completed typed results.
 - `ChunkMesher` converts voxel snapshots into mesh data and creates meshes on the main thread.
 - `ChunkRenderer` owns chunk scene nodes, mesh pooling, and the mesh cache.
 - `ChunkCoord`, `ChunkBuildJob`, and `ChunkBuildResult` provide shared coordinate and transfer types.
@@ -14,12 +14,13 @@ A chunk enters `visible_chunks` only after its mesh is restored or applied. Torc
 
 Worker threads only produce data. Godot scene nodes, `ArrayMesh` assignment, pooling, and signal-driven visual updates remain on the main thread. Shutdown stops and joins workers before clearing renderer-owned nodes.
 
-`VoxelWorld` indexes placed blocks, removed blocks, generated tree blocks, and randomly rolled
-copper deposits by chunk. Copper is generated only by a full chunk build after base terrain exists;
-terrain-only preloads do not roll it. Rolled deposits and empty-chunk markers persist across chunk
-rebuilds and save reloads instead of being derived from terrain coordinates. Each build job snapshots
-only the requested chunk plus the mesher's two-block border, so distant accumulated edits do not turn
-every rebuild into a full-world scan.
+`VoxelWorld` indexes placed blocks, removed blocks, generated tree blocks, and seeded copper deposits
+by chunk. A full chunk build derives copper from the world seed and chunk origin after base terrain
+exists; terrain-only preloads do not generate it. Deposits and empty-chunk markers stay in memory
+across mesh rebuilds, then leave with evicted terrain and regenerate from the same seed when the chunk
+returns. Saves persist mined copper as normal removed-block edits rather than storing generated
+deposits. Each build job snapshots only the requested chunk plus the mesher's two-block border, so
+distant accumulated edits do not turn every rebuild into a full-world scan.
 
 The streaming soak test instantiates the real gameplay scene, moves the real player, edits the real voxel model, and checks visible/data/terrain bounds, pending work, orphan nodes, and drag-preview leaks.
 
