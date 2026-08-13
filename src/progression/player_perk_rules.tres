@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="PlayerPerkRules" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://progression/player_perk_rules.gd" id="1_rules"]
+[ext_resource type="Script" path="res://progression/player_perk_definition.gd" id="2_definition"]
+[ext_resource type="Resource" path="res://progression/definitions/player_perks/health.tres" id="3_health"]
+[ext_resource type="Resource" path="res://progression/definitions/player_perks/strength.tres" id="4_strength"]
+[ext_resource type="Resource" path="res://progression/definitions/player_perks/defense.tres" id="5_defense"]
+
+[resource]
+script = ExtResource("1_rules")
+definitions = Array[ExtResource("2_definition")]([ExtResource("3_health"), ExtResource("4_strength"), ExtResource("5_defense")])
