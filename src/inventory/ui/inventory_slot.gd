@@ -20,6 +20,7 @@ var _empty_style: StyleBoxFlat
 func _ready():
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	focus_mode = Control.FOCUS_NONE
+	set_process_input(false)
 	if not empty_label.is_empty():
 		count_label.add_theme_font_size_override("font_size", 10)
 	refresh_visuals()
@@ -88,24 +89,35 @@ func _get_gear_tooltip_definition() -> ItemDefinition:
 	return definition
 
 func refresh_visuals():
-	if item_id == null or item_count <= 0:
+	var visual_count := _get_visual_count()
+	if item_id == null or visual_count <= 0:
 		add_theme_stylebox_override("panel", _empty_style)
 	else:
 		add_theme_stylebox_override("panel", _normal_style)
 	_refresh_item_visuals()
 
 func _refresh_item_visuals():
-	if item_id == null or item_count <= 0:
+	var visual_item_id = _drag_source_item_id if not _active_drag_data.is_empty() else item_id
+	var visual_count := _get_visual_count()
+	if visual_item_id == null or visual_count <= 0:
 		icon.texture = null
 		count_label.text = empty_label
 	else:
-		icon.texture = inventory_model.item_catalog.get_definition(item_id).icon
-		if item_count > 1:
-			count_label.text = str(item_count)
+		icon.texture = inventory_model.item_catalog.get_definition(visual_item_id).icon
+		if visual_count > 1:
+			count_label.text = str(visual_count)
 		else:
 			count_label.text = ""
 
 var _drag_preview_layer: CanvasLayer = null
+var _active_drag_data: Dictionary = {}
+var _drag_source_item_id = null
+var _drag_source_count: int = 0
+
+func _get_visual_count() -> int:
+	if _active_drag_data.is_empty():
+		return item_count
+	return _drag_source_count - int(_active_drag_data.get("drag_count", 0))
 
 func _process(_delta):
 	if _drag_preview_layer == null:
@@ -133,23 +145,22 @@ func _gui_input(event):
 			if changed:
 				get_viewport().set_input_as_handled()
 			return
-		if event.button_index == MOUSE_BUTTON_RIGHT:
-			if item_id != null and item_count > 0:
-				var src_item_id = item_id
-				var src_count = item_count
-				if inventory_model:
-					var s = inventory_model.get_slot(slot_index)
-					if s != null:
-						src_item_id = s.item_id
-						src_count = s.count
-					else:
-						return
-				var half = int(ceil(float(src_count) / 2.0))
-				var data = {"source_index": slot_index, "drag_count": half}
-				_show_high_layer_preview(src_item_id, half)
-				force_drag(data, Control.new())
-				get_viewport().set_input_as_handled()
-				return
+
+func _input(event: InputEvent) -> void:
+	if _active_drag_data.is_empty() or not get_viewport().gui_is_dragging():
+		return
+	if not event is InputEventMouseButton:
+		return
+	var mouse_event := event as InputEventMouseButton
+	if not mouse_event.pressed or mouse_event.button_index not in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
+		return
+	var drag_count := int(_active_drag_data.get("drag_count", 0))
+	if mouse_event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+		drag_count = maxi(1, drag_count - 1)
+	else:
+		drag_count = mini(_drag_source_count, drag_count + 1)
+	_set_drag_count(drag_count)
+	get_viewport().set_input_as_handled()
 
 func _get_drag_data(_at_position):
 	if item_id == null or item_count <= 0:
@@ -162,9 +173,21 @@ func _get_drag_data(_at_position):
 	var count: int = s.count
 	var source_item_id: StringName = s.item_id
 	var data = {"source_index": slot_index, "drag_count": count}
+	_active_drag_data = data
+	_drag_source_item_id = source_item_id
+	_drag_source_count = count
 	_show_high_layer_preview(source_item_id, count)
+	refresh_visuals()
+	set_process_input(true)
 	set_drag_preview(Control.new())
 	return data
+
+func _set_drag_count(count: int) -> void:
+	if _active_drag_data.is_empty():
+		return
+	_active_drag_data["drag_count"] = clampi(count, 1, _drag_source_count)
+	_update_high_layer_preview_count(int(_active_drag_data["drag_count"]))
+	refresh_visuals()
 
 func _can_drop_data(_at_position, data) -> bool:
 	if data == null or not data is Dictionary:
@@ -215,15 +238,15 @@ func _create_drag_preview(source_item_id: StringName, count: int) -> Control:
 	preview_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	preview_icon.texture = inventory_model.item_catalog.get_definition(source_item_id).icon
 	preview.add_child(preview_icon)
-	if count > 1:
-		var lbl = Label.new()
-		lbl.text = str(count)
-		lbl.position = Vector2(4, 40)
-		lbl.size = Vector2(56, 18)
-		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		lbl.add_theme_font_size_override("font_size", 14)
-		lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		preview.add_child(lbl)
+	var lbl = Label.new()
+	lbl.name = "Count"
+	lbl.text = str(count) if count > 1 else ""
+	lbl.position = Vector2(4, 40)
+	lbl.size = Vector2(56, 18)
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.add_theme_font_size_override("font_size", 14)
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	preview.add_child(lbl)
 	preview.modulate = Color(1, 1, 1, 0.9)
 	return preview
 
@@ -239,6 +262,14 @@ func _show_high_layer_preview(source_item_id: StringName, count: int):
 	_drag_preview_layer = layer
 	set_process(true)
 
+func _update_high_layer_preview_count(count: int) -> void:
+	if _drag_preview_layer == null or not is_instance_valid(_drag_preview_layer) or _drag_preview_layer.get_child_count() == 0:
+		return
+	var panel := _drag_preview_layer.get_child(0) as Control
+	var label := panel.get_node_or_null("Count") as Label
+	if label != null:
+		label.text = str(count) if count > 1 else ""
+
 func _hide_high_layer_preview():
 	if _drag_preview_layer != null and is_instance_valid(_drag_preview_layer):
 		_drag_preview_layer.queue_free()
@@ -246,5 +277,14 @@ func _hide_high_layer_preview():
 	set_process(false)
 
 func _notification(what):
-	if what == NOTIFICATION_DRAG_END or what == NOTIFICATION_EXIT_TREE or what == NOTIFICATION_PREDELETE:
+	if what == NOTIFICATION_DRAG_END:
+		_active_drag_data.clear()
+		_drag_source_item_id = null
+		_drag_source_count = 0
+		set_process_input(false)
+		_hide_high_layer_preview()
+		if is_node_ready():
+			refresh_visuals()
+	elif what == NOTIFICATION_EXIT_TREE or what == NOTIFICATION_PREDELETE:
+		set_process_input(false)
 		_hide_high_layer_preview()

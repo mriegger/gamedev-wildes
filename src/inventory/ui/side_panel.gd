@@ -20,6 +20,7 @@ const TAB_TITLES: Dictionary = {
 @onready var _equipment_view: Control = $Margin/Content/ViewRoot/EquipmentView
 @onready var _equipment_grid: GridContainer = $Margin/Content/ViewRoot/EquipmentView/EquipmentGrid
 @onready var _equipment_button: WildesButton = $Margin/Content/ActionButtons/EquipmentButton
+@onready var _trash_target: Panel = $Margin/Content/ActionButtons/InventoryTrashTarget as Panel
 
 var hotbar: Hotbar = null
 var inventory_model: InventoryModel = null
@@ -67,6 +68,7 @@ func setup(inv: InventoryModel, inventory_stat_coordinator: InventoryStatCoordin
 	inventory_model = inv
 	camera_rig = cam_rig
 	hotbar = hb
+	_trash_target.setup(inv)
 	if camera_rig:
 		camera_rig.set_panel_obstruction_widths(left_panel_width, PANEL_WIDTH)
 	for id in _slot_groups.keys():

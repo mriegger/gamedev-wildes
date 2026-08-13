@@ -65,6 +65,10 @@ func _init() -> void:
 	_expect(is_equal_approx(selected_armor_stats.get_value(&"defense"), 1.0), "direct equipment model move did not synchronize stats")
 	_expect(selected_armor_inventory.handle_drop(selected_helmet_index, 4, 1), "direct equipment model return failed")
 	_expect(is_equal_approx(selected_armor_stats.get_value(&"defense"), 0.0), "direct equipment model return retained stats")
+	_expect(selected_armor_inventory.handle_drop(4, selected_helmet_index, 1), "discard equipment setup move failed")
+	_expect(selected_armor_inventory.discard_stack(selected_helmet_index, 1), "equipped armor discard failed")
+	_expect(selected_armor_inventory.get_slot(selected_helmet_index) == null, "equipped armor discard retained its stack")
+	_expect(is_equal_approx(selected_armor_stats.get_value(&"defense"), 0.0), "equipped armor discard retained stats")
 
 	var selected_item_inventory := InventoryModel.new(item_catalog)
 	selected_item_inventory.setup_starter()

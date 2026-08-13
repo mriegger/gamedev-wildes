@@ -128,9 +128,12 @@ func _prepare_drop(source_index: int, destination_index: int, drag_count: int) -
 	return {"equipment_index": equipment_index, "armor": armor, "armor_set": armor_set}
 
 func _on_inventory_changed() -> void:
-	assert(_synchronize_selected_item(false))
-	assert(_synchronize_equipment(false))
-	assert(_synchronize_armor_set(false))
+	if not _synchronize_selected_item(false):
+		push_error("[InventoryStatCoordinator] Failed to synchronize the selected item")
+	if not _synchronize_equipment(false):
+		push_error("[InventoryStatCoordinator] Failed to synchronize equipped armor")
+	if not _synchronize_armor_set(false):
+		push_error("[InventoryStatCoordinator] Failed to synchronize the armor set")
 
 func _synchronize_selected_item(force: bool) -> bool:
 	var next_item_id: StringName = &""

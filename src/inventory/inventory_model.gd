@@ -118,6 +118,22 @@ func move_hotbar_slot_to_backpack(hotbar_idx: int) -> bool:
 	inventory_changed.emit()
 	return true
 
+func can_discard_stack(source_index: int, count: int) -> bool:
+	if source_index < 0 or source_index >= mini(size, TOTAL_SIZE):
+		return false
+	var stack := slots[source_index]
+	return stack != null and count > 0 and count <= stack.count
+
+func discard_stack(source_index: int, count: int) -> bool:
+	if not can_discard_stack(source_index, count):
+		return false
+	var stack := slots[source_index]
+	stack.count -= count
+	if stack.count == 0:
+		slots[source_index] = null
+	inventory_changed.emit()
+	return true
+
 func ensure_item(item_id: StringName) -> bool:
 	if not item_catalog.has_definition(item_id):
 		return false

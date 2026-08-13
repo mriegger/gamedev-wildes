@@ -11,6 +11,7 @@ var _backpack_open: bool = false
 func _ready():
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	focus_mode = Control.FOCUS_NONE
+	set_process_input(false)
 	key_label.text = str(slot_index + 1)
 	refresh_visuals()
 	set_process(false)

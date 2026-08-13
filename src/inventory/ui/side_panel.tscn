@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3 uid="uid://s1d3p4n3l01"]
+[gd_scene load_steps=9 format=3 uid="uid://s1d3p4n3l01"]
 
 [ext_resource type="Script" path="res://inventory/ui/side_panel.gd" id="1_script"]
 [ext_resource type="Material" path="res://ui/theme/frosted_panel_material.tres" id="2_frosted"]
@@ -6,6 +6,7 @@
 [ext_resource type="PackedScene" path="res://ui/components/wildes_button.tscn" id="4_button"]
 [ext_resource type="Texture2D" path="res://assets/images/icons/button/equipment_icon.png" id="6_equipment"]
 [ext_resource type="PackedScene" path="res://inventory/ui/inventory_slot.tscn" id="8_slot"]
+[ext_resource type="PackedScene" path="res://inventory/ui/inventory_trash_target.tscn" id="9_trash"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_background"]
 bg_color = Color(0.14, 0.16, 0.18, 0.32)
@@ -132,3 +133,6 @@ button_icon = ExtResource("6_equipment")
 button_icon_size = Vector2(20, 20)
 button_font_size = 14
 metadata/_side_panel_no_focus = true
+
+[node name="InventoryTrashTarget" parent="Margin/Content/ActionButtons" instance=ExtResource("9_trash")]
+layout_mode = 2

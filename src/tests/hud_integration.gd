@@ -1,5 +1,14 @@
 extends SceneTree
 
+class UnhandledWheelProbe:
+	extends Node
+
+	var wheel_event_count: int = 0
+
+	func _unhandled_input(event: InputEvent) -> void:
+		if event is InputEventMouseButton and (event as InputEventMouseButton).button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
+			wheel_event_count += 1
+
 var _frame: int = 0
 var _phase: int = 0
 var _hud: HUD = null
@@ -14,18 +23,20 @@ var _errors: Array[String] = []
 var _orphan_before: int = 0
 var _src_center: Vector2 = Vector2.ZERO
 var _dst_center: Vector2 = Vector2.ZERO
-var _right_src_center: Vector2 = Vector2.ZERO
-var _right_dst_center: Vector2 = Vector2.ZERO
+var _split_src_center: Vector2 = Vector2.ZERO
+var _split_dst_center: Vector2 = Vector2.ZERO
 var _left_start_frame: int = 0
-var _right_start_frame: int = 0
+var _split_start_frame: int = 0
 var _left_destination_index: int = -1
 var _left_destination_ui_index: int = -1
-var _right_destination_index: int = -1
-var _right_destination_ui_index: int = -1
+var _split_destination_index: int = -1
+var _split_destination_ui_index: int = -1
 var _hotbar_click_destination_index: int = -1
 var _hotbar_click_destination_ui_index: int = -1
 var _helmet_inventory_slot: InventorySlot = null
 var _original_window_size: Vector2i
+var _unhandled_wheel_probe: UnhandledWheelProbe
+var _trash_start_frame: int = 0
 
 func _init() -> void:
 	print("[hud_integration] starting")
@@ -42,6 +53,8 @@ func _init() -> void:
 	_crafting_recipe_catalog = load("res://crafting/crafting_recipe_catalog.tres") as CraftingRecipeCatalog
 	_crafting_coordinator = CraftingCoordinator.new()
 	_crafting_coordinator.setup(_inv, _crafting_recipe_catalog)
+	_unhandled_wheel_probe = UnhandledWheelProbe.new()
+	root.add_child(_unhandled_wheel_probe)
 	_orphan_before = int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
 	print("[hud_integration] orphan before %d" % _orphan_before)
 
@@ -172,27 +185,29 @@ func _process(_delta: float) -> bool:
 	elif _phase == 6 and _frame == 170:
 		var src_slot2: Control = _hud.hotbar.slot_nodes[6] as Control
 		var inv_slots2: Array[InventorySlot] = _hud.side_panel.get_inventory_slots()
-		_right_destination_ui_index = _find_empty_inventory_ui_index(inv_slots2)
-		if _right_destination_ui_index < 0:
-			_fail("no empty inventory slot for right drag")
+		_split_destination_ui_index = _find_empty_inventory_ui_index(inv_slots2)
+		if _split_destination_ui_index < 0:
+			_fail("no empty inventory slot for adjustable drag")
 			return false
-		var dst_inventory_slot2 := inv_slots2[_right_destination_ui_index]
-		_right_destination_index = dst_inventory_slot2.slot_index
+		var dst_inventory_slot2 := inv_slots2[_split_destination_ui_index]
+		_split_destination_index = dst_inventory_slot2.slot_index
 		var dst_slot2: Control = dst_inventory_slot2 as Control
-		_right_src_center = src_slot2.get_global_rect().get_center()
-		_right_dst_center = dst_slot2.get_global_rect().get_center()
-		print("[hud_integration] right drag src %s dst %s" % [str(_right_src_center), str(_right_dst_center)])
-		_start_right_drag(_right_src_center, _right_dst_center)
-		_right_start_frame = _frame
+		_split_src_center = src_slot2.get_global_rect().get_center()
+		_split_dst_center = dst_slot2.get_global_rect().get_center()
+		print("[hud_integration] adjustable drag src %s dst %s" % [str(_split_src_center), str(_split_dst_center)])
+		_start_left_drag(_split_src_center, _split_dst_center)
+		_check_full_stack_drag_source_hidden()
+		_split_start_frame = _frame
 		_phase = 7
-	elif _phase == 7 and _frame == _right_start_frame + 3:
-		_check_mid_drag("right", 1)
+	elif _phase == 7 and _frame == _split_start_frame + 3:
+		_adjust_and_check_split_drag()
+		_check_mid_drag("split", 1)
 		_phase = 8
-	elif _phase == 8 and _frame == _right_start_frame + 5:
-		_end_right_drag(_right_dst_center)
+	elif _phase == 8 and _frame == _split_start_frame + 5:
+		_end_left_drag(_split_dst_center)
 		_phase = 9
-	elif _phase == 9 and _frame == _right_start_frame + 10:
-		_check_right_drag_result()
+	elif _phase == 9 and _frame == _split_start_frame + 10:
+		_check_split_drag_result()
 		_phase = 10
 	elif _phase == 10 and _frame == 185:
 		_start_armor_equip()
@@ -243,6 +258,37 @@ func _process(_delta: float) -> bool:
 		_check_closed_hotbar_click_result()
 		_phase = 26
 	elif _phase == 26 and _frame == 217:
+		_hud.side_panel.open()
+		_phase = 27
+	elif _phase == 27 and _frame == 245:
+		_start_trash_drag()
+		_trash_start_frame = _frame
+		_phase = 28
+	elif _phase == 28 and _frame == _trash_start_frame + 3:
+		_check_mid_drag("trash", 1)
+		_phase = 29
+	elif _phase == 29 and _frame == _trash_start_frame + 5:
+		_end_trash_drag()
+		_phase = 30
+	elif _phase == 30 and _frame == _trash_start_frame + 10:
+		_check_trash_drag_result()
+		_phase = 31
+	elif _phase == 31 and _frame == _trash_start_frame + 12:
+		_equip_helmet_for_trash()
+		_phase = 32
+	elif _phase == 32 and _frame == _trash_start_frame + 14:
+		_start_equipment_trash_drag()
+		_phase = 33
+	elif _phase == 33 and _frame == _trash_start_frame + 17:
+		_check_mid_drag("equipment-trash", 1)
+		_phase = 34
+	elif _phase == 34 and _frame == _trash_start_frame + 19:
+		_end_trash_drag()
+		_phase = 35
+	elif _phase == 35 and _frame == _trash_start_frame + 24:
+		_check_equipment_trash_drag_result()
+		_phase = 36
+	elif _phase == 36 and _frame == _trash_start_frame + 26:
 		_check_final_and_quit()
 	return false
 
@@ -450,40 +496,66 @@ func _end_left_drag(dst: Vector2) -> void:
 	vp.push_input(release, true)
 	print("[hud_integration] left drag end pushed")
 
-func _start_right_drag(src: Vector2, dst: Vector2) -> void:
-	print("[hud_integration] right drag start half-split")
-	var vp: Viewport = root
-	var press: InputEventMouseButton = InputEventMouseButton.new()
-	press.position = src
-	press.global_position = src
-	press.button_index = MOUSE_BUTTON_RIGHT
-	press.pressed = true
-	press.button_mask = MOUSE_BUTTON_MASK_RIGHT
-	vp.push_input(press, true)
-	var motion: InputEventMouseMotion = InputEventMouseMotion.new()
-	motion.position = dst
-	motion.global_position = dst
-	motion.button_mask = MOUSE_BUTTON_MASK_RIGHT
-	motion.relative = dst - src
-	vp.push_input(motion, true)
-	print("[hud_integration] right drag start pushed")
+func _push_drag_wheel(button_index: MouseButton, count: int) -> void:
+	for _index in range(count):
+		var wheel := InputEventMouseButton.new()
+		wheel.position = _split_dst_center
+		wheel.global_position = _split_dst_center
+		wheel.button_index = button_index
+		wheel.pressed = true
+		wheel.button_mask = MOUSE_BUTTON_MASK_LEFT
+		root.push_input(wheel, true)
 
-func _end_right_drag(dst: Vector2) -> void:
-	print("[hud_integration] right drag end")
-	var vp: Viewport = root
-	var release: InputEventMouseButton = InputEventMouseButton.new()
-	release.position = dst
-	release.global_position = dst
-	release.button_index = MOUSE_BUTTON_RIGHT
-	release.pressed = false
-	vp.push_input(release, true)
-	var left_release: InputEventMouseButton = InputEventMouseButton.new()
-	left_release.position = dst
-	left_release.global_position = dst
-	left_release.button_index = MOUSE_BUTTON_LEFT
-	left_release.pressed = false
-	vp.push_input(left_release, true)
-	print("[hud_integration] right drag end pushed")
+func _check_full_stack_drag_source_hidden() -> void:
+	var source := _hud.hotbar.slot_nodes[6] as HotbarSlot
+	if source.icon.texture != null or not source.count_label.text.is_empty():
+		_fail("adjustable drag: full-stack source remained visible")
+
+func _adjust_and_check_split_drag() -> void:
+	var source := _hud.hotbar.slot_nodes[6] as HotbarSlot
+	var source_stack := _inv.get_slot(6)
+	if source_stack == null or source_stack.count != 16:
+		_fail("adjustable drag: model changed before drop")
+		return
+	_push_drag_wheel(MOUSE_BUTTON_WHEEL_DOWN, 20)
+	if source.count_label.text != "15":
+		_fail("adjustable drag: minimum count did not leave 15 in the source")
+		return
+	var preview_count := _get_drag_preview_count()
+	if preview_count != 1:
+		_fail("adjustable drag: minimum preview expected 1 got %d" % preview_count)
+		return
+	_push_drag_wheel(MOUSE_BUTTON_WHEEL_UP, 20)
+	if source.icon.texture != null or not source.count_label.text.is_empty():
+		_fail("adjustable drag: maximum count did not hide the source")
+		return
+	preview_count = _get_drag_preview_count()
+	if preview_count != 16:
+		_fail("adjustable drag: maximum preview expected 16 got %d" % preview_count)
+		return
+	_push_drag_wheel(MOUSE_BUTTON_WHEEL_DOWN, 8)
+	if source.count_label.text != "8":
+		_fail("adjustable drag: partial count did not leave 8 in the source")
+		return
+	preview_count = _get_drag_preview_count()
+	if preview_count != 8:
+		_fail("adjustable drag: partial preview expected 8 got %d" % preview_count)
+		return
+	if _unhandled_wheel_probe.wheel_event_count != 0:
+		_fail("adjustable drag: wheel input escaped to gameplay")
+
+func _get_drag_preview_count() -> int:
+	var previews: Array = []
+	_find_drag_previews(root, previews)
+	if previews.size() != 1:
+		return -1
+	var layer := previews[0] as CanvasLayer
+	if layer.get_child_count() != 1:
+		return -1
+	var count_label := layer.get_child(0).get_node_or_null("Count") as Label
+	if count_label == null or count_label.text.is_empty():
+		return 1
+	return int(count_label.text)
 
 func _totals(inv: InventoryModel) -> Dictionary:
 	var d: Dictionary = {}
@@ -524,8 +596,14 @@ func _check_mid_drag(label: String, expected: int) -> void:
 			return
 		var preview_panel := pl.get_child(0) as Control
 		var preview_icon := preview_panel.get_node_or_null("Icon") as TextureRect
-		var expected_block := BlockId.Type.GRASS if label == "left" else BlockId.Type.TORCH
-		var expected_icon := _item_catalog.get_item_for_block(expected_block).icon
+		var expected_item_id: StringName
+		if label == "left":
+			expected_item_id = _item_catalog.get_item_for_block(BlockId.Type.GRASS).id
+		elif label == "equipment-trash":
+			expected_item_id = &"copper_helmet"
+		else:
+			expected_item_id = _item_catalog.get_item_for_block(BlockId.Type.TORCH).id
+		var expected_icon := _item_catalog.get_definition(expected_item_id).icon
 		if preview_icon == null or preview_icon.texture != expected_icon:
 			_fail("mid %s drag: preview icon mismatch" % label)
 			return
@@ -573,51 +651,51 @@ func _check_left_drag_result() -> void:
 		return
 	print("[hud_integration] left drag ok")
 
-func _check_right_drag_result() -> void:
-	print("[hud_integration] check right drag frame %d" % _frame)
+func _check_split_drag_result() -> void:
+	print("[hud_integration] check adjustable drag frame %d" % _frame)
 	var orphan: int = int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
 	print("[hud_integration] orphan=%d" % orphan)
 	var previews: Array = []
 	_find_drag_previews(root, previews)
 	print("[hud_integration] previews %d %s" % [previews.size(), str(previews)])
 	if orphan != 0:
-		_fail("orphan after right drag %d" % orphan)
+		_fail("orphan after adjustable drag %d" % orphan)
 		return
 	if not previews.is_empty():
-		_fail("leaked drag preview after right drag %s" % str(previews))
+		_fail("leaked drag preview after adjustable drag %s" % str(previews))
 		return
 	var s6 = _inv.get_slot(6)
-	var destination = _inv.get_slot(_right_destination_index)
+	var destination = _inv.get_slot(_split_destination_index)
 	var torch_id := _item_catalog.get_item_for_block(BlockId.Type.TORCH).id
 	print("[hud_integration] slot6 %s destination %s" % [str(s6), str(destination)])
 	if s6 == null or s6.count != 8 or s6.item_id != torch_id:
-		_fail("right drag: slot6 expected torch 8 got %s" % str(s6))
+		_fail("adjustable drag: slot6 expected torch 8 got %s" % str(s6))
 		return
 	if destination == null or destination.count != 8 or destination.item_id != torch_id:
-		_fail("right drag: destination expected torch 8 got %s" % str(destination))
+		_fail("adjustable drag: destination expected torch 8 got %s" % str(destination))
 		return
 	var n6: HotbarSlot = _hud.hotbar.slot_nodes[6] as HotbarSlot
 	if n6.item_count != 8 or n6.item_id != torch_id:
-		_fail("right drag: hotbar node6 mismatch")
+		_fail("adjustable drag: hotbar node6 mismatch")
 		return
-	var inv_node: InventorySlot = _hud.side_panel.get_inventory_slots()[_right_destination_ui_index]
+	var inv_node: InventorySlot = _hud.side_panel.get_inventory_slots()[_split_destination_ui_index]
 	if inv_node.item_id != torch_id or inv_node.item_count != 8:
-		_fail("right drag: inventory node1 mismatch")
+		_fail("adjustable drag: inventory node mismatch")
 		return
 	for i in range(_inv.size):
 		var s = _inv.get_slot(i)
 		if s != null:
 			var max_stack := _item_catalog.get_definition(s.item_id).max_stack
 			if s.count <= 0 or s.count > max_stack:
-				_fail("right drag: invariant at %d" % i)
+				_fail("adjustable drag: invariant at %d" % i)
 				return
 			if not _inv.can_slot_accept_item_id(i, s.item_id):
-				_fail("right drag: slot %d not accepted" % i)
+				_fail("adjustable drag: slot %d not accepted" % i)
 				return
-	print("[hud_integration] right drag ok")
+	print("[hud_integration] adjustable drag ok")
 
 func _start_number_assignment() -> void:
-	var backpack_slot := _hud.side_panel.get_inventory_slots()[_right_destination_ui_index]
+	var backpack_slot := _hud.side_panel.get_inventory_slots()[_split_destination_ui_index]
 	var backpack_center := backpack_slot.get_global_rect().get_center()
 	var motion := InputEventMouseMotion.new()
 	motion.position = backpack_center
@@ -630,7 +708,7 @@ func _start_number_assignment() -> void:
 
 func _check_number_assignment() -> void:
 	var hotbar_stack := _inv.get_slot(3)
-	var backpack_stack := _inv.get_slot(_right_destination_index)
+	var backpack_stack := _inv.get_slot(_split_destination_index)
 	var torch_id := _item_catalog.get_item_for_block(BlockId.Type.TORCH).id
 	if hotbar_stack == null or hotbar_stack.item_id != torch_id or hotbar_stack.count != 8:
 		_fail("number assignment: hotbar slot 4 expected torch 8 got %s" % str(hotbar_stack))
@@ -639,7 +717,7 @@ func _check_number_assignment() -> void:
 		_fail("number assignment: backpack expected copper sword got %s" % str(backpack_stack))
 		return
 	var hotbar_node := _hud.hotbar.slot_nodes[3]
-	var backpack_node := _hud.side_panel.get_inventory_slots()[_right_destination_ui_index]
+	var backpack_node := _hud.side_panel.get_inventory_slots()[_split_destination_ui_index]
 	if hotbar_node.item_id != torch_id or hotbar_node.item_count != 8:
 		_fail("number assignment: hotbar visuals not refreshed")
 		return
@@ -974,6 +1052,94 @@ func _check_closed_hotbar_click_result() -> void:
 		_fail("closed hotbar click: hotbar item moved")
 		return
 	print("[hud_integration] closed hotbar click activated slot")
+
+func _start_trash_drag() -> void:
+	var trash_target := _hud.side_panel.get_node("Margin/Content/ActionButtons/InventoryTrashTarget") as Control
+	var placeholder := trash_target.get_node("Center/PlaceholderIcon") as Label
+	if placeholder.text != "X" or trash_target.tooltip_text != "Drag items here to discard":
+		_fail("trash target placeholder is missing")
+		return
+	var source := _hud.side_panel.get_inventory_slots()[_hotbar_click_destination_ui_index]
+	var source_stack := _inv.get_slot(source.slot_index)
+	var torch_id := _item_catalog.get_item_for_block(BlockId.Type.TORCH).id
+	if source_stack == null or source_stack.item_id != torch_id or source_stack.count != 8:
+		_fail("trash drag source is missing")
+		return
+	_start_left_drag(source.get_global_rect().get_center(), trash_target.get_global_rect().get_center())
+	if source.icon.texture != null or not source.count_label.text.is_empty():
+		_fail("trash drag full-stack source remained visible")
+
+func _end_trash_drag() -> void:
+	var trash_target := _hud.side_panel.get_node("Margin/Content/ActionButtons/InventoryTrashTarget") as Control
+	_end_left_drag(trash_target.get_global_rect().get_center())
+
+func _check_trash_drag_result() -> void:
+	if _inv.get_slot(_hotbar_click_destination_index) != null:
+		_fail("trash drop did not delete the backpack stack")
+		return
+	var source := _hud.side_panel.get_inventory_slots()[_hotbar_click_destination_ui_index]
+	if source.item_id != null or source.item_count != 0 or source.icon.texture != null:
+		_fail("trash drop did not refresh the backpack slot")
+		return
+	var previews: Array = []
+	_find_drag_previews(root, previews)
+	if not previews.is_empty():
+		_fail("trash drop leaked drag preview")
+		return
+	print("[hud_integration] trash drop deleted backpack stack")
+
+func _equip_helmet_for_trash() -> void:
+	_hud.side_panel._switch_to_tab_id("inventory")
+	var helmet_slot: InventorySlot
+	for slot in _hud.side_panel.get_inventory_slots():
+		var stack := _inv.get_slot(slot.slot_index)
+		if stack != null and stack.item_id == &"copper_helmet":
+			helmet_slot = slot
+			break
+	if helmet_slot == null:
+		_fail("equipment trash setup could not find the helmet")
+		return
+	_push_double_click(helmet_slot)
+	var equipped := _inv.get_equipped_armor(ArmorDefinition.Slot.HEAD)
+	if equipped == null or equipped.id != &"copper_helmet":
+		_fail("equipment trash setup did not equip the helmet")
+		return
+	if not is_equal_approx(_stats.get_value(&"defense"), 1.0):
+		_fail("equipment trash setup did not apply helmet defense")
+		return
+	_hud.side_panel._switch_to_tab_id("equipment")
+
+func _start_equipment_trash_drag() -> void:
+	var source := _hud.side_panel.get_equipment_slots()[ArmorDefinition.Slot.HEAD]
+	var source_stack := _inv.get_slot(source.slot_index)
+	if source_stack == null or source_stack.item_id != &"copper_helmet" or source_stack.count != 1:
+		_fail("equipment trash drag source is missing")
+		return
+	var trash_target := _hud.side_panel.get_node("Margin/Content/ActionButtons/InventoryTrashTarget") as Control
+	_start_left_drag(source.get_global_rect().get_center(), trash_target.get_global_rect().get_center())
+	if source.icon.texture != null or source.count_label.text != source.empty_label:
+		_fail("equipment trash full-stack source remained visible")
+
+func _check_equipment_trash_drag_result() -> void:
+	if _inv.get_equipped_armor(ArmorDefinition.Slot.HEAD) != null:
+		_fail("trash drop did not delete equipped armor")
+		return
+	if _find_item_index(&"copper_helmet") >= 0:
+		_fail("discarded equipped armor remained in inventory")
+		return
+	if not is_equal_approx(_stats.get_value(&"defense"), 0.0):
+		_fail("discarded equipped armor retained its defense")
+		return
+	var source := _hud.side_panel.get_equipment_slots()[ArmorDefinition.Slot.HEAD]
+	if source.item_id != null or source.item_count != 0 or source.icon.texture != null or source.count_label.text != source.empty_label:
+		_fail("trash drop did not refresh the equipment slot")
+		return
+	var previews: Array = []
+	_find_drag_previews(root, previews)
+	if not previews.is_empty():
+		_fail("equipment trash drop leaked drag preview")
+		return
+	print("[hud_integration] trash drop deleted equipped armor")
 
 func _find_drag_previews(node: Node, out: Array) -> void:
 	if node.name.contains("DragPreview"):
