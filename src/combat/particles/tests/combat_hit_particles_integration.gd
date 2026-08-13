@@ -69,6 +69,8 @@ func _run():
 	_emit_outcome(combat, player_sheep)
 	var wool := particles._bursts[2]
 	var wool_profile := particle_catalog.get_profile(&"player", &"sheep")
+	_expect(wool_profile.primary_color.is_equal_approx(Color(0.62, 0.6, 0.54, 1.0)), "wool palette became too bright")
+	_expect(wool_profile.accent_color.is_equal_approx(Color(0.38, 0.36, 0.32, 1.0)), "wool accent palette changed")
 	_expect((wool.get_node("Primary") as CPUParticles3D).color.is_equal_approx(wool_profile.primary_color), "wool primary color changed")
 	_expect((wool.get_node("Accent") as CPUParticles3D).color.is_equal_approx(wool_profile.accent_color), "wool accent color changed")
 	var unsupported := MeleeContact.new(2, &"sheep", 0, &"player", &"test", Vector3.ONE, Vector3.FORWARD)
