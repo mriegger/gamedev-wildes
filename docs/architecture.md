@@ -116,7 +116,8 @@ visible as the drag source.
 and all equipped armor. It replaces one bounded `ActorStats` modifier source whenever that active
 loadout changes, so duplicate runes stack without accumulating stale runtime modifiers. Maximum-HP
 changes preserve the player's current health percentage. Runes on unselected weapons and unequipped
-armor remain persisted but inactive.
+armor remain persisted but inactive. Setup validates each rune and a conservative maximum active
+loadout before inventory changes can drive effect replacement.
 
 `Game` owns player stats and handles their completed health-depleted transition. Defeat puts
 the player motor into an input-blocking stopped state, closes inventory and debug panels, and

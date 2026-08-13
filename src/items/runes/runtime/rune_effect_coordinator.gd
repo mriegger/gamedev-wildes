@@ -3,6 +3,7 @@ class_name RuneEffectCoordinator
 
 const EFFECT_SOURCE_ID: StringName = &"socketed_runes"
 const EFFECT_SOURCE_INSTANCE_ID: StringName = &"socketed_runes"
+const MAXIMUM_ACTIVE_RUNE_COUNT: int = ProficiencyDefinition.MAXIMUM_SLOT_COUNT * (ArmorDefinition.SLOT_COUNT + 1)
 
 var inventory_model: InventoryModel
 var actor_stats: ActorStats
@@ -37,7 +38,24 @@ func _validate_rune_definitions(item_catalog: ItemCatalog, p_actor_stats: ActorS
 		):
 			push_error("[RuneEffectCoordinator] Invalid modifiers for %s" % rune.id)
 			return false
+	if not _can_apply_maximum_active_loadout(item_catalog, p_actor_stats):
+		push_error("[RuneEffectCoordinator] Rune catalog permits an invalid active modifier loadout")
+		return false
 	return true
+
+func _can_apply_maximum_active_loadout(item_catalog: ItemCatalog, p_actor_stats: ActorStats) -> bool:
+	var maximum_active_modifiers: Array[StatModifier] = []
+	for definition in item_catalog.definitions:
+		var rune := definition as RuneDefinition
+		if rune == null:
+			continue
+		for _active_slot in range(MAXIMUM_ACTIVE_RUNE_COUNT):
+			maximum_active_modifiers.append_array(rune.socket_modifiers)
+	return p_actor_stats.can_replace_source_modifiers(
+		EFFECT_SOURCE_ID,
+		EFFECT_SOURCE_INSTANCE_ID,
+		maximum_active_modifiers,
+	)
 
 func _on_inventory_changed() -> void:
 	var synchronized := _synchronize_active_runes(false)

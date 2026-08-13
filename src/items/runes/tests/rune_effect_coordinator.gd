@@ -57,6 +57,24 @@ func _init() -> void:
 	_expect(is_equal_approx(stats.get_value(&"hp"), 200.0), "unequipped armor rune remained active")
 	_expect(is_equal_approx(stats.current_hp, 74.0), "armor rune unequip did not preserve health percentage")
 
+	var unsafe_definitions: Array[ItemDefinition] = []
+	for definition in item_catalog.definitions:
+		unsafe_definitions.append(definition.duplicate(true) as ItemDefinition)
+	var unsafe_catalog := ItemCatalog.new()
+	unsafe_catalog.definitions = unsafe_definitions
+	var unsafe_rune := unsafe_catalog.get_definition(&"basic_rune") as RuneDefinition
+	unsafe_rune.socket_modifiers[0].amount = -10.0
+	var unsafe_stats := ActorStats.new(stats_definition)
+	_expect(
+		unsafe_stats.can_replace_source_modifiers(&"fixture", &"fixture", unsafe_rune.socket_modifiers),
+		"unsafe catalog fixture was not individually valid",
+	)
+	var unsafe_coordinator := RuneEffectCoordinator.new()
+	_expect(
+		not unsafe_coordinator._can_apply_maximum_active_loadout(unsafe_catalog, unsafe_stats),
+		"rune catalog with an invalid maximum active loadout was accepted",
+	)
+
 	if _errors.is_empty():
 		print("RUNE_EFFECT_COORDINATOR PASS")
 		quit(0)
