@@ -81,7 +81,7 @@ func _run():
 		dirt_cell: BlockId.Type.DIRT,
 		edge_grass_cell: BlockId.Type.GRASS,
 	}, {})
-	player.voxel_world = voxel_world
+	player.voxel_space = voxel_world
 	player.on_ground = true
 	player.ground_y = 1.0
 	player.global_position = Vector3(0.5, 1.0, 0.5)
@@ -164,11 +164,11 @@ func _run():
 	footsteps._process(0.1)
 	_expect(_count_nodes(root) == before_count, "footstep _process leaked nodes")
 
+	player.voxel_space = null
 	asp.stop()
 	asp.stream = null
 	footsteps._last_stream = null
 	footsteps.catalog = null
-	player.voxel_world = null
 	player.queue_free()
 	packed = null
 	asp = null
