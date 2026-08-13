@@ -36,9 +36,11 @@ func _run():
 		var accent := burst.get_node("Accent") as CPUParticles3D
 		_expect(primary != null and accent != null, "%s emitters are missing" % burst.name)
 		_expect(primary.one_shot and accent.one_shot, "%s emitters are not one-shot" % burst.name)
-		_expect(primary.amount + accent.amount == 10, "%s particle count changed" % burst.name)
+		_expect(primary.amount + accent.amount == 16, "%s particle count changed" % burst.name)
 		_expect(primary.mesh is QuadMesh and accent.mesh is QuadMesh, "%s does not use chunky quads" % burst.name)
-		_expect((primary.mesh as QuadMesh).size.is_equal_approx(Vector2(0.16, 0.16)), "%s quad size changed" % burst.name)
+		_expect((primary.mesh as QuadMesh).size.is_equal_approx(Vector2(0.1, 0.1)), "%s quad size changed" % burst.name)
+		_expect(is_equal_approx(primary.initial_velocity_min, 1.8) and is_equal_approx(primary.initial_velocity_max, 3.0), "%s primary velocity changed" % burst.name)
+		_expect(is_equal_approx(accent.initial_velocity_min, 1.5) and is_equal_approx(accent.initial_velocity_max, 2.6), "%s accent velocity changed" % burst.name)
 		var material := (primary.mesh as QuadMesh).material as StandardMaterial3D
 		_expect(material != null and material.billboard_mode == BaseMaterial3D.BILLBOARD_ENABLED, "%s quads are not billboarded" % burst.name)
 	particles.setup(combat, particle_catalog)
