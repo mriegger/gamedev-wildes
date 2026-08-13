@@ -94,12 +94,23 @@ func _physics_process(delta):
 func is_in_water() -> bool:
 	if voxel_world == null:
 		return false
-	var feet_cell := Vector3i(
+	return voxel_world.get_block_id_at(_get_feet_cell()) == BlockId.Type.WATER
+
+func get_footstep_surface_block_id() -> int:
+	if voxel_world == null:
+		return BlockId.Type.AIR
+	if is_in_water():
+		return BlockId.Type.WATER
+	if not on_ground:
+		return BlockId.Type.AIR
+	return VoxelBodySolver.get_supporting_block_id(voxel_world, global_position, player_width, ground_y)
+
+func _get_feet_cell() -> Vector3i:
+	return Vector3i(
 		floori(global_position.x),
 		floori(global_position.y + 0.05),
 		floori(global_position.z)
 	)
-	return voxel_world.get_block_id_at(feet_cell) == BlockId.Type.WATER
 
 func _handle_movement(delta):
 	if not on_ground:

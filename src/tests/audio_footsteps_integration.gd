@@ -40,10 +40,18 @@ func _run():
 	_expect(asp != null, "FootstepPlayer missing")
 	_expect(asp.bus == &"SFX", "footstep bus not SFX is %s" % asp.bus)
 	_expect(abs(asp.volume_db - (-8.0)) < 0.1, "footstep volume not -8dB got %f" % asp.volume_db)
-	_expect(footsteps._dirt_streams.size() == 9, "dirt footstep streams expected 9 got %d" % footsteps._dirt_streams.size())
-	_expect(footsteps._water_streams.size() == 8, "water footstep streams expected 8 got %d" % footsteps._water_streams.size())
-	for stream in footsteps._dirt_streams + footsteps._water_streams:
-		_expect(stream != null, "null stream in footsteps")
+	var catalog := footsteps.catalog as FootstepAudioCatalog
+	_expect(catalog != null, "footstep catalog missing")
+	_expect(catalog.validate(), "footstep catalog invalid")
+	var dirt_profile := catalog.get_profile(BlockId.Type.DIRT)
+	var water_profile := catalog.get_profile(BlockId.Type.WATER)
+	_expect(dirt_profile.streams.size() == 9, "dirt footstep streams expected 9 got %d" % dirt_profile.streams.size())
+	_expect(water_profile.streams.size() == 8, "water footstep streams expected 8 got %d" % water_profile.streams.size())
+	_expect(catalog.get_profile(BlockId.Type.GRASS) == dirt_profile, "grass did not use dirt fallback")
+	_expect(catalog.get_profile(BlockId.Type.STONE) == dirt_profile, "unmapped surface did not use dirt fallback")
+	for profile in catalog.profiles:
+		for stream in profile.streams:
+			_expect(stream != null, "null stream in footsteps")
 
 	var profile = player.animation_driver.animator.profile
 	footsteps.setup(player, profile)
@@ -53,27 +61,47 @@ func _run():
 	var last_stream: AudioStream
 	var repeated = false
 	for i in range(30):
-		var selected_stream: AudioStream = footsteps._select_random_stream(footsteps._dirt_streams)
+		var selected_stream: AudioStream = footsteps._select_random_stream(dirt_profile.streams)
 		if selected_stream == last_stream and last_stream != null:
 			repeated = true
 		last_stream = selected_stream
 	_expect(not repeated, "footstep repeated same idx immediate")
-	footsteps._play_step()
-	_expect(asp.pitch_scale >= 0.92 and asp.pitch_scale <= 1.08, "footstep pitch out of range %f" % asp.pitch_scale)
 
 	var block_catalog := load("res://blocks/block_catalog.tres") as BlockCatalog
 	var voxel_world := VoxelWorld.new(16, 32, 5, 8.0, block_catalog)
 	var water_cell := Vector3i(0, 1, 0)
-	voxel_world.restore_block_edits({water_cell: BlockId.Type.WATER}, {})
+	var grass_cell := Vector3i(1, 0, 0)
+	var dirt_cell := Vector3i(2, 0, 0)
+	var edge_grass_cell := Vector3i(3, 0, 0)
+	voxel_world.restore_block_edits({
+		water_cell: BlockId.Type.WATER,
+		grass_cell: BlockId.Type.GRASS,
+		dirt_cell: BlockId.Type.DIRT,
+		edge_grass_cell: BlockId.Type.GRASS,
+	}, {})
 	player.voxel_world = voxel_world
+	player.on_ground = true
+	player.ground_y = 1.0
 	player.global_position = Vector3(0.5, 1.0, 0.5)
 	_expect(player.is_in_water(), "player did not detect water at feet")
+	_expect(player.get_footstep_surface_block_id() == BlockId.Type.WATER, "water surface block not detected")
 	footsteps._play_step()
-	_expect(footsteps._water_streams.has(asp.stream), "water did not select a water footstep")
+	_expect(water_profile.streams.has(asp.stream), "water did not select a water footstep")
 	player.global_position = Vector3(1.5, 1.0, 0.5)
 	_expect(not player.is_in_water(), "player detected water in a dry feet cell")
+	_expect(player.get_footstep_surface_block_id() == BlockId.Type.GRASS, "grass surface block not detected")
 	footsteps._play_step()
-	_expect(footsteps._dirt_streams.has(asp.stream), "dry ground did not select a dirt footstep")
+	_expect(dirt_profile.streams.has(asp.stream), "grass did not use the dirt fallback footstep")
+	_expect(asp.pitch_scale >= 0.92 and asp.pitch_scale <= 1.08, "footstep pitch out of range %f" % asp.pitch_scale)
+	player.global_position = Vector3(2.5, 1.0, 0.5)
+	_expect(player.get_footstep_surface_block_id() == BlockId.Type.DIRT, "dirt surface block not detected")
+	footsteps._play_step()
+	_expect(dirt_profile.streams.has(asp.stream), "dirt did not select a dirt footstep")
+	player.global_position = Vector3(4.2, 1.0, 0.5)
+	_expect(voxel_world.get_block_id_at(Vector3i(4, 0, 0)) == BlockId.Type.AIR, "edge regression center was not air")
+	_expect(player.get_footstep_surface_block_id() == BlockId.Type.GRASS, "edge support did not select the supporting grass block")
+	footsteps._play_step()
+	_expect(dirt_profile.streams.has(asp.stream), "edge support did not use the dirt fallback footstep")
 
 	player.on_ground = false
 	player.velocity = Vector3(0.0, -4.0, 0.0)
@@ -82,7 +110,7 @@ func _run():
 	player.global_position = Vector3(0.5, 1.0, 0.5)
 	footsteps._process(0.1)
 	_expect(asp.playing, "entering water did not play a splash")
-	_expect(footsteps._water_streams.has(asp.stream), "water entry splash did not use a water footstep")
+	_expect(water_profile.streams.has(asp.stream), "water entry splash did not use a water footstep")
 	_expect(is_equal_approx(footsteps._step_timer, 0.0), "water entry splash did not reset the footstep timer")
 	asp.stop()
 	footsteps._process(0.1)
@@ -130,10 +158,23 @@ func _run():
 	footsteps._process(0.1)
 	_expect(_count_nodes(root) == before_count, "footstep _process leaked nodes")
 
+	asp.stop()
+	asp.stream = null
+	footsteps._last_stream = null
+	footsteps.catalog = null
 	player.voxel_world = null
+	player.queue_free()
+	packed = null
+	asp = null
+	footsteps = null
+	catalog = null
+	dirt_profile = null
+	water_profile = null
+	profile = null
+	last_stream = null
+	player = null
 	voxel_world = null
 	block_catalog = null
-	player.queue_free()
 	for _frame_index in range(10):
 		await process_frame
 	call_deferred("_finish", "AUDIO_FOOTSTEPS")

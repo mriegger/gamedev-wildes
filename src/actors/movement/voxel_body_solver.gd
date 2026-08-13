@@ -73,14 +73,11 @@ static func collides_at(voxel_world: VoxelWorld, position: Vector3, body_width: 
 	return false
 
 static func get_ground_y(voxel_world: VoxelWorld, position: Vector3, body_width: float) -> float:
-	var min_x := int(floor(position.x - body_width * 0.5 + 0.04))
-	var max_x := int(floor(position.x + body_width * 0.5 - 0.04))
-	var min_z := int(floor(position.z - body_width * 0.5 + 0.04))
-	var max_z := int(floor(position.z + body_width * 0.5 - 0.04))
+	var footprint := _get_footprint(position, body_width)
 	var best := VoxelWorld.NO_SURFACE_Y
 	var feet_y := int(floor(position.y + 0.08))
-	for x in range(min_x, max_x + 1):
-		for z in range(min_z, max_z + 1):
+	for x in range(footprint.position.x, footprint.end.x):
+		for z in range(footprint.position.y, footprint.end.y):
 			var highest_top := voxel_world.get_highest_top(x, z)
 			if highest_top != VoxelWorld.NO_SURFACE_Y and highest_top <= position.y + 0.08 and highest_top >= position.y - 1.2:
 				if highest_top > best:
@@ -94,3 +91,31 @@ static func get_ground_y(voxel_world: VoxelWorld, position: Vector3, body_width:
 						best = block_top
 					break
 	return best
+
+static func get_supporting_block_id(voxel_world: VoxelWorld, position: Vector3, body_width: float, ground_y: float) -> int:
+	if ground_y == VoxelWorld.NO_SURFACE_Y:
+		return BlockId.Type.AIR
+	var footprint := _get_footprint(position, body_width)
+	var block_y := floori(ground_y - 0.001)
+	var nearest_distance := INF
+	var nearest_block_id := BlockId.Type.AIR
+	for x in range(footprint.position.x, footprint.end.x):
+		for z in range(footprint.position.y, footprint.end.y):
+			var cell := Vector3i(x, block_y, z)
+			if not voxel_world.is_solid(cell):
+				continue
+			var distance := Vector2(
+				position.x - (float(x) + 0.5),
+				position.z - (float(z) + 0.5),
+			).length_squared()
+			if distance < nearest_distance:
+				nearest_distance = distance
+				nearest_block_id = voxel_world.get_block_id_at(cell)
+	return nearest_block_id
+
+static func _get_footprint(position: Vector3, body_width: float) -> Rect2i:
+	var min_x := floori(position.x - body_width * 0.5 + 0.04)
+	var max_x := floori(position.x + body_width * 0.5 - 0.04)
+	var min_z := floori(position.z - body_width * 0.5 + 0.04)
+	var max_z := floori(position.z + body_width * 0.5 - 0.04)
+	return Rect2i(min_x, min_z, max_x - min_x + 1, max_z - min_z + 1)
