@@ -34,6 +34,7 @@ var item_proficiency: ItemProficiency
 var inventory_stat_coordinator: InventoryStatCoordinator
 var crafting_coordinator: CraftingCoordinator
 var combat_progression_coordinator: CombatProgressionCoordinator
+var rune_socketing_coordinator: RuneSocketingCoordinator
 var input_buffer: InputBuffer = InputBuffer.new()
 var settings: GameSettings
 
@@ -74,6 +75,11 @@ func _ready():
 	player_stats = ActorStats.new(player_stats_definition)
 	item_proficiency = ItemProficiency.new(item_catalog)
 	_restore_inventory()
+	_restore_item_proficiency()
+	rune_socketing_coordinator = RuneSocketingCoordinator.new()
+	if not rune_socketing_coordinator.setup(inventory_model, item_proficiency):
+		push_error("[Game] Saved rune socket state is invalid")
+		return
 	inventory_stat_coordinator = InventoryStatCoordinator.new()
 	if not inventory_stat_coordinator.setup(inventory_model, player_stats):
 		push_error("[Game] Equipment modifiers are invalid")
@@ -81,7 +87,6 @@ func _ready():
 	crafting_coordinator = CraftingCoordinator.new()
 	crafting_coordinator.setup(inventory_model, crafting_recipe_catalog)
 	_restore_player_stats()
-	_restore_item_proficiency()
 	combat_progression_coordinator = CombatProgressionCoordinator.new()
 	combat_progression_coordinator.setup(player_stats, inventory_model, entity_catalog, item_proficiency)
 	world.configure_start_state(_world_state)
