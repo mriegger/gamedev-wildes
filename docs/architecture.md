@@ -155,7 +155,8 @@ before committing.
 `VoxelSpace` is the read-only query boundary shared by the streamed `VoxelWorld` and immutable
 `LevelState`. Player setup is one-time; `Game` atomically rebinds movement, collision, targeting,
 and edit capabilities when the active space changes. Dungeon levels never become save-state
-owners: saves receive an explicit overworld position and keep the existing version-4 format.
+owners: saves receive an explicit overworld position while retaining the version-five format,
+version-four migration, and item proficiency state.
 
 Serialized configuration is explicit and typed. `BlockCatalog` lists `BlockDefinition` resources,
 `ItemCatalog` lists item resources and their action definitions, `BiomeLibrary` lists biome

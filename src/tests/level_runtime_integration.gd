@@ -162,7 +162,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	game.block_catalog = block_catalog
 	game.item_catalog = load("res://items/item_catalog.tres") as ItemCatalog
 	game.entity_catalog = load("res://entities/entity_catalog.tres") as EntityCatalog
-	game.player_stats_definition = load("res://player/player_stats.tres") as ActorStatsDefinition
+	game.player_stats_definition = load("res://player/player_stats.tres") as CombatStatsDefinition
 	game.level_catalog = catalog
 	game.level_runtime_scene = runtime_scene
 	var world := (load(WORLD_SCENE) as PackedScene).instantiate() as WorldController
@@ -233,7 +233,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	game.player_stats = ActorStats.new(game.player_stats_definition)
 	camera_rig.setup(player, game.input_buffer)
 	entities.setup(game.entity_catalog, voxel_world, 1337, _position_ready)
-	combat.setup(voxel_world, player, entities)
+	combat.setup(voxel_world, player, game.player_stats, entities)
 	player.setup(camera_rig, game.inventory_model, game.input_buffer, game.player_stats, combat, entities)
 	var world_spawn := voxel_world.get_spawn_position()
 	var doorway_anchor := world_spawn

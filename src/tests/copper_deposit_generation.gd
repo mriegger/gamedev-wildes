@@ -50,7 +50,7 @@ func _test_save_omits_generated_copper(catalog: BlockCatalog) -> void:
 		"copper_blocks": {"1,2,3": BlockId.Type.COPPER},
 		"generated_copper_chunks": {"0,0": true},
 	}
-	_expect(SaveManager.save_world_state(slot_id, save_data, world, player, inventory, item_proficiency, 0.0, 6.0), "save manager could not write deterministic copper test save")
+	_expect(SaveManager.save_world_state(slot_id, save_data, world, player.global_position, player.stats, inventory, item_proficiency, 0.0, 6.0), "save manager could not write deterministic copper test save")
 	_expect(not save_data.has("copper_blocks"), "in-memory save retained generated copper blocks")
 	_expect(not save_data.has("generated_copper_chunks"), "in-memory save retained generated copper chunk markers")
 	var saved_info := SaveManager.get_slot_info(slot_id)
