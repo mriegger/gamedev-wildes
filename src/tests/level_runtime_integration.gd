@@ -183,6 +183,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	var coordinator := LevelInteractionCoordinator.new()
 	var entities := EntityCoordinator.new()
 	var combat := MeleeCombatCoordinator.new()
+	var combat_hit_particles := (load("res://combat/particles/combat_hit_particles.tscn") as PackedScene).instantiate() as CombatHitParticles
 	var mining_break_particles := (load("res://mining/presentation/mining_break_particles.tscn") as PackedScene).instantiate()
 	var mining_hit_particles := (load("res://mining/presentation/mining_hit_particles.tscn") as PackedScene).instantiate()
 	world.name = "World"
@@ -195,6 +196,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	coordinator.name = "LevelInteractionCoordinator"
 	entities.name = "Entities"
 	combat.name = "MeleeCombat"
+	combat_hit_particles.name = "CombatHitParticles"
 	mining_break_particles.name = "MiningBreakParticles"
 	mining_hit_particles.name = "MiningHitParticles"
 	game.add_child(world)
@@ -203,6 +205,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	game.add_child(environment)
 	game.add_child(entities)
 	game.add_child(combat)
+	game.add_child(combat_hit_particles)
 	game.add_child(hud)
 	game.add_child(session)
 	game.add_child(coordinator)
