@@ -21,7 +21,12 @@ enum Type {
 	ANVIL = 16,
 	CHEST = 17,
 	CAULDRON = 18,
-	COUNT = 19,
+	BRICK = 100,
+	CRACKED_CINDER_BRICKS = 101,
+	DEEPSTONE_BRICK = 102,
+	SEDIMENTARY_STONE = 103,
+	CHISELED_MARBLE = 104,
+	COUNT = 105,
 }
 
 const DISPLAY_NAMES: Dictionary = {
@@ -44,13 +49,18 @@ const DISPLAY_NAMES: Dictionary = {
 	Type.ANVIL: "Anvil",
 	Type.CHEST: "Chest",
 	Type.CAULDRON: "Cauldron",
+	Type.BRICK: "Brick",
+	Type.CRACKED_CINDER_BRICKS: "Cracked Cinder Bricks",
+	Type.DEEPSTONE_BRICK: "Deepstone Brick",
+	Type.SEDIMENTARY_STONE: "Sedimentary Stone",
+	Type.CHISELED_MARBLE: "Chiseled Marble",
 }
 
 static func get_display_name(id: Type) -> String:
 	return DISPLAY_NAMES.get(id, "Unknown")
 
 static func is_valid(id: int) -> bool:
-	return id >= Type.AIR and id < Type.COUNT
+	return DISPLAY_NAMES.has(id)
 
 static func is_chunk_cube(id: int) -> bool:
 	return is_valid(id) and id != Type.AIR and id != Type.TORCH and id != Type.WATER and id != Type.ANVIL and id != Type.CHEST and id != Type.CAULDRON

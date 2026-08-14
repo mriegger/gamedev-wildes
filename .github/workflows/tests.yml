@@ -49,6 +49,20 @@ jobs:
             30 "VOXEL_RAYCAST PASS" /tmp/voxel_raycast.log -- \
             godot --headless --path src --script res://blocks/tests/voxel_raycast.gd
 
+  masonry-block-content:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Validate masonry block content
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "MASONRY_BLOCK_CONTENT PASS" /tmp/masonry_block_content.log -- \
+            godot --headless --path src --script res://blocks/tests/masonry_block_content.gd
+
   inventory-fuzz:
     runs-on: ubuntu-latest
     timeout-minutes: 10

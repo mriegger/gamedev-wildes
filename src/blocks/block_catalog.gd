@@ -48,6 +48,8 @@ func _rebuild_lookup() -> void:
 				push_error("[BlockCatalog] Container must be targetable and non-breakable at %s" % source)
 				_is_valid = false
 	for id in range(BlockId.Type.COUNT):
+		if not BlockId.is_valid(id):
+			continue
 		var definition := _definitions_by_id[id]
 		if definition == null:
 			push_error("[BlockCatalog] Missing block for BlockId %d" % id)

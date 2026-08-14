@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="BlockCatalog" load_steps=21 format=3]
+[gd_resource type="Resource" script_class="BlockCatalog" load_steps=26 format=3]
 
 [ext_resource type="Script" path="res://blocks/block_catalog.gd" id="1_catalog"]
 [ext_resource type="Script" path="res://blocks/block_definition.gd" id="2_definition"]
@@ -21,7 +21,12 @@
 [ext_resource type="Resource" path="res://blocks/definitions/anvil.tres" id="18_anvil"]
 [ext_resource type="Resource" path="res://blocks/definitions/chest.tres" id="19_chest"]
 [ext_resource type="Resource" path="res://blocks/definitions/cauldron.tres" id="20_cauldron"]
+[ext_resource type="Resource" path="res://blocks/definitions/brick.tres" id="100_brick"]
+[ext_resource type="Resource" path="res://blocks/definitions/cracked_cinder_bricks.tres" id="101_cracked_cinder_bricks"]
+[ext_resource type="Resource" path="res://blocks/definitions/deepstone_brick.tres" id="102_deepstone_brick"]
+[ext_resource type="Resource" path="res://blocks/definitions/sedimentary_stone.tres" id="103_sedimentary_stone"]
+[ext_resource type="Resource" path="res://blocks/definitions/chiseled_marble.tres" id="104_chiseled_marble"]
 
 [resource]
 script = ExtResource("1_catalog")
-definitions = Array[ExtResource("2_definition")]([ExtResource("2_air"), ExtResource("3_grass"), ExtResource("4_dirt"), ExtResource("5_sand"), ExtResource("6_stone"), ExtResource("7_log"), ExtResource("8_leaves"), ExtResource("9_torch"), ExtResource("10_water"), ExtResource("11_copper"), ExtResource("12_cobblestone"), ExtResource("13_mossy_stone_bricks"), ExtResource("14_stone_bricks"), ExtResource("15_terracotta_bricks"), ExtResource("16_wood_planks"), ExtResource("17_farmland_dry"), ExtResource("18_anvil"), ExtResource("19_chest"), ExtResource("20_cauldron")])
+definitions = Array[ExtResource("2_definition")]([ExtResource("2_air"), ExtResource("3_grass"), ExtResource("4_dirt"), ExtResource("5_sand"), ExtResource("6_stone"), ExtResource("7_log"), ExtResource("8_leaves"), ExtResource("9_torch"), ExtResource("10_water"), ExtResource("11_copper"), ExtResource("12_cobblestone"), ExtResource("13_mossy_stone_bricks"), ExtResource("14_stone_bricks"), ExtResource("15_terracotta_bricks"), ExtResource("16_wood_planks"), ExtResource("17_farmland_dry"), ExtResource("18_anvil"), ExtResource("19_chest"), ExtResource("20_cauldron"), ExtResource("100_brick"), ExtResource("101_cracked_cinder_bricks"), ExtResource("102_deepstone_brick"), ExtResource("103_sedimentary_stone"), ExtResource("104_chiseled_marble")])
