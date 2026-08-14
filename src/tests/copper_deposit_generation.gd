@@ -50,12 +50,26 @@ func _test_save_omits_generated_copper(catalog: BlockCatalog) -> void:
 		"copper_blocks": {"1,2,3": BlockId.Type.COPPER},
 		"generated_copper_chunks": {"0,0": true},
 	}
-	_expect(SaveManager.save_world_state(slot_id, save_data, world, player, inventory, item_proficiency, 0.0, 6.0), "save manager could not write deterministic copper test save")
+	var pumpkin_state_ids: Array[String] = []
+	var pumpkin_quarter_turns: Array[int] = []
+	var available_states := ["stage_1", "stage_2", "stage_3", "stage_4", "crop", "harvested"]
+	for index in range(PumpkinPatchState.TILE_COUNT):
+		pumpkin_state_ids.append(available_states[index % available_states.size()])
+		pumpkin_quarter_turns.append(index % 4)
+	var pumpkin_snapshot := {
+		"present": true,
+		"origin": [4, 12, -6],
+		"growth_state_ids": pumpkin_state_ids,
+		"quarter_turns": pumpkin_quarter_turns,
+	}
+	_expect(SaveManager.save_world_state(slot_id, save_data, world, player, inventory, item_proficiency, pumpkin_snapshot, 0.0, 6.0), "save manager could not write deterministic copper test save")
 	_expect(not save_data.has("copper_blocks"), "in-memory save retained generated copper blocks")
 	_expect(not save_data.has("generated_copper_chunks"), "in-memory save retained generated copper chunk markers")
 	var saved_info := SaveManager.get_slot_info(slot_id)
 	_expect(not saved_info.has("copper_blocks"), "save file retained generated copper blocks")
 	_expect(not saved_info.has("generated_copper_chunks"), "save file retained generated copper chunk markers")
+	var encoded_pumpkin_snapshot = JSON.parse_string(JSON.stringify(pumpkin_snapshot))
+	_expect(saved_info.get("pumpkin_patch", {}) == encoded_pumpkin_snapshot, "save file changed persistent pumpkin patch state")
 	SaveManager.delete_slot(slot_id)
 	player.free()
 

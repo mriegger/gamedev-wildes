@@ -22,7 +22,7 @@
 [ext_resource type="PackedScene" path="res://ui/screens/death/player_death_screen.tscn" id="20_death_screen"]
 [ext_resource type="PackedScene" path="res://combat/particles/combat_hit_particles.tscn" id="21_combat_particles"]
 [ext_resource type="Resource" path="res://combat/particles/combat_hit_particle_catalog.tres" id="22_combat_particle_catalog"]
-[ext_resource type="PackedScene" path="res://farming/debug/pumpkin_patch_preview.tscn" id="23_pumpkin_patch"]
+[ext_resource type="PackedScene" path="res://farming/pumpkin/pumpkin_patch_coordinator.tscn" id="23_pumpkin_patch"]
 
 [node name="Game" type="Node3D"]
 script = ExtResource("1_game")
@@ -62,7 +62,7 @@ script = ExtResource("7_session")
 
 [node name="MiningHitParticles" parent="." instance=ExtResource("13_mining_hit_particles")]
 
-[node name="PumpkinPatchPreview" parent="." instance=ExtResource("23_pumpkin_patch")]
+[node name="PumpkinPatch" parent="." instance=ExtResource("23_pumpkin_patch")]
 
 [node name="SaveStatusLayer" type="CanvasLayer" parent="."]
 process_mode = 2

@@ -121,6 +121,7 @@ func _init() -> void:
 	_expect(SaveManager._migrate_save_data(version_four_save), "version-four save did not migrate")
 	_expect(version_four_save["version"] == SaveManager.CURRENT_SAVE_VERSION, "migration did not update the save version")
 	_expect(version_four_save["item_proficiency"] == {}, "migration did not initialize proficiency")
+	_expect(version_four_save["pumpkin_patch"] == {"present": false}, "migration did not preserve older worlds without pumpkin patches")
 	_expect((version_four_save["player_stats"] as Dictionary)["level"] == 3, "migration changed existing progression")
 	var version_three_save := {"version": 3}
 	_expect(not SaveManager._migrate_save_data(version_three_save), "unsupported save version migrated")

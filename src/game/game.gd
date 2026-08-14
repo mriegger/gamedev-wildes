@@ -27,7 +27,7 @@ signal main_menu_requested
 @onready var game_session: GameSession = $GameSession as GameSession
 @onready var mining_break_particles: MiningBreakParticles = $MiningBreakParticles as MiningBreakParticles
 @onready var mining_hit_particles: MiningHitParticles = $MiningHitParticles as MiningHitParticles
-@onready var pumpkin_patch_preview: PumpkinPatchPreview = $PumpkinPatchPreview as PumpkinPatchPreview
+@onready var pumpkin_patch: PumpkinPatchCoordinator = $PumpkinPatch as PumpkinPatchCoordinator
 @onready var _save_canvas: CanvasLayer = $SaveStatusLayer as CanvasLayer
 @onready var _save_label: Label = $SaveStatusLayer/SaveStatusLabel as Label
 
@@ -102,9 +102,10 @@ func _ready():
 	world.generation_progress.connect(_on_generation_progress)
 	await world.initialize_world_async()
 	world.generation_progress.disconnect(_on_generation_progress)
-	_setup_gameplay()
+	if not _setup_gameplay():
+		return
 	game_session.save_status_changed.connect(_show_save_status)
-	game_session.setup(_slot_id, _save_data, world, player, inventory_model, item_proficiency, game_environment)
+	game_session.setup(_slot_id, _save_data, world, player, inventory_model, item_proficiency, game_environment, pumpkin_patch)
 	if _recovered_defeated_save and _slot_id != -1 and not game_session.save("defeated_save_recovery"):
 		push_error("[Game] Failed to persist recovered player state")
 	_recovered_defeated_save = false
@@ -147,7 +148,7 @@ func _restore_item_proficiency():
 	if saved_proficiency is Dictionary and not item_proficiency.restore(saved_proficiency):
 		push_error("[Game] Saved item proficiency is invalid; using base proficiency")
 
-func _setup_gameplay():
+func _setup_gameplay() -> bool:
 	camera_rig.setup(player, input_buffer)
 	entity_coordinator.setup(entity_catalog, world.voxel_model, world.config.seed_value, world.is_position_streamed)
 	melee_combat.setup(world.voxel_model, player, player_stats, entity_coordinator)
@@ -158,27 +159,29 @@ func _setup_gameplay():
 	combat_hit_particles.setup(melee_combat, combat_hit_particle_catalog)
 	player.setup(world, camera_rig, inventory_model, input_buffer, player_stats, melee_combat, entity_coordinator)
 	player_stats.health_depleted.connect(_on_player_defeated)
-	var mining_particle_tints := MiningParticleTintPalette.new(block_catalog)
-	mining_break_particles.setup(world.voxel_model, mining_particle_tints)
-	mining_hit_particles.setup(player.animation_driver, player.interactor, mining_particle_tints)
-	pumpkin_patch_preview.setup(world.voxel_model, player)
-	camera_rig.reset_panel_obstruction()
-
-	game_environment.sky_color_changed.connect(world.update_water_tint)
-	game_environment.start_clock()
-	hud.setup_with_camera(inventory_model, inventory_stat_coordinator, crafting_coordinator, crafting_recipe_catalog, camera_rig, player_stats, item_proficiency)
-	hud.setup_dev_console(inventory_model, pumpkin_patch_preview)
-	hud.setup_socketing(inventory_model, rune_socketing_coordinator, item_proficiency)
-
 	var saved_position = _world_state.player_position
 	if saved_position != Vector3.ZERO:
 		player.global_position = saved_position + Vector3(0, 0.2, 0)
 	else:
 		player.global_position = world.voxel_model.get_spawn_position() + Vector3(0, 0.1, 0)
+	var mining_particle_tints := MiningParticleTintPalette.new(block_catalog)
+	mining_break_particles.setup(world.voxel_model, mining_particle_tints)
+	mining_hit_particles.setup(player.animation_driver, player.interactor, mining_particle_tints)
+	if not pumpkin_patch.setup(world.voxel_model, player, world.config.seed_value, _save_data.get("pumpkin_patch", null)):
+		push_error("[Game] Pumpkin patch state is invalid or no suitable new-world placement exists")
+		return false
+	camera_rig.reset_panel_obstruction()
+
+	game_environment.sky_color_changed.connect(world.update_water_tint)
+	game_environment.start_clock()
+	hud.setup_with_camera(inventory_model, inventory_stat_coordinator, crafting_coordinator, crafting_recipe_catalog, camera_rig, player_stats, item_proficiency)
+	hud.setup_dev_console(inventory_model, pumpkin_patch)
+	hud.setup_socketing(inventory_model, rune_socketing_coordinator, item_proficiency)
 	world.set_player_ref(player)
 	camera_rig.snap_to_follow_target()
 	camera_rig.current_yaw_deg = camera_rig.target_yaw_deg
 	camera_rig.camera.current = true
+	return true
 
 func _on_player_defeated():
 	if _death_screen != null and is_instance_valid(_death_screen):

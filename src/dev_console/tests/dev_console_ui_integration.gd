@@ -5,20 +5,20 @@ var _phase: int = 0
 var _errors: Array[String] = []
 var _console: DevConsole
 var _inventory: InventoryModel
-var _pumpkin_preview: PumpkinPatchPreview
+var _pumpkin_patch: PumpkinPatchCoordinator
 
 func _init() -> void:
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
 	_inventory = InventoryModel.new(item_catalog)
-	_pumpkin_preview = PumpkinPatchPreview.new()
+	_pumpkin_patch = PumpkinPatchCoordinator.new()
 	_console = (load("res://dev_console/presentation/dev_console.tscn") as PackedScene).instantiate() as DevConsole
 	root.add_child(_console)
-	root.add_child(_pumpkin_preview)
+	root.add_child(_pumpkin_patch)
 
 func _process(_delta: float) -> bool:
 	_frame += 1
 	if _phase == 0 and _frame == 2:
-		_console.setup(_inventory, _pumpkin_preview)
+		_console.setup(_inventory, _pumpkin_patch)
 		_check_closed_layout()
 		_send_slash()
 		_phase = 1
