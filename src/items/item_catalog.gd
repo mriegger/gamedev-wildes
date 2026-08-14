@@ -75,7 +75,7 @@ func _rebuild_lookup() -> void:
 		_definitions_by_block[block_id] = definition
 
 func _is_supported_primary_action(action: ItemActionDefinition) -> bool:
-	return action == null or action is MiningActionDefinition or action is MeleeAttackActionDefinition
+	return action == null or action is MiningActionDefinition or action is MeleeAttackActionDefinition or action is TillingActionDefinition
 
 func _is_supported_secondary_action(action: ItemActionDefinition) -> bool:
 	return action == null or action is BlockPlacementActionDefinition
@@ -135,6 +135,15 @@ func validate(block_catalog: BlockCatalog) -> bool:
 			if block_catalog.get_definition(placement.block.id) != placement.block:
 				push_error("[ItemCatalog] Non-canonical block resource for %s" % definition.id)
 				valid = false
+		var tilling := definition.primary_action as TillingActionDefinition
+		if tilling != null:
+			if tilling.result_block != null and BlockId.is_valid(tilling.result_block.id) and block_catalog.get_definition(tilling.result_block.id) != tilling.result_block:
+				push_error("[ItemCatalog] Non-canonical tilling result for %s" % definition.id)
+				valid = false
+			for source_block in tilling.source_blocks:
+				if source_block != null and BlockId.is_valid(source_block.id) and block_catalog.get_definition(source_block.id) != source_block:
+					push_error("[ItemCatalog] Non-canonical tilling source for %s" % definition.id)
+					valid = false
 		var mining := definition.primary_action as MiningActionDefinition
 		if mining == null:
 			continue

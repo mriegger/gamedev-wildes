@@ -174,18 +174,19 @@ func _update_selection_visuals():
 	var selected_block_id = interactor.get_selected_block_id()
 	var has_block = selected_block_id != null
 	var primary_holding = Input.is_action_pressed("primary_use")
-	var has_mining_action = interactor.is_editing_enabled() and interactor.get_selected_primary_action() is MiningActionDefinition
+	var selected_primary := interactor.get_selected_primary_action()
+	var has_target_action = interactor.is_editing_enabled() and (selected_primary is MiningActionDefinition or selected_primary is TillingActionDefinition)
 
 	var show_mining_outline = false
 	var show_ghost = false
 
 	if has_block:
 		if primary_holding or interactor.is_mining:
-			show_mining_outline = has_mining_action and interactor.target_has
+			show_mining_outline = has_target_action and interactor.target_has
 		else:
 			show_ghost = interactor.placement_has
 	else:
-		show_mining_outline = has_mining_action and interactor.target_has
+		show_mining_outline = has_target_action and interactor.target_has
 
 	if show_mining_outline and interactor.target_has:
 		if selection_box == null or not selection_box.is_inside_tree():
@@ -198,13 +199,13 @@ func _update_selection_visuals():
 
 		var pulse = 0.85 + 0.15 * sin(Time.get_ticks_msec() / 1000.0 * 1.8 * TAU)
 		var col: Color
-		if interactor.can_mine_target:
+		if interactor.can_primary_target:
 			col = Color(1.0, 0.92, 0.08, 0.95 * pulse)
 		else:
 			col = Color(1.0, 0.32, 0.22, 0.55 * pulse)
 		_selection_edge_mat.albedo_color = col
 
-		if interactor.is_mining and interactor.can_mine_target:
+		if interactor.is_mining and interactor.can_primary_target:
 			if breaking_block:
 				breaking_block.visible = true
 				var bt = voxel_space.get_block_at(interactor.target_block)

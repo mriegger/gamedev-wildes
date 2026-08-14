@@ -17,7 +17,7 @@ world time. Copper deposits regenerate deterministically from the world seed.
 | `Space` | Hop — needed to get up any ledge |
 | `Q` / `E` | Rotate the camera 45° |
 | Mouse wheel / pinch | Zoom |
-| Left-click / hold | Use the selected item's primary action; hold to mine, click to attack |
+| Left-click / hold | Use the selected item's primary action; hold to mine, click to attack or till soil |
 | Right-click | Place the selected block |
 | `F` | Enter or leave a nearby dungeon |
 | `1`–`9` | Select hotbar slot; while the backpack is open, assign the hovered item to that slot |
@@ -56,6 +56,8 @@ are configured through typed level resources rather than hardcoded dungeon IDs.
 
 **Blocks.** Grass, dirt, sand, stone, wood, leaves, cobblestone, mossy stone bricks, stone bricks,
 terracotta bricks, and wood planks are minable and placeable. Copper is minable but not placeable.
+Using a hoe on the exposed top face of grass or dirt converts it into dry farmland, which drops dirt
+when mined.
 Seeded copper deposits generate after the surrounding terrain as connected 5–30 block blobs. Most
 of each deposit stays underground, while some deposits expose up to three blocks at the surface.
 Stone and the other common blocks are hand-minable. Copper requires a stone or copper pickaxe,
@@ -64,10 +66,10 @@ through — each is an omni light with a 9-block radius.
 Overworld torch shadows are configurable for the nearest 0, 1, 2, or 4 lights and default to the
 nearest one.
 
-**Tools.** New worlds start with an empty inventory, while the first pickaxe is crafted from stone and
-wood. Item actions are data-driven: stone and copper pickaxes can mine copper, while the sword uses
-click-triggered, alternating melee swings. Pixel-art held tools are extruded into shaded 3D
-silhouette meshes at runtime.
+**Tools.** New worlds start with an empty inventory, while the first pickaxe is crafted from stone
+and wood. Item actions are data-driven: the hoe tills exposed grass and dirt, stone and copper
+pickaxes can mine copper, and the sword uses click-triggered, alternating melee swings. Held tools
+use either runtime-extruded pixel art or authored 3D scenes.
 
 **Lighting.** Per-vertex ambient occlusion is baked into chunk meshes. A directional sun plus a
 fill light drive real-time shadows, and a keyframed day/night profile interpolates sky, ambient,
@@ -160,6 +162,8 @@ from Godot primitive meshes. Visual effects use project-authored shaders.
 | `src/assets/audio/combat/impacts/player/player_hit.wav` | Muse, prompted by Michael Riegger | Project-authored |
 | `src/assets/audio/footsteps/water/Footstep_Water_*.wav` (8 files) | [Little Robot Sound Factory](https://littlerobotsoundfactory.com/) – Water footsteps – by Morten Barfod Søegaard | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | `src/assets/audio/sfx/tools/impactGeneric_light_*.ogg` (4 files) | [Impact Sounds](https://kenney.nl/assets/impact-sounds) – Kenney (https://kenney.nl) – generic light impacts for tool and crafting clunks | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
+| `src/assets/audio/sfx/farming/tilling/bookFlip*.ogg` (3 files) | [RPG Audio](https://kenney.nl/assets/rpg-audio) – Kenney | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
+| `src/assets/models/tools/hoe/copper_hoe.glb`, `Textures/colormap.png`, and derived inventory icon | [Survival Kit](https://kenney.nl/assets/survival-kit) – Kenney | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `src/assets/textures/effects/mining/dirt_*.png` (3 files) | [Particle Pack](https://kenney.nl/assets/particle-pack) – Kenney | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
 
 Godot itself is MIT licensed.

@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="ItemCatalog" load_steps=25 format=3]
+[gd_resource type="Resource" script_class="ItemCatalog" load_steps=26 format=3]
 
 [ext_resource type="Script" path="res://items/item_catalog.gd" id="1_catalog"]
 [ext_resource type="Script" path="res://items/item_definition.gd" id="2_definition"]
@@ -24,7 +24,8 @@
 [ext_resource type="Resource" path="res://items/definitions/stone_bricks_block.tres" id="22_stone_bricks"]
 [ext_resource type="Resource" path="res://items/definitions/terracotta_bricks_block.tres" id="23_terracotta_bricks"]
 [ext_resource type="Resource" path="res://items/definitions/wood_planks_block.tres" id="24_wood_planks"]
+[ext_resource type="Resource" path="res://items/definitions/copper_hoe.tres" id="25_hoe"]
 
 [resource]
 script = ExtResource("1_catalog")
-definitions = Array[ExtResource("2_definition")]([ExtResource("3_grass"), ExtResource("4_dirt"), ExtResource("5_sand"), ExtResource("6_stone"), ExtResource("7_log"), ExtResource("8_leaves"), ExtResource("17_copper"), ExtResource("20_cobblestone"), ExtResource("21_mossy_stone_bricks"), ExtResource("22_stone_bricks"), ExtResource("23_terracotta_bricks"), ExtResource("24_wood_planks"), ExtResource("9_torch"), ExtResource("19_basic_rune"), ExtResource("18_stone_pickaxe"), ExtResource("10_pickaxe"), ExtResource("11_sword"), ExtResource("12_test_totem"), ExtResource("13_helmet"), ExtResource("14_chest_plate"), ExtResource("15_pants"), ExtResource("16_shoes")])
+definitions = Array[ExtResource("2_definition")]([ExtResource("3_grass"), ExtResource("4_dirt"), ExtResource("5_sand"), ExtResource("6_stone"), ExtResource("7_log"), ExtResource("8_leaves"), ExtResource("17_copper"), ExtResource("20_cobblestone"), ExtResource("21_mossy_stone_bricks"), ExtResource("22_stone_bricks"), ExtResource("23_terracotta_bricks"), ExtResource("24_wood_planks"), ExtResource("9_torch"), ExtResource("19_basic_rune"), ExtResource("18_stone_pickaxe"), ExtResource("10_pickaxe"), ExtResource("25_hoe"), ExtResource("11_sword"), ExtResource("12_test_totem"), ExtResource("13_helmet"), ExtResource("14_chest_plate"), ExtResource("15_pants"), ExtResource("16_shoes")])

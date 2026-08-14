@@ -4,6 +4,7 @@ class_name PlayerInteractor
 signal block_placed
 signal melee_attack_started(action: MeleeAttackActionDefinition, direction: int)
 signal melee_terrain_hit(position: Vector3i)
+signal soil_tilled
 
 @export var reach: float = 6.0
 @export var place_cooldown: float = 0.18
@@ -24,7 +25,7 @@ var target_has: bool = false
 var placement_block: Vector3i = Vector3i(-999, -999, -999)
 var placement_has: bool = false
 var last_ray_normal: Vector3i = Vector3i.UP
-var can_mine_target: bool = false
+var can_primary_target: bool = false
 var can_place_target: bool = false
 var pointer_over_ui: bool = false
 
@@ -91,7 +92,7 @@ func is_editing_enabled() -> bool:
 func _clear_active_state():
 	target_has = false
 	placement_has = false
-	can_mine_target = false
+	can_primary_target = false
 	can_place_target = false
 	_reset_mining()
 	_reset_melee_chain()
@@ -103,7 +104,7 @@ func cancel_actions():
 	secondary_use_timer = 0.0
 	target_has = false
 	placement_has = false
-	can_mine_target = false
+	can_primary_target = false
 	can_place_target = false
 
 func _physics_process(delta):
@@ -115,7 +116,7 @@ func _physics_process(delta):
 	if pointer_over_ui:
 		target_has = false
 		placement_has = false
-		can_mine_target = false
+		can_primary_target = false
 		can_place_target = false
 		if is_mining:
 			_reset_mining()
@@ -129,7 +130,7 @@ func _physics_process(delta):
 func _handle_raycast():
 	target_has = false
 	placement_has = false
-	can_mine_target = false
+	can_primary_target = false
 	can_place_target = false
 
 	var mouse_pos = get_viewport().get_mouse_position()
@@ -152,7 +153,10 @@ func _handle_raycast():
 	var motor_pos = motor.global_position
 	var reach_squared = reach * reach
 	var selected_primary := get_selected_primary_action()
-	can_mine_target = selected_primary is MiningActionDefinition and _can_mine_position(best_hit, selected_primary as MiningActionDefinition)
+	if selected_primary is MiningActionDefinition:
+		can_primary_target = _can_mine_position(best_hit, selected_primary as MiningActionDefinition)
+	elif selected_primary is TillingActionDefinition:
+		can_primary_target = _can_till_position(best_hit, best_normal, selected_primary as TillingActionDefinition)
 
 	if editable_voxel_world != null and not editable_voxel_world.is_edit_protected(best_place) and voxel_space.get_block_at(best_place) == null:
 		if not _placement_collides_player(best_place) and not _placement_collides_entity(best_place):
@@ -285,7 +289,8 @@ func _handle_item_actions(delta):
 	var selected_primary := get_selected_primary_action()
 	var selected_mining := selected_primary as MiningActionDefinition
 	var selected_melee := selected_primary as MeleeAttackActionDefinition
-	if _input_buffer.primary_use_pressed and target_has and can_mine_target and selected_mining != null:
+	var selected_tilling := selected_primary as TillingActionDefinition
+	if _input_buffer.primary_use_pressed and target_has and can_primary_target and selected_mining != null:
 		if not is_mining:
 			mine_target = target_block
 			mine_target_rev = editable_voxel_world.get_revision(mine_target)
@@ -327,6 +332,8 @@ func _handle_item_actions(delta):
 			_start_melee_attack()
 		else:
 			_reset_melee_chain()
+	if primary_use_just and target_has and selected_tilling != null:
+		_commit_till(target_block, last_ray_normal, selected_tilling)
 
 	var selected_placement := get_selected_placement_action()
 	if (_input_buffer.secondary_use_just or _input_buffer.secondary_use_pressed) and secondary_use_timer <= 0.0:
@@ -403,13 +410,39 @@ func _can_mine_position(pos: Vector3i, action: MiningActionDefinition) -> bool:
 		return false
 	return action.can_mine(voxel_space.block_catalog.get_definition(block_id))
 
+func _can_till_position(pos: Vector3i, face_normal: Vector3i, action: TillingActionDefinition) -> bool:
+	if action == null or voxel_space == null or editable_voxel_world == null or motor == null:
+		return false
+	if editable_voxel_world.is_edit_protected(pos):
+		return false
+	if get_selected_primary_action() != action or face_normal != Vector3i.UP:
+		return false
+	var center := Vector3(pos) + Vector3(0.5, 0.5, 0.5)
+	if motor.global_position.distance_squared_to(center) > reach * reach:
+		return false
+	if voxel_space.get_block_id_at(pos + Vector3i.UP) != BlockId.Type.AIR:
+		return false
+	var block_id := voxel_space.get_block_id_at(pos)
+	if block_id == BlockId.Type.AIR:
+		return false
+	return action.can_till(voxel_space.block_catalog.get_definition(block_id))
+
+func _commit_till(pos: Vector3i, face_normal: Vector3i, action: TillingActionDefinition) -> void:
+	if not _can_till_position(pos, face_normal, action):
+		return
+	var old_id := voxel_space.get_block_id_at(pos)
+	var edit := editable_voxel_world.try_replace_block(pos, old_id, action.result_block.id)
+	if edit.is_success():
+		soil_tilled.emit()
+		_handle_raycast()
+
 func get_mine_duration() -> float:
 	assert(is_mining and mine_action != null)
 	var block_id := voxel_space.get_block_id_at(mine_target)
 	return mine_action.get_mine_duration(voxel_space.block_catalog.get_definition(block_id))
 
 func has_mining_impact_target() -> bool:
-	return is_mining and target_has and can_mine_target and mine_target == target_block
+	return is_mining and target_has and can_primary_target and mine_target == target_block
 
 func get_mining_impact_position() -> Vector3:
 	assert(has_mining_impact_target())

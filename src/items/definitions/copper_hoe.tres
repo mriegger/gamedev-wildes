@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="ItemDefinition" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://items/item_definition.gd" id="1_definition"]
+[ext_resource type="Texture2D" path="res://assets/textures/tools/hoe/copper_hoe.png" id="2_icon"]
+[ext_resource type="PackedScene" path="res://items/held/copper_hoe.tscn" id="3_held"]
+[ext_resource type="Resource" path="res://items/actions/definitions/copper_hoe_tilling.tres" id="4_tilling"]
+[ext_resource type="Resource" path="res://items/audio/profiles/copper_hoe_equip.tres" id="5_equip_audio"]
+
+[resource]
+script = ExtResource("1_definition")
+id = &"copper_hoe"
+display_name = "Copper Hoe"
+icon = ExtResource("2_icon")
+max_stack = 1
+primary_action = ExtResource("4_tilling")
+held_scene = ExtResource("3_held")
+equip_audio = ExtResource("5_equip_audio")
