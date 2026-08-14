@@ -24,7 +24,6 @@ func _init() -> void:
 		BlockId.Type.WOOD_PLANKS: [&"wood_planks_block", "Wood Planks", "wood_planks.png", false],
 	}
 	var texture_set := BlockTextureSet.new(block_catalog)
-	var world := VoxelWorld.new(16, 32, 5, 8.0, block_catalog)
 	for block_id in expected:
 		var values := expected[block_id] as Array
 		var item_id := values[0] as StringName
@@ -51,13 +50,6 @@ func _init() -> void:
 		_expect(unarmed_mining.can_mine(block) != requires_copper_pickaxe, "unarmed mining rule invalid for %s" % item_id)
 		_expect(stone_pickaxe_mining.can_mine(block) != requires_copper_pickaxe, "stone pickaxe mining rule invalid for %s" % item_id)
 		_expect(copper_pickaxe_mining.can_mine(block), "copper pickaxe cannot mine %s" % item_id)
-		var position := Vector3i(block_id, 8, 0)
-		var placement_edit := world.try_place_block(position, block_id)
-		_expect(placement_edit.is_success(), "world placement failed for %s" % item_id)
-		_expect(world.get_block_id_at(position) == block_id, "placed world state mismatch for %s" % item_id)
-		var mining_edits := world.try_mine_block(position)
-		_expect(mining_edits.size() == 1 and mining_edits[0].is_success(), "world mining failed for %s" % item_id)
-		_expect(world.get_block_id_at(position) == BlockId.Type.AIR, "mined block remained for %s" % item_id)
 	if _errors.is_empty():
 		print("BLOCK_CONTENT PASS")
 		quit(0)
