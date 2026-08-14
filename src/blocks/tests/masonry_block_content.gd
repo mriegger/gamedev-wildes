@@ -13,14 +13,14 @@ func _init() -> void:
 	_expect(item_catalog.validate(block_catalog), "item catalog invalid")
 	_expect(recipe_catalog.validate(item_catalog), "recipe catalog invalid")
 	_expect(BlockId.Type.FARMLAND_DRY == 15, "farmland stable ID changed")
-	_expect(BlockId.Type.BRICK == 100, "brick stable ID changed")
+	_expect(BlockId.Type.BRICKS == 100, "bricks stable ID changed")
 	_expect(BlockId.Type.CRACKED_CINDER_BRICKS == 101, "cracked cinder bricks stable ID changed")
 	_expect(BlockId.Type.DEEPSTONE_BRICK == 102, "deepstone brick stable ID changed")
 	_expect(BlockId.Type.SEDIMENTARY_STONE == 103, "sedimentary stone stable ID changed")
 	_expect(BlockId.Type.CHISELED_MARBLE == 104, "chiseled marble stable ID changed")
 	_expect(not BlockId.is_valid(99), "unassigned block ID accepted")
 	var expected: Dictionary = {
-		BlockId.Type.BRICK: [&"brick_block", "Brick", "brick.png"],
+		BlockId.Type.BRICKS: [&"bricks_block", "Bricks", "bricks.png"],
 		BlockId.Type.CRACKED_CINDER_BRICKS: [&"cracked_cinder_bricks_block", "Cracked Cinder Bricks", "cracked_cinder_bricks.png"],
 		BlockId.Type.DEEPSTONE_BRICK: [&"deepstone_brick_block", "Deepstone Brick", "deepstone_brick.png"],
 		BlockId.Type.SEDIMENTARY_STONE: [&"sedimentary_stone_block", "Sedimentary Stone", "sedimentary_stone.png"],
