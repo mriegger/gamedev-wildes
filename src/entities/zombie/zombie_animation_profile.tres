@@ -1,0 +1,36 @@
+[gd_resource type="Resource" script_class="BlockyHumanoidAnimationProfile" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://actors/animation/blocky_humanoid_animation_profile.gd" id="1_profile"]
+
+[resource]
+script = ExtResource("1_profile")
+walk_cycle_seconds = 0.82
+walk_bob_height = 0.045
+walk_leg_travel = 0.34
+walk_leg_lift = 0.11
+walk_leg_reach_degrees = 22.0
+walk_leg_push_degrees = 25.0
+walk_arm_swing_degrees = 18.0
+walk_rhythm_shape = 0.18
+sprint_cycle_seconds = 0.54
+sprint_bob_height = 0.1
+sprint_leg_travel = 0.48
+sprint_leg_lift = 0.24
+sprint_leg_reach_degrees = 28.0
+sprint_leg_push_degrees = 38.0
+sprint_arm_swing_degrees = 30.0
+sprint_lean_degrees = 12.0
+idle_cycle_seconds = 2.8
+idle_bob_height = 0.018
+idle_torso_pitch_degrees = 4.0
+idle_torso_sway_degrees = 3.5
+idle_arm_swing_degrees = 2.5
+body_lean_degrees = 11.0
+turn_lean_degrees = 10.0
+attack_windup_degrees = 34.0
+attack_follow_through_degrees = 58.0
+attack_right_arm_pitch_degrees = -58.0
+attack_body_lean_degrees = 18.0
+attack_body_twist_degrees = 24.0
+attack_leg_brace_degrees = 11.0
+attack_crouch_depth = 0.07

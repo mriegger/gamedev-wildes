@@ -1,0 +1,29 @@
+[gd_scene format=3 uid="uid://c4m3r4r1g001"]
+
+[ext_resource type="Script" path="res://player/camera/camera_rig.gd" id="1_camera"]
+
+[node name="CameraRig" type="Node3D"]
+transform = Transform3D(-0.707107, 0, 0.707107, 0, 1, 0, -0.707107, 0, -0.707107, 100, 0, 100)
+script = ExtResource("1_camera")
+min_ortho_size = 18.0
+max_ortho_size = 70.0
+zoom_speed = 10.0
+follow_lerp = 10.0
+yaw_lerp_speed = 5.5
+pitch_deg = -45.0
+orbit_distance = 70.0
+
+[node name="AudioListener3D" type="AudioListener3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.4, 0)
+current = true
+
+[node name="Pitch" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.707107, 0.707107, 0, -0.707107, 0.707107, 0, 0, 0)
+
+[node name="Camera3D" type="Camera3D" parent="Pitch"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 70)
+projection = 1
+size = 42.0
+near = 0.1
+far = 1000.0
+current = true

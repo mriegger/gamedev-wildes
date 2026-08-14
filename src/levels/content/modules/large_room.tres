@@ -1,0 +1,48 @@
+[gd_resource type="Resource" script_class="LevelModuleDefinition" load_steps=10 format=3]
+
+[ext_resource type="Script" path="res://levels/definitions/level_module_definition.gd" id="1_module"]
+[ext_resource type="Script" path="res://levels/definitions/level_socket_definition.gd" id="2_socket"]
+[ext_resource type="Script" path="res://levels/definitions/level_torch_definition.gd" id="3_torch"]
+
+[sub_resource type="Resource" id="SocketNorth"]
+script = ExtResource("2_socket")
+socket_id = &"north"
+cell = Vector3i(4, 1, 0)
+direction = 0
+
+[sub_resource type="Resource" id="SocketEast"]
+script = ExtResource("2_socket")
+socket_id = &"east"
+cell = Vector3i(8, 1, 4)
+direction = 1
+
+[sub_resource type="Resource" id="SocketSouth"]
+script = ExtResource("2_socket")
+socket_id = &"south"
+cell = Vector3i(4, 1, 8)
+direction = 2
+
+[sub_resource type="Resource" id="SocketWest"]
+script = ExtResource("2_socket")
+socket_id = &"west"
+cell = Vector3i(0, 1, 4)
+direction = 3
+
+[sub_resource type="Resource" id="TorchWest"]
+script = ExtResource("3_torch")
+cell = Vector3i(1, 2, 2)
+wall_direction = 3
+
+[sub_resource type="Resource" id="TorchEast"]
+script = ExtResource("3_torch")
+cell = Vector3i(7, 2, 6)
+wall_direction = 1
+
+[resource]
+script = ExtResource("1_module")
+module_id = &"dungeon_large_room"
+size = Vector3i(9, 4, 9)
+weight = 1.0
+cells = PackedInt32Array(4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 0, 4, 4, 4, 4, 4, 0, 0, 0, 0, 0, 0, 0, 4, 4, 0, 0, 0, 0, 0, 0, 0, 4, 4, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 4, 4, 0, 0, 0, 0, 0, 0, 0, 4, 4, 0, 0, 0, 0, 0, 0, 0, 4, 4, 4, 4, 4, 0, 4, 4, 4, 4, 4, 4, 4, 4, 0, 4, 4, 4, 4, 4, 0, 0, 0, 0, 0, 0, 0, 4, 4, 0, 0, 0, 0, 0, 0, 0, 4, 4, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 4, 4, 0, 0, 0, 0, 0, 0, 0, 4, 4, 0, 0, 0, 0, 0, 0, 0, 4, 4, 4, 4, 4, 0, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4)
+sockets = Array[ExtResource("2_socket")]([SubResource("SocketNorth"), SubResource("SocketEast"), SubResource("SocketSouth"), SubResource("SocketWest")])
+torches = Array[ExtResource("3_torch")]([SubResource("TorchWest"), SubResource("TorchEast")])

@@ -1,0 +1,249 @@
+name: Build macOS release
+
+# Builds a macOS .app for each task whose task.toml changed, at the exact commit
+# the task references (commit-hash), ad-hoc signs it, and publishes a GitHub
+# Release. Engine is read from task.toml (godot | love | raylib).
+# Also builds the current src/ on every push to main as a dev artifact.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      task:
+        description: 'Task folder name under tasks/'
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set.outputs.matrix }}
+      count: ${{ steps.set.outputs.count }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: set
+        env:
+          GH_EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          SHA: ${{ github.sha }}
+          TASK_INPUT: ${{ github.event.inputs.task }}
+        run: |
+          set -euo pipefail
+          items='[]'
+          while IFS= read -r p; do
+            [ -n "$p" ] && [ -f "$p" ] || continue
+            obj="$(python3 .github/scripts/read_task_toml.py "$p")"
+            echo "found: $obj"
+            items="$(jq -c --argjson o "$obj" '. + [$o]' <<<"$items")"
+          done < <(bash .github/scripts/changed_task_tomls.sh)
+
+          skipped="$(jq -c '[.[] | select(.placeholder)]' <<<"$items")"
+          matrix="$(jq -c '[.[] | select(.placeholder | not)]' <<<"$items")"
+          count="$(jq 'length' <<<"$matrix")"
+          echo "Skipped (placeholder commit-hash): $skipped"
+          echo "Will build: $matrix"
+          {
+            echo "matrix={\"include\":${matrix}}"
+            echo "count=${count}"
+          } >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: detect
+    if: ${{ fromJSON(needs.detect.outputs.count) > 0 }}
+    runs-on: macos-14
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.detect.outputs.matrix) }}
+    env:
+      GODOT_VERSION: '4.7'
+      LOVE_VERSION: '11.5'
+      RAYLIB_VERSION: '5.0'
+    steps:
+      - name: Checkout build scripts (trigger ref)
+        uses: actions/checkout@v4
+        with:
+          path: ci
+
+      - name: Checkout source at task commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.commit_hash }}
+          path: source
+
+      - name: Build macOS .app
+        id: build
+        working-directory: source
+        run: |
+          bash "$GITHUB_WORKSPACE/ci/.github/scripts/build_macos.sh" \
+            "${{ matrix.engine }}" "${{ matrix.name }}" "src"
+
+      - name: Ad-hoc codesign
+        run: |
+          set -euo pipefail
+          APP="${{ steps.build.outputs.app_path }}"
+          codesign --force --deep --timestamp=none --sign - "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+
+      - name: Package
+        id: pkg
+        run: |
+          set -euo pipefail
+          APP="${{ steps.build.outputs.app_path }}"
+          BASE="$(basename "$APP" .app)"
+          ZIP="$(dirname "$APP")/${BASE}-macos.zip"
+          ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
+          {
+            echo "zip=${ZIP}"
+            echo "base=${BASE}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.pkg.outputs.base }}-macos
+          path: ${{ steps.pkg.outputs.zip }}
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          SHORT="$(git -C source rev-parse --short HEAD)"
+          TAG="${{ matrix.task }}-${SHORT}"
+          ZIP="${{ steps.pkg.outputs.zip }}"
+          BASE="${{ steps.pkg.outputs.base }}"
+          {
+            echo "Automated macOS build (ad-hoc signed)."
+            echo
+            echo "- Task: \`${{ matrix.task }}\`"
+            echo "- Game: ${{ matrix.name }}"
+            echo "- Engine: ${{ matrix.engine }}"
+            echo "- Source commit: \`${{ matrix.commit_hash }}\`"
+            echo
+            echo "Ad-hoc signed — if you download this via a browser, clear the"
+            echo "quarantine flag once before launching:"
+            echo '```'
+            echo "xattr -dr com.apple.quarantine \"${BASE}.app\""
+            echo '```'
+          } > notes.md
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$ZIP" --clobber
+          else
+            gh release create "$TAG" "$ZIP" \
+              --target "${{ matrix.commit_hash }}" \
+              --title "${{ matrix.name }} (${SHORT})" \
+              --notes-file notes.md
+          fi
+
+  # Dev binary for every push to main — builds current src/ directly, no task indirection.
+  # Now also publishes a GitHub Release for every commit that touches src/ (so
+  # you always have a downloadable build, not just for task commits).
+  build-current:
+    if: github.ref == 'refs/heads/main'
+    runs-on: macos-14
+    env:
+      GODOT_VERSION: '4.7'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check if src changed
+        id: src_changed
+        env:
+          BEFORE: ${{ github.event.before }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          before="${BEFORE:-}"
+          sha="${SHA:-HEAD}"
+          if [ -z "$before" ] || printf '%s' "$before" | grep -qE '^0+$' || ! git cat-file -e "${before}^{commit}" 2>/dev/null; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "No valid BEFORE ($before) — treating as src-changed"
+            exit 0
+          fi
+          if git diff --name-only "$before" "$sha" -- src | grep -q .; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "src changed between $before and $sha"
+            git diff --name-only "$before" "$sha" -- src | head -n 20
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "src unchanged between $before and $sha — still building artifact, skipping Release"
+          fi
+
+      - name: Build macOS .app (current src)
+        id: build
+        run: |
+          bash .github/scripts/build_macos.sh godot "Wildes" src
+
+      - name: Ad-hoc codesign
+        run: |
+          set -euo pipefail
+          APP="${{ steps.build.outputs.app_path }}"
+          codesign --force --deep --timestamp=none --sign - "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+
+      - name: Package
+        id: pkg
+        run: |
+          set -euo pipefail
+          APP="${{ steps.build.outputs.app_path }}"
+          BASE="$(basename "$APP" .app)"
+          ZIP="$(dirname "$APP")/${BASE}-macos.zip"
+          ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
+          {
+            echo "zip=${ZIP}"
+            echo "base=${BASE}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload dev artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.pkg.outputs.base }}-macos-dev-${{ github.sha }}
+          path: ${{ steps.pkg.outputs.zip }}
+          retention-days: 14
+
+      - name: Publish GitHub Release (src change)
+        if: steps.src_changed.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          SHORT="$(git rev-parse --short HEAD)"
+          TAG="main-${SHORT}"
+          ZIP="${{ steps.pkg.outputs.zip }}"
+          BASE="${{ steps.pkg.outputs.base }}"
+          {
+            echo "Automated macOS build (ad-hoc signed) for \`src/\` on \`main\`."
+            echo
+            echo "- Source commit: \`${SHORT}\` (\`${{ github.sha }}\`)"
+            echo "- Branch: \`main\`"
+            echo
+            echo "Ad-hoc signed — if you download this via a browser, clear the"
+            echo "quarantine flag once before launching:"
+            echo '```'
+            echo "xattr -dr com.apple.quarantine \"${BASE}.app\""
+            echo '```'
+          } > notes.md
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists — uploading asset"
+            gh release upload "$TAG" "$ZIP" --clobber
+          else
+            gh release create "$TAG" "$ZIP" \
+              --target "${{ github.sha }}" \
+              --title "Wildes (${SHORT})" \
+              --notes-file notes.md
+          fi

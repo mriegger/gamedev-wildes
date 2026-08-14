@@ -1,0 +1,138 @@
+[gd_scene load_steps=9 format=3 uid="uid://s1d3p4n3l01"]
+
+[ext_resource type="Script" path="res://inventory/ui/side_panel.gd" id="1_script"]
+[ext_resource type="Material" path="res://ui/theme/frosted_panel_material.tres" id="2_frosted"]
+[ext_resource type="FontFile" path="res://assets/fonts/RobotoSlab-Bold.ttf" id="3_bold"]
+[ext_resource type="PackedScene" path="res://ui/components/wildes_button.tscn" id="4_button"]
+[ext_resource type="Texture2D" path="res://assets/images/icons/button/equipment_icon.png" id="6_equipment"]
+[ext_resource type="PackedScene" path="res://inventory/ui/inventory_slot.tscn" id="8_slot"]
+[ext_resource type="PackedScene" path="res://inventory/ui/inventory_trash_target.tscn" id="9_trash"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_background"]
+bg_color = Color(0.14, 0.16, 0.18, 0.32)
+
+[node name="SidePanel" type="Control"]
+custom_minimum_size = Vector2(380, 0)
+mouse_filter = 2
+script = ExtResource("1_script")
+slot_scene = ExtResource("8_slot")
+
+[node name="SidePanelBackground" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+material = ExtResource("2_frosted")
+theme_override_styles/panel = SubResource("StyleBoxFlat_background")
+
+[node name="Margin" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = -16.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Content" type="VBoxContainer" parent="Margin"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="Title" type="Label" parent="Margin/Content"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.96, 0.95, 0.9, 1)
+theme_override_fonts/font = ExtResource("3_bold")
+theme_override_font_sizes/font_size = 18
+text = "INVENTORY"
+horizontal_alignment = 1
+
+[node name="TitleSpacer" type="Control" parent="Margin/Content"]
+custom_minimum_size = Vector2(0, 10)
+layout_mode = 2
+mouse_filter = 2
+
+[node name="ViewRoot" type="Control" parent="Margin/Content"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+mouse_filter = 2
+
+[node name="InventoryView" type="VBoxContainer" parent="Margin/Content/ViewRoot"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Hint" type="Label" parent="Margin/Content/ViewRoot/InventoryView"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.76, 0.74, 0.68, 1)
+theme_override_font_sizes/font_size = 11
+text = "DOUBLE-CLICK ARMOR TO EQUIP"
+horizontal_alignment = 1
+
+[node name="InventoryGrid" type="GridContainer" parent="Margin/Content/ViewRoot/InventoryView"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/h_separation = 6
+theme_override_constants/v_separation = 6
+columns = 5
+
+[node name="EquipmentView" type="VBoxContainer" parent="Margin/Content/ViewRoot"]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Heading" type="Label" parent="Margin/Content/ViewRoot/EquipmentView"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.96, 0.95, 0.9, 1)
+theme_override_fonts/font = ExtResource("3_bold")
+theme_override_font_sizes/font_size = 14
+text = "DOUBLE-CLICK ARMOR TO UNEQUIP"
+horizontal_alignment = 1
+
+[node name="EquipmentGrid" type="GridContainer" parent="Margin/Content/ViewRoot/EquipmentView"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/h_separation = 12
+theme_override_constants/v_separation = 12
+columns = 2
+
+[node name="ActionButtons" type="HBoxContainer" parent="Margin/Content"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 8
+mouse_filter = 2
+theme_override_constants/separation = 8
+
+[node name="EquipmentButton" parent="Margin/Content/ActionButtons" instance=ExtResource("4_button")]
+custom_minimum_size = Vector2(0, 44)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+focus_mode = 0
+button_text = "EQUIPMENT"
+button_icon = ExtResource("6_equipment")
+button_icon_size = Vector2(20, 20)
+button_font_size = 14
+metadata/_side_panel_no_focus = true
+
+[node name="InventoryTrashTarget" parent="Margin/Content/ActionButtons" instance=ExtResource("9_trash")]
+layout_mode = 2

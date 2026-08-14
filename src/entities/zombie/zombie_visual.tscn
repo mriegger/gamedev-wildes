@@ -1,0 +1,140 @@
+[gd_scene load_steps=15 format=3]
+
+[ext_resource type="Script" path="res://actors/animation/blocky_humanoid_animator.gd" id="1_animator"]
+[ext_resource type="Resource" path="res://entities/zombie/zombie_animation_profile.tres" id="2_profile"]
+[ext_resource type="Script" path="res://entities/zombie/zombie_animation_driver.gd" id="3_driver"]
+
+[sub_resource type="StandardMaterial3D" id="Material_shirt"]
+albedo_color = Color(0.08, 0.42, 0.42, 1)
+roughness = 0.9
+
+[sub_resource type="StandardMaterial3D" id="Material_skin"]
+albedo_color = Color(0.35, 0.58, 0.28, 1)
+roughness = 0.95
+
+[sub_resource type="StandardMaterial3D" id="Material_legs"]
+albedo_color = Color(0.21, 0.16, 0.36, 1)
+roughness = 0.9
+
+[sub_resource type="StandardMaterial3D" id="Material_eyes"]
+albedo_color = Color(0.06, 0.04, 0.03, 1)
+
+[sub_resource type="StandardMaterial3D" id="Material_mouth"]
+albedo_color = Color(0.18, 0.08, 0.07, 1)
+
+[sub_resource type="BoxMesh" id="Box_torso"]
+material = SubResource("Material_shirt")
+size = Vector3(0.45, 0.675, 0.225)
+
+[sub_resource type="BoxMesh" id="Box_head"]
+material = SubResource("Material_skin")
+size = Vector3(0.45, 0.45, 0.45)
+
+[sub_resource type="BoxMesh" id="Box_arm"]
+material = SubResource("Material_skin")
+size = Vector3(0.225, 0.675, 0.225)
+
+[sub_resource type="BoxMesh" id="Box_leg"]
+material = SubResource("Material_legs")
+size = Vector3(0.225, 0.675, 0.225)
+
+[sub_resource type="BoxMesh" id="Box_eye"]
+material = SubResource("Material_eyes")
+size = Vector3(0.09, 0.09, 0.025)
+
+[sub_resource type="BoxMesh" id="Box_mouth"]
+material = SubResource("Material_mouth")
+size = Vector3(0.19, 0.055, 0.025)
+
+[node name="ZombieVisual" type="Node3D"]
+script = ExtResource("1_animator")
+profile = ExtResource("2_profile")
+
+[node name="RigRoot" type="Node3D" parent="."]
+
+[node name="BodySecondary" type="Node3D" parent="RigRoot"]
+position = Vector3(0, 0.675, 0)
+
+[node name="BodyAction" type="Node3D" parent="RigRoot/BodySecondary"]
+
+[node name="TorsoBase" type="Node3D" parent="RigRoot/BodySecondary/BodyAction"]
+
+[node name="Torso" type="MeshInstance3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase"]
+position = Vector3(0, 0.3375, 0)
+mesh = SubResource("Box_torso")
+
+[node name="HeadAnchor" type="Node3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase"]
+position = Vector3(0, 0.675, 0)
+
+[node name="HeadBase" type="Node3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/HeadAnchor"]
+
+[node name="HeadSecondary" type="Node3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/HeadAnchor/HeadBase"]
+
+[node name="Head" type="MeshInstance3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/HeadAnchor/HeadBase/HeadSecondary"]
+position = Vector3(0, 0.225, 0)
+mesh = SubResource("Box_head")
+
+[node name="LeftEye" type="MeshInstance3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/HeadAnchor/HeadBase/HeadSecondary"]
+position = Vector3(-0.115, 0.285, 0.231)
+mesh = SubResource("Box_eye")
+
+[node name="RightEye" type="MeshInstance3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/HeadAnchor/HeadBase/HeadSecondary"]
+position = Vector3(0.115, 0.285, 0.231)
+mesh = SubResource("Box_eye")
+
+[node name="Mouth" type="MeshInstance3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/HeadAnchor/HeadBase/HeadSecondary"]
+position = Vector3(0, 0.13, 0.231)
+mesh = SubResource("Box_mouth")
+
+[node name="LeftShoulder" type="Node3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase"]
+position = Vector3(-0.3375, 0.675, 0)
+
+[node name="LeftArmBase" type="Node3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/LeftShoulder"]
+
+[node name="LeftArmAction" type="Node3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/LeftShoulder/LeftArmBase"]
+
+[node name="LeftArm" type="MeshInstance3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/LeftShoulder/LeftArmBase/LeftArmAction"]
+position = Vector3(0, -0.3375, 0)
+mesh = SubResource("Box_arm")
+
+[node name="RightShoulder" type="Node3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase"]
+position = Vector3(0.3375, 0.675, 0)
+
+[node name="RightArmBase" type="Node3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/RightShoulder"]
+
+[node name="RightArmAction" type="Node3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/RightShoulder/RightArmBase"]
+
+[node name="RightArm" type="MeshInstance3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/RightShoulder/RightArmBase/RightArmAction"]
+position = Vector3(0, -0.3375, 0)
+mesh = SubResource("Box_arm")
+
+[node name="LeftHip" type="Node3D" parent="RigRoot"]
+position = Vector3(-0.1125, 0.675, 0)
+
+[node name="LeftLegLocomotion" type="Node3D" parent="RigRoot/LeftHip"]
+position = Vector3(0, -0.3375, 0)
+
+[node name="LeftLegBase" type="Node3D" parent="RigRoot/LeftHip/LeftLegLocomotion"]
+
+[node name="LeftLeg" type="MeshInstance3D" parent="RigRoot/LeftHip/LeftLegLocomotion/LeftLegBase"]
+mesh = SubResource("Box_leg")
+
+[node name="LeftFootMarker" type="Marker3D" parent="RigRoot/LeftHip/LeftLegLocomotion/LeftLegBase"]
+position = Vector3(0, -0.3375, 0)
+
+[node name="RightHip" type="Node3D" parent="RigRoot"]
+position = Vector3(0.1125, 0.675, 0)
+
+[node name="RightLegLocomotion" type="Node3D" parent="RigRoot/RightHip"]
+position = Vector3(0, -0.3375, 0)
+
+[node name="RightLegBase" type="Node3D" parent="RigRoot/RightHip/RightLegLocomotion"]
+
+[node name="RightLeg" type="MeshInstance3D" parent="RigRoot/RightHip/RightLegLocomotion/RightLegBase"]
+mesh = SubResource("Box_leg")
+
+[node name="RightFootMarker" type="Marker3D" parent="RigRoot/RightHip/RightLegLocomotion/RightLegBase"]
+position = Vector3(0, -0.3375, 0)
+
+[node name="AnimationDriver" type="Node" parent="."]
+script = ExtResource("3_driver")

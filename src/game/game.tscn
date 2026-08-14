@@ -1,0 +1,99 @@
+[gd_scene load_steps=27 format=3 uid="uid://b22g4me0x1f3h"]
+
+[ext_resource type="Script" path="res://game/game.gd" id="1_game"]
+[ext_resource type="PackedScene" path="res://world/world.tscn" id="2_world"]
+[ext_resource type="PackedScene" path="res://player/player.tscn" id="3_player"]
+[ext_resource type="PackedScene" path="res://player/camera/camera_rig.tscn" id="4_camera"]
+[ext_resource type="PackedScene" path="res://environment/environment.tscn" id="5_environment"]
+[ext_resource type="PackedScene" path="res://ui/hud/hud.tscn" id="6_hud"]
+[ext_resource type="Script" path="res://game/game_session.gd" id="7_session"]
+[ext_resource type="PackedScene" path="res://ui/screens/pause/pause_menu.tscn" id="8_pause"]
+[ext_resource type="Resource" path="res://blocks/block_catalog.tres" id="9_block_catalog"]
+[ext_resource type="Resource" path="res://items/item_catalog.tres" id="10_item_catalog"]
+[ext_resource type="PackedScene" path="res://player/debug/animation_tuning_panel.tscn" id="11_tuning"]
+[ext_resource type="PackedScene" path="res://mining/presentation/mining_break_particles.tscn" id="12_mining_particles"]
+[ext_resource type="PackedScene" path="res://mining/presentation/mining_hit_particles.tscn" id="13_mining_hit_particles"]
+[ext_resource type="Script" path="res://entities/entity_coordinator.gd" id="14_entities"]
+[ext_resource type="Resource" path="res://entities/entity_catalog.tres" id="15_entity_catalog"]
+[ext_resource type="Resource" path="res://player/player_stats.tres" id="16_player_stats"]
+[ext_resource type="PackedScene" path="res://player/debug/player_stats_debug_panel.tscn" id="17_stats_debug"]
+[ext_resource type="Script" path="res://combat/melee_combat_coordinator.gd" id="18_melee_combat"]
+[ext_resource type="Resource" path="res://crafting/crafting_recipe_catalog.tres" id="19_crafting_catalog"]
+[ext_resource type="PackedScene" path="res://ui/screens/death/player_death_screen.tscn" id="20_death_screen"]
+[ext_resource type="PackedScene" path="res://combat/particles/combat_hit_particles.tscn" id="21_combat_particles"]
+[ext_resource type="Resource" path="res://combat/particles/combat_hit_particle_catalog.tres" id="22_combat_particle_catalog"]
+[ext_resource type="Resource" path="res://levels/content/level_catalog.tres" id="23_level_catalog"]
+[ext_resource type="PackedScene" path="res://levels/runtime/level_runtime.tscn" id="24_level_runtime"]
+[ext_resource type="Script" path="res://levels/entrance/level_interaction_coordinator.gd" id="25_level_interaction"]
+[ext_resource type="Resource" path="res://levels/content/meadow_dungeon_entrance.tres" id="26_level_entrance"]
+
+[node name="Game" type="Node3D"]
+script = ExtResource("1_game")
+pause_menu_scene = ExtResource("8_pause")
+animation_tuning_panel_scene = ExtResource("11_tuning")
+player_stats_debug_panel_scene = ExtResource("17_stats_debug")
+player_death_screen_scene = ExtResource("20_death_screen")
+block_catalog = ExtResource("9_block_catalog")
+item_catalog = ExtResource("10_item_catalog")
+crafting_recipe_catalog = ExtResource("19_crafting_catalog")
+entity_catalog = ExtResource("15_entity_catalog")
+combat_hit_particle_catalog = ExtResource("22_combat_particle_catalog")
+player_stats_definition = ExtResource("16_player_stats")
+level_catalog = ExtResource("23_level_catalog")
+level_entrance_definition = ExtResource("26_level_entrance")
+level_runtime_scene = ExtResource("24_level_runtime")
+
+[node name="World" parent="." instance=ExtResource("2_world")]
+
+[node name="Player" parent="." instance=ExtResource("3_player")]
+
+[node name="CameraRig" parent="." instance=ExtResource("4_camera")]
+
+[node name="Environment" parent="." instance=ExtResource("5_environment")]
+
+[node name="Entities" type="Node3D" parent="."]
+script = ExtResource("14_entities")
+
+[node name="MeleeCombat" type="Node" parent="."]
+script = ExtResource("18_melee_combat")
+
+[node name="CombatHitParticles" parent="." instance=ExtResource("21_combat_particles")]
+
+[node name="HUD" parent="." instance=ExtResource("6_hud")]
+
+[node name="GameSession" type="Node" parent="."]
+script = ExtResource("7_session")
+
+[node name="MiningBreakParticles" parent="." instance=ExtResource("12_mining_particles")]
+
+[node name="MiningHitParticles" parent="." instance=ExtResource("13_mining_hit_particles")]
+
+[node name="LevelInteractionCoordinator" type="Node" parent="."]
+script = ExtResource("25_level_interaction")
+
+[node name="SaveStatusLayer" type="CanvasLayer" parent="."]
+process_mode = 2
+visible = false
+layer = 100
+
+[node name="SaveStatusLabel" type="Label" parent="SaveStatusLayer"]
+offset_left = 10.0
+offset_top = 10.0
+offset_right = 420.0
+offset_bottom = 36.0
+theme_override_colors/font_color = Color(1, 1, 1, 0.85)
+theme_override_font_sizes/font_size = 14
+
+[node name="TransitionLayer" type="CanvasLayer" parent="."]
+process_mode = 3
+layer = 200
+
+[node name="Fade" type="ColorRect" parent="TransitionLayer"]
+visible = false
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0, 0, 0, 0)

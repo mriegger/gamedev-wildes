@@ -1,0 +1,15 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://combat/particles/combat_hit_particles.gd" id="1_script"]
+[ext_resource type="PackedScene" path="res://combat/particles/combat_hit_particle_burst.tscn" id="2_burst"]
+
+[node name="CombatHitParticles" type="Node3D"]
+script = ExtResource("1_script")
+
+[node name="Burst01" parent="." instance=ExtResource("2_burst")]
+
+[node name="Burst02" parent="." instance=ExtResource("2_burst")]
+
+[node name="Burst03" parent="." instance=ExtResource("2_burst")]
+
+[node name="Burst04" parent="." instance=ExtResource("2_burst")]

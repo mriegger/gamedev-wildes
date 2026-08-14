@@ -1,0 +1,148 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://ui/screens/settings/settings_screen.gd" id="1_script"]
+[ext_resource type="PackedScene" path="res://ui/components/wildes_button.tscn" id="2_button"]
+
+[node name="SettingsScreen" type="Control"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_script")
+
+[node name="VBox" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 30.0
+offset_top = 24.0
+offset_right = -30.0
+offset_bottom = -24.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 16
+
+[node name="Title" type="Label" parent="VBox"]
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+text = "SETTINGS"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 32
+theme_override_colors/font_color = Color(0.96, 0.95, 0.9, 1)
+
+[node name="Description" type="Label" parent="VBox"]
+layout_mode = 2
+text = "Display and audio changes apply immediately. 3D rendering is capped at 2560×1440."
+autowrap_mode = 3
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 14
+theme_override_colors/font_color = Color(0.82, 0.82, 0.78, 1)
+
+[node name="SettingsGrid" type="GridContainer" parent="VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/h_separation = 22
+theme_override_constants/v_separation = 12
+columns = 2
+
+[node name="FrameRateLabel" type="Label" parent="VBox/SettingsGrid"]
+layout_mode = 2
+text = "Frame-rate limit"
+
+[node name="FrameRate" type="OptionButton" parent="VBox/SettingsGrid"]
+custom_minimum_size = Vector2(220, 38)
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="RenderScaleLabel" type="Label" parent="VBox/SettingsGrid"]
+layout_mode = 2
+text = "3D resolution"
+
+[node name="RenderScale" type="OptionButton" parent="VBox/SettingsGrid"]
+custom_minimum_size = Vector2(220, 38)
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="AntiAliasingLabel" type="Label" parent="VBox/SettingsGrid"]
+layout_mode = 2
+text = "Anti-aliasing"
+
+[node name="AntiAliasing" type="OptionButton" parent="VBox/SettingsGrid"]
+custom_minimum_size = Vector2(220, 38)
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="VolumetricFogLabel" type="Label" parent="VBox/SettingsGrid"]
+layout_mode = 2
+text = "Volumetric fog"
+
+[node name="VolumetricFog" type="CheckButton" parent="VBox/SettingsGrid"]
+layout_mode = 2
+text = "Enabled"
+
+[node name="SunShadowsLabel" type="Label" parent="VBox/SettingsGrid"]
+layout_mode = 2
+text = "Sun shadows"
+
+[node name="SunShadows" type="CheckButton" parent="VBox/SettingsGrid"]
+layout_mode = 2
+button_pressed = true
+text = "Enabled"
+
+[node name="ShadowRangeLabel" type="Label" parent="VBox/SettingsGrid"]
+layout_mode = 2
+text = "Sun shadow range"
+
+[node name="ShadowRange" type="OptionButton" parent="VBox/SettingsGrid"]
+custom_minimum_size = Vector2(220, 38)
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="TorchShadowsLabel" type="Label" parent="VBox/SettingsGrid"]
+layout_mode = 2
+text = "Overworld Torch Shadows"
+
+[node name="TorchShadows" type="OptionButton" parent="VBox/SettingsGrid"]
+custom_minimum_size = Vector2(220, 38)
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="DungeonTorchShadowsLabel" type="Label" parent="VBox/SettingsGrid"]
+layout_mode = 2
+text = "Dungeon Torch Shadows"
+
+[node name="DungeonTorchShadows" type="OptionButton" parent="VBox/SettingsGrid"]
+custom_minimum_size = Vector2(220, 38)
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="AmbientVolumeLabel" type="Label" parent="VBox/SettingsGrid"]
+layout_mode = 2
+text = "Ambient volume"
+
+[node name="AmbientVolume" type="HSlider" parent="VBox/SettingsGrid"]
+custom_minimum_size = Vector2(220, 38)
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 0.0
+max_value = 1.0
+step = 0.01
+value = 1.0
+
+[node name="BirdsEnabledLabel" type="Label" parent="VBox/SettingsGrid"]
+layout_mode = 2
+text = "Bird ambience"
+
+[node name="BirdsEnabled" type="CheckButton" parent="VBox/SettingsGrid"]
+layout_mode = 2
+button_pressed = true
+text = "Enabled"
+
+[node name="BackButton" parent="VBox" instance=ExtResource("2_button")]
+custom_minimum_size = Vector2(220, 58)
+layout_mode = 2
+size_flags_horizontal = 4
+button_text = "BACK"

@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="ZombieBehaviorDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://entities/zombie/zombie_behavior_definition.gd" id="1_behavior"]
+[ext_resource type="Resource" path="res://combat/profiles/zombie_melee.tres" id="2_profile"]
+
+[resource]
+script = ExtResource("1_behavior")
+wander_speed = 1.6
+chase_speed = 3.2
+gravity = 30.0
+jump_velocity = 7.0
+detection_range = 16.0
+forget_range = 24.0
+target_memory_seconds = 3.0
+melee_profile = ExtResource("2_profile")
+wander_radius = 8.0
+wander_goal_seconds = 4.0
+repath_seconds = 0.5

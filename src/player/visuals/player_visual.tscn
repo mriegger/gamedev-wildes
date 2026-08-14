@@ -1,0 +1,147 @@
+[gd_scene load_steps=12 format=3]
+
+[ext_resource type="Script" path="res://actors/animation/blocky_humanoid_animator.gd" id="1_animator"]
+[ext_resource type="Resource" path="res://actors/animation/blocky_humanoid_animation_profile.tres" id="2_profile"]
+[ext_resource type="Script" path="res://player/visuals/held_item_view.gd" id="3_held_item"]
+[ext_resource type="Script" path="res://equipment/armor/presentation/player_armor_view.gd" id="4_armor_view"]
+
+[sub_resource type="StandardMaterial3D" id="Material_torso"]
+albedo_color = Color(0.32, 0.49, 0.78, 1)
+
+[sub_resource type="StandardMaterial3D" id="Material_skin"]
+albedo_color = Color(0.92, 0.8, 0.62, 1)
+
+[sub_resource type="StandardMaterial3D" id="Material_legs"]
+albedo_color = Color(0.28, 0.28, 0.32, 1)
+
+[sub_resource type="BoxMesh" id="Box_torso"]
+material = SubResource("Material_torso")
+size = Vector3(0.45, 0.675, 0.225)
+
+[sub_resource type="BoxMesh" id="Box_head"]
+material = SubResource("Material_skin")
+size = Vector3(0.45, 0.45, 0.45)
+
+[sub_resource type="BoxMesh" id="Box_arm"]
+material = SubResource("Material_skin")
+size = Vector3(0.225, 0.675, 0.225)
+
+[sub_resource type="BoxMesh" id="Box_leg"]
+material = SubResource("Material_legs")
+size = Vector3(0.225, 0.675, 0.225)
+
+[node name="PlayerVisual" type="Node3D"]
+script = ExtResource("1_animator")
+profile = ExtResource("2_profile")
+
+[node name="RigRoot" type="Node3D" parent="."]
+
+[node name="BodySecondary" type="Node3D" parent="RigRoot"]
+position = Vector3(0, 0.675, 0)
+
+[node name="BodyAction" type="Node3D" parent="RigRoot/BodySecondary"]
+
+[node name="TorsoBase" type="Node3D" parent="RigRoot/BodySecondary/BodyAction"]
+
+[node name="Torso" type="MeshInstance3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase"]
+position = Vector3(0, 0.3375, 0)
+mesh = SubResource("Box_torso")
+
+[node name="ArmorTorsoSocket" type="Node3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase"]
+position = Vector3(0, 0.3375, 0)
+
+[node name="HeadAnchor" type="Node3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase"]
+position = Vector3(0, 0.675, 0)
+
+[node name="HeadBase" type="Node3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/HeadAnchor"]
+
+[node name="HeadSecondary" type="Node3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/HeadAnchor/HeadBase"]
+
+[node name="Head" type="MeshInstance3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/HeadAnchor/HeadBase/HeadSecondary"]
+position = Vector3(0, 0.225, 0)
+mesh = SubResource("Box_head")
+
+[node name="ArmorHeadSocket" type="Node3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/HeadAnchor/HeadBase/HeadSecondary"]
+position = Vector3(0, 0.225, 0)
+
+[node name="LeftShoulder" type="Node3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase"]
+position = Vector3(-0.3375, 0.675, 0)
+
+[node name="LeftArmBase" type="Node3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/LeftShoulder"]
+
+[node name="LeftArmAction" type="Node3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/LeftShoulder/LeftArmBase"]
+
+[node name="LeftArm" type="MeshInstance3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/LeftShoulder/LeftArmBase/LeftArmAction"]
+position = Vector3(0, -0.3375, 0)
+mesh = SubResource("Box_arm")
+
+[node name="ArmorLeftArmSocket" type="Node3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/LeftShoulder/LeftArmBase/LeftArmAction"]
+position = Vector3(0, -0.3375, 0)
+
+[node name="RightShoulder" type="Node3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase"]
+position = Vector3(0.3375, 0.675, 0)
+
+[node name="RightArmBase" type="Node3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/RightShoulder"]
+
+[node name="RightArmAction" type="Node3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/RightShoulder/RightArmBase"]
+
+[node name="RightArm" type="MeshInstance3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/RightShoulder/RightArmBase/RightArmAction"]
+position = Vector3(0, -0.3375, 0)
+mesh = SubResource("Box_arm")
+
+[node name="ArmorRightArmSocket" type="Node3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/RightShoulder/RightArmBase/RightArmAction"]
+position = Vector3(0, -0.3375, 0)
+
+[node name="RightHandSocket" type="Node3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/RightShoulder/RightArmBase/RightArmAction"]
+position = Vector3(0, -0.675, 0)
+rotation = Vector3(0.785398, 0, 0)
+script = ExtResource("3_held_item")
+
+[node name="LeftHip" type="Node3D" parent="RigRoot"]
+position = Vector3(-0.1125, 0.675, 0)
+
+[node name="LeftLegLocomotion" type="Node3D" parent="RigRoot/LeftHip"]
+position = Vector3(0, -0.3375, 0)
+
+[node name="LeftLegBase" type="Node3D" parent="RigRoot/LeftHip/LeftLegLocomotion"]
+
+[node name="LeftLeg" type="MeshInstance3D" parent="RigRoot/LeftHip/LeftLegLocomotion/LeftLegBase"]
+mesh = SubResource("Box_leg")
+
+[node name="ArmorLeftLegSocket" type="Node3D" parent="RigRoot/LeftHip/LeftLegLocomotion/LeftLegBase"]
+
+[node name="LeftFootMarker" type="Marker3D" parent="RigRoot/LeftHip/LeftLegLocomotion/LeftLegBase"]
+position = Vector3(0, -0.3375, 0)
+
+[node name="ArmorLeftFootSocket" type="Node3D" parent="RigRoot/LeftHip/LeftLegLocomotion/LeftLegBase"]
+position = Vector3(0, -0.3375, 0)
+
+[node name="RightHip" type="Node3D" parent="RigRoot"]
+position = Vector3(0.1125, 0.675, 0)
+
+[node name="RightLegLocomotion" type="Node3D" parent="RigRoot/RightHip"]
+position = Vector3(0, -0.3375, 0)
+
+[node name="RightLegBase" type="Node3D" parent="RigRoot/RightHip/RightLegLocomotion"]
+
+[node name="RightLeg" type="MeshInstance3D" parent="RigRoot/RightHip/RightLegLocomotion/RightLegBase"]
+mesh = SubResource("Box_leg")
+
+[node name="ArmorRightLegSocket" type="Node3D" parent="RigRoot/RightHip/RightLegLocomotion/RightLegBase"]
+
+[node name="RightFootMarker" type="Marker3D" parent="RigRoot/RightHip/RightLegLocomotion/RightLegBase"]
+position = Vector3(0, -0.3375, 0)
+
+[node name="ArmorRightFootSocket" type="Node3D" parent="RigRoot/RightHip/RightLegLocomotion/RightLegBase"]
+position = Vector3(0, -0.3375, 0)
+
+[node name="ArmorView" type="Node" parent="."]
+script = ExtResource("4_armor_view")
+head_attachment_path = NodePath("../RigRoot/BodySecondary/BodyAction/TorsoBase/HeadAnchor/HeadBase/HeadSecondary/ArmorHeadSocket")
+torso_attachment_path = NodePath("../RigRoot/BodySecondary/BodyAction/TorsoBase/ArmorTorsoSocket")
+left_arm_attachment_path = NodePath("../RigRoot/BodySecondary/BodyAction/TorsoBase/LeftShoulder/LeftArmBase/LeftArmAction/ArmorLeftArmSocket")
+right_arm_attachment_path = NodePath("../RigRoot/BodySecondary/BodyAction/TorsoBase/RightShoulder/RightArmBase/RightArmAction/ArmorRightArmSocket")
+left_leg_attachment_path = NodePath("../RigRoot/LeftHip/LeftLegLocomotion/LeftLegBase/ArmorLeftLegSocket")
+right_leg_attachment_path = NodePath("../RigRoot/RightHip/RightLegLocomotion/RightLegBase/ArmorRightLegSocket")
+left_foot_attachment_path = NodePath("../RigRoot/LeftHip/LeftLegLocomotion/LeftLegBase/ArmorLeftFootSocket")
+right_foot_attachment_path = NodePath("../RigRoot/RightHip/RightLegLocomotion/RightLegBase/ArmorRightFootSocket")

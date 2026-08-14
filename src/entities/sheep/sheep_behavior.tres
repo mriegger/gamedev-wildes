@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="SheepBehaviorDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://entities/sheep/sheep_behavior_definition.gd" id="1_behavior"]
+
+[resource]
+script = ExtResource("1_behavior")
+wander_speed = 1.2
+flee_speed = 3.6
+gravity = 30.0
+jump_velocity = 7.0
+wander_radius = 6.0
+wander_goal_seconds = 3.0
+idle_seconds = 2.0
+flee_seconds = 4.0
+flee_goal_distance = 10.0
+repath_seconds = 0.5

@@ -1,0 +1,94 @@
+[gd_scene load_steps=12 format=3]
+
+[ext_resource type="Script" path="res://mining/presentation/mining_break_particles.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/textures/effects/mining/dirt_01.png" id="2_dirt_01"]
+[ext_resource type="Texture2D" path="res://assets/textures/effects/mining/dirt_02.png" id="3_dirt_02"]
+[ext_resource type="Texture2D" path="res://assets/textures/effects/mining/dirt_03.png" id="4_dirt_03"]
+
+[sub_resource type="Gradient" id="Gradient_fade"]
+offsets = PackedFloat32Array(0, 0.65, 1)
+colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0)
+
+[sub_resource type="StandardMaterial3D" id="Material_dirt_01"]
+transparency = 1
+shading_mode = 0
+vertex_color_use_as_albedo = true
+albedo_texture = ExtResource("2_dirt_01")
+billboard_mode = 1
+billboard_keep_scale = true
+
+[sub_resource type="QuadMesh" id="Mesh_dirt_01"]
+material = SubResource("Material_dirt_01")
+size = Vector2(1.5, 1.5)
+
+[sub_resource type="StandardMaterial3D" id="Material_dirt_02"]
+transparency = 1
+shading_mode = 0
+vertex_color_use_as_albedo = true
+albedo_texture = ExtResource("3_dirt_02")
+billboard_mode = 1
+billboard_keep_scale = true
+
+[sub_resource type="QuadMesh" id="Mesh_dirt_02"]
+material = SubResource("Material_dirt_02")
+size = Vector2(1.5, 1.5)
+
+[sub_resource type="StandardMaterial3D" id="Material_dirt_03"]
+transparency = 1
+shading_mode = 0
+vertex_color_use_as_albedo = true
+albedo_texture = ExtResource("4_dirt_03")
+billboard_mode = 1
+billboard_keep_scale = true
+
+[sub_resource type="QuadMesh" id="Mesh_dirt_03"]
+material = SubResource("Material_dirt_03")
+size = Vector2(1.5, 1.5)
+
+[node name="MiningBreakParticles" type="Node3D"]
+script = ExtResource("1_script")
+
+[node name="Dirt01" type="CPUParticles3D" parent="."]
+emitting = false
+amount = 1
+lifetime = 0.3
+one_shot = true
+explosiveness = 1.0
+local_coords = false
+direction = Vector3(0, 1, 0)
+spread = 20.0
+gravity = Vector3(0, -1.5, 0)
+initial_velocity_min = 1.1
+initial_velocity_max = 1.5
+color_ramp = SubResource("Gradient_fade")
+mesh = SubResource("Mesh_dirt_01")
+
+[node name="Dirt02" type="CPUParticles3D" parent="."]
+emitting = false
+amount = 1
+lifetime = 0.3
+one_shot = true
+explosiveness = 1.0
+local_coords = false
+direction = Vector3(0, 1, 0)
+spread = 20.0
+gravity = Vector3(0, -1.5, 0)
+initial_velocity_min = 1.1
+initial_velocity_max = 1.5
+color_ramp = SubResource("Gradient_fade")
+mesh = SubResource("Mesh_dirt_02")
+
+[node name="Dirt03" type="CPUParticles3D" parent="."]
+emitting = false
+amount = 1
+lifetime = 0.3
+one_shot = true
+explosiveness = 1.0
+local_coords = false
+direction = Vector3(0, 1, 0)
+spread = 20.0
+gravity = Vector3(0, -1.5, 0)
+initial_velocity_min = 1.1
+initial_velocity_max = 1.5
+color_ramp = SubResource("Gradient_fade")
+mesh = SubResource("Mesh_dirt_03")

@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="ItemDefinition" load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://items/item_definition.gd" id="1_definition"]
+[ext_resource type="Texture2D" path="res://assets/textures/blocks/tree_leaves.png" id="2_icon"]
+[ext_resource type="Resource" path="res://blocks/definitions/leaves.tres" id="3_block"]
+[ext_resource type="Resource" path="res://items/actions/definitions/unarmed_mining.tres" id="4_mining"]
+[ext_resource type="Script" path="res://items/actions/block_placement_action_definition.gd" id="5_placement"]
+
+[sub_resource type="Resource" id="Resource_placement"]
+script = ExtResource("5_placement")
+block = ExtResource("3_block")
+
+[resource]
+script = ExtResource("1_definition")
+id = &"leaves_block"
+display_name = "Leaves"
+icon = ExtResource("2_icon")
+max_stack = 99
+primary_action = ExtResource("4_mining")
+secondary_action = SubResource("Resource_placement")

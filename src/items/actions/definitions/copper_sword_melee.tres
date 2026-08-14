@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="MeleeAttackActionDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://items/actions/melee_attack_action_definition.gd" id="1_melee"]
+[ext_resource type="Resource" path="res://combat/profiles/copper_sword_melee.tres" id="2_profile"]
+
+[resource]
+script = ExtResource("1_melee")
+attack_profile = ExtResource("2_profile")
+chain_input_window = 0.26
+held_position_offset = Vector3(0, 0.1125, 0)
+held_rotation_degrees = Vector3(0, -113.6, 0)

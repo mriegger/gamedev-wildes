@@ -1,0 +1,20 @@
+[gd_resource type="Resource" load_steps=2 format=3 uid="uid://qT3Ho6ABiNNAP"]
+
+[ext_resource type="Script" path="res://world/generation/biome.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+biome_id = "forest"
+min_temperature = 0.3
+max_temperature = 0.7
+min_humidity = 0.45
+max_humidity = 0.85
+min_continentalness = 0.2
+max_continentalness = 0.6
+min_erosion = 0.1
+max_erosion = 0.5
+min_peaks_valleys = 0.2
+max_peaks_valleys = 0.65
+surface_block = 1
+shore_block = 3
+tree_density = 0.03

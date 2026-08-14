@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="ItemDefinition" load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://items/item_definition.gd" id="1_definition"]
+[ext_resource type="Texture2D" path="res://assets/textures/tools/sword/copper_sword.png" id="2_icon"]
+[ext_resource type="Resource" path="res://items/actions/definitions/copper_sword_melee.tres" id="3_action"]
+[ext_resource type="PackedScene" path="res://items/held/copper_sword.tscn" id="4_held"]
+[ext_resource type="Resource" path="res://progression/definitions/common.tres" id="5_proficiency"]
+[ext_resource type="Resource" path="res://items/rarity/definitions/common.tres" id="6_rarity"]
+[ext_resource type="Resource" path="res://items/audio/profiles/copper_sword_equip.tres" id="7_equip_audio"]
+
+[resource]
+script = ExtResource("1_definition")
+id = &"copper_sword"
+display_name = "Copper Sword"
+icon = ExtResource("2_icon")
+max_stack = 1
+primary_action = ExtResource("3_action")
+held_scene = ExtResource("4_held")
+equip_audio = ExtResource("7_equip_audio")
+rarity = ExtResource("6_rarity")
+proficiency = ExtResource("5_proficiency")

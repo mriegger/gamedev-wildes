@@ -1,0 +1,7 @@
+{
+  "seed": 1337,
+  "region": {"x0": -32, "x1": 32, "z0": -32, "z1": 32, "y0": 0, "y1": 128},
+  "digest": "16c0b7cdab1cee1a1aebd697ffdf65595e6485ad65ca26befc7e25760afbc069",
+  "description": "SHA256 over deterministic base-terrain and tree block IDs (voxel_world.get_block_id_at) for fixed region, seed 1337 with jittered WorldConfig. Seeded post-terrain copper deposits are covered separately and intentionally excluded. Any noise/spline/biome/lake/river change that reshapes existing worlds must update this digest.",
+  "generated_by": "src/tests/world_golden_hash.gd --update"
+}

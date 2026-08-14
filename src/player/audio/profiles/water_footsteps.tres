@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="FootstepAudioProfile" load_steps=10 format=3]
+
+[ext_resource type="Script" path="res://player/audio/footstep_audio_profile.gd" id="1_profile"]
+[ext_resource type="AudioStream" path="res://assets/audio/footsteps/water/Footstep_Water_00.wav" id="2_step_00"]
+[ext_resource type="AudioStream" path="res://assets/audio/footsteps/water/Footstep_Water_01.wav" id="3_step_01"]
+[ext_resource type="AudioStream" path="res://assets/audio/footsteps/water/Footstep_Water_02.wav" id="4_step_02"]
+[ext_resource type="AudioStream" path="res://assets/audio/footsteps/water/Footstep_Water_03.wav" id="5_step_03"]
+[ext_resource type="AudioStream" path="res://assets/audio/footsteps/water/Footstep_Water_04.wav" id="6_step_04"]
+[ext_resource type="AudioStream" path="res://assets/audio/footsteps/water/Footstep_Water_05.wav" id="7_step_05"]
+[ext_resource type="AudioStream" path="res://assets/audio/footsteps/water/Footstep_Water_06.wav" id="8_step_06"]
+[ext_resource type="AudioStream" path="res://assets/audio/footsteps/water/Footstep_Water_07.wav" id="9_step_07"]
+
+[resource]
+script = ExtResource("1_profile")
+surface_block_id = 8
+streams = Array[AudioStream]([ExtResource("2_step_00"), ExtResource("3_step_01"), ExtResource("4_step_02"), ExtResource("5_step_03"), ExtResource("6_step_04"), ExtResource("7_step_05"), ExtResource("8_step_06"), ExtResource("9_step_07")])

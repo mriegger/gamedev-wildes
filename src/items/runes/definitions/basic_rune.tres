@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="RuneDefinition" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://items/runes/rune_definition.gd" id="1_definition"]
+[ext_resource type="Texture2D" path="res://assets/textures/items/basic_rune.svg" id="2_icon"]
+[ext_resource type="Resource" path="res://items/rarity/definitions/common.tres" id="3_rarity"]
+[ext_resource type="Script" path="res://stats/stat_modifier.gd" id="4_modifier"]
+
+[sub_resource type="Resource" id="maximum_hp"]
+script = ExtResource("4_modifier")
+id = &"basic_rune_maximum_hp"
+source_id = &"basic_rune"
+stat_id = &"hp"
+amount = 100.0
+
+[resource]
+script = ExtResource("1_definition")
+id = &"basic_rune"
+display_name = "Basic Rune"
+icon = ExtResource("2_icon")
+max_stack = 99
+rarity = ExtResource("3_rarity")
+compatible_gear = 3
+compatible_armor_slots = 15
+socket_modifiers = Array[ExtResource("4_modifier")]([SubResource("maximum_hp")])

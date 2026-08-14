@@ -1,0 +1,18 @@
+[gd_scene load_steps=6 format=3 uid="uid://bappsh3ll47fx"]
+
+[ext_resource type="Script" path="res://app/app.gd" id="1_app"]
+[ext_resource type="PackedScene" path="res://ui/screens/main_menu/main_menu.tscn" id="2_main_menu"]
+[ext_resource type="PackedScene" path="res://ui/screens/world_select/save_slot_screen.tscn" id="3_world_select"]
+[ext_resource type="PackedScene" path="res://ui/screens/loading/loading_screen.tscn" id="4_loading"]
+[ext_resource type="PackedScene" path="res://game/game.tscn" id="5_game"]
+
+[node name="App" type="Node"]
+script = ExtResource("1_app")
+main_menu_scene = ExtResource("2_main_menu")
+world_select_scene = ExtResource("3_world_select")
+loading_scene = ExtResource("4_loading")
+game_scene = ExtResource("5_game")
+
+[node name="GameRoot" type="Node" parent="."]
+
+[node name="ScreenRoot" type="Node" parent="."]

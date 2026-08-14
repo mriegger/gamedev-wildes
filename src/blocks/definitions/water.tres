@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="BlockDefinition" load_steps=2 format=3 uid="uid://lcw58j0jz8vs3"]
+
+[ext_resource type="Script" path="res://blocks/block_definition.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+id = 8
+is_solid = false
+is_opaque = false
+is_raycast_solid = false
+is_breakable = true
+is_replaceable = true
+emissive_enabled = false
+emissive_color = Color(0, 0, 0, 0)
+emissive_energy = 0.0
+light_range = 0.0
+light_color = Color(1, 1, 1, 1)

@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="BiomeLibrary" load_steps=9 format=3 uid="uid://b10m3l1br4ry7"]
+
+[ext_resource type="Script" path="res://world/generation/biome_library.gd" id="1_library"]
+[ext_resource type="Script" path="res://world/generation/biome.gd" id="2_biome"]
+[ext_resource type="Resource" path="res://world/generation/biomes/desert.tres" id="3_desert"]
+[ext_resource type="Resource" path="res://world/generation/biomes/forest.tres" id="4_forest"]
+[ext_resource type="Resource" path="res://world/generation/biomes/highland.tres" id="5_highland"]
+[ext_resource type="Resource" path="res://world/generation/biomes/mountains.tres" id="6_mountains"]
+[ext_resource type="Resource" path="res://world/generation/biomes/plains.tres" id="7_plains"]
+[ext_resource type="Resource" path="res://world/generation/biomes/wetland.tres" id="8_wetland"]
+
+[resource]
+script = ExtResource("1_library")
+biomes = Array[ExtResource("2_biome")]([ExtResource("3_desert"), ExtResource("4_forest"), ExtResource("5_highland"), ExtResource("6_mountains"), ExtResource("7_plains"), ExtResource("8_wetland")])

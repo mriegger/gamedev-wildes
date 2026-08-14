@@ -1,0 +1,56 @@
+[gd_resource type="Resource" script_class="ArmorDefinition" load_steps=14 format=3]
+
+[ext_resource type="Script" path="res://equipment/armor/armor_definition.gd" id="1_armor"]
+[ext_resource type="Texture2D" path="res://equipment/armor/sets/copper/icons/copper_chest_plate.svg" id="2_icon"]
+[ext_resource type="Script" path="res://stats/stat_modifier.gd" id="3_modifier"]
+[ext_resource type="Script" path="res://equipment/armor/armor_visual_part.gd" id="4_visual"]
+[ext_resource type="Material" path="res://equipment/armor/sets/copper/copper_armor_material.tres" id="5_material"]
+[ext_resource type="Resource" path="res://equipment/armor/sets/copper/copper_armor_set.tres" id="6_set"]
+[ext_resource type="Resource" path="res://progression/definitions/common.tres" id="7_proficiency"]
+[ext_resource type="Resource" path="res://items/rarity/definitions/common.tres" id="8_rarity"]
+
+[sub_resource type="Resource" id="defense"]
+script = ExtResource("3_modifier")
+id = &"copper_chest_plate_defense"
+source_id = &"copper_chest_plate"
+stat_id = &"defense"
+amount = 3.0
+
+[sub_resource type="BoxMesh" id="chest_mesh"]
+material = ExtResource("5_material")
+size = Vector3(0.49, 0.7, 0.27)
+
+[sub_resource type="Resource" id="chest"]
+script = ExtResource("4_visual")
+attachment = 1
+mesh = SubResource("chest_mesh")
+
+[sub_resource type="BoxMesh" id="shoulder_mesh"]
+material = ExtResource("5_material")
+size = Vector3(0.265, 0.18, 0.285)
+
+[sub_resource type="Resource" id="left_shoulder"]
+script = ExtResource("4_visual")
+attachment = 2
+mesh = SubResource("shoulder_mesh")
+local_transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.25, 0)
+
+[sub_resource type="Resource" id="right_shoulder"]
+script = ExtResource("4_visual")
+attachment = 3
+mesh = SubResource("shoulder_mesh")
+local_transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.25, 0)
+
+[resource]
+script = ExtResource("1_armor")
+id = &"copper_chest_plate"
+display_name = "Copper Chest Plate"
+icon = ExtResource("2_icon")
+max_stack = 1
+rarity = ExtResource("8_rarity")
+proficiency = ExtResource("7_proficiency")
+stat_modifier_activation = 1
+stat_modifiers = Array[ExtResource("3_modifier")]([SubResource("defense")])
+armor_slot = 1
+armor_set = ExtResource("6_set")
+visual_parts = Array[ExtResource("4_visual")]([SubResource("chest"), SubResource("left_shoulder"), SubResource("right_shoulder")])

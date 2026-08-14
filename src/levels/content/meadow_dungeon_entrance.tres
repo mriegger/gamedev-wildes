@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="LevelEntranceDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://levels/definitions/level_entrance_definition.gd" id="1_entrance"]
+
+[resource]
+script = ExtResource("1_entrance")
+entrance_id = &"meadow_dungeon"
+level_id = &"stone_dungeon"
+arch_block_id = 4
+door_block_id = 5
+enter_prompt = "F  Enter Dungeon"
+return_prompt = "F  Return to Wildes"

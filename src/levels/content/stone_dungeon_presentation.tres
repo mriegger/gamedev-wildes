@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="LevelPresentationDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://levels/definitions/level_presentation_definition.gd" id="1_presentation"]
+[ext_resource type="Shader" path="res://levels/presentation/level_terrain.gdshader" id="2_shader"]
+
+[resource]
+script = ExtResource("1_presentation")
+terrain_shader = ExtResource("2_shader")
+background_color = Color(0.002, 0.003, 0.005, 1)
+background_energy_multiplier = 0.1
+ambient_light_color = Color(0.42, 0.44, 0.48, 1)
+ambient_light_energy = 0.28
+return_door_block_id = 5

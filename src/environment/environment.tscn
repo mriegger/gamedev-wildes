@@ -1,0 +1,34 @@
+[gd_scene format=3 uid="uid://bl1xnl7u48ppo"]
+
+[ext_resource type="Script" path="res://environment/game_environment.gd" id="1_game_environment"]
+[ext_resource type="Environment" path="res://environment/default_environment.tres" id="2_environment"]
+[ext_resource type="Script" path="res://environment/day_night/game_clock.gd" id="3_clock"]
+[ext_resource type="Script" path="res://environment/day_night/day_night_values.gd" id="4_values"]
+[ext_resource type="PackedScene" path="res://environment/day_night/debug_clock_panel.tscn" id="5_debug"]
+[ext_resource type="Resource" path="res://environment/day_night/day_night_profile.tres" id="6_profile"]
+[ext_resource type="PackedScene" path="res://environment/ambient/ambient_soundscape.tscn" id="7_ambient"]
+
+[node name="GameEnvironment" type="Node3D"]
+script = ExtResource("1_game_environment")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = ExtResource("2_environment")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.642788, -0.383022, 0.663414, 0, 0.866025, 0.5, -0.766044, -0.321394, 0.55667, 0, 24, 0)
+
+[node name="SunFill" type="DirectionalLight3D" parent="."]
+transform = Transform3D(-0.642788, -0.383022, -0.663414, 0, 0.866025, -0.5, 0.766044, -0.321394, -0.55667, 0, 24, 0)
+
+[node name="GameClock" type="Node3D" parent="."]
+script = ExtResource("3_clock")
+cycle_duration_minutes = 20.0
+enable_cycle = true
+
+[node name="DayNightValues" type="Node3D" parent="."]
+script = ExtResource("4_values")
+profile = ExtResource("6_profile")
+
+[node name="DebugClockPanel" parent="." instance=ExtResource("5_debug")]
+
+[node name="AmbientSoundscape" parent="." instance=ExtResource("7_ambient")]

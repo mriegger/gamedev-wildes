@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ArmorSetDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://equipment/armor/armor_set_definition.gd" id="1_set"]
+[ext_resource type="Script" path="res://stats/stat_modifier.gd" id="2_modifier"]
+
+[sub_resource type="Resource" id="full_set_defense"]
+script = ExtResource("2_modifier")
+id = &"copper_armor_full_set_defense"
+source_id = &"copper_armor"
+stat_id = &"defense"
+amount = 3.0
+
+[resource]
+script = ExtResource("1_set")
+id = &"copper_armor"
+full_set_modifiers = Array[ExtResource("2_modifier")]([SubResource("full_set_defense")])

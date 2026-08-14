@@ -1,0 +1,12 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://environment/ambient/ambient_soundscape.gd" id="1"]
+
+[node name="AmbientSoundscape" type="Node"]
+script = ExtResource("1")
+
+[node name="BirdsPlayer" type="AudioStreamPlayer" parent="."]
+bus = &"Ambient"
+
+[node name="NightPlayer" type="AudioStreamPlayer" parent="."]
+bus = &"Ambient"

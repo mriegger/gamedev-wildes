@@ -1,0 +1,26 @@
+[gd_scene load_steps=9 format=3 uid="uid://c9w0rld0x2m4p"]
+
+[ext_resource type="Script" path="res://world/world.gd" id="1_world"]
+[ext_resource type="Resource" path="res://world/settings/world_config.tres" id="2_config"]
+[ext_resource type="Resource" path="res://world/materials/water_profile.tres" id="4_water_profile"]
+[ext_resource type="Shader" path="res://world/materials/terrain.gdshader" id="5_terrain_shader"]
+[ext_resource type="Shader" path="res://world/materials/water.gdshader" id="6_water_shader"]
+[ext_resource type="Script" path="res://world/chunks/chunk_renderer.gd" id="7_chunk_renderer"]
+[ext_resource type="Script" path="res://world/chunks/chunk_build_scheduler.gd" id="8_chunk_scheduler"]
+[ext_resource type="Script" path="res://blocks/presentation/torch_renderer.gd" id="9_torch_renderer"]
+
+[node name="World" type="Node3D"]
+script = ExtResource("1_world")
+config = ExtResource("2_config")
+water_profile = ExtResource("4_water_profile")
+terrain_shader = ExtResource("5_terrain_shader")
+water_shader = ExtResource("6_water_shader")
+
+[node name="ChunkRenderer" type="Node3D" parent="."]
+script = ExtResource("7_chunk_renderer")
+
+[node name="ChunkBuildScheduler" type="Node" parent="."]
+script = ExtResource("8_chunk_scheduler")
+
+[node name="Torches" type="Node3D" parent="."]
+script = ExtResource("9_torch_renderer")

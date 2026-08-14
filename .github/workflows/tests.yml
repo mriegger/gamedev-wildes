@@ -1,0 +1,595 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  headless-boot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Boot project headlessly
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            60 "Godot Engine v4.7" /tmp/headless_boot.log -- \
+            godot --path src --headless --quit
+
+  block-content:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run block content tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "BLOCK_CONTENT PASS" /tmp/block_content.log -- \
+            godot --headless --path src --script res://blocks/tests/block_content.gd
+      - name: Run block world edit tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "BLOCK_WORLD_EDITS PASS" /tmp/block_world_edits.log -- \
+            godot --headless --path src --script res://blocks/tests/block_world_edits.gd
+
+  inventory-fuzz:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run inventory fuzz tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            120 "ALL PASS" /tmp/inventory_fuzz.log -- \
+            godot --headless --path src --script res://tests/inventory_fuzz_runner.gd -- --seqs=20000 --ops=20
+
+  crafting-system:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run crafting system tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "CRAFTING_SYSTEM PASS" /tmp/crafting_system.log -- \
+            godot --headless --path src --script res://crafting/tests/crafting_system.gd
+
+  crafting-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run crafting UI integration tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "CRAFTING_UI PASS" /tmp/crafting_ui.log -- \
+            godot --headless --path src --script res://crafting/tests/crafting_ui_integration.gd
+
+  dev-console-command:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run developer console command tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "DEV_CONSOLE_COMMAND PASS" /tmp/dev_console_command.log -- \
+            godot --headless --path src --script res://dev_console/tests/dev_console_command_processor.gd
+
+  dev-console-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run developer console UI integration tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "DEV_CONSOLE_UI PASS" /tmp/dev_console_ui.log -- \
+            godot --headless --path src --script res://dev_console/tests/dev_console_ui_integration.gd
+
+  stats-system:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run stats system tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "Stats system tests passed" /tmp/stats_system.log -- \
+            godot --headless --path src --script res://tests/stats_system.gd
+
+  progression-system:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run item proficiency tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "ITEM_PROFICIENCY PASS" /tmp/item_proficiency.log -- \
+            godot --headless --path src --script res://progression/tests/item_proficiency.gd
+      - name: Run combat progression tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "COMBAT_PROGRESSION PASS" /tmp/combat_progression.log -- \
+            godot --headless --path src --script res://progression/tests/combat_progression.gd
+
+  rune-system:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Validate rune content
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "RUNE_DEFINITION PASS" /tmp/rune_definition.log -- \
+            godot --headless --path src --script res://items/runes/tests/rune_definition.gd
+      - name: Validate socket persistence
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "INVENTORY_SOCKET_PERSISTENCE PASS" /tmp/inventory_socket_persistence.log -- \
+            godot --headless --path src --script res://items/runes/tests/inventory_socket_persistence.gd
+      - name: Validate socket commands
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "RUNE_SOCKETING PASS" /tmp/rune_socketing.log -- \
+            godot --headless --path src --script res://items/runes/tests/rune_socketing.gd
+      - name: Validate active rune effects
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "RUNE_EFFECT_COORDINATOR PASS" /tmp/rune_effects.log -- \
+            godot --headless --path src --script res://items/runes/tests/rune_effect_coordinator.gd
+      - name: Validate rune socketing UI
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "RUNE_SOCKETING_UI PASS" /tmp/rune_socketing_ui.log -- \
+            godot --headless --path src --script res://items/runes/tests/rune_socketing_ui_integration.gd
+      - name: Validate rune tooltips
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "RUNE_TOOLTIP PASS" /tmp/rune_tooltip.log -- \
+            godot --headless --path src --script res://items/runes/tests/rune_tooltip_integration.gd
+
+  armor-system:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run armor equipment tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "ARMOR_SYSTEM PASS" /tmp/armor_system.log -- \
+            godot --headless --path src --script res://equipment/armor/tests/armor_system.gd
+
+  armor-visual:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run armor visual integration tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "ARMOR_VISUAL PASS" /tmp/armor_visual.log -- \
+            godot --headless --path src --script res://equipment/armor/tests/armor_visual_integration.gd
+
+  world-golden-hash:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run world golden hash determinism
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            60 "GOLDEN PASS" /tmp/world_golden_hash.log -- \
+            godot --headless --path src --script res://tests/world_golden_hash.gd
+
+  tree-targeting-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run tree targeting integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "TREE_TARGETING PASS" /tmp/tree_targeting.log -- \
+            godot --headless --path src --script res://tests/tree_targeting_integration.gd
+
+  world-edit-index:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run world edit spatial-index tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            60 "WORLD_EDIT_INDEX PASS" /tmp/world_edit_index.log -- \
+            godot --headless --path src --script res://tests/world_edit_index.gd
+
+  copper-deposits:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run copper deposit generation tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            60 "COPPER_DEPOSITS PASS" /tmp/copper_deposits.log -- \
+            godot --headless --path src --script res://tests/copper_deposit_generation.gd
+
+  entity-domain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run entity domain tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "ENTITY_DOMAIN PASS" /tmp/entity_domain.log -- \
+            godot --headless --path src --script res://tests/entity_domain.gd
+
+  entity-navigation-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run entity navigation integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "ENTITY_NAVIGATION_INTEGRATION PASS" /tmp/entity_navigation.log -- \
+            godot --headless --path src --script res://tests/entity_navigation_integration.gd
+
+  entity-combat-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run entity combat integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "ENTITY_COMBAT_INTEGRATION PASS" /tmp/entity_combat.log -- \
+            godot --headless --path src --script res://tests/entity_combat_integration.gd
+
+  entity-spatial-index:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run entity spatial index tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "ENTITY_SPATIAL_INDEX PASS" /tmp/entity_spatial_index.log -- \
+            godot --headless --path src --script res://tests/entity_spatial_index.gd
+
+  entity-population-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run entity population integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "ENTITY_POPULATION_INTEGRATION PASS" /tmp/entity_population.log -- \
+            godot --headless --path src --script res://tests/entity_population_integration.gd
+
+  entity-placement-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run entity placement integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "ENTITY_PLACEMENT_INTEGRATION PASS" /tmp/entity_placement.log -- \
+            godot --headless --path src --script res://tests/entity_placement_integration.gd
+
+  sheep-behavior-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run sheep behavior integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "SHEEP_BEHAVIOR_INTEGRATION PASS" /tmp/sheep_behavior.log -- \
+            godot --headless --path src --script res://tests/sheep_behavior_integration.gd
+
+  entity-species-population-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run entity species population integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "ENTITY_SPECIES_POPULATION_INTEGRATION PASS" /tmp/entity_species_population.log -- \
+            godot --headless --path src --script res://tests/entity_species_population_integration.gd
+
+  entity-fade-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run entity fade lifecycle integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "ENTITY_FADE_INTEGRATION PASS" /tmp/entity_fade.log -- \
+            godot --headless --path src --script res://tests/entity_fade_integration.gd
+  level-system:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run deterministic level generation and model tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            120 "LEVEL_SYSTEM PASS" /tmp/level_system.log -- \
+            godot --headless --path src --script res://tests/level_system.gd
+
+  level-runtime-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run finite level runtime lifecycle tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            60 "LEVEL_RUNTIME PASS" /tmp/level_runtime.log -- \
+            godot --headless --path src --script res://tests/level_runtime_integration.gd
+      - name: Run level save-position compatibility tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "LEVEL_SAVE_PROBE PASS" /tmp/level_save_probe.log -- \
+            godot --headless --path src --script res://tests/level_save_probe.gd
+      - name: Run dungeon torch shadow integration tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "DUNGEON_TORCH_SHADOWS PASS" /tmp/dungeon_torch_shadows.log -- \
+            godot --headless --path src --script res://tests/dungeon_torch_shadow_integration.gd
+
+  hud-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run HUD headless integration (orphan + preview leak)
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "HUD_INTEGRATION PASS" /tmp/hud_integration.log -- \
+            godot --headless --path src --script res://tests/hud_integration.gd
+
+  player-animation-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run player animation integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "PLAYER_ANIMATION PASS" /tmp/player_animation.log -- \
+            godot --headless --path src --script res://tests/player_animation_integration.gd
+
+  animation-tuning-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run animation tuning panel integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "ANIMATION_TUNING PASS" /tmp/animation_tuning.log -- \
+            godot --headless --path src --script res://tests/animation_tuning_panel_integration.gd
+
+  tool-system-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run tool system integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "TOOL_SYSTEM PASS" /tmp/tool_system.log -- \
+            godot --headless --path src --script res://tests/tool_system_integration.gd
+      - name: Run item rarity tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "ITEM_RARITY PASS" /tmp/item_rarity.log -- \
+            godot --headless --path src --script res://items/rarity/tests/item_rarity.gd
+
+  audio-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run ambient audio integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "AUDIO_AMBIENT PASS" /tmp/audio_ambient.log -- \
+            godot --headless --path src --script res://tests/audio_ambient_integration.gd
+      - name: Run footstep audio integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "AUDIO_FOOTSTEPS PASS" /tmp/audio_footsteps.log -- \
+            godot --headless --path src --script res://tests/audio_footsteps_integration.gd
+      - name: Run action audio integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "AUDIO_ACTION PASS" /tmp/audio_action.log -- \
+            godot --headless --path src --script res://tests/audio_action_integration.gd
+      - name: Run zombie vocalizations integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "ZOMBIE_VOCALIZATIONS PASS" /tmp/zombie_vocalizations.log -- \
+            godot --headless --path src --script res://entities/zombie/tests/zombie_vocalizations_integration.gd
+      - name: Run sheep vocalizations integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "SHEEP_VOCALIZATIONS PASS" /tmp/sheep_vocalizations.log -- \
+            godot --headless --path src --script res://entities/sheep/tests/sheep_vocalizations_integration.gd
+
+  mining-effects-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run mining break particle integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "MINING_BREAK_PARTICLES PASS" /tmp/mining_break_particles.log -- \
+            godot --headless --path src --script res://mining/tests/mining_break_particles_integration.gd
+      - name: Run mining hit particle integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "MINING_HIT_PARTICLES PASS" /tmp/mining_hit_particles.log -- \
+            godot --headless --path src --script res://mining/tests/mining_hit_particles_integration.gd
+      - name: Run combat hit particle integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "COMBAT_HIT_PARTICLES PASS" /tmp/combat_hit_particles.log -- \
+            godot --headless --path src --script res://combat/particles/tests/combat_hit_particles_integration.gd
+
+  entity-efficiency:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Record entity efficiency telemetry and verify deterministic bounds
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            120 "ENTITY_EFFICIENCY PASS" /tmp/entity_efficiency.log -- \
+            godot --headless --path src --script res://tests/entity_efficiency_benchmark.gd -- --output=/tmp/entity_efficiency.json
+
+  soak-entity-streaming:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run entity streaming soak (population + pathfinding + cleanup bounds)
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            60 "SOAK_ENTITY_STREAMING PASS" /tmp/soak_entity_streaming.log -- \
+            godot --headless --path src --script res://tests/soak_entity_streaming.gd
+
+  soak-world-streaming:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run world streaming soak (bounded chunks + orphan + threading)
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            90 "SOAK PASS" /tmp/soak.log -- \
+            godot --headless --path src --script res://tests/soak_world_streaming.gd

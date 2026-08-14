@@ -1,0 +1,72 @@
+[gd_resource type="Resource" script_class="ArmorDefinition" load_steps=18 format=3]
+
+[ext_resource type="Script" path="res://equipment/armor/armor_definition.gd" id="1_armor"]
+[ext_resource type="Texture2D" path="res://equipment/armor/sets/copper/icons/copper_helmet.svg" id="2_icon"]
+[ext_resource type="Script" path="res://stats/stat_modifier.gd" id="3_modifier"]
+[ext_resource type="Script" path="res://equipment/armor/armor_visual_part.gd" id="4_visual"]
+[ext_resource type="Material" path="res://equipment/armor/sets/copper/copper_armor_material.tres" id="5_material"]
+[ext_resource type="Resource" path="res://equipment/armor/sets/copper/copper_armor_set.tres" id="6_set"]
+[ext_resource type="Resource" path="res://progression/definitions/common.tres" id="7_proficiency"]
+[ext_resource type="Resource" path="res://items/rarity/definitions/common.tres" id="8_rarity"]
+
+[sub_resource type="Resource" id="defense"]
+script = ExtResource("3_modifier")
+id = &"copper_helmet_defense"
+source_id = &"copper_helmet"
+stat_id = &"defense"
+amount = 1.0
+
+[sub_resource type="BoxMesh" id="helmet_top_mesh"]
+material = ExtResource("5_material")
+size = Vector3(0.5, 0.08, 0.5)
+
+[sub_resource type="Resource" id="helmet_top"]
+script = ExtResource("4_visual")
+mesh = SubResource("helmet_top_mesh")
+local_transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.235, 0)
+
+[sub_resource type="BoxMesh" id="helmet_side_mesh"]
+material = ExtResource("5_material")
+size = Vector3(0.06, 0.38, 0.48)
+
+[sub_resource type="Resource" id="helmet_left"]
+script = ExtResource("4_visual")
+mesh = SubResource("helmet_side_mesh")
+local_transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.235, -0.02, 0)
+
+[sub_resource type="Resource" id="helmet_right"]
+script = ExtResource("4_visual")
+mesh = SubResource("helmet_side_mesh")
+local_transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.235, -0.02, 0)
+
+[sub_resource type="BoxMesh" id="helmet_back_mesh"]
+material = ExtResource("5_material")
+size = Vector3(0.44, 0.38, 0.06)
+
+[sub_resource type="Resource" id="helmet_back"]
+script = ExtResource("4_visual")
+mesh = SubResource("helmet_back_mesh")
+local_transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.02, -0.235)
+
+[sub_resource type="BoxMesh" id="helmet_brow_mesh"]
+material = ExtResource("5_material")
+size = Vector3(0.44, 0.08, 0.06)
+
+[sub_resource type="Resource" id="helmet_brow"]
+script = ExtResource("4_visual")
+mesh = SubResource("helmet_brow_mesh")
+local_transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.15, 0.235)
+
+[resource]
+script = ExtResource("1_armor")
+id = &"copper_helmet"
+display_name = "Copper Helmet"
+icon = ExtResource("2_icon")
+max_stack = 1
+rarity = ExtResource("8_rarity")
+proficiency = ExtResource("7_proficiency")
+stat_modifier_activation = 1
+stat_modifiers = Array[ExtResource("3_modifier")]([SubResource("defense")])
+armor_slot = 0
+armor_set = ExtResource("6_set")
+visual_parts = Array[ExtResource("4_visual")]([SubResource("helmet_top"), SubResource("helmet_left"), SubResource("helmet_right"), SubResource("helmet_back"), SubResource("helmet_brow")])
