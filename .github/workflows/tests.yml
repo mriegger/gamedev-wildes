@@ -485,6 +485,11 @@ jobs:
           bash .github/scripts/run_godot_check.sh \
             30 "MINING_HIT_PARTICLES PASS" /tmp/mining_hit_particles.log -- \
             godot --headless --path src --script res://mining/tests/mining_hit_particles_integration.gd
+      - name: Run combat hit particle integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "COMBAT_HIT_PARTICLES PASS" /tmp/combat_hit_particles.log -- \
+            godot --headless --path src --script res://combat/particles/tests/combat_hit_particles_integration.gd
 
   entity-efficiency:
     runs-on: ubuntu-latest
