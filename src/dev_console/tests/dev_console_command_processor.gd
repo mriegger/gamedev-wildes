@@ -1,7 +1,7 @@
 extends SceneTree
 
-class PumpkinPatchPreviewStub:
-	extends PumpkinPatchPreview
+class PumpkinPatchStub:
+	extends PumpkinPatchCoordinator
 
 	var spawn_count: int = 0
 
@@ -22,13 +22,13 @@ func _init() -> void:
 	_expect(copper.icon != null and copper.icon.resource_path == "res://assets/textures/blocks/copper.png", "copper texture mismatch")
 	_expect(copper.icon != null and copper.icon.get_width() == 16 and copper.icon.get_height() == 16, "copper texture was not 16x16")
 	var inventory := InventoryModel.new(item_catalog)
-	var pumpkin_preview := PumpkinPatchPreviewStub.new()
+	var pumpkin_patch := PumpkinPatchStub.new()
 	inventory.slots[0] = InventoryStack.new(&"stone_block", 4)
 	inventory.slots[InventoryModel.HOTBAR_SIZE] = InventoryStack.new(&"stone_block", 10)
 	var processor := DevConsoleCommandProcessor.new()
-	_setup_processor(processor, inventory, pumpkin_preview)
+	_setup_processor(processor, inventory, pumpkin_patch)
 	_expect_result(processor.execute("spawn pumpkin_patch"), DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN, "pumpkin patch spawn command failed")
-	_expect(pumpkin_preview.spawn_count == 1, "pumpkin patch command did not invoke the preview")
+	_expect(pumpkin_patch.spawn_count == 1, "pumpkin patch command did not invoke the coordinator")
 
 	_expect_result(processor.execute("spawn stone 5"), DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN, "stone spawn command failed")
 	_expect(inventory.get_slot(InventoryModel.HOTBAR_SIZE).count == 15, "spawn did not add to the existing backpack stack")
@@ -37,7 +37,7 @@ func _init() -> void:
 
 	var all_items_inventory := InventoryModel.new(item_catalog)
 	var all_items_processor := DevConsoleCommandProcessor.new()
-	_setup_processor(all_items_processor, all_items_inventory, pumpkin_preview)
+	_setup_processor(all_items_processor, all_items_inventory, pumpkin_patch)
 	for definition in item_catalog.definitions:
 		var before_id_count := all_items_inventory.get_backpack_item_count(definition.id)
 		_expect_result(all_items_processor.execute("spawn %s 1" % definition.id), DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN, "canonical item ID failed for %s" % definition.id)
@@ -48,7 +48,7 @@ func _init() -> void:
 
 	var alias_inventory := InventoryModel.new(item_catalog)
 	var alias_processor := DevConsoleCommandProcessor.new()
-	_setup_processor(alias_processor, alias_inventory, pumpkin_preview)
+	_setup_processor(alias_processor, alias_inventory, pumpkin_patch)
 	var expected_aliases: Dictionary[String, StringName] = {
 		"torches": &"torch",
 	}
@@ -59,7 +59,7 @@ func _init() -> void:
 	var split_stack_inventory := InventoryModel.new(item_catalog)
 	split_stack_inventory.slots[InventoryModel.HOTBAR_SIZE] = InventoryStack.new(&"stone_block", 98)
 	var split_stack_processor := DevConsoleCommandProcessor.new()
-	_setup_processor(split_stack_processor, split_stack_inventory, pumpkin_preview)
+	_setup_processor(split_stack_processor, split_stack_inventory, pumpkin_patch)
 	_expect_result(split_stack_processor.execute("SPAWN STONE 3"), DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN, "case-insensitive spawn command failed")
 	_expect(split_stack_inventory.get_slot(InventoryModel.HOTBAR_SIZE).count == 99, "spawn did not fill the existing stack first")
 	_expect(split_stack_inventory.get_slot(InventoryModel.HOTBAR_SIZE + 1).count == 2, "spawn did not place overflow in a new stack")
@@ -99,7 +99,7 @@ func _init() -> void:
 	_expect_result(processor.execute("give stone 1"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "unknown command was accepted")
 	_expect_result(processor.execute("spawn stone"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "incomplete spawn command was accepted")
 	_expect_result(processor.execute("spawn pumpkin_patch 1"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "pumpkin patch count argument was accepted")
-	_expect(pumpkin_preview.spawn_count == 1, "invalid pumpkin patch command invoked the preview")
+	_expect(pumpkin_patch.spawn_count == 1, "invalid pumpkin patch command invoked the coordinator")
 	_expect(inventory.to_dict() == before_invalid, "invalid commands changed the inventory")
 
 	var full_inventory := InventoryModel.new(item_catalog)
@@ -107,11 +107,11 @@ func _init() -> void:
 		full_inventory.slots[index] = InventoryStack.new(&"dirt_block", 99)
 	var full_before := full_inventory.to_dict()
 	var full_processor := DevConsoleCommandProcessor.new()
-	_setup_processor(full_processor, full_inventory, pumpkin_preview)
+	_setup_processor(full_processor, full_inventory, pumpkin_patch)
 	_expect_result(full_processor.execute("spawn stone 1"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "spawn succeeded without backpack capacity")
 	_expect_result(full_processor.execute("spawn copper_pickaxe 1"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "equipment spawn succeeded without backpack capacity")
 	_expect(full_inventory.to_dict() == full_before, "failed spawns partially changed the backpack")
-	pumpkin_preview.free()
+	pumpkin_patch.free()
 
 	if _errors.is_empty():
 		print("DEV_CONSOLE_COMMAND PASS")
@@ -125,10 +125,10 @@ func _expect(condition: bool, message: String) -> void:
 	if not condition:
 		_errors.append(message)
 
-func _setup_processor(processor: DevConsoleCommandProcessor, inventory: InventoryModel, pumpkin_preview: PumpkinPatchPreview) -> void:
+func _setup_processor(processor: DevConsoleCommandProcessor, inventory: InventoryModel, pumpkin_patch: PumpkinPatchCoordinator) -> void:
 	processor.setup(
 		inventory,
-		pumpkin_preview,
+		pumpkin_patch,
 		Callable(self, "_handle_structure_command").bind(&"new"),
 		Callable(self, "_handle_structure_command").bind(&"import"),
 		Callable(self, "_handle_structure_command").bind(&"export"),
