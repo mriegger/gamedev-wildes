@@ -20,8 +20,11 @@ func _run() -> void:
 	_expect(generated_snapshot.get("present", false), "generated snapshot was absent")
 	var origin := generated_snapshot.get("origin", []) as Array
 	if origin.size() == 3:
-		_expect(absi(int(origin[0]) - floori(player.position.x)) <= PumpkinPatchCoordinator.SEARCH_RADIUS, "pumpkin patch spawned beyond one-screen X range")
-		_expect(absi(int(origin[2]) - floori(player.position.z)) <= PumpkinPatchCoordinator.SEARCH_RADIUS, "pumpkin patch spawned beyond one-screen Z range")
+		var patch_center := Vector2(float(origin[0]) + float(PumpkinPatchCoordinator.PATCH_WIDTH) * 0.5, float(origin[2]) + float(PumpkinPatchCoordinator.PATCH_DEPTH) * 0.5)
+		var player_center := Vector2(player.position.x, player.position.z)
+		_expect(patch_center.distance_squared_to(player_center) >= PumpkinPatchCoordinator.MIN_PLAYER_DISTANCE_SQUARED, "pumpkin patch spawned inside the minimum discovery distance")
+		_expect(absi(int(origin[0]) - floori(player.position.x)) <= PumpkinPatchCoordinator.SEARCH_RADIUS, "pumpkin patch spawned beyond the configured X range")
+		_expect(absi(int(origin[2]) - floori(player.position.z)) <= PumpkinPatchCoordinator.SEARCH_RADIUS, "pumpkin patch spawned beyond the configured Z range")
 	else:
 		_expect(false, "generated snapshot omitted its origin")
 	_validate_patch_presentation(pumpkin_patch)
