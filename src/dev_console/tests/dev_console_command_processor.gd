@@ -92,6 +92,28 @@ func _init() -> void:
 	_expect(stats.level == 1 and stats.experience == 99, "give_xp did not add raw experience")
 	_expect_result(processor.execute("GIVE_XP 126"), DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN, "case-insensitive give_xp command failed")
 	_expect(stats.level == 3 and stats.experience == 0, "give_xp did not apply multi-level progression")
+	_expect_result(processor.execute("give_xp +1"), DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN, "explicitly positive give_xp command failed")
+	_expect(stats.level == 3 and stats.experience == 1, "explicitly positive give_xp command changed progression incorrectly")
+
+	var maximum_grant_stats := ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
+	var maximum_grant_processor := DevConsoleCommandProcessor.new()
+	_setup_processor(maximum_grant_processor, InventoryModel.new(item_catalog), maximum_grant_stats, pumpkin_patch)
+	_expect_result(
+		maximum_grant_processor.execute("give_xp %d" % DevConsoleCommandProcessor.MAXIMUM_GIVE_XP_AMOUNT),
+		DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN,
+		"maximum give_xp amount was rejected",
+	)
+	_expect(
+		maximum_grant_stats.get_total_experience() == DevConsoleCommandProcessor.MAXIMUM_GIVE_XP_AMOUNT,
+		"maximum give_xp amount changed during leveling",
+	)
+	var maximum_grant_progress := maximum_grant_stats.snapshot_progression()
+	_expect_result(
+		maximum_grant_processor.execute("give_xp %d" % (DevConsoleCommandProcessor.MAXIMUM_GIVE_XP_AMOUNT + 1)),
+		DevConsoleCommandProcessor.ExecutionResult.REJECTED,
+		"give_xp amount above the command limit was accepted",
+	)
+	_expect(maximum_grant_stats.snapshot_progression() == maximum_grant_progress, "oversized give_xp amount changed progression")
 
 	var before_invalid := inventory.to_dict()
 	var level_before_invalid := stats.level
@@ -110,6 +132,9 @@ func _init() -> void:
 	_expect_result(processor.execute("give_xp 0"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "zero give_xp amount was accepted")
 	_expect_result(processor.execute("give_xp -1"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "negative give_xp amount was accepted")
 	_expect_result(processor.execute("give_xp nope"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "non-numeric give_xp amount was accepted")
+	_expect_result(processor.execute("give_xp 9223372036854775807"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "maximum integer give_xp amount was accepted")
+	_expect_result(processor.execute("give_xp 9223372036854775808"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "overflowing integer token was accepted")
+	_expect_result(processor.execute("give_xp 999999999999999999999999999999999999"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "unbounded integer token was accepted")
 	_expect_result(processor.execute("give_xp 1 extra"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "give_xp command with extra arguments was accepted")
 	_expect_result(processor.execute("give stone 1"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "unknown command was accepted")
 	_expect_result(processor.execute("spawn stone"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "incomplete spawn command was accepted")

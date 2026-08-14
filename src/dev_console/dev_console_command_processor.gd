@@ -10,6 +10,7 @@ enum ExecutionResult {
 const ITEM_ALIASES: Dictionary[StringName, StringName] = {
 	&"torches": &"torch",
 }
+const MAXIMUM_GIVE_XP_AMOUNT: int = 999_999_999
 
 var inventory_model: InventoryModel
 var actor_stats: ActorStats
@@ -79,9 +80,9 @@ func _execute_spawn(tokens: PackedStringArray) -> ExecutionResult:
 	return ExecutionResult.KEEP_OPEN
 
 func _execute_give_xp(tokens: PackedStringArray) -> ExecutionResult:
-	if tokens.size() != 2 or not tokens[1].is_valid_int():
+	if tokens.size() != 2:
 		return ExecutionResult.REJECTED
-	var amount := int(tokens[1])
+	var amount := _parse_give_xp_amount(tokens[1])
 	if amount < 1 or actor_stats.is_at_maximum_level():
 		return ExecutionResult.REJECTED
 	actor_stats.add_experience(amount)
@@ -103,6 +104,22 @@ func _execute_dev(tokens: PackedStringArray) -> ExecutionResult:
 
 func _execute_structure_action(action: Callable) -> ExecutionResult:
 	return ExecutionResult.CLOSE if bool(action.call()) else ExecutionResult.REJECTED
+
+func _parse_give_xp_amount(token: String) -> int:
+	if token.is_empty():
+		return 0
+	var first_digit := 1 if token.unicode_at(0) == 43 else 0
+	if first_digit == token.length():
+		return 0
+	var amount := 0
+	for index in range(first_digit, token.length()):
+		var character := token.unicode_at(index)
+		if character < 48 or character > 57:
+			return 0
+		amount = amount * 10 + character - 48
+		if amount > MAXIMUM_GIVE_XP_AMOUNT:
+			return 0
+	return amount
 
 func _resolve_item_id(item_name: String) -> StringName:
 	var normalized_name := _normalize_item_name(item_name)
