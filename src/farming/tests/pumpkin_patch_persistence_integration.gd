@@ -129,8 +129,8 @@ func _validate_patch_presentation(pumpkin_patch: PumpkinPatchCoordinator) -> voi
 
 func _flat_world(block_catalog: BlockCatalog, surface_block_id: int) -> VoxelWorld:
 	var voxel_world := VoxelWorld.new(20, 36, -1, 12.0, block_catalog)
-	for x in range(-12, 13):
-		for z in range(-12, 13):
+	for x in range(-90, 91):
+		for z in range(-90, 91):
 			var key := Vector2i(x, z)
 			voxel_world.height_map_dict[key] = 0
 			voxel_world.type_map_dict[key] = surface_block_id
