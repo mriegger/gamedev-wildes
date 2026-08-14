@@ -80,6 +80,11 @@ jobs:
           bash .github/scripts/run_godot_check.sh \
             30 "DEV_CONSOLE_COMMAND PASS" /tmp/dev_console_command.log -- \
             godot --headless --path src --script res://dev_console/tests/dev_console_command_processor.gd
+      - name: Run pumpkin patch preview integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "PUMPKIN_PATCH_PREVIEW PASS" /tmp/pumpkin_patch_preview.log -- \
+            godot --headless --path src --script res://farming/tests/pumpkin_patch_preview_integration.gd
 
   dev-console-ui:
     runs-on: ubuntu-latest

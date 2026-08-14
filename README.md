@@ -78,7 +78,8 @@ enabled Craft button is pressed, playing one success sound.
 IDs and display names are accepted; equipment IDs remain material-qualified, such as
 `copper_pickaxe` and `copper_sword`. Press `/` again or `Esc` to close the console without
 opening the pause menu. Copper can be mined from deposits or added directly with
-`spawn copper <count>`.
+`spawn copper <count>`. `spawn pumpkin_patch` creates one non-persistent 5×4 visual preview with
+tilled soil and all six supplied pumpkin growth states near the player.
 
 **UI & saves.** Backpack and hotbar stacks can be split by scrolling while left-dragging. The side
 panel includes a trash drop target that accepts backpack, hotbar, and equipped items. A
@@ -150,6 +151,7 @@ from Godot primitive meshes. Visual effects use project-authored shaders.
 | `src/assets/audio/sfx/tools/impactGeneric_light_*.ogg` (4 files) | [Impact Sounds](https://kenney.nl/assets/impact-sounds) – Kenney (https://kenney.nl) – generic light impacts for tool and crafting clunks | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `src/assets/audio/sfx/farming/tilling/bookFlip*.ogg` (3 files) | [RPG Audio](https://kenney.nl/assets/rpg-audio) – Kenney | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `src/assets/models/tools/hoe/copper_hoe.glb`, `Textures/colormap.png`, and derived inventory icon | [Survival Kit](https://kenney.nl/assets/survival-kit) – Kenney | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
+| `src/assets/models/farming/pumpkin/*.fbx` (6 files) | [Ultimate Crops](https://quaternius.com/packs/ultimatecrops.html) – Quaternius | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `src/assets/textures/blocks/farmland_dry.png` | Codex, prompted by Michael Riegger | Project-authored |
 | `src/assets/textures/effects/mining/dirt_*.png` (3 files) | [Particle Pack](https://kenney.nl/assets/particle-pack) – Kenney | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
 
