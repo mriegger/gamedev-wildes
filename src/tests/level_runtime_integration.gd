@@ -36,12 +36,12 @@ func _run() -> void:
 	_expect(runtime_scene != null, "level runtime scene did not load")
 	_expect(world_scene != null, "world scene did not load")
 	if catalog == null or block_catalog == null or runtime_scene == null or world_scene == null:
-		_finish(0)
+		call_deferred("_finish", 0)
 		return
 	var generation := LevelGenerator.new().generate(catalog, &"stone_dungeon", 1337, &"runtime_test", Vector3i(7, 0, -9))
 	_expect(generation.succeeded, "runtime fixture generation failed: %s" % generation.failure_reason)
 	if not generation.succeeded:
-		_finish(0)
+		call_deferred("_finish", 0)
 		return
 	var texture_set := BlockTextureSet.new(block_catalog)
 	var settings := GameSettings.new()
@@ -57,7 +57,7 @@ func _run() -> void:
 	await process_frame
 	var orphan_count := int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
 	_expect(orphan_count == orphan_baseline, "level/world lifecycle changed orphan count from %d to %d" % [orphan_baseline, orphan_count])
-	_finish(orphan_count)
+	call_deferred("_finish", orphan_count)
 
 func _run_runtime_lifecycle(
 	runtime_scene: PackedScene,
@@ -122,8 +122,16 @@ func _test_world_suspension(world_scene: PackedScene) -> void:
 		return
 	root.add_child(world)
 	await process_frame
+	var voxel_world := VoxelWorld.new(
+		world.config.chunk_size,
+		world.config.max_build_y,
+		world.config.water_level,
+		world.config.meadow_radius,
+		world.block_catalog
+	)
 	var manager := ChunkManager.new()
-	manager._scheduler = world.chunk_scheduler
+	manager.setup(world.config, voxel_world, world.chunk_scheduler, world.chunk_renderer)
+	world.voxel_model = voxel_world
 	world.chunk_manager = manager
 	var settings := GameSettings.new()
 	settings.shadow_range = GameSettings.SHADOW_RANGE_HIGH
@@ -150,6 +158,7 @@ func _test_world_suspension(world_scene: PackedScene) -> void:
 	_expect(world.torch_renderer._max_shadow_torches == settings.torch_shadow_count, "world resume did not apply deferred torch culling")
 	world.resume()
 	_expect(not world.is_suspended() and not manager._suspended and not world.chunk_scheduler._suspended, "repeated resume was not idempotent")
+	world.shutdown()
 	world.queue_free()
 	await process_frame
 	await process_frame
@@ -178,6 +187,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	var mining_hit_particles := (load("res://mining/presentation/mining_hit_particles.tscn") as PackedScene).instantiate()
 	world.name = "World"
 	player.name = "Player"
+	player.process_mode = Node.PROCESS_MODE_DISABLED
 	camera_rig.name = "CameraRig"
 	environment.name = "Environment"
 	hud.name = "HUD"
@@ -219,7 +229,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	_expect(game.world == world and game.player == player and game.camera_rig == camera_rig, "Game onready dependencies were not wired")
 	_expect(game.game_environment == environment and game.level_interaction == coordinator, "Game transition dependencies were not wired")
 	var manager := ChunkManager.new()
-	manager._scheduler = world.chunk_scheduler
+	manager.setup(world.config, voxel_world, world.chunk_scheduler, world.chunk_renderer)
 	world.chunk_manager = manager
 	var settings := GameSettings.new()
 	settings.torch_shadow_count = 0
@@ -308,6 +318,9 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 		_expect(coordinator._target_position.is_equal_approx(entrance.interaction_position), "entry prompt target changed in cycle %d" % cycle)
 		_expect(coordinator.interaction_requested.get_connections().size() == 1, "transition duplicated interaction signal consumers in cycle %d" % cycle)
 	player.unbind_space()
+	combat.shutdown()
+	entities.shutdown()
+	world.shutdown()
 	game.queue_free()
 	await process_frame
 	await process_frame
