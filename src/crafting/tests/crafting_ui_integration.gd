@@ -122,7 +122,7 @@ func _check_open_state() -> void:
 	_expect(_camera_rig.camera.h_offset < 0.0, "camera framing did not account for the wider left panel")
 	var recipe_scroll := _hud.crafting_panel.get_node("Margin/Content/Body/Recipes/RecipeScroll") as ScrollContainer
 	var recipe_list := _hud.crafting_panel.get_node("Margin/Content/Body/Recipes/RecipeScroll/RecipeList") as VBoxContainer
-	_expect(recipe_scroll != null and recipe_list.get_child_count() == 9, "scrollable recipe list did not contain nine recipes")
+	_expect(recipe_scroll != null and recipe_list.get_child_count() == 10, "scrollable recipe list did not contain ten recipes")
 	var recipe_button := recipe_list.get_child(0) as Button
 	var recipe_icon_frame := recipe_button.get_node("Content/IconFrame") as CenterContainer
 	var recipe_icon := recipe_icon_frame.get_node("Icon") as TextureRect
