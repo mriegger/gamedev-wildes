@@ -6,7 +6,7 @@ func _init() -> void:
 	var block_catalog := load("res://blocks/block_catalog.tres") as BlockCatalog
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
 	var player_stats_definition := load("res://player/player_stats.tres") as CombatStatsDefinition
-	_expect(SaveManager.CURRENT_SAVE_VERSION == 6, "save version changed")
+	_expect(SaveManager.CURRENT_SAVE_VERSION == 7, "save version changed")
 	_expect(block_catalog != null and block_catalog.validate(), "block catalog invalid")
 	_expect(item_catalog != null and item_catalog.validate(block_catalog), "item catalog invalid")
 	_expect(player_stats_definition != null and player_stats_definition.validate(), "player stats definition invalid")
