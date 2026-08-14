@@ -151,7 +151,7 @@ IDs and display names are accepted; equipment IDs remain material-qualified, suc
 `dev structure import`, `dev structure export`, and `dev structure exit`. Press `/` again or
 `Esc` to close the console without opening the pause menu. Copper can be mined from deposits or
 added directly with `spawn copper <count>`. New worlds contain one seeded 5×4 pumpkin patch within
-ten blocks of the initial player spawn. Its location, growth states, and rotations persist in the
+forty blocks of the initial player spawn. Its location, growth states, and rotations persist in the
 save. The
 `spawn pumpkin_patch` command relocates and randomizes that persistent patch near the player.
 
