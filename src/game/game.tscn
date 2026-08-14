@@ -1,4 +1,4 @@
-[gd_scene load_steps=27 format=3 uid="uid://b22g4me0x1f3h"]
+[gd_scene load_steps=28 format=3 uid="uid://b22g4me0x1f3h"]
 
 [ext_resource type="Script" path="res://game/game.gd" id="1_game"]
 [ext_resource type="PackedScene" path="res://world/world.tscn" id="2_world"]
@@ -26,6 +26,7 @@
 [ext_resource type="PackedScene" path="res://levels/runtime/level_runtime.tscn" id="24_level_runtime"]
 [ext_resource type="Script" path="res://levels/entrance/level_interaction_coordinator.gd" id="25_level_interaction"]
 [ext_resource type="Resource" path="res://levels/content/meadow_dungeon_entrance.tres" id="26_level_entrance"]
+[ext_resource type="PackedScene" path="res://farming/debug/pumpkin_patch_preview.tscn" id="27_pumpkin_patch"]
 
 [node name="Game" type="Node3D"]
 script = ExtResource("1_game")
@@ -70,6 +71,8 @@ script = ExtResource("7_session")
 
 [node name="LevelInteractionCoordinator" type="Node" parent="."]
 script = ExtResource("25_level_interaction")
+
+[node name="PumpkinPatchPreview" parent="." instance=ExtResource("27_pumpkin_patch")]
 
 [node name="SaveStatusLayer" type="CanvasLayer" parent="."]
 process_mode = 2

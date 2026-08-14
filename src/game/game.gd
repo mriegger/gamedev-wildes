@@ -33,6 +33,7 @@ signal main_menu_requested
 @onready var mining_break_particles: MiningBreakParticles = $MiningBreakParticles as MiningBreakParticles
 @onready var mining_hit_particles: MiningHitParticles = $MiningHitParticles as MiningHitParticles
 @onready var level_interaction: LevelInteractionCoordinator = $LevelInteractionCoordinator as LevelInteractionCoordinator
+@onready var pumpkin_patch_preview: PumpkinPatchPreview = $PumpkinPatchPreview as PumpkinPatchPreview
 @onready var _save_canvas: CanvasLayer = $SaveStatusLayer as CanvasLayer
 @onready var _save_label: Label = $SaveStatusLayer/SaveStatusLabel as Label
 @onready var _fade: ColorRect = $TransitionLayer/Fade as ColorRect
@@ -179,11 +180,13 @@ func _setup_gameplay():
 	var mining_particle_tints := MiningParticleTintPalette.new(block_catalog)
 	mining_break_particles.setup(world.voxel_model, mining_particle_tints)
 	mining_hit_particles.setup(player.animation_driver, player.interactor, mining_particle_tints)
+	pumpkin_patch_preview.setup(world.voxel_model, player)
 	camera_rig.reset_panel_obstruction()
 
 	game_environment.sky_color_changed.connect(world.update_water_tint)
 	game_environment.start_clock()
 	hud.setup_with_camera(inventory_model, inventory_stat_coordinator, crafting_coordinator, crafting_recipe_catalog, camera_rig, player_stats, item_proficiency)
+	hud.setup_dev_console(inventory_model, pumpkin_patch_preview)
 	hud.setup_socketing(inventory_model, rune_socketing_coordinator, item_proficiency)
 
 	var world_spawn := world.voxel_model.get_spawn_position()

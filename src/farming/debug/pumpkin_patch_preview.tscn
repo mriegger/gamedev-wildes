@@ -1,0 +1,15 @@
+[gd_scene load_steps=9 format=3]
+
+[ext_resource type="Script" path="res://farming/debug/pumpkin_patch_preview.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/textures/blocks/farmland_dry.png" id="2_soil"]
+[ext_resource type="PackedScene" path="res://assets/models/farming/pumpkin/Pumpkin 1 FBX.fbx" id="3_stage_1"]
+[ext_resource type="PackedScene" path="res://assets/models/farming/pumpkin/Pumpkin 2 FBX.fbx" id="4_stage_2"]
+[ext_resource type="PackedScene" path="res://assets/models/farming/pumpkin/Pumpkin 3 FBX.fbx" id="5_stage_3"]
+[ext_resource type="PackedScene" path="res://assets/models/farming/pumpkin/Pumpkin 4 FBX.fbx" id="6_stage_4"]
+[ext_resource type="PackedScene" path="res://assets/models/farming/pumpkin/Pumpkin Crop FBX.fbx" id="7_crop"]
+[ext_resource type="PackedScene" path="res://assets/models/farming/pumpkin/Pumpkin Harvested FBX.fbx" id="8_harvested"]
+
+[node name="PumpkinPatchPreview" type="Node3D"]
+script = ExtResource("1_script")
+soil_texture = ExtResource("2_soil")
+pumpkin_scenes = Array[PackedScene]([ExtResource("3_stage_1"), ExtResource("4_stage_2"), ExtResource("5_stage_3"), ExtResource("6_stage_4"), ExtResource("7_crop"), ExtResource("8_harvested")])
