@@ -19,8 +19,8 @@ func setup_with_camera(p_inventory: InventoryModel, p_inventory_stat_coordinator
 	side_panel.progress_changed.connect(_on_side_panel_progress_changed)
 	_on_side_panel_progress_changed(side_panel.get_progress())
 
-func setup_dev_console(inventory: InventoryModel, pumpkin_patch_preview: PumpkinPatchPreview) -> void:
-	dev_console.setup(inventory, pumpkin_patch_preview)
+func setup_dev_console(inventory: InventoryModel, pumpkin_patch: PumpkinPatchCoordinator) -> void:
+	dev_console.setup(inventory, pumpkin_patch)
 
 func setup_socketing(
 	inventory: InventoryModel,

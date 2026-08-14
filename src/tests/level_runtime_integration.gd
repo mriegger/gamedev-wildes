@@ -193,6 +193,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	var combat_hit_particles := (load("res://combat/particles/combat_hit_particles.tscn") as PackedScene).instantiate() as CombatHitParticles
 	var mining_break_particles := (load("res://mining/presentation/mining_break_particles.tscn") as PackedScene).instantiate()
 	var mining_hit_particles := (load("res://mining/presentation/mining_hit_particles.tscn") as PackedScene).instantiate()
+	var pumpkin_patch := PumpkinPatchCoordinator.new()
 	world.name = "World"
 	player.name = "Player"
 	player.process_mode = Node.PROCESS_MODE_DISABLED
@@ -206,6 +207,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	combat_hit_particles.name = "CombatHitParticles"
 	mining_break_particles.name = "MiningBreakParticles"
 	mining_hit_particles.name = "MiningHitParticles"
+	pumpkin_patch.name = "PumpkinPatch"
 	game.add_child(world)
 	game.add_child(player)
 	game.add_child(camera_rig)
@@ -218,6 +220,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	game.add_child(coordinator)
 	game.add_child(mining_break_particles)
 	game.add_child(mining_hit_particles)
+	game.add_child(pumpkin_patch)
 	var save_layer := CanvasLayer.new()
 	save_layer.name = "SaveStatusLayer"
 	var save_label := Label.new()
@@ -237,7 +240,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	root.add_child(game)
 	await process_frame
 	_expect(game.world == world and game.player == player and game.camera_rig == camera_rig, "Game onready dependencies were not wired")
-	_expect(game.game_environment == environment and game.level_interaction == coordinator, "Game transition dependencies were not wired")
+	_expect(game.game_environment == environment and game.level_interaction == coordinator and game.pumpkin_patch == pumpkin_patch, "Game transition dependencies were not wired")
 	var manager := ChunkManager.new()
 	manager.setup(world.config, voxel_world, world.chunk_scheduler, world.chunk_renderer)
 	world.chunk_manager = manager

@@ -89,8 +89,9 @@ enabled Craft button is pressed, playing one success sound.
 IDs and display names are accepted; equipment IDs remain material-qualified, such as
 `copper_pickaxe` and `copper_sword`. Press `/` again or `Esc` to close the console without
 opening the pause menu. Copper can be mined from deposits or added directly with
-`spawn copper <count>`. `spawn pumpkin_patch` creates one non-persistent 5×4 visual preview with
-tilled soil and all six supplied pumpkin growth states near the player.
+`spawn copper <count>`. New worlds contain one seeded 5×4 pumpkin patch within ten blocks of the
+initial player spawn. Its location, growth states, and rotations persist in the save. The
+`spawn pumpkin_patch` command relocates and randomizes that persistent patch near the player.
 
 **UI & saves.** Backpack and hotbar stacks can be split by scrolling while left-dragging. The side
 panel includes a trash drop target that accepts backpack, hotbar, and equipped items. A
@@ -100,7 +101,7 @@ the game. The pause menu exposes persistent frame-rate, 3D resolution,
 anti-aliasing, fog, sun-shadow, shadow-range, overworld and dungeon torch-shadow, and
 ambient-audio settings. Dungeon shadows default to the nearest six authored torches and fade
 between active casters. Saves live in `user://saves/` and autosave every 30 seconds, plus shortly
-after any block edit. Saving inside a dungeon records its overworld return position because
+after any block or pumpkin-patch edit. Saving inside a dungeon records its overworld return position because
 dungeon layouts are recreated on entry.
 
 ## Project Structure

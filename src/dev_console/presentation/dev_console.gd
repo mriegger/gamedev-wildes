@@ -11,11 +11,11 @@ func _ready() -> void:
 	set_process_input(false)
 	_command_input.text_submitted.connect(_on_command_submitted)
 
-func setup(inventory_model: InventoryModel, pumpkin_patch_preview: PumpkinPatchPreview) -> void:
-	assert(inventory_model != null and pumpkin_patch_preview != null)
+func setup(inventory_model: InventoryModel, pumpkin_patch: PumpkinPatchCoordinator) -> void:
+	assert(inventory_model != null and pumpkin_patch != null)
 	assert(_command_processor == null)
 	_command_processor = DevConsoleCommandProcessor.new()
-	_command_processor.setup(inventory_model, pumpkin_patch_preview)
+	_command_processor.setup(inventory_model, pumpkin_patch)
 	set_process_input(true)
 
 func _input(event: InputEvent) -> void:

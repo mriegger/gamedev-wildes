@@ -15,6 +15,7 @@ var _inventory: InventoryModel
 var _item_proficiency: ItemProficiency
 var _environment: GameEnvironment
 var _persisted_position_query: Callable
+var _pumpkin_patch: PumpkinPatchCoordinator
 var _auto_save_elapsed: float = 0.0
 var _edit_idle_elapsed: float = 0.0
 var _playtime_accum: float = 0.0
@@ -24,12 +25,13 @@ var _saving_suspended: bool = false
 func _ready():
 	set_process(false)
 
-func setup(p_slot_id: int, p_save_data: Dictionary, p_world: WorldController, p_player_stats: ActorStats, p_inventory: InventoryModel, p_item_proficiency: ItemProficiency, p_environment: GameEnvironment, p_persisted_position_query: Callable):
+func setup(p_slot_id: int, p_save_data: Dictionary, p_world: WorldController, p_player_stats: ActorStats, p_inventory: InventoryModel, p_item_proficiency: ItemProficiency, p_environment: GameEnvironment, p_pumpkin_patch: PumpkinPatchCoordinator, p_persisted_position_query: Callable):
 	assert(p_world != null)
 	assert(p_player_stats != null)
 	assert(p_inventory != null)
 	assert(p_item_proficiency != null)
 	assert(p_environment != null)
+	assert(p_pumpkin_patch != null)
 	assert(p_persisted_position_query.is_valid())
 	slot_id = p_slot_id
 	save_data = p_save_data
@@ -39,6 +41,7 @@ func setup(p_slot_id: int, p_save_data: Dictionary, p_world: WorldController, p_
 	_item_proficiency = p_item_proficiency
 	_environment = p_environment
 	_persisted_position_query = p_persisted_position_query
+	_pumpkin_patch = p_pumpkin_patch
 	_auto_save_elapsed = 0.0
 	_edit_idle_elapsed = 0.0
 	_playtime_accum = 0.0
@@ -46,8 +49,10 @@ func setup(p_slot_id: int, p_save_data: Dictionary, p_world: WorldController, p_
 	_saving_suspended = false
 	set_process(slot_id != -1)
 	if slot_id != -1:
+		save_data["pumpkin_patch"] = _pumpkin_patch.snapshot()
 		SaveManager.update_last_played(slot_id, save_data)
 		_world.voxel_model.block_edit_committed.connect(_on_world_edit)
+		_pumpkin_patch.state_changed.connect(_on_persistent_state_changed)
 
 func _process(delta):
 	_playtime_accum += delta
@@ -65,6 +70,9 @@ func _process(delta):
 		save("auto")
 
 func _on_world_edit(_edit: BlockEdit):
+	_on_persistent_state_changed()
+
+func _on_persistent_state_changed():
 	_pending_edit_save = true
 	_edit_idle_elapsed = 0.0
 	save_status_changed.emit("Pending save...")
@@ -74,7 +82,7 @@ func save(reason: String) -> bool:
 		return false
 	var time_to_save = _environment.get_time_of_day()
 	var persisted_position := _persisted_position_query.call() as Vector3
-	var success = SaveManager.save_world_state(slot_id, save_data, _world.voxel_model, persisted_position, _player_stats, _inventory, _item_proficiency, _playtime_accum, time_to_save)
+	var success = SaveManager.save_world_state(slot_id, save_data, _world.voxel_model, persisted_position, _player_stats, _inventory, _item_proficiency, _pumpkin_patch.snapshot(), _playtime_accum, time_to_save)
 	if success:
 		_auto_save_elapsed = 0.0
 		_edit_idle_elapsed = 0.0
@@ -110,3 +118,5 @@ func shutdown(reason: String):
 		save(reason)
 	if _world and _world.voxel_model and _world.voxel_model.block_edit_committed.is_connected(_on_world_edit):
 		_world.voxel_model.block_edit_committed.disconnect(_on_world_edit)
+	if _pumpkin_patch and _pumpkin_patch.state_changed.is_connected(_on_persistent_state_changed):
+		_pumpkin_patch.state_changed.disconnect(_on_persistent_state_changed)
