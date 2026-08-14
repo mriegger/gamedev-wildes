@@ -14,6 +14,7 @@ func _init() -> void:
 		&"stone_pickaxe",
 		&"torch_bundle",
 		&"copper_pickaxe",
+		&"copper_hoe",
 		&"copper_sword",
 		&"copper_helmet",
 		&"copper_chest_plate",
@@ -21,7 +22,7 @@ func _init() -> void:
 		&"copper_shoes",
 		&"basic_rune",
 	]
-	_expect(recipe_catalog.definitions.size() == expected_recipe_ids.size(), "expected nine recipes")
+	_expect(recipe_catalog.definitions.size() == expected_recipe_ids.size(), "expected ten recipes")
 	_expect(recipe_catalog.definitions[0].id == &"stone_pickaxe", "stone pickaxe is not the first recipe")
 	for recipe_id in expected_recipe_ids:
 		_expect(recipe_catalog.has_definition(recipe_id), "missing recipe %s" % recipe_id)
@@ -35,6 +36,7 @@ func _init() -> void:
 	_expect(torch_recipe.get_ingredient_counts() == {&"log_block": 2, &"leaves_block": 2}, "torch recipe ingredients mismatch")
 	var expected_copper_recipes := {
 		&"copper_pickaxe": {&"copper": 10, &"log_block": 5},
+		&"copper_hoe": {&"copper": 10, &"log_block": 5},
 		&"copper_sword": {&"copper": 15, &"log_block": 5},
 		&"copper_helmet": {&"copper": 5},
 		&"copper_chest_plate": {&"copper": 5},

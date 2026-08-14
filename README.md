@@ -140,7 +140,7 @@ fallback values keep GL Compatibility usable at reduced fidelity, without volume
 06:00–19:00; sunrise and sundown get their own warm color keys, and nights stay bright enough
 to play.
 
-**Crafting.** Opening crafting with `Tab` reveals a recipe panel alongside the backpack. Eight
+**Crafting.** Opening crafting with `Tab` reveals a recipe panel alongside the backpack. Ten
 data-driven recipes use materials from the backpack and hotbar and craft immediately when the
 enabled Craft button is pressed, playing one success sound.
 
