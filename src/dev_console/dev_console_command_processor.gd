@@ -12,6 +12,7 @@ const ITEM_ALIASES: Dictionary[StringName, StringName] = {
 }
 
 var inventory_model: InventoryModel
+var pumpkin_patch_preview: PumpkinPatchPreview
 var _new_structure: Callable
 var _import_structure: Callable
 var _export_structure: Callable
@@ -19,25 +20,27 @@ var _exit_structure: Callable
 
 func setup(
 	p_inventory_model: InventoryModel,
+	p_pumpkin_patch_preview: PumpkinPatchPreview,
 	p_new_structure: Callable,
 	p_import_structure: Callable,
 	p_export_structure: Callable,
 	p_exit_structure: Callable,
 ) -> void:
-	assert(p_inventory_model != null)
-	assert(inventory_model == null)
+	assert(p_inventory_model != null and p_pumpkin_patch_preview != null)
+	assert(inventory_model == null and pumpkin_patch_preview == null)
 	assert(p_new_structure.is_valid())
 	assert(p_import_structure.is_valid())
 	assert(p_export_structure.is_valid())
 	assert(p_exit_structure.is_valid())
 	inventory_model = p_inventory_model
+	pumpkin_patch_preview = p_pumpkin_patch_preview
 	_new_structure = p_new_structure
 	_import_structure = p_import_structure
 	_export_structure = p_export_structure
 	_exit_structure = p_exit_structure
 
 func execute(command_line: String) -> ExecutionResult:
-	if inventory_model == null:
+	if inventory_model == null or pumpkin_patch_preview == null:
 		return ExecutionResult.REJECTED
 	var tokens := command_line.strip_edges().split(" ", false)
 	if tokens.is_empty():
@@ -50,6 +53,8 @@ func execute(command_line: String) -> ExecutionResult:
 	return ExecutionResult.REJECTED
 
 func _execute_spawn(tokens: PackedStringArray) -> ExecutionResult:
+	if tokens.size() == 2 and _normalize_item_name(tokens[1]) == &"pumpkin_patch":
+		return ExecutionResult.KEEP_OPEN if pumpkin_patch_preview.spawn_patch() else ExecutionResult.REJECTED
 	if tokens.size() < 3:
 		return ExecutionResult.REJECTED
 	var count_token := tokens[tokens.size() - 1]
