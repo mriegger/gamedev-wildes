@@ -74,7 +74,7 @@ func _on_block_placed() -> void:
 	_block_placed_count += 1
 
 func _on_block_edit(edit: BlockEdit) -> void:
-	if edit.is_success() and not edit.is_mine():
+	if edit.is_success() and edit.is_place():
 		_world_place_count += 1
 
 func _aim_at_placement(position: Vector3i) -> void:

@@ -3,7 +3,7 @@
 - `ambient/nri-DawnchorusinAmphitheater.mp3` provides continuous daytime bird ambience.
 - `ambient/forest_night_avocado.ogg` provides continuous nighttime forest ambience.
 - `combat/weapons/sword/draw/*.ogg` provides three sword-draw variations.
-- `combat/weapons/pickaxe/draw/*.ogg` provides three copper-pickaxe equip variations.
+- `combat/weapons/pickaxe/draw/*.ogg` provides three copper-pickaxe and copper-hoe equip variations.
 - `combat/impacts/creature/*.wav` provides three creature-impact variations.
 - `combat/impacts/player/player_hit.wav` provides player-hit impact feedback.
 - `entities/sheep/vocalizations/real_sheep_*.wav` provides seven positional sheep vocalizations.
@@ -12,6 +12,7 @@
 - `footsteps/grass/footstep_grass_*.ogg` provides five grass footstep variations.
 - `footsteps/water/Footstep_Water_*.wav` provides eight water footstep variations.
 - `sfx/tools/impactGeneric_light_*.ogg` provides four terrain-impact variations.
+- `sfx/farming/tilling/bookFlip*.ogg` provides three soil-tilling variations.
 
 ## Attribution
 
@@ -27,3 +28,4 @@
 | `footsteps/grass/footstep_grass_000.ogg` to `footstep_grass_004.ogg` (5 files) | [Impact Sounds](https://kenney.nl/assets/impact-sounds) – Kenney | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) | Attribution, license notice, and source credit are not required under CC0; documented here for provenance. Verified 2026-07-30 against the canonical Game Dev Assets list. |
 | `footsteps/water/Footstep_Water_00.wav` to `Footstep_Water_07.wav` (8 files) | Water footsteps – by Morten Barfod Søegaard, Little Robot Sound Factory – https://littlerobotsoundfactory.com/ | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | Original source: Little Robot Sound Factory. No changes beyond file placement. |
 | `sfx/tools/impactGeneric_light_001.ogg` to `impactGeneric_light_004.ogg` (4 files) | [Impact Sounds](https://kenney.nl/assets/impact-sounds) – Kenney (https://kenney.nl) – generic light impacts | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) | No attribution required per CC0, but documented here. Used for mining/melee terrain clunks and crafting impacts. Original source: Kenney.nl |
+| `sfx/farming/tilling/bookFlip1.ogg` to `bookFlip3.ogg` (3 files) | [RPG Audio](https://kenney.nl/assets/rpg-audio) – Kenney | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) | Attribution, license notice, and source credit are not required under CC0; documented here for provenance. Verified 2026-07-30 against the canonical Game Dev Assets list. |

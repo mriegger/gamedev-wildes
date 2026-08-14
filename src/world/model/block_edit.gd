@@ -9,11 +9,13 @@ enum Result {
 	FAIL_INVALID_POS = 7,
 	FAIL_Y_OUT_OF_RANGE = 8,
 	FAIL_NO_TORCH_SUPPORT = 9,
+	FAIL_BLOCK_CHANGED = 10,
 }
 
 enum Operation {
 	MINE = 0,
 	PLACE = 1,
+	REPLACE = 2,
 }
 
 const RESULT_MESSAGES: Dictionary = {
@@ -24,6 +26,7 @@ const RESULT_MESSAGES: Dictionary = {
 	Result.FAIL_INVALID_POS: "Invalid position",
 	Result.FAIL_Y_OUT_OF_RANGE: "Y out of build range",
 	Result.FAIL_NO_TORCH_SUPPORT: "Torch requires adjacent opaque block",
+	Result.FAIL_BLOCK_CHANGED: "Target block changed",
 }
 
 var operation: Operation = Operation.PLACE
@@ -45,6 +48,12 @@ func is_success() -> bool:
 func is_mine() -> bool:
 	return operation == Operation.MINE
 
+func is_place() -> bool:
+	return operation == Operation.PLACE
+
+func is_replace() -> bool:
+	return operation == Operation.REPLACE
+
 static func success_mine(p_pos: Vector3i, p_old_id: int, p_revision: int) -> BlockEdit:
 	var e = BlockEdit.new(Operation.MINE, p_pos)
 	e.old_id = p_old_id
@@ -62,6 +71,14 @@ static func success_place(p_pos: Vector3i, p_new_id: int, p_revision: int, p_att
 	e.result = Result.SUCCESS
 	return e
 
+static func success_replace(p_pos: Vector3i, p_old_id: int, p_new_id: int, p_revision: int) -> BlockEdit:
+	var e = BlockEdit.new(Operation.REPLACE, p_pos)
+	e.old_id = p_old_id
+	e.new_id = p_new_id
+	e.revision = p_revision
+	e.result = Result.SUCCESS
+	return e
+
 static func fail(p_pos: Vector3i, p_op: Operation, p_result: Result, p_reason: String = "") -> BlockEdit:
 	var e = BlockEdit.new(p_op, p_pos)
 	e.result = p_result
@@ -72,5 +89,7 @@ func _to_string() -> String:
 	if is_success():
 		if is_mine():
 			return "[BlockEdit MINE %s %s->AIR rev %d]" % [pos, BlockId.get_display_name(old_id as BlockId.Type), revision]
+		if is_replace():
+			return "[BlockEdit REPLACE %s %s->%s rev %d]" % [pos, BlockId.get_display_name(old_id as BlockId.Type), BlockId.get_display_name(new_id as BlockId.Type), revision]
 		return "[BlockEdit PLACE %s AIR->%s rev %d attach %s]" % [pos, BlockId.get_display_name(new_id as BlockId.Type), revision, attach_dir]
 	return "[BlockEdit FAIL %s %s: %s]" % [pos, Result.find_key(result), reason]

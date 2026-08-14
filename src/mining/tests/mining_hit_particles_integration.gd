@@ -71,7 +71,7 @@ func _run():
 
 	interactor.is_mining = true
 	interactor.target_has = true
-	interactor.can_mine_target = true
+	interactor.can_primary_target = true
 	interactor.mine_target = dirt_target
 	interactor.target_block = interactor.mine_target
 	interactor.last_ray_normal = Vector3i.RIGHT

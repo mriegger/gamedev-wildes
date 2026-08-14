@@ -418,6 +418,23 @@ func try_place_block(p: Vector3i, block_type: int, attach_dir: Vector3i = Vector
 	block_edit_committed.emit(edit)
 	return edit
 
+func try_replace_block(p: Vector3i, expected_old_id: int, new_id: int) -> BlockEdit:
+	if not BlockId.is_valid(expected_old_id) or expected_old_id == BlockId.Type.AIR:
+		return BlockEdit.fail(p, BlockEdit.Operation.REPLACE, BlockEdit.Result.FAIL_INVALID_POS, "Invalid expected block id")
+	if not BlockId.is_valid(new_id) or new_id == BlockId.Type.AIR:
+		return BlockEdit.fail(p, BlockEdit.Operation.REPLACE, BlockEdit.Result.FAIL_INVALID_POS, "Invalid replacement block id")
+	if p.y < 0 or p.y >= max_build_y:
+		return BlockEdit.fail(p, BlockEdit.Operation.REPLACE, BlockEdit.Result.FAIL_Y_OUT_OF_RANGE)
+	if get_block_id_at(p) != expected_old_id:
+		return BlockEdit.fail(p, BlockEdit.Operation.REPLACE, BlockEdit.Result.FAIL_BLOCK_CHANGED)
+	_put_indexed_edit(_placed_blocks, _placed_edits_by_chunk, p, new_id)
+	_erase_indexed_edit(_removed_blocks, _removed_edits_by_chunk, p)
+	_invalidate_highest_cache(p.x, p.z)
+	var rev := _increment_revision(p)
+	var edit := BlockEdit.success_replace(p, expected_old_id, new_id, rev)
+	block_edit_committed.emit(edit)
+	return edit
+
 func get_spawn_position() -> Vector3:
 	var meadow_radius_squared = spawn_search_radius * spawn_search_radius
 	var best = Vector3(0.5, 10.5, 0.5)
