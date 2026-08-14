@@ -5,8 +5,8 @@ signal state_changed
 
 const PATCH_WIDTH: int = 5
 const PATCH_DEPTH: int = 4
-const SEARCH_RADIUS: int = 80
-const MIN_PLAYER_DISTANCE_SQUARED: float = 2500.0
+const SEARCH_RADIUS: int = 45
+const MIN_PLAYER_DISTANCE_SQUARED: float = 1225.0
 const MODEL_FIT_SIZE: float = 1.755
 const SOIL_SURFACE_OFFSET: float = 0.008
 const VALID_SURFACE_BLOCKS: Array[int] = [

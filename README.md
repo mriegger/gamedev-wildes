@@ -89,7 +89,7 @@ enabled Craft button is pressed, playing one success sound.
 IDs and display names are accepted; equipment IDs remain material-qualified, such as
 `copper_pickaxe` and `copper_sword`. Press `/` again or `Esc` to close the console without
 opening the pause menu. Copper can be mined from deposits or added directly with
-`spawn copper <count>`. New worlds contain one seeded 5×4 pumpkin patch 50–80 blocks from the
+`spawn copper <count>`. New worlds contain one seeded 5×4 pumpkin patch 35–45 blocks from the
 initial player spawn. Its location, growth states, and rotations persist in the save. The
 `spawn pumpkin_patch` command relocates and randomizes that persistent patch near the player.
 
