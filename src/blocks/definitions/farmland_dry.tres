@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="BlockDefinition" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://blocks/block_definition.gd" id="1_def"]
+[ext_resource type="Texture2D" path="res://assets/textures/blocks/farmland_dry.png" id="2_top"]
+[ext_resource type="Texture2D" path="res://assets/textures/blocks/dirt.png" id="3_dirt"]
+
+[resource]
+script = ExtResource("1_def")
+id = 15
+is_solid = true
+is_opaque = true
+is_raycast_solid = true
+is_breakable = true
+is_replaceable = false
+drop_item_id = &"dirt_block"
+top_texture = ExtResource("2_top")
+side_texture = ExtResource("3_dirt")
+bottom_texture = ExtResource("3_dirt")
+emissive_enabled = false
+emissive_color = Color(0, 0, 0, 0)
+emissive_energy = 0.0
+light_range = 0.0
+light_color = Color(1, 1, 1, 1)

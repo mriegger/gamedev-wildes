@@ -47,7 +47,11 @@ activated only through socketed gear.
 
 Create a `MiningActionDefinition` with one or more `MiningToolStat` entries, then assign it as the item's primary action. Each stat has a `StringName` tag, power, and speed multiplier. Blocks declare a mining tag, minimum power, and base duration. A minimum power of zero keeps hand mining available; a positive value requires a matching tool stat.
 
-Primary actions currently accept mining and melee definitions. Secondary actions currently accept block placement. Catalog validation rejects action types in slots that do not yet have an execution path, and new action types must add their runtime handler and catalog allowance together.
+## Add a tilling tool
+
+Create a `TillingActionDefinition` with canonical source block resources and one canonical result block, then assign it as the item's primary action. The copper hoe maps grass and dirt to dry farmland. Tilling requires the top face, an air block directly above it, and normal interaction reach. The voxel world validates and commits the replacement atomically.
+
+Primary actions currently accept mining, melee, and tilling definitions. Secondary actions currently accept block placement. Catalog validation rejects action types in slots that do not yet have an execution path, and new action types must add their runtime handler and catalog allowance together.
 
 Held items reference a scene through `ItemDefinition.held_scene`. Pixel-art tools can use `PixelExtrudedItem` to turn a square transparent texture into a shaded one-draw-call silhouette mesh with real depth. Custom modeled items can provide any other `Node3D` scene through the same field.
 

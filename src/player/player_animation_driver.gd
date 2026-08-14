@@ -108,7 +108,7 @@ func _process(delta: float):
 		var head_position = animator.head_secondary.global_position
 		local_look_direction = model_basis.inverse() * (target_center - head_position)
 	_animation_state.set_motion(local_velocity, speed_ratio, sprinting, _motor.on_ground, _motor.jump_anticipation, turn_rate, has_look_target, local_look_direction)
-	var mining_active = _interactor.is_mining and _interactor.can_mine_target
+	var mining_active = _interactor.is_mining and _interactor.can_primary_target
 	animator.set_mining_active(mining_active)
 	_update_mining_impact(delta, mining_active)
 	animator.advance_animation(delta)

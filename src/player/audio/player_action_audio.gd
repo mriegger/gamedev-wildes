@@ -5,6 +5,7 @@ class_name PlayerActionAudio
 @onready var _creature_hit_player: AudioStreamPlayer = $CreatureHitPlayer
 @onready var _player_hit_player: AudioStreamPlayer = $PlayerHitPlayer
 @onready var _equip_player: AudioStreamPlayer = $EquipPlayer
+@onready var _till_player: AudioStreamPlayer = $TillPlayer
 
 var _interactor: PlayerInteractor
 var _animation_driver: PlayerAnimationDriver
@@ -25,9 +26,15 @@ var _creature_hit_streams: Array[AudioStream] = [
 var _player_hit_streams: Array[AudioStream] = [
 	preload("res://assets/audio/combat/impacts/player/player_hit.wav"),
 ]
+var _till_streams: Array[AudioStream] = [
+	preload("res://assets/audio/sfx/farming/tilling/bookFlip1.ogg"),
+	preload("res://assets/audio/sfx/farming/tilling/bookFlip2.ogg"),
+	preload("res://assets/audio/sfx/farming/tilling/bookFlip3.ogg"),
+]
 var _last_clunk_idx: int = -1
 var _last_creature_hit_idx: int = -1
 var _last_player_hit_idx: int = -1
+var _last_till_idx: int = -1
 var _last_equip_indices: Dictionary = {}
 
 
@@ -44,6 +51,7 @@ func setup(
 	_selected_item_id = _get_selected_item_id()
 	_animation_driver.mining_impact.connect(_on_mining_impact)
 	_interactor.melee_terrain_hit.connect(_on_melee_terrain_hit)
+	_interactor.soil_tilled.connect(_on_soil_tilled)
 	_combat.melee_outcome_committed.connect(_on_melee_outcome_committed)
 	_inventory.inventory_changed.connect(_on_inventory_changed)
 	if _clunk_player.stream == null and not _clunk_streams.is_empty():
@@ -56,6 +64,10 @@ func _on_mining_impact():
 
 func _on_melee_terrain_hit(_pos: Vector3i):
 	_play_clunk(-4.0)
+
+
+func _on_soil_tilled():
+	_last_till_idx = _play_random(_till_player, _till_streams, _last_till_idx, 0.96, 1.04)
 
 
 func _on_melee_outcome_committed(outcome: MeleeOutcome):
@@ -122,6 +134,8 @@ func _exit_tree():
 	if _interactor != null:
 		if _interactor.melee_terrain_hit.is_connected(_on_melee_terrain_hit):
 			_interactor.melee_terrain_hit.disconnect(_on_melee_terrain_hit)
+		if _interactor.soil_tilled.is_connected(_on_soil_tilled):
+			_interactor.soil_tilled.disconnect(_on_soil_tilled)
 	if _combat != null and _combat.melee_outcome_committed.is_connected(_on_melee_outcome_committed):
 		_combat.melee_outcome_committed.disconnect(_on_melee_outcome_committed)
 	if _inventory != null and _inventory.inventory_changed.is_connected(_on_inventory_changed):
@@ -134,9 +148,11 @@ func _exit_tree():
 	_release_player(_creature_hit_player)
 	_release_player(_player_hit_player)
 	_release_player(_equip_player)
+	_release_player(_till_player)
 	_clunk_streams.clear()
 	_creature_hit_streams.clear()
 	_player_hit_streams.clear()
+	_till_streams.clear()
 	_last_equip_indices.clear()
 
 
