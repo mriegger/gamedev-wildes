@@ -188,9 +188,9 @@ func _check_open_state() -> void:
 	var crafting_rect := _hud.crafting_panel.get_global_rect()
 	var backpack_rect := _hud.side_panel.get_global_rect()
 	for slot in _hud.hotbar.slot_nodes:
-		var slot_rect := (slot as HotbarSlot).get_global_rect()
-		_expect(not crafting_rect.intersects(slot_rect), "crafting panel covered hotbar slot %d" % (slot as HotbarSlot).slot_index)
-		_expect(not backpack_rect.intersects(slot_rect), "backpack covered hotbar slot %d" % (slot as HotbarSlot).slot_index)
+		var slot_rect := (slot as InventoryHotbarSlot).get_global_rect()
+		_expect(not crafting_rect.intersects(slot_rect), "crafting panel covered hotbar slot %d" % (slot as InventoryHotbarSlot).slot_index)
+		_expect(not backpack_rect.intersects(slot_rect), "backpack covered hotbar slot %d" % (slot as InventoryHotbarSlot).slot_index)
 
 func _finish() -> void:
 	if _errors.is_empty():

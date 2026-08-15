@@ -1,7 +1,7 @@
 extends CanvasLayer
 class_name HUD
 
-@onready var hotbar: Hotbar = $Hotbar as Hotbar
+@onready var hotbar: InventoryHotbar = $InventoryHotbar as InventoryHotbar
 @onready var health_bar: PlayerHealthBar = $HealthBar as PlayerHealthBar
 @onready var experience_bar: PlayerExperienceBar = $PlayerExperienceBar as PlayerExperienceBar
 @onready var side_panel: SidePanel = $SidePanel as SidePanel

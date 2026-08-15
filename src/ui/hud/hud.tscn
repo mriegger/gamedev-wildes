@@ -1,7 +1,7 @@
 [gd_scene load_steps=9 format=3 uid="uid://hudc0mp0s1t3"]
 
 [ext_resource type="Script" path="res://ui/hud/hud.gd" id="1_hud"]
-[ext_resource type="PackedScene" path="res://inventory/ui/hotbar.tscn" id="2_hotbar"]
+[ext_resource type="PackedScene" path="res://inventory/ui/inventory_hotbar.tscn" id="2_hotbar"]
 [ext_resource type="PackedScene" path="res://inventory/ui/side_panel.tscn" id="3_side_panel"]
 [ext_resource type="PackedScene" path="res://player/ui/health_bar.tscn" id="4_health_bar"]
 [ext_resource type="PackedScene" path="res://crafting/presentation/crafting_panel.tscn" id="5_crafting_panel"]
@@ -13,7 +13,7 @@
 script = ExtResource("1_hud")
 layer = 1
 
-[node name="Hotbar" parent="." instance=ExtResource("2_hotbar")]
+[node name="InventoryHotbar" parent="." instance=ExtResource("2_hotbar")]
 
 [node name="HealthBar" parent="." instance=ExtResource("4_health_bar")]
 

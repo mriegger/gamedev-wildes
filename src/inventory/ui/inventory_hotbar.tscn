@@ -1,0 +1,33 @@
+[gd_scene load_steps=3 format=3 uid="uid://h0tb4r1c0n"]
+
+[ext_resource type="Script" path="res://inventory/ui/inventory_hotbar.gd" id="1_hotbar"]
+[ext_resource type="PackedScene" path="res://inventory/ui/inventory_hotbar_slot.tscn" id="2_slot"]
+
+[node name="InventoryHotbar" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_left = 0.0
+anchor_top = 0.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+script = ExtResource("1_hotbar")
+slot_scene = ExtResource("2_slot")
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 12
+anchor_left = 0.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -96.0
+grow_horizontal = 0
+grow_vertical = 0
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="HBoxContainer" type="HBoxContainer" parent="MarginContainer"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 6
