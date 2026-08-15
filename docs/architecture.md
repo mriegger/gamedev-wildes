@@ -84,8 +84,10 @@ attack profiles, stat modifiers, and proficiency definitions stay authoritative 
 equipment bonuses, and unlock thresholds.
 
 `InventorySlot` presents combat-item and rune details for hotbar, backpack, and equipped slots
-through one custom `ItemTooltip`. `Game` passes `ItemProficiency` through `HUD`, `Hotbar`, and
-`SidePanel` into each slot, and a visible tooltip queries current progress without owning it.
+through one custom `ItemTooltip`. `Game` passes `ItemProficiency` through `HUD`,
+`InventoryHotbar`, and `SidePanel` into each inventory-bound slot. `HotbarView` and
+`ItemSlotView` own only reusable presentation and selection intent, while a visible tooltip queries
+current progress without owning it.
 Weapon rows read the item's melee attack profile, while armor rows read its slot and stat
 modifiers, so presentation does not own or duplicate gear state. During a left-button drag, the
 source slot owns the adjustable drag count and consumes wheel input before gameplay camera handling.

@@ -33,9 +33,6 @@ func set_selected_slot(slot_index: int) -> void:
 func set_selection_input_enabled(enabled: bool) -> void:
 	_selection_input_enabled = enabled
 
-func is_selection_input_enabled() -> bool:
-	return _selection_input_enabled
-
 func _build_slots() -> void:
 	for index in range(slot_count):
 		var slot := slot_scene.instantiate() as ItemSlotView
