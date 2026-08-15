@@ -30,9 +30,17 @@ distant accumulated edits do not turn every rebuild into a full-world scan.
 The streaming soak test instantiates the real gameplay scene, moves the real player, edits the real voxel model, and checks visible/data/terrain bounds, pending work, orphan nodes, and drag-preview leaks.
 
 Transient entities use the same readiness boundary through `WorldController.is_position_streamed`.
-`EntityCoordinator` rejects spawn candidates outside streamed regions and removes active actors as
-soon as their position is no longer streamed or exceeds the despawn radius. Removal also clears the
-actor's spatial-index entry. The entity streaming soak
+`WorldEntityCoordinator` rejects ambient spawn candidates outside streamed regions and removes
+active actors as soon as their position is no longer streamed or exceeds the despawn radius.
+`EntityRuntime` owns those actors, their stats, spatial entries, and retirement; removal clears all
+gameplay indexes together. The entity streaming soak
 moves across regions while alternating day and night, and asserts population, pathfinding, index,
 and cleanup bounds independently of the chunk renderer soak. Retired actors leave all gameplay
 indexes and population counts immediately. Their fading presentations use a separate fixed bound.
+
+Finite dungeons do not reuse ambient spawning or streaming rules. Each `LevelRuntime` owns a
+dedicated 64-actor `EntityRuntime` over `LevelState`; room encounters feed it validated atomic
+batches and bounded navigation work. Entering a dungeon suspends the overworld coordinator without
+destroying its runtime. Leaving restores and resumes the same overworld instance before queuing the
+dungeon runtime for deletion; death suspends it immediately and follows that restore-then-retire
+order during the return flow.

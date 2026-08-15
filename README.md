@@ -43,6 +43,11 @@ unused optional openings are sealed across their complete authored shape with th
 Press `Esc` when finished. Two opposite connections form a straight hall; rooms can expose all four
 sides. Entry markers are authored as a player Spawn plus one shared Entrance / Exit Door; aim at
 each desired cell before opening Module Tools, set each marker from the target, then commit the pair.
+Room modules also expose an Enemy Spawn Zones section. `Add Zone` returns to first-person targeting:
+left-click the first floor corner, aim at the opposite corner to review its usable-cell count, then
+left-click that second corner to commit. Right-click or `Esc` cancels. Colored floor overlays show
+candidates with solid support, body clearance, and three-cell doorway clearance; each saved row can
+be removed from Module Tools.
 
 The animation tuner is a compact right-side debug-build panel. Its Movement, Animation, Parts,
 and Attack tabs update the live player immediately, while preview modes let you hold idle, walk,
@@ -71,9 +76,15 @@ room requirements, hallway variants, terrain presentation, ambient lighting, and
 materials are configured through typed level resources rather than hardcoded dungeon IDs. Each
 destination dungeon owns its catalog, entrance, definition, presentation, and modules under
 `levels/content/dungeons/<family>`. Directories organize each self-contained family but never
-register content through filesystem scans. A room requirement maps a stable room type and count to
-a module pool, so additional variants can join an existing type and new types such as small or boss
-rooms can be added without a dungeon-specific generator branch.
+register content through filesystem scans. A room requirement maps a stable room type, count,
+module pool, and encounter, so additional variants can join an existing type and new types such as
+small or boss rooms can be added without a dungeon-specific generator branch.
+Master rooms configure 40 zombies, normal rooms 25, and chest rooms 6. A room encounter activates
+only after the player is fully inside. Wood-plank portcullises immediately block movement,
+pathfinding, targeting, and attacks while the HUD shows separate active and pending counts. Defeated
+enemies refill authored spawn positions on a later physics tick; killing the complete configured
+group opens every branch and readies child rooms. Leaving or dying discards that run, restores the
+exact overworld anchor and player-owned inventory, and creates fresh encounter state on re-entry.
 
 **Structure construction workspace.** `dev structure new` opens a document type, length, width, and
 height dialog, then enters an isolated first-person workspace for a generic structure or Level
@@ -83,11 +94,16 @@ later overwrites of that bound file. Successful exports keep the workspace open 
 current draft clean. `dev structure exit` leaves the workspace and confirms before discarding
 edited cells, torches, or Level Module metadata. Level Module tools edit precise weight, targeted
 `VOID` cells, connections selected from the outside face of a lower boundary wall, and an atomic
-player-spawn/shared entrance-exit marker pair. Each connection can require a match or define the
-solid block used to fill its complete doorway when generation leaves it unused.
+player-spawn/shared entrance-exit marker pair. They also author horizontal enemy spawn zones from
+two floor corners, showing the usable-cell count and colored candidate overlays. Each connection
+can require a match or define the solid block used to fill its complete doorway when generation
+leaves it unused.
 Torches remain normal first-person palette placements instead of panel metadata. Exported modules
 must still be added explicitly to the appropriate level content and catalog; repository-root files
-are not consumed or registered by generation automatically. Module
+are not consumed or registered by generation automatically. Spawn zones persist horizontal floor
+rectangles; blocked decorative cells are ignored, but every zone must retain at least one
+supported, body-clear candidate away from doorways. Current Level Module resources require their
+physical format version. Module
 resources remain geometry-focused, while `LevelDefinition` assigns them to its entry, hallway, and
 typed room-requirement pools. Connection openings are derived from authored boundary geometry, so
 hallways can use any enclosed opening size supported by the module bounds.
