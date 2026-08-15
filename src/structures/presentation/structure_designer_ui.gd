@@ -18,6 +18,8 @@ signal void_requested
 signal connection_targeting_requested
 signal socket_remove_requested(socket_id: StringName)
 signal socket_unused_fill_block_requested(socket_id: StringName, block_id: int)
+signal enemy_spawn_zone_targeting_requested
+signal enemy_spawn_zone_remove_requested(zone_id: StringName)
 signal marker_target_requested(role: MarkerRole, facing: LevelSocketDefinition.Direction)
 signal markers_commit_requested(
 	spawn_cell: Vector3i,
@@ -32,17 +34,21 @@ var _toolbelt: CreativeToolbelt
 var _active_overlay: ActiveOverlay = ActiveOverlay.NONE
 var _module_tools_available: bool
 var _connection_targeting: bool = false
+var _enemy_spawn_zone_targeting: bool = false
 var _hovered_palette_item_id: StringName
 var _pending_spawn_cell: Variant
 var _pending_spawn_facing: LevelSocketDefinition.Direction = LevelSocketDefinition.Direction.NORTH
 var _pending_return_cell: Variant
 var _pending_return_facing: LevelSocketDefinition.Direction = LevelSocketDefinition.Direction.NORTH
+var _enemy_spawn_zone_rows: Dictionary = {}
+var _enemy_spawn_zone_candidate_counts: Dictionary = {}
 
 @onready var _hotbar: HotbarView = $HotbarView as HotbarView
 @onready var _palette_overlay: Control = $PaletteOverlay as Control
 @onready var _palette_grid: GridContainer = $PaletteOverlay/PalettePanel/Margin/VBox/Scroll/PaletteGrid as GridContainer
 @onready var _module_tools_hint: Label = $ModuleToolsHint as Label
 @onready var _connection_mode_hint: Label = $ConnectionModeHint as Label
+@onready var _enemy_spawn_zone_mode_hint: Label = $EnemySpawnZoneModeHint as Label
 @onready var _module_panel: PanelContainer = $ModulePanel as PanelContainer
 @onready var _module_close_button: Button = $ModulePanel/Margin/VBox/Header/Close as Button
 @onready var _weight_input: SpinBox = $ModulePanel/Margin/VBox/WeightRow/Weight as SpinBox
@@ -50,27 +56,32 @@ var _pending_return_facing: LevelSocketDefinition.Direction = LevelSocketDefinit
 @onready var _connection_button: Button = $ModulePanel/Margin/VBox/ConnectionHeader/PlaceConnections as Button
 @onready var _connection_summary: Label = $ModulePanel/Margin/VBox/ConnectionSummary as Label
 @onready var _socket_list: VBoxContainer = $ModulePanel/Margin/VBox/SocketScroll/SocketList as VBoxContainer
-@onready var _spawn_current: Label = $ModulePanel/Margin/VBox/Markers/Spawn/Current as Label
-@onready var _spawn_pending: Label = $ModulePanel/Margin/VBox/Markers/Spawn/Pending as Label
-@onready var _spawn_facing: OptionButton = $ModulePanel/Margin/VBox/Markers/Spawn/Controls/Facing as OptionButton
-@onready var _spawn_set_button: Button = $ModulePanel/Margin/VBox/Markers/Spawn/Controls/Set as Button
-@onready var _return_current: Label = $ModulePanel/Margin/VBox/Markers/Return/Current as Label
-@onready var _return_pending: Label = $ModulePanel/Margin/VBox/Markers/Return/Pending as Label
-@onready var _return_facing: OptionButton = $ModulePanel/Margin/VBox/Markers/Return/Controls/Facing as OptionButton
-@onready var _return_set_button: Button = $ModulePanel/Margin/VBox/Markers/Return/Controls/Set as Button
-@onready var _marker_commit_button: Button = $ModulePanel/Margin/VBox/Markers/Actions/Commit as Button
-@onready var _marker_clear_button: Button = $ModulePanel/Margin/VBox/Markers/Actions/Clear as Button
+@onready var _enemy_spawn_zone_button: Button = $ModulePanel/Margin/VBox/DetailsScroll/Details/EnemySpawnZoneHeader/Add as Button
+@onready var _enemy_spawn_zone_summary: Label = $ModulePanel/Margin/VBox/DetailsScroll/Details/EnemySpawnZoneSummary as Label
+@onready var _enemy_spawn_zone_list: VBoxContainer = $ModulePanel/Margin/VBox/DetailsScroll/Details/EnemySpawnZoneList as VBoxContainer
+@onready var _spawn_current: Label = $ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Spawn/Current as Label
+@onready var _spawn_pending: Label = $ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Spawn/Pending as Label
+@onready var _spawn_facing: OptionButton = $ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Spawn/Controls/Facing as OptionButton
+@onready var _spawn_set_button: Button = $ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Spawn/Controls/Set as Button
+@onready var _return_current: Label = $ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Return/Current as Label
+@onready var _return_pending: Label = $ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Return/Pending as Label
+@onready var _return_facing: OptionButton = $ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Return/Controls/Facing as OptionButton
+@onready var _return_set_button: Button = $ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Return/Controls/Set as Button
+@onready var _marker_commit_button: Button = $ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Actions/Commit as Button
+@onready var _marker_clear_button: Button = $ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Actions/Clear as Button
 
 func _ready() -> void:
 	_palette_overlay.visible = false
 	_module_tools_hint.visible = false
 	_connection_mode_hint.visible = false
+	_enemy_spawn_zone_mode_hint.visible = false
 	_module_panel.visible = false
 	_hotbar.slot_selection_requested.connect(_on_hotbar_selection_requested)
 	_module_close_button.pressed.connect(close_module_panel)
 	_weight_input.value_changed.connect(_on_weight_changed)
 	_void_button.pressed.connect(_on_void_pressed)
 	_connection_button.pressed.connect(_on_connection_pressed)
+	_enemy_spawn_zone_button.pressed.connect(_on_enemy_spawn_zone_pressed)
 	_spawn_set_button.pressed.connect(_on_marker_target_pressed.bind(MarkerRole.SPAWN, _spawn_facing))
 	_return_set_button.pressed.connect(_on_marker_target_pressed.bind(MarkerRole.RETURN, _return_facing))
 	_marker_commit_button.pressed.connect(_on_markers_commit_pressed)
@@ -139,6 +150,34 @@ func set_connection_targeting(active: bool) -> void:
 		_connection_mode_hint.text = "CONNECTION MODE  •  Click a wall or an opening's floor  •  Esc when done"
 	_present_active_overlay()
 
+func set_enemy_spawn_zone_targeting(active: bool) -> void:
+	_enemy_spawn_zone_targeting = active
+	if active:
+		_enemy_spawn_zone_mode_hint.text = "ENEMY SPAWN ZONE  •  Click the first floor corner  •  Right-click or Esc to cancel"
+	_present_active_overlay()
+
+func present_enemy_spawn_zone_target(
+	first_corner: Variant,
+	target_cell: Variant,
+	candidate_count: int,
+	valid: bool,
+) -> void:
+	if not _enemy_spawn_zone_targeting:
+		return
+	if target_cell == null:
+		_enemy_spawn_zone_mode_hint.text = "ENEMY SPAWN ZONE  •  Aim at a floor  •  Right-click or Esc to cancel"
+		return
+	if first_corner == null:
+		if valid:
+			_enemy_spawn_zone_mode_hint.text = "First corner %s ready  •  Left-click  •  Right-click or Esc to cancel" % _cell_text(target_cell as Vector3i)
+		else:
+			_enemy_spawn_zone_mode_hint.text = "Enemy zones need solid floor and two clear blocks  •  Choose another cell"
+		return
+	if valid:
+		_enemy_spawn_zone_mode_hint.text = "%s to %s  •  %d usable cells  •  Left-click to commit" % [_cell_text(first_corner as Vector3i), _cell_text(target_cell as Vector3i), candidate_count]
+	else:
+		_enemy_spawn_zone_mode_hint.text = "Second corner must share a floor level and leave at least one usable cell  •  Right-click or Esc to cancel"
+
 func present_connection_target(
 	direction: Variant,
 	valid: bool,
@@ -172,6 +211,36 @@ func present_module_state(
 	_connection_button.disabled = _all_cardinal_sides_used(sockets)
 	_spawn_current.text = _marker_text("Current", spawn_marker)
 	_return_current.text = _marker_text("Current", return_marker)
+
+func present_enemy_spawn_zones(zones: Array[LevelEnemySpawnZone], candidate_counts: Dictionary) -> void:
+	_clear_container(_enemy_spawn_zone_list)
+	_enemy_spawn_zone_rows.clear()
+	_enemy_spawn_zone_candidate_counts.clear()
+	for zone in zones:
+		present_enemy_spawn_zone(zone, int(candidate_counts.get(zone.zone_id, 0)), false)
+	_refresh_enemy_spawn_zone_summary()
+
+func present_enemy_spawn_zone(zone: LevelEnemySpawnZone, candidate_count: int, refresh_summary: bool = true) -> void:
+	if zone == null:
+		return
+	var row := _enemy_spawn_zone_rows.get(zone.zone_id) as HBoxContainer
+	if row == null:
+		row = _create_enemy_spawn_zone_row(zone.zone_id)
+		_enemy_spawn_zone_rows[zone.zone_id] = row
+		_enemy_spawn_zone_list.add_child(row)
+	(row.get_child(0) as Label).text = _enemy_spawn_zone_row_text(zone, candidate_count)
+	_enemy_spawn_zone_candidate_counts[zone.zone_id] = candidate_count
+	if refresh_summary:
+		_refresh_enemy_spawn_zone_summary()
+
+func remove_enemy_spawn_zone(zone_id: StringName) -> void:
+	var row := _enemy_spawn_zone_rows.get(zone_id) as HBoxContainer
+	if row != null:
+		_enemy_spawn_zone_list.remove_child(row)
+		row.queue_free()
+	_enemy_spawn_zone_rows.erase(zone_id)
+	_enemy_spawn_zone_candidate_counts.erase(zone_id)
+	_refresh_enemy_spawn_zone_summary()
 
 func set_pending_marker(
 	role: MarkerRole,
@@ -259,9 +328,10 @@ func _set_active_overlay(overlay: ActiveOverlay) -> void:
 func _present_active_overlay() -> void:
 	_palette_overlay.visible = is_palette_open()
 	_module_panel.visible = is_module_panel_open()
-	_module_tools_hint.visible = _module_tools_available and _active_overlay == ActiveOverlay.NONE and not _connection_targeting
+	_module_tools_hint.visible = _module_tools_available and _active_overlay == ActiveOverlay.NONE and not _connection_targeting and not _enemy_spawn_zone_targeting
 	_connection_mode_hint.visible = _connection_targeting
-	_hotbar.set_selection_input_enabled(not is_ui_blocking() and not _connection_targeting)
+	_enemy_spawn_zone_mode_hint.visible = _enemy_spawn_zone_targeting
+	_hotbar.set_selection_input_enabled(not is_ui_blocking() and not _connection_targeting and not _enemy_spawn_zone_targeting)
 
 func _on_weight_changed(value: float) -> void:
 	weight_requested.emit(value)
@@ -273,11 +343,18 @@ func _on_connection_pressed() -> void:
 	close_module_panel()
 	connection_targeting_requested.emit()
 
+func _on_enemy_spawn_zone_pressed() -> void:
+	close_module_panel()
+	enemy_spawn_zone_targeting_requested.emit()
+
 func _on_socket_remove_pressed(socket_id: StringName) -> void:
 	socket_remove_requested.emit(socket_id)
 
 func _on_socket_unused_fill_block_selected(item_index: int, socket_id: StringName, option: OptionButton) -> void:
 	socket_unused_fill_block_requested.emit(socket_id, option.get_item_id(item_index))
+
+func _on_enemy_spawn_zone_remove_pressed(zone_id: StringName) -> void:
+	enemy_spawn_zone_remove_requested.emit(zone_id)
 
 func _on_marker_target_pressed(role: MarkerRole, option: OptionButton) -> void:
 	marker_target_requested.emit(role, option.get_selected_id() as LevelSocketDefinition.Direction)
@@ -306,6 +383,37 @@ func _rebuild_socket_list(sockets: Array[LevelSocketDefinition], aperture_sizes:
 		var aperture_size: Vector2i = aperture_sizes.get(socket.socket_id, Vector2i.ZERO)
 		var row := _socket_row(socket, aperture_size)
 		_socket_list.add_child(row)
+
+func _create_enemy_spawn_zone_row(zone_id: StringName) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	var label := Label.new()
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(label)
+	var remove := Button.new()
+	remove.text = "Remove"
+	remove.pressed.connect(_on_enemy_spawn_zone_remove_pressed.bind(zone_id))
+	row.add_child(remove)
+	return row
+
+func _enemy_spawn_zone_row_text(zone: LevelEnemySpawnZone, candidate_count: int) -> String:
+	return "%s  %s → %s  •  %d cells" % [
+		zone.zone_id,
+		_cell_text(zone.minimum_feet_cell),
+		_cell_text(zone.maximum_feet_cell),
+		candidate_count,
+	]
+
+func _refresh_enemy_spawn_zone_summary() -> void:
+	var total_candidates := 0
+	for count in _enemy_spawn_zone_candidate_counts.values():
+		total_candidates += int(count)
+	var zone_count := _enemy_spawn_zone_rows.size()
+	if zone_count == 0:
+		_enemy_spawn_zone_summary.text = "No enemy spawn zones"
+	elif zone_count == 1:
+		_enemy_spawn_zone_summary.text = "1 zone • %d usable cells" % total_candidates
+	else:
+		_enemy_spawn_zone_summary.text = "%d zones • %d usable cells" % [zone_count, total_candidates]
 
 func _socket_row(socket: LevelSocketDefinition, aperture_size: Vector2i) -> VBoxContainer:
 	var row := VBoxContainer.new()

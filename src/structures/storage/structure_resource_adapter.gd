@@ -37,11 +37,13 @@ static func _create_structure_snapshot(draft: StructureDraft, identifier: String
 
 static func _create_module_snapshot(draft: StructureDraft, identifier: StringName) -> LevelModuleDefinition:
 	var definition := LevelModuleDefinition.new()
+	definition.format_version = LevelModuleDefinition.CURRENT_FORMAT_VERSION
 	definition.module_id = identifier
 	definition.size = draft.get_size()
 	definition.weight = draft.get_weight()
 	definition.cells = draft.snapshot_cells()
 	definition.sockets.assign(draft.get_sockets())
+	definition.enemy_spawn_zones.assign(draft.get_enemy_spawn_zones())
 	for source in draft.get_torches():
 		var direction: Variant = LevelSocketDefinition.direction_for_vector(source.support_direction)
 		if direction == null:
@@ -73,9 +75,9 @@ static func _structures_equal(first: StructureDefinition, second: StructureDefin
 static func _modules_equal(first: LevelModuleDefinition, second: LevelModuleDefinition) -> bool:
 	if not first.validate() or not second.validate():
 		return false
-	if first.module_id != second.module_id or first.size != second.size or first.cells != second.cells or first.weight != second.weight:
+	if first.format_version != second.format_version or first.module_id != second.module_id or first.size != second.size or first.cells != second.cells or first.weight != second.weight:
 		return false
-	if first.sockets.size() != second.sockets.size() or first.torches.size() != second.torches.size():
+	if first.sockets.size() != second.sockets.size() or first.torches.size() != second.torches.size() or first.enemy_spawn_zones.size() != second.enemy_spawn_zones.size():
 		return false
 	for index in first.sockets.size():
 		var left_socket := first.sockets[index]
@@ -86,6 +88,11 @@ static func _modules_equal(first: LevelModuleDefinition, second: LevelModuleDefi
 		var left_torch := first.torches[index]
 		var right_torch := second.torches[index]
 		if left_torch == null or right_torch == null or left_torch.cell != right_torch.cell or left_torch.wall_direction != right_torch.wall_direction:
+			return false
+	for index in first.enemy_spawn_zones.size():
+		var left_zone := first.enemy_spawn_zones[index]
+		var right_zone := second.enemy_spawn_zones[index]
+		if left_zone == null or right_zone == null or left_zone.zone_id != right_zone.zone_id or left_zone.minimum_feet_cell != right_zone.minimum_feet_cell or left_zone.maximum_feet_cell != right_zone.maximum_feet_cell:
 			return false
 	return _markers_equal(first.spawn_marker, second.spawn_marker) and _markers_equal(first.return_door_marker, second.return_door_marker)
 

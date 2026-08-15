@@ -21,6 +21,9 @@ var _space: StructureDesignerSpace
 var _toolbelt: CreativeToolbelt
 var _current_hit: VoxelRaycastHit
 var _connection_targeting: bool
+var _enemy_spawn_zone_targeting: bool
+var _enemy_spawn_zone_first_corner: Variant
+var _enemy_spawn_zone_last_target: Variant
 var _external_ui_blocked: bool
 var _active: bool
 
@@ -58,11 +61,14 @@ func setup(
 	_designer_ui.connection_targeting_requested.connect(_on_connection_targeting_requested)
 	_designer_ui.socket_remove_requested.connect(_on_socket_remove_requested)
 	_designer_ui.socket_unused_fill_block_requested.connect(_on_socket_unused_fill_block_requested)
+	_designer_ui.enemy_spawn_zone_targeting_requested.connect(_on_enemy_spawn_zone_targeting_requested)
+	_designer_ui.enemy_spawn_zone_remove_requested.connect(_on_enemy_spawn_zone_remove_requested)
 	_designer_ui.marker_target_requested.connect(_on_marker_target_requested)
 	_designer_ui.markers_commit_requested.connect(_on_markers_commit_requested)
 	_designer_ui.markers_clear_requested.connect(_on_markers_clear_requested)
 	_spawn_initial_torches()
 	_sync_module_presentation()
+	_sync_all_enemy_spawn_zones()
 	_setup_environment()
 
 func activate() -> void:
@@ -83,6 +89,8 @@ func set_external_ui_blocked(blocked: bool) -> void:
 func cancel_active_ui() -> bool:
 	if _stop_connection_targeting():
 		return true
+	if _stop_enemy_spawn_zone_targeting():
+		return true
 	return _designer_ui.close_active_overlay()
 
 func _process(_delta: float) -> void:
@@ -94,9 +102,14 @@ func _process(_delta: float) -> void:
 		_guide_view.clear_preview()
 		if _connection_targeting:
 			_designer_ui.present_connection_target(null, false, true, Vector2i.ZERO)
+		elif _enemy_spawn_zone_targeting:
+			_designer_ui.present_enemy_spawn_zone_target(_enemy_spawn_zone_first_corner, null, 0, false)
 		return
 	if _connection_targeting:
 		_present_connection_target(_current_hit)
+		return
+	if _enemy_spawn_zone_targeting:
+		_present_enemy_spawn_zone_target(_current_hit)
 		return
 	var action := _toolbelt.get_selected_placement_action()
 	var block_id := action.block.id
@@ -109,14 +122,14 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		var key_event := event as InputEventKey
 		if key_event.keycode == KEY_TAB or key_event.physical_keycode == KEY_TAB:
-			if _stop_connection_targeting():
+			if _stop_connection_targeting() or _stop_enemy_spawn_zone_targeting():
 				_designer_ui.open_palette()
 			else:
 				_designer_ui.toggle_palette()
 			get_viewport().set_input_as_handled()
 			return
 		if _draft.get_format() == StructureDraft.Format.LEVEL_MODULE and (key_event.keycode == KEY_M or key_event.physical_keycode == KEY_M):
-			if _stop_connection_targeting():
+			if _stop_connection_targeting() or _stop_enemy_spawn_zone_targeting():
 				_current_hit = _controller.get_centered_raycast()
 				_designer_ui.open_module_panel()
 			else:
@@ -136,6 +149,15 @@ func _unhandled_input(event: InputEvent) -> void:
 	if _connection_targeting:
 		if mouse_event.button_index == MOUSE_BUTTON_LEFT:
 			_try_add_targeted_connection()
+		if mouse_event.button_index == MOUSE_BUTTON_LEFT or mouse_event.button_index == MOUSE_BUTTON_RIGHT:
+			get_viewport().set_input_as_handled()
+		return
+	if _enemy_spawn_zone_targeting:
+		if mouse_event.button_index == MOUSE_BUTTON_LEFT:
+			_try_add_targeted_enemy_spawn_zone()
+		elif mouse_event.button_index == MOUSE_BUTTON_RIGHT:
+			_stop_enemy_spawn_zone_targeting()
+			_designer_ui.open_module_panel()
 		if mouse_event.button_index == MOUSE_BUTTON_LEFT or mouse_event.button_index == MOUSE_BUTTON_RIGHT:
 			get_viewport().set_input_as_handled()
 		return
@@ -179,8 +201,10 @@ func _apply_change(change: StructureDraftChange) -> void:
 	for torch in change.added_torches:
 		_torch_renderer.spawn_torch(torch.cell, torch.support_direction)
 	if change.metadata_changed:
-		_metadata_overlay.rebuild()
+		_metadata_overlay.rebuild_non_zone_metadata()
 		_sync_module_presentation()
+	for zone_id in change.changed_enemy_spawn_zone_ids:
+		_sync_enemy_spawn_zone(zone_id)
 
 func _spawn_initial_torches() -> void:
 	var attachments: Dictionary = {}
@@ -198,6 +222,19 @@ func _sync_module_presentation() -> void:
 		_draft.get_spawn_marker(),
 		_draft.get_return_door_marker(),
 	)
+
+func _sync_all_enemy_spawn_zones() -> void:
+	if _draft.get_format() != StructureDraft.Format.LEVEL_MODULE:
+		return
+	_designer_ui.present_enemy_spawn_zones(_draft.get_enemy_spawn_zones(), _enemy_spawn_zone_candidate_counts())
+
+func _sync_enemy_spawn_zone(zone_id: StringName) -> void:
+	_metadata_overlay.rebuild_enemy_spawn_zone(zone_id)
+	var zone := _draft.get_enemy_spawn_zone(zone_id)
+	if zone == null:
+		_designer_ui.remove_enemy_spawn_zone(zone_id)
+		return
+	_designer_ui.present_enemy_spawn_zone(zone, _draft.get_enemy_spawn_zone_candidate_cells(zone_id).size())
 
 func _can_preview_placement(cell: Vector3i, block_id: int, face_normal: Vector3i) -> bool:
 	if _controller.body_intersects_cell(cell):
@@ -289,6 +326,12 @@ func _socket_aperture_sizes() -> Dictionary:
 		sizes[socket.socket_id] = LevelSocketAperture.dimensions(aperture, socket.direction)
 	return sizes
 
+func _enemy_spawn_zone_candidate_counts() -> Dictionary:
+	var counts: Dictionary = {}
+	for zone in _draft.get_enemy_spawn_zones():
+		counts[zone.zone_id] = _draft.get_enemy_spawn_zone_candidate_cells(zone.zone_id).size()
+	return counts
+
 func _on_ui_blocking_changed(blocking: bool) -> void:
 	if blocking:
 		_guide_view.clear_preview()
@@ -317,6 +360,13 @@ func _on_connection_targeting_requested() -> void:
 	_designer_ui.set_connection_targeting(true)
 	_guide_view.clear_preview()
 
+func _on_enemy_spawn_zone_targeting_requested() -> void:
+	_enemy_spawn_zone_targeting = true
+	_enemy_spawn_zone_first_corner = null
+	_enemy_spawn_zone_last_target = null
+	_designer_ui.set_enemy_spawn_zone_targeting(true)
+	_guide_view.clear_preview()
+
 func _stop_connection_targeting() -> bool:
 	if not _connection_targeting:
 		return false
@@ -325,11 +375,78 @@ func _stop_connection_targeting() -> bool:
 	_guide_view.clear_preview()
 	return true
 
+func _stop_enemy_spawn_zone_targeting() -> bool:
+	if not _enemy_spawn_zone_targeting:
+		return false
+	_enemy_spawn_zone_targeting = false
+	_enemy_spawn_zone_first_corner = null
+	_enemy_spawn_zone_last_target = null
+	_designer_ui.set_enemy_spawn_zone_targeting(false)
+	_guide_view.clear_preview()
+	return true
+
 func _on_socket_remove_requested(socket_id: StringName) -> void:
 	_apply_change(_draft.try_remove_socket(socket_id))
 
 func _on_socket_unused_fill_block_requested(socket_id: StringName, block_id: int) -> void:
 	_apply_change(_draft.try_set_socket_unused_fill_block(socket_id, block_id))
+
+func _on_enemy_spawn_zone_remove_requested(zone_id: StringName) -> void:
+	_apply_change(_draft.try_remove_enemy_spawn_zone(zone_id))
+
+func _present_enemy_spawn_zone_target(hit: VoxelRaycastHit) -> void:
+	var target: Variant = _enemy_spawn_zone_target_cell(hit)
+	if target == null:
+		_enemy_spawn_zone_last_target = null
+		_guide_view.clear_preview()
+		_designer_ui.present_enemy_spawn_zone_target(_enemy_spawn_zone_first_corner, null, 0, false)
+		return
+	var target_cell := target as Vector3i
+	if _enemy_spawn_zone_last_target != null and (_enemy_spawn_zone_last_target as Vector3i) == target_cell:
+		return
+	_enemy_spawn_zone_last_target = target_cell
+	if _enemy_spawn_zone_first_corner == null:
+		var corner_valid := _draft.is_valid_enemy_spawn_zone_corner(target_cell)
+		_guide_view.show_connection_preview([target_cell], corner_valid)
+		_designer_ui.present_enemy_spawn_zone_target(null, target_cell, 1 if corner_valid else 0, corner_valid)
+		return
+	var first_corner := _enemy_spawn_zone_first_corner as Vector3i
+	var candidates := _draft.get_enemy_spawn_zone_preview_cells(first_corner, target_cell)
+	var valid := not candidates.is_empty()
+	var preview_cells := candidates
+	if preview_cells.is_empty():
+		preview_cells.assign([first_corner, target_cell])
+	_guide_view.show_connection_preview(preview_cells, valid)
+	_designer_ui.present_enemy_spawn_zone_target(first_corner, target_cell, candidates.size(), valid)
+
+func _try_add_targeted_enemy_spawn_zone() -> void:
+	_current_hit = _controller.get_centered_raycast()
+	if _current_hit == null:
+		return
+	var target: Variant = _enemy_spawn_zone_target_cell(_current_hit)
+	if target == null:
+		return
+	var target_cell := target as Vector3i
+	if _enemy_spawn_zone_first_corner == null:
+		if not _draft.is_valid_enemy_spawn_zone_corner(target_cell):
+			return
+		_enemy_spawn_zone_first_corner = target_cell
+		_enemy_spawn_zone_last_target = null
+		return
+	var change := _draft.try_add_enemy_spawn_zone(_enemy_spawn_zone_first_corner as Vector3i, target_cell)
+	_apply_change(change)
+	if not change.succeeded:
+		return
+	_stop_enemy_spawn_zone_targeting()
+	_designer_ui.open_module_panel()
+
+func _enemy_spawn_zone_target_cell(hit: VoxelRaycastHit) -> Variant:
+	if hit.face_normal != Vector3i.UP:
+		return null
+	var cell := hit.placement_cell
+	if not _draft.is_in_bounds(cell):
+		return null
+	return cell
 
 func _on_marker_target_requested(role: StructureDesignerUI.MarkerRole, facing: LevelSocketDefinition.Direction) -> void:
 	if _current_hit == null or not _draft.is_in_bounds(_current_hit.placement_cell):

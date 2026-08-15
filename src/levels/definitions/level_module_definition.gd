@@ -1,6 +1,8 @@
 extends Resource
 class_name LevelModuleDefinition
 
+const CURRENT_FORMAT_VERSION: int = 1
+const MAX_ENEMY_SPAWN_ZONES: int = 64
 const AIR_NEIGHBORS: Array[Vector3i] = [
 	Vector3i.LEFT,
 	Vector3i.RIGHT,
@@ -10,6 +12,7 @@ const AIR_NEIGHBORS: Array[Vector3i] = [
 	Vector3i.BACK,
 ]
 
+@export var format_version: int
 @export var module_id: StringName
 @export var size: Vector3i
 @export_range(0.01, 100.0, 0.01, "or_greater") var weight: float = 1.0
@@ -18,6 +21,7 @@ const AIR_NEIGHBORS: Array[Vector3i] = [
 @export var torches: Array[LevelTorchDefinition] = []
 @export var spawn_marker: LevelMarkerDefinition
 @export var return_door_marker: LevelMarkerDefinition
+@export var enemy_spawn_zones: Array[LevelEnemySpawnZone] = []
 
 func cell_at(cell: Vector3i) -> int:
 	assert(StructureCell.is_in_bounds(cell, size))
@@ -25,6 +29,25 @@ func cell_at(cell: Vector3i) -> int:
 
 func socket_aperture_cells(socket: LevelSocketDefinition) -> Array[Vector3i]:
 	return LevelSocketAperture.find_cells(socket, size, cells)
+
+func get_enemy_spawn_zone_candidate_cells(zone_id: StringName) -> Array[Vector3i]:
+	for zone in enemy_spawn_zones:
+		if zone != null and zone.zone_id == zone_id:
+			return zone.get_candidate_cells(size, cells, sockets)
+	return []
+
+func get_enemy_spawn_candidate_cells() -> Array[Vector3i]:
+	var candidates: Array[Vector3i] = []
+	var seen: Dictionary = {}
+	for zone in enemy_spawn_zones:
+		if zone == null:
+			continue
+		for cell in zone.get_candidate_cells(size, cells, sockets):
+			if seen.has(cell):
+				continue
+			seen[cell] = true
+			candidates.append(cell)
+	return candidates
 
 func rotated_size(quarter_turns: int) -> Vector3i:
 	if posmod(quarter_turns, 2) == 0:
@@ -82,6 +105,9 @@ func validate() -> bool:
 	var source := resource_path
 	if source.is_empty():
 		source = String(module_id)
+	if format_version != CURRENT_FORMAT_VERSION:
+		push_error("[LevelModuleDefinition] Unsupported format version for %s" % source)
+		valid = false
 	if module_id.is_empty():
 		push_error("[LevelModuleDefinition] Empty module ID at %s" % source)
 		valid = false
@@ -149,6 +175,27 @@ func validate() -> bool:
 		valid = _validate_marker(return_door_marker, "entrance/exit door", source) and valid
 		valid = _validate_marker_socket_clearance(spawn_marker, "spawn", socket_aperture_owners, source) and valid
 		valid = _validate_marker_socket_clearance(return_door_marker, "entrance/exit door", socket_aperture_owners, source) and valid
+	var zone_ids: Dictionary = {}
+	if enemy_spawn_zones.size() > MAX_ENEMY_SPAWN_ZONES:
+		push_error("[LevelModuleDefinition] Enemy spawn zone count exceeds %d for %s" % [MAX_ENEMY_SPAWN_ZONES, source])
+		valid = false
+	for zone in enemy_spawn_zones:
+		if zone == null:
+			push_error("[LevelModuleDefinition] Null enemy spawn zone for %s" % source)
+			valid = false
+			continue
+		if zone_ids.has(zone.zone_id):
+			push_error("[LevelModuleDefinition] Duplicate enemy spawn zone ID for %s" % source)
+			valid = false
+			continue
+		zone_ids[zone.zone_id] = true
+		if not zone.has_valid_bounds(size):
+			push_error("[LevelModuleDefinition] Invalid enemy spawn zone bounds for %s" % source)
+			valid = false
+			continue
+		if zone.get_candidate_cells(size, cells, sockets).is_empty():
+			push_error("[LevelModuleDefinition] Enemy spawn zone has no usable cells for %s" % source)
+			valid = false
 	return valid
 
 func _validate_socket(socket: LevelSocketDefinition, source: String) -> bool:

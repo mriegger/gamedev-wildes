@@ -81,6 +81,25 @@ theme_override_constants/shadow_offset_x = 2
 theme_override_constants/shadow_offset_y = 2
 theme_override_font_sizes/font_size = 18
 
+[node name="EnemySpawnZoneModeHint" type="Label" parent="."]
+visible = false
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 120.0
+offset_top = 16.0
+offset_right = -120.0
+offset_bottom = 48.0
+grow_horizontal = 2
+mouse_filter = 2
+text = "ENEMY SPAWN ZONE  •  Click two floor corners  •  Right-click or Esc to cancel"
+horizontal_alignment = 1
+vertical_alignment = 1
+theme_override_colors/font_color = Color(0.82, 0.46, 1, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.95)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 2
+theme_override_font_sizes/font_size = 18
+
 [node name="ModulePanel" type="PanelContainer" parent="."]
 visible = false
 z_index = 2
@@ -176,76 +195,111 @@ horizontal_scroll_mode = 0
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="MarkersTitle" type="Label" parent="ModulePanel/Margin/VBox"]
+[node name="DetailsScroll" type="ScrollContainer" parent="ModulePanel/Margin/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="Details" type="VBoxContainer" parent="ModulePanel/Margin/VBox/DetailsScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="EnemySpawnZoneHeader" type="HBoxContainer" parent="ModulePanel/Margin/VBox/DetailsScroll/Details"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="ModulePanel/Margin/VBox/DetailsScroll/Details/EnemySpawnZoneHeader"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Enemy Spawn Zones"
+
+[node name="Add" type="Button" parent="ModulePanel/Margin/VBox/DetailsScroll/Details/EnemySpawnZoneHeader"]
+layout_mode = 2
+text = "Add Zone"
+
+[node name="EnemySpawnZoneHelp" type="Label" parent="ModulePanel/Margin/VBox/DetailsScroll/Details"]
+layout_mode = 2
+text = "Click two opposite floor corners. Usable cells need solid floor, two blocks of air, and doorway clearance."
+autowrap_mode = 2
+
+[node name="EnemySpawnZoneSummary" type="Label" parent="ModulePanel/Margin/VBox/DetailsScroll/Details"]
+layout_mode = 2
+text = "No enemy spawn zones"
+theme_override_colors/font_color = Color(0.82, 0.58, 1, 1)
+
+[node name="EnemySpawnZoneList" type="VBoxContainer" parent="ModulePanel/Margin/VBox/DetailsScroll/Details"]
+layout_mode = 2
+
+[node name="MarkersTitle" type="Label" parent="ModulePanel/Margin/VBox/DetailsScroll/Details"]
 layout_mode = 2
 text = "Entry Markers — aim before opening Module Tools"
 
-[node name="Markers" type="VBoxContainer" parent="ModulePanel/Margin/VBox"]
+[node name="Markers" type="VBoxContainer" parent="ModulePanel/Margin/VBox/DetailsScroll/Details"]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="Spawn" type="VBoxContainer" parent="ModulePanel/Margin/VBox/Markers"]
+[node name="Spawn" type="VBoxContainer" parent="ModulePanel/Margin/VBox/DetailsScroll/Details/Markers"]
 layout_mode = 2
 
-[node name="Title" type="Label" parent="ModulePanel/Margin/VBox/Markers/Spawn"]
+[node name="Title" type="Label" parent="ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Spawn"]
 layout_mode = 2
 text = "Player Spawn"
 
-[node name="Current" type="Label" parent="ModulePanel/Margin/VBox/Markers/Spawn"]
+[node name="Current" type="Label" parent="ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Spawn"]
 layout_mode = 2
 text = "Current: not set"
 
-[node name="Pending" type="Label" parent="ModulePanel/Margin/VBox/Markers/Spawn"]
+[node name="Pending" type="Label" parent="ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Spawn"]
 layout_mode = 2
 text = "Pending: not set"
 
-[node name="Controls" type="HBoxContainer" parent="ModulePanel/Margin/VBox/Markers/Spawn"]
+[node name="Controls" type="HBoxContainer" parent="ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Spawn"]
 layout_mode = 2
 
-[node name="Facing" type="OptionButton" parent="ModulePanel/Margin/VBox/Markers/Spawn/Controls"]
+[node name="Facing" type="OptionButton" parent="ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Spawn/Controls"]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="Set" type="Button" parent="ModulePanel/Margin/VBox/Markers/Spawn/Controls"]
+[node name="Set" type="Button" parent="ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Spawn/Controls"]
 layout_mode = 2
 text = "Set from target"
 
-[node name="Return" type="VBoxContainer" parent="ModulePanel/Margin/VBox/Markers"]
+[node name="Return" type="VBoxContainer" parent="ModulePanel/Margin/VBox/DetailsScroll/Details/Markers"]
 layout_mode = 2
 
-[node name="Title" type="Label" parent="ModulePanel/Margin/VBox/Markers/Return"]
+[node name="Title" type="Label" parent="ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Return"]
 layout_mode = 2
 text = "Entrance / Exit Door"
 
-[node name="Current" type="Label" parent="ModulePanel/Margin/VBox/Markers/Return"]
+[node name="Current" type="Label" parent="ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Return"]
 layout_mode = 2
 text = "Current: not set"
 
-[node name="Pending" type="Label" parent="ModulePanel/Margin/VBox/Markers/Return"]
+[node name="Pending" type="Label" parent="ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Return"]
 layout_mode = 2
 text = "Pending: not set"
 
-[node name="Controls" type="HBoxContainer" parent="ModulePanel/Margin/VBox/Markers/Return"]
+[node name="Controls" type="HBoxContainer" parent="ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Return"]
 layout_mode = 2
 
-[node name="Facing" type="OptionButton" parent="ModulePanel/Margin/VBox/Markers/Return/Controls"]
+[node name="Facing" type="OptionButton" parent="ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Return/Controls"]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="Set" type="Button" parent="ModulePanel/Margin/VBox/Markers/Return/Controls"]
+[node name="Set" type="Button" parent="ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Return/Controls"]
 layout_mode = 2
 text = "Set from target"
 
-[node name="Actions" type="HBoxContainer" parent="ModulePanel/Margin/VBox/Markers"]
+[node name="Actions" type="HBoxContainer" parent="ModulePanel/Margin/VBox/DetailsScroll/Details/Markers"]
 layout_mode = 2
 
-[node name="Commit" type="Button" parent="ModulePanel/Margin/VBox/Markers/Actions"]
+[node name="Commit" type="Button" parent="ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Actions"]
 layout_mode = 2
 size_flags_horizontal = 3
 disabled = true
 text = "Commit entry pair"
 
-[node name="Clear" type="Button" parent="ModulePanel/Margin/VBox/Markers/Actions"]
+[node name="Clear" type="Button" parent="ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Actions"]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "Clear pair"

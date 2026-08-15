@@ -36,6 +36,7 @@ func _init() -> void:
 
 func _make_valid_module() -> LevelModuleDefinition:
 	var definition := LevelModuleDefinition.new()
+	definition.format_version = LevelModuleDefinition.CURRENT_FORMAT_VERSION
 	definition.module_id = &"malformed_probe_module"
 	definition.size = Vector3i(4, 4, 4)
 	definition.weight = 150.25

@@ -56,6 +56,7 @@ wall_direction = 3
 
 [resource]
 script = ExtResource("1_gqx7s")
+format_version = 1
 module_id = &"stone_hallway"
 size = Vector3i(16, 8, 7)
 weight = 4.0

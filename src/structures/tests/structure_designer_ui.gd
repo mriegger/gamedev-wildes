@@ -7,6 +7,8 @@ var _void_request_count: int
 var _connection_targeting_count: int = 0
 var _removed_sockets: Array[StringName] = []
 var _socket_fill_requests: Array[Array] = []
+var _enemy_spawn_zone_targeting_count: int = 0
+var _removed_enemy_spawn_zones: Array[StringName] = []
 var _marker_targets: Array[Array] = []
 var _marker_commits: Array[Array] = []
 var _marker_clear_count: int
@@ -95,15 +97,19 @@ func _test_module_ui(item_catalog: ItemCatalog) -> void:
 	var module_panel := ui.get_node("ModulePanel") as PanelContainer
 	var module_tools_hint := ui.get_node("ModuleToolsHint") as Label
 	var connection_mode_hint := ui.get_node("ConnectionModeHint") as Label
+	var enemy_spawn_zone_mode_hint := ui.get_node("EnemySpawnZoneModeHint") as Label
 	var weight_input := ui.get_node("ModulePanel/Margin/VBox/WeightRow/Weight") as SpinBox
 	var connection_button := ui.get_node("ModulePanel/Margin/VBox/ConnectionHeader/PlaceConnections") as Button
 	var connection_summary := ui.get_node("ModulePanel/Margin/VBox/ConnectionSummary") as Label
 	var socket_list := ui.get_node("ModulePanel/Margin/VBox/SocketScroll/SocketList") as VBoxContainer
 	var socket_help := ui.get_node("ModulePanel/Margin/VBox/SocketHelp") as Label
-	var marker_title := ui.get_node("ModulePanel/Margin/VBox/MarkersTitle") as Label
-	var spawn_title := ui.get_node("ModulePanel/Margin/VBox/Markers/Spawn/Title") as Label
-	var entrance_exit_title := ui.get_node("ModulePanel/Margin/VBox/Markers/Return/Title") as Label
-	var marker_commit := ui.get_node("ModulePanel/Margin/VBox/Markers/Actions/Commit") as Button
+	var enemy_spawn_zone_add := ui.get_node("ModulePanel/Margin/VBox/DetailsScroll/Details/EnemySpawnZoneHeader/Add") as Button
+	var enemy_spawn_zone_summary := ui.get_node("ModulePanel/Margin/VBox/DetailsScroll/Details/EnemySpawnZoneSummary") as Label
+	var enemy_spawn_zone_list := ui.get_node("ModulePanel/Margin/VBox/DetailsScroll/Details/EnemySpawnZoneList") as VBoxContainer
+	var marker_title := ui.get_node("ModulePanel/Margin/VBox/DetailsScroll/Details/MarkersTitle") as Label
+	var spawn_title := ui.get_node("ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Spawn/Title") as Label
+	var entrance_exit_title := ui.get_node("ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Return/Title") as Label
+	var marker_commit := ui.get_node("ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Actions/Commit") as Button
 	_expect(not module_panel.visible and module_tools_hint.visible, "Level Module did not start in first-person build mode")
 	_expect(module_panel.find_children("*Torch*", "Control", true, false).is_empty(), "Level Module panel retained torch metadata clutter")
 	_expect(socket_help.text.contains("1×2") and socket_help.text.contains("prebuilt opening") and socket_help.text.contains("unused doorway") and socket_help.text.contains("Must connect"), "connection controls did not explain variable openings and unused fills")
@@ -123,6 +129,8 @@ func _test_module_ui(item_catalog: ItemCatalog) -> void:
 	ui.connection_targeting_requested.connect(_on_connection_targeting_requested)
 	ui.socket_remove_requested.connect(_on_socket_remove_requested)
 	ui.socket_unused_fill_block_requested.connect(_on_socket_unused_fill_block_requested)
+	ui.enemy_spawn_zone_targeting_requested.connect(_on_enemy_spawn_zone_targeting_requested)
+	ui.enemy_spawn_zone_remove_requested.connect(_on_enemy_spawn_zone_remove_requested)
 	ui.marker_target_requested.connect(_on_marker_target_requested)
 	ui.markers_commit_requested.connect(_on_markers_commit_requested)
 	ui.markers_clear_requested.connect(_on_markers_clear_requested)
@@ -156,7 +164,9 @@ func _test_module_ui(item_catalog: ItemCatalog) -> void:
 		&"south": Vector2i(1, 2),
 		&"west": Vector2i(1, 2),
 	}
+	var no_enemy_spawn_zones: Array[LevelEnemySpawnZone] = []
 	ui.present_module_state(0.05, sockets, aperture_sizes, null, null)
+	ui.present_enemy_spawn_zones(no_enemy_spawn_zones, {})
 	_expect(connection_summary.text.contains("eligible as an expansion module"), "two connections were not presented as expansion-eligible")
 	_expect((socket_list.get_child(0).get_child(0).get_child(0) as Label).text.contains("3×6"), "connection list omitted the opening size")
 	var north_fill := socket_list.get_child(0).get_child(1).get_child(1) as OptionButton
@@ -179,12 +189,20 @@ func _test_module_ui(item_catalog: ItemCatalog) -> void:
 	var four_sockets: Array[LevelSocketDefinition] = [north_socket, east_socket, south_socket, west_socket]
 	ui.present_module_state(0.05, four_sockets, aperture_sizes, null, null)
 	_expect(socket_list.get_child_count() == 4 and connection_button.disabled, "four-sided room did not complete the simple connection workflow")
+	var enemy_spawn_zone := LevelEnemySpawnZone.new()
+	enemy_spawn_zone.zone_id = &"enemy_spawn_zone"
+	enemy_spawn_zone.minimum_feet_cell = Vector3i(2, 1, 2)
+	enemy_spawn_zone.maximum_feet_cell = Vector3i(4, 1, 4)
+	var enemy_spawn_zones: Array[LevelEnemySpawnZone] = [enemy_spawn_zone]
 	ui.present_module_state(0.05, sockets, aperture_sizes, spawn_marker, return_marker)
+	ui.present_enemy_spawn_zones(enemy_spawn_zones, {&"enemy_spawn_zone": 7})
 	_expect(weight_input.value == 0.05 and _weights.is_empty(), "module weight presentation changed or re-emitted an imported sub-tenth value")
 	_expect(is_zero_approx(weight_input.step) and weight_input.allow_lesser and weight_input.allow_greater, "module weight editor did not preserve the positive finite weight contract")
 	_expect(socket_list.get_child_count() == 2, "module socket list presentation mismatch")
 	_expect(not connection_button.disabled, "partial connection layout disabled connection targeting")
 	_expect(connection_summary.text.contains("eligible as a start module"), "paired markers were not presented as start-eligible")
+	_expect(enemy_spawn_zone_summary.text == "1 zone • 7 usable cells", "enemy spawn zone summary changed")
+	_expect(enemy_spawn_zone_list.get_child_count() == 1 and (enemy_spawn_zone_list.get_child(0).get_child(0) as Label).text.contains("7 cells"), "enemy spawn zone list omitted its candidate count")
 	weight_input.value = 3.25
 	_expect(_weights == [3.25], "weight editor quantized a non-tenth request")
 	(ui.get_node("ModulePanel/Margin/VBox/SetVoid") as Button).pressed.emit()
@@ -202,13 +220,24 @@ func _test_module_ui(item_catalog: ItemCatalog) -> void:
 	ui.open_module_panel()
 	(socket_list.get_child(1).get_child(0).get_child(1) as Button).pressed.emit()
 	_expect(_removed_sockets == [&"east"], "socket remove control emitted the wrong ID")
-	var spawn_facing := ui.get_node("ModulePanel/Margin/VBox/Markers/Spawn/Controls/Facing") as OptionButton
+	enemy_spawn_zone_add.pressed.emit()
+	_expect(_enemy_spawn_zone_targeting_count == 1 and not ui.is_module_panel_open(), "enemy spawn zone control did not enter first-person targeting")
+	ui.set_enemy_spawn_zone_targeting(true)
+	ui.present_enemy_spawn_zone_target(null, Vector3i(2, 1, 2), 1, true)
+	_expect(enemy_spawn_zone_mode_hint.visible and enemy_spawn_zone_mode_hint.text.contains("First corner") and enemy_spawn_zone_mode_hint.text.contains("Left-click"), "first enemy spawn zone corner guidance is unclear")
+	ui.present_enemy_spawn_zone_target(Vector3i(2, 1, 2), Vector3i(4, 1, 4), 7, true)
+	_expect(enemy_spawn_zone_mode_hint.text.contains("7 usable cells") and enemy_spawn_zone_mode_hint.text.contains("commit"), "second enemy spawn zone corner guidance omitted capacity or commit")
+	ui.set_enemy_spawn_zone_targeting(false)
+	ui.open_module_panel()
+	(enemy_spawn_zone_list.get_child(0).get_child(1) as Button).pressed.emit()
+	_expect(_removed_enemy_spawn_zones == [&"enemy_spawn_zone"], "enemy spawn zone remove control emitted the wrong ID")
+	var spawn_facing := ui.get_node("ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Spawn/Controls/Facing") as OptionButton
 	spawn_facing.select(LevelSocketDefinition.Direction.EAST)
-	(ui.get_node("ModulePanel/Margin/VBox/Markers/Spawn/Controls/Set") as Button).pressed.emit()
+	(ui.get_node("ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Spawn/Controls/Set") as Button).pressed.emit()
 	_expect(_marker_targets == [[StructureDesignerUI.MarkerRole.SPAWN, LevelSocketDefinition.Direction.EAST]], "spawn target control emitted the wrong role or facing")
-	var return_facing := ui.get_node("ModulePanel/Margin/VBox/Markers/Return/Controls/Facing") as OptionButton
+	var return_facing := ui.get_node("ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Return/Controls/Facing") as OptionButton
 	return_facing.select(LevelSocketDefinition.Direction.WEST)
-	(ui.get_node("ModulePanel/Margin/VBox/Markers/Return/Controls/Set") as Button).pressed.emit()
+	(ui.get_node("ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Return/Controls/Set") as Button).pressed.emit()
 	_expect(_marker_targets == [
 		[StructureDesignerUI.MarkerRole.SPAWN, LevelSocketDefinition.Direction.EAST],
 		[StructureDesignerUI.MarkerRole.RETURN, LevelSocketDefinition.Direction.WEST],
@@ -219,7 +248,7 @@ func _test_module_ui(item_catalog: ItemCatalog) -> void:
 	_expect(not marker_commit.disabled, "two pending markers did not enable paired commit")
 	marker_commit.pressed.emit()
 	_expect(_marker_commits == [[Vector3i(1, 1, 2), LevelSocketDefinition.Direction.EAST, Vector3i(4, 1, 5), LevelSocketDefinition.Direction.WEST]], "paired marker commit emitted incorrect candidates")
-	(ui.get_node("ModulePanel/Margin/VBox/Markers/Actions/Clear") as Button).pressed.emit()
+	(ui.get_node("ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Actions/Clear") as Button).pressed.emit()
 	_expect(_marker_clear_count == 1 and marker_commit.disabled, "marker clear did not emit or retained pending state")
 	(ui.get_node("ModulePanel/Margin/VBox/Header/Close") as Button).pressed.emit()
 	_expect(not ui.is_module_panel_open() and not module_panel.visible and module_tools_hint.visible, "module close control did not restore build mode")
@@ -252,6 +281,12 @@ func _on_socket_remove_requested(socket_id: StringName) -> void:
 
 func _on_socket_unused_fill_block_requested(socket_id: StringName, block_id: int) -> void:
 	_socket_fill_requests.append([socket_id, block_id])
+
+func _on_enemy_spawn_zone_targeting_requested() -> void:
+	_enemy_spawn_zone_targeting_count += 1
+
+func _on_enemy_spawn_zone_remove_requested(zone_id: StringName) -> void:
+	_removed_enemy_spawn_zones.append(zone_id)
 
 func _on_marker_target_requested(role: StructureDesignerUI.MarkerRole, facing: LevelSocketDefinition.Direction) -> void:
 	_marker_targets.append([role, facing])

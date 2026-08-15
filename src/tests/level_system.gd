@@ -500,6 +500,7 @@ func _make_extensible_fixture(reverse_semantic_sets: bool) -> Dictionary:
 
 func _make_aperture_module(module_id: StringName, socket_specs: Array[Dictionary], with_markers: bool) -> LevelModuleDefinition:
 	var module := LevelModuleDefinition.new()
+	module.format_version = LevelModuleDefinition.CURRENT_FORMAT_VERSION
 	module.module_id = module_id
 	module.size = Vector3i(7, 8, 7)
 	module.cells.resize(module.size.x * module.size.y * module.size.z)

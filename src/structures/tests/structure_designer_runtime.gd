@@ -153,6 +153,9 @@ func _test_module_runtime() -> void:
 		Vector3i(1, 0, 2),
 		Vector3i(2, 0, 2),
 		Vector3i(5, 0, 4),
+		Vector3i(2, 0, 3),
+		Vector3i(3, 0, 3),
+		Vector3i(4, 0, 3),
 		Vector3i(1, 0, 4),
 		Vector3i(1, 1, 4),
 		Vector3i(1, 2, 4),
@@ -259,6 +262,49 @@ func _test_module_runtime() -> void:
 	_expect(not runtime.cancel_active_ui(), "connection targeting cancellation left another UI layer open")
 
 	_toggle_module_tools(runtime)
+	(ui.get_node("ModulePanel/Margin/VBox/DetailsScroll/Details/EnemySpawnZoneHeader/Add") as Button).pressed.emit()
+	var enemy_spawn_zone_hint := ui.get_node("EnemySpawnZoneModeHint") as Label
+	_expect(enemy_spawn_zone_hint.visible and controller._input_enabled and controller._mouse_capture_enabled, "enemy spawn zone action did not enter first-person targeting")
+	_click(runtime, MOUSE_BUTTON_RIGHT)
+	_expect(ui.is_module_panel_open() and draft.get_enemy_spawn_zones().is_empty(), "enemy spawn zone right-click cancellation did not return to module tools")
+	(ui.get_node("ModulePanel/Margin/VBox/DetailsScroll/Details/EnemySpawnZoneHeader/Add") as Button).pressed.emit()
+	_aim_at(controller, Vector3(2.5, 3.0, 3.5), Vector3(2.5, 0.5, 3.5))
+	runtime._process(0.0)
+	_expect(enemy_spawn_zone_hint.text.contains("First corner") and enemy_spawn_zone_hint.text.contains("Left-click"), "enemy spawn zone first-corner target was not presented")
+	_click(runtime, MOUSE_BUTTON_LEFT)
+	_aim_at(controller, Vector3(3.5, 3.0, 3.5), Vector3(3.5, 0.5, 3.5))
+	runtime._process(0.0)
+	_expect(enemy_spawn_zone_hint.text.contains("2 usable cells") and enemy_spawn_zone_hint.text.contains("commit"), "enemy spawn zone second-corner target omitted capacity")
+	_click(runtime, MOUSE_BUTTON_LEFT)
+	var enemy_spawn_zones := draft.get_enemy_spawn_zones()
+	_expect(enemy_spawn_zones.size() == 1 and enemy_spawn_zones[0].minimum_feet_cell == Vector3i(2, 1, 3) and enemy_spawn_zones[0].maximum_feet_cell == Vector3i(3, 1, 3), "enemy spawn zone targeting committed the wrong rectangle")
+	_expect(ui.is_module_panel_open() and not controller._input_enabled and not controller._mouse_capture_enabled, "committed enemy spawn zone did not return to module tools")
+	var enemy_spawn_zone_overlay := overlay.get_node("EnemySpawnZone_enemy_spawn_zone/Candidates") as MultiMeshInstance3D
+	var enemy_spawn_zone_list := ui.get_node("ModulePanel/Margin/VBox/DetailsScroll/Details/EnemySpawnZoneList") as VBoxContainer
+	_expect(enemy_spawn_zone_overlay != null and enemy_spawn_zone_overlay.multimesh.instance_count == 2, "enemy spawn zone overlay omitted candidate cells")
+	_expect(enemy_spawn_zone_list.get_child_count() == 1 and (enemy_spawn_zone_list.get_child(0).get_child(0) as Label).text.contains("2 cells"), "enemy spawn zone panel did not refresh")
+	var second_zone_change := draft.try_add_enemy_spawn_zone(Vector3i(4, 1, 3), Vector3i(4, 1, 3))
+	runtime._apply_change(second_zone_change)
+	var first_overlay_before := overlay.get_node("EnemySpawnZone_enemy_spawn_zone") as Node3D
+	var second_overlay_before := overlay.get_node("EnemySpawnZone_enemy_spawn_zone_2") as Node3D
+	var second_row_before := ui._enemy_spawn_zone_rows[&"enemy_spawn_zone_2"] as HBoxContainer
+	var bounded_edit := draft.try_place_block(Vector3i(2, 1, 3), BlockId.Type.DIRT)
+	_expect(bounded_edit.changed_enemy_spawn_zone_ids == [&"enemy_spawn_zone"], "runtime edit did not identify only the intersecting enemy spawn zone")
+	runtime._apply_change(bounded_edit)
+	var first_overlay_after := overlay.get_node("EnemySpawnZone_enemy_spawn_zone") as Node3D
+	var second_overlay_after := overlay.get_node("EnemySpawnZone_enemy_spawn_zone_2") as Node3D
+	_expect(first_overlay_after != first_overlay_before, "affected enemy spawn zone overlay was not rebuilt")
+	_expect(second_overlay_after == second_overlay_before, "unaffected enemy spawn zone overlay was rebuilt")
+	_expect((ui._enemy_spawn_zone_rows[&"enemy_spawn_zone_2"] as HBoxContainer) == second_row_before, "unaffected enemy spawn zone row was rebuilt")
+	_expect(int(ui._enemy_spawn_zone_candidate_counts[&"enemy_spawn_zone"]) == 1 and int(ui._enemy_spawn_zone_candidate_counts[&"enemy_spawn_zone_2"]) == 1, "targeted enemy spawn zone counts were not preserved")
+	runtime._apply_change(draft.try_remove_block(Vector3i(2, 1, 3)))
+	(enemy_spawn_zone_list.get_child(0).get_child(1) as Button).pressed.emit()
+	await _tree.process_frame
+	_expect(draft.get_enemy_spawn_zones().size() == 1 and not overlay.has_node("EnemySpawnZone_enemy_spawn_zone") and overlay.has_node("EnemySpawnZone_enemy_spawn_zone_2"), "enemy spawn zone remove intent changed an unrelated zone")
+	(enemy_spawn_zone_list.get_child(0).get_child(1) as Button).pressed.emit()
+	await _tree.process_frame
+	_expect(draft.get_enemy_spawn_zones().is_empty() and not overlay.has_node("EnemySpawnZone_enemy_spawn_zone_2"), "second enemy spawn zone remove intent did not clear model and overlay")
+
 	var north_fill := socket_list.get_child(0).get_child(1).get_child(1) as OptionButton
 	_expect(north_fill.get_selected_id() == BlockId.Type.STONE, "module tools did not present the doorway fill block")
 	var cells_before_fill_change := draft.snapshot_cells()
@@ -286,16 +332,16 @@ func _test_module_runtime() -> void:
 	_expect(not ui.is_module_panel_open() and controller._input_enabled, "M did not close Level Module tools")
 	_aim_at(controller, Vector3(1.5, 3.0, 2.5), Vector3(1.5, 0.5, 2.5))
 	_toggle_module_tools(runtime)
-	var spawn_facing := ui.get_node("ModulePanel/Margin/VBox/Markers/Spawn/Controls/Facing") as OptionButton
+	var spawn_facing := ui.get_node("ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Spawn/Controls/Facing") as OptionButton
 	spawn_facing.select(LevelSocketDefinition.Direction.EAST)
-	(ui.get_node("ModulePanel/Margin/VBox/Markers/Spawn/Controls/Set") as Button).pressed.emit()
+	(ui.get_node("ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Spawn/Controls/Set") as Button).pressed.emit()
 	_toggle_module_tools(runtime)
 	_aim_at(controller, Vector3(5.5, 3.0, 4.5), Vector3(5.5, 0.5, 4.5))
 	_toggle_module_tools(runtime)
-	var return_facing := ui.get_node("ModulePanel/Margin/VBox/Markers/Return/Controls/Facing") as OptionButton
+	var return_facing := ui.get_node("ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Return/Controls/Facing") as OptionButton
 	return_facing.select(LevelSocketDefinition.Direction.WEST)
-	(ui.get_node("ModulePanel/Margin/VBox/Markers/Return/Controls/Set") as Button).pressed.emit()
-	(ui.get_node("ModulePanel/Margin/VBox/Markers/Actions/Commit") as Button).pressed.emit()
+	(ui.get_node("ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Return/Controls/Set") as Button).pressed.emit()
+	(ui.get_node("ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Actions/Commit") as Button).pressed.emit()
 	var spawn_marker := draft.get_spawn_marker()
 	var return_marker := draft.get_return_door_marker()
 	_expect(spawn_marker != null and spawn_marker.cell == Vector3i(1, 1, 2) and spawn_marker.facing == LevelSocketDefinition.Direction.EAST, "spawn marker target did not commit")
@@ -303,7 +349,8 @@ func _test_module_runtime() -> void:
 	_expect(overlay.get_child_count() == 2 and overlay.has_node("SpawnMarker") and overlay.has_node("ReturnMarker"), "paired marker overlays did not refresh without duplicates")
 	_expect_overlay_color(overlay.get_node("SpawnMarker") as Node3D, StructureMetadataOverlay.SPAWN_COLOR, "spawn marker")
 	_expect_overlay_color(overlay.get_node("ReturnMarker") as Node3D, StructureMetadataOverlay.RETURN_COLOR, "return marker")
-	(ui.get_node("ModulePanel/Margin/VBox/Markers/Actions/Clear") as Button).pressed.emit()
+	(ui.get_node("ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Actions/Clear") as Button).pressed.emit()
+	await _tree.process_frame
 	_expect(draft.get_spawn_marker() == null and draft.get_return_door_marker() == null and overlay.get_child_count() == 0, "marker clear retained paired domain or overlay state")
 	(ui.get_node("ModulePanel/Margin/VBox/Header/Close") as Button).pressed.emit()
 	_expect(not ui.is_module_panel_open() and controller._input_enabled and controller._mouse_capture_enabled, "module close button did not restore first-person input")

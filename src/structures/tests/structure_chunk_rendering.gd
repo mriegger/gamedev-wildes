@@ -109,6 +109,7 @@ func _test_structure_chunk_mesher() -> void:
 	var beside_air := mesher.build_mesh_data(draft.copy_cells_for_chunk(Vector3i.ZERO, StructureChunkMesher.CHUNK_SIZE), size, Vector3i.ZERO) as Dictionary
 	_expect(beside_air != null and (beside_air["vertices"] as PackedVector3Array).size() == 24, "in-bounds AIR did not expose its neighboring face")
 	var module_definition := LevelModuleDefinition.new()
+	module_definition.format_version = LevelModuleDefinition.CURRENT_FORMAT_VERSION
 	module_definition.module_id = &"void_rendering"
 	module_definition.size = size
 	module_definition.cells.resize(size.x * size.y * size.z)

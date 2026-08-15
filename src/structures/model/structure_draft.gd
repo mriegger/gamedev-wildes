@@ -11,6 +11,7 @@ class SocketEdit:
 	var changed_cells: Array[Vector3i]
 	var removed_torch_cells: Array[Vector3i]
 	var aperture_cells: Array[Vector3i]
+	var changed_enemy_spawn_zone_ids: Array[StringName]
 
 const DEFAULT_LEVEL_MODULE_SIZE: Vector3i = Vector3i(7, 4, 7)
 
@@ -20,6 +21,8 @@ var _cells: PackedInt32Array
 var _torches_by_cell: Dictionary = {}
 var _torch_cells_by_support: Dictionary = {}
 var _sockets: Array[LevelSocketDefinition] = []
+var _enemy_spawn_zones: Array[LevelEnemySpawnZone] = []
+var _enemy_spawn_zone_ids_by_cell: Dictionary = {}
 var _spawn_marker: LevelMarkerDefinition
 var _return_door_marker: LevelMarkerDefinition
 var _weight: float = 1.0
@@ -75,6 +78,8 @@ static func restore_level_module(definition: LevelModuleDefinition, source_path:
 		draft._add_torch(copied_torch)
 	for socket in definition.sockets:
 		draft._sockets.append(_copy_socket(socket))
+	for zone in definition.enemy_spawn_zones:
+		draft._enemy_spawn_zones.append(_copy_enemy_spawn_zone(zone))
 	draft._spawn_marker = _copy_marker(definition.spawn_marker)
 	draft._return_door_marker = _copy_marker(definition.return_door_marker)
 	draft._index_module_metadata()
@@ -146,6 +151,39 @@ func get_socket_aperture_cells(socket_id: StringName) -> Array[Vector3i]:
 			return LevelSocketAperture.find_cells(socket, _size, _cells)
 	return []
 
+func get_enemy_spawn_zones() -> Array[LevelEnemySpawnZone]:
+	var copied: Array[LevelEnemySpawnZone] = []
+	for zone in _enemy_spawn_zones:
+		copied.append(_copy_enemy_spawn_zone(zone))
+	return copied
+
+func get_enemy_spawn_zone(zone_id: StringName) -> LevelEnemySpawnZone:
+	for zone in _enemy_spawn_zones:
+		if zone.zone_id == zone_id:
+			return _copy_enemy_spawn_zone(zone)
+	return null
+
+func get_enemy_spawn_zone_candidate_cells(zone_id: StringName) -> Array[Vector3i]:
+	for zone in _enemy_spawn_zones:
+		if zone.zone_id == zone_id:
+			return zone.get_candidate_cells(_size, _cells, _sockets)
+	return []
+
+func get_enemy_spawn_zone_preview_cells(first_corner: Vector3i, second_corner: Vector3i) -> Array[Vector3i]:
+	var zone := _prepare_enemy_spawn_zone(first_corner, second_corner)
+	if zone == null:
+		return []
+	return zone.get_candidate_cells(_size, _cells, _sockets)
+
+func is_valid_enemy_spawn_zone_corner(cell: Vector3i) -> bool:
+	if _format != Format.LEVEL_MODULE or not is_in_bounds(cell):
+		return false
+	if not is_in_bounds(cell + Vector3i.UP) or not is_in_bounds(cell + Vector3i.DOWN):
+		return false
+	return get_cell(cell) == StructureCell.AIR \
+		and get_cell(cell + Vector3i.UP) == StructureCell.AIR \
+		and StructureCell.is_structure_solid(get_cell(cell + Vector3i.DOWN))
+
 func get_socket_candidate_cells(cell: Vector3i, direction: LevelSocketDefinition.Direction) -> Array[Vector3i]:
 	if _format != Format.LEVEL_MODULE or not LevelSocketDefinition.is_valid_direction(direction) or not is_in_bounds(cell):
 		return []
@@ -205,7 +243,10 @@ func can_place_block(cell: Vector3i, block_id: int) -> bool:
 		return false
 	if StructureCell.is_structure_solid(get_cell(cell)) or has_torch(cell):
 		return false
-	return not _required_air_cells.has(cell)
+	if _required_air_cells.has(cell):
+		return false
+	var changes: Dictionary = {cell: block_id}
+	return _enemy_spawn_zones_are_valid(_enemy_spawn_zone_ids_for_cells([cell]), changes)
 
 func try_place_block(cell: Vector3i, block_id: int) -> StructureDraftChange:
 	if not can_place_block(cell, block_id):
@@ -218,6 +259,9 @@ func try_remove_block(cell: Vector3i) -> StructureDraftChange:
 		return StructureDraftChange.reject()
 	if _required_solid_cells.has(cell) or _required_non_air_cells.has(cell):
 		return StructureDraftChange.reject()
+	var changes: Dictionary = {cell: StructureCell.AIR}
+	if not _enemy_spawn_zones_are_valid(_enemy_spawn_zone_ids_for_cells([cell]), changes):
+		return StructureDraftChange.reject()
 	var removed_torch_cells := _get_torch_cells_supported_by(cell)
 	_set_cell(cell, StructureCell.AIR)
 	for torch_cell in removed_torch_cells:
@@ -229,7 +273,10 @@ func try_set_void(cell: Vector3i) -> StructureDraftChange:
 		return StructureDraftChange.reject()
 	if get_cell(cell) == StructureCell.VOID or has_torch(cell):
 		return StructureDraftChange.reject()
-	if _required_air_cells.has(cell) or _required_solid_cells.has(cell):
+	if _required_air_cells.has(cell) or _required_solid_cells.has(cell) or _required_non_air_cells.has(cell):
+		return StructureDraftChange.reject()
+	var changes: Dictionary = {cell: StructureCell.VOID}
+	if not _enemy_spawn_zones_are_valid(_enemy_spawn_zone_ids_for_cells([cell]), changes):
 		return StructureDraftChange.reject()
 	var removed_torch_cells := _get_torch_cells_supported_by(cell)
 	_set_cell(cell, StructureCell.VOID)
@@ -272,7 +319,7 @@ func try_add_socket(cell: Vector3i, direction: LevelSocketDefinition.Direction) 
 		_remove_torch(torch_cell)
 	_sockets.append(edit.socket)
 	_add_socket_requirements(edit.socket)
-	return _commit_change(edit.changed_cells, [], edit.removed_torch_cells, true)
+	return _commit_change(edit.changed_cells, [], edit.removed_torch_cells, true, edit.changed_enemy_spawn_zone_ids)
 
 func can_add_socket(cell: Vector3i, direction: LevelSocketDefinition.Direction) -> bool:
 	return _prepare_socket_edit(cell, direction) != null
@@ -284,9 +331,31 @@ func try_remove_socket(socket_id: StringName) -> StructureDraftChange:
 		var socket := _sockets[index]
 		if socket.socket_id != socket_id:
 			continue
+		var changed_zone_ids := _enemy_spawn_zone_ids_for_socket_aperture(get_socket_aperture_cells(socket_id))
 		_remove_socket_requirements(socket)
 		_sockets.remove_at(index)
-		return _commit_change([], [], [], true)
+		return _commit_change([], [], [], true, changed_zone_ids)
+	return StructureDraftChange.reject()
+
+func can_add_enemy_spawn_zone(first_corner: Vector3i, second_corner: Vector3i) -> bool:
+	return _prepare_enemy_spawn_zone(first_corner, second_corner) != null
+
+func try_add_enemy_spawn_zone(first_corner: Vector3i, second_corner: Vector3i) -> StructureDraftChange:
+	var zone := _prepare_enemy_spawn_zone(first_corner, second_corner)
+	if zone == null:
+		return StructureDraftChange.reject()
+	_enemy_spawn_zones.append(zone)
+	_index_enemy_spawn_zone(zone)
+	return _commit_change([], [], [], false, [zone.zone_id])
+
+func try_remove_enemy_spawn_zone(zone_id: StringName) -> StructureDraftChange:
+	if _format != Format.LEVEL_MODULE:
+		return StructureDraftChange.reject()
+	for index in _enemy_spawn_zones.size():
+		if _enemy_spawn_zones[index].zone_id == zone_id:
+			_unindex_enemy_spawn_zone(_enemy_spawn_zones[index])
+			_enemy_spawn_zones.remove_at(index)
+			return _commit_change([], [], [], false, [zone_id])
 	return StructureDraftChange.reject()
 
 func try_set_socket_unused_fill_block(socket_id: StringName, block_id: int) -> StructureDraftChange:
@@ -363,9 +432,14 @@ func _commit_change(
 	added_torches: Array[StructureTorchDefinition] = [],
 	removed_torch_cells: Array[Vector3i] = [],
 	metadata_changed: bool = false,
+	changed_enemy_spawn_zone_ids: Array[StringName] = [],
 ) -> StructureDraftChange:
 	_dirty = true
-	return StructureDraftChange.success(changed_cells, added_torches, removed_torch_cells, metadata_changed)
+	var affected_zone_ids := _merged_enemy_spawn_zone_ids(
+		changed_enemy_spawn_zone_ids,
+		_enemy_spawn_zone_ids_for_cells(changed_cells),
+	)
+	return StructureDraftChange.success(changed_cells, added_torches, removed_torch_cells, metadata_changed, affected_zone_ids)
 
 func _prepare_socket_edit(cell: Vector3i, direction: LevelSocketDefinition.Direction) -> SocketEdit:
 	if _format != Format.LEVEL_MODULE or not LevelSocketDefinition.is_valid_direction(direction) or not LevelSocketAperture.is_boundary(cell, _size, direction):
@@ -393,6 +467,13 @@ func _prepare_socket_edit(cell: Vector3i, direction: LevelSocketDefinition.Direc
 			return null
 		if has_torch(aperture_cell) or _marker_footprint_contains(aperture_cell):
 			return null
+	var additional_sockets: Array[LevelSocketDefinition] = [socket]
+	var changed_zone_ids := _merged_enemy_spawn_zone_ids(
+		_enemy_spawn_zone_ids_for_socket_aperture(aperture_cells),
+		_enemy_spawn_zone_ids_for_cells(changes.keys()),
+	)
+	if not _enemy_spawn_zones_are_valid(changed_zone_ids, changes, additional_sockets):
+		return null
 	var edit := SocketEdit.new()
 	edit.socket = socket
 	for aperture_cell in [cell, upper]:
@@ -400,6 +481,7 @@ func _prepare_socket_edit(cell: Vector3i, direction: LevelSocketDefinition.Direc
 			edit.changed_cells.append(aperture_cell)
 	edit.removed_torch_cells = _get_torch_cells_supported_by_many(edit.changed_cells)
 	edit.aperture_cells = aperture_cells
+	edit.changed_enemy_spawn_zone_ids = changed_zone_ids
 	return edit
 
 func _default_socket_fill_block(cell: Vector3i) -> int:
@@ -434,6 +516,65 @@ func _remove_torch(cell: Vector3i) -> void:
 		_torch_cells_by_support.erase(support_cell)
 	_torches_by_cell.erase(cell)
 
+func _enemy_spawn_zones_are_valid(
+	zone_ids: Array[StringName],
+	changes: Dictionary,
+	additional_sockets: Array[LevelSocketDefinition] = [],
+) -> bool:
+	var sockets: Array[LevelSocketDefinition] = []
+	sockets.assign(_sockets)
+	sockets.append_array(additional_sockets)
+	for zone_id in zone_ids:
+		var zone := _enemy_spawn_zone_by_id(zone_id)
+		if zone != null and zone.get_candidate_cells(_size, _cells, sockets, changes).is_empty():
+			return false
+	return true
+
+func _enemy_spawn_zone_ids_for_cells(cells: Array) -> Array[StringName]:
+	var affected_lookup: Dictionary = {}
+	for value in cells:
+		var cell := value as Vector3i
+		if not _enemy_spawn_zone_ids_by_cell.has(cell):
+			continue
+		for zone_id in _enemy_spawn_zone_ids_by_cell[cell]:
+			affected_lookup[zone_id] = true
+	var affected: Array[StringName] = []
+	for zone_id in affected_lookup:
+		affected.append(zone_id as StringName)
+	affected.sort()
+	return affected
+
+func _enemy_spawn_zone_ids_for_socket_aperture(aperture: Array[Vector3i]) -> Array[StringName]:
+	var affected: Array[StringName] = []
+	for zone in _enemy_spawn_zones:
+		for cell in aperture:
+			var x_distance := maxi(maxi(zone.minimum_feet_cell.x - cell.x, cell.x - zone.maximum_feet_cell.x), 0)
+			var z_distance := maxi(maxi(zone.minimum_feet_cell.z - cell.z, cell.z - zone.maximum_feet_cell.z), 0)
+			if maxi(x_distance, z_distance) >= LevelEnemySpawnZone.SOCKET_CLEARANCE:
+				continue
+			affected.append(zone.zone_id)
+			break
+	return affected
+
+func _merged_enemy_spawn_zone_ids(first: Array[StringName], second: Array[StringName]) -> Array[StringName]:
+	var merged: Array[StringName] = []
+	var seen: Dictionary = {}
+	var zone_ids: Array[StringName] = []
+	zone_ids.assign(first)
+	zone_ids.append_array(second)
+	for zone_id in zone_ids:
+		if seen.has(zone_id):
+			continue
+		seen[zone_id] = true
+		merged.append(zone_id)
+	return merged
+
+func _enemy_spawn_zone_by_id(zone_id: StringName) -> LevelEnemySpawnZone:
+	for zone in _enemy_spawn_zones:
+		if zone.zone_id == zone_id:
+			return zone
+	return null
+
 func _get_torch_cells_supported_by(support_cell: Vector3i) -> Array[Vector3i]:
 	var cells: Array[Vector3i] = []
 	if not _torch_cells_by_support.has(support_cell):
@@ -459,6 +600,8 @@ func _index_module_metadata() -> void:
 	assert(_format == Format.LEVEL_MODULE)
 	for socket in _sockets:
 		_add_socket_requirements(socket)
+	for zone in _enemy_spawn_zones:
+		_index_enemy_spawn_zone(zone)
 	_add_marker_requirements(_spawn_marker)
 	_add_marker_requirements(_return_door_marker)
 
@@ -568,6 +711,62 @@ func _next_socket_id(direction: LevelSocketDefinition.Direction) -> StringName:
 		suffix += 1
 	return StringName("%s_%d" % [base, suffix])
 
+func _prepare_enemy_spawn_zone(first_corner: Vector3i, second_corner: Vector3i) -> LevelEnemySpawnZone:
+	if _format != Format.LEVEL_MODULE or _enemy_spawn_zones.size() >= LevelModuleDefinition.MAX_ENEMY_SPAWN_ZONES or first_corner.y != second_corner.y:
+		return null
+	var zone := LevelEnemySpawnZone.new()
+	zone.zone_id = _next_enemy_spawn_zone_id()
+	zone.minimum_feet_cell = Vector3i(
+		mini(first_corner.x, second_corner.x),
+		first_corner.y,
+		mini(first_corner.z, second_corner.z),
+	)
+	zone.maximum_feet_cell = Vector3i(
+		maxi(first_corner.x, second_corner.x),
+		first_corner.y,
+		maxi(first_corner.z, second_corner.z),
+	)
+	if not zone.has_valid_bounds(_size):
+		return null
+	if zone.get_candidate_cells(_size, _cells, _sockets).is_empty():
+		return null
+	return zone
+
+func _next_enemy_spawn_zone_id() -> StringName:
+	var used: Dictionary = {}
+	for zone in _enemy_spawn_zones:
+		used[zone.zone_id] = true
+	var base := &"enemy_spawn_zone"
+	if not used.has(base):
+		return base
+	var suffix := 2
+	while used.has(StringName("enemy_spawn_zone_%d" % suffix)):
+		suffix += 1
+	return StringName("enemy_spawn_zone_%d" % suffix)
+
+func _index_enemy_spawn_zone(zone: LevelEnemySpawnZone) -> void:
+	for y in range(zone.minimum_feet_cell.y - 1, zone.maximum_feet_cell.y + 2):
+		for z in range(zone.minimum_feet_cell.z, zone.maximum_feet_cell.z + 1):
+			for x in range(zone.minimum_feet_cell.x, zone.maximum_feet_cell.x + 1):
+				var cell := Vector3i(x, y, z)
+				var zone_ids: Dictionary
+				if _enemy_spawn_zone_ids_by_cell.has(cell):
+					zone_ids = _enemy_spawn_zone_ids_by_cell[cell] as Dictionary
+				else:
+					zone_ids = {}
+					_enemy_spawn_zone_ids_by_cell[cell] = zone_ids
+				zone_ids[zone.zone_id] = true
+
+func _unindex_enemy_spawn_zone(zone: LevelEnemySpawnZone) -> void:
+	for y in range(zone.minimum_feet_cell.y - 1, zone.maximum_feet_cell.y + 2):
+		for z in range(zone.minimum_feet_cell.z, zone.maximum_feet_cell.z + 1):
+			for x in range(zone.minimum_feet_cell.x, zone.maximum_feet_cell.x + 1):
+				var cell := Vector3i(x, y, z)
+				var zone_ids := _enemy_spawn_zone_ids_by_cell[cell] as Dictionary
+				zone_ids.erase(zone.zone_id)
+				if zone_ids.is_empty():
+					_enemy_spawn_zone_ids_by_cell.erase(cell)
+
 static func _air_cells(size: Vector3i) -> PackedInt32Array:
 	var cells := PackedInt32Array()
 	cells.resize(size.x * size.y * size.z)
@@ -588,6 +787,15 @@ static func _copy_socket(source: LevelSocketDefinition) -> LevelSocketDefinition
 	copied.cell = source.cell
 	copied.direction = source.direction
 	copied.unused_fill_block_id = source.unused_fill_block_id
+	return copied
+
+static func _copy_enemy_spawn_zone(source: LevelEnemySpawnZone) -> LevelEnemySpawnZone:
+	if source == null:
+		return null
+	var copied := LevelEnemySpawnZone.new()
+	copied.zone_id = source.zone_id
+	copied.minimum_feet_cell = source.minimum_feet_cell
+	copied.maximum_feet_cell = source.maximum_feet_cell
 	return copied
 
 static func _copy_marker(source: LevelMarkerDefinition) -> LevelMarkerDefinition:

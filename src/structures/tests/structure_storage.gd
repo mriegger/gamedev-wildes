@@ -190,12 +190,23 @@ func _test_variable_module_round_trip(store: StructureFileStore, root_path: Stri
 			_expect(draft.try_place_block(Vector3i(x, y, 0), BlockId.Type.STONE).succeeded, "variable module boundary setup failed")
 	for x in range(1, 3):
 		for y in range(1, 3):
-			_expect(draft.try_remove_block(Vector3i(x, y, 0)).succeeded, "variable module opening setup failed")
-	_expect(draft.try_add_socket(Vector3i(1, 1, 0), LevelSocketDefinition.Direction.NORTH).succeeded, "variable module socket setup failed")
-	_expect(draft.try_set_socket_unused_fill_block(&"north", BlockId.Type.MOSSY_STONE_BRICKS).succeeded, "variable module socket fill setup failed")
+			_expect(draft.try_remove_block(Vector3i(x, y, 0)).succeeded, "module opening setup failed")
+	for floor_cell in [Vector3i(0, 0, 2), Vector3i(3, 0, 2)]:
+		_expect(draft.try_place_block(floor_cell, BlockId.Type.STONE).succeeded, "module floor setup failed")
+	_expect(draft.try_place_block(Vector3i(0, 0, 3), BlockId.Type.STONE).succeeded, "module spawn-zone floor setup failed")
+	_expect(draft.try_add_socket(Vector3i(1, 1, 0), LevelSocketDefinition.Direction.NORTH).succeeded, "module socket setup failed")
+	_expect(draft.try_set_socket_unused_fill_block(&"north", BlockId.Type.MOSSY_STONE_BRICKS).succeeded, "module socket fill setup failed")
+	_expect(draft.try_set_markers(Vector3i(0, 1, 2), LevelSocketDefinition.Direction.EAST, Vector3i(3, 1, 2), LevelSocketDefinition.Direction.WEST).succeeded, "module marker setup failed")
+	_expect(draft.try_place_block(Vector3i(3, 2, 3), BlockId.Type.STONE).succeeded, "module torch support setup failed")
+	_expect(draft.try_place_torch(Vector3i(2, 2, 3), Vector3i.RIGHT).succeeded, "module torch setup failed")
+	_expect(draft.try_add_enemy_spawn_zone(Vector3i(0, 1, 3), Vector3i(0, 1, 3)).succeeded, "module spawn-zone setup failed")
+	_expect(draft.try_set_weight(3.25).succeeded, "module storage weight setup failed")
 	var exported := store.export_draft(draft, identifier)
 	_expect(exported.succeeded and FileAccess.file_exists(path), "variable module root export failed: %s" % exported.message)
 	_expect(FileAccess.get_file_as_string(path).contains("unused_fill_block_id = 11"), "module resource did not physically serialize the socket fill block")
+	var exported_text := FileAccess.get_file_as_string(path)
+	_expect(exported_text.contains("format_version = 1"), "module resource did not physically serialize format version 1")
+	_expect(exported_text.contains("enemy_spawn_zones") and exported_text.contains("minimum_feet_cell = Vector3i(0, 1, 3)"), "module resource did not physically serialize enemy spawn zones")
 	var entry := _find_entry(store.list_importable(), identifier)
 	_expect(entry != null and entry.format == StructureDraft.Format.LEVEL_MODULE, "variable module was not listed for import")
 	if entry == null:
@@ -204,13 +215,21 @@ func _test_variable_module_round_trip(store: StructureFileStore, root_path: Stri
 	_expect(imported.succeeded and imported.draft != null, "variable module import failed: %s" % imported.message)
 	if not imported.succeeded:
 		return
+	_expect(imported.draft.snapshot_cells() == draft.snapshot_cells(), "module import changed dense cells")
+	_expect(imported.draft.get_weight() == 3.25, "module import changed exact weight")
+	_expect(imported.draft.get_sockets().size() == 1 and imported.draft.get_sockets()[0].socket_id == &"north", "module import changed sockets")
 	_expect(imported.draft.get_socket_aperture_cells(&"north").size() == 4, "variable module import changed the derived opening")
 	_expect(imported.draft.get_sockets()[0].unused_fill_block_id == BlockId.Type.MOSSY_STONE_BRICKS, "variable module import changed the socket fill block")
+	_expect(imported.draft.get_torches().size() == 1 and imported.draft.get_torches()[0].support_direction == Vector3i.RIGHT, "module import changed torches")
+	_expect(imported.draft.get_spawn_marker().cell == Vector3i(0, 1, 2) and imported.draft.get_return_door_marker().cell == Vector3i(3, 1, 2), "module import changed paired markers")
+	_expect(imported.draft.get_enemy_spawn_zone_candidate_cells(&"enemy_spawn_zone") == [Vector3i(0, 1, 3)], "module import changed enemy spawn zones")
 	var expected := StructureResourceAdapter.create_snapshot(draft, identifier)
 	var actual := StructureResourceAdapter.create_snapshot(imported.draft, identifier)
 	_expect(StructureResourceAdapter.resources_equal(expected, actual), "variable module round trip changed persisted fields")
 	var reloaded := ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE) as LevelModuleDefinition
+	_expect(reloaded != null and reloaded.format_version == LevelModuleDefinition.CURRENT_FORMAT_VERSION and reloaded.module_id == identifier and reloaded.weight == 3.25, "module resource round trip changed metadata")
 	_expect(reloaded != null and reloaded.sockets[0].unused_fill_block_id == BlockId.Type.MOSSY_STONE_BRICKS, "module resource round trip changed the socket fill block")
+	_expect(reloaded != null and reloaded.enemy_spawn_zones.size() == 1 and reloaded.get_enemy_spawn_candidate_cells() == [Vector3i(0, 1, 3)], "module resource round trip changed enemy spawn zones")
 	_expect(reloaded != null and reloaded.validate(), "reloaded module resource is invalid")
 
 func _test_export_failures(store: StructureFileStore, root_path: String, suffix: String) -> void:
@@ -297,6 +316,7 @@ func _make_definition(identifier: StringName, block_id: int) -> StructureDefinit
 
 func _make_module_definition(identifier: StringName) -> LevelModuleDefinition:
 	var definition := LevelModuleDefinition.new()
+	definition.format_version = LevelModuleDefinition.CURRENT_FORMAT_VERSION
 	definition.module_id = identifier
 	definition.size = Vector3i(5, 4, 5)
 	definition.weight = 150.25

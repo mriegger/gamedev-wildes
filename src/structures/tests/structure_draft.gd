@@ -16,6 +16,9 @@ func _init() -> void:
 	_test_module_authoring_snapshot()
 	_test_malformed_module_definitions()
 	_test_bounded_chunk_queries()
+	_test_enemy_spawn_zone_transactions()
+	_test_bounded_enemy_spawn_zone_invalidation()
+	_test_resource_snapshots()
 	if _failures.is_empty():
 		print("STRUCTURE_DRAFT PASS")
 		quit(0)
@@ -290,11 +293,11 @@ func _test_module_authoring_transactions() -> void:
 	_expect(not draft.try_remove_socket(&"missing").succeeded, "missing socket removal succeeded")
 	var unrelated_support := Vector3i(4, 3, 3)
 	var unrelated_torch := Vector3i(3, 3, 3)
-	var void_support := Vector3i(4, 2, 3)
-	var void_torch := Vector3i(3, 2, 3)
+	var void_support := Vector3i(2, 2, 2)
+	var void_torch := Vector3i(1, 2, 2)
 	_expect(StructureCell.is_structure_solid(draft.get_cell(unrelated_support)), "unrelated torch support setup failed")
 	_expect(draft.try_place_torch(unrelated_torch, Vector3i.RIGHT).succeeded, "unrelated torch setup failed")
-	_expect(StructureCell.is_structure_solid(draft.get_cell(void_support)), "VOID torch support setup failed")
+	_expect(draft.try_place_block(void_support, BlockId.Type.STONE).succeeded, "VOID torch support setup failed")
 	_expect(draft.try_place_torch(void_torch, Vector3i.RIGHT).succeeded, "VOID torch setup failed")
 	var void_change := draft.try_set_void(void_support)
 	_expect(void_change.succeeded and void_change.changed_cells == [void_support] and void_change.removed_torch_cells == [void_torch], "VOID edit returned incorrect cell or torch deltas")
@@ -369,6 +372,7 @@ func _test_requirement_reference_counts() -> void:
 	var return_cell := Vector3i(4, 1, 4)
 	_expect(draft.try_place_block(return_cell + Vector3i.DOWN, BlockId.Type.STONE).succeeded, "overlap return floor setup failed")
 	_expect(draft.try_add_socket(socket_cell, LevelSocketDefinition.Direction.NORTH).succeeded, "overlap socket setup failed")
+	_expect(not draft.try_set_void(Vector3i(1, 1, 0)).succeeded, "socket perimeter accepted VOID")
 	var before_invalid := StructureResourceAdapter.create_snapshot(draft, &"overlap_module") as LevelModuleDefinition
 	var marker_change := draft.try_set_markers(
 		socket_cell,
@@ -400,11 +404,13 @@ func _test_module_authoring_snapshot() -> void:
 	var socket_cell := Vector3i(2, 1, 0)
 	var spawn_cell := Vector3i(1, 1, 2)
 	var return_cell := Vector3i(3, 1, 2)
+	var zone_cell := Vector3i(4, 1, 4)
 	var torch_support := Vector3i(4, 2, 3)
-	for floor_cell in [spawn_cell + Vector3i.DOWN, return_cell + Vector3i.DOWN]:
+	for floor_cell in [spawn_cell + Vector3i.DOWN, return_cell + Vector3i.DOWN, zone_cell + Vector3i.DOWN]:
 		_expect(draft.try_place_block(floor_cell, BlockId.Type.STONE).succeeded, "snapshot floor setup failed")
 	_expect(draft.try_add_socket(socket_cell, LevelSocketDefinition.Direction.NORTH).succeeded, "snapshot socket command failed")
 	_expect(draft.try_set_markers(spawn_cell, LevelSocketDefinition.Direction.EAST, return_cell, LevelSocketDefinition.Direction.WEST).succeeded, "snapshot marker command failed")
+	_expect(draft.try_add_enemy_spawn_zone(zone_cell, zone_cell).succeeded, "snapshot enemy spawn-zone command failed")
 	_expect(draft.try_place_block(torch_support, BlockId.Type.STONE).succeeded, "snapshot torch support failed")
 	_expect(draft.try_place_torch(Vector3i(3, 2, 3), Vector3i.RIGHT).succeeded, "snapshot torch command failed")
 	_expect(draft.try_set_void(Vector3i(0, 3, 0)).succeeded, "snapshot VOID command failed")
@@ -418,6 +424,7 @@ func _test_module_authoring_snapshot() -> void:
 	_expect(restored != null and StructureResourceAdapter.resources_equal(snapshot, restored_snapshot), "authored module snapshot did not round-trip exactly")
 	_expect(restored.get_weight() == 137.625 and restored.get_sockets()[0].socket_id == &"north", "authored module round trip changed weight or socket order")
 	_expect(restored.get_torches()[0].cell == Vector3i(3, 2, 3), "authored module round trip changed torch order")
+	_expect(restored.get_enemy_spawn_zone_candidate_cells(&"enemy_spawn_zone") == [zone_cell], "authored module round trip changed enemy spawn zones")
 
 func _test_malformed_module_definitions() -> void:
 	var output: Array = []
@@ -446,6 +453,7 @@ func _test_bounded_chunk_queries() -> void:
 
 func _make_module_definition(identifier: StringName) -> LevelModuleDefinition:
 	var definition := LevelModuleDefinition.new()
+	definition.format_version = LevelModuleDefinition.CURRENT_FORMAT_VERSION
 	definition.module_id = identifier
 	definition.size = Vector3i(5, 4, 5)
 	definition.weight = 150.25
@@ -496,6 +504,96 @@ func _make_module_definition(identifier: StringName) -> LevelModuleDefinition:
 	return_marker.facing = LevelSocketDefinition.Direction.WEST
 	definition.return_door_marker = return_marker
 	return definition
+
+func _test_enemy_spawn_zone_transactions() -> void:
+	var draft := StructureDraft.create_level_module(Vector3i(9, 5, 9))
+	for z in range(1, 8):
+		for x in range(1, 8):
+			_expect(draft.try_place_block(Vector3i(x, 0, z), BlockId.Type.STONE).succeeded, "spawn-zone floor setup failed")
+	_expect(not draft.can_add_enemy_spawn_zone(Vector3i(2, 1, 2), Vector3i(6, 2, 6)), "spawn zone accepted corners on different floor levels")
+	var added := draft.try_add_enemy_spawn_zone(Vector3i(6, 1, 6), Vector3i(2, 1, 2))
+	_expect(added.succeeded and not added.metadata_changed, "valid enemy spawn zone used broad metadata invalidation")
+	_expect(added.changed_enemy_spawn_zone_ids == [&"enemy_spawn_zone"], "enemy spawn zone add omitted its affected ID")
+	var zones := draft.get_enemy_spawn_zones()
+	_expect(zones.size() == 1 and zones[0].zone_id == &"enemy_spawn_zone", "first enemy spawn zone ID changed")
+	_expect(zones[0].minimum_feet_cell == Vector3i(2, 1, 2) and zones[0].maximum_feet_cell == Vector3i(6, 1, 6), "enemy spawn zone corners were not normalized")
+	_expect(draft.get_enemy_spawn_zone_candidate_cells(&"enemy_spawn_zone").size() == 25, "enemy spawn zone candidate cells changed")
+	zones[0].minimum_feet_cell = Vector3i.ZERO
+	zones.clear()
+	_expect(draft.get_enemy_spawn_zones()[0].minimum_feet_cell == Vector3i(2, 1, 2), "enemy spawn zone query exposed mutable state")
+	var affected_edit := draft.try_place_block(Vector3i(2, 1, 2), BlockId.Type.DIRT)
+	_expect(affected_edit.succeeded, "geometry edit with remaining spawn candidates was rejected")
+	_expect(affected_edit.changed_enemy_spawn_zone_ids == [&"enemy_spawn_zone"], "spawn-zone geometry edit did not identify only its affected zone")
+	_expect(draft.get_enemy_spawn_zone_candidate_cells(&"enemy_spawn_zone").size() == 24, "spawn candidates did not react to committed geometry")
+	_expect(draft.try_remove_block(Vector3i(2, 1, 2)).succeeded, "spawn candidate geometry could not be restored")
+	_expect(draft.try_add_enemy_spawn_zone(Vector3i(7, 1, 7), Vector3i(7, 1, 7)).succeeded, "single-cell enemy spawn zone was rejected")
+	_expect(draft.get_enemy_spawn_zones()[1].zone_id == &"enemy_spawn_zone_2", "enemy spawn zone ID was not made unique")
+	_expect(not draft.try_place_block(Vector3i(7, 1, 7), BlockId.Type.DIRT).succeeded, "last usable spawn cell accepted blocking geometry")
+	_expect(not draft.try_remove_block(Vector3i(7, 0, 7)).succeeded, "last usable spawn cell accepted floor removal")
+	_expect(draft.try_remove_enemy_spawn_zone(&"enemy_spawn_zone_2").succeeded, "enemy spawn zone removal failed")
+	_expect(draft.try_remove_block(Vector3i(7, 0, 7)).succeeded, "removed spawn zone retained geometry protection")
+	_expect(not draft.try_remove_enemy_spawn_zone(&"missing").succeeded, "missing enemy spawn zone removal succeeded")
+
+	var doorway_draft := StructureDraft.create_level_module(Vector3i(9, 5, 9))
+	for x in range(1, 8):
+		_expect(doorway_draft.try_place_block(Vector3i(x, 0, 2), BlockId.Type.STONE).succeeded, "doorway-clearance floor setup failed")
+	_build_boundary_wall(doorway_draft, LevelSocketDefinition.Direction.NORTH)
+	_expect(doorway_draft.try_add_enemy_spawn_zone(Vector3i(4, 1, 2), Vector3i(4, 1, 2)).succeeded, "doorway-clearance zone setup failed")
+	_expect(not doorway_draft.try_add_socket(Vector3i(4, 1, 0), LevelSocketDefinition.Direction.NORTH).succeeded, "doorway registration invalidated the only spawn candidate")
+	_expect(doorway_draft.get_sockets().is_empty() and doorway_draft.get_enemy_spawn_zone_candidate_cells(&"enemy_spawn_zone") == [Vector3i(4, 1, 2)], "rejected doorway partially mutated spawn-zone state")
+
+	var bounded_draft := StructureDraft.create_level_module(Vector3i(3, 4, 3))
+	_expect(bounded_draft.try_place_block(Vector3i(1, 0, 1), BlockId.Type.STONE).succeeded, "bounded spawn-zone floor setup failed")
+	for _index in LevelModuleDefinition.MAX_ENEMY_SPAWN_ZONES:
+		_expect(bounded_draft.try_add_enemy_spawn_zone(Vector3i(1, 1, 1), Vector3i(1, 1, 1)).succeeded, "bounded spawn-zone authoring rejected an in-range zone")
+	_expect(not bounded_draft.try_add_enemy_spawn_zone(Vector3i(1, 1, 1), Vector3i(1, 1, 1)).succeeded, "spawn-zone authoring exceeded its bounded collection limit")
+
+func _test_bounded_enemy_spawn_zone_invalidation() -> void:
+	var definition := LevelModuleDefinition.new()
+	definition.format_version = LevelModuleDefinition.CURRENT_FORMAT_VERSION
+	definition.module_id = &"maximum_spawn_zone_module"
+	definition.size = LevelDefinition.HARD_MAX_EXTENT
+	definition.cells.resize(definition.size.x * definition.size.y * definition.size.z)
+	definition.cells.fill(StructureCell.AIR)
+	for z in definition.size.z:
+		for x in definition.size.x:
+			definition.cells[StructureCell.index_of(Vector3i(x, 0, z), definition.size)] = BlockId.Type.STONE
+	var zone := LevelEnemySpawnZone.new()
+	zone.zone_id = &"enemy_spawn_zone"
+	zone.minimum_feet_cell = Vector3i(0, 1, 0)
+	zone.maximum_feet_cell = Vector3i(definition.size.x - 1, 1, definition.size.z - 1)
+	definition.enemy_spawn_zones.append(zone)
+	var draft := StructureDraft.restore_level_module(definition, "/tmp/maximum_spawn_zone_module.tres")
+	_expect(draft != null, "maximum spawn-zone draft could not be restored")
+	if draft == null:
+		return
+	var unrelated := draft.try_place_block(Vector3i(definition.size.x - 1, definition.size.y - 1, definition.size.z - 1), BlockId.Type.STONE)
+	_expect(unrelated.succeeded, "unrelated maximum-size module edit was rejected")
+	_expect(unrelated.changed_enemy_spawn_zone_ids.is_empty(), "unrelated maximum-size edit invalidated every enemy spawn zone")
+
+func _test_resource_snapshots() -> void:
+	var generic := StructureDraft.create_generic(Vector3i(3, 3, 3))
+	_expect(generic.try_place_block(Vector3i.ZERO, BlockId.Type.STONE).succeeded, "generic snapshot setup failed")
+	var generic_snapshot := StructureResourceAdapter.create_snapshot(generic, &"snapshot_generic") as StructureDefinition
+	_expect(generic_snapshot != null and generic_snapshot.validate(), "generic snapshot is invalid")
+	generic_snapshot.cells[0] = BlockId.Type.DIRT
+	_expect(generic.get_cell(Vector3i.ZERO) == BlockId.Type.STONE, "generic snapshot shares mutable cells with the draft")
+	var restored_generic := StructureDraft.restore_structure(StructureResourceAdapter.create_snapshot(generic, &"snapshot_generic") as StructureDefinition, "/tmp/snapshot_generic.tres")
+	_expect(restored_generic != null and restored_generic.snapshot_cells() == generic.snapshot_cells(), "generic snapshot restore changed cells")
+	var module := StructureDraft.create_level_module(Vector3i(3, 3, 3))
+	_expect(module.try_place_block(Vector3i.ZERO, BlockId.Type.STONE).succeeded, "module snapshot setup failed")
+	_expect(module.try_add_enemy_spawn_zone(Vector3i(0, 1, 0), Vector3i(0, 1, 0)).succeeded, "module snapshot spawn-zone setup failed")
+	var module_snapshot := StructureResourceAdapter.create_snapshot(module, &"snapshot_module") as LevelModuleDefinition
+	_expect(module_snapshot != null and module_snapshot.validate(), "module snapshot is invalid")
+	_expect(module_snapshot.format_version == LevelModuleDefinition.CURRENT_FORMAT_VERSION, "module snapshot omitted its physical format version")
+	_expect(module_snapshot.enemy_spawn_zones.size() == 1 and module_snapshot.get_enemy_spawn_candidate_cells() == [Vector3i(0, 1, 0)], "module snapshot changed enemy spawn zones")
+	module_snapshot.enemy_spawn_zones[0].minimum_feet_cell = Vector3i.ONE
+	_expect(module.get_enemy_spawn_zones()[0].minimum_feet_cell == Vector3i(0, 1, 0), "module snapshot shares mutable enemy spawn zones with the draft")
+	module_snapshot.cells[0] = BlockId.Type.DIRT
+	_expect(module.get_cell(Vector3i.ZERO) == BlockId.Type.STONE, "module snapshot shares mutable cells with the draft")
+	var restored_module := StructureDraft.restore_level_module(StructureResourceAdapter.create_snapshot(module, &"snapshot_module") as LevelModuleDefinition, "/tmp/snapshot_module.tres")
+	_expect(restored_module != null and restored_module.snapshot_cells() == module.snapshot_cells(), "module snapshot restore changed cells")
+	_expect(restored_module != null and restored_module.get_enemy_spawn_zone_candidate_cells(&"enemy_spawn_zone") == [Vector3i(0, 1, 0)], "module snapshot restore changed enemy spawn zones")
 
 func _build_boundary_wall(draft: StructureDraft, direction: LevelSocketDefinition.Direction) -> void:
 	var size := draft.get_size()

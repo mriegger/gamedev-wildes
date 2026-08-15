@@ -35,6 +35,24 @@ func _init() -> void:
 	missing_support.torches[0].support_direction = Vector3i.BACK
 	var duplicate_torch := valid.duplicate(true) as StructureDefinition
 	duplicate_torch.torches.append(duplicate_torch.torches[0].duplicate(true))
+	var valid_module := _make_valid_module()
+	var unversioned_module := valid_module.duplicate(true) as LevelModuleDefinition
+	unversioned_module.format_version = 0
+	var vertical_zone_module := valid_module.duplicate(true) as LevelModuleDefinition
+	vertical_zone_module.enemy_spawn_zones[0].maximum_feet_cell.y = 2
+	var blocked_zone_module := valid_module.duplicate(true) as LevelModuleDefinition
+	var blocked_cell := blocked_zone_module.enemy_spawn_zones[0].minimum_feet_cell
+	blocked_zone_module.cells[StructureCell.index_of(blocked_cell, blocked_zone_module.size)] = BlockId.Type.STONE
+	var duplicate_zone_module := valid_module.duplicate(true) as LevelModuleDefinition
+	duplicate_zone_module.enemy_spawn_zones.append(duplicate_zone_module.enemy_spawn_zones[0].duplicate(true))
+	var excessive_zone_module := valid_module.duplicate(true) as LevelModuleDefinition
+	excessive_zone_module.enemy_spawn_zones.clear()
+	for index in LevelModuleDefinition.MAX_ENEMY_SPAWN_ZONES + 1:
+		var zone := LevelEnemySpawnZone.new()
+		zone.zone_id = StringName("enemy_spawn_zone_%d" % index)
+		zone.minimum_feet_cell = Vector3i(1, 1, 1)
+		zone.maximum_feet_cell = Vector3i(1, 1, 1)
+		excessive_zone_module.enemy_spawn_zones.append(zone)
 	var passed := not unversioned.validate()
 	passed = not wrong_version.validate() and passed
 	passed = not wrong_id.validate() and passed
@@ -51,6 +69,12 @@ func _init() -> void:
 	passed = not unsupported_torch.validate() and passed
 	passed = not missing_support.validate() and passed
 	passed = not duplicate_torch.validate() and passed
+	passed = valid_module.validate() and passed
+	passed = not unversioned_module.validate() and passed
+	passed = not vertical_zone_module.validate() and passed
+	passed = not blocked_zone_module.validate() and passed
+	passed = not duplicate_zone_module.validate() and passed
+	passed = not excessive_zone_module.validate() and passed
 	if passed:
 		print("STRUCTURE_DEFINITION_MALFORMED PASS")
 		quit(0)
@@ -71,3 +95,20 @@ func _make_valid_definition() -> StructureDefinition:
 	torch.support_direction = Vector3i.LEFT
 	definition.torches.append(torch)
 	return definition
+
+func _make_valid_module() -> LevelModuleDefinition:
+	var module := LevelModuleDefinition.new()
+	module.format_version = LevelModuleDefinition.CURRENT_FORMAT_VERSION
+	module.module_id = &"test_module"
+	module.size = Vector3i(3, 4, 3)
+	module.cells.resize(module.size.x * module.size.y * module.size.z)
+	module.cells.fill(StructureCell.AIR)
+	for z in module.size.z:
+		for x in module.size.x:
+			module.cells[StructureCell.index_of(Vector3i(x, 0, z), module.size)] = BlockId.Type.STONE
+	var zone := LevelEnemySpawnZone.new()
+	zone.zone_id = &"enemy_spawn_zone"
+	zone.minimum_feet_cell = Vector3i(1, 1, 1)
+	zone.maximum_feet_cell = Vector3i(1, 1, 1)
+	module.enemy_spawn_zones.append(zone)
+	return module
