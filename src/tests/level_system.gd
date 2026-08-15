@@ -5,6 +5,7 @@ const BLOCK_CATALOG_PATH: String = "res://blocks/block_catalog.tres"
 const ENTRANCE_DEFINITION_PATH: String = "res://levels/content/meadow_dungeon_entrance.tres"
 const LEVEL_ID: StringName = &"stone_dungeon"
 const ENTRANCE_ID: StringName = &"overworld_dungeon_entrance"
+const STONE_MODULE_DIRECTORY: String = "res://levels/content/modules/stone"
 const FUZZ_SEED_COUNT: int = 1000
 const EXPECTED_GOLDEN_DIGEST: String = "54eb2e11958a406fe08aa8c6b86885a84859b3987f51c1ae1438751db5b4bce3"
 const DIRECTIONS: Array[Vector3i] = [
@@ -97,10 +98,15 @@ func _test_catalog_and_modules() -> void:
 	_expect(definition.maximum_explored_states == 10000, "search-state bound changed")
 	_expect(definition.expansion_module_ids.size() == 5, "expansion pool must contain five modules")
 	_expect(definition.cap_module_ids.size() == 2, "cap pool must contain two modules")
+	var stone_module_ids: Array[StringName] = [definition.start_module_id]
+	stone_module_ids.append_array(definition.expansion_module_ids)
+	stone_module_ids.append_array(definition.cap_module_ids)
 	var start_count := 0
 	for module in _catalog.modules:
 		_expect(module != null and module.validate(), "module failed validation: %s" % module.module_id)
 		_expect(module.resource_path.ends_with(".tres"), "module is not backed by a typed resource: %s" % module.module_id)
+		if stone_module_ids.has(module.module_id):
+			_expect(module.resource_path.get_base_dir() == STONE_MODULE_DIRECTORY, "stone dungeon module escaped its content directory: %s" % module.module_id)
 		_expect(module.cells.size() == module.size.x * module.size.y * module.size.z, "dense cell count changed for %s" % module.module_id)
 		_expect(module.weight > 0.0, "non-positive module weight for %s" % module.module_id)
 		var seen_sockets: Dictionary = {}

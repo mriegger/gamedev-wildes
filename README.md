@@ -65,7 +65,9 @@ dungeon assembled from authored chambers, halls, junctions, and dead ends. The f
 uses cutaway-facing geometry, a black void, and authored torch light. The overworld stays loaded
 but its streaming and presentation are suspended until you return through the dungeon door.
 Doorway selection, module pools, terrain presentation, ambient lighting, and return-door materials
-are configured through typed level resources rather than hardcoded dungeon IDs.
+are configured through typed level resources rather than hardcoded dungeon IDs. Active stone
+modules live under `levels/content/modules/stone`; future material families receive their own
+directory and `LevelDefinition` pools rather than being discovered through filesystem scans.
 
 **Structure construction workspace.** `dev structure new` opens a document type, length, width, and
 height dialog, then enters an isolated first-person workspace for a generic structure or Level

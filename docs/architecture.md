@@ -167,6 +167,12 @@ module pools and `LevelPresentationDefinition`; `LevelCatalog` resolves the stab
 torch placements remain presentation-owned, while `LevelState` contains only finite voxel-space
 truth, bounds, and entry/return geometry.
 
+Module directories organize content families without becoming runtime registries. The stone
+dungeon's registered resources live under `levels/content/modules/stone`, while its
+`LevelDefinition` remains the sole authority for start, expansion, and cap membership. A future
+iron dungeon can use `modules/iron` and its own explicit pools without adding a parallel family ID
+to every module or scanning project files at runtime.
+
 ## Structure authoring
 
 `StructureDraft` is the Node-independent mutable owner for a generic structure or Level Module
