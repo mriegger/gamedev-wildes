@@ -187,7 +187,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	game.entity_catalog = load("res://entities/entity_catalog.tres") as EntityCatalog
 	game.player_stats_definition = load("res://player/player_stats.tres") as CombatStatsDefinition
 	game.level_catalog = catalog
-	game.level_entrance_definition = load("res://levels/content/meadow_dungeon_entrance.tres") as LevelEntranceDefinition
+	game.level_entrance_definition = load("res://levels/content/entrances/meadow/stone_dungeon_entrance.tres") as LevelEntranceDefinition
 	game.level_runtime_scene = runtime_scene
 	game.structure_designer_runtime_scene = load(STRUCTURE_RUNTIME_SCENE) as PackedScene
 	game.structure_terrain_shader = load(STRUCTURE_TERRAIN_SHADER) as Shader

@@ -2,10 +2,10 @@ extends SceneTree
 
 const CATALOG_PATH: String = "res://levels/content/level_catalog.tres"
 const BLOCK_CATALOG_PATH: String = "res://blocks/block_catalog.tres"
-const ENTRANCE_DEFINITION_PATH: String = "res://levels/content/meadow_dungeon_entrance.tres"
+const ENTRANCE_DEFINITION_PATH: String = "res://levels/content/entrances/meadow/stone_dungeon_entrance.tres"
 const LEVEL_ID: StringName = &"stone_dungeon"
 const ENTRANCE_ID: StringName = &"overworld_dungeon_entrance"
-const STONE_MODULE_DIRECTORY: String = "res://levels/content/modules/stone"
+const STONE_MODULE_DIRECTORY: String = "res://levels/content/dungeons/stone/modules"
 const FUZZ_SEED_COUNT: int = 1000
 const DEEP_FUZZ_INTERVAL: int = 20
 const LIVE_MINIMUM_MODULE_COUNT: int = 4
@@ -30,14 +30,14 @@ const EXPECTED_EXPANSION_MODULE_IDS: Array[StringName] = [
 	&"stone_master_room",
 ]
 const LEGACY_MODULE_PATHS: Array[String] = [
-	"res://levels/content/modules/stone/start_chamber.tres",
-	"res://levels/content/modules/stone/straight_hall.tres",
-	"res://levels/content/modules/stone/corner_hall.tres",
-	"res://levels/content/modules/stone/small_room.tres",
-	"res://levels/content/modules/stone/large_room.tres",
-	"res://levels/content/modules/stone/t_junction.tres",
-	"res://levels/content/modules/stone/compact_dead_end.tres",
-	"res://levels/content/modules/stone/dead_end_chamber.tres",
+	"res://tests/fixtures/levels/legacy_stone/modules/start_chamber.tres",
+	"res://tests/fixtures/levels/legacy_stone/modules/straight_hall.tres",
+	"res://tests/fixtures/levels/legacy_stone/modules/corner_hall.tres",
+	"res://tests/fixtures/levels/legacy_stone/modules/small_room.tres",
+	"res://tests/fixtures/levels/legacy_stone/modules/large_room.tres",
+	"res://tests/fixtures/levels/legacy_stone/modules/t_junction.tres",
+	"res://tests/fixtures/levels/legacy_stone/modules/compact_dead_end.tres",
+	"res://tests/fixtures/levels/legacy_stone/modules/dead_end_chamber.tres",
 ]
 const LEGACY_MODULE_IDS: Array[StringName] = [
 	&"dungeon_start_chamber",
@@ -101,6 +101,8 @@ func _test_catalog_and_modules() -> void:
 	_expect(_catalog.validate(), "level catalog validation failed")
 	_expect(_catalog.modules.size() == EXPECTED_MODULE_IDS.size(), "catalog must contain exactly the three live stone modules")
 	_expect(_catalog.levels.size() == 1, "catalog must contain exactly one initial level")
+	for legacy_module_id in LEGACY_MODULE_IDS:
+		_expect(not _catalog.has_module(legacy_module_id), "legacy fixture was registered as live content: %s" % legacy_module_id)
 	var actual_ids: Array[StringName] = []
 	for module in _catalog.modules:
 		actual_ids.append(module.module_id)

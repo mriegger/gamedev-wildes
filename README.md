@@ -66,10 +66,12 @@ stone dungeon assembled from authored entry paths, hallways, and master rooms. T
 uses cutaway-facing geometry, a black void, and authored torch light. The overworld stays loaded
 but its streaming and presentation are suspended until you return through the dungeon door.
 Doorway selection, module pools, terrain presentation, ambient lighting, and return-door materials
-are configured through typed level resources rather than hardcoded dungeon IDs. Active stone
-modules live under `levels/content/modules/stone`; future material families receive their own
-directory and `LevelDefinition` pools rather than being discovered through filesystem scans. The
-current large-format stone modules target four to six placements within the 96×16×96 level bound.
+are configured through typed level resources rather than hardcoded dungeon IDs. Each destination
+dungeon owns its definition, presentation, and modules under `levels/content/dungeons/<family>`,
+while overworld doorways are grouped under `levels/content/entrances/<region>`. The root
+`level_catalog.tres` remains the explicit registry; directories never register content through
+filesystem scans. The current stone modules target four to six placements within the 96×16×96
+level bound.
 
 **Structure construction workspace.** `dev structure new` opens a document type, length, width, and
 height dialog, then enters an isolated first-person workspace for a generic structure or Level

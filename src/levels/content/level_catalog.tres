@@ -3,10 +3,10 @@
 [ext_resource type="Script" path="res://levels/definitions/level_catalog.gd" id="1_catalog"]
 [ext_resource type="Script" path="res://levels/definitions/level_module_definition.gd" id="2_module"]
 [ext_resource type="Script" path="res://levels/definitions/level_definition.gd" id="3_level"]
-[ext_resource type="Resource" path="res://levels/content/modules/stone/stone_entry_path.tres" id="4_entry"]
-[ext_resource type="Resource" path="res://levels/content/modules/stone/stone_hallway.tres" id="5_hallway"]
-[ext_resource type="Resource" path="res://levels/content/modules/stone/stone_master_room.tres" id="6_master_room"]
-[ext_resource type="Resource" path="res://levels/content/stone_dungeon.tres" id="7_dungeon"]
+[ext_resource type="Resource" path="res://levels/content/dungeons/stone/modules/stone_entry_path.tres" id="4_entry"]
+[ext_resource type="Resource" path="res://levels/content/dungeons/stone/modules/stone_hallway.tres" id="5_hallway"]
+[ext_resource type="Resource" path="res://levels/content/dungeons/stone/modules/stone_master_room.tres" id="6_master_room"]
+[ext_resource type="Resource" path="res://levels/content/dungeons/stone/stone_dungeon.tres" id="7_dungeon"]
 
 [resource]
 script = ExtResource("1_catalog")

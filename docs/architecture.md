@@ -167,12 +167,15 @@ module pools and `LevelPresentationDefinition`; `LevelCatalog` resolves the stab
 torch placements remain presentation-owned, while `LevelState` contains only finite voxel-space
 truth, bounds, and entry/return geometry.
 
-Module directories organize content families without becoming runtime registries. The stone
-dungeon's registered resources live under `levels/content/modules/stone`, while its
-`LevelDefinition` remains the sole authority for start, expansion, and cap membership. A future
-iron dungeon can use `modules/iron` and its own explicit pools without adding a parallel family ID
-to every module or scanning project files at runtime. The live stone definition targets four to six
-large-format modules so the authored dimensions remain feasible inside its 96×16×96 bound.
+Content directories organize ownership without becoming runtime registries. Each destination
+dungeon keeps its definition, presentation, and modules together under
+`levels/content/dungeons/<family>`, while entrances are grouped by overworld region under
+`levels/content/entrances/<region>`. `level_catalog.tres` remains the sole explicit registry and
+`LevelDefinition` remains the authority for start, expansion, and cap membership. A future iron
+dungeon can mirror the stone family without adding a parallel family ID to every module or scanning
+project files at runtime. Golden-only modules live under `tests/fixtures/levels` so they cannot be
+mistaken for registered content. The live stone definition targets four to six large-format modules
+inside its 96×16×96 bound.
 
 ## Structure authoring
 
