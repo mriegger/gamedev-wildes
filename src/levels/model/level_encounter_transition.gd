@@ -1,27 +1,36 @@
 extends RefCounted
 class_name LevelEncounterTransition
 
-var active_enemy_count: int:
+var room_id: int:
 	get:
-		return _active_enemy_count
-var pending_enemy_count: int:
+		return _room_id
+var summary: LevelEncounterSummary:
 	get:
-		return _pending_enemy_count
+		return _summary
 var room_cleared: bool:
 	get:
 		return _room_cleared
-var door_changes: Dictionary:
+var opened_seal_ids: Array[int]:
 	get:
-		return _door_changes.duplicate()
+		return _opened_seal_ids.duplicate()
 
-var _active_enemy_count: int
-var _pending_enemy_count: int
+var _room_id: int
+var _summary: LevelEncounterSummary
 var _room_cleared: bool
-var _door_changes: Dictionary
+var _opened_seal_ids: Array[int] = []
 
-func _init(p_active_enemy_count: int, p_pending_enemy_count: int, p_room_cleared: bool, p_door_changes: Dictionary) -> void:
-	assert(p_active_enemy_count >= 0 and p_pending_enemy_count >= 0)
-	_active_enemy_count = p_active_enemy_count
-	_pending_enemy_count = p_pending_enemy_count
+func _init(
+	p_room_id: int,
+	p_summary: LevelEncounterSummary,
+	p_room_cleared: bool,
+	p_opened_seal_ids: Array[int],
+) -> void:
+	assert(p_room_id >= 0 and p_summary != null)
+	_room_id = p_room_id
+	_summary = p_summary
 	_room_cleared = p_room_cleared
-	_door_changes = p_door_changes.duplicate()
+	_opened_seal_ids.assign(p_opened_seal_ids)
+	_opened_seal_ids.sort()
+	for index in _opened_seal_ids.size():
+		assert(_opened_seal_ids[index] >= 0)
+		assert(index == 0 or _opened_seal_ids[index - 1] != _opened_seal_ids[index])

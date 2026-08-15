@@ -45,8 +45,8 @@ class PhysicsEncounterTickDriver:
 
 var _failures: int = 0
 var _assertions: int = 0
-var _progress_events: Array[Vector2i] = []
-var _cleared_count: int = 0
+var _summary_events: Array[LevelEncounterSummary] = []
+var _cleared_room_ids: Array[int] = []
 
 func _init() -> void:
 	call_deferred("_run")
@@ -143,25 +143,25 @@ func _run() -> void:
 		generation.layout,
 		level_state,
 		topology,
-		state.get_door_locks(),
-		state.get_revealed_room_ids(),
+		state.get_sealed_door_ids(),
+		state.get_discovered_room_ids(),
 		BlockTextureSet.new(block_catalog),
 		incompatible_shader,
 		torch_renderer,
 	), "geometry renderer accepted a shader without the reveal contract")
 	_expect(renderer.get_child_count() == 0, "incompatible shader setup partially committed scene nodes")
-	var incomplete_locks := state.get_door_locks()
-	incomplete_locks.erase(incomplete_locks.keys()[0])
+	var invalid_seals := state.get_sealed_door_ids()
+	invalid_seals.append(invalid_seals[0])
 	_expect(not renderer.setup(
 		generation.layout,
 		level_state,
 		topology,
-		incomplete_locks,
-		state.get_revealed_room_ids(),
+		invalid_seals,
+		state.get_discovered_room_ids(),
 		BlockTextureSet.new(block_catalog),
 		definition.presentation.terrain_shader,
 		torch_renderer,
-	), "geometry renderer accepted incomplete doorway locks")
+	), "geometry renderer accepted duplicate seals")
 	_expect(renderer.get_child_count() == 0, "failed geometry setup partially committed scene nodes")
 	for torch_cell in torch_attachments:
 		_expect(is_equal_approx(_torch_reveal_strength(torch_renderer, torch_cell as Vector3i), 1.0), "failed geometry setup partially changed torch reveal state")
@@ -169,19 +169,22 @@ func _run() -> void:
 		generation.layout,
 		level_state,
 		topology,
-		state.get_door_locks(),
-		state.get_revealed_room_ids(),
+		state.get_sealed_door_ids(),
+		state.get_discovered_room_ids(),
 		BlockTextureSet.new(block_catalog),
 		definition.presentation.terrain_shader,
 		torch_renderer,
 	), "geometry renderer setup failed")
 	coordinator.set_player(player)
-	coordinator.door_locks_changed.connect(renderer.apply_door_locks)
-	coordinator.encounter_progress_changed.connect(_on_progress_changed)
-	coordinator.encounter_progress_changed.connect(hud.show_encounter)
-	coordinator.encounter_cleared.connect(_on_encounter_cleared)
-	coordinator.encounter_cleared.connect(hud.show_cleared)
-	coordinator.encounter_cleared.connect(func() -> void: renderer.reveal_rooms(state.get_revealed_room_ids()))
+	coordinator.seals_opened.connect(renderer.open_seals)
+	coordinator.encounter_summary_changed.connect(_on_summary_changed)
+	coordinator.encounter_summary_changed.connect(hud.show_summary)
+	coordinator.room_cleared.connect(_on_room_cleared)
+	coordinator.room_cleared.connect(func(cleared_room_id: int) -> void:
+		renderer.discover_rooms(topology.get_room(cleared_room_id).child_room_ids)
+		if state.get_summary().active_wave_count == 0:
+			hud.show_cleared()
+	)
 
 	var unrelated_ids := _spawn_unrelated_entities(runtime, topology, level_state, entity_catalog, 2)
 	_expect(unrelated_ids.size() == 2, "could not create two unrelated dungeon entities")
@@ -196,12 +199,12 @@ func _run() -> void:
 	_expect(gate_path.size() == 2, "root incoming gate had no traversable open path")
 	player.global_position = _aperture_body_position(parent_doorway)
 	coordinator.tick()
-	_expect(state.get_active_room_id() == -1, "player intersecting the incoming gate activated the room")
+	_expect(state.get_active_room_ids().is_empty(), "player intersecting the incoming gate activated the room")
 	_expect(_room_progress(state, room_id).status == LevelEncounterState.RoomStatus.READY, "failed boundary activation changed room state")
 	_expect(runtime.get_active_count() == unrelated_ids.size(), "failed boundary activation spawned encounter entities")
 
-	var parent_barrier := renderer._barrier_meshes[room.parent_door_id] as MeshInstance3D
-	_expect(not parent_barrier.visible and is_equal_approx(parent_barrier.transparency, 1.0), "ready root incoming doorway retained a fill block")
+	var parent_seal := renderer._seal_meshes[room.parent_door_id] as MeshInstance3D
+	_expect(not parent_seal.visible and is_equal_approx(parent_seal.transparency, 1.0), "ready root incoming doorway retained a seal")
 	_expect(is_equal_approx(float((renderer._room_materials[room_id] as ShaderMaterial).get_shader_parameter("reveal_amount")), 1.0), "ready root room did not begin revealed")
 	var revealed_child_room_id := room.child_room_ids[0]
 	var child_material := renderer._room_materials[revealed_child_room_id] as ShaderMaterial
@@ -209,40 +212,44 @@ func _run() -> void:
 	for torch_cell in renderer._room_torch_cells[revealed_child_room_id] as Array[Vector3i]:
 		_expect(is_zero_approx(_torch_reveal_strength(torch_renderer, torch_cell)), "locked child branch retained a visible torch")
 	player.global_position = Vector3(constrained_spawn_cells[0]) + Vector3(0.5, 0.0, 0.5)
+	var sealed_before_activation := state.get_sealed_door_ids()
 	coordinator.tick()
 	var progress := _room_progress(state, room_id)
 	_expect(progress.status == LevelEncounterState.RoomStatus.ACTIVE, "fully contained player did not activate the ready room")
-	_expect(state.get_active_room_id() == room_id, "activated room ID was not retained")
+	_expect(state.get_active_room_ids() == [room_id], "activated room ID was not retained")
 	_expect(progress.active_entity_ids.size() == 2, "initial transactional spawn did not fill both available slots")
 	_expect(state.get_spawned_enemy_count(room_id) == 2, "initial spawn advanced by the wrong count")
 	_expect(runtime.get_active_count() == unrelated_ids.size() + 2, "initial spawn did not commit atomically to the runtime")
-	_expect(not _progress_events.is_empty() and _progress_events.back().x == 2, "activation did not publish active encounter progress")
-	var expected_pending := progress.enemy_ids.size() - progress.next_spawn_index
+	_expect(not _summary_events.is_empty() and _summary_events.back().active_enemy_count == 2, "activation did not publish aggregate encounter progress")
+	var expected_pending := progress.enemy_ids.size() - progress.defeated_count - progress.active_entity_ids.size()
 	_expect(
-		(hud.get_node("Panel/Margin/Label") as Label).text == "Room Locked  •  2 active  •  %d pending" % expected_pending,
-		"HUD did not present separate active and pending encounter counts",
+		(hud.get_node("Panel/Margin/Label") as Label).text == "1 wave  •  2 active  •  %d pending" % expected_pending,
+		"HUD did not present aggregate wave, active, and pending counts",
 	)
-	_expect(parent_barrier.visible and is_zero_approx(parent_barrier.transparency), "room activation did not restore its authored doorway fill")
+	_expect(state.get_sealed_door_ids() == sealed_before_activation, "room activation changed monotonic seals")
+	_expect(not parent_seal.visible and is_equal_approx(parent_seal.transparency, 1.0), "room activation resealed the discovered retreat path")
 
 	for door_id in room.door_ids:
-		_expect(bool(state.get_door_locks()[door_id]), "activation did not logically lock room door %d" % door_id)
 		var doorway := _find_doorway(topology, door_id)
 		for cell in doorway.aperture_cells:
-			_expect(level_state.get_cell_value(cell) == doorway.fill_block_id, "locked door did not project its authored fill at %s" % cell)
-			_expect(level_state.is_solid(cell), "locked door did not block movement at %s" % cell)
-			_expect(level_state.is_raycast_solid(cell), "locked door did not block raycasts at %s" % cell)
+			if sealed_before_activation.has(door_id):
+				_expect(level_state.get_cell_value(cell) == doorway.fill_block_id, "seal did not project its authored fill at %s" % cell)
+				_expect(level_state.is_solid(cell), "seal did not block movement at %s" % cell)
+				_expect(level_state.is_raycast_solid(cell), "seal did not block raycasts at %s" % cell)
+			else:
+				_expect(level_state.get_cell_value(cell) == StructureCell.AIR, "discovered doorway was resealed at %s" % cell)
 
 	if gate_path.size() == 2:
 		var start_cell := gate_path[0]
 		var goal_cell := gate_path[1]
-		var blocked_path := VoxelPathfinder.find_path(level_state, start_cell, goal_cell, player.player_width, player.player_height, 8, 512)
-		_expect(blocked_path.status != VoxelPathResult.Status.FOUND, "pathfinding crossed the locked incoming gate")
+		var retreat_path := VoxelPathfinder.find_path(level_state, start_cell, goal_cell, player.player_width, player.player_height, 8, 512)
+		_expect(retreat_path.status == VoxelPathResult.Status.FOUND, "pathfinding could not retreat through the discovered doorway")
 		var ray_origin := Vector3(start_cell) + Vector3(0.5, player.player_height * 0.5, 0.5)
 		var ray_target := Vector3(goal_cell) + Vector3(0.5, player.player_height * 0.5, 0.5)
-		_expect(not VoxelLineOfSight.has_clear_path(level_state, ray_origin, ray_target), "line of sight crossed the locked incoming gate")
+		_expect(VoxelLineOfSight.has_clear_path(level_state, ray_origin, ray_target), "line of sight did not remain open through the discovered doorway")
 		var ray_hit := VoxelRaycast.cast(level_state, ray_origin, ray_origin.direction_to(ray_target), ray_origin.distance_to(ray_target))
-		_expect(ray_hit != null and parent_doorway.aperture_cells.has(ray_hit.target_cell), "voxel raycast did not hit the locked incoming gate")
-		_expect(VoxelBodySolver.collides_at(level_state, _aperture_body_position(parent_doorway), player.player_width, player.player_height, false), "player body did not collide with the locked gate")
+		_expect(ray_hit == null or not parent_doorway.aperture_cells.has(ray_hit.target_cell), "voxel raycast hit a removed incoming seal")
+		_expect(not VoxelBodySolver.collides_at(level_state, _aperture_body_position(parent_doorway), player.player_width, player.player_height, false), "player body collided with the discovered doorway")
 
 	var unblocked_player_position: Variant = _find_player_position_clear_of_spawns(room, topology, constrained_spawn_cells, player.player_width, player.player_height)
 	_expect(unblocked_player_position is Vector3, "root room had no player position clear of constrained spawn cells")
@@ -252,6 +259,94 @@ func _run() -> void:
 		coordinator.tick()
 		_expect(state.get_spawned_enemy_count(room_id) == spawned_before_unblocking + 1, "freed transient spawn position was not retried")
 		_expect(progress.active_entity_ids.size() == 3, "freed static encounter slot did not restore deterministic capacity")
+
+	var second_room_id := _find_highest_capacity_ready_root(topology, state, coordinator._capacity_by_room, room_id)
+	_expect(second_room_id >= 0, "generated topology has no second ready root for concurrent waves")
+	var second_progress: LevelEncounterState.RoomProgress
+	if second_room_id >= 0:
+		var second_room := topology.get_room(second_room_id)
+		player.global_position = Vector3(second_room.spawn_cells[0]) + Vector3(0.5, 0.0, 0.5)
+		coordinator.tick()
+		second_progress = _room_progress(state, second_room_id)
+		var expected_active_rooms: Array[int] = [room_id, second_room_id]
+		expected_active_rooms.sort()
+		_expect(state.get_active_room_ids() == expected_active_rooms, "entering another discovered room did not preserve both waves")
+		_expect(second_progress.status == LevelEncounterState.RoomStatus.ACTIVE and not second_progress.active_entity_ids.is_empty(), "second room did not activate independently")
+		_expect(second_progress.active_entity_ids.size() == LevelEncounterState.MAX_CONCURRENT_ENEMIES_PER_ROOM, "concurrent fixture did not activate a full twenty-enemy second wave")
+		var aggregate := state.get_summary()
+		_expect(aggregate.active_wave_count == 2, "concurrent activation did not report two waves")
+		_expect(
+			(hud.get_node("Panel/Margin/Label") as Label).text == "2 waves  •  %d active  •  %d pending" % [aggregate.active_enemy_count, aggregate.pending_enemy_count],
+			"HUD did not aggregate concurrent waves",
+		)
+		var active_wave_room_ids: Array[int] = [room_id, second_room_id]
+		var expected_congregated_count := progress.active_entity_ids.size() + second_progress.active_entity_ids.size()
+		var congregated_count := _move_active_waves_into_room(
+			runtime,
+			state,
+			active_wave_room_ids,
+			room_id,
+			topology,
+			level_state,
+			zombie_definition,
+		)
+		_expect(expected_congregated_count > LevelEncounterState.MAX_CONCURRENT_ENEMIES_PER_ROOM, "concurrent fixture did not exceed one room's origin-wave cap")
+		_expect(congregated_count == expected_congregated_count, "enemies from concurrent origins could not physically congregate in one room")
+
+	if second_progress != null and unblocked_player_position is Vector3:
+		var roaming_runtime_id := _first_runtime_id(second_progress.active_entity_ids)
+		var roaming_actor := runtime.get_actor(roaming_runtime_id)
+		var first_wave_active_before := progress.active_entity_ids.size()
+		var second_wave_active_before := second_progress.active_entity_ids.size()
+		_expect(roaming_actor != null, "second wave had no actor to test cross-room ownership")
+		if roaming_actor != null:
+			roaming_actor.global_position = unblocked_player_position as Vector3
+			runtime.tick(0.0, player.global_position)
+			var roaming_defeat := runtime.try_apply_damage(roaming_runtime_id, 10000.0)
+			_expect(roaming_defeat != null and roaming_defeat.defeated, "roaming encounter enemy defeat failed")
+			_expect(progress.active_entity_ids.size() == first_wave_active_before, "roaming enemy defeat was charged to its physical room")
+			_expect(second_progress.active_entity_ids.size() == second_wave_active_before - 1, "roaming enemy defeat lost its originating-wave ownership")
+			await physics_frame
+			coordinator.tick()
+			_expect(second_progress.active_entity_ids.size() == second_wave_active_before, "originating wave did not refill after a roaming defeat")
+
+	if second_progress != null:
+		var first_active_before_parallel_refill := progress.active_entity_ids.size()
+		var second_active_before_parallel_refill := second_progress.active_entity_ids.size()
+		var first_spawned_before_parallel_refill := state.get_spawned_enemy_count(room_id)
+		var second_spawned_before_parallel_refill := state.get_spawned_enemy_count(second_room_id)
+		_expect(progress.enemy_ids.size() > first_spawned_before_parallel_refill, "first wave had no pending enemy for overlapping refill coverage")
+		_expect(second_progress.enemy_ids.size() > second_spawned_before_parallel_refill, "second wave had no pending enemy for overlapping refill coverage")
+		var first_parallel_runtime_id := _first_runtime_id(progress.active_entity_ids)
+		var second_parallel_runtime_id := _first_runtime_id(second_progress.active_entity_ids)
+		var first_defeat_driver := PhysicsDefeatDriver.new()
+		var second_defeat_driver := PhysicsDefeatDriver.new()
+		var parallel_tick_driver := PhysicsEncounterTickDriver.new()
+		first_defeat_driver.setup(runtime, first_parallel_runtime_id)
+		second_defeat_driver.setup(runtime, second_parallel_runtime_id)
+		parallel_tick_driver.setup(coordinator)
+		root.add_child(first_defeat_driver)
+		root.add_child(second_defeat_driver)
+		root.add_child(parallel_tick_driver)
+		var parallel_same_frame_tick: int = await parallel_tick_driver.tick_completed
+		_expect(first_defeat_driver.result != null and first_defeat_driver.result.defeated, "first overlapping-wave defeat failed")
+		_expect(second_defeat_driver.result != null and second_defeat_driver.result.defeated, "second overlapping-wave defeat failed")
+		_expect(first_defeat_driver.defeat_frame == second_defeat_driver.defeat_frame, "overlapping-wave defeats did not occur in the same physics frame")
+		_expect(parallel_same_frame_tick == first_defeat_driver.defeat_frame, "overlapping-wave fixture did not tick after both same-frame defeats")
+		_expect(state.get_spawned_enemy_count(room_id) == first_spawned_before_parallel_refill, "first wave refilled during its defeat frame")
+		_expect(state.get_spawned_enemy_count(second_room_id) == second_spawned_before_parallel_refill, "second wave refilled during its defeat frame")
+		_expect(progress.active_entity_ids.size() == first_active_before_parallel_refill - 1, "first wave did not retain its independent open slot")
+		_expect(second_progress.active_entity_ids.size() == second_active_before_parallel_refill - 1, "second wave did not retain its independent open slot")
+		var parallel_later_frame_tick: int = await parallel_tick_driver.tick_completed
+		_expect(parallel_later_frame_tick > parallel_same_frame_tick, "overlapping replacements did not wait for the next physics frame")
+		_expect(state.get_spawned_enemy_count(room_id) == first_spawned_before_parallel_refill + 1, "first wave did not refill on the shared next tick")
+		_expect(state.get_spawned_enemy_count(second_room_id) == second_spawned_before_parallel_refill + 1, "second wave did not refill on the shared next tick")
+		_expect(progress.active_entity_ids.size() == first_active_before_parallel_refill, "first wave did not restore its own capacity")
+		_expect(second_progress.active_entity_ids.size() == second_active_before_parallel_refill, "second wave did not restore its own capacity")
+		parallel_tick_driver.set_physics_process(false)
+		first_defeat_driver.queue_free()
+		second_defeat_driver.queue_free()
+		parallel_tick_driver.queue_free()
 
 	if unrelated_ids.size() == 2:
 		var active_before_unrelated := progress.active_entity_ids.size()
@@ -289,7 +384,7 @@ func _run() -> void:
 		tick_driver.queue_free()
 
 	var defeat_iterations := 0
-	while state.get_active_room_id() == room_id and defeat_iterations < LevelRoomEncounterDefinition.MAX_ENEMY_COUNT + 2:
+	while state.get_active_room_ids().has(room_id) and defeat_iterations < LevelRoomEncounterDefinition.MAX_ENEMY_COUNT + 2:
 		progress = _room_progress(state, room_id)
 		var runtime_id := _first_runtime_id(progress.active_entity_ids)
 		if runtime_id <= 0:
@@ -302,25 +397,39 @@ func _run() -> void:
 
 	progress = _room_progress(state, room_id)
 	_expect(progress.status == LevelEncounterState.RoomStatus.CLEARED, "room did not clear after every configured enemy died")
-	_expect(state.get_active_room_id() == -1, "cleared room remained active")
+	_expect(not state.get_active_room_ids().has(room_id), "cleared room remained active")
 	_expect(progress.next_spawn_index == progress.enemy_ids.size(), "room cleared before every configured enemy spawned")
 	_expect(progress.defeated_count == progress.enemy_ids.size(), "room cleared before every configured enemy died")
 	_expect(progress.active_entity_ids.is_empty(), "cleared room retained assigned runtime IDs")
-	_expect(_cleared_count == 1, "clear signal did not emit exactly once")
-	_expect((hud.get_node("Panel/Margin/Label") as Label).text == "Room Cleared", "HUD did not present room clearance")
+	_expect(_cleared_room_ids == [room_id], "clear signal did not identify exactly the cleared room")
+	_expect(second_progress != null and second_progress.status == LevelEncounterState.RoomStatus.ACTIVE, "clearing one room stopped the other wave")
+	var remaining_summary := state.get_summary()
+	_expect(remaining_summary.active_wave_count == 1, "clearing one of two waves lost the remaining aggregate")
+	_expect(
+		(hud.get_node("Panel/Margin/Label") as Label).text == "1 wave  •  %d active  •  %d pending" % [remaining_summary.active_enemy_count, remaining_summary.pending_enemy_count],
+		"room clear notice replaced an ongoing wave summary",
+	)
 	for door_id in room.door_ids:
-		_expect(not bool(state.get_door_locks()[door_id]), "cleared room door remained locked: %d" % door_id)
 		var doorway := _find_doorway(topology, door_id)
-		for cell in doorway.aperture_cells:
-			_expect(level_state.get_cell_value(cell) == StructureCell.AIR, "cleared room door did not restore AIR at %s" % cell)
-			_expect(not level_state.is_solid(cell), "cleared room door still blocked movement at %s" % cell)
+		if sealed_before_activation.has(door_id):
+			_expect(not state.get_sealed_door_ids().has(door_id), "cleared room seal remained authoritative: %d" % door_id)
+			for cell in doorway.aperture_cells:
+				_expect(level_state.get_cell_value(cell) == StructureCell.AIR, "cleared seal did not restore AIR at %s" % cell)
+				_expect(not level_state.is_solid(cell), "cleared seal still blocked movement at %s" % cell)
 	for child_room_id in room.child_room_ids:
 		var child_room := topology.get_room(child_room_id)
 		_expect(_room_progress(state, child_room_id).status == LevelEncounterState.RoomStatus.READY, "cleared room did not ready child %d" % child_room_id)
-		_expect(not bool(state.get_door_locks()[child_room.parent_door_id]), "cleared room did not open child gate %d" % child_room.parent_door_id)
-	_expect(parent_barrier.visible and parent_barrier.transparency < 1.0, "cleared doorway fill disappeared without fading")
+		_expect(not state.get_sealed_door_ids().has(child_room.parent_door_id), "cleared room did not open child seal %d" % child_room.parent_door_id)
+	var fading_seal_id := -1
+	for seal_id in sealed_before_activation:
+		if not state.get_sealed_door_ids().has(seal_id):
+			fading_seal_id = seal_id
+			break
+	_expect(fading_seal_id >= 0, "room clear did not open a visible seal")
+	var fading_seal := renderer._seal_meshes.get(fading_seal_id) as MeshInstance3D
+	_expect(fading_seal != null and fading_seal.visible and fading_seal.transparency < 1.0, "opened seal disappeared without fading")
 	await create_timer(LevelGeometryRenderer.TRANSITION_SECONDS + 0.05).timeout
-	_expect(not parent_barrier.visible and is_equal_approx(parent_barrier.transparency, 1.0), "cleared doorway fill did not finish fading")
+	_expect(fading_seal != null and not fading_seal.visible and is_equal_approx(fading_seal.transparency, 1.0), "opened seal did not finish fading")
 	_expect(is_equal_approx(float(child_material.get_shader_parameter("reveal_amount")), 1.0), "unlocked child branch did not finish fading in")
 	for torch_cell in renderer._room_torch_cells[revealed_child_room_id] as Array[Vector3i]:
 		_expect(is_equal_approx(_torch_reveal_strength(torch_renderer, torch_cell), 1.0), "unlocked child branch torch did not finish fading in")
@@ -343,6 +452,56 @@ func _find_ready_root_with_child(topology: LevelEncounterTopology, state: LevelE
 		if room.parent_room_id < 0 and not room.child_room_ids.is_empty() and _room_progress(state, room_id).status == LevelEncounterState.RoomStatus.READY:
 			return room_id
 	return -1
+
+func _find_highest_capacity_ready_root(
+	topology: LevelEncounterTopology,
+	state: LevelEncounterState,
+	capacity_by_room: Dictionary,
+	excluded_room_id: int,
+) -> int:
+	var selected_room_id := -1
+	var selected_capacity := -1
+	for room_id in topology.get_room_ids():
+		var room := topology.get_room(room_id)
+		if room_id != excluded_room_id and room.parent_room_id < 0 and _room_progress(state, room_id).status == LevelEncounterState.RoomStatus.READY:
+			var capacity := int(capacity_by_room.get(room_id, 0))
+			if capacity > selected_capacity:
+				selected_room_id = room_id
+				selected_capacity = capacity
+	return selected_room_id
+
+func _move_active_waves_into_room(
+	runtime: EntityRuntime,
+	state: LevelEncounterState,
+	source_room_ids: Array[int],
+	target_room_id: int,
+	topology: LevelEncounterTopology,
+	level_state: LevelState,
+	entity_definition: EntityDefinition,
+) -> int:
+	var target_room := topology.get_room(target_room_id)
+	var target_positions: Array[Vector3] = []
+	var interior_cells: Array = target_room._interior_cells.keys()
+	interior_cells.sort_custom(_cell_less)
+	for value in interior_cells:
+		var position := Vector3(value as Vector3i) + Vector3(0.5, 0.0, 0.5)
+		if EntitySpawnGeometryType.can_spawn(level_state, entity_definition, position) \
+			and target_room.contains_body(position, entity_definition.body_width, entity_definition.body_height, topology.get_doorways()):
+			target_positions.append(position)
+	if target_positions.is_empty():
+		return 0
+	var moved_count := 0
+	for source_room_id in source_room_ids:
+		var runtime_ids: Array = _room_progress(state, source_room_id).active_entity_ids.keys()
+		runtime_ids.sort()
+		for value in runtime_ids:
+			var actor := runtime.get_actor(int(value))
+			if actor == null:
+				continue
+			actor.global_position = target_positions[moved_count % target_positions.size()]
+			if topology.find_room_containing_body(actor.global_position, entity_definition.body_width, entity_definition.body_height) == target_room_id:
+				moved_count += 1
+	return moved_count
 
 func _spread_spawn_cells(cells: Array[Vector3i], count: int) -> Array[Vector3i]:
 	var result: Array[Vector3i] = []
@@ -520,11 +679,11 @@ func _cell_less(first: Vector3i, second: Vector3i) -> bool:
 		return first.y < second.y
 	return first.z < second.z
 
-func _on_progress_changed(active_enemy_count: int, pending_enemy_count: int) -> void:
-	_progress_events.append(Vector2i(active_enemy_count, pending_enemy_count))
+func _on_summary_changed(summary: LevelEncounterSummary) -> void:
+	_summary_events.append(summary)
 
-func _on_encounter_cleared() -> void:
-	_cleared_count += 1
+func _on_room_cleared(room_id: int) -> void:
+	_cleared_room_ids.append(room_id)
 
 func _cleanup(
 	runtime: EntityRuntime,
@@ -556,7 +715,7 @@ func _expect(condition: bool, message: String) -> void:
 
 func _finish() -> void:
 	if _failures == 0:
-		print("LEVEL_ENCOUNTER_RUNTIME PASS assertions=%d progress_events=%d" % [_assertions, _progress_events.size()])
+		print("LEVEL_ENCOUNTER_RUNTIME PASS assertions=%d summary_events=%d" % [_assertions, _summary_events.size()])
 		quit(0)
 	else:
 		print("LEVEL_ENCOUNTER_RUNTIME FAILED failures=%d assertions=%d" % [_failures, _assertions])

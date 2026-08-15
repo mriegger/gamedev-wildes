@@ -114,7 +114,8 @@ func _run_runtime_lifecycle(
 	var return_door := runtime.get_node("ReturnDoor") as MeshInstance3D
 	_expect(geometry != null and geometry.get_node_or_null("EntryGeometry") is MeshInstance3D, "runtime entry geometry was not built at iteration %d" % iteration)
 	_expect(geometry != null and geometry._room_meshes.size() == runtime._topology.get_room_ids().size(), "runtime omitted room branch geometry at iteration %d" % iteration)
-	_expect(geometry != null and geometry._barrier_meshes.size() == runtime._topology.get_doorways().size(), "runtime omitted authored doorway fills at iteration %d" % iteration)
+	_expect(geometry != null and geometry._seal_meshes.size() == runtime._topology.get_doorways().size(), "runtime omitted authored doorway seals at iteration %d" % iteration)
+	_expect(runtime.get_entity_runtime()._max_active == runtime._topology.get_maximum_simultaneous_encounter_enemy_count(), "runtime ignored topology-derived encounter capacity at iteration %d" % iteration)
 	for material_value in geometry._room_materials.values():
 		var terrain_material := material_value as ShaderMaterial
 		_expect(terrain_material != null and terrain_material.shader.resource_path == "res://levels/presentation/level_terrain.gdshader", "runtime terrain shader changed at iteration %d" % iteration)
@@ -427,7 +428,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	_expect(game._level_runtime == null and not is_instance_valid(defeated_runtime), "dungeon defeat retained the failed runtime")
 	await game._enter_level()
 	var fresh_runtime := game._level_runtime
-	_expect(fresh_runtime._encounter_state != first_attempt_state and fresh_runtime._encounter_state.get_active_room_id() == -1, "dungeon re-entry did not create a fresh encounter attempt")
+	_expect(fresh_runtime._encounter_state != first_attempt_state and fresh_runtime._encounter_state.get_active_room_ids().is_empty(), "dungeon re-entry did not create a fresh encounter attempt")
 	await game._exit_level()
 	player.unbind_space()
 	game._unbind_entity_context()

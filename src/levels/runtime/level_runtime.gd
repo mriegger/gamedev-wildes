@@ -2,7 +2,6 @@ extends Node3D
 class_name LevelRuntime
 
 const DUNGEON_TORCH_SHADOW_FADE_SECONDS: float = 0.45
-const MAX_ACTIVE_ENTITIES: int = LevelRoomEncounterDefinition.MAX_ENEMY_COUNT
 const MAX_RETIRING_ENTITIES: int = LevelRoomEncounterDefinition.MAX_ENEMY_COUNT
 const MAX_NAVIGATION_SEARCH_RADIUS: int = 48
 const MAX_NAVIGATION_SEARCH_NODES: int = 2048
@@ -53,7 +52,7 @@ func setup(
 	_entity_runtime.setup(
 		entity_catalog,
 		_state,
-		MAX_ACTIVE_ENTITIES,
+		_topology.get_maximum_simultaneous_encounter_enemy_count(),
 		MAX_RETIRING_ENTITIES,
 		EntityNavigationLimits.new(
 			MAX_NAVIGATION_SEARCH_RADIUS,
@@ -72,9 +71,9 @@ func setup(
 		entity_catalog,
 		layout.seed_value,
 	))
-	_encounter_coordinator.door_locks_changed.connect(_on_door_locks_changed)
-	_encounter_coordinator.encounter_progress_changed.connect(_encounter_hud.show_encounter)
-	_encounter_coordinator.encounter_cleared.connect(_on_encounter_cleared)
+	_encounter_coordinator.seals_opened.connect(_on_seals_opened)
+	_encounter_coordinator.encounter_summary_changed.connect(_encounter_hud.show_summary)
+	_encounter_coordinator.room_cleared.connect(_on_room_cleared)
 	_level_environment = _create_environment(presentation)
 	_torch_renderer.setup(block_catalog, settings.dungeon_torch_shadow_count, DUNGEON_TORCH_SHADOW_FADE_SECONDS)
 	var torch_attachments: Dictionary = {}
@@ -85,8 +84,8 @@ func setup(
 		layout,
 		_state,
 		_topology,
-		_encounter_state.get_door_locks(),
-		_encounter_state.get_revealed_room_ids(),
+		_encounter_state.get_sealed_door_ids(),
+		_encounter_state.get_discovered_room_ids(),
 		texture_set,
 		presentation.terrain_shader,
 		_torch_renderer,
@@ -156,12 +155,15 @@ func set_player_ref(player: Node3D) -> void:
 func apply_settings(settings: GameSettings) -> void:
 	_torch_renderer.set_max_shadow_torches(settings.dungeon_torch_shadow_count)
 
-func _on_door_locks_changed(changes: Dictionary) -> void:
-	_geometry_renderer.apply_door_locks(changes)
+func _on_seals_opened(seal_ids: Array[int]) -> void:
+	_geometry_renderer.open_seals(seal_ids)
 
-func _on_encounter_cleared() -> void:
-	_geometry_renderer.reveal_rooms(_encounter_state.get_revealed_room_ids())
-	_encounter_hud.show_cleared()
+func _on_room_cleared(room_id: int) -> void:
+	var room := _topology.get_room(room_id)
+	assert(room != null)
+	_geometry_renderer.discover_rooms(room.child_room_ids)
+	if _encounter_state.get_summary().active_wave_count == 0:
+		_encounter_hud.show_cleared()
 
 func _setup_return_door(block_catalog: BlockCatalog, door_block_id: int) -> void:
 	var mesh := BoxMesh.new()

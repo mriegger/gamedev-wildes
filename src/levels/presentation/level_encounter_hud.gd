@@ -12,10 +12,20 @@ func _ready() -> void:
 	_panel.visible = false
 	set_process(false)
 
-func show_encounter(active_enemy_count: int, pending_enemy_count: int) -> void:
-	assert(active_enemy_count >= 0 and pending_enemy_count >= 0 and active_enemy_count + pending_enemy_count > 0)
+func show_summary(summary: LevelEncounterSummary) -> void:
+	assert(summary != null)
+	if summary.active_wave_count == 0:
+		if is_zero_approx(_clear_remaining):
+			hide_status()
+		return
 	_clear_remaining = 0.0
-	_label.text = "Room Locked  •  %d active  •  %d pending" % [active_enemy_count, pending_enemy_count]
+	var wave_label := "wave" if summary.active_wave_count == 1 else "waves"
+	_label.text = "%d %s  •  %d active  •  %d pending" % [
+		summary.active_wave_count,
+		wave_label,
+		summary.active_enemy_count,
+		summary.pending_enemy_count,
+	]
 	_panel.visible = true
 	set_process(false)
 

@@ -14,8 +14,8 @@ var _return_door_facing: LevelSocketDefinition.Direction
 var _bounds_min: Vector3i
 var _bounds_max: Vector3i
 var _doorways_by_id: Dictionary = {}
-var _door_locks: Dictionary = {}
-var _locked_door_cells: Dictionary = {}
+var _sealed_door_ids: Dictionary = {}
+var _sealed_door_cells: Dictionary = {}
 
 func _init(
 	p_block_catalog: BlockCatalog,
@@ -85,15 +85,15 @@ func _build_solid_index() -> void:
 	)
 
 func get_cell_value(position: Vector3i) -> int:
-	if _locked_door_cells.has(position):
-		return int(_locked_door_cells[position])
+	if _sealed_door_cells.has(position):
+		return int(_sealed_door_cells[position])
 	return int(_cells.get(position, VOID))
 
 func has_cell(position: Vector3i) -> bool:
 	return _cells.has(position)
 
 func is_interior_open(position: Vector3i) -> bool:
-	return not _locked_door_cells.has(position) and int(_cells.get(position, VOID)) == AIR
+	return not _sealed_door_cells.has(position) and int(_cells.get(position, VOID)) == AIR
 
 func is_base_interior_open(position: Vector3i) -> bool:
 	return int(_cells.get(position, VOID)) == AIR
@@ -105,7 +105,7 @@ func get_block_at(position: Vector3i) -> Variant:
 	return block_id
 
 func get_block_id_at(position: Vector3i) -> int:
-	return int(_locked_door_cells[position]) if _locked_door_cells.has(position) else int(_cells.get(position, AIR))
+	return int(_sealed_door_cells[position]) if _sealed_door_cells.has(position) else int(_cells.get(position, AIR))
 
 func is_solid(position: Vector3i) -> bool:
 	var block: Variant = get_block_at(position)
@@ -151,44 +151,46 @@ func get_solid_cells() -> Array[Vector3i]:
 func snapshot_cells() -> Dictionary:
 	return _cells.duplicate()
 
-func configure_doors(doorways: Array[LevelDoorway], door_locks: Dictionary) -> bool:
-	if not _doorways_by_id.is_empty() or doorways.is_empty() or door_locks.size() != doorways.size():
+func configure_seals(doorways: Array[LevelDoorway], sealed_door_ids: Array[int]) -> bool:
+	if not _doorways_by_id.is_empty() or doorways.is_empty() or sealed_door_ids.size() > doorways.size():
 		return false
 	var doorways_by_id: Dictionary = {}
 	var occupied_cells: Dictionary = {}
 	for doorway in doorways:
-		if doorway == null or doorways_by_id.has(doorway.door_id) or not door_locks.has(doorway.door_id):
+		if doorway == null or doorways_by_id.has(doorway.door_id):
 			return false
 		for cell in doorway.aperture_cells:
 			if occupied_cells.has(cell) or int(_cells.get(cell, VOID)) != AIR:
 				return false
 			occupied_cells[cell] = doorway.door_id
 		doorways_by_id[doorway.door_id] = doorway
-	for door_id in door_locks:
-		if not doorways_by_id.has(door_id) or not door_locks[door_id] is bool:
+	var seals: Dictionary = {}
+	for door_id in sealed_door_ids:
+		if not doorways_by_id.has(door_id) or seals.has(door_id):
 			return false
+		seals[door_id] = true
 	_doorways_by_id = doorways_by_id
-	_door_locks = door_locks.duplicate()
-	_rebuild_locked_door_cells()
+	_sealed_door_ids = seals
+	_rebuild_sealed_door_cells()
 	return true
 
-func can_apply_door_locks(changes: Dictionary) -> bool:
-	for door_id in changes:
-		if not _doorways_by_id.has(door_id) or not changes[door_id] is bool:
+func can_open_seals(door_ids: Array[int]) -> bool:
+	var seen: Dictionary = {}
+	for door_id in door_ids:
+		if not _doorways_by_id.has(door_id) or not _sealed_door_ids.has(door_id) or seen.has(door_id):
 			return false
+		seen[door_id] = true
 	return true
 
-func apply_door_locks(changes: Dictionary) -> void:
-	assert(can_apply_door_locks(changes))
-	for door_id in changes:
-		_door_locks[door_id] = changes[door_id]
-	_rebuild_locked_door_cells()
+func open_seals(door_ids: Array[int]) -> void:
+	assert(can_open_seals(door_ids))
+	for door_id in door_ids:
+		_sealed_door_ids.erase(door_id)
+	_rebuild_sealed_door_cells()
 
-func _rebuild_locked_door_cells() -> void:
-	_locked_door_cells.clear()
-	for door_id in _door_locks:
-		if not bool(_door_locks[door_id]):
-			continue
+func _rebuild_sealed_door_cells() -> void:
+	_sealed_door_cells.clear()
+	for door_id in _sealed_door_ids:
 		var doorway := _doorways_by_id[door_id] as LevelDoorway
 		for cell in doorway.aperture_cells:
-			_locked_door_cells[cell] = doorway.fill_block_id
+			_sealed_door_cells[cell] = doorway.fill_block_id

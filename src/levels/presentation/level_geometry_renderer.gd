@@ -6,20 +6,21 @@ const TRANSITION_SECONDS: float = 0.35
 var _room_meshes: Dictionary = {}
 var _room_materials: Dictionary = {}
 var _room_torch_cells: Dictionary = {}
-var _barrier_meshes: Dictionary = {}
-var _barrier_materials: Dictionary = {}
-var _barrier_room_ids: Dictionary = {}
-var _revealed_room_ids: Dictionary = {}
-var _barrier_tweens: Dictionary = {}
-var _reveal_tweens: Dictionary = {}
+var _seal_meshes: Dictionary = {}
+var _seal_materials: Dictionary = {}
+var _seal_room_ids: Dictionary = {}
+var _sealed_door_ids: Dictionary = {}
+var _discovered_room_ids: Dictionary = {}
+var _seal_tweens: Dictionary = {}
+var _discovery_tweens: Dictionary = {}
 var _torch_renderer: TorchRenderer
 
 func setup(
 	layout: LevelLayout,
 	state: LevelState,
 	topology: LevelEncounterTopology,
-	door_locks: Dictionary,
-	revealed_room_ids: Array[int],
+	sealed_door_ids: Array[int],
+	discovered_room_ids: Array[int],
 	texture_set: BlockTextureSet,
 	terrain_shader: Shader,
 	torch_renderer: TorchRenderer,
@@ -28,7 +29,7 @@ func setup(
 		return false
 	if not _has_reveal_uniform(terrain_shader):
 		return false
-	if not _room_meshes.is_empty() or not _barrier_meshes.is_empty():
+	if not _room_meshes.is_empty() or not _seal_meshes.is_empty():
 		return false
 	var placements: Dictionary = {}
 	for placement in layout.placed_modules:
@@ -37,11 +38,21 @@ func setup(
 		placements[placement.placement_id] = placement
 	if not placements.has(0):
 		return false
-	var revealed: Dictionary = {}
-	for room_id in revealed_room_ids:
-		if topology.get_room(room_id) == null or revealed.has(room_id):
+	var discovered: Dictionary = {}
+	for room_id in discovered_room_ids:
+		if topology.get_room(room_id) == null or discovered.has(room_id):
 			return false
-		revealed[room_id] = true
+		discovered[room_id] = true
+	var doorways: Dictionary = {}
+	for doorway in topology.get_doorways():
+		if doorway == null or doorways.has(doorway.door_id):
+			return false
+		doorways[doorway.door_id] = doorway
+	var sealed: Dictionary = {}
+	for door_id in sealed_door_ids:
+		if not doorways.has(door_id) or sealed.has(door_id):
+			return false
+		sealed[door_id] = true
 	var placement_owners: Dictionary = {}
 	var torch_cell_owners: Dictionary = {}
 	var solid_cells_by_room: Dictionary = {}
@@ -50,7 +61,7 @@ func setup(
 		var room := topology.get_room(room_id)
 		var room_cells: Array[Vector3i] = []
 		var torch_cells: Array[Vector3i] = []
-		for placement_id in room.reveal_placement_ids:
+		for placement_id in room.discovery_placement_ids:
 			if placement_id == 0 or placement_owners.has(placement_id) or not placements.has(placement_id):
 				return false
 			placement_owners[placement_id] = room_id
@@ -82,80 +93,78 @@ func setup(
 	var room_meshes: Dictionary = {}
 	var room_materials: Dictionary = {}
 	for room_id in topology.get_room_ids():
-		var reveal_amount := 1.0 if revealed.has(room_id) else 0.0
+		var reveal_amount := 1.0 if discovered.has(room_id) else 0.0
 		var material := _make_material(terrain_shader, texture_set, reveal_amount)
 		var mesh := mesher.create_mesh_for_cells(state, solid_cells_by_room[room_id] as Array[Vector3i])
 		if mesh == null:
 			return false
 		room_meshes[room_id] = mesh
 		room_materials[room_id] = material
-	var barrier_meshes: Dictionary = {}
-	var barrier_materials: Dictionary = {}
-	var barrier_room_ids: Dictionary = {}
+	var seal_meshes: Dictionary = {}
+	var seal_materials: Dictionary = {}
+	var seal_room_ids: Dictionary = {}
 	for doorway in topology.get_doorways():
-		if doorway == null or not door_locks.has(doorway.door_id) or not door_locks[doorway.door_id] is bool or barrier_meshes.has(doorway.door_id):
-			return false
 		var mesh := mesher.create_uniform_block_mesh(state, doorway.aperture_cells, doorway.fill_block_id)
 		if mesh == null:
 			return false
 		var material := _make_material(
 			terrain_shader,
 			texture_set,
-			1.0 if revealed.has(doorway.room_id) else 0.0,
+			1.0 if discovered.has(doorway.room_id) else 0.0,
 		)
-		barrier_meshes[doorway.door_id] = mesh
-		barrier_materials[doorway.door_id] = material
-		barrier_room_ids[doorway.door_id] = doorway.room_id
-	if barrier_meshes.size() != door_locks.size():
-		return false
+		seal_meshes[doorway.door_id] = mesh
+		seal_materials[doorway.door_id] = material
+		seal_room_ids[doorway.door_id] = doorway.room_id
 	_torch_renderer = torch_renderer
 	_room_materials = room_materials
 	_room_torch_cells = torch_cells_by_room
-	_barrier_materials = barrier_materials
-	_barrier_room_ids = barrier_room_ids
+	_seal_materials = seal_materials
+	_seal_room_ids = seal_room_ids
+	_sealed_door_ids = sealed
 	add_child(_make_mesh_instance("EntryGeometry", base_mesh, _make_material(terrain_shader, texture_set, 1.0)))
 	for room_id in topology.get_room_ids():
 		var instance := _make_mesh_instance("RoomBranch%d" % room_id, room_meshes[room_id] as ArrayMesh, room_materials[room_id] as ShaderMaterial)
 		add_child(instance)
 		_room_meshes[room_id] = instance
 	for doorway in topology.get_doorways():
-		var instance := _make_mesh_instance("Barrier%d" % doorway.door_id, barrier_meshes[doorway.door_id] as ArrayMesh, barrier_materials[doorway.door_id] as ShaderMaterial)
-		instance.transparency = 0.0 if bool(door_locks[doorway.door_id]) else 1.0
-		instance.visible = bool(door_locks[doorway.door_id])
+		var instance := _make_mesh_instance("Seal%d" % doorway.door_id, seal_meshes[doorway.door_id] as ArrayMesh, seal_materials[doorway.door_id] as ShaderMaterial)
+		instance.transparency = 0.0 if sealed.has(doorway.door_id) else 1.0
+		instance.visible = sealed.has(doorway.door_id)
 		add_child(instance)
-		_barrier_meshes[doorway.door_id] = instance
+		_seal_meshes[doorway.door_id] = instance
 	for room_id in topology.get_room_ids():
-		var reveal_amount := 1.0 if revealed.has(room_id) else 0.0
-		_set_room_reveal(room_id, reveal_amount)
-		if revealed.has(room_id):
-			_revealed_room_ids[room_id] = true
+		var reveal_amount := 1.0 if discovered.has(room_id) else 0.0
+		_set_room_discovery_amount(room_id, reveal_amount)
+		if discovered.has(room_id):
+			_discovered_room_ids[room_id] = true
 	return true
 
-func apply_door_locks(changes: Dictionary) -> void:
-	for door_id in changes:
-		assert(_barrier_meshes.has(door_id) and changes[door_id] is bool)
-		var instance := _barrier_meshes[door_id] as MeshInstance3D
-		var previous := _barrier_tweens.get(door_id) as Tween
+func open_seals(seal_ids: Array[int]) -> void:
+	var requested: Dictionary = {}
+	for door_id in seal_ids:
+		assert(_seal_meshes.has(door_id) and _sealed_door_ids.has(door_id) and not requested.has(door_id))
+		requested[door_id] = true
+	for door_id in seal_ids:
+		_sealed_door_ids.erase(door_id)
+		var instance := _seal_meshes[door_id] as MeshInstance3D
+		var previous := _seal_tweens.get(door_id) as Tween
 		if previous != null and previous.is_valid():
 			previous.kill()
-		if bool(changes[door_id]):
-			instance.visible = true
-			instance.transparency = 0.0
-			continue
 		var tween := create_tween()
 		tween.set_trans(Tween.TRANS_QUAD)
 		tween.set_ease(Tween.EASE_OUT)
 		tween.tween_property(instance, "transparency", 1.0, TRANSITION_SECONDS)
 		tween.tween_callback(func() -> void: instance.visible = false)
-		_barrier_tweens[door_id] = tween
+		_seal_tweens[door_id] = tween
 
-func reveal_rooms(room_ids: Array[int]) -> void:
+func discover_rooms(room_ids: Array[int]) -> void:
+	var requested: Dictionary = {}
 	for room_id in room_ids:
-		if _revealed_room_ids.has(room_id):
-			continue
-		assert(_room_materials.has(room_id))
-		_revealed_room_ids[room_id] = true
-		var previous := _reveal_tweens.get(room_id) as Tween
+		assert(_room_materials.has(room_id) and not _discovered_room_ids.has(room_id) and not requested.has(room_id))
+		requested[room_id] = true
+	for room_id in room_ids:
+		_discovered_room_ids[room_id] = true
+		var previous := _discovery_tweens.get(room_id) as Tween
 		if previous != null and previous.is_valid():
 			previous.kill()
 		var material := _room_materials[room_id] as ShaderMaterial
@@ -165,12 +174,12 @@ func reveal_rooms(room_ids: Array[int]) -> void:
 		tween.set_trans(Tween.TRANS_QUAD)
 		tween.set_ease(Tween.EASE_OUT)
 		tween.tween_method(
-			func(amount: float) -> void: _set_room_reveal(target_room_id, amount),
+			func(amount: float) -> void: _set_room_discovery_amount(target_room_id, amount),
 			start_amount,
 			1.0,
 			TRANSITION_SECONDS,
 		)
-		_reveal_tweens[room_id] = tween
+		_discovery_tweens[room_id] = tween
 
 func _append_placement_cells(layout: LevelLayout, placement: LevelPlacedModule, target: Array[Vector3i]) -> void:
 	for y in placement.definition.size.y:
@@ -215,11 +224,11 @@ func _has_reveal_uniform(shader: Shader) -> bool:
 			return int(uniform.get("type", TYPE_NIL)) == TYPE_FLOAT
 	return false
 
-func _set_room_reveal(room_id: int, amount: float) -> void:
+func _set_room_discovery_amount(room_id: int, amount: float) -> void:
 	var strength := clampf(amount, 0.0, 1.0)
 	(_room_materials[room_id] as ShaderMaterial).set_shader_parameter("reveal_amount", strength)
-	for door_id in _barrier_room_ids:
-		if int(_barrier_room_ids[door_id]) == room_id:
-			(_barrier_materials[door_id] as ShaderMaterial).set_shader_parameter("reveal_amount", strength)
+	for door_id in _seal_room_ids:
+		if int(_seal_room_ids[door_id]) == room_id:
+			(_seal_materials[door_id] as ShaderMaterial).set_shader_parameter("reveal_amount", strength)
 	for cell in _room_torch_cells[room_id] as Array[Vector3i]:
 		assert(_torch_renderer.set_torch_reveal_strength(cell, strength))

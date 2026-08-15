@@ -19,9 +19,9 @@ var enemy_ids: Array[StringName]:
 var spawn_cells: Array[Vector3i]:
 	get:
 		return _spawn_cells.duplicate()
-var reveal_placement_ids: Array[int]:
+var discovery_placement_ids: Array[int]:
 	get:
-		return _reveal_placement_ids.duplicate()
+		return _discovery_placement_ids.duplicate()
 
 var _room_id: int
 var _parent_room_id: int
@@ -30,7 +30,7 @@ var _child_room_ids: Array[int] = []
 var _door_ids: Array[int] = []
 var _enemy_ids: Array[StringName] = []
 var _spawn_cells: Array[Vector3i] = []
-var _reveal_placement_ids: Array[int] = []
+var _discovery_placement_ids: Array[int] = []
 var _interior_cells: Dictionary = {}
 
 func _init(
@@ -41,12 +41,12 @@ func _init(
 	p_door_ids: Array[int],
 	p_enemy_ids: Array[StringName],
 	p_spawn_cells: Array[Vector3i],
-	p_reveal_placement_ids: Array[int],
+	p_discovery_placement_ids: Array[int],
 	p_interior_cells: Dictionary,
 ) -> void:
 	assert(p_room_id >= 0)
 	assert(p_parent_room_id >= -1 and p_parent_door_id >= 0)
-	assert(not p_door_ids.is_empty() and not p_enemy_ids.is_empty() and not p_spawn_cells.is_empty() and not p_reveal_placement_ids.is_empty())
+	assert(not p_door_ids.is_empty() and not p_enemy_ids.is_empty() and not p_spawn_cells.is_empty() and not p_discovery_placement_ids.is_empty())
 	_room_id = p_room_id
 	_parent_room_id = p_parent_room_id
 	_parent_door_id = p_parent_door_id
@@ -54,7 +54,7 @@ func _init(
 	_door_ids.assign(p_door_ids)
 	_enemy_ids.assign(p_enemy_ids)
 	_spawn_cells.assign(p_spawn_cells)
-	_reveal_placement_ids.assign(p_reveal_placement_ids)
+	_discovery_placement_ids.assign(p_discovery_placement_ids)
 	_interior_cells = p_interior_cells.duplicate()
 
 func contains_body(feet_position: Vector3, body_width: float, body_height: float, doorways: Array[LevelDoorway]) -> bool:

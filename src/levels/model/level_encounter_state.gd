@@ -25,10 +25,9 @@ class RoomProgress:
 
 var _rooms: Dictionary = {}
 var _room_ids: Array[int] = []
-var _door_locks: Dictionary = {}
+var _sealed_door_ids: Dictionary = {}
 var _runtime_to_room: Dictionary = {}
 var _runtime_to_entity: Dictionary = {}
-var _active_room_id: int = -1
 
 static func create(topology: LevelEncounterTopology, level_seed: int) -> LevelEncounterState:
 	if topology == null:
@@ -36,19 +35,41 @@ static func create(topology: LevelEncounterTopology, level_seed: int) -> LevelEn
 	var state := LevelEncounterState.new()
 	return state if state._initialize(topology, level_seed) else null
 
-func get_active_room_id() -> int:
-	return _active_room_id
+func get_active_room_ids() -> Array[int]:
+	var active_room_ids: Array[int] = []
+	for room_id in _room_ids:
+		var room := _rooms[room_id] as RoomProgress
+		if room.status == RoomStatus.ACTIVE:
+			active_room_ids.append(room_id)
+	return active_room_ids
 
-func get_revealed_room_ids() -> Array[int]:
-	var room_ids: Array[int] = []
+func get_discovered_room_ids() -> Array[int]:
+	var discovered_room_ids: Array[int] = []
 	for room_id in _room_ids:
 		var room := _rooms[room_id] as RoomProgress
 		if room.status != RoomStatus.LOCKED:
-			room_ids.append(room_id)
-	return room_ids
+			discovered_room_ids.append(room_id)
+	return discovered_room_ids
 
-func get_door_locks() -> Dictionary:
-	return _door_locks.duplicate()
+func get_sealed_door_ids() -> Array[int]:
+	var sealed_door_ids: Array[int] = []
+	for door_id in _sealed_door_ids:
+		sealed_door_ids.append(int(door_id))
+	sealed_door_ids.sort()
+	return sealed_door_ids
+
+func get_summary() -> LevelEncounterSummary:
+	var active_wave_count := 0
+	var active_enemy_count := 0
+	var pending_enemy_count := 0
+	for room_id in _room_ids:
+		var room := _rooms[room_id] as RoomProgress
+		if room.status != RoomStatus.ACTIVE:
+			continue
+		active_wave_count += 1
+		active_enemy_count += room.active_entity_ids.size()
+		pending_enemy_count += room.enemy_ids.size() - room.defeated_count - room.active_entity_ids.size()
+	return LevelEncounterSummary.new(active_wave_count, active_enemy_count, pending_enemy_count)
 
 func get_spawned_enemy_count(room_id: int) -> int:
 	var room := _rooms.get(room_id) as RoomProgress
@@ -62,7 +83,7 @@ func get_configured_enemy_ids(room_id: int) -> Array[StringName]:
 
 func can_activate(room_id: int) -> bool:
 	var room := _rooms.get(room_id) as RoomProgress
-	return room != null and room.status == RoomStatus.READY and _active_room_id < 0 and room.next_spawn_index == 0
+	return room != null and room.status == RoomStatus.READY and room.next_spawn_index == 0
 
 func can_commit_activation(room_id: int, entity_ids: Array[StringName], concurrent_capacity: int) -> bool:
 	var room := _rooms.get(room_id) as RoomProgress
@@ -74,17 +95,11 @@ func can_commit_activation(room_id: int, entity_ids: Array[StringName], concurre
 		and concurrent_capacity <= room.enemy_ids.size() \
 		and _entity_ids_match_next(room, entity_ids)
 
-func get_activation_door_changes(room_id: int) -> Dictionary:
-	var room := _rooms.get(room_id) as RoomProgress
-	if not can_activate(room_id) or room == null:
-		return {}
-	return _collect_activation_door_changes(room)
-
-func get_defeat_door_changes(runtime_id: int, entity_id: StringName) -> Dictionary:
+func get_defeat_opened_seal_ids(runtime_id: int, entity_id: StringName) -> Array[int]:
 	var room := _get_assigned_room(runtime_id, entity_id)
 	if room == null or not _will_clear_after_defeat(room):
-		return {}
-	return _collect_clear_door_changes(room)
+		return []
+	return _collect_clear_opened_seal_ids(room)
 
 func get_next_enemy_ids(room_id: int, maximum_count: int) -> Array[StringName]:
 	var result: Array[StringName] = []
@@ -110,13 +125,10 @@ func commit_activation(room_id: int, runtime_ids: Array[int], entity_ids: Array[
 	var room := _rooms[room_id] as RoomProgress
 	if not _can_commit_spawns(room, runtime_ids, entity_ids):
 		return null
-	var door_changes := _collect_activation_door_changes(room)
 	_commit_spawns(room_id, room, runtime_ids, entity_ids)
 	room.concurrent_capacity = concurrent_capacity
 	room.status = RoomStatus.ACTIVE
-	_active_room_id = room_id
-	_commit_door_changes(door_changes)
-	return _make_transition(room, false, door_changes)
+	return _make_transition(room_id, false, [])
 
 func commit_refill(room_id: int, runtime_ids: Array[int], entity_ids: Array[StringName]) -> LevelEncounterTransition:
 	var room := _rooms.get(room_id) as RoomProgress
@@ -125,7 +137,7 @@ func commit_refill(room_id: int, runtime_ids: Array[int], entity_ids: Array[Stri
 	if not can_commit_refill(room_id, entity_ids) or not _can_commit_spawns(room, runtime_ids, entity_ids):
 		return null
 	_commit_spawns(room_id, room, runtime_ids, entity_ids)
-	return _make_transition(room, false, {})
+	return _make_transition(room_id, false, [])
 
 func can_commit_refill(room_id: int, entity_ids: Array[StringName]) -> bool:
 	var room := _rooms.get(room_id) as RoomProgress
@@ -141,29 +153,31 @@ func record_defeat(runtime_id: int, entity_id: StringName) -> LevelEncounterTran
 		return null
 	var room_id := int(_runtime_to_room[runtime_id])
 	var cleared := _will_clear_after_defeat(room)
-	var door_changes := _collect_clear_door_changes(room) if cleared else {}
+	var opened_seal_ids: Array[int] = []
+	if cleared:
+		opened_seal_ids = _collect_clear_opened_seal_ids(room)
 	room.active_entity_ids.erase(runtime_id)
 	_runtime_to_room.erase(runtime_id)
 	_runtime_to_entity.erase(runtime_id)
 	room.defeated_count += 1
 	if cleared:
 		room.status = RoomStatus.CLEARED
-		_active_room_id = -1
 		for child_room_id in room.definition.child_room_ids:
 			var child := _rooms[child_room_id] as RoomProgress
 			assert(child.status == RoomStatus.LOCKED)
 			child.status = RoomStatus.READY
-		_commit_door_changes(door_changes)
-	return _make_transition(room, cleared, door_changes)
+		_open_seals(opened_seal_ids)
+	return _make_transition(room_id, cleared, opened_seal_ids)
 
 func _initialize(topology: LevelEncounterTopology, level_seed: int) -> bool:
 	_room_ids = topology.get_room_ids()
 	if _room_ids.is_empty():
 		return false
+	_room_ids.sort()
 	for doorway in topology.get_doorways():
-		if doorway == null or _door_locks.has(doorway.door_id):
+		if doorway == null or _sealed_door_ids.has(doorway.door_id):
 			return false
-		_door_locks[doorway.door_id] = true
+		_sealed_door_ids[doorway.door_id] = true
 	for room_id in _room_ids:
 		var definition := topology.get_room(room_id)
 		if definition == null:
@@ -171,8 +185,10 @@ func _initialize(topology: LevelEncounterTopology, level_seed: int) -> bool:
 		var enemy_ids := _shuffle_enemy_ids(definition.enemy_ids, level_seed, room_id)
 		var progress := RoomProgress.new(definition, enemy_ids)
 		if definition.parent_room_id < 0:
+			if not _sealed_door_ids.has(definition.parent_door_id):
+				return false
 			progress.status = RoomStatus.READY
-			_door_locks[definition.parent_door_id] = false
+			_sealed_door_ids.erase(definition.parent_door_id)
 		_rooms[room_id] = progress
 	return true
 
@@ -217,37 +233,29 @@ func _will_clear_after_defeat(room: RoomProgress) -> bool:
 		and room.next_spawn_index == room.enemy_ids.size() \
 		and room.active_entity_ids.size() == 1
 
-func _collect_activation_door_changes(room: RoomProgress) -> Dictionary:
-	var changes: Dictionary = {}
+func _collect_clear_opened_seal_ids(room: RoomProgress) -> Array[int]:
+	var opened_seal_ids: Array[int] = []
+	var seen: Dictionary = {}
 	for door_id in room.definition.door_ids:
-		_append_door_change(door_id, true, changes)
-	return changes
-
-func _collect_clear_door_changes(room: RoomProgress) -> Dictionary:
-	var changes: Dictionary = {}
-	for door_id in room.definition.door_ids:
-		_append_door_change(door_id, false, changes)
+		_append_opened_seal_id(door_id, seen, opened_seal_ids)
 	for child_room_id in room.definition.child_room_ids:
 		var child := _rooms[child_room_id] as RoomProgress
-		_append_door_change(child.definition.parent_door_id, false, changes)
-	return changes
+		_append_opened_seal_id(child.definition.parent_door_id, seen, opened_seal_ids)
+	opened_seal_ids.sort()
+	return opened_seal_ids
 
-func _append_door_change(door_id: int, locked: bool, changes: Dictionary) -> void:
-	assert(_door_locks.has(door_id))
-	if bool(_door_locks[door_id]) != locked:
-		changes[door_id] = locked
+func _append_opened_seal_id(door_id: int, seen: Dictionary, opened_seal_ids: Array[int]) -> void:
+	if _sealed_door_ids.has(door_id) and not seen.has(door_id):
+		seen[door_id] = true
+		opened_seal_ids.append(door_id)
 
-func _commit_door_changes(changes: Dictionary) -> void:
-	for door_id in changes:
-		_door_locks[door_id] = changes[door_id]
+func _open_seals(opened_seal_ids: Array[int]) -> void:
+	for door_id in opened_seal_ids:
+		assert(_sealed_door_ids.has(door_id))
+		_sealed_door_ids.erase(door_id)
 
-func _make_transition(room: RoomProgress, cleared: bool, door_changes: Dictionary) -> LevelEncounterTransition:
-	return LevelEncounterTransition.new(
-		room.active_entity_ids.size(),
-		room.enemy_ids.size() - room.next_spawn_index,
-		cleared,
-		door_changes,
-	)
+func _make_transition(room_id: int, cleared: bool, opened_seal_ids: Array[int]) -> LevelEncounterTransition:
+	return LevelEncounterTransition.new(room_id, get_summary(), cleared, opened_seal_ids)
 
 func _shuffle_enemy_ids(source: Array[StringName], level_seed: int, room_id: int) -> Array[StringName]:
 	var shuffled: Array[StringName] = source.duplicate()

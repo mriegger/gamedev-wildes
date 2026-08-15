@@ -20,6 +20,14 @@ func get_room(room_id: int) -> LevelEncounterRoom:
 func get_doorways() -> Array[LevelDoorway]:
 	return _doorways.duplicate()
 
+func get_maximum_simultaneous_encounter_enemy_count() -> int:
+	var maximum_count := 0
+	for room_id in _room_ids:
+		var room := get_room(room_id)
+		if room.parent_room_id < 0:
+			maximum_count += _get_subtree_maximum_enemy_count(room)
+	return maximum_count
+
 func find_room_containing_body(feet_position: Vector3, body_width: float, body_height: float) -> int:
 	for room_id in _room_ids:
 		var room := get_room(room_id)
@@ -75,7 +83,7 @@ func _build(layout: LevelLayout, definition: LevelDefinition) -> bool:
 	var room_child_ids: Dictionary = {}
 	var room_door_ids: Dictionary = {}
 	var room_placement_ids: Array[int] = []
-	var reveal_placement_owners: Dictionary = {}
+	var discovery_placement_owners: Dictionary = {}
 	for placement_id in placements:
 		var placement := placements[placement_id] as LevelPlacedModule
 		if placement.room_type_id.is_empty():
@@ -151,13 +159,13 @@ func _build(layout: LevelLayout, definition: LevelDefinition) -> bool:
 		var door_ids: Array[int] = []
 		door_ids.assign(room_door_ids[room_id])
 		door_ids.sort()
-		var reveal_placement_ids := _collect_reveal_placement_ids(room_id, int(room_parent_ids[room_id]), parent_placement)
-		if enemy_ids.is_empty() or spawn_cells.is_empty() or door_ids.is_empty() or reveal_placement_ids.is_empty():
+		var discovery_placement_ids := _collect_discovery_placement_ids(room_id, int(room_parent_ids[room_id]), parent_placement)
+		if enemy_ids.is_empty() or spawn_cells.is_empty() or door_ids.is_empty() or discovery_placement_ids.is_empty():
 			return false
-		for placement_id in reveal_placement_ids:
-			if placement_id == 0 or reveal_placement_owners.has(placement_id):
+		for placement_id in discovery_placement_ids:
+			if placement_id == 0 or discovery_placement_owners.has(placement_id):
 				return false
-			reveal_placement_owners[placement_id] = room_id
+			discovery_placement_owners[placement_id] = room_id
 		_rooms_by_id[room_id] = LevelEncounterRoom.new(
 			room_id,
 			int(room_parent_ids[room_id]),
@@ -166,10 +174,10 @@ func _build(layout: LevelLayout, definition: LevelDefinition) -> bool:
 			door_ids,
 			enemy_ids,
 			spawn_cells,
-			reveal_placement_ids,
+			discovery_placement_ids,
 			interior_cells
 		)
-	if reveal_placement_owners.size() != placements.size() - 1:
+	if discovery_placement_owners.size() != placements.size() - 1:
 		return false
 	_room_ids.assign(room_placement_ids)
 	return not _rooms_by_id.is_empty()
@@ -204,7 +212,7 @@ func _find_socket_fill_block(module: LevelModuleDefinition, socket_id: StringNam
 			return socket.unused_fill_block_id
 	return StructureCell.AIR
 
-func _collect_reveal_placement_ids(room_id: int, parent_room_id: int, parent_placement: Dictionary) -> Array[int]:
+func _collect_discovery_placement_ids(room_id: int, parent_room_id: int, parent_placement: Dictionary) -> Array[int]:
 	var result: Array[int] = []
 	var stop_placement_id := parent_room_id if parent_room_id >= 0 else 0
 	var placement_id := room_id
@@ -214,6 +222,13 @@ func _collect_reveal_placement_ids(room_id: int, parent_room_id: int, parent_pla
 		result.push_front(placement_id)
 		placement_id = int(parent_placement[placement_id])
 	return result
+
+func _get_subtree_maximum_enemy_count(room: LevelEncounterRoom) -> int:
+	var child_maximum_count := 0
+	for child_room_id in room.child_room_ids:
+		child_maximum_count += _get_subtree_maximum_enemy_count(get_room(child_room_id))
+	var room_maximum_count := mini(room.enemy_ids.size(), LevelEncounterState.MAX_CONCURRENT_ENEMIES_PER_ROOM)
+	return maxi(room_maximum_count, child_maximum_count)
 
 func _door_key(room_id: int, connection_id: int) -> String:
 	return "%d:%d" % [room_id, connection_id]

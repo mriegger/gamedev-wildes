@@ -3,9 +3,9 @@ class_name LevelEncounterCoordinator
 
 const EntitySpawnGeometryType := preload("res://entities/entity_spawn_geometry.gd")
 
-signal door_locks_changed(changes: Dictionary)
-signal encounter_progress_changed(active_enemy_count: int, pending_enemy_count: int)
-signal encounter_cleared
+signal seals_opened(seal_ids: Array[int])
+signal encounter_summary_changed(summary: LevelEncounterSummary)
+signal room_cleared(room_id: int)
 
 var _topology: LevelEncounterTopology
 var _state: LevelEncounterState
@@ -16,7 +16,7 @@ var _player: PlayerMotor
 var _level_seed: int
 var _spawn_cells_by_room: Dictionary = {}
 var _capacity_by_room: Dictionary = {}
-var _refill_not_before_physics_frame: int = 0
+var _refill_not_before_physics_frame_by_room: Dictionary = {}
 
 func setup(
 	topology: LevelEncounterTopology,
@@ -44,7 +44,7 @@ func setup(
 			shutdown()
 			return false
 		_capacity_by_room[room_id] = capacity
-	if not level_state.configure_doors(topology.get_doorways(), state.get_door_locks()):
+	if not level_state.configure_seals(topology.get_doorways(), state.get_sealed_door_ids()):
 		shutdown()
 		return false
 	_entity_runtime.entity_defeated.connect(_on_entity_defeated)
@@ -57,11 +57,10 @@ func set_player(player: PlayerMotor) -> void:
 func tick() -> void:
 	if _player == null or _player.is_defeated():
 		return
-	var active_room_id := _state.get_active_room_id()
-	if active_room_id >= 0:
-		if Engine.get_physics_frames() >= _refill_not_before_physics_frame:
+	var physics_frame := Engine.get_physics_frames()
+	for active_room_id in _state.get_active_room_ids():
+		if physics_frame >= int(_refill_not_before_physics_frame_by_room.get(active_room_id, 0)):
 			_try_refill(active_room_id)
-		return
 	var room_id := _topology.find_room_containing_body(_player.global_position, _player.player_width, _player.player_height)
 	if room_id >= 0 and _state.can_activate(room_id):
 		_try_activate(room_id)
@@ -77,7 +76,7 @@ func shutdown() -> void:
 	_player = null
 	_spawn_cells_by_room.clear()
 	_capacity_by_room.clear()
-	_refill_not_before_physics_frame = 0
+	_refill_not_before_physics_frame_by_room.clear()
 
 func _try_activate(room_id: int) -> void:
 	var capacity := int(_capacity_by_room[room_id])
@@ -87,9 +86,6 @@ func _try_activate(room_id: int) -> void:
 	var committed_entity_ids := batch["entity_ids"] as Array[StringName]
 	if requests.is_empty() or not _state.can_commit_activation(room_id, committed_entity_ids, capacity):
 		return
-	var expected_door_changes := _state.get_activation_door_changes(room_id)
-	if not _level_state.can_apply_door_locks(expected_door_changes):
-		return
 	var runtime_ids := _entity_runtime.try_spawn_batch(requests)
 	if runtime_ids.is_empty():
 		return
@@ -97,7 +93,7 @@ func _try_activate(room_id: int) -> void:
 	if transition == null:
 		_cancel_spawn_batch(runtime_ids)
 		return
-	_apply_transition(transition, expected_door_changes)
+	_apply_transition(transition)
 
 func _try_refill(room_id: int) -> void:
 	var refill_count := _state.get_refill_count(room_id)
@@ -116,7 +112,7 @@ func _try_refill(room_id: int) -> void:
 	if transition == null:
 		_cancel_spawn_batch(runtime_ids)
 		return
-	_apply_transition(transition, {})
+	_apply_transition(transition)
 
 func _build_spawn_batch(room_id: int, entity_ids: Array[StringName], ignore_transient_occupancy: bool = false) -> Dictionary:
 	var requests: Array[EntitySpawnRequest] = []
@@ -171,23 +167,23 @@ func _cancel_spawn_batch(runtime_ids: Array[int]) -> void:
 		assert(_entity_runtime.try_despawn(runtime_id))
 
 func _on_entity_defeated(runtime_id: int, entity_id: StringName) -> void:
-	var expected_door_changes := _state.get_defeat_door_changes(runtime_id, entity_id)
-	assert(_level_state.can_apply_door_locks(expected_door_changes))
+	var expected_opened_seal_ids := _state.get_defeat_opened_seal_ids(runtime_id, entity_id)
+	assert(_level_state.can_open_seals(expected_opened_seal_ids))
 	var transition := _state.record_defeat(runtime_id, entity_id)
 	if transition != null:
-		_refill_not_before_physics_frame = maxi(_refill_not_before_physics_frame, Engine.get_physics_frames() + 1)
-		_apply_transition(transition, expected_door_changes)
+		assert(transition.opened_seal_ids == expected_opened_seal_ids)
+		_refill_not_before_physics_frame_by_room[transition.room_id] = Engine.get_physics_frames() + 1
+		_apply_transition(transition)
 
-func _apply_transition(transition: LevelEncounterTransition, expected_door_changes: Dictionary) -> void:
-	var changes := transition.door_changes
-	assert(changes == expected_door_changes)
-	if not changes.is_empty():
-		_level_state.apply_door_locks(changes)
-		door_locks_changed.emit(changes)
+func _apply_transition(transition: LevelEncounterTransition) -> void:
+	var opened_seal_ids := transition.opened_seal_ids
+	if not opened_seal_ids.is_empty():
+		_level_state.open_seals(opened_seal_ids)
+		seals_opened.emit(opened_seal_ids)
 	if transition.room_cleared:
-		encounter_cleared.emit()
-	else:
-		encounter_progress_changed.emit(transition.active_enemy_count, transition.pending_enemy_count)
+		_refill_not_before_physics_frame_by_room.erase(transition.room_id)
+		room_cleared.emit(transition.room_id)
+	encounter_summary_changed.emit(transition.summary)
 
 func _shuffle_spawn_cells(source: Array[Vector3i], room_id: int) -> Array[Vector3i]:
 	var cells: Array[Vector3i] = source.duplicate()
