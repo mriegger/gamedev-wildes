@@ -61,16 +61,19 @@ and fill with water up to level 5.
 further out. Meshing runs on background threads so movement doesn't hitch; edits are stored
 globally and survive unload/reload.
 
-**Dungeon levels.** A doorway near the meadow spawn leads to a deterministic four-to-six-module
-stone dungeon assembled from authored entry paths, hallways, and master rooms. The finite interior
-uses cutaway-facing geometry, a black void, and authored torch light. The overworld stays loaded
-but its streaming and presentation are suspended until you return through the dungeon door.
-Doorway selection, module pools, terrain presentation, ambient lighting, and return-door materials
-are configured through typed level resources rather than hardcoded dungeon IDs. Each destination
-dungeon owns its catalog, entrance, definition, presentation, and modules under
+**Dungeon levels.** A doorway near the meadow spawn leads to a deterministic 13-module stone
+dungeon assembled from an entry path, five ordinary hallways, and seven rooms: one master room,
+three normal rooms, and three chest rooms. Every hallway connects at both ends, while unused room
+doorways are sealed with their authored fill blocks. The finite interior uses cutaway-facing
+geometry, a black void, and authored torch light. The overworld stays loaded but its streaming and
+presentation are suspended until you return through the dungeon door. Doorway selection, exact
+room requirements, hallway variants, terrain presentation, ambient lighting, and return-door
+materials are configured through typed level resources rather than hardcoded dungeon IDs. Each
+destination dungeon owns its catalog, entrance, definition, presentation, and modules under
 `levels/content/dungeons/<family>`. Directories organize each self-contained family but never
-register content through filesystem scans. The current stone modules target four to six placements
-within the 96×16×96 level bound.
+register content through filesystem scans. A room requirement maps a stable room type and count to
+a module pool, so additional variants can join an existing type and new types such as small or boss
+rooms can be added without a dungeon-specific generator branch.
 
 **Structure construction workspace.** `dev structure new` opens a document type, length, width, and
 height dialog, then enters an isolated first-person workspace for a generic structure or Level
@@ -84,11 +87,10 @@ player-spawn/shared entrance-exit marker pair. Each connection can require a mat
 solid block used to fill its complete doorway when generation leaves it unused.
 Torches remain normal first-person palette placements instead of panel metadata. Exported modules
 must still be added explicitly to the appropriate level content and catalog; repository-root files
-are not consumed or registered by generation automatically.
-Hall and room are authoring descriptions rather than persisted module types: the generator follows
-doorway connections, while `LevelDefinition` assigns modules to its start, expansion, and cap pools.
-Connection openings are derived from authored boundary geometry, so hallways can use any enclosed
-opening size supported by the module bounds.
+are not consumed or registered by generation automatically. Module
+resources remain geometry-focused, while `LevelDefinition` assigns them to its entry, hallway, and
+typed room-requirement pools. Connection openings are derived from authored boundary geometry, so
+hallways can use any enclosed opening size supported by the module bounds.
 
 **Blocks.** Grass, dirt, sand, stone, wood, leaves, cobblestone, mossy stone bricks, stone bricks,
 terracotta bricks, and wood planks are minable and placeable. Copper is minable but not placeable.

@@ -163,18 +163,22 @@ version-four migration, and item proficiency state.
 
 Dungeon content is selected through stable typed resources. `LevelEntranceDefinition` maps a
 doorway ID to a level ID and owns its current doorway presentation. `LevelDefinition` selects its
-module pools and `LevelPresentationDefinition`; `LevelCatalog` resolves the stable IDs. Generated
-torch placements remain presentation-owned, while `LevelState` contains only finite voxel-space
-truth, bounds, and entry/return geometry.
+entry module, hallway module pool, exact typed room requirements, and `LevelPresentationDefinition`;
+`LevelCatalog` resolves the stable IDs. Each room requirement owns a stable room type, an exact
+count, and a module pool, so variants share a count without teaching generation their individual
+IDs. Generated torch placements remain presentation-owned, while `LevelState` contains only finite
+voxel-space truth, bounds, and entry/return geometry.
 
 Content directories organize ownership without becoming runtime registries. Each destination
 dungeon keeps its catalog, entrance, definition, presentation, and modules together under
 `levels/content/dungeons/<family>`. The family catalog is the explicit registry and
-`LevelDefinition` remains the authority for start, expansion, and cap membership. A future iron
+`LevelDefinition` remains the authority for entry, hallway, and room-type membership. A future iron
 dungeon can mirror the stone family without adding a parallel family ID to every module or scanning
 project files at runtime. Golden-only modules live under `tests/fixtures/levels` so they cannot be
-mistaken for registered content. The live stone definition targets four to six large-format modules
-inside its 96×16×96 bound.
+mistaken for registered content. The live stone recipe places one master room, three normal rooms,
+three chest rooms, five ordinary hallways, and the two-ended entry path for 13 modules inside its
+96×16×96 bound. Hallways must connect at both ends; rooms seal every unused doorway with its
+socket's authored fill block.
 
 ## Structure authoring
 
@@ -202,11 +206,11 @@ import, and validation. Export saves a temporary resource, reloads and compares 
 field, then renames the validated file into place; collisions, stale bound sources, or failures
 leave the prior file and draft state unchanged.
 
-Hall and room are geometric authoring concepts rather than persisted module classifications.
-Cardinal socket topology defines connectivity: one connection is cap-eligible, while two or more
-are expansion-eligible, and paired markers plus a connection make a module start-eligible. `LevelDefinition` remains
-the owner of actual start, expansion, and cap pool membership. The designer's simple connection
-mode authors at most one doorway per cardinal side while the persisted module format and generator
+Hall and room membership is not duplicated on the module resource. `LevelDefinition` classifies
+module IDs through its hallway pool and typed room requirements, while paired markers identify the
+entry module. Adding a visual variant extends a requirement's module pool; adding a room behavior
+such as a small or boss room adds another typed requirement. The designer's simple connection mode
+authors at most one doorway per cardinal side while the persisted module format and generator
 continue to support existing advanced multi-door resources.
 
 Each socket persists its stable ID, boundary seed, facing, and unused-fill block ID. AIR means the
@@ -217,9 +221,10 @@ complete connected AIR component on that boundary plane, keeping geometry author
 parallel serialized shape. The draft protects the aperture, inward clearance, and supporting floor
 as one transactional footprint. Generation normalizes the complete aperture after rotation and
 joins only matching shapes and sizes, allowing arbitrary enclosed hallway cross-sections while
-rejecting truncated seams. Once the target module count is reached, generation leaves connected
-apertures open and seals every remaining optional aperture without adding a module. Standard wall
-targeting carves 1×2; prebuilt openings retain their authored size.
+rejecting truncated seams. Required entry and hallway apertures drive alternating room-and-hall
+assembly until every hallway has two connections. Generation then leaves connected apertures open
+and seals every remaining optional room aperture without adding a module. Standard wall targeting
+carves 1×2; prebuilt openings retain their authored size.
 
 `Game` constructs and injects the dual-format file store while composing the console, authoring
 workflow, dialogs, and dedicated first-person runtime. It
