@@ -46,6 +46,9 @@ func _test_block_and_torch_transactions() -> void:
 	_expect(not draft.try_place_block(Vector3i(-1, 0, 0), BlockId.Type.DIRT).succeeded, "out-of-bounds placement succeeded")
 	_expect(not draft.try_place_block(Vector3i.ZERO, StructureCell.VOID).succeeded, "VOID placement succeeded")
 	_expect(draft.snapshot_cells() == original and not draft.is_dirty(), "rejected placement mutated the draft")
+	var rejected_void := draft.try_set_void(Vector3i.ZERO)
+	_expect(not rejected_void.succeeded and draft.snapshot_cells() == original and not draft.is_dirty(), "generic VOID rejection mutated the draft")
+	_expect(not draft.try_set_socket_unused_fill_block(&"missing", BlockId.Type.STONE).succeeded, "generic draft accepted socket fill metadata")
 	var support := Vector3i(1, 1, 1)
 	var torch_cell := support + Vector3i.RIGHT
 	var placed := draft.try_place_block(support, BlockId.Type.STONE)
@@ -146,6 +149,7 @@ func _test_module_restore_and_protection() -> void:
 	_expect(draft.get_cell(Vector3i(0, 3, 0)) == StructureCell.VOID, "restored Level Module changed a VOID cell")
 	var sockets := draft.get_sockets()
 	_expect(sockets.size() == 2 and sockets[0].socket_id == &"north_entry" and sockets[1].socket_id == &"south_exit", "restored Level Module changed socket order")
+	_expect(sockets[0].unused_fill_block_id == BlockId.Type.MOSSY_STONE_BRICKS and sockets[1].unused_fill_block_id == StructureCell.AIR, "restored Level Module changed socket fill blocks")
 	var torches := draft.get_torches()
 	_expect(torches.size() == 2 and torches[0].cell == Vector3i(3, 2, 3) and torches[1].cell == Vector3i(1, 2, 3), "restored Level Module changed torch order")
 	_expect(torches[0].support_direction == Vector3i.RIGHT and torches[1].support_direction == Vector3i.LEFT, "restored Level Module changed torch directions")
@@ -224,6 +228,16 @@ func _test_module_authoring_transactions() -> void:
 	_expect(authored.size() == 4, "four-face socket authoring changed socket count")
 	for index in sockets.size():
 		_expect(authored[index].socket_id == sockets[index].id and authored[index].direction == sockets[index].direction, "socket authoring changed direction-based IDs or order")
+		_expect(authored[index].unused_fill_block_id == BlockId.Type.STONE, "socket did not inherit its wall fill block")
+	var fill_change := draft.try_set_socket_unused_fill_block(&"north", BlockId.Type.MOSSY_STONE_BRICKS)
+	_expect(fill_change.succeeded and fill_change.metadata_changed and draft.get_sockets()[0].unused_fill_block_id == BlockId.Type.MOSSY_STONE_BRICKS, "socket unused fill block edit failed")
+	_expect(not draft.try_set_socket_unused_fill_block(&"north", BlockId.Type.MOSSY_STONE_BRICKS).succeeded, "socket accepted a no-op unused fill change")
+	for invalid_fill in [StructureCell.VOID, BlockId.Type.TORCH, BlockId.Type.WATER, BlockId.Type.COUNT]:
+		_expect(not draft.try_set_socket_unused_fill_block(&"north", invalid_fill).succeeded, "socket accepted invalid unused fill block %s" % invalid_fill)
+	_expect(not draft.try_set_socket_unused_fill_block(&"missing", BlockId.Type.STONE).succeeded, "unknown socket accepted unused fill metadata")
+	_expect(draft.try_set_socket_unused_fill_block(&"north", StructureCell.AIR).succeeded and draft.get_sockets()[0].unused_fill_block_id == StructureCell.AIR, "socket could not be marked as a required connection")
+	authored[0].unused_fill_block_id = BlockId.Type.DIRT
+	_expect(draft.get_sockets()[0].unused_fill_block_id == StructureCell.AIR, "socket fill query exposed mutable draft state")
 	_expect(not draft.has_torch(east_torch_cell), "socket carving retained a torch whose support was removed")
 	_expect(authored[1].cell == Vector3i(4, 1, 2), "east socket changed its selected boundary cell")
 	var failed_cells := draft.snapshot_cells()
@@ -293,6 +307,7 @@ func _test_variable_connection_aperture() -> void:
 	_expect(LevelSocketAperture.dimensions(candidate, LevelSocketDefinition.Direction.WEST) == Vector2i(3, 6), "large opening dimensions changed")
 	_expect(draft.try_add_socket(seed, LevelSocketDefinition.Direction.WEST).succeeded, "large opening registration failed")
 	_expect(draft.snapshot_cells() == before, "registering a prebuilt opening changed dense cells")
+	_expect(draft.get_sockets()[0].unused_fill_block_id == BlockId.Type.STONE, "prebuilt opening did not inherit its floor block")
 	var copied := draft.get_socket_aperture_cells(&"west")
 	copied.clear()
 	_expect(draft.get_socket_aperture_cells(&"west").size() == 18, "aperture query exposed mutable draft state")
@@ -445,6 +460,7 @@ func _make_module_definition(identifier: StringName) -> LevelModuleDefinition:
 	north.socket_id = &"north_entry"
 	north.cell = Vector3i(2, 1, 0)
 	north.direction = LevelSocketDefinition.Direction.NORTH
+	north.unused_fill_block_id = BlockId.Type.MOSSY_STONE_BRICKS
 	definition.sockets.append(north)
 	var south := LevelSocketDefinition.new()
 	south.socket_id = &"south_exit"

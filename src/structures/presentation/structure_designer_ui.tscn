@@ -158,7 +158,7 @@ text = "Place Connections"
 
 [node name="SocketHelp" type="Label" parent="ModulePanel/Margin/VBox"]
 layout_mode = 2
-text = "Click a wall for a 1×2 doorway, or click a prebuilt opening's floor to use its full size. Connections require matching shape and size."
+text = "Click a wall for a 1×2 doorway, or click a prebuilt opening's floor to use its full size. Choose how each unused doorway is filled; Must connect keeps it required."
 autowrap_mode = 2
 
 [node name="ConnectionSummary" type="Label" parent="ModulePanel/Margin/VBox"]

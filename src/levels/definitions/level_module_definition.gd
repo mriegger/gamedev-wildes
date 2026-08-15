@@ -107,6 +107,9 @@ func _validate_socket(socket: LevelSocketDefinition, source: String) -> bool:
 	if not LevelSocketDefinition.is_valid_direction(socket.direction):
 		push_error("[LevelModuleDefinition] Socket direction is invalid for %s" % source)
 		return false
+	if not LevelSocketDefinition.is_valid_unused_fill_block(socket.unused_fill_block_id):
+		push_error("[LevelModuleDefinition] Socket unused fill block is invalid for %s" % source)
+		return false
 	if not LevelSocketAperture.is_boundary(socket.cell, size, socket.direction):
 		push_error("[LevelModuleDefinition] Socket is not on its facing boundary for %s" % source)
 		return false

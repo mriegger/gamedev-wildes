@@ -185,8 +185,9 @@ dirty state.
 dense canonical cube cells, and typed supported wall torches. Dense cells use
 `x + size.x * (z + size.z * y)` indexing and reject `VOID`, non-cube blocks, unsupported torches,
 and empty structures. Level Modules retain their independent dimensions, cells including `VOID`,
-weight, ordered sockets, ordered torches, and paired markers. `StructureResourceAdapter` converts
-both formats without changing their persisted contracts. `StructureFileStore` scans only direct
+weight, ordered sockets with per-socket unused fill blocks, ordered torches, and paired markers.
+`StructureResourceAdapter` converts both formats without changing their persisted contracts.
+`StructureFileStore` scans only direct
 `.tres` files in the globalized repository root and bypasses the resource cache during discovery,
 import, and validation. Export saves a temporary resource, reloads and compares every persisted
 field, then renames the validated file into place; collisions, stale bound sources, or failures
@@ -199,12 +200,16 @@ the owner of actual start, expansion, and cap pool membership. The designer's si
 mode authors at most one doorway per cardinal side while the persisted module format and generator
 continue to support existing advanced multi-door resources.
 
-Each socket persists only its stable ID, boundary seed, and facing. Its aperture is the complete
-connected AIR component on that boundary plane, keeping geometry authoritative without a parallel
-serialized shape. The draft protects the aperture, inward clearance, and supporting floor as one
-transactional footprint. Generation normalizes the complete aperture after rotation and joins only
-matching shapes and sizes, allowing arbitrary enclosed hallway cross-sections while rejecting
-truncated seams. Standard wall targeting carves 1×2; prebuilt openings retain their authored size.
+Each socket persists its stable ID, boundary seed, facing, and unused-fill block ID. AIR means the
+connection remains required, while a solid cube records the material future generation may use to
+seal the complete aperture when it is unused. New sockets infer that value from the carved wall or
+supporting floor, and legacy resources that omit it remain required. The aperture itself is the
+complete connected AIR component on that boundary plane, keeping geometry authoritative without a
+parallel serialized shape. The draft protects the aperture, inward clearance, and supporting floor
+as one transactional footprint. Generation normalizes the complete aperture after rotation and
+joins only matching shapes and sizes, allowing arbitrary enclosed hallway cross-sections while
+rejecting truncated seams. It does not consume unused-fill metadata yet. Standard wall targeting
+carves 1×2; prebuilt openings retain their authored size.
 
 `Game` constructs and injects the dual-format file store while composing the console, authoring
 workflow, dialogs, and dedicated first-person runtime. It

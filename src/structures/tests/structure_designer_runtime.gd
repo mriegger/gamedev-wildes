@@ -156,11 +156,12 @@ func _test_module_runtime() -> void:
 		Vector3i(1, 0, 4),
 		Vector3i(1, 1, 4),
 		Vector3i(1, 2, 4),
+		Vector3i(2, 1, 4),
 		Vector3i(20, 1, 5),
 	]:
 		_expect(draft.try_place_block(cell, BlockId.Type.STONE).succeeded, "Level Module runtime seed failed at %s" % cell)
 	var carved_torch := Vector3i(3, 2, 1)
-	var retained_torch := Vector3i(1, 1, 5)
+	var retained_torch := Vector3i(2, 1, 5)
 	_expect(draft.try_place_torch(carved_torch, Vector3i.FORWARD).succeeded, "socket-support torch seed failed")
 	_expect(draft.try_place_torch(retained_torch, Vector3i.FORWARD).succeeded, "unrelated torch seed failed")
 	_expect(draft.try_set_weight(3.25).succeeded, "Level Module weight seed failed")
@@ -224,6 +225,7 @@ func _test_module_runtime() -> void:
 	_click(runtime, MOUSE_BUTTON_LEFT)
 	var sockets := draft.get_sockets()
 	_expect(sockets.size() == 1 and sockets[0].socket_id == &"north" and sockets[0].direction == LevelSocketDefinition.Direction.NORTH, "connection intent did not commit its boundary direction")
+	_expect(sockets[0].unused_fill_block_id == BlockId.Type.STONE, "carved doorway did not inherit its wall fill block")
 	_expect(draft.get_cell(Vector3i(3, 1, 0)) == StructureCell.AIR and draft.get_cell(Vector3i(3, 2, 0)) == StructureCell.AIR, "connection intent did not carve its two-block aperture")
 	_expect(not torch_renderer.has_torch(carved_torch), "connection carving retained a torch whose support was removed")
 	_expect(torch_renderer.torch_instances.get(retained_torch) == retained_torch_node, "connection carving rebuilt an unrelated torch node")
@@ -251,12 +253,23 @@ func _test_module_runtime() -> void:
 	_expect(draft.snapshot_cells() == before_south_connection and draft.get_socket_aperture_cells(&"south").size() == 18, "south connection changed or truncated its prebuilt opening")
 	var south_overlay := overlay.get_node("Socket_south/Aperture") as MultiMeshInstance3D
 	_expect(socket_list.get_child_count() == 2 and south_overlay.multimesh.instance_count == 18, "large south connection presentation did not refresh")
-	_expect((socket_list.get_child(1).get_child(0) as Label).text.contains("3×6"), "large south connection size was absent from the panel")
+	_expect((socket_list.get_child(1).get_child(0).get_child(0) as Label).text.contains("3×6"), "large south connection size was absent from the panel")
 	_expect(runtime.cancel_active_ui(), "Esc did not finish connection targeting")
 	_expect(not connection_hint.visible and controller._input_enabled and controller._mouse_capture_enabled, "finishing connection targeting did not restore build mode")
 	_expect(not runtime.cancel_active_ui(), "connection targeting cancellation left another UI layer open")
 
 	_toggle_module_tools(runtime)
+	var north_fill := socket_list.get_child(0).get_child(1).get_child(1) as OptionButton
+	_expect(north_fill.get_selected_id() == BlockId.Type.STONE, "module tools did not present the doorway fill block")
+	var cells_before_fill_change := draft.snapshot_cells()
+	var aperture_before_fill_change := draft.get_socket_aperture_cells(&"north")
+	var stone_bricks_index := north_fill.get_item_index(BlockId.Type.STONE_BRICKS)
+	north_fill.select(stone_bricks_index)
+	north_fill.item_selected.emit(stone_bricks_index)
+	_expect(draft.get_sockets()[0].unused_fill_block_id == BlockId.Type.STONE_BRICKS, "module tools did not commit the doorway fill block")
+	_expect(draft.snapshot_cells() == cells_before_fill_change and draft.get_socket_aperture_cells(&"north") == aperture_before_fill_change, "doorway fill metadata changed authored geometry")
+	var refreshed_north_fill := socket_list.get_child(0).get_child(1).get_child(1) as OptionButton
+	_expect(ui.is_module_panel_open() and refreshed_north_fill.get_selected_id() == BlockId.Type.STONE_BRICKS, "module tools did not remain open and refresh the committed doorway fill block")
 	weight_input.value = 2.7
 	_expect(draft.get_weight() == 2.7 and weight_input.value == 2.7, "valid weight intent did not update exact draft and UI truth")
 	_expect(overlay.get_child_count() == 2 and overlay.get_node("Socket_north") != socket_root, "metadata change did not refresh its overlays exactly once")
@@ -264,10 +277,10 @@ func _test_module_runtime() -> void:
 	var void_change := draft.try_set_void(Vector3i(6, 3, 6))
 	runtime._apply_change(void_change)
 	_expect(void_change.succeeded and overlay.get_node("Socket_north") == socket_root, "ordinary VOID edit rebuilt metadata presentation")
-	(socket_list.get_child(0).get_child(1) as Button).pressed.emit()
+	(socket_list.get_child(0).get_child(0).get_child(1) as Button).pressed.emit()
 	_expect(draft.get_sockets().size() == 1 and socket_list.get_child_count() == 1 and overlay.get_child_count() == 1, "connection removal changed unrelated domain or presentation state")
 	_expect(draft.get_cell(Vector3i(3, 1, 0)) == StructureCell.AIR and draft.get_cell(Vector3i(3, 2, 0)) == StructureCell.AIR, "connection removal refilled its aperture")
-	(socket_list.get_child(0).get_child(1) as Button).pressed.emit()
+	(socket_list.get_child(0).get_child(0).get_child(1) as Button).pressed.emit()
 	_expect(draft.get_sockets().is_empty() and socket_list.get_child_count() == 0 and overlay.get_child_count() == 0, "final connection removal retained domain or presentation state")
 	_toggle_module_tools(runtime)
 	_expect(not ui.is_module_panel_open() and controller._input_enabled, "M did not close Level Module tools")
@@ -295,7 +308,7 @@ func _test_module_runtime() -> void:
 	(ui.get_node("ModulePanel/Margin/VBox/Header/Close") as Button).pressed.emit()
 	_expect(not ui.is_module_panel_open() and controller._input_enabled and controller._mouse_capture_enabled, "module close button did not restore first-person input")
 	_expect(torch_renderer.torch_instances.get(retained_torch) == retained_torch_node, "metadata authoring rebuilt an unrelated torch node")
-	_aim_at(controller, Vector3(1.5, 0.0, 6.5), Vector3(1.5, 1.5, 4.5))
+	_aim_at(controller, Vector3(2.5, 0.0, 7.5), Vector3(2.5, 1.5, 4.5))
 	_click(runtime, MOUSE_BUTTON_LEFT)
 	_expect(not draft.has_torch(retained_torch) and not torch_renderer.has_torch(retained_torch), "Level Module first-person removal did not remove its torch")
 	_assign_torch_to_selected_slot(ui)

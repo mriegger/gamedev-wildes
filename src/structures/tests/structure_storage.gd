@@ -192,8 +192,10 @@ func _test_variable_module_round_trip(store: StructureFileStore, root_path: Stri
 		for y in range(1, 3):
 			_expect(draft.try_remove_block(Vector3i(x, y, 0)).succeeded, "variable module opening setup failed")
 	_expect(draft.try_add_socket(Vector3i(1, 1, 0), LevelSocketDefinition.Direction.NORTH).succeeded, "variable module socket setup failed")
+	_expect(draft.try_set_socket_unused_fill_block(&"north", BlockId.Type.MOSSY_STONE_BRICKS).succeeded, "variable module socket fill setup failed")
 	var exported := store.export_draft(draft, identifier)
 	_expect(exported.succeeded and FileAccess.file_exists(path), "variable module root export failed: %s" % exported.message)
+	_expect(FileAccess.get_file_as_string(path).contains("unused_fill_block_id = 11"), "module resource did not physically serialize the socket fill block")
 	var entry := _find_entry(store.list_importable(), identifier)
 	_expect(entry != null and entry.format == StructureDraft.Format.LEVEL_MODULE, "variable module was not listed for import")
 	if entry == null:
@@ -203,9 +205,13 @@ func _test_variable_module_round_trip(store: StructureFileStore, root_path: Stri
 	if not imported.succeeded:
 		return
 	_expect(imported.draft.get_socket_aperture_cells(&"north").size() == 4, "variable module import changed the derived opening")
+	_expect(imported.draft.get_sockets()[0].unused_fill_block_id == BlockId.Type.MOSSY_STONE_BRICKS, "variable module import changed the socket fill block")
 	var expected := StructureResourceAdapter.create_snapshot(draft, identifier)
 	var actual := StructureResourceAdapter.create_snapshot(imported.draft, identifier)
 	_expect(StructureResourceAdapter.resources_equal(expected, actual), "variable module round trip changed persisted fields")
+	var reloaded := ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE) as LevelModuleDefinition
+	_expect(reloaded != null and reloaded.sockets[0].unused_fill_block_id == BlockId.Type.MOSSY_STONE_BRICKS, "module resource round trip changed the socket fill block")
+	_expect(reloaded != null and reloaded.validate(), "reloaded module resource is invalid")
 
 func _test_export_failures(store: StructureFileStore, root_path: String, suffix: String) -> void:
 	var existing_id := StringName("collision_%s" % suffix)
@@ -317,6 +323,7 @@ func _make_module_definition(identifier: StringName) -> LevelModuleDefinition:
 	north.socket_id = &"north_entry"
 	north.cell = Vector3i(2, 1, 0)
 	north.direction = LevelSocketDefinition.Direction.NORTH
+	north.unused_fill_block_id = BlockId.Type.MOSSY_STONE_BRICKS
 	definition.sockets.append(north)
 	var south := LevelSocketDefinition.new()
 	south.socket_id = &"south_exit"

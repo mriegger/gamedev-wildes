@@ -287,6 +287,18 @@ func try_remove_socket(socket_id: StringName) -> StructureDraftChange:
 		return _commit_change([], [], [], true)
 	return StructureDraftChange.reject()
 
+func try_set_socket_unused_fill_block(socket_id: StringName, block_id: int) -> StructureDraftChange:
+	if _format != Format.LEVEL_MODULE or not LevelSocketDefinition.is_valid_unused_fill_block(block_id):
+		return StructureDraftChange.reject()
+	for socket in _sockets:
+		if socket.socket_id != socket_id:
+			continue
+		if socket.unused_fill_block_id == block_id:
+			return StructureDraftChange.reject()
+		socket.unused_fill_block_id = block_id
+		return _commit_change([], [], [], true)
+	return StructureDraftChange.reject()
+
 func try_set_markers(
 	spawn_cell: Vector3i,
 	spawn_facing: LevelSocketDefinition.Direction,
@@ -367,6 +379,7 @@ func _prepare_socket_edit(cell: Vector3i, direction: LevelSocketDefinition.Direc
 	socket.socket_id = _next_socket_id(direction)
 	socket.cell = cell
 	socket.direction = direction
+	socket.unused_fill_block_id = _default_socket_fill_block(cell)
 	var changes: Dictionary = {cell: StructureCell.AIR, upper: StructureCell.AIR}
 	if not LevelSocketAperture.is_valid(socket, _size, _cells, changes):
 		return null
@@ -382,6 +395,15 @@ func _prepare_socket_edit(cell: Vector3i, direction: LevelSocketDefinition.Direc
 	edit.removed_torch_cells = _get_torch_cells_supported_by_many(edit.changed_cells)
 	edit.aperture_cells = aperture_cells
 	return edit
+
+func _default_socket_fill_block(cell: Vector3i) -> int:
+	for candidate in [cell, cell + Vector3i.UP, cell + Vector3i.DOWN]:
+		if not is_in_bounds(candidate):
+			continue
+		var value := get_cell(candidate)
+		if StructureCell.is_structure_solid(value):
+			return value
+	return StructureCell.AIR
 
 func _set_cell(cell: Vector3i, value: int) -> void:
 	_cells[StructureCell.index_of(cell, _size)] = value
@@ -550,6 +572,7 @@ static func _copy_socket(source: LevelSocketDefinition) -> LevelSocketDefinition
 	copied.socket_id = source.socket_id
 	copied.cell = source.cell
 	copied.direction = source.direction
+	copied.unused_fill_block_id = source.unused_fill_block_id
 	return copied
 
 static func _copy_marker(source: LevelMarkerDefinition) -> LevelMarkerDefinition:

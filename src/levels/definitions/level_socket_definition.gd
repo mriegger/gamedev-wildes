@@ -11,6 +11,10 @@ enum Direction {
 @export var socket_id: StringName
 @export var cell: Vector3i
 @export var direction: Direction = Direction.NORTH
+@export var unused_fill_block_id: BlockId.Type = BlockId.Type.AIR
+
+static func is_valid_unused_fill_block(value: int) -> bool:
+	return value == StructureCell.AIR or StructureCell.is_structure_solid(value)
 
 static func is_valid_direction(value: int) -> bool:
 	return value >= 0 and value < Direction.size()

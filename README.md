@@ -37,8 +37,11 @@ panel returns to first-person building. `/` opens the developer console, and `Es
 designer UI before offering to leave the designer. In Module Tools, `Place Connections` returns to
 first-person connection mode. Click a solid lower boundary wall for a standard 1×2 doorway, or
 click the floor beneath a prebuilt boundary opening to register its complete shape and size. Only
-matching openings connect; every unused opening therefore needs a compatible cap module. Press
-`Esc` when finished. Two opposite connections form a straight hall; rooms can expose all four sides.
+matching openings connect. Each connection row can export either `Must connect` or a placeable cube
+to use when that doorway is eventually left unused. The current generator still closes every
+opening with a compatible module; consuming the new fill metadata is a separate generation change.
+Press `Esc` when finished. Two opposite connections form a straight hall; rooms can expose all four
+sides.
 
 The animation tuner is a compact right-side debug-build panel. Its Movement, Animation, Parts,
 and Attack tabs update the live player immediately, while preview modes let you hold idle, walk,
@@ -72,7 +75,8 @@ later overwrites of that bound file. Successful exports keep the workspace open 
 current draft clean. `dev structure exit` leaves the workspace and confirms before discarding
 edited cells, torches, or Level Module metadata. Level Module tools edit precise weight, targeted
 `VOID` cells, connections selected from the outside face of a lower boundary wall, and an atomic
-spawn/return marker pair.
+spawn/return marker pair. Each connection can require a match or define the solid block used to
+fill its complete doorway when generation leaves it unused.
 Torches remain normal first-person palette placements instead of panel metadata. Exported modules
 must still be added explicitly to the appropriate level content and catalog; repository-root files
 are not consumed or registered by generation automatically.

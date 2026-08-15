@@ -64,6 +64,12 @@ func _test_catalog_and_modules() -> void:
 	_expect(not StructureCell.is_valid(BlockId.Type.WATER), "water block ID was accepted as a dense module cell")
 	_expect(not StructureCell.is_valid(-2), "unknown negative cell value was accepted")
 	_expect(not StructureCell.is_valid(BlockId.Type.COUNT), "unknown positive block ID was accepted")
+	_expect(LevelSocketDefinition.is_valid_unused_fill_block(StructureCell.AIR), "required connection sentinel is invalid")
+	_expect(LevelSocketDefinition.is_valid_unused_fill_block(BlockId.Type.STONE_BRICKS), "solid socket fill block is invalid")
+	_expect(not LevelSocketDefinition.is_valid_unused_fill_block(StructureCell.VOID), "VOID socket fill block was accepted")
+	_expect(not LevelSocketDefinition.is_valid_unused_fill_block(BlockId.Type.TORCH), "torch socket fill block was accepted")
+	_expect(not LevelSocketDefinition.is_valid_unused_fill_block(BlockId.Type.WATER), "water socket fill block was accepted")
+	_expect(not LevelSocketDefinition.is_valid_unused_fill_block(BlockId.Type.COUNT), "unknown socket fill block was accepted")
 	_expect(_catalog.validate(), "level catalog validation failed")
 	_expect(_catalog.modules.size() == EXPECTED_MODULE_IDS.size(), "catalog must contain exactly eight initial modules")
 	_expect(_catalog.levels.size() == 1, "catalog must contain exactly one initial level")
@@ -101,6 +107,7 @@ func _test_catalog_and_modules() -> void:
 		for socket in module.sockets:
 			_expect(not seen_sockets.has(socket.socket_id), "duplicate socket ID in %s" % module.module_id)
 			seen_sockets[socket.socket_id] = true
+			_expect(socket.unused_fill_block_id == StructureCell.AIR, "legacy module socket unexpectedly became optional in %s" % module.module_id)
 			_expect(_is_boundary(socket.cell, module.size, socket.direction), "socket is not on its declared boundary in %s" % module.module_id)
 			_expect(module.cell_at(socket.cell) == StructureCell.AIR, "socket lower aperture is not AIR in %s" % module.module_id)
 			_expect(module.cell_at(socket.cell + Vector3i.UP) == StructureCell.AIR, "socket upper aperture is not AIR in %s" % module.module_id)

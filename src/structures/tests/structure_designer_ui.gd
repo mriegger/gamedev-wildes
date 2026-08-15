@@ -6,6 +6,7 @@ var _weights: Array[float] = []
 var _void_request_count: int
 var _connection_targeting_count: int = 0
 var _removed_sockets: Array[StringName] = []
+var _socket_fill_requests: Array[Array] = []
 var _marker_targets: Array[Array] = []
 var _marker_commits: Array[Array] = []
 var _marker_clear_count: int
@@ -102,7 +103,7 @@ func _test_module_ui(item_catalog: ItemCatalog) -> void:
 	var marker_commit := ui.get_node("ModulePanel/Margin/VBox/Markers/Actions/Commit") as Button
 	_expect(not module_panel.visible and module_tools_hint.visible, "Level Module did not start in first-person build mode")
 	_expect(module_panel.find_children("*Torch*", "Control", true, false).is_empty(), "Level Module panel retained torch metadata clutter")
-	_expect(socket_help.text.contains("1×2") and socket_help.text.contains("prebuilt opening") and socket_help.text.contains("matching shape and size"), "connection controls did not explain variable opening authoring")
+	_expect(socket_help.text.contains("1×2") and socket_help.text.contains("prebuilt opening") and socket_help.text.contains("unused doorway") and socket_help.text.contains("Must connect"), "connection controls did not explain variable openings and unused fills")
 	var blocking_state_start := _blocking_states.size()
 	ui.ui_blocking_changed.connect(_on_ui_blocking_changed)
 	ui.open_module_panel()
@@ -117,6 +118,7 @@ func _test_module_ui(item_catalog: ItemCatalog) -> void:
 	ui.void_requested.connect(_on_void_requested)
 	ui.connection_targeting_requested.connect(_on_connection_targeting_requested)
 	ui.socket_remove_requested.connect(_on_socket_remove_requested)
+	ui.socket_unused_fill_block_requested.connect(_on_socket_unused_fill_block_requested)
 	ui.marker_target_requested.connect(_on_marker_target_requested)
 	ui.markers_commit_requested.connect(_on_markers_commit_requested)
 	ui.markers_clear_requested.connect(_on_markers_clear_requested)
@@ -124,6 +126,7 @@ func _test_module_ui(item_catalog: ItemCatalog) -> void:
 	north_socket.socket_id = &"north"
 	north_socket.cell = Vector3i(3, 1, 0)
 	north_socket.direction = LevelSocketDefinition.Direction.NORTH
+	north_socket.unused_fill_block_id = BlockId.Type.STONE
 	var east_socket := LevelSocketDefinition.new()
 	east_socket.socket_id = &"east"
 	east_socket.cell = Vector3i(6, 1, 3)
@@ -151,9 +154,23 @@ func _test_module_ui(item_catalog: ItemCatalog) -> void:
 	}
 	ui.present_module_state(0.05, sockets, aperture_sizes, null, null)
 	_expect(connection_summary.text.contains("eligible as an expansion module"), "two connections were not presented as expansion-eligible")
-	_expect((socket_list.get_child(0).get_child(0) as Label).text.contains("3×6"), "connection list omitted the opening size")
+	_expect((socket_list.get_child(0).get_child(0).get_child(0) as Label).text.contains("3×6"), "connection list omitted the opening size")
+	var north_fill := socket_list.get_child(0).get_child(1).get_child(1) as OptionButton
+	_expect(north_fill.get_item_count() == 12, "unused-fill selector did not contain Must connect plus every placeable cube")
+	_expect(north_fill.get_item_index(BlockId.Type.COPPER) == -1, "unused-fill selector included Copper material")
+	_expect(north_fill.get_item_index(BlockId.Type.TORCH) == -1 and north_fill.get_item_index(BlockId.Type.WATER) == -1, "unused-fill selector included a non-cube block")
+	_expect(north_fill.get_selected_id() == BlockId.Type.STONE, "unused-fill selector did not present the socket's current block")
+	var stone_bricks_index := north_fill.get_item_index(BlockId.Type.STONE_BRICKS)
+	north_fill.select(stone_bricks_index)
+	north_fill.item_selected.emit(stone_bricks_index)
+	_expect(_socket_fill_requests == [[&"north", BlockId.Type.STONE_BRICKS]], "unused-fill selector emitted the wrong socket or block")
+	var must_connect_index := north_fill.get_item_index(StructureCell.AIR)
+	north_fill.select(must_connect_index)
+	north_fill.item_selected.emit(must_connect_index)
+	_expect(_socket_fill_requests == [[&"north", BlockId.Type.STONE_BRICKS], [&"north", StructureCell.AIR]], "Must connect did not emit the required-connection sentinel")
 	var one_socket: Array[LevelSocketDefinition] = [north_socket]
 	ui.present_module_state(0.05, one_socket, aperture_sizes, null, null)
+	_expect(_socket_fill_requests.size() == 2, "rebuilding connection rows emitted a fill request")
 	_expect(connection_summary.text.contains("cap or dead end"), "one connection was not presented as cap-eligible")
 	var four_sockets: Array[LevelSocketDefinition] = [north_socket, east_socket, south_socket, west_socket]
 	ui.present_module_state(0.05, four_sockets, aperture_sizes, null, null)
@@ -179,7 +196,7 @@ func _test_module_ui(item_catalog: ItemCatalog) -> void:
 	_expect(connection_mode_hint.text.contains("already has a connection"), "used connection side guidance is unclear")
 	ui.set_connection_targeting(false)
 	ui.open_module_panel()
-	(socket_list.get_child(1).get_child(1) as Button).pressed.emit()
+	(socket_list.get_child(1).get_child(0).get_child(1) as Button).pressed.emit()
 	_expect(_removed_sockets == [&"east"], "socket remove control emitted the wrong ID")
 	var spawn_facing := ui.get_node("ModulePanel/Margin/VBox/Markers/Spawn/Controls/Facing") as OptionButton
 	spawn_facing.select(LevelSocketDefinition.Direction.EAST)
@@ -228,6 +245,9 @@ func _on_connection_targeting_requested() -> void:
 
 func _on_socket_remove_requested(socket_id: StringName) -> void:
 	_removed_sockets.append(socket_id)
+
+func _on_socket_unused_fill_block_requested(socket_id: StringName, block_id: int) -> void:
+	_socket_fill_requests.append([socket_id, block_id])
 
 func _on_marker_target_requested(role: StructureDesignerUI.MarkerRole, facing: LevelSocketDefinition.Direction) -> void:
 	_marker_targets.append([role, facing])

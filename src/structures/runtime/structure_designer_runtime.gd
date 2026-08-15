@@ -57,6 +57,7 @@ func setup(
 	_designer_ui.void_requested.connect(_on_void_requested)
 	_designer_ui.connection_targeting_requested.connect(_on_connection_targeting_requested)
 	_designer_ui.socket_remove_requested.connect(_on_socket_remove_requested)
+	_designer_ui.socket_unused_fill_block_requested.connect(_on_socket_unused_fill_block_requested)
 	_designer_ui.marker_target_requested.connect(_on_marker_target_requested)
 	_designer_ui.markers_commit_requested.connect(_on_markers_commit_requested)
 	_designer_ui.markers_clear_requested.connect(_on_markers_clear_requested)
@@ -326,6 +327,9 @@ func _stop_connection_targeting() -> bool:
 
 func _on_socket_remove_requested(socket_id: StringName) -> void:
 	_apply_change(_draft.try_remove_socket(socket_id))
+
+func _on_socket_unused_fill_block_requested(socket_id: StringName, block_id: int) -> void:
+	_apply_change(_draft.try_set_socket_unused_fill_block(socket_id, block_id))
 
 func _on_marker_target_requested(role: StructureDesignerUI.MarkerRole, facing: LevelSocketDefinition.Direction) -> void:
 	if _current_hit == null or not _draft.is_in_bounds(_current_hit.placement_cell):

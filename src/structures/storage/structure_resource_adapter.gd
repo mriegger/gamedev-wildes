@@ -80,7 +80,7 @@ static func _modules_equal(first: LevelModuleDefinition, second: LevelModuleDefi
 	for index in first.sockets.size():
 		var left_socket := first.sockets[index]
 		var right_socket := second.sockets[index]
-		if left_socket == null or right_socket == null or left_socket.socket_id != right_socket.socket_id or left_socket.cell != right_socket.cell or left_socket.direction != right_socket.direction:
+		if left_socket == null or right_socket == null or left_socket.socket_id != right_socket.socket_id or left_socket.cell != right_socket.cell or left_socket.direction != right_socket.direction or left_socket.unused_fill_block_id != right_socket.unused_fill_block_id:
 			return false
 	for index in first.torches.size():
 		var left_torch := first.torches[index]

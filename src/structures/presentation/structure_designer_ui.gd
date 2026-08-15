@@ -17,6 +17,7 @@ signal weight_requested(weight: float)
 signal void_requested
 signal connection_targeting_requested
 signal socket_remove_requested(socket_id: StringName)
+signal socket_unused_fill_block_requested(socket_id: StringName, block_id: int)
 signal marker_target_requested(role: MarkerRole, facing: LevelSocketDefinition.Direction)
 signal markers_commit_requested(
 	spawn_cell: Vector3i,
@@ -275,6 +276,9 @@ func _on_connection_pressed() -> void:
 func _on_socket_remove_pressed(socket_id: StringName) -> void:
 	socket_remove_requested.emit(socket_id)
 
+func _on_socket_unused_fill_block_selected(item_index: int, socket_id: StringName, option: OptionButton) -> void:
+	socket_unused_fill_block_requested.emit(socket_id, option.get_item_id(item_index))
+
 func _on_marker_target_pressed(role: MarkerRole, option: OptionButton) -> void:
 	marker_target_requested.emit(role, option.get_selected_id() as LevelSocketDefinition.Direction)
 
@@ -300,23 +304,45 @@ func _rebuild_socket_list(sockets: Array[LevelSocketDefinition], aperture_sizes:
 	_clear_container(_socket_list)
 	for socket in sockets:
 		var aperture_size: Vector2i = aperture_sizes.get(socket.socket_id, Vector2i.ZERO)
-		var row := _metadata_row(
-			"%s  %s  %s  %d×%d" % [socket.socket_id, _cell_text(socket.cell), _direction_text(socket.direction), aperture_size.x, aperture_size.y],
-			Callable(self, "_on_socket_remove_pressed").bind(socket.socket_id),
-		)
+		var row := _socket_row(socket, aperture_size)
 		_socket_list.add_child(row)
 
-func _metadata_row(text: String, remove_action: Callable) -> HBoxContainer:
-	var row := HBoxContainer.new()
+func _socket_row(socket: LevelSocketDefinition, aperture_size: Vector2i) -> VBoxContainer:
+	var row := VBoxContainer.new()
+	var heading := HBoxContainer.new()
 	var label := Label.new()
-	label.text = text
+	label.text = "%s  %s  %s  %d×%d" % [socket.socket_id, _cell_text(socket.cell), _direction_text(socket.direction), aperture_size.x, aperture_size.y]
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(label)
+	heading.add_child(label)
 	var remove := Button.new()
 	remove.text = "Remove"
-	remove.pressed.connect(remove_action)
-	row.add_child(remove)
+	remove.pressed.connect(_on_socket_remove_pressed.bind(socket.socket_id))
+	heading.add_child(remove)
+	row.add_child(heading)
+	var unused := HBoxContainer.new()
+	var unused_label := Label.new()
+	unused_label.text = "If unused"
+	unused_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	unused.add_child(unused_label)
+	var option := OptionButton.new()
+	option.custom_minimum_size.x = 176.0
+	_populate_unused_fill_options(option, socket.unused_fill_block_id)
+	option.item_selected.connect(_on_socket_unused_fill_block_selected.bind(socket.socket_id, option))
+	unused.add_child(option)
+	row.add_child(unused)
 	return row
+
+func _populate_unused_fill_options(option: OptionButton, selected_block_id: int) -> void:
+	option.add_item("Must connect", StructureCell.AIR)
+	for item_id in _toolbelt.get_placeable_item_ids():
+		var definition := _item_catalog.get_definition(item_id)
+		var placement := definition.secondary_action as BlockPlacementActionDefinition
+		if placement == null or placement.block == null or not StructureCell.is_structure_solid(placement.block.id):
+			continue
+		option.add_item(definition.display_name, placement.block.id)
+	if option.get_item_index(selected_block_id) == -1 and StructureCell.is_structure_solid(selected_block_id):
+		option.add_item(BlockId.get_display_name(selected_block_id), selected_block_id)
+	option.select(option.get_item_index(selected_block_id))
 
 func _clear_container(container: Container) -> void:
 	for child in container.get_children():
