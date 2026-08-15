@@ -10,6 +10,7 @@ class SocketEdit:
 	var socket: LevelSocketDefinition
 	var changed_cells: Array[Vector3i]
 	var removed_torch_cells: Array[Vector3i]
+	var aperture_cells: Array[Vector3i]
 
 const DEFAULT_LEVEL_MODULE_SIZE: Vector3i = Vector3i(7, 4, 7)
 
@@ -24,6 +25,8 @@ var _return_door_marker: LevelMarkerDefinition
 var _weight: float = 1.0
 var _required_air_cells: Dictionary = {}
 var _required_solid_cells: Dictionary = {}
+var _required_non_air_cells: Dictionary = {}
+var _socket_aperture_owners: Dictionary = {}
 var _identifier: StringName
 var _source_path: String
 var _dirty: bool
@@ -137,13 +140,30 @@ func get_sockets() -> Array[LevelSocketDefinition]:
 		copied.append(_copy_socket(socket))
 	return copied
 
+func get_socket_aperture_cells(socket_id: StringName) -> Array[Vector3i]:
+	for socket in _sockets:
+		if socket.socket_id == socket_id:
+			return LevelSocketAperture.find_cells(socket, _size, _cells)
+	return []
+
+func get_socket_candidate_cells(cell: Vector3i, direction: LevelSocketDefinition.Direction) -> Array[Vector3i]:
+	if _format != Format.LEVEL_MODULE or not LevelSocketDefinition.is_valid_direction(direction) or not is_in_bounds(cell):
+		return []
+	var edit := _prepare_socket_edit(cell, direction)
+	if edit != null:
+		return edit.aperture_cells.duplicate()
+	var socket := LevelSocketDefinition.new()
+	socket.cell = cell
+	socket.direction = direction
+	return LevelSocketAperture.find_cells(socket, _size, _cells)
+
 func get_boundary_directions(cell: Vector3i) -> Array[LevelSocketDefinition.Direction]:
 	var directions: Array[LevelSocketDefinition.Direction] = []
 	if _format != Format.LEVEL_MODULE or not is_in_bounds(cell):
 		return directions
 	for value in LevelSocketDefinition.Direction.values():
 		var direction := value as LevelSocketDefinition.Direction
-		if _is_boundary(cell, direction):
+		if LevelSocketAperture.is_boundary(cell, _size, direction):
 			directions.append(direction)
 	return directions
 
@@ -196,7 +216,7 @@ func try_place_block(cell: Vector3i, block_id: int) -> StructureDraftChange:
 func try_remove_block(cell: Vector3i) -> StructureDraftChange:
 	if not is_in_bounds(cell) or not StructureCell.is_structure_solid(get_cell(cell)):
 		return StructureDraftChange.reject()
-	if _required_solid_cells.has(cell):
+	if _required_solid_cells.has(cell) or _required_non_air_cells.has(cell):
 		return StructureDraftChange.reject()
 	var removed_torch_cells := _get_torch_cells_supported_by(cell)
 	_set_cell(cell, StructureCell.AIR)
@@ -332,34 +352,35 @@ func _commit_change(
 	return StructureDraftChange.success(changed_cells, added_torches, removed_torch_cells, metadata_changed)
 
 func _prepare_socket_edit(cell: Vector3i, direction: LevelSocketDefinition.Direction) -> SocketEdit:
-	if _format != Format.LEVEL_MODULE or not LevelSocketDefinition.is_valid_direction(direction) or not _is_boundary(cell, direction):
+	if _format != Format.LEVEL_MODULE or not LevelSocketDefinition.is_valid_direction(direction) or not LevelSocketAperture.is_boundary(cell, _size, direction):
 		return null
 	for socket in _sockets:
 		if socket.cell == cell:
 			return null
 	var upper := cell + Vector3i.UP
-	var floor_cell := cell + Vector3i.DOWN
-	var inward := -LevelSocketDefinition.vector_for(direction)
-	var inward_lower := cell + inward
-	var inward_upper := upper + inward
-	if not is_in_bounds(upper) or not is_in_bounds(floor_cell) or not is_in_bounds(inward_lower) or not is_in_bounds(inward_upper):
+	if not is_in_bounds(upper):
 		return null
-	if not StructureCell.is_structure_solid(get_cell(floor_cell)):
-		return null
-	if get_cell(inward_lower) != StructureCell.AIR or get_cell(inward_upper) != StructureCell.AIR:
-		return null
-	if _required_solid_cells.has(cell) or _required_solid_cells.has(upper):
-		return null
+	for changed_cell in [cell, upper]:
+		if _required_solid_cells.has(changed_cell) or _required_non_air_cells.has(changed_cell):
+			return null
 	var socket := LevelSocketDefinition.new()
 	socket.socket_id = _next_socket_id(direction)
 	socket.cell = cell
 	socket.direction = direction
+	var changes: Dictionary = {cell: StructureCell.AIR, upper: StructureCell.AIR}
+	if not LevelSocketAperture.is_valid(socket, _size, _cells, changes):
+		return null
+	var aperture_cells := LevelSocketAperture.find_cells(socket, _size, _cells, changes)
+	for aperture_cell in aperture_cells:
+		if _socket_aperture_owners.has(aperture_cell):
+			return null
 	var edit := SocketEdit.new()
 	edit.socket = socket
 	for aperture_cell in [cell, upper]:
 		if get_cell(aperture_cell) != StructureCell.AIR:
 			edit.changed_cells.append(aperture_cell)
 	edit.removed_torch_cells = _get_torch_cells_supported_by_many(edit.changed_cells)
+	edit.aperture_cells = aperture_cells
 	return edit
 
 func _set_cell(cell: Vector3i, value: int) -> void:
@@ -415,21 +436,56 @@ func _index_module_metadata() -> void:
 
 func _add_socket_requirements(socket: LevelSocketDefinition) -> void:
 	var inward := -LevelSocketDefinition.vector_for(socket.direction)
-	var upper := socket.cell + Vector3i.UP
-	_increment_requirement(_required_air_cells, socket.cell)
-	_increment_requirement(_required_air_cells, upper)
-	_increment_requirement(_required_air_cells, socket.cell + inward)
-	_increment_requirement(_required_air_cells, upper + inward)
-	_increment_requirement(_required_solid_cells, socket.cell + Vector3i.DOWN)
+	var aperture_cells := LevelSocketAperture.find_cells(socket, _size, _cells)
+	var aperture_lookup: Dictionary = {}
+	for aperture_cell in aperture_cells:
+		aperture_lookup[aperture_cell] = true
+		_socket_aperture_owners[aperture_cell] = socket.socket_id
+		_increment_requirement(_required_air_cells, aperture_cell)
+		_increment_requirement(_required_air_cells, aperture_cell + inward)
+	var closure_cells := _socket_closure_cells(aperture_cells, aperture_lookup, socket.direction)
+	for closure_cell in closure_cells:
+		_increment_requirement(_required_non_air_cells, closure_cell)
+	for aperture_cell in aperture_cells:
+		var floor_cell := aperture_cell + Vector3i.DOWN
+		if not aperture_lookup.has(floor_cell):
+			_increment_requirement(_required_solid_cells, floor_cell)
 
 func _remove_socket_requirements(socket: LevelSocketDefinition) -> void:
 	var inward := -LevelSocketDefinition.vector_for(socket.direction)
-	var upper := socket.cell + Vector3i.UP
-	_decrement_requirement(_required_air_cells, socket.cell)
-	_decrement_requirement(_required_air_cells, upper)
-	_decrement_requirement(_required_air_cells, socket.cell + inward)
-	_decrement_requirement(_required_air_cells, upper + inward)
-	_decrement_requirement(_required_solid_cells, socket.cell + Vector3i.DOWN)
+	var aperture_cells := LevelSocketAperture.find_cells(socket, _size, _cells)
+	var aperture_lookup: Dictionary = {}
+	for aperture_cell in aperture_cells:
+		aperture_lookup[aperture_cell] = true
+		_socket_aperture_owners.erase(aperture_cell)
+		_decrement_requirement(_required_air_cells, aperture_cell)
+		_decrement_requirement(_required_air_cells, aperture_cell + inward)
+	var closure_cells := _socket_closure_cells(aperture_cells, aperture_lookup, socket.direction)
+	for closure_cell in closure_cells:
+		_decrement_requirement(_required_non_air_cells, closure_cell)
+	for aperture_cell in aperture_cells:
+		var floor_cell := aperture_cell + Vector3i.DOWN
+		if not aperture_lookup.has(floor_cell):
+			_decrement_requirement(_required_solid_cells, floor_cell)
+
+func _socket_closure_cells(
+	aperture_cells: Array[Vector3i],
+	aperture_lookup: Dictionary,
+	direction: LevelSocketDefinition.Direction,
+) -> Array[Vector3i]:
+	var closure_lookup: Dictionary = {}
+	var transverse := Vector3i.RIGHT if direction == LevelSocketDefinition.Direction.NORTH or direction == LevelSocketDefinition.Direction.SOUTH else Vector3i.BACK
+	for aperture_cell in aperture_cells:
+		for offset in [Vector3i.UP, Vector3i.DOWN, transverse, -transverse]:
+			var neighbor: Vector3i = aperture_cell + offset
+			if aperture_lookup.has(neighbor) or not LevelSocketAperture.is_boundary(neighbor, _size, direction):
+				continue
+			closure_lookup[neighbor] = true
+	var closure_cells: Array[Vector3i] = []
+	for cell_value in closure_lookup:
+		closure_cells.append(cell_value as Vector3i)
+	closure_cells.sort_custom(_cell_less)
+	return closure_cells
 
 func _add_marker_requirements(marker: LevelMarkerDefinition) -> void:
 	if marker == null:
@@ -474,20 +530,6 @@ func _next_socket_id(direction: LevelSocketDefinition.Direction) -> StringName:
 	while used.has(StringName("%s_%d" % [base, suffix])):
 		suffix += 1
 	return StringName("%s_%d" % [base, suffix])
-
-func _is_boundary(cell: Vector3i, direction: LevelSocketDefinition.Direction) -> bool:
-	if not is_in_bounds(cell):
-		return false
-	match direction:
-		LevelSocketDefinition.Direction.NORTH:
-			return cell.z == 0
-		LevelSocketDefinition.Direction.EAST:
-			return cell.x == _size.x - 1
-		LevelSocketDefinition.Direction.SOUTH:
-			return cell.z == _size.z - 1
-		LevelSocketDefinition.Direction.WEST:
-			return cell.x == 0
-	return false
 
 static func _air_cells(size: Vector3i) -> PackedInt32Array:
 	var cells := PackedInt32Array()

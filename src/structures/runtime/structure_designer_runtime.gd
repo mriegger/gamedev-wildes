@@ -4,6 +4,7 @@ class_name StructureDesignerRuntime
 class ConnectionTarget:
 	var cell: Vector3i
 	var direction: LevelSocketDefinition.Direction
+	var aperture_cells: Array[Vector3i]
 	var side_available: bool
 	var valid: bool
 
@@ -91,7 +92,7 @@ func _process(_delta: float) -> void:
 	if _current_hit == null:
 		_guide_view.clear_preview()
 		if _connection_targeting:
-			_designer_ui.present_connection_target(null, false, true)
+			_designer_ui.present_connection_target(null, false, true, Vector2i.ZERO)
 		return
 	if _connection_targeting:
 		_present_connection_target(_current_hit)
@@ -192,6 +193,7 @@ func _sync_module_presentation() -> void:
 	_designer_ui.present_module_state(
 		_draft.get_weight(),
 		_draft.get_sockets(),
+		_socket_aperture_sizes(),
 		_draft.get_spawn_marker(),
 		_draft.get_return_door_marker(),
 	)
@@ -208,13 +210,18 @@ func _present_connection_target(hit: VoxelRaycastHit) -> void:
 	if target == null:
 		var cell := hit.target_cell
 		if _draft.is_in_bounds(cell) and _draft.is_in_bounds(cell + Vector3i.UP):
-			_guide_view.show_connection_preview(cell, false)
+			_guide_view.show_connection_preview([cell, cell + Vector3i.UP], false)
 		else:
 			_guide_view.clear_preview()
-		_designer_ui.present_connection_target(null, false, true)
+		_designer_ui.present_connection_target(null, false, true, Vector2i.ZERO)
 		return
-	_guide_view.show_connection_preview(target.cell, target.valid)
-	_designer_ui.present_connection_target(target.direction, target.valid, target.side_available)
+	_guide_view.show_connection_preview(target.aperture_cells, target.valid)
+	_designer_ui.present_connection_target(
+		target.direction,
+		target.valid,
+		target.side_available,
+		LevelSocketAperture.dimensions(target.aperture_cells, target.direction),
+	)
 
 func _connection_target_for_hit(hit: VoxelRaycastHit) -> ConnectionTarget:
 	var candidate_cells: Array[Vector3i] = [hit.target_cell]
@@ -228,6 +235,9 @@ func _connection_target_for_hit(hit: VoxelRaycastHit) -> ConnectionTarget:
 		var target := ConnectionTarget.new()
 		target.cell = cell
 		target.direction = direction as LevelSocketDefinition.Direction
+		target.aperture_cells = _draft.get_socket_candidate_cells(target.cell, target.direction)
+		if target.aperture_cells.is_empty() and _draft.is_in_bounds(cell + Vector3i.UP):
+			target.aperture_cells.assign([cell, cell + Vector3i.UP])
 		target.side_available = not _draft.has_socket_direction(target.direction)
 		target.valid = target.side_available and _draft.can_add_socket(target.cell, target.direction)
 		if target.valid:
@@ -260,7 +270,7 @@ func _try_add_targeted_connection() -> void:
 	if not change.succeeded:
 		return
 	_guide_view.clear_preview()
-	_designer_ui.present_connection_target(null, false, true)
+	_designer_ui.present_connection_target(null, false, true, Vector2i.ZERO)
 	if _all_connection_sides_used():
 		_stop_connection_targeting()
 		_designer_ui.open_module_panel()
@@ -270,6 +280,13 @@ func _all_connection_sides_used() -> bool:
 		if not _draft.has_socket_direction(value as LevelSocketDefinition.Direction):
 			return false
 	return true
+
+func _socket_aperture_sizes() -> Dictionary:
+	var sizes: Dictionary = {}
+	for socket in _draft.get_sockets():
+		var aperture := _draft.get_socket_aperture_cells(socket.socket_id)
+		sizes[socket.socket_id] = LevelSocketAperture.dimensions(aperture, socket.direction)
+	return sizes
 
 func _on_ui_blocking_changed(blocking: bool) -> void:
 	if blocking:

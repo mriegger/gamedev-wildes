@@ -35,7 +35,9 @@ ascend/descend, and `Shift` acceleration. Left-click removes, right-click places
 infinite creative palette, and `M` opens Level Module tools with a free cursor. Closing either
 panel returns to first-person building. `/` opens the developer console, and `Esc` closes active
 designer UI before offering to leave the designer. In Module Tools, `Place Connections` returns to
-first-person connection mode: click lower boundary walls from inside to add doorways, then press
+first-person connection mode. Click a solid lower boundary wall for a standard 1×2 doorway, or
+click the floor beneath a prebuilt boundary opening to register its complete shape and size. Only
+matching openings connect; every unused opening therefore needs a compatible cap module. Press
 `Esc` when finished. Two opposite connections form a straight hall; rooms can expose all four sides.
 
 The animation tuner is a compact right-side debug-build panel. Its Movement, Animation, Parts,
@@ -76,6 +78,8 @@ must still be added explicitly to the appropriate level content and catalog; rep
 are not consumed or registered by generation automatically.
 Hall and room are authoring descriptions rather than persisted module types: the generator follows
 doorway connections, while `LevelDefinition` assigns modules to its start, expansion, and cap pools.
+Connection openings are derived from authored boundary geometry, so hallways can use any enclosed
+opening size supported by the module bounds.
 
 **Blocks.** Grass, dirt, sand, stone, wood, leaves, cobblestone, mossy stone bricks, stone bricks,
 terracotta bricks, and wood planks are minable and placeable. Copper is minable but not placeable.

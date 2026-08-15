@@ -10,6 +10,7 @@ func _init() -> void:
 	_test_restore_and_binding()
 	_test_module_restore_and_protection()
 	_test_module_authoring_transactions()
+	_test_variable_connection_aperture()
 	_test_four_way_room_connections()
 	_test_requirement_reference_counts()
 	_test_module_authoring_snapshot()
@@ -182,7 +183,7 @@ func _test_module_restore_and_protection() -> void:
 	for cell in [Vector3i(2, 0, 0), Vector3i(2, 0, 4), Vector3i(1, 0, 2), Vector3i(3, 0, 2)]:
 		_expect(not draft.try_remove_block(cell).succeeded, "metadata-required solid accepted removal at %s" % cell)
 	_expect(not draft.is_dirty(), "rejected metadata edits dirtied the Level Module draft")
-	_expect(draft.try_place_block(Vector3i(4, 3, 4), BlockId.Type.DIRT).succeeded, "unrelated Level Module placement was rejected")
+	_expect(draft.try_place_block(Vector3i(4, 3, 3), BlockId.Type.DIRT).succeeded, "unrelated Level Module placement was rejected")
 	_expect(draft.try_remove_block(Vector3i(4, 0, 4)).succeeded, "unrelated Level Module removal was rejected")
 	_expect(draft.is_dirty(), "unrelated Level Module edits did not dirty the draft")
 
@@ -199,17 +200,14 @@ func _test_module_authoring_transactions() -> void:
 	_expect(not clean_module.try_set_weight(0.0).succeeded, "clean module accepted an invalid weight")
 	_expect(not clean_module.is_dirty() and clean_module.snapshot_cells() == clean_cells and clean_module.get_sockets().is_empty(), "rejected clean-module metadata commands committed state")
 	var draft := StructureDraft.create_level_module(Vector3i(5, 4, 5))
+	for direction in LevelSocketDefinition.Direction.values():
+		_build_boundary_wall(draft, direction as LevelSocketDefinition.Direction)
 	var sockets: Array[Dictionary] = [
 		{"cell": Vector3i(2, 1, 0), "direction": LevelSocketDefinition.Direction.NORTH, "id": &"north"},
 		{"cell": Vector3i(4, 1, 2), "direction": LevelSocketDefinition.Direction.EAST, "id": &"east"},
 		{"cell": Vector3i(2, 1, 4), "direction": LevelSocketDefinition.Direction.SOUTH, "id": &"south"},
 		{"cell": Vector3i(0, 1, 2), "direction": LevelSocketDefinition.Direction.WEST, "id": &"west"},
 	]
-	for socket_data in sockets:
-		var cell := socket_data.cell as Vector3i
-		_expect(draft.try_place_block(cell + Vector3i.DOWN, BlockId.Type.STONE).succeeded, "socket floor setup failed at %s" % cell)
-		_expect(draft.try_place_block(cell, BlockId.Type.STONE).succeeded, "socket lower aperture setup failed at %s" % cell)
-		_expect(draft.try_place_block(cell + Vector3i.UP, BlockId.Type.STONE).succeeded, "socket upper aperture setup failed at %s" % cell)
 	var east_torch_cell := Vector3i(3, 2, 2)
 	_expect(draft.try_place_torch(east_torch_cell, Vector3i.RIGHT).succeeded, "socket carving torch setup failed")
 	for socket_data in sockets:
@@ -231,40 +229,43 @@ func _test_module_authoring_transactions() -> void:
 	var failed_cells := draft.snapshot_cells()
 	var failed_sockets := draft.get_sockets()
 	_expect(not draft.try_add_socket(Vector3i(3, 1, 1), LevelSocketDefinition.Direction.NORTH).succeeded, "non-boundary socket was accepted")
-	_expect(not draft.try_add_socket(Vector3i(3, 1, 0), LevelSocketDefinition.Direction.NORTH).succeeded, "socket without a floor was accepted")
+	_expect(not draft.try_add_socket(Vector3i(3, 1, 0), LevelSocketDefinition.Direction.NORTH).succeeded, "socket overlapping an existing aperture was accepted")
 	_expect(draft.snapshot_cells() == failed_cells and draft.get_sockets().size() == failed_sockets.size(), "failed socket creation partially committed")
-	_expect(draft.try_place_block(Vector3i(3, 0, 0), BlockId.Type.STONE).succeeded, "blocked-inward socket floor setup failed")
-	_expect(draft.try_place_block(Vector3i(3, 1, 1), BlockId.Type.STONE).succeeded, "blocked-inward socket body setup failed")
-	var blocked_snapshot := draft.snapshot_cells()
-	_expect(not draft.try_add_socket(Vector3i(3, 1, 0), LevelSocketDefinition.Direction.NORTH).succeeded, "socket with blocked inward body clearance was accepted")
-	_expect(draft.snapshot_cells() == blocked_snapshot and draft.get_sockets().size() == failed_sockets.size(), "blocked-inward socket partially committed")
-	var second_north := Vector3i(1, 1, 0)
-	_expect(draft.try_place_block(second_north + Vector3i.DOWN, BlockId.Type.STONE).succeeded, "second north floor setup failed")
-	_expect(draft.try_place_block(second_north, BlockId.Type.STONE).succeeded, "second north lower setup failed")
-	_expect(draft.try_place_block(second_north + Vector3i.UP, BlockId.Type.STONE).succeeded, "second north upper setup failed")
-	_expect(draft.try_add_socket(second_north, LevelSocketDefinition.Direction.NORTH).succeeded, "second north socket failed")
-	authored = draft.get_sockets()
-	_expect(authored[-1].socket_id == &"north_2", "same-direction socket did not receive a unique ID")
-	_expect(not draft.try_place_block(second_north, BlockId.Type.DIRT).succeeded, "socket aperture accepted a block")
-	_expect(not draft.try_set_void(second_north).succeeded, "socket aperture accepted VOID")
-	_expect(not draft.try_remove_block(second_north + Vector3i.DOWN).succeeded, "socket floor accepted removal")
-	_expect(not draft.try_set_void(second_north + Vector3i.DOWN).succeeded, "socket floor accepted VOID")
-	_expect(draft.try_remove_socket(&"north_2").succeeded, "socket removal failed")
-	_expect(draft.get_cell(second_north) == StructureCell.AIR and draft.get_cell(second_north + Vector3i.UP) == StructureCell.AIR, "socket removal refilled its aperture")
-	var open_readd := draft.try_add_socket(second_north, LevelSocketDefinition.Direction.NORTH)
-	_expect(open_readd.succeeded and open_readd.changed_cells.is_empty() and draft.get_sockets()[-1].socket_id == &"north_2", "open socket re-add changed cells or lost its next unique ID")
-	_expect(draft.try_remove_block(Vector3i(3, 1, 1)).succeeded, "partial-aperture inward clearance setup failed")
-	_expect(draft.try_place_block(Vector3i(3, 2, 0), BlockId.Type.STONE).succeeded, "partial-aperture wall setup failed")
-	var partial_carve := draft.try_add_socket(Vector3i(3, 1, 0), LevelSocketDefinition.Direction.NORTH)
-	_expect(partial_carve.succeeded and partial_carve.changed_cells == [Vector3i(3, 2, 0)] and draft.get_sockets()[-1].socket_id == &"north_3", "partial socket aperture did not return its one-cell carve")
+	var blocked := StructureDraft.create_level_module(Vector3i(7, 4, 7))
+	_build_boundary_wall(blocked, LevelSocketDefinition.Direction.NORTH)
+	_expect(blocked.try_place_block(Vector3i(3, 1, 1), BlockId.Type.STONE).succeeded, "blocked-inward socket body setup failed")
+	var blocked_snapshot := blocked.snapshot_cells()
+	_expect(not blocked.try_add_socket(Vector3i(3, 1, 0), LevelSocketDefinition.Direction.NORTH).succeeded, "socket with blocked inward body clearance was accepted")
+	_expect(blocked.snapshot_cells() == blocked_snapshot and blocked.get_sockets().is_empty(), "blocked-inward socket partially committed")
+	var repeated := StructureDraft.create_level_module(Vector3i(7, 4, 7))
+	_build_boundary_wall(repeated, LevelSocketDefinition.Direction.NORTH)
+	var first_north := Vector3i(1, 1, 0)
+	var second_north := Vector3i(4, 1, 0)
+	_expect(repeated.try_add_socket(first_north, LevelSocketDefinition.Direction.NORTH).succeeded, "first repeated north socket failed")
+	_expect(repeated.try_add_socket(second_north, LevelSocketDefinition.Direction.NORTH).succeeded, "second repeated north socket failed")
+	_expect(repeated.get_sockets()[-1].socket_id == &"north_2", "same-direction socket did not receive a unique ID")
+	_expect(not repeated.try_place_block(second_north, BlockId.Type.DIRT).succeeded, "socket aperture accepted a block")
+	_expect(not repeated.try_set_void(second_north).succeeded, "socket aperture accepted VOID")
+	_expect(not repeated.try_remove_block(second_north + Vector3i.DOWN).succeeded, "socket floor accepted removal")
+	_expect(not repeated.try_set_void(second_north + Vector3i.DOWN).succeeded, "socket floor accepted VOID")
+	_expect(repeated.try_remove_socket(&"north_2").succeeded, "socket removal failed")
+	_expect(repeated.get_cell(second_north) == StructureCell.AIR and repeated.get_cell(second_north + Vector3i.UP) == StructureCell.AIR, "socket removal refilled its aperture")
+	var open_readd := repeated.try_add_socket(second_north, LevelSocketDefinition.Direction.NORTH)
+	_expect(open_readd.succeeded and open_readd.changed_cells.is_empty() and repeated.get_sockets()[-1].socket_id == &"north_2", "open socket re-add changed cells or lost its next unique ID")
+	var partial := StructureDraft.create_level_module(Vector3i(7, 4, 7))
+	_build_boundary_wall(partial, LevelSocketDefinition.Direction.NORTH)
+	var partial_cell := Vector3i(3, 1, 0)
+	_expect(partial.try_remove_block(partial_cell).succeeded, "partial-aperture lower setup failed")
+	var partial_carve := partial.try_add_socket(partial_cell, LevelSocketDefinition.Direction.NORTH)
+	_expect(partial_carve.succeeded and partial_carve.changed_cells == [partial_cell + Vector3i.UP], "partial socket aperture did not return its one-cell carve")
 	_expect(not draft.try_remove_socket(&"missing").succeeded, "missing socket removal succeeded")
-	var unrelated_support := Vector3i(4, 3, 4)
-	var unrelated_torch := Vector3i(3, 3, 4)
+	var unrelated_support := Vector3i(4, 3, 3)
+	var unrelated_torch := Vector3i(3, 3, 3)
 	var void_support := Vector3i(4, 2, 3)
 	var void_torch := Vector3i(3, 2, 3)
-	_expect(draft.try_place_block(unrelated_support, BlockId.Type.STONE).succeeded, "unrelated torch support setup failed")
+	_expect(StructureCell.is_structure_solid(draft.get_cell(unrelated_support)), "unrelated torch support setup failed")
 	_expect(draft.try_place_torch(unrelated_torch, Vector3i.RIGHT).succeeded, "unrelated torch setup failed")
-	_expect(draft.try_place_block(void_support, BlockId.Type.STONE).succeeded, "VOID torch support setup failed")
+	_expect(StructureCell.is_structure_solid(draft.get_cell(void_support)), "VOID torch support setup failed")
 	_expect(draft.try_place_torch(void_torch, Vector3i.RIGHT).succeeded, "VOID torch setup failed")
 	var void_change := draft.try_set_void(void_support)
 	_expect(void_change.succeeded and void_change.changed_cells == [void_support] and void_change.removed_torch_cells == [void_torch], "VOID edit returned incorrect cell or torch deltas")
@@ -279,8 +280,34 @@ func _test_module_authoring_transactions() -> void:
 	for invalid_weight in [0.0, -1.0, INF, NAN]:
 		_expect(not draft.try_set_weight(invalid_weight).succeeded and draft.get_weight() == 150.25, "invalid module weight changed draft truth")
 
+func _test_variable_connection_aperture() -> void:
+	var draft := StructureDraft.create_level_module(Vector3i(16, 8, 7))
+	_build_boundary_wall(draft, LevelSocketDefinition.Direction.WEST)
+	for y in range(1, 7):
+		for z in range(2, 5):
+			_expect(draft.try_remove_block(Vector3i(0, y, z)).succeeded, "large opening setup failed at %s" % Vector3i(0, y, z))
+	var seed := Vector3i(0, 1, 3)
+	var before := draft.snapshot_cells()
+	var candidate := draft.get_socket_candidate_cells(seed, LevelSocketDefinition.Direction.WEST)
+	_expect(candidate.size() == 18, "large opening candidate did not include all 18 cells")
+	_expect(LevelSocketAperture.dimensions(candidate, LevelSocketDefinition.Direction.WEST) == Vector2i(3, 6), "large opening dimensions changed")
+	_expect(draft.try_add_socket(seed, LevelSocketDefinition.Direction.WEST).succeeded, "large opening registration failed")
+	_expect(draft.snapshot_cells() == before, "registering a prebuilt opening changed dense cells")
+	var copied := draft.get_socket_aperture_cells(&"west")
+	copied.clear()
+	_expect(draft.get_socket_aperture_cells(&"west").size() == 18, "aperture query exposed mutable draft state")
+	_expect(not draft.try_place_block(Vector3i(1, 6, 4), BlockId.Type.STONE).succeeded, "large opening inward AIR accepted a block")
+	_expect(not draft.try_remove_block(Vector3i(0, 0, 2)).succeeded, "large opening floor accepted removal")
+	_expect(not draft.try_remove_block(Vector3i(0, 3, 1)).succeeded, "registered opening expanded through an ordinary cell edit")
+	_expect(draft.try_remove_socket(&"west").succeeded, "large opening socket removal failed")
+	_expect(draft.try_remove_block(Vector3i(0, 3, 1)).succeeded, "unregistered opening could not be resized")
+	_expect(draft.try_add_socket(seed, LevelSocketDefinition.Direction.WEST).succeeded, "resized opening could not be registered again")
+	_expect(draft.get_socket_aperture_cells(&"west").size() == 19, "resized opening profile was not derived from geometry")
+
 func _test_four_way_room_connections() -> void:
 	var draft := StructureDraft.create_level_module(Vector3i(7, 4, 7))
+	for direction in LevelSocketDefinition.Direction.values():
+		_build_boundary_wall(draft, direction as LevelSocketDefinition.Direction)
 	var connections: Array[Dictionary] = [
 		{"cell": Vector3i(3, 1, 0), "direction": LevelSocketDefinition.Direction.NORTH},
 		{"cell": Vector3i(6, 1, 3), "direction": LevelSocketDefinition.Direction.EAST},
@@ -288,10 +315,8 @@ func _test_four_way_room_connections() -> void:
 		{"cell": Vector3i(0, 1, 3), "direction": LevelSocketDefinition.Direction.WEST},
 	]
 	for connection in connections:
-		var cell := connection.cell as Vector3i
-		var direction := connection.direction as LevelSocketDefinition.Direction
-		for solid_cell in [cell + Vector3i.DOWN, cell, cell + Vector3i.UP]:
-			_expect(draft.try_place_block(solid_cell, BlockId.Type.STONE).succeeded, "four-way room setup failed at %s" % solid_cell)
+		var cell := connection["cell"] as Vector3i
+		var direction := connection["direction"] as LevelSocketDefinition.Direction
 		_expect(draft.get_boundary_directions(cell).has(direction), "four-way room boundary query missed %s" % direction)
 		_expect(draft.can_add_socket(cell, direction), "four-way room query rejected %s" % direction)
 		_expect(draft.try_add_socket(cell, direction).succeeded, "four-way room failed to add %s" % direction)
@@ -302,12 +327,10 @@ func _test_four_way_room_connections() -> void:
 
 func _test_requirement_reference_counts() -> void:
 	var draft := StructureDraft.create_level_module(Vector3i(5, 4, 5))
+	_build_boundary_wall(draft, LevelSocketDefinition.Direction.NORTH)
 	var socket_cell := Vector3i(2, 1, 0)
 	var return_cell := Vector3i(4, 1, 4)
-	for floor_cell in [socket_cell + Vector3i.DOWN, return_cell + Vector3i.DOWN]:
-		_expect(draft.try_place_block(floor_cell, BlockId.Type.STONE).succeeded, "overlap floor setup failed")
-	_expect(draft.try_place_block(socket_cell, BlockId.Type.STONE).succeeded, "overlap lower aperture setup failed")
-	_expect(draft.try_place_block(socket_cell + Vector3i.UP, BlockId.Type.STONE).succeeded, "overlap upper aperture setup failed")
+	_expect(draft.try_place_block(return_cell + Vector3i.DOWN, BlockId.Type.STONE).succeeded, "overlap return floor setup failed")
 	_expect(draft.try_add_socket(socket_cell, LevelSocketDefinition.Direction.NORTH).succeeded, "overlap socket setup failed")
 	var marker_change := draft.try_set_markers(
 		socket_cell,
@@ -346,14 +369,13 @@ func _test_requirement_reference_counts() -> void:
 
 func _test_module_authoring_snapshot() -> void:
 	var draft := StructureDraft.create_level_module(Vector3i(5, 4, 5))
+	_build_boundary_wall(draft, LevelSocketDefinition.Direction.NORTH)
 	var socket_cell := Vector3i(2, 1, 0)
 	var spawn_cell := Vector3i(1, 1, 2)
 	var return_cell := Vector3i(3, 1, 2)
 	var torch_support := Vector3i(4, 2, 3)
-	for floor_cell in [socket_cell + Vector3i.DOWN, spawn_cell + Vector3i.DOWN, return_cell + Vector3i.DOWN]:
+	for floor_cell in [spawn_cell + Vector3i.DOWN, return_cell + Vector3i.DOWN]:
 		_expect(draft.try_place_block(floor_cell, BlockId.Type.STONE).succeeded, "snapshot floor setup failed")
-	_expect(draft.try_place_block(socket_cell, BlockId.Type.STONE).succeeded, "snapshot lower aperture setup failed")
-	_expect(draft.try_place_block(socket_cell + Vector3i.UP, BlockId.Type.STONE).succeeded, "snapshot upper aperture setup failed")
 	_expect(draft.try_add_socket(socket_cell, LevelSocketDefinition.Direction.NORTH).succeeded, "snapshot socket command failed")
 	_expect(draft.try_set_markers(spawn_cell, LevelSocketDefinition.Direction.EAST, return_cell, LevelSocketDefinition.Direction.WEST).succeeded, "snapshot marker command failed")
 	_expect(draft.try_place_block(torch_support, BlockId.Type.STONE).succeeded, "snapshot torch support failed")
@@ -402,6 +424,10 @@ func _make_module_definition(identifier: StringName) -> LevelModuleDefinition:
 	definition.weight = 150.25
 	definition.cells.resize(definition.size.x * definition.size.y * definition.size.z)
 	definition.cells.fill(StructureCell.AIR)
+	for y in definition.size.y:
+		for x in definition.size.x:
+			definition.cells[StructureCell.index_of(Vector3i(x, y, 0), definition.size)] = BlockId.Type.STONE
+			definition.cells[StructureCell.index_of(Vector3i(x, y, definition.size.z - 1), definition.size)] = BlockId.Type.STONE
 	for cell in [
 		Vector3i(2, 0, 0),
 		Vector3i(2, 0, 4),
@@ -412,6 +438,8 @@ func _make_module_definition(identifier: StringName) -> LevelModuleDefinition:
 		Vector3i(4, 0, 4),
 	]:
 		definition.cells[StructureCell.index_of(cell, definition.size)] = BlockId.Type.STONE
+	for cell in [Vector3i(2, 1, 0), Vector3i(2, 2, 0), Vector3i(2, 1, 4), Vector3i(2, 2, 4)]:
+		definition.cells[StructureCell.index_of(cell, definition.size)] = StructureCell.AIR
 	definition.cells[StructureCell.index_of(Vector3i(0, 3, 0), definition.size)] = StructureCell.VOID
 	var north := LevelSocketDefinition.new()
 	north.socket_id = &"north_entry"
@@ -440,6 +468,16 @@ func _make_module_definition(identifier: StringName) -> LevelModuleDefinition:
 	return_marker.facing = LevelSocketDefinition.Direction.WEST
 	definition.return_door_marker = return_marker
 	return definition
+
+func _build_boundary_wall(draft: StructureDraft, direction: LevelSocketDefinition.Direction) -> void:
+	var size := draft.get_size()
+	for y in size.y:
+		for z in size.z:
+			for x in size.x:
+				var cell := Vector3i(x, y, z)
+				if not LevelSocketAperture.is_boundary(cell, size, direction) or StructureCell.is_structure_solid(draft.get_cell(cell)):
+					continue
+				_expect(draft.try_place_block(cell, BlockId.Type.STONE).succeeded, "boundary wall setup failed at %s" % cell)
 
 func _expect(condition: bool, message: String) -> void:
 	if not condition:

@@ -102,7 +102,7 @@ func _test_module_ui(item_catalog: ItemCatalog) -> void:
 	var marker_commit := ui.get_node("ModulePanel/Margin/VBox/Markers/Actions/Commit") as Button
 	_expect(not module_panel.visible and module_tools_hint.visible, "Level Module did not start in first-person build mode")
 	_expect(module_panel.find_children("*Torch*", "Control", true, false).is_empty(), "Level Module panel retained torch metadata clutter")
-	_expect(socket_help.text.contains("from inside") and socket_help.text.contains("two ends for a hall") and socket_help.text.contains("four sides for a room"), "connection controls did not explain hall and room authoring")
+	_expect(socket_help.text.contains("1×2") and socket_help.text.contains("prebuilt opening") and socket_help.text.contains("matching shape and size"), "connection controls did not explain variable opening authoring")
 	var blocking_state_start := _blocking_states.size()
 	ui.ui_blocking_changed.connect(_on_ui_blocking_changed)
 	ui.open_module_panel()
@@ -143,15 +143,22 @@ func _test_module_ui(item_catalog: ItemCatalog) -> void:
 	return_marker.cell = Vector3i(5, 1, 5)
 	return_marker.facing = LevelSocketDefinition.Direction.WEST
 	var sockets: Array[LevelSocketDefinition] = [north_socket, east_socket]
-	ui.present_module_state(0.05, sockets, null, null)
+	var aperture_sizes: Dictionary = {
+		&"north": Vector2i(3, 6),
+		&"east": Vector2i(1, 2),
+		&"south": Vector2i(1, 2),
+		&"west": Vector2i(1, 2),
+	}
+	ui.present_module_state(0.05, sockets, aperture_sizes, null, null)
 	_expect(connection_summary.text.contains("eligible as an expansion module"), "two connections were not presented as expansion-eligible")
+	_expect((socket_list.get_child(0).get_child(0) as Label).text.contains("3×6"), "connection list omitted the opening size")
 	var one_socket: Array[LevelSocketDefinition] = [north_socket]
-	ui.present_module_state(0.05, one_socket, null, null)
+	ui.present_module_state(0.05, one_socket, aperture_sizes, null, null)
 	_expect(connection_summary.text.contains("cap or dead end"), "one connection was not presented as cap-eligible")
 	var four_sockets: Array[LevelSocketDefinition] = [north_socket, east_socket, south_socket, west_socket]
-	ui.present_module_state(0.05, four_sockets, null, null)
+	ui.present_module_state(0.05, four_sockets, aperture_sizes, null, null)
 	_expect(socket_list.get_child_count() == 4 and connection_button.disabled, "four-sided room did not complete the simple connection workflow")
-	ui.present_module_state(0.05, sockets, spawn_marker, return_marker)
+	ui.present_module_state(0.05, sockets, aperture_sizes, spawn_marker, return_marker)
 	_expect(weight_input.value == 0.05 and _weights.is_empty(), "module weight presentation changed or re-emitted an imported sub-tenth value")
 	_expect(is_zero_approx(weight_input.step) and weight_input.allow_lesser and weight_input.allow_greater, "module weight editor did not preserve the positive finite weight contract")
 	_expect(socket_list.get_child_count() == 2, "module socket list presentation mismatch")
@@ -166,9 +173,9 @@ func _test_module_ui(item_catalog: ItemCatalog) -> void:
 	_expect(not ui.is_module_panel_open() and not ui.is_ui_blocking(), "connection control did not return to first-person mode")
 	ui.set_connection_targeting(true)
 	_expect(connection_mode_hint.visible and not module_tools_hint.visible, "connection targeting did not replace the module hint")
-	ui.present_connection_target(LevelSocketDefinition.Direction.NORTH, true, true)
-	_expect(connection_mode_hint.text.contains("North connection ready") and connection_mode_hint.text.contains("Left-click"), "valid connection target guidance is unclear")
-	ui.present_connection_target(LevelSocketDefinition.Direction.NORTH, false, false)
+	ui.present_connection_target(LevelSocketDefinition.Direction.NORTH, true, true, Vector2i(3, 6))
+	_expect(connection_mode_hint.text.contains("North 3×6 opening ready") and connection_mode_hint.text.contains("Left-click"), "valid connection target guidance is unclear")
+	ui.present_connection_target(LevelSocketDefinition.Direction.NORTH, false, false, Vector2i(3, 6))
 	_expect(connection_mode_hint.text.contains("already has a connection"), "used connection side guidance is unclear")
 	ui.set_connection_targeting(false)
 	ui.open_module_panel()

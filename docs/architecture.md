@@ -199,6 +199,13 @@ the owner of actual start, expansion, and cap pool membership. The designer's si
 mode authors at most one doorway per cardinal side while the persisted module format and generator
 continue to support existing advanced multi-door resources.
 
+Each socket persists only its stable ID, boundary seed, and facing. Its aperture is the complete
+connected AIR component on that boundary plane, keeping geometry authoritative without a parallel
+serialized shape. The draft protects the aperture, inward clearance, and supporting floor as one
+transactional footprint. Generation normalizes the complete aperture after rotation and joins only
+matching shapes and sizes, allowing arbitrary enclosed hallway cross-sections while rejecting
+truncated seams. Standard wall targeting carves 1×2; prebuilt openings retain their authored size.
+
 `Game` constructs and injects the dual-format file store while composing the console, authoring
 workflow, dialogs, and dedicated first-person runtime. It
 snapshots and suspends the active overworld or dungeon presentation without changing
@@ -218,7 +225,7 @@ consume drafts, or register exported modules automatically.
 
 Each future content family, such as containers or encounters, adds its typed authored definition,
 transformed placement, state owner, runtime coordinator, and real caller together. Generic marker
-payloads, module graphs, persistent placement IDs, and new socket profiles wait until a feature
+payloads, module graphs, and persistent placement IDs wait until a feature
 actually consumes them.
 
 Serialized configuration is explicit and typed. `BlockCatalog` lists `BlockDefinition` resources,

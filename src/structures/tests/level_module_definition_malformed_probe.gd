@@ -41,8 +41,13 @@ func _make_valid_module() -> LevelModuleDefinition:
 	definition.weight = 150.25
 	definition.cells.resize(64)
 	definition.cells.fill(StructureCell.AIR)
+	for y in definition.size.y:
+		for x in definition.size.x:
+			definition.cells[StructureCell.index_of(Vector3i(x, y, 0), definition.size)] = BlockId.Type.STONE
 	for cell in [Vector3i(1, 0, 0), Vector3i(0, 0, 2), Vector3i(3, 0, 2), Vector3i(3, 2, 3)]:
 		definition.cells[StructureCell.index_of(cell, definition.size)] = BlockId.Type.STONE
+	for cell in [Vector3i(1, 1, 0), Vector3i(1, 2, 0)]:
+		definition.cells[StructureCell.index_of(cell, definition.size)] = StructureCell.AIR
 	var socket := LevelSocketDefinition.new()
 	socket.socket_id = &"north"
 	socket.cell = Vector3i(1, 1, 0)

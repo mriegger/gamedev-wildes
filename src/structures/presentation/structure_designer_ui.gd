@@ -135,36 +135,38 @@ func is_ui_blocking() -> bool:
 func set_connection_targeting(active: bool) -> void:
 	_connection_targeting = active
 	if active:
-		_connection_mode_hint.text = "CONNECTION MODE  •  Click a lower outer boundary wall  •  Esc when done"
+		_connection_mode_hint.text = "CONNECTION MODE  •  Click a wall or an opening's floor  •  Esc when done"
 	_present_active_overlay()
 
 func present_connection_target(
 	direction: Variant,
 	valid: bool,
 	side_available: bool,
+	aperture_size: Vector2i,
 ) -> void:
 	if not _connection_targeting:
 		return
 	if direction == null:
-		_connection_mode_hint.text = "CONNECTION MODE  •  Aim at a lower outer boundary wall  •  Esc when done"
+		_connection_mode_hint.text = "CONNECTION MODE  •  Aim at a wall or an opening's floor  •  Esc when done"
 		return
 	var direction_text := _direction_text(direction as LevelSocketDefinition.Direction)
 	if not side_available:
 		_connection_mode_hint.text = "%s already has a connection  •  Choose another side  •  Esc when done" % direction_text
 	elif valid:
-		_connection_mode_hint.text = "%s connection ready  •  Left-click to add  •  Esc when done" % direction_text
+		_connection_mode_hint.text = "%s %d×%d opening ready  •  Left-click to add  •  Esc when done" % [direction_text, aperture_size.x, aperture_size.y]
 	else:
-		_connection_mode_hint.text = "%s doorway needs a solid floor and clear interior  •  Esc when done" % direction_text
+		_connection_mode_hint.text = "%s opening needs supported floors, enclosure, and clear interior  •  Esc when done" % direction_text
 
 func present_module_state(
 	weight: float,
 	sockets: Array[LevelSocketDefinition],
+	aperture_sizes: Dictionary,
 	spawn_marker: LevelMarkerDefinition,
 	return_marker: LevelMarkerDefinition,
 ) -> void:
 	assert(_module_tools_available)
 	_weight_input.set_value_no_signal(weight)
-	_rebuild_socket_list(sockets)
+	_rebuild_socket_list(sockets, aperture_sizes)
 	_connection_summary.text = _connection_summary_text(sockets.size(), spawn_marker != null)
 	_connection_button.disabled = _all_cardinal_sides_used(sockets)
 	_spawn_current.text = _marker_text("Current", spawn_marker)
@@ -294,11 +296,12 @@ func _populate_direction_options(option: OptionButton) -> void:
 	for direction in LevelSocketDefinition.Direction.values():
 		option.add_item(_direction_text(direction as LevelSocketDefinition.Direction), direction)
 
-func _rebuild_socket_list(sockets: Array[LevelSocketDefinition]) -> void:
+func _rebuild_socket_list(sockets: Array[LevelSocketDefinition], aperture_sizes: Dictionary) -> void:
 	_clear_container(_socket_list)
 	for socket in sockets:
+		var aperture_size: Vector2i = aperture_sizes.get(socket.socket_id, Vector2i.ZERO)
 		var row := _metadata_row(
-			"%s  %s  %s" % [socket.socket_id, _cell_text(socket.cell), _direction_text(socket.direction)],
+			"%s  %s  %s  %d×%d" % [socket.socket_id, _cell_text(socket.cell), _direction_text(socket.direction), aperture_size.x, aperture_size.y],
 			Callable(self, "_on_socket_remove_pressed").bind(socket.socket_id),
 		)
 		_socket_list.add_child(row)

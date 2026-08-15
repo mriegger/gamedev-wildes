@@ -44,6 +44,7 @@ func _run() -> void:
 		return
 	_test_catalog_and_modules()
 	_test_rotations()
+	_test_variable_aperture_generation()
 	_test_seed_identity_and_failures()
 	_test_entrance_placement_stability()
 	var fuzz_started := Time.get_ticks_msec()
@@ -107,6 +108,7 @@ func _test_catalog_and_modules() -> void:
 			_expect(module.cell_at(socket.cell + inward) == StructureCell.AIR, "socket does not open into lower interior AIR in %s" % module.module_id)
 			_expect(module.cell_at(socket.cell + Vector3i.UP + inward) == StructureCell.AIR, "socket does not open into upper interior AIR in %s" % module.module_id)
 			_expect(StructureCell.is_structure_solid(module.cell_at(socket.cell + Vector3i.DOWN)), "socket floor is missing in %s" % module.module_id)
+			_expect(module.socket_aperture_cells(socket).size() == 2, "legacy socket opening changed in %s" % module.module_id)
 		var seen_torches: Dictionary = {}
 		for torch in module.torches:
 			_expect(not seen_torches.has(torch.cell), "duplicate torch cell in %s" % module.module_id)
@@ -186,6 +188,163 @@ func _test_rotated_marker(module: LevelModuleDefinition, marker: LevelMarkerDefi
 	_expect(int(occupied[transformed_head]) == StructureCell.AIR, "rotated %s marker headroom changed in %s q%d" % [label, module.module_id, quarter_turns])
 	_expect(StructureCell.is_structure_solid(int(occupied[transformed_floor])), "rotated %s marker floor changed in %s q%d" % [label, module.module_id, quarter_turns])
 	_expect(LevelSocketDefinition.rotate(marker.facing, quarter_turns) == ((int(marker.facing) + quarter_turns) % 4 as LevelSocketDefinition.Direction), "rotated %s marker facing changed in %s q%d" % [label, module.module_id, quarter_turns])
+
+func _test_variable_aperture_generation() -> void:
+	var start := _make_aperture_module(
+		&"aperture_start",
+		[{"id": &"east", "direction": LevelSocketDefinition.Direction.EAST, "width": 3, "height": 6, "seed_offset": 1}],
+		true,
+	)
+	var hall := _make_aperture_module(
+		&"aperture_hall",
+		[
+			{"id": &"north", "direction": LevelSocketDefinition.Direction.NORTH, "width": 3, "height": 6, "seed_offset": 0},
+			{"id": &"south", "direction": LevelSocketDefinition.Direction.SOUTH, "width": 3, "height": 6, "seed_offset": 2},
+		],
+		false,
+	)
+	var cap := _make_aperture_module(
+		&"aperture_cap",
+		[{"id": &"north", "direction": LevelSocketDefinition.Direction.NORTH, "width": 3, "height": 6, "seed_offset": 1}],
+		false,
+	)
+	var definition := _make_aperture_level(start.module_id, hall.module_id, cap.module_id)
+	var catalog := LevelCatalog.new()
+	catalog.modules.assign([start, hall, cap])
+	catalog.levels.append(definition)
+	_expect(catalog.validate(), "variable-aperture catalog failed validation")
+	var result := LevelGenerator.new().generate(catalog, definition.level_id, 81, &"variable_aperture", Vector3i.ZERO)
+	_expect(result.succeeded, "matching 3×6 openings did not generate: %s" % result.failure_reason)
+	if result.succeeded:
+		_expect(result.layout.placed_modules.size() == 3, "variable-aperture layout placed the wrong module count")
+		var seam_edges: Dictionary = {}
+		var records: Array[Dictionary] = []
+		var rotated_hall := false
+		for placement_index in result.layout.placed_modules.size():
+			var placement := result.layout.placed_modules[placement_index]
+			if placement.definition.module_id == hall.module_id:
+				rotated_hall = placement.rotation == 1 or placement.rotation == 3
+			for socket in placement.definition.sockets:
+				var aperture := placement.world_socket_aperture(socket)
+				_expect(aperture.size() == 18, "generated 3×6 socket lost aperture cells")
+				records.append({
+					"placement": placement_index,
+					"direction": placement.world_direction(socket.direction),
+					"aperture": aperture,
+				})
+		_expect(rotated_hall, "variable-aperture hallway did not exercise quarter-turn matching")
+		for record_index in records.size():
+			var record := records[record_index]
+			var direction := record["direction"] as LevelSocketDefinition.Direction
+			var outward := LevelSocketDefinition.vector_for(direction)
+			var aperture := record["aperture"] as Array[Vector3i]
+			var partner_count := 0
+			for other_index in records.size():
+				if other_index == record_index:
+					continue
+				var other := records[other_index]
+				if int(other["placement"]) == int(record["placement"]) or int(other["direction"]) != int(LevelSocketDefinition.opposite(direction)):
+					continue
+				if _translated_cells_equal(aperture, outward, other["aperture"] as Array[Vector3i]):
+					partner_count += 1
+			_expect(partner_count == 1, "variable-aperture socket did not have exactly one matching partner")
+			for cell in aperture:
+				var neighbor := cell + outward
+				_expect(result.layout.get_cell(cell) == StructureCell.AIR and result.layout.get_cell(neighbor) == StructureCell.AIR, "variable-aperture seam was not open")
+				seam_edges[_edge_key(cell, neighbor)] = true
+		_expect(seam_edges.size() == 36, "variable-aperture layout did not create two 18-cell seams")
+	var small_cap := _make_aperture_module(
+		&"small_aperture_cap",
+		[{"id": &"north", "direction": LevelSocketDefinition.Direction.NORTH, "width": 1, "height": 2, "seed_offset": 0}],
+		false,
+	)
+	var mismatch_definition := _make_aperture_level(start.module_id, hall.module_id, small_cap.module_id)
+	var mismatch_catalog := LevelCatalog.new()
+	mismatch_catalog.modules.assign([start, hall, small_cap])
+	mismatch_catalog.levels.append(mismatch_definition)
+	_expect(mismatch_catalog.validate(), "mismatched-aperture catalog was structurally invalid")
+	var mismatch := LevelGenerator.new().generate(mismatch_catalog, mismatch_definition.level_id, 81, &"variable_aperture", Vector3i.ZERO)
+	_expect(not mismatch.succeeded, "3×6 opening connected to a 1×2 cap")
+	var shape_cap := _make_aperture_module(
+		&"shape_aperture_cap",
+		[{"id": &"north", "direction": LevelSocketDefinition.Direction.NORTH, "width": 3, "height": 6, "seed_offset": 1}],
+		false,
+	)
+	var missing_profile_cell := _aperture_boundary_cell(LevelSocketDefinition.Direction.NORTH, 2, 6, shape_cap.size)
+	shape_cap.cells[StructureCell.index_of(missing_profile_cell, shape_cap.size)] = BlockId.Type.STONE
+	_expect(shape_cap.validate(), "asymmetric 3×6 cap failed validation")
+	_expect(LevelSocketAperture.dimensions(shape_cap.socket_aperture_cells(shape_cap.sockets[0]), LevelSocketDefinition.Direction.NORTH) == Vector2i(3, 6), "asymmetric cap lost its 3×6 bounds")
+	var shape_definition := _make_aperture_level(start.module_id, hall.module_id, shape_cap.module_id)
+	var shape_catalog := LevelCatalog.new()
+	shape_catalog.modules.assign([start, hall, shape_cap])
+	shape_catalog.levels.append(shape_definition)
+	_expect(shape_catalog.validate(), "asymmetric-aperture catalog was structurally invalid")
+	var shape_mismatch := LevelGenerator.new().generate(shape_catalog, shape_definition.level_id, 81, &"variable_aperture", Vector3i.ZERO)
+	_expect(not shape_mismatch.succeeded, "different opening shapes with identical 3×6 bounds connected")
+
+func _make_aperture_module(module_id: StringName, socket_specs: Array[Dictionary], with_markers: bool) -> LevelModuleDefinition:
+	var module := LevelModuleDefinition.new()
+	module.module_id = module_id
+	module.size = Vector3i(7, 8, 7)
+	module.cells.resize(module.size.x * module.size.y * module.size.z)
+	module.cells.fill(BlockId.Type.STONE)
+	for y in range(1, module.size.y - 1):
+		for z in range(1, module.size.z - 1):
+			for x in range(1, module.size.x - 1):
+				module.cells[StructureCell.index_of(Vector3i(x, y, z), module.size)] = StructureCell.AIR
+	for spec in socket_specs:
+		var direction := spec["direction"] as LevelSocketDefinition.Direction
+		var width := int(spec["width"])
+		var height := int(spec["height"])
+		var transverse_start := (module.size.x - width) / 2 if direction == LevelSocketDefinition.Direction.NORTH or direction == LevelSocketDefinition.Direction.SOUTH else (module.size.z - width) / 2
+		for y in range(1, height + 1):
+			for transverse in range(transverse_start, transverse_start + width):
+				var cell := _aperture_boundary_cell(direction, transverse, y, module.size)
+				module.cells[StructureCell.index_of(cell, module.size)] = StructureCell.AIR
+		var socket := LevelSocketDefinition.new()
+		socket.socket_id = spec["id"] as StringName
+		socket.cell = _aperture_boundary_cell(direction, transverse_start + int(spec["seed_offset"]), 1, module.size)
+		socket.direction = direction
+		module.sockets.append(socket)
+	if with_markers:
+		module.spawn_marker = LevelMarkerDefinition.new()
+		module.spawn_marker.cell = Vector3i(2, 1, 3)
+		module.spawn_marker.facing = LevelSocketDefinition.Direction.EAST
+		module.return_door_marker = LevelMarkerDefinition.new()
+		module.return_door_marker.cell = Vector3i(4, 1, 3)
+		module.return_door_marker.facing = LevelSocketDefinition.Direction.WEST
+	_expect(module.validate(), "synthetic aperture module failed validation: %s" % module_id)
+	return module
+
+func _make_aperture_level(start_id: StringName, expansion_id: StringName, cap_id: StringName) -> LevelDefinition:
+	var definition := LevelDefinition.new()
+	definition.level_id = &"variable_aperture_level"
+	definition.presentation = _catalog.get_level(LEVEL_ID).presentation
+	definition.start_module_id = start_id
+	definition.expansion_module_ids.assign([expansion_id])
+	definition.cap_module_ids.assign([cap_id])
+	definition.minimum_module_count = 3
+	definition.maximum_module_count = 3
+	definition.maximum_extent = Vector3i(64, 16, 64)
+	definition.maximum_explored_states = 1000
+	return definition
+
+func _aperture_boundary_cell(
+	direction: LevelSocketDefinition.Direction,
+	transverse: int,
+	y: int,
+	size: Vector3i,
+) -> Vector3i:
+	match direction:
+		LevelSocketDefinition.Direction.NORTH:
+			return Vector3i(transverse, y, 0)
+		LevelSocketDefinition.Direction.EAST:
+			return Vector3i(size.x - 1, y, transverse)
+		LevelSocketDefinition.Direction.SOUTH:
+			return Vector3i(transverse, y, size.z - 1)
+		LevelSocketDefinition.Direction.WEST:
+			return Vector3i(0, y, transverse)
+	return Vector3i.ZERO
 
 func _test_seed_identity_and_failures() -> void:
 	var identity_seed := LevelGenerator.derive_seed(1337, &"entrance", Vector3i(1, 2, 3))
@@ -332,6 +491,7 @@ func _validate_layout(layout: LevelLayout, seed_index: int) -> void:
 				"placement": placement_index,
 				"cell": placement.world_cell(socket.cell),
 				"direction": placement.world_direction(socket.direction),
+				"aperture": placement.world_socket_aperture(socket),
 			})
 		for torch in module.torches:
 			var torch_cell := placement.world_cell(torch.cell)
@@ -358,7 +518,8 @@ func _validate_layout(layout: LevelLayout, seed_index: int) -> void:
 		var socket := socket_records[socket_index]
 		var cell := socket["cell"] as Vector3i
 		var direction := socket["direction"] as LevelSocketDefinition.Direction
-		var neighbor := cell + LevelSocketDefinition.vector_for(direction)
+		var outward := LevelSocketDefinition.vector_for(direction)
+		var aperture := socket["aperture"] as Array[Vector3i]
 		var partner_count := 0
 		for other_index in socket_records.size():
 			if other_index == socket_index:
@@ -366,13 +527,13 @@ func _validate_layout(layout: LevelLayout, seed_index: int) -> void:
 			var other := socket_records[other_index]
 			if int(other["placement"]) == int(socket["placement"]):
 				continue
-			if other["cell"] == neighbor and int(other["direction"]) == int(LevelSocketDefinition.opposite(direction)):
+			if int(other["direction"]) == int(LevelSocketDefinition.opposite(direction)) and _translated_cells_equal(aperture, outward, other["aperture"] as Array[Vector3i]):
 				partner_count += 1
 		_expect(partner_count == 1, "socket has %d partners instead of one at %s for %s" % [partner_count, cell, label])
-		_expect(layout.get_cell(cell) == StructureCell.AIR and layout.get_cell(cell + Vector3i.UP) == StructureCell.AIR, "socket aperture is not open for %s" % label)
-		_expect(layout.get_cell(neighbor) == StructureCell.AIR and layout.get_cell(neighbor + Vector3i.UP) == StructureCell.AIR, "socket partner aperture is not open for %s" % label)
-		allowed_cross_module_edges[_edge_key(cell, neighbor)] = true
-		allowed_cross_module_edges[_edge_key(cell + Vector3i.UP, neighbor + Vector3i.UP)] = true
+		for aperture_cell in aperture:
+			var neighbor := aperture_cell + outward
+			_expect(layout.get_cell(aperture_cell) == StructureCell.AIR and layout.get_cell(neighbor) == StructureCell.AIR, "socket aperture is not open for %s" % label)
+			allowed_cross_module_edges[_edge_key(aperture_cell, neighbor)] = true
 	for cell in layout.cells:
 		if int(layout.cells[cell]) != StructureCell.AIR:
 			continue
@@ -556,6 +717,17 @@ func _edge_key(first: Vector3i, second: Vector3i) -> String:
 		first = second
 		second = swap
 	return "%d,%d,%d>%d,%d,%d" % [first.x, first.y, first.z, second.x, second.y, second.z]
+
+func _translated_cells_equal(first: Array[Vector3i], offset: Vector3i, second: Array[Vector3i]) -> bool:
+	if first.size() != second.size():
+		return false
+	var second_cells: Dictionary = {}
+	for cell in second:
+		second_cells[cell] = true
+	for cell in first:
+		if not second_cells.has(cell + offset):
+			return false
+	return true
 
 func _cell_less(first: Vector3i, second: Vector3i) -> bool:
 	if first.x != second.x:

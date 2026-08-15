@@ -14,6 +14,9 @@ func cell_at(cell: Vector3i) -> int:
 	assert(StructureCell.is_in_bounds(cell, size))
 	return cells[StructureCell.index_of(cell, size)]
 
+func socket_aperture_cells(socket: LevelSocketDefinition) -> Array[Vector3i]:
+	return LevelSocketAperture.find_cells(socket, size, cells)
+
 func rotated_size(quarter_turns: int) -> Vector3i:
 	if posmod(quarter_turns, 2) == 0:
 		return size
@@ -59,6 +62,7 @@ func validate() -> bool:
 			push_error("[LevelModuleDefinition] Invalid block ID %d for %s" % [value, source])
 			valid = false
 	var socket_ids: Dictionary = {}
+	var socket_aperture_owners: Dictionary = {}
 	for socket in sockets:
 		if socket == null:
 			push_error("[LevelModuleDefinition] Null socket for %s" % source)
@@ -69,7 +73,16 @@ func validate() -> bool:
 			valid = false
 			continue
 		socket_ids[socket.socket_id] = true
-		valid = _validate_socket(socket, source) and valid
+		var socket_valid := _validate_socket(socket, source)
+		valid = socket_valid and valid
+		if not socket_valid:
+			continue
+		for aperture_cell in socket_aperture_cells(socket):
+			if socket_aperture_owners.has(aperture_cell):
+				push_error("[LevelModuleDefinition] Socket apertures overlap for %s" % source)
+				valid = false
+			else:
+				socket_aperture_owners[aperture_cell] = socket.socket_id
 	var torch_cells: Dictionary = {}
 	for torch in torches:
 		if torch == null:
@@ -91,41 +104,16 @@ func validate() -> bool:
 	return valid
 
 func _validate_socket(socket: LevelSocketDefinition, source: String) -> bool:
-	var valid := true
 	if not LevelSocketDefinition.is_valid_direction(socket.direction):
 		push_error("[LevelModuleDefinition] Socket direction is invalid for %s" % source)
 		return false
-	if not StructureCell.is_in_bounds(socket.cell, size) or not StructureCell.is_in_bounds(socket.cell + Vector3i.UP, size):
-		push_error("[LevelModuleDefinition] Socket aperture outside %s" % source)
-		return false
-	var boundary_valid := false
-	match socket.direction:
-		LevelSocketDefinition.Direction.NORTH:
-			boundary_valid = socket.cell.z == 0
-		LevelSocketDefinition.Direction.EAST:
-			boundary_valid = socket.cell.x == size.x - 1
-		LevelSocketDefinition.Direction.SOUTH:
-			boundary_valid = socket.cell.z == size.z - 1
-		LevelSocketDefinition.Direction.WEST:
-			boundary_valid = socket.cell.x == 0
-	if not boundary_valid:
+	if not LevelSocketAperture.is_boundary(socket.cell, size, socket.direction):
 		push_error("[LevelModuleDefinition] Socket is not on its facing boundary for %s" % source)
-		valid = false
-	var inward: Vector3i = -LevelSocketDefinition.vector_for(socket.direction)
-	var aperture_cells: Array[Vector3i] = [socket.cell, socket.cell + Vector3i.UP]
-	for aperture_cell in aperture_cells:
-		if cell_at(aperture_cell) != StructureCell.AIR:
-			push_error("[LevelModuleDefinition] Socket aperture is not air for %s" % source)
-			valid = false
-		var inner_cell: Vector3i = aperture_cell + inward
-		if not StructureCell.is_in_bounds(inner_cell, size) or cell_at(inner_cell) != StructureCell.AIR:
-			push_error("[LevelModuleDefinition] Socket does not open into interior air for %s" % source)
-			valid = false
-	var floor_cell := socket.cell + Vector3i.DOWN
-	if not StructureCell.is_in_bounds(floor_cell, size) or not StructureCell.is_structure_solid(cell_at(floor_cell)):
-		push_error("[LevelModuleDefinition] Socket has no floor for %s" % source)
-		valid = false
-	return valid
+		return false
+	if not LevelSocketAperture.is_valid(socket, size, cells):
+		push_error("[LevelModuleDefinition] Socket opening is not enclosed, supported, or clear for %s" % source)
+		return false
+	return true
 
 func _validate_torch(torch: LevelTorchDefinition, source: String) -> bool:
 	if not LevelSocketDefinition.is_valid_direction(torch.wall_direction):

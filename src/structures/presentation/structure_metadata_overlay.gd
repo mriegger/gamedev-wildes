@@ -33,16 +33,26 @@ func _add_socket(socket: LevelSocketDefinition) -> void:
 	root.name = "Socket_%s" % socket.socket_id
 	add_child(root)
 	var material := _make_material(SOCKET_COLOR)
-	for offset in [Vector3i.ZERO, Vector3i.UP]:
-		var aperture := MeshInstance3D.new()
-		var aperture_mesh := BoxMesh.new()
-		aperture_mesh.size = Vector3.ONE * 0.92
-		aperture.mesh = aperture_mesh
-		aperture.position = Vector3(socket.cell + offset) + Vector3.ONE * 0.5
-		aperture.material_override = material
-		aperture.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		root.add_child(aperture)
-	_add_arrow(root, Vector3(socket.cell) + Vector3(0.5, 1.0, 0.5), LevelSocketDefinition.vector_for(socket.direction), material)
+	var aperture_cells := _draft.get_socket_aperture_cells(socket.socket_id)
+	var aperture_mesh := BoxMesh.new()
+	aperture_mesh.size = Vector3.ONE * 0.92
+	var multimesh := MultiMesh.new()
+	multimesh.transform_format = MultiMesh.TRANSFORM_3D
+	multimesh.mesh = aperture_mesh
+	multimesh.instance_count = aperture_cells.size()
+	var center := Vector3.ZERO
+	for index in aperture_cells.size():
+		var position := Vector3(aperture_cells[index]) + Vector3.ONE * 0.5
+		multimesh.set_instance_transform(index, Transform3D(Basis.IDENTITY, position))
+		center += position
+	var aperture := MultiMeshInstance3D.new()
+	aperture.name = "Aperture"
+	aperture.multimesh = multimesh
+	aperture.material_override = material
+	aperture.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(aperture)
+	center /= float(aperture_cells.size())
+	_add_arrow(root, center, LevelSocketDefinition.vector_for(socket.direction), material)
 
 func _add_marker(label: String, cell: Vector3i, facing: LevelSocketDefinition.Direction, color: Color) -> void:
 	var root := Node3D.new()

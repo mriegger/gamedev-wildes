@@ -15,3 +15,9 @@ func world_cell(local_cell: Vector3i) -> Vector3i:
 
 func world_direction(local_direction: LevelSocketDefinition.Direction) -> LevelSocketDefinition.Direction:
 	return LevelSocketDefinition.rotate(local_direction, rotation)
+
+func world_socket_aperture(socket: LevelSocketDefinition) -> Array[Vector3i]:
+	var aperture: Array[Vector3i] = []
+	for cell in definition.socket_aperture_cells(socket):
+		aperture.append(world_cell(cell))
+	return aperture

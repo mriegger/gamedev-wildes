@@ -35,6 +35,7 @@ func _init() -> void:
 	_test_import_discovery(store, root_path, suffix)
 	_test_round_trip(store, root_path, suffix)
 	_test_module_round_trip(store, root_path, suffix)
+	_test_variable_module_round_trip(store, root_path, suffix)
 	_test_export_failures(store, root_path, suffix)
 	_test_write_failure_preservation(store, root_path, suffix)
 	_test_temporary_cleanup(root_path, suffix)
@@ -154,7 +155,7 @@ func _test_module_round_trip(store: StructureFileStore, root_path: String, suffi
 		snapshot.spawn_marker.cell = Vector3i.ZERO
 	_expect(draft.get_cell(Vector3i(4, 0, 4)) == BlockId.Type.STONE and draft.get_sockets()[0].socket_id == &"north_entry", "Level Module snapshot exposed cells or sockets")
 	_expect(draft.get_torches()[0].cell == Vector3i(3, 2, 3) and draft.get_spawn_marker().cell == Vector3i(1, 1, 2), "Level Module snapshot exposed torches or markers")
-	_expect(draft.try_place_block(Vector3i(4, 3, 4), BlockId.Type.DIRT).succeeded, "Level Module overwrite edit failed")
+	_expect(draft.try_place_block(Vector3i(4, 3, 3), BlockId.Type.DIRT).succeeded, "Level Module overwrite edit failed")
 	var overwritten := store.export_draft(draft)
 	_expect(overwritten.succeeded and not draft.is_dirty(), "bound Level Module overwrite failed: %s" % overwritten.message)
 	var reloaded := ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE) as LevelModuleDefinition
@@ -164,7 +165,7 @@ func _test_module_round_trip(store: StructureFileStore, root_path: String, suffi
 	_expect(reloaded != null and reloaded.sockets.size() == 2 and reloaded.sockets[0].socket_id == &"north_entry" and reloaded.sockets[1].socket_id == &"south_exit", "Level Module overwrite changed socket order")
 	_expect(reloaded != null and reloaded.torches.size() == 2 and reloaded.torches[0].cell == Vector3i(3, 2, 3) and reloaded.torches[1].cell == Vector3i(1, 2, 3), "Level Module overwrite changed torch order")
 	_expect(reloaded != null and reloaded.spawn_marker.cell == Vector3i(1, 1, 2) and reloaded.return_door_marker.cell == Vector3i(3, 1, 2), "Level Module overwrite changed paired markers")
-	_expect(draft.try_place_block(Vector3i(3, 3, 4), BlockId.Type.STONE).succeeded, "Level Module stale-type edit failed")
+	_expect(draft.try_place_block(Vector3i(3, 3, 3), BlockId.Type.STONE).succeeded, "Level Module stale-type edit failed")
 	_expect(ResourceSaver.save(_make_definition(identifier, BlockId.Type.STONE), path) == OK, "bound Level Module source could not be replaced with a generic structure")
 	var replacement_bytes := FileAccess.get_file_as_bytes(path)
 	var stale_type := store.export_draft(draft)
@@ -179,6 +180,32 @@ func _test_module_round_trip(store: StructureFileStore, root_path: String, suffi
 	_expect(new_export.succeeded and new_resource is LevelModuleDefinition, "new Level Module draft exported the wrong resource type")
 	var new_entry := _find_entry(store.list_importable(), new_identifier)
 	_expect(new_entry != null and new_entry.format == StructureDraft.Format.LEVEL_MODULE, "new Level Module export was not listed with its type")
+
+func _test_variable_module_round_trip(store: StructureFileStore, root_path: String, suffix: String) -> void:
+	var identifier := StringName("variable_module_%s" % suffix)
+	var path := _track_path(root_path.path_join("%s.tres" % identifier))
+	var draft := StructureDraft.create_level_module(Vector3i(4, 4, 4))
+	for y in 4:
+		for x in 4:
+			_expect(draft.try_place_block(Vector3i(x, y, 0), BlockId.Type.STONE).succeeded, "variable module boundary setup failed")
+	for x in range(1, 3):
+		for y in range(1, 3):
+			_expect(draft.try_remove_block(Vector3i(x, y, 0)).succeeded, "variable module opening setup failed")
+	_expect(draft.try_add_socket(Vector3i(1, 1, 0), LevelSocketDefinition.Direction.NORTH).succeeded, "variable module socket setup failed")
+	var exported := store.export_draft(draft, identifier)
+	_expect(exported.succeeded and FileAccess.file_exists(path), "variable module root export failed: %s" % exported.message)
+	var entry := _find_entry(store.list_importable(), identifier)
+	_expect(entry != null and entry.format == StructureDraft.Format.LEVEL_MODULE, "variable module was not listed for import")
+	if entry == null:
+		return
+	var imported := store.import_entry(entry)
+	_expect(imported.succeeded and imported.draft != null, "variable module import failed: %s" % imported.message)
+	if not imported.succeeded:
+		return
+	_expect(imported.draft.get_socket_aperture_cells(&"north").size() == 4, "variable module import changed the derived opening")
+	var expected := StructureResourceAdapter.create_snapshot(draft, identifier)
+	var actual := StructureResourceAdapter.create_snapshot(imported.draft, identifier)
+	_expect(StructureResourceAdapter.resources_equal(expected, actual), "variable module round trip changed persisted fields")
 
 func _test_export_failures(store: StructureFileStore, root_path: String, suffix: String) -> void:
 	var existing_id := StringName("collision_%s" % suffix)
@@ -269,6 +296,10 @@ func _make_module_definition(identifier: StringName) -> LevelModuleDefinition:
 	definition.weight = 150.25
 	definition.cells.resize(definition.size.x * definition.size.y * definition.size.z)
 	definition.cells.fill(StructureCell.AIR)
+	for y in definition.size.y:
+		for x in definition.size.x:
+			definition.cells[StructureCell.index_of(Vector3i(x, y, 0), definition.size)] = BlockId.Type.STONE
+			definition.cells[StructureCell.index_of(Vector3i(x, y, definition.size.z - 1), definition.size)] = BlockId.Type.STONE
 	for cell in [
 		Vector3i(2, 0, 0),
 		Vector3i(2, 0, 4),
@@ -279,6 +310,8 @@ func _make_module_definition(identifier: StringName) -> LevelModuleDefinition:
 		Vector3i(4, 0, 4),
 	]:
 		definition.cells[StructureCell.index_of(cell, definition.size)] = BlockId.Type.STONE
+	for cell in [Vector3i(2, 1, 0), Vector3i(2, 2, 0), Vector3i(2, 1, 4), Vector3i(2, 2, 4)]:
+		definition.cells[StructureCell.index_of(cell, definition.size)] = StructureCell.AIR
 	definition.cells[StructureCell.index_of(Vector3i(0, 3, 0), definition.size)] = StructureCell.VOID
 	var north := LevelSocketDefinition.new()
 	north.socket_id = &"north_entry"

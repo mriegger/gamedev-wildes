@@ -115,7 +115,8 @@ func _assemble_attempt(state: AssemblyState, target_module_count: int) -> Assemb
 			var required_direction := LevelSocketDefinition.opposite(frontier["direction"] as LevelSocketDefinition.Direction)
 			var candidates_by_direction := _cap_candidates_by_direction if use_caps else _expansion_candidates_by_direction
 			var candidates := candidates_by_direction[required_direction] as Array[Dictionary]
-			for candidate in _weighted_candidate_order(candidates):
+			var frontier_profile := frontier["aperture_profile"] as Array[Vector2i]
+			for candidate in _weighted_candidate_order(_matching_candidates(candidates, frontier_profile)):
 				if _explored_states >= _search_limit:
 					return null
 				_explored_states += 1
@@ -172,12 +173,18 @@ func _build_candidates(module_ids: Array[StringName], required_direction: LevelS
 		var module := _catalog.get_module(module_id)
 		for rotation in range(4):
 			for socket in module.sockets:
-				if LevelSocketDefinition.rotate(socket.direction, rotation) != required_direction:
+				var rotated_direction := LevelSocketDefinition.rotate(socket.direction, rotation)
+				if rotated_direction != required_direction:
 					continue
+				var rotated_aperture: Array[Vector3i] = []
+				for cell in module.socket_aperture_cells(socket):
+					rotated_aperture.append(module.rotate_cell(cell, rotation))
 				candidates.append({
 					"module": module,
 					"rotation": rotation,
 					"socket": socket,
+					"aperture_cells": rotated_aperture,
+					"aperture_profile": LevelSocketAperture.normalized_profile(rotated_aperture, rotated_direction),
 					"key": "%s:%d:%s" % [module.module_id, rotation, socket.socket_id],
 					"weight": module.weight,
 				})
@@ -185,6 +192,13 @@ func _build_candidates(module_ids: Array[StringName], required_direction: LevelS
 		return String(a["key"]) < String(b["key"])
 	)
 	return candidates
+
+func _matching_candidates(candidates: Array[Dictionary], profile: Array[Vector2i]) -> Array[Dictionary]:
+	var matching: Array[Dictionary] = []
+	for candidate in candidates:
+		if candidate["aperture_profile"] as Array[Vector2i] == profile:
+			matching.append(candidate)
+	return matching
 
 func _weighted_candidate_order(candidates: Array[Dictionary]) -> Array[Dictionary]:
 	var remaining: Array[Dictionary] = []
@@ -210,16 +224,24 @@ func _try_place(state: AssemblyState, frontier_index: int, candidate: Dictionary
 	var module := candidate["module"] as LevelModuleDefinition
 	var socket := candidate["socket"] as LevelSocketDefinition
 	var rotation := int(candidate["rotation"])
-	var frontier_cell := frontier["cell"] as Vector3i
 	var frontier_direction := frontier["direction"] as LevelSocketDefinition.Direction
-	var new_socket_world := frontier_cell + LevelSocketDefinition.vector_for(frontier_direction)
-	var origin := new_socket_world - module.rotate_cell(socket.cell, rotation)
+	var frontier_aperture := frontier["aperture_cells"] as Array[Vector3i]
+	var rotated_aperture := candidate["aperture_cells"] as Array[Vector3i]
+	var target_aperture: Array[Vector3i] = []
+	for cell in frontier_aperture:
+		target_aperture.append(cell + LevelSocketDefinition.vector_for(frontier_direction))
+	var origin := _minimum_cell(target_aperture) - _minimum_cell(rotated_aperture)
+	var connected_aperture: Array[Vector3i] = []
+	for cell in rotated_aperture:
+		connected_aperture.append(origin + cell)
+	if not _same_cell_set(target_aperture, connected_aperture):
+		return null
 	var placement := LevelPlacedModule.new(module, origin, rotation)
 	var transformed_cells := _transformed_cells(placement)
 	for cell in transformed_cells:
 		if state.cells.has(cell):
 			return null
-	if not _has_only_connected_air_adjacency(state, transformed_cells, frontier_cell, new_socket_world):
+	if not _has_only_connected_air_adjacency(state, transformed_cells, frontier_aperture, frontier_direction):
 		return null
 	var candidate_min := state.bounds_min
 	var candidate_max := state.bounds_max
@@ -245,7 +267,16 @@ func _transformed_cells(placement: LevelPlacedModule) -> Dictionary:
 				transformed[placement.world_cell(local_cell)] = value
 	return transformed
 
-func _has_only_connected_air_adjacency(state: AssemblyState, transformed_cells: Dictionary, frontier_cell: Vector3i, new_socket_world: Vector3i) -> bool:
+func _has_only_connected_air_adjacency(
+	state: AssemblyState,
+	transformed_cells: Dictionary,
+	frontier_aperture: Array[Vector3i],
+	frontier_direction: LevelSocketDefinition.Direction,
+) -> bool:
+	var connected_neighbors: Dictionary = {}
+	var outward := LevelSocketDefinition.vector_for(frontier_direction)
+	for frontier_cell in frontier_aperture:
+		connected_neighbors[frontier_cell + outward] = frontier_cell
 	for cell in transformed_cells:
 		if int(transformed_cells[cell]) != StructureCell.AIR:
 			continue
@@ -254,9 +285,7 @@ func _has_only_connected_air_adjacency(state: AssemblyState, transformed_cells: 
 			var neighbor: Vector3i = transformed_cell + offset
 			if int(state.cells.get(neighbor, StructureCell.VOID)) != StructureCell.AIR:
 				continue
-			var is_lower_aperture: bool = transformed_cell == new_socket_world and neighbor == frontier_cell
-			var is_upper_aperture: bool = transformed_cell == new_socket_world + Vector3i.UP and neighbor == frontier_cell + Vector3i.UP
-			if not is_lower_aperture and not is_upper_aperture:
+			if not connected_neighbors.has(transformed_cell) or connected_neighbors[transformed_cell] != neighbor:
 				return false
 	return true
 
@@ -273,11 +302,15 @@ func _write_placement(state: AssemblyState, placement: LevelPlacedModule, transf
 	for socket in placement.definition.sockets:
 		if socket.socket_id == connected_socket_id:
 			continue
+		var world_aperture := placement.world_socket_aperture(socket)
+		var world_direction := placement.world_direction(socket.direction)
 		state.frontiers.append({
 			"module_id": placement.definition.module_id,
 			"socket_id": socket.socket_id,
 			"cell": placement.world_cell(socket.cell),
-			"direction": placement.world_direction(socket.direction),
+			"direction": world_direction,
+			"aperture_cells": world_aperture,
+			"aperture_profile": LevelSocketAperture.normalized_profile(world_aperture, world_direction),
 		})
 	for torch in placement.definition.torches:
 		state.torches.append(LevelTorchPlacement.new(
@@ -289,6 +322,24 @@ func _write_placement(state: AssemblyState, placement: LevelPlacedModule, transf
 func _fits_extent(bounds_min: Vector3i, bounds_max: Vector3i) -> bool:
 	var span := bounds_max - bounds_min + Vector3i.ONE
 	return span.x <= _definition.maximum_extent.x and span.y <= _definition.maximum_extent.y and span.z <= _definition.maximum_extent.z
+
+func _minimum_cell(cells: Array[Vector3i]) -> Vector3i:
+	assert(not cells.is_empty())
+	var minimum := cells[0]
+	for cell in cells:
+		minimum = minimum.min(cell)
+	return minimum
+
+func _same_cell_set(first: Array[Vector3i], second: Array[Vector3i]) -> bool:
+	if first.size() != second.size():
+		return false
+	var first_cells: Dictionary = {}
+	for cell in first:
+		first_cells[cell] = true
+	for cell in second:
+		if not first_cells.has(cell):
+			return false
+	return true
 
 func _validate_finished_state(state: AssemblyState, target_module_count: int) -> bool:
 	if not state.frontiers.is_empty() or state.placed_modules.size() != target_module_count:

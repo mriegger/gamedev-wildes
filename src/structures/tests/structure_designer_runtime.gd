@@ -140,22 +140,23 @@ func _test_runtime() -> void:
 	await _free_runtime(runtime)
 
 func _test_module_runtime() -> void:
-	var draft := StructureDraft.create_level_module(Vector3i(32, 4, 32))
+	var draft := StructureDraft.create_level_module(Vector3i(32, 8, 7))
 	_expect(draft != null, "Level Module draft creation failed")
 	if draft == null:
 		return
+	_build_boundary_wall(draft, LevelSocketDefinition.Direction.NORTH)
+	_build_boundary_wall(draft, LevelSocketDefinition.Direction.SOUTH)
+	for y in range(1, 7):
+		for x in range(2, 5):
+			_expect(draft.try_remove_block(Vector3i(x, y, 6)).succeeded, "large south opening setup failed")
 	for cell in [
-		Vector3i(3, 0, 0),
-		Vector3i(3, 1, 0),
-		Vector3i(3, 2, 0),
-		Vector3i(3, 0, 6),
 		Vector3i(1, 0, 2),
 		Vector3i(2, 0, 2),
 		Vector3i(5, 0, 4),
 		Vector3i(1, 0, 4),
 		Vector3i(1, 1, 4),
 		Vector3i(1, 2, 4),
-		Vector3i(20, 1, 20),
+		Vector3i(20, 1, 5),
 	]:
 		_expect(draft.try_place_block(cell, BlockId.Type.STONE).succeeded, "Level Module runtime seed failed at %s" % cell)
 	var carved_torch := Vector3i(3, 2, 1)
@@ -200,7 +201,7 @@ func _test_module_runtime() -> void:
 	_expect(draft.get_weight() == 3.25 and weight_input.value == 3.25, "rejected weight input diverged from draft truth")
 	_expect(runtime.cancel_active_ui(), "Esc cancellation hook did not consume Level Module tools")
 	_expect(not ui.is_module_panel_open() and controller._input_enabled and controller._mouse_capture_enabled, "Esc cancellation did not restore first-person build mode")
-	var distant_chunk_before := _chunk_mesh_id(runtime, Vector3i(1, 0, 1))
+	var distant_chunk_before := _chunk_mesh_id(runtime, Vector3i(1, 0, 0))
 	_toggle_module_tools(runtime)
 	(ui.get_node("ModulePanel/Margin/VBox/ConnectionHeader/PlaceConnections") as Button).pressed.emit()
 	var connection_hint := ui.get_node("ConnectionModeHint") as Label
@@ -209,9 +210,8 @@ func _test_module_runtime() -> void:
 
 	_aim_at(controller, Vector3(3.5, 0.0, 3.5), Vector3(1.5, 1.5, 4.5))
 	runtime._process(0.0)
-	var invalid_preview := runtime.get_node("StructureDesignerGuideView/PlacementPreview") as MeshInstance3D
-	var invalid_upper_preview := runtime.get_node("StructureDesignerGuideView/ConnectionUpperPreview") as MeshInstance3D
-	_expect(invalid_preview.visible and invalid_upper_preview.visible, "invalid connection target did not show a two-block preview")
+	var connection_preview := runtime.get_node("StructureDesignerGuideView/ConnectionPreview") as MultiMeshInstance3D
+	_expect(connection_preview.visible and connection_preview.multimesh.instance_count == 2, "invalid connection target did not show a two-block preview")
 	_click(runtime, MOUSE_BUTTON_LEFT)
 	_expect(draft.get_sockets().is_empty() and draft.get_cell(Vector3i(1, 1, 4)) == BlockId.Type.STONE, "invalid connection click mutated the module")
 	_expect(connection_hint.visible, "invalid connection click exited targeting mode")
@@ -220,16 +220,18 @@ func _test_module_runtime() -> void:
 	runtime._process(0.0)
 	var north_hit := controller.get_centered_raycast()
 	_expect(north_hit != null and north_hit.target_cell == Vector3i(3, 1, 0) and north_hit.face_normal == Vector3i.BACK, "inside north-wall targeting fixture is invalid")
-	_expect(connection_hint.text.contains("North connection ready"), "inside north wall did not derive an outward north connection")
+	_expect(connection_hint.text.contains("North 1×2 opening ready"), "inside north wall did not derive an outward north connection")
 	_click(runtime, MOUSE_BUTTON_LEFT)
 	var sockets := draft.get_sockets()
 	_expect(sockets.size() == 1 and sockets[0].socket_id == &"north" and sockets[0].direction == LevelSocketDefinition.Direction.NORTH, "connection intent did not commit its boundary direction")
 	_expect(draft.get_cell(Vector3i(3, 1, 0)) == StructureCell.AIR and draft.get_cell(Vector3i(3, 2, 0)) == StructureCell.AIR, "connection intent did not carve its two-block aperture")
 	_expect(not torch_renderer.has_torch(carved_torch), "connection carving retained a torch whose support was removed")
 	_expect(torch_renderer.torch_instances.get(retained_torch) == retained_torch_node, "connection carving rebuilt an unrelated torch node")
-	_expect(_chunk_mesh_id(runtime, Vector3i(1, 0, 1)) == distant_chunk_before, "connection carving rebuilt an unrelated chunk")
+	_expect(_chunk_mesh_id(runtime, Vector3i(1, 0, 0)) == distant_chunk_before, "connection carving rebuilt an unrelated chunk")
 	_expect(socket_list.get_child_count() == 1 and overlay.get_child_count() == 1 and overlay.has_node("Socket_north"), "connection metadata presentation did not refresh exactly once")
 	_expect(not runtime._can_preview_placement(Vector3i(3, 1, 0), BlockId.Type.DIRT, Vector3i.FORWARD), "connection aperture presented an invalid block placement")
+	var north_overlay := overlay.get_node("Socket_north/Aperture") as MultiMeshInstance3D
+	_expect(north_overlay.multimesh.instance_count == 2, "north connection overlay did not present its complete aperture")
 	_expect_overlay_color(overlay.get_node("Socket_north") as Node3D, StructureMetadataOverlay.SOCKET_COLOR, "connection")
 	var socket_root := overlay.get_node("Socket_north") as Node3D
 	weight_input.value = 0.0
@@ -240,12 +242,16 @@ func _test_module_runtime() -> void:
 	runtime._process(0.0)
 	var south_hit := controller.get_centered_raycast()
 	_expect(south_hit != null and south_hit.target_cell == Vector3i(3, 0, 6) and south_hit.face_normal == Vector3i.UP, "open south-doorway floor targeting fixture is invalid")
-	_expect(connection_hint.text.contains("South connection ready"), "boundary floor did not recover the open south doorway connection")
+	_expect(connection_hint.text.contains("South 3×6 opening ready"), "boundary floor did not recover the large south opening")
+	_expect(connection_preview.visible and connection_preview.multimesh.instance_count == 18, "large south opening did not preview all aperture cells")
+	var before_south_connection := draft.snapshot_cells()
 	_click(runtime, MOUSE_BUTTON_LEFT)
 	sockets = draft.get_sockets()
 	_expect(sockets.size() == 2 and sockets[1].socket_id == &"south" and sockets[1].direction == LevelSocketDefinition.Direction.SOUTH, "second hallway end did not commit the south connection")
-	_expect(draft.get_cell(Vector3i(3, 1, 6)) == StructureCell.AIR and draft.get_cell(Vector3i(3, 2, 6)) == StructureCell.AIR, "south connection did not carve its doorway")
-	_expect(socket_list.get_child_count() == 2 and overlay.has_node("Socket_south"), "two-ended hallway presentation did not refresh")
+	_expect(draft.snapshot_cells() == before_south_connection and draft.get_socket_aperture_cells(&"south").size() == 18, "south connection changed or truncated its prebuilt opening")
+	var south_overlay := overlay.get_node("Socket_south/Aperture") as MultiMeshInstance3D
+	_expect(socket_list.get_child_count() == 2 and south_overlay.multimesh.instance_count == 18, "large south connection presentation did not refresh")
+	_expect((socket_list.get_child(1).get_child(0) as Label).text.contains("3×6"), "large south connection size was absent from the panel")
 	_expect(runtime.cancel_active_ui(), "Esc did not finish connection targeting")
 	_expect(not connection_hint.visible and controller._input_enabled and controller._mouse_capture_enabled, "finishing connection targeting did not restore build mode")
 	_expect(not runtime.cancel_active_ui(), "connection targeting cancellation left another UI layer open")
@@ -367,6 +373,16 @@ func _chunk_mesh_id(runtime: StructureDesignerRuntime, chunk: Vector3i) -> int:
 	if instance == null or instance.mesh == null:
 		return 0
 	return instance.mesh.get_instance_id()
+
+func _build_boundary_wall(draft: StructureDraft, direction: LevelSocketDefinition.Direction) -> void:
+	var size := draft.get_size()
+	for y in size.y:
+		for z in size.z:
+			for x in size.x:
+				var cell := Vector3i(x, y, z)
+				if not LevelSocketAperture.is_boundary(cell, size, direction) or StructureCell.is_structure_solid(draft.get_cell(cell)):
+					continue
+				_expect(draft.try_place_block(cell, BlockId.Type.STONE).succeeded, "runtime boundary wall setup failed at %s" % cell)
 
 func _expect(condition: bool, message: String) -> void:
 	if not condition:
