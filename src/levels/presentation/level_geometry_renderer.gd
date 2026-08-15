@@ -99,7 +99,7 @@ func setup(
 	for doorway in topology.get_doorways():
 		if not seal_ids_by_room.has(doorway.room_id):
 			return false
-		var mesh := mesher.create_uniform_block_mesh(state, doorway.aperture_cells, doorway.fill_block_id)
+		var mesh := mesher.create_doorway_seal_mesh(doorway)
 		if mesh == null:
 			return false
 		seal_meshes[doorway.door_id] = mesh

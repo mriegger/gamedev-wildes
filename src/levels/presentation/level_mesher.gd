@@ -19,15 +19,16 @@ func build_mesh_data_for_cells(state: LevelState, solid_cells: Array[Vector3i]) 
 func create_mesh_for_cells(state: LevelState, solid_cells: Array[Vector3i]) -> ArrayMesh:
 	return _cube_mesher.create_mesh_from_data(build_mesh_data_for_cells(state, solid_cells))
 
-func create_uniform_block_mesh(state: LevelState, cells: Array[Vector3i], block_id: int) -> ArrayMesh:
-	assert(StructureCell.is_structure_solid(block_id))
-	var occupied: Dictionary = {}
-	for cell in cells:
-		occupied[cell] = true
+func create_doorway_seal_mesh(doorway: LevelDoorway) -> ArrayMesh:
+	assert(doorway != null)
+	var inward_direction := -LevelSocketDefinition.vector_for(doorway.direction)
+	var visible_neighbors: Dictionary = {}
+	for cell in doorway.aperture_cells:
+		visible_neighbors[cell + inward_direction] = true
 	return _cube_mesher.create_mesh_from_data(_cube_mesher.build_mesh_data(
-		cells,
-		func(_cell: Vector3i) -> int: return block_id,
-		func(cell: Vector3i) -> bool: return not occupied.has(cell) and state.is_base_interior_open(cell),
+		doorway.aperture_cells,
+		func(_cell: Vector3i) -> int: return doorway.fill_block_id,
+		func(cell: Vector3i) -> bool: return visible_neighbors.has(cell),
 	))
 
 func create_mesh_from_data(data: Variant) -> ArrayMesh:

@@ -767,7 +767,7 @@ func _expect_initial_geometry_state(
 		var owner_discovered := discovered_room_ids.has(doorway.room_id)
 		var expected_visible := sealed_door_ids.has(doorway.door_id) and owner_discovered
 		_expect(seal != null and seal.material_override == terrain_material, "seal %d did not use the authored shared terrain material" % doorway.door_id)
-		_expect(_seal_uses_authored_texture_layers(seal, doorway.fill_block_id, texture_set), "seal %d did not retain its authored fill-block texture layers" % doorway.door_id)
+		_expect_seal_mesh_faces_room(seal, doorway, texture_set)
 		if seal != null:
 			_expect(seal.visible == expected_visible, "seal %d visibility ignored its seal or discovery state" % doorway.door_id)
 			_expect(is_equal_approx(seal.transparency, 0.0 if expected_visible else 1.0), "seal %d transparency ignored its seal or discovery state" % doorway.door_id)
@@ -888,23 +888,33 @@ func _expect_torch_light_state(renderer: TorchRenderer, cell: Vector3i, expected
 	_expect((light.light_energy > 0.0) == expected_visible, "%s torch light %s energy was incorrect" % [context, cell])
 	_expect(not light.shadow_enabled, "%s torch light %s cast a shadow" % [context, cell])
 
-func _seal_uses_authored_texture_layers(seal: MeshInstance3D, block_id: int, texture_set: BlockTextureSet) -> bool:
+func _expect_seal_mesh_faces_room(seal: MeshInstance3D, doorway: LevelDoorway, texture_set: BlockTextureSet) -> void:
 	var mesh := seal.mesh as ArrayMesh if seal != null else null
+	_expect(mesh != null and mesh.get_surface_count() == 1, "seal %d did not retain one mesh surface" % doorway.door_id)
 	if mesh == null or mesh.get_surface_count() != 1:
-		return false
+		return
 	var arrays := mesh.surface_get_arrays(0)
+	var normals := arrays[Mesh.ARRAY_NORMAL] as PackedVector3Array
+	var indices := arrays[Mesh.ARRAY_INDEX] as PackedInt32Array
 	var texture_layers := arrays[Mesh.ARRAY_TEX_UV2] as PackedVector2Array
-	if texture_layers.is_empty():
-		return false
-	var expected_layers: Dictionary = {
-		int(texture_set.top_layers[block_id]): true,
-		int(texture_set.side_layers[block_id]): true,
-		int(texture_set.bottom_layers[block_id]): true,
-	}
+	var face_count := doorway.aperture_cells.size()
+	var inward_normal := Vector3(-LevelSocketDefinition.vector_for(doorway.direction))
+	_expect(normals.size() == face_count * 4, "seal %d rendered more than one face per aperture cell" % doorway.door_id)
+	_expect(indices.size() == face_count * 6, "seal %d retained non-room-facing triangles" % doorway.door_id)
+	_expect(texture_layers.size() == normals.size(), "seal %d texture-layer count did not match its vertices" % doorway.door_id)
+	var faces_room := true
+	for normal in normals:
+		if normal.dot(inward_normal) <= 0.9999:
+			faces_room = false
+			break
+	_expect(faces_room, "seal %d exposed a face toward its hidden hallway" % doorway.door_id)
+	var expected_layer := int(texture_set.side_layers[doorway.fill_block_id])
+	var uses_authored_texture := true
 	for layer in texture_layers:
-		if not expected_layers.has(roundi(layer.x)) or not is_zero_approx(layer.y):
-			return false
-	return true
+		if roundi(layer.x) != expected_layer or not is_zero_approx(layer.y):
+			uses_authored_texture = false
+			break
+	_expect(uses_authored_texture, "seal %d did not retain its authored fill-block side texture" % doorway.door_id)
 
 func _shared_terrain_material(renderer: LevelGeometryRenderer) -> ShaderMaterial:
 	var entry_mesh := renderer.get_node_or_null("EntryGeometry") as MeshInstance3D
