@@ -15,7 +15,7 @@ enum ActiveOverlay {
 signal ui_blocking_changed(blocking: bool)
 signal weight_requested(weight: float)
 signal void_requested
-signal socket_add_requested
+signal connection_targeting_requested
 signal socket_remove_requested(socket_id: StringName)
 signal marker_target_requested(role: MarkerRole, facing: LevelSocketDefinition.Direction)
 signal markers_commit_requested(
@@ -30,6 +30,7 @@ var _item_catalog: ItemCatalog
 var _toolbelt: CreativeToolbelt
 var _active_overlay: ActiveOverlay = ActiveOverlay.NONE
 var _module_tools_available: bool
+var _connection_targeting: bool = false
 var _hovered_palette_item_id: StringName
 var _pending_spawn_cell: Variant
 var _pending_spawn_facing: LevelSocketDefinition.Direction = LevelSocketDefinition.Direction.NORTH
@@ -40,11 +41,13 @@ var _pending_return_facing: LevelSocketDefinition.Direction = LevelSocketDefinit
 @onready var _palette_overlay: Control = $PaletteOverlay as Control
 @onready var _palette_grid: GridContainer = $PaletteOverlay/PalettePanel/Margin/VBox/Scroll/PaletteGrid as GridContainer
 @onready var _module_tools_hint: Label = $ModuleToolsHint as Label
+@onready var _connection_mode_hint: Label = $ConnectionModeHint as Label
 @onready var _module_panel: PanelContainer = $ModulePanel as PanelContainer
 @onready var _module_close_button: Button = $ModulePanel/Margin/VBox/Header/Close as Button
 @onready var _weight_input: SpinBox = $ModulePanel/Margin/VBox/WeightRow/Weight as SpinBox
 @onready var _void_button: Button = $ModulePanel/Margin/VBox/SetVoid as Button
-@onready var _socket_add_button: Button = $ModulePanel/Margin/VBox/SocketHeader/AddSocket as Button
+@onready var _connection_button: Button = $ModulePanel/Margin/VBox/ConnectionHeader/PlaceConnections as Button
+@onready var _connection_summary: Label = $ModulePanel/Margin/VBox/ConnectionSummary as Label
 @onready var _socket_list: VBoxContainer = $ModulePanel/Margin/VBox/SocketScroll/SocketList as VBoxContainer
 @onready var _spawn_current: Label = $ModulePanel/Margin/VBox/Markers/Spawn/Current as Label
 @onready var _spawn_pending: Label = $ModulePanel/Margin/VBox/Markers/Spawn/Pending as Label
@@ -60,12 +63,13 @@ var _pending_return_facing: LevelSocketDefinition.Direction = LevelSocketDefinit
 func _ready() -> void:
 	_palette_overlay.visible = false
 	_module_tools_hint.visible = false
+	_connection_mode_hint.visible = false
 	_module_panel.visible = false
 	_hotbar.slot_selection_requested.connect(_on_hotbar_selection_requested)
 	_module_close_button.pressed.connect(close_module_panel)
 	_weight_input.value_changed.connect(_on_weight_changed)
 	_void_button.pressed.connect(_on_void_pressed)
-	_socket_add_button.pressed.connect(_on_socket_add_pressed)
+	_connection_button.pressed.connect(_on_connection_pressed)
 	_spawn_set_button.pressed.connect(_on_marker_target_pressed.bind(MarkerRole.SPAWN, _spawn_facing))
 	_return_set_button.pressed.connect(_on_marker_target_pressed.bind(MarkerRole.RETURN, _return_facing))
 	_marker_commit_button.pressed.connect(_on_markers_commit_pressed)
@@ -128,6 +132,30 @@ func close_active_overlay() -> bool:
 func is_ui_blocking() -> bool:
 	return _active_overlay != ActiveOverlay.NONE
 
+func set_connection_targeting(active: bool) -> void:
+	_connection_targeting = active
+	if active:
+		_connection_mode_hint.text = "CONNECTION MODE  •  Click a lower outer boundary wall  •  Esc when done"
+	_present_active_overlay()
+
+func present_connection_target(
+	direction: Variant,
+	valid: bool,
+	side_available: bool,
+) -> void:
+	if not _connection_targeting:
+		return
+	if direction == null:
+		_connection_mode_hint.text = "CONNECTION MODE  •  Aim at a lower outer boundary wall  •  Esc when done"
+		return
+	var direction_text := _direction_text(direction as LevelSocketDefinition.Direction)
+	if not side_available:
+		_connection_mode_hint.text = "%s already has a connection  •  Choose another side  •  Esc when done" % direction_text
+	elif valid:
+		_connection_mode_hint.text = "%s connection ready  •  Left-click to add  •  Esc when done" % direction_text
+	else:
+		_connection_mode_hint.text = "%s doorway needs a solid floor and clear interior  •  Esc when done" % direction_text
+
 func present_module_state(
 	weight: float,
 	sockets: Array[LevelSocketDefinition],
@@ -137,6 +165,8 @@ func present_module_state(
 	assert(_module_tools_available)
 	_weight_input.set_value_no_signal(weight)
 	_rebuild_socket_list(sockets)
+	_connection_summary.text = _connection_summary_text(sockets.size(), spawn_marker != null)
+	_connection_button.disabled = _all_cardinal_sides_used(sockets)
 	_spawn_current.text = _marker_text("Current", spawn_marker)
 	_return_current.text = _marker_text("Current", return_marker)
 
@@ -226,8 +256,9 @@ func _set_active_overlay(overlay: ActiveOverlay) -> void:
 func _present_active_overlay() -> void:
 	_palette_overlay.visible = is_palette_open()
 	_module_panel.visible = is_module_panel_open()
-	_module_tools_hint.visible = _module_tools_available and _active_overlay == ActiveOverlay.NONE
-	_hotbar.set_selection_input_enabled(not is_ui_blocking())
+	_module_tools_hint.visible = _module_tools_available and _active_overlay == ActiveOverlay.NONE and not _connection_targeting
+	_connection_mode_hint.visible = _connection_targeting
+	_hotbar.set_selection_input_enabled(not is_ui_blocking() and not _connection_targeting)
 
 func _on_weight_changed(value: float) -> void:
 	weight_requested.emit(value)
@@ -235,8 +266,9 @@ func _on_weight_changed(value: float) -> void:
 func _on_void_pressed() -> void:
 	void_requested.emit()
 
-func _on_socket_add_pressed() -> void:
-	socket_add_requested.emit()
+func _on_connection_pressed() -> void:
+	close_module_panel()
+	connection_targeting_requested.emit()
 
 func _on_socket_remove_pressed(socket_id: StringName) -> void:
 	socket_remove_requested.emit(socket_id)
@@ -308,3 +340,20 @@ func _cell_text(cell: Vector3i) -> String:
 
 func _direction_text(direction: LevelSocketDefinition.Direction) -> String:
 	return String(LevelSocketDefinition.Direction.find_key(direction)).capitalize()
+
+func _connection_summary_text(connection_count: int, has_start_markers: bool) -> String:
+	if has_start_markers:
+		if connection_count == 0:
+			return "Start markers set • add a connection for generation"
+		return "%d connections • eligible as a start module" % connection_count
+	if connection_count == 0:
+		return "No connections • not yet usable by generation"
+	if connection_count == 1:
+		return "1 connection • eligible as a cap or dead end"
+	return "%d connections • eligible as an expansion module" % connection_count
+
+func _all_cardinal_sides_used(sockets: Array[LevelSocketDefinition]) -> bool:
+	var used_directions: Dictionary = {}
+	for socket in sockets:
+		used_directions[socket.direction] = true
+	return used_directions.size() == LevelSocketDefinition.Direction.size()

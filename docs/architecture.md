@@ -192,6 +192,13 @@ import, and validation. Export saves a temporary resource, reloads and compares 
 field, then renames the validated file into place; collisions, stale bound sources, or failures
 leave the prior file and draft state unchanged.
 
+Hall and room are geometric authoring concepts rather than persisted module classifications.
+Cardinal socket topology defines connectivity: one connection is cap-eligible, while two or more
+are expansion-eligible, and paired markers plus a connection make a module start-eligible. `LevelDefinition` remains
+the owner of actual start, expansion, and cap pool membership. The designer's simple connection
+mode authors at most one doorway per cardinal side while the persisted module format and generator
+continue to support existing advanced multi-door resources.
+
 `Game` constructs and injects the dual-format file store while composing the console, authoring
 workflow, dialogs, and dedicated first-person runtime. It
 snapshots and suspends the active overworld or dungeon presentation without changing

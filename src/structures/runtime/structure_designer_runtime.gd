@@ -1,6 +1,12 @@
 extends Node3D
 class_name StructureDesignerRuntime
 
+class ConnectionTarget:
+	var cell: Vector3i
+	var direction: LevelSocketDefinition.Direction
+	var side_available: bool
+	var valid: bool
+
 @onready var _controller: StructureDesignerController = $StructureDesignerController as StructureDesignerController
 @onready var _chunk_renderer: StructureChunkRenderer = $StructureChunkRenderer as StructureChunkRenderer
 @onready var _torch_renderer: TorchRenderer = $TorchRenderer as TorchRenderer
@@ -13,6 +19,7 @@ var _draft: StructureDraft
 var _space: StructureDesignerSpace
 var _toolbelt: CreativeToolbelt
 var _current_hit: VoxelRaycastHit
+var _connection_targeting: bool
 var _external_ui_blocked: bool
 var _active: bool
 
@@ -47,7 +54,7 @@ func setup(
 	_designer_ui.ui_blocking_changed.connect(_on_ui_blocking_changed)
 	_designer_ui.weight_requested.connect(_on_weight_requested)
 	_designer_ui.void_requested.connect(_on_void_requested)
-	_designer_ui.socket_add_requested.connect(_on_socket_add_requested)
+	_designer_ui.connection_targeting_requested.connect(_on_connection_targeting_requested)
 	_designer_ui.socket_remove_requested.connect(_on_socket_remove_requested)
 	_designer_ui.marker_target_requested.connect(_on_marker_target_requested)
 	_designer_ui.markers_commit_requested.connect(_on_markers_commit_requested)
@@ -72,6 +79,8 @@ func set_external_ui_blocked(blocked: bool) -> void:
 	_sync_input_state()
 
 func cancel_active_ui() -> bool:
+	if _stop_connection_targeting():
+		return true
 	return _designer_ui.close_active_overlay()
 
 func _process(_delta: float) -> void:
@@ -81,6 +90,11 @@ func _process(_delta: float) -> void:
 	_current_hit = _controller.get_centered_raycast()
 	if _current_hit == null:
 		_guide_view.clear_preview()
+		if _connection_targeting:
+			_designer_ui.present_connection_target(null, false, true)
+		return
+	if _connection_targeting:
+		_present_connection_target(_current_hit)
 		return
 	var action := _toolbelt.get_selected_placement_action()
 	var block_id := action.block.id
@@ -93,13 +107,20 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		var key_event := event as InputEventKey
 		if key_event.keycode == KEY_TAB or key_event.physical_keycode == KEY_TAB:
-			_designer_ui.toggle_palette()
+			if _stop_connection_targeting():
+				_designer_ui.open_palette()
+			else:
+				_designer_ui.toggle_palette()
 			get_viewport().set_input_as_handled()
 			return
 		if _draft.get_format() == StructureDraft.Format.LEVEL_MODULE and (key_event.keycode == KEY_M or key_event.physical_keycode == KEY_M):
-			if not _designer_ui.is_module_panel_open():
+			if _stop_connection_targeting():
 				_current_hit = _controller.get_centered_raycast()
-			_designer_ui.toggle_module_panel()
+				_designer_ui.open_module_panel()
+			else:
+				if not _designer_ui.is_module_panel_open():
+					_current_hit = _controller.get_centered_raycast()
+				_designer_ui.toggle_module_panel()
 			get_viewport().set_input_as_handled()
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -109,6 +130,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	var mouse_event := event as InputEventMouseButton
 	if not mouse_event.pressed:
+		return
+	if _connection_targeting:
+		if mouse_event.button_index == MOUSE_BUTTON_LEFT:
+			_try_add_targeted_connection()
+		if mouse_event.button_index == MOUSE_BUTTON_LEFT or mouse_event.button_index == MOUSE_BUTTON_RIGHT:
+			get_viewport().set_input_as_handled()
 		return
 	if mouse_event.button_index == MOUSE_BUTTON_LEFT:
 		_try_remove_target()
@@ -176,6 +203,74 @@ func _can_preview_placement(cell: Vector3i, block_id: int, face_normal: Vector3i
 		return _draft.can_place_torch(cell, -face_normal)
 	return _draft.can_place_block(cell, block_id)
 
+func _present_connection_target(hit: VoxelRaycastHit) -> void:
+	var target := _connection_target_for_hit(hit)
+	if target == null:
+		var cell := hit.target_cell
+		if _draft.is_in_bounds(cell) and _draft.is_in_bounds(cell + Vector3i.UP):
+			_guide_view.show_connection_preview(cell, false)
+		else:
+			_guide_view.clear_preview()
+		_designer_ui.present_connection_target(null, false, true)
+		return
+	_guide_view.show_connection_preview(target.cell, target.valid)
+	_designer_ui.present_connection_target(target.direction, target.valid, target.side_available)
+
+func _connection_target_for_hit(hit: VoxelRaycastHit) -> ConnectionTarget:
+	var candidate_cells: Array[Vector3i] = [hit.target_cell]
+	if hit.face_normal == Vector3i.UP:
+		candidate_cells.append(hit.target_cell + Vector3i.UP)
+	var fallback: ConnectionTarget
+	for cell in candidate_cells:
+		var direction: Variant = _boundary_direction_for_hit(cell, hit.face_normal)
+		if direction == null:
+			continue
+		var target := ConnectionTarget.new()
+		target.cell = cell
+		target.direction = direction as LevelSocketDefinition.Direction
+		target.side_available = not _draft.has_socket_direction(target.direction)
+		target.valid = target.side_available and _draft.can_add_socket(target.cell, target.direction)
+		if target.valid:
+			return target
+		if fallback == null:
+			fallback = target
+	return fallback
+
+func _boundary_direction_for_hit(cell: Vector3i, face_normal: Vector3i) -> Variant:
+	var directions := _draft.get_boundary_directions(cell)
+	if directions.is_empty():
+		return null
+	if directions.size() == 1:
+		return directions[0]
+	for direction_vector in [-face_normal, face_normal]:
+		var direction: Variant = LevelSocketDefinition.direction_for_vector(direction_vector)
+		if direction != null and directions.has(direction as LevelSocketDefinition.Direction):
+			return direction
+	return null
+
+func _try_add_targeted_connection() -> void:
+	_current_hit = _controller.get_centered_raycast()
+	if _current_hit == null:
+		return
+	var target := _connection_target_for_hit(_current_hit)
+	if target == null or not target.valid:
+		return
+	var change := _draft.try_add_socket(target.cell, target.direction)
+	_apply_change(change)
+	if not change.succeeded:
+		return
+	_guide_view.clear_preview()
+	_designer_ui.present_connection_target(null, false, true)
+	if _all_connection_sides_used():
+		_stop_connection_targeting()
+		_designer_ui.open_module_panel()
+
+func _all_connection_sides_used() -> bool:
+	for value in LevelSocketDefinition.Direction.values():
+		if not _draft.has_socket_direction(value as LevelSocketDefinition.Direction):
+			return false
+	return true
+
 func _on_ui_blocking_changed(blocking: bool) -> void:
 	if blocking:
 		_guide_view.clear_preview()
@@ -199,13 +294,18 @@ func _on_void_requested() -> void:
 		return
 	_apply_change(_draft.try_set_void(_current_hit.target_cell))
 
-func _on_socket_add_requested() -> void:
-	if _current_hit == null:
-		return
-	var direction: Variant = LevelSocketDefinition.direction_for_vector(_current_hit.face_normal)
-	if direction == null:
-		return
-	_apply_change(_draft.try_add_socket(_current_hit.target_cell, direction as LevelSocketDefinition.Direction))
+func _on_connection_targeting_requested() -> void:
+	_connection_targeting = true
+	_designer_ui.set_connection_targeting(true)
+	_guide_view.clear_preview()
+
+func _stop_connection_targeting() -> bool:
+	if not _connection_targeting:
+		return false
+	_connection_targeting = false
+	_designer_ui.set_connection_targeting(false)
+	_guide_view.clear_preview()
+	return true
 
 func _on_socket_remove_requested(socket_id: StringName) -> void:
 	_apply_change(_draft.try_remove_socket(socket_id))

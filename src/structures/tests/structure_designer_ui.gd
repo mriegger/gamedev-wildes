@@ -4,7 +4,7 @@ var _failures: Array[String] = []
 var _blocking_states: Array[bool] = []
 var _weights: Array[float] = []
 var _void_request_count: int
-var _socket_add_count: int
+var _connection_targeting_count: int = 0
 var _removed_sockets: Array[StringName] = []
 var _marker_targets: Array[Array] = []
 var _marker_commits: Array[Array] = []
@@ -93,13 +93,16 @@ func _test_module_ui(item_catalog: ItemCatalog) -> void:
 	var ui := await _create_ui(item_catalog, toolbelt, StructureDraft.Format.LEVEL_MODULE)
 	var module_panel := ui.get_node("ModulePanel") as PanelContainer
 	var module_tools_hint := ui.get_node("ModuleToolsHint") as Label
+	var connection_mode_hint := ui.get_node("ConnectionModeHint") as Label
 	var weight_input := ui.get_node("ModulePanel/Margin/VBox/WeightRow/Weight") as SpinBox
+	var connection_button := ui.get_node("ModulePanel/Margin/VBox/ConnectionHeader/PlaceConnections") as Button
+	var connection_summary := ui.get_node("ModulePanel/Margin/VBox/ConnectionSummary") as Label
 	var socket_list := ui.get_node("ModulePanel/Margin/VBox/SocketScroll/SocketList") as VBoxContainer
 	var socket_help := ui.get_node("ModulePanel/Margin/VBox/SocketHelp") as Label
 	var marker_commit := ui.get_node("ModulePanel/Margin/VBox/Markers/Actions/Commit") as Button
 	_expect(not module_panel.visible and module_tools_hint.visible, "Level Module did not start in first-person build mode")
-	_expect(socket_help.text.contains("outside face") and socket_help.text.contains("two-block-high doorway"), "socket controls did not explain boundary targeting")
 	_expect(module_panel.find_children("*Torch*", "Control", true, false).is_empty(), "Level Module panel retained torch metadata clutter")
+	_expect(socket_help.text.contains("from inside") and socket_help.text.contains("two ends for a hall") and socket_help.text.contains("four sides for a room"), "connection controls did not explain hall and room authoring")
 	var blocking_state_start := _blocking_states.size()
 	ui.ui_blocking_changed.connect(_on_ui_blocking_changed)
 	ui.open_module_panel()
@@ -112,7 +115,7 @@ func _test_module_ui(item_catalog: ItemCatalog) -> void:
 	_expect(_blocking_states.slice(blocking_state_start) == [true], "switching designer panels toggled input blocking")
 	ui.weight_requested.connect(_on_weight_requested)
 	ui.void_requested.connect(_on_void_requested)
-	ui.socket_add_requested.connect(_on_socket_add_requested)
+	ui.connection_targeting_requested.connect(_on_connection_targeting_requested)
 	ui.socket_remove_requested.connect(_on_socket_remove_requested)
 	ui.marker_target_requested.connect(_on_marker_target_requested)
 	ui.markers_commit_requested.connect(_on_markers_commit_requested)
@@ -125,6 +128,14 @@ func _test_module_ui(item_catalog: ItemCatalog) -> void:
 	east_socket.socket_id = &"east"
 	east_socket.cell = Vector3i(6, 1, 3)
 	east_socket.direction = LevelSocketDefinition.Direction.EAST
+	var south_socket := LevelSocketDefinition.new()
+	south_socket.socket_id = &"south"
+	south_socket.cell = Vector3i(3, 1, 6)
+	south_socket.direction = LevelSocketDefinition.Direction.SOUTH
+	var west_socket := LevelSocketDefinition.new()
+	west_socket.socket_id = &"west"
+	west_socket.cell = Vector3i(0, 1, 3)
+	west_socket.direction = LevelSocketDefinition.Direction.WEST
 	var spawn_marker := LevelMarkerDefinition.new()
 	spawn_marker.cell = Vector3i(1, 1, 1)
 	spawn_marker.facing = LevelSocketDefinition.Direction.SOUTH
@@ -132,16 +143,35 @@ func _test_module_ui(item_catalog: ItemCatalog) -> void:
 	return_marker.cell = Vector3i(5, 1, 5)
 	return_marker.facing = LevelSocketDefinition.Direction.WEST
 	var sockets: Array[LevelSocketDefinition] = [north_socket, east_socket]
+	ui.present_module_state(0.05, sockets, null, null)
+	_expect(connection_summary.text.contains("eligible as an expansion module"), "two connections were not presented as expansion-eligible")
+	var one_socket: Array[LevelSocketDefinition] = [north_socket]
+	ui.present_module_state(0.05, one_socket, null, null)
+	_expect(connection_summary.text.contains("cap or dead end"), "one connection was not presented as cap-eligible")
+	var four_sockets: Array[LevelSocketDefinition] = [north_socket, east_socket, south_socket, west_socket]
+	ui.present_module_state(0.05, four_sockets, null, null)
+	_expect(socket_list.get_child_count() == 4 and connection_button.disabled, "four-sided room did not complete the simple connection workflow")
 	ui.present_module_state(0.05, sockets, spawn_marker, return_marker)
 	_expect(weight_input.value == 0.05 and _weights.is_empty(), "module weight presentation changed or re-emitted an imported sub-tenth value")
 	_expect(is_zero_approx(weight_input.step) and weight_input.allow_lesser and weight_input.allow_greater, "module weight editor did not preserve the positive finite weight contract")
 	_expect(socket_list.get_child_count() == 2, "module socket list presentation mismatch")
+	_expect(not connection_button.disabled, "partial connection layout disabled connection targeting")
+	_expect(connection_summary.text.contains("eligible as a start module"), "paired markers were not presented as start-eligible")
 	weight_input.value = 3.25
 	_expect(_weights == [3.25], "weight editor quantized a non-tenth request")
 	(ui.get_node("ModulePanel/Margin/VBox/SetVoid") as Button).pressed.emit()
 	_expect(_void_request_count == 1, "VOID control did not emit an intent")
-	(ui.get_node("ModulePanel/Margin/VBox/SocketHeader/AddSocket") as Button).pressed.emit()
-	_expect(_socket_add_count == 1, "socket add control did not emit an intent")
+	connection_button.pressed.emit()
+	_expect(_connection_targeting_count == 1, "connection control did not request targeting mode")
+	_expect(not ui.is_module_panel_open() and not ui.is_ui_blocking(), "connection control did not return to first-person mode")
+	ui.set_connection_targeting(true)
+	_expect(connection_mode_hint.visible and not module_tools_hint.visible, "connection targeting did not replace the module hint")
+	ui.present_connection_target(LevelSocketDefinition.Direction.NORTH, true, true)
+	_expect(connection_mode_hint.text.contains("North connection ready") and connection_mode_hint.text.contains("Left-click"), "valid connection target guidance is unclear")
+	ui.present_connection_target(LevelSocketDefinition.Direction.NORTH, false, false)
+	_expect(connection_mode_hint.text.contains("already has a connection"), "used connection side guidance is unclear")
+	ui.set_connection_targeting(false)
+	ui.open_module_panel()
 	(socket_list.get_child(1).get_child(1) as Button).pressed.emit()
 	_expect(_removed_sockets == [&"east"], "socket remove control emitted the wrong ID")
 	var spawn_facing := ui.get_node("ModulePanel/Margin/VBox/Markers/Spawn/Controls/Facing") as OptionButton
@@ -165,7 +195,7 @@ func _test_module_ui(item_catalog: ItemCatalog) -> void:
 	_expect(_marker_clear_count == 1 and marker_commit.disabled, "marker clear did not emit or retained pending state")
 	(ui.get_node("ModulePanel/Margin/VBox/Header/Close") as Button).pressed.emit()
 	_expect(not ui.is_module_panel_open() and not module_panel.visible and module_tools_hint.visible, "module close control did not restore build mode")
-	_expect(not ui.is_ui_blocking() and _blocking_states.slice(blocking_state_start) == [true, false], "closing module tools did not release input blocking")
+	_expect(not ui.is_ui_blocking() and _blocking_states.back() == false, "closing module tools did not release input blocking")
 	ui.queue_free()
 	await process_frame
 
@@ -186,8 +216,8 @@ func _on_weight_requested(weight: float) -> void:
 func _on_void_requested() -> void:
 	_void_request_count += 1
 
-func _on_socket_add_requested() -> void:
-	_socket_add_count += 1
+func _on_connection_targeting_requested() -> void:
+	_connection_targeting_count += 1
 
 func _on_socket_remove_requested(socket_id: StringName) -> void:
 	_removed_sockets.append(socket_id)

@@ -10,6 +10,7 @@ func _init() -> void:
 	_test_restore_and_binding()
 	_test_module_restore_and_protection()
 	_test_module_authoring_transactions()
+	_test_four_way_room_connections()
 	_test_requirement_reference_counts()
 	_test_module_authoring_snapshot()
 	_test_malformed_module_definitions()
@@ -277,6 +278,27 @@ func _test_module_authoring_transactions() -> void:
 	_expect(not draft.try_set_weight(150.25).succeeded, "unchanged module weight succeeded")
 	for invalid_weight in [0.0, -1.0, INF, NAN]:
 		_expect(not draft.try_set_weight(invalid_weight).succeeded and draft.get_weight() == 150.25, "invalid module weight changed draft truth")
+
+func _test_four_way_room_connections() -> void:
+	var draft := StructureDraft.create_level_module(Vector3i(7, 4, 7))
+	var connections: Array[Dictionary] = [
+		{"cell": Vector3i(3, 1, 0), "direction": LevelSocketDefinition.Direction.NORTH},
+		{"cell": Vector3i(6, 1, 3), "direction": LevelSocketDefinition.Direction.EAST},
+		{"cell": Vector3i(3, 1, 6), "direction": LevelSocketDefinition.Direction.SOUTH},
+		{"cell": Vector3i(0, 1, 3), "direction": LevelSocketDefinition.Direction.WEST},
+	]
+	for connection in connections:
+		var cell := connection.cell as Vector3i
+		var direction := connection.direction as LevelSocketDefinition.Direction
+		for solid_cell in [cell + Vector3i.DOWN, cell, cell + Vector3i.UP]:
+			_expect(draft.try_place_block(solid_cell, BlockId.Type.STONE).succeeded, "four-way room setup failed at %s" % solid_cell)
+		_expect(draft.get_boundary_directions(cell).has(direction), "four-way room boundary query missed %s" % direction)
+		_expect(draft.can_add_socket(cell, direction), "four-way room query rejected %s" % direction)
+		_expect(draft.try_add_socket(cell, direction).succeeded, "four-way room failed to add %s" % direction)
+		_expect(draft.get_cell(cell) == StructureCell.AIR and draft.get_cell(cell + Vector3i.UP) == StructureCell.AIR, "four-way room did not carve %s" % direction)
+	_expect(draft.get_sockets().size() == 4, "four-way room did not retain four connections")
+	for value in LevelSocketDefinition.Direction.values():
+		_expect(draft.has_socket_direction(value as LevelSocketDefinition.Direction), "four-way room omitted direction %s" % value)
 
 func _test_requirement_reference_counts() -> void:
 	var draft := StructureDraft.create_level_module(Vector3i(5, 4, 5))

@@ -4,6 +4,7 @@ class_name StructureDesignerGuideView
 const LINE_THICKNESS: float = 0.035
 
 var _preview: MeshInstance3D
+var _upper_preview: MeshInstance3D
 var _valid_preview_material: StandardMaterial3D
 var _invalid_preview_material: StandardMaterial3D
 
@@ -17,9 +18,20 @@ func show_preview(cell: Vector3i, valid: bool) -> void:
 	_preview.position = Vector3(cell) + Vector3(0.5, 0.5, 0.5)
 	_preview.material_override = _valid_preview_material if valid else _invalid_preview_material
 	_preview.visible = true
+	_upper_preview.visible = false
+
+func show_connection_preview(cell: Vector3i, valid: bool) -> void:
+	var material := _valid_preview_material if valid else _invalid_preview_material
+	_preview.position = Vector3(cell) + Vector3(0.5, 0.5, 0.5)
+	_preview.material_override = material
+	_preview.visible = true
+	_upper_preview.position = Vector3(cell + Vector3i.UP) + Vector3(0.5, 0.5, 0.5)
+	_upper_preview.material_override = material
+	_upper_preview.visible = true
 
 func clear_preview() -> void:
 	_preview.visible = false
+	_upper_preview.visible = false
 
 func _create_floor(size: Vector3i) -> void:
 	var floor_mesh := BoxMesh.new()
@@ -78,6 +90,12 @@ func _create_preview() -> void:
 	_preview.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_preview.visible = false
 	add_child(_preview)
+	_upper_preview = MeshInstance3D.new()
+	_upper_preview.name = "ConnectionUpperPreview"
+	_upper_preview.mesh = mesh
+	_upper_preview.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_upper_preview.visible = false
+	add_child(_upper_preview)
 
 func _make_preview_material(color: Color) -> StandardMaterial3D:
 	var material := StandardMaterial3D.new()

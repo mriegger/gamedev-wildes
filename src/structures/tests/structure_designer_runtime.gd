@@ -148,10 +148,13 @@ func _test_module_runtime() -> void:
 		Vector3i(3, 0, 0),
 		Vector3i(3, 1, 0),
 		Vector3i(3, 2, 0),
+		Vector3i(3, 0, 6),
 		Vector3i(1, 0, 2),
 		Vector3i(2, 0, 2),
 		Vector3i(5, 0, 4),
+		Vector3i(1, 0, 4),
 		Vector3i(1, 1, 4),
+		Vector3i(1, 2, 4),
 		Vector3i(20, 1, 20),
 	]:
 		_expect(draft.try_place_block(cell, BlockId.Type.STONE).succeeded, "Level Module runtime seed failed at %s" % cell)
@@ -197,12 +200,28 @@ func _test_module_runtime() -> void:
 	_expect(draft.get_weight() == 3.25 and weight_input.value == 3.25, "rejected weight input diverged from draft truth")
 	_expect(runtime.cancel_active_ui(), "Esc cancellation hook did not consume Level Module tools")
 	_expect(not ui.is_module_panel_open() and controller._input_enabled and controller._mouse_capture_enabled, "Esc cancellation did not restore first-person build mode")
-	_aim_at(controller, Vector3(3.5, 0.0, -2.5), Vector3(3.5, 1.5, 0.5))
-	var socket_hit := controller.get_centered_raycast()
-	_expect(socket_hit != null and socket_hit.target_cell == Vector3i(3, 1, 0) and socket_hit.face_normal == Vector3i.FORWARD, "connection target did not resolve the selected outside boundary face")
 	var distant_chunk_before := _chunk_mesh_id(runtime, Vector3i(1, 0, 1))
 	_toggle_module_tools(runtime)
-	(ui.get_node("ModulePanel/Margin/VBox/SocketHeader/AddSocket") as Button).pressed.emit()
+	(ui.get_node("ModulePanel/Margin/VBox/ConnectionHeader/PlaceConnections") as Button).pressed.emit()
+	var connection_hint := ui.get_node("ConnectionModeHint") as Label
+	_expect(not module_panel.visible and connection_hint.visible, "connection action did not enter first-person targeting mode")
+	_expect(controller._input_enabled and controller._mouse_capture_enabled, "connection targeting did not restore first-person controls")
+
+	_aim_at(controller, Vector3(3.5, 0.0, 3.5), Vector3(1.5, 1.5, 4.5))
+	runtime._process(0.0)
+	var invalid_preview := runtime.get_node("StructureDesignerGuideView/PlacementPreview") as MeshInstance3D
+	var invalid_upper_preview := runtime.get_node("StructureDesignerGuideView/ConnectionUpperPreview") as MeshInstance3D
+	_expect(invalid_preview.visible and invalid_upper_preview.visible, "invalid connection target did not show a two-block preview")
+	_click(runtime, MOUSE_BUTTON_LEFT)
+	_expect(draft.get_sockets().is_empty() and draft.get_cell(Vector3i(1, 1, 4)) == BlockId.Type.STONE, "invalid connection click mutated the module")
+	_expect(connection_hint.visible, "invalid connection click exited targeting mode")
+
+	_aim_at(controller, Vector3(3.5, 0.0, 3.5), Vector3(3.5, 1.5, 0.5))
+	runtime._process(0.0)
+	var north_hit := controller.get_centered_raycast()
+	_expect(north_hit != null and north_hit.target_cell == Vector3i(3, 1, 0) and north_hit.face_normal == Vector3i.BACK, "inside north-wall targeting fixture is invalid")
+	_expect(connection_hint.text.contains("North connection ready"), "inside north wall did not derive an outward north connection")
+	_click(runtime, MOUSE_BUTTON_LEFT)
 	var sockets := draft.get_sockets()
 	_expect(sockets.size() == 1 and sockets[0].socket_id == &"north" and sockets[0].direction == LevelSocketDefinition.Direction.NORTH, "connection intent did not commit its boundary direction")
 	_expect(draft.get_cell(Vector3i(3, 1, 0)) == StructureCell.AIR and draft.get_cell(Vector3i(3, 2, 0)) == StructureCell.AIR, "connection intent did not carve its two-block aperture")
@@ -215,16 +234,35 @@ func _test_module_runtime() -> void:
 	var socket_root := overlay.get_node("Socket_north") as Node3D
 	weight_input.value = 0.0
 	_expect(overlay.get_node("Socket_north") == socket_root and overlay.get_child_count() == 1, "rejected weight rebuilt or duplicated metadata geometry")
+	_expect(connection_hint.visible, "first hallway end exited connection targeting")
+
+	_aim_at(controller, Vector3(3.5, 0.0, 3.5), Vector3(3.5, 1.0, 6.5))
+	runtime._process(0.0)
+	var south_hit := controller.get_centered_raycast()
+	_expect(south_hit != null and south_hit.target_cell == Vector3i(3, 0, 6) and south_hit.face_normal == Vector3i.UP, "open south-doorway floor targeting fixture is invalid")
+	_expect(connection_hint.text.contains("South connection ready"), "boundary floor did not recover the open south doorway connection")
+	_click(runtime, MOUSE_BUTTON_LEFT)
+	sockets = draft.get_sockets()
+	_expect(sockets.size() == 2 and sockets[1].socket_id == &"south" and sockets[1].direction == LevelSocketDefinition.Direction.SOUTH, "second hallway end did not commit the south connection")
+	_expect(draft.get_cell(Vector3i(3, 1, 6)) == StructureCell.AIR and draft.get_cell(Vector3i(3, 2, 6)) == StructureCell.AIR, "south connection did not carve its doorway")
+	_expect(socket_list.get_child_count() == 2 and overlay.has_node("Socket_south"), "two-ended hallway presentation did not refresh")
+	_expect(runtime.cancel_active_ui(), "Esc did not finish connection targeting")
+	_expect(not connection_hint.visible and controller._input_enabled and controller._mouse_capture_enabled, "finishing connection targeting did not restore build mode")
+	_expect(not runtime.cancel_active_ui(), "connection targeting cancellation left another UI layer open")
+
+	_toggle_module_tools(runtime)
 	weight_input.value = 2.7
 	_expect(draft.get_weight() == 2.7 and weight_input.value == 2.7, "valid weight intent did not update exact draft and UI truth")
-	_expect(overlay.get_child_count() == 1 and overlay.get_node("Socket_north") != socket_root, "metadata change did not refresh its overlay exactly once")
+	_expect(overlay.get_child_count() == 2 and overlay.get_node("Socket_north") != socket_root, "metadata change did not refresh its overlays exactly once")
 	socket_root = overlay.get_node("Socket_north") as Node3D
 	var void_change := draft.try_set_void(Vector3i(6, 3, 6))
 	runtime._apply_change(void_change)
 	_expect(void_change.succeeded and overlay.get_node("Socket_north") == socket_root, "ordinary VOID edit rebuilt metadata presentation")
 	(socket_list.get_child(0).get_child(1) as Button).pressed.emit()
-	_expect(draft.get_sockets().is_empty() and socket_list.get_child_count() == 0 and overlay.get_child_count() == 0, "connection removal retained domain or presentation state")
+	_expect(draft.get_sockets().size() == 1 and socket_list.get_child_count() == 1 and overlay.get_child_count() == 1, "connection removal changed unrelated domain or presentation state")
 	_expect(draft.get_cell(Vector3i(3, 1, 0)) == StructureCell.AIR and draft.get_cell(Vector3i(3, 2, 0)) == StructureCell.AIR, "connection removal refilled its aperture")
+	(socket_list.get_child(0).get_child(1) as Button).pressed.emit()
+	_expect(draft.get_sockets().is_empty() and socket_list.get_child_count() == 0 and overlay.get_child_count() == 0, "final connection removal retained domain or presentation state")
 	_toggle_module_tools(runtime)
 	_expect(not ui.is_module_panel_open() and controller._input_enabled, "M did not close Level Module tools")
 	_aim_at(controller, Vector3(1.5, 3.0, 2.5), Vector3(1.5, 0.5, 2.5))
