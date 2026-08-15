@@ -100,10 +100,14 @@ func _test_module_ui(item_catalog: ItemCatalog) -> void:
 	var connection_summary := ui.get_node("ModulePanel/Margin/VBox/ConnectionSummary") as Label
 	var socket_list := ui.get_node("ModulePanel/Margin/VBox/SocketScroll/SocketList") as VBoxContainer
 	var socket_help := ui.get_node("ModulePanel/Margin/VBox/SocketHelp") as Label
+	var marker_title := ui.get_node("ModulePanel/Margin/VBox/MarkersTitle") as Label
+	var spawn_title := ui.get_node("ModulePanel/Margin/VBox/Markers/Spawn/Title") as Label
+	var entrance_exit_title := ui.get_node("ModulePanel/Margin/VBox/Markers/Return/Title") as Label
 	var marker_commit := ui.get_node("ModulePanel/Margin/VBox/Markers/Actions/Commit") as Button
 	_expect(not module_panel.visible and module_tools_hint.visible, "Level Module did not start in first-person build mode")
 	_expect(module_panel.find_children("*Torch*", "Control", true, false).is_empty(), "Level Module panel retained torch metadata clutter")
 	_expect(socket_help.text.contains("1×2") and socket_help.text.contains("prebuilt opening") and socket_help.text.contains("unused doorway") and socket_help.text.contains("Must connect"), "connection controls did not explain variable openings and unused fills")
+	_expect(marker_title.text.contains("aim before opening") and spawn_title.text == "Player Spawn" and entrance_exit_title.text == "Entrance / Exit Door", "entry marker controls did not distinguish spawn from the shared entrance/exit door")
 	var blocking_state_start := _blocking_states.size()
 	ui.ui_blocking_changed.connect(_on_ui_blocking_changed)
 	ui.open_module_panel()

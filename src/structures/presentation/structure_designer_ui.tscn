@@ -178,7 +178,7 @@ size_flags_horizontal = 3
 
 [node name="MarkersTitle" type="Label" parent="ModulePanel/Margin/VBox"]
 layout_mode = 2
-text = "Markers"
+text = "Entry Markers — aim before opening Module Tools"
 
 [node name="Markers" type="VBoxContainer" parent="ModulePanel/Margin/VBox"]
 layout_mode = 2
@@ -189,7 +189,7 @@ layout_mode = 2
 
 [node name="Title" type="Label" parent="ModulePanel/Margin/VBox/Markers/Spawn"]
 layout_mode = 2
-text = "Spawn"
+text = "Player Spawn"
 
 [node name="Current" type="Label" parent="ModulePanel/Margin/VBox/Markers/Spawn"]
 layout_mode = 2
@@ -215,7 +215,7 @@ layout_mode = 2
 
 [node name="Title" type="Label" parent="ModulePanel/Margin/VBox/Markers/Return"]
 layout_mode = 2
-text = "Return"
+text = "Entrance / Exit Door"
 
 [node name="Current" type="Label" parent="ModulePanel/Margin/VBox/Markers/Return"]
 layout_mode = 2
@@ -243,7 +243,7 @@ layout_mode = 2
 layout_mode = 2
 size_flags_horizontal = 3
 disabled = true
-text = "Commit pair"
+text = "Commit entry pair"
 
 [node name="Clear" type="Button" parent="ModulePanel/Margin/VBox/Markers/Actions"]
 layout_mode = 2

@@ -41,7 +41,8 @@ matching openings connect. Each connection row can export either `Must connect` 
 to use when that doorway is eventually left unused. The current generator still closes every
 opening with a compatible module; consuming the new fill metadata is a separate generation change.
 Press `Esc` when finished. Two opposite connections form a straight hall; rooms can expose all four
-sides.
+sides. Entry markers are authored as a player Spawn plus one shared Entrance / Exit Door; aim at
+each desired cell before opening Module Tools, set each marker from the target, then commit the pair.
 
 The animation tuner is a compact right-side debug-build panel. Its Movement, Animation, Parts,
 and Attack tabs update the live player immediately, while preview modes let you hold idle, walk,
