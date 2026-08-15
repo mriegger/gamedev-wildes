@@ -3,20 +3,69 @@ extends SceneTree
 func _init() -> void:
 	var empty_result := LevelGenerator.new().generate(LevelCatalog.new(), &"stone_dungeon", 1, &"probe", Vector3i.ZERO)
 	var source_catalog := load("res://levels/content/dungeons/stone/level_catalog.tres") as LevelCatalog
-	var impossible_level := source_catalog.get_level(&"stone_dungeon").duplicate(true) as LevelDefinition
-	impossible_level.minimum_module_count = 1
-	impossible_level.maximum_module_count = 1
-	var required_start := source_catalog.get_module(&"stone_entry_path").duplicate(true) as LevelModuleDefinition
-	required_start.sockets[0].unused_fill_block_id = StructureCell.AIR
-	var impossible_catalog := LevelCatalog.new()
-	impossible_catalog.modules.assign(source_catalog.modules)
-	impossible_catalog.modules[0] = required_start
-	impossible_catalog.levels.append(impossible_level)
-	var impossible_result := LevelGenerator.new().generate(impossible_catalog, &"stone_dungeon", 1, &"probe", Vector3i.ZERO)
-	var oversized_level := source_catalog.get_level(&"stone_dungeon").duplicate(true) as LevelDefinition
-	oversized_level.maximum_module_count = LevelDefinition.HARD_MAX_MODULE_COUNT + 1
+	if source_catalog == null:
+		print("LEVEL_MALFORMED_PROBE FAILED")
+		quit(1)
+		return
+	var source_level := source_catalog.get_level(&"stone_dungeon")
+	var unsupported_version := source_level.duplicate(true) as LevelDefinition
+	unsupported_version.format_version = LevelDefinition.FORMAT_VERSION + 1
 	var missing_presentation := source_catalog.get_level(&"stone_dungeon").duplicate(true) as LevelDefinition
 	missing_presentation.presentation = null
+	var empty_room_type := LevelRoomRequirement.new()
+	empty_room_type.count = 1
+	empty_room_type.module_ids.assign([&"stone_room"])
+	var zero_room_count := LevelRoomRequirement.new()
+	zero_room_count.room_type_id = &"zero_room"
+	zero_room_count.count = 0
+	zero_room_count.module_ids.assign([&"stone_room"])
+	var empty_room_pool := LevelRoomRequirement.new()
+	empty_room_pool.room_type_id = &"empty_pool"
+	empty_room_pool.count = 1
+	var duplicate_room_modules := LevelRoomRequirement.new()
+	duplicate_room_modules.room_type_id = &"duplicate_pool"
+	duplicate_room_modules.count = 1
+	duplicate_room_modules.module_ids.assign([&"stone_room", &"stone_room"])
+	var duplicate_room_types := source_level.duplicate(true) as LevelDefinition
+	var duplicated_requirement := duplicate_room_types.room_requirements[0].duplicate(true) as LevelRoomRequirement
+	duplicated_requirement.module_ids.assign([&"stone_room"])
+	duplicate_room_types.room_requirements.append(duplicated_requirement)
+	var null_requirement := source_level.duplicate(true) as LevelDefinition
+	null_requirement.room_requirements.append(null)
+	var conflicting_roles := source_level.duplicate(true) as LevelDefinition
+	conflicting_roles.hallway_module_ids.append(&"stone_room")
+	var unknown_hallway := source_level.duplicate(true) as LevelDefinition
+	unknown_hallway.hallway_module_ids.assign([&"missing_hallway"])
+	var unknown_hallway_catalog := _catalog_with(source_catalog, unknown_hallway)
+	var unknown_room := source_level.duplicate(true) as LevelDefinition
+	unknown_room.room_requirements[0].module_ids.assign([&"missing_room"])
+	var unknown_room_catalog := _catalog_with(source_catalog, unknown_room)
+	var sealable_start := source_catalog.get_module(&"stone_entry_path").duplicate(true) as LevelModuleDefinition
+	sealable_start.sockets[0].unused_fill_block_id = BlockId.Type.STONE_BRICKS
+	var sealable_start_catalog := _catalog_with(source_catalog, source_level, {sealable_start.module_id: sealable_start})
+	var one_socket_hallway := source_catalog.get_module(&"stone_hallway").duplicate(true) as LevelModuleDefinition
+	one_socket_hallway.sockets.resize(1)
+	var one_socket_hallway_catalog := _catalog_with(source_catalog, source_level, {one_socket_hallway.module_id: one_socket_hallway})
+	var sealable_hallway := source_catalog.get_module(&"stone_hallway").duplicate(true) as LevelModuleDefinition
+	sealable_hallway.sockets[0].unused_fill_block_id = BlockId.Type.STONE_BRICKS
+	var sealable_hallway_catalog := _catalog_with(source_catalog, source_level, {sealable_hallway.module_id: sealable_hallway})
+	var required_room := source_catalog.get_module(&"stone_room").duplicate(true) as LevelModuleDefinition
+	required_room.sockets[0].unused_fill_block_id = StructureCell.AIR
+	var required_room_catalog := _catalog_with(source_catalog, source_level, {required_room.module_id: required_room})
+	var disconnected_room := source_catalog.get_module(&"stone_chest_room").duplicate(true) as LevelModuleDefinition
+	disconnected_room.cells[StructureCell.index_of(Vector3i.ZERO, disconnected_room.size)] = StructureCell.AIR
+	var disconnected_room_catalog := _catalog_with(source_catalog, source_level, {disconnected_room.module_id: disconnected_room})
+	var too_few_rooms := source_level.duplicate(true) as LevelDefinition
+	too_few_rooms.room_requirements.resize(1)
+	too_few_rooms.room_requirements[0].count = 1
+	var too_few_rooms_catalog := _catalog_with(source_catalog, too_few_rooms)
+	var oversized_composition := source_level.duplicate(true) as LevelDefinition
+	oversized_composition.room_requirements.resize(1)
+	oversized_composition.room_requirements[0].count = 33
+	var oversized_composition_catalog := _catalog_with(source_catalog, oversized_composition)
+	var missing_hallways := source_level.duplicate(true) as LevelDefinition
+	missing_hallways.hallway_module_ids.clear()
+	var missing_hallways_catalog := _catalog_with(source_catalog, missing_hallways)
 	var oversized_module := source_catalog.get_module(&"stone_entry_path").duplicate(true) as LevelModuleDefinition
 	oversized_module.size = Vector3i(LevelDefinition.HARD_MAX_EXTENT.x + 1, oversized_module.size.y, oversized_module.size.z)
 	var one_cell_socket := source_catalog.get_module(&"stone_hallway").duplicate(true) as LevelModuleDefinition
@@ -49,10 +98,50 @@ func _init() -> void:
 	unknown_entrance.entrance_id = &"unknown"
 	unknown_entrance.level_id = &"missing"
 	var empty_failed := not empty_result.succeeded and empty_result.failure_code == LevelGenerationResult.FailureCode.INVALID_CATALOG and empty_result.layout == null and not empty_result.failure_reason.is_empty()
-	var impossible_failed := not impossible_result.succeeded and impossible_result.failure_code == LevelGenerationResult.FailureCode.INVALID_CATALOG and impossible_result.layout == null and not impossible_result.failure_reason.is_empty()
-	if empty_failed and impossible_failed and not oversized_level.validate() and not missing_presentation.validate() and not oversized_module.validate() and not one_cell_socket.validate() and not overlapping_sockets.validate() and not exposed_socket.validate() and not invalid_socket_fill.validate() and not torch_socket_overlap.validate() and not spawn_socket_overlap.validate() and not return_socket_overlap.validate() and not unknown_entrance.validate(source_catalog):
+	var checks: Array[bool] = [
+		empty_failed,
+		not unsupported_version.validate(),
+		not missing_presentation.validate(),
+		not empty_room_type.validate("probe"),
+		not zero_room_count.validate("probe"),
+		not empty_room_pool.validate("probe"),
+		not duplicate_room_modules.validate("probe"),
+		not duplicate_room_types.validate(),
+		not null_requirement.validate(),
+		not conflicting_roles.validate(),
+		not unknown_hallway_catalog.validate(),
+		not unknown_room_catalog.validate(),
+		not sealable_start_catalog.validate(),
+		not one_socket_hallway_catalog.validate(),
+		not sealable_hallway_catalog.validate(),
+		not required_room_catalog.validate(),
+		not disconnected_room_catalog.validate(),
+		not too_few_rooms_catalog.validate(),
+		not oversized_composition_catalog.validate(),
+		not missing_hallways_catalog.validate(),
+		not oversized_module.validate(),
+		not one_cell_socket.validate(),
+		not overlapping_sockets.validate(),
+		not exposed_socket.validate(),
+		not invalid_socket_fill.validate(),
+		not torch_socket_overlap.validate(),
+		not spawn_socket_overlap.validate(),
+		not return_socket_overlap.validate(),
+		not unknown_entrance.validate(source_catalog),
+	]
+	var passed := true
+	for check in checks:
+		passed = check and passed
+	if passed:
 		print("LEVEL_MALFORMED_PROBE PASS")
 		quit(0)
 	else:
 		print("LEVEL_MALFORMED_PROBE FAILED")
 		quit(1)
+
+func _catalog_with(source: LevelCatalog, level: LevelDefinition, replacements: Dictionary = {}) -> LevelCatalog:
+	var catalog := LevelCatalog.new()
+	for module in source.modules:
+		catalog.modules.append(replacements.get(module.module_id, module) as LevelModuleDefinition)
+	catalog.levels.append(level)
+	return catalog

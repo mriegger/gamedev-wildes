@@ -8,10 +8,10 @@ const ENTRANCE_ID: StringName = &"overworld_dungeon_entrance"
 const STONE_MODULE_DIRECTORY: String = "res://levels/content/dungeons/stone/modules"
 const FUZZ_SEED_COUNT: int = 1000
 const DEEP_FUZZ_INTERVAL: int = 20
-const LIVE_MINIMUM_MODULE_COUNT: int = 4
-const LIVE_MAXIMUM_MODULE_COUNT: int = 6
-const EXPECTED_LIVE_GOLDEN_DIGEST: String = "91e901bdecfdb541d85b086b4d28a5a6557f9fa9f0b19a929b4b2ff2cec99a55"
-const EXPECTED_LEGACY_GOLDEN_DIGEST: String = "54eb2e11958a406fe08aa8c6b86885a84859b3987f51c1ae1438751db5b4bce3"
+const LIVE_ROOM_COUNT: int = 7
+const LIVE_HALLWAY_COUNT: int = 5
+const LIVE_TARGET_MODULE_COUNT: int = 13
+const EXPECTED_LIVE_GOLDEN_DIGEST: String = "98e19f215318327be5659249a1f8e30037a826c8191e2c75b4c6a1bfc2f25123"
 const DIRECTIONS: Array[Vector3i] = [
 	Vector3i.LEFT,
 	Vector3i.RIGHT,
@@ -24,31 +24,15 @@ const EXPECTED_MODULE_IDS: Array[StringName] = [
 	&"stone_entry_path",
 	&"stone_hallway",
 	&"stone_master_room",
+	&"stone_room",
+	&"stone_chest_room",
 ]
-const EXPECTED_EXPANSION_MODULE_IDS: Array[StringName] = [
-	&"stone_hallway",
-	&"stone_master_room",
-]
-const LEGACY_MODULE_PATHS: Array[String] = [
-	"res://tests/fixtures/levels/legacy_stone/modules/start_chamber.tres",
-	"res://tests/fixtures/levels/legacy_stone/modules/straight_hall.tres",
-	"res://tests/fixtures/levels/legacy_stone/modules/corner_hall.tres",
-	"res://tests/fixtures/levels/legacy_stone/modules/small_room.tres",
-	"res://tests/fixtures/levels/legacy_stone/modules/large_room.tres",
-	"res://tests/fixtures/levels/legacy_stone/modules/t_junction.tres",
-	"res://tests/fixtures/levels/legacy_stone/modules/compact_dead_end.tres",
-	"res://tests/fixtures/levels/legacy_stone/modules/dead_end_chamber.tres",
-]
-const LEGACY_MODULE_IDS: Array[StringName] = [
-	&"dungeon_start_chamber",
-	&"dungeon_straight_hall",
-	&"dungeon_corner_hall",
-	&"dungeon_small_room",
-	&"dungeon_large_room",
-	&"dungeon_t_junction",
-	&"dungeon_compact_dead_end",
-	&"dungeon_dead_end_chamber",
-]
+const EXPECTED_HALLWAY_MODULE_IDS: Array[StringName] = [&"stone_hallway"]
+const EXPECTED_ROOM_COUNTS: Dictionary = {
+	&"master_room": 1,
+	&"normal_room": 3,
+	&"chest_room": 3,
+}
 
 var _failures: int = 0
 var _assertions: int = 0
@@ -72,9 +56,10 @@ func _run() -> void:
 	_test_rotations()
 	_test_variable_aperture_generation()
 	_test_optional_socket_sealing()
+	_test_extensible_room_requirements()
+	_test_semantic_set_determinism()
 	_test_seed_identity_and_failures()
 	_test_entrance_placement_stability()
-	_test_legacy_generation_golden()
 	var fuzz_started := Time.get_ticks_msec()
 	var successful_seeds := _test_generation_fuzz()
 	var fuzz_msec := Time.get_ticks_msec() - fuzz_started
@@ -99,10 +84,8 @@ func _test_catalog_and_modules() -> void:
 	_expect(not LevelSocketDefinition.is_valid_unused_fill_block(BlockId.Type.WATER), "water socket fill block was accepted")
 	_expect(not LevelSocketDefinition.is_valid_unused_fill_block(BlockId.Type.COUNT), "unknown socket fill block was accepted")
 	_expect(_catalog.validate(), "level catalog validation failed")
-	_expect(_catalog.modules.size() == EXPECTED_MODULE_IDS.size(), "catalog must contain exactly the three live stone modules")
+	_expect(_catalog.modules.size() == EXPECTED_MODULE_IDS.size(), "catalog must contain exactly the expected live stone modules")
 	_expect(_catalog.levels.size() == 1, "catalog must contain exactly one initial level")
-	for legacy_module_id in LEGACY_MODULE_IDS:
-		_expect(not _catalog.has_module(legacy_module_id), "legacy fixture was registered as live content: %s" % legacy_module_id)
 	var actual_ids: Array[StringName] = []
 	for module in _catalog.modules:
 		actual_ids.append(module.module_id)
@@ -113,6 +96,7 @@ func _test_catalog_and_modules() -> void:
 	_expect(_catalog.has_level(LEVEL_ID), "stone dungeon definition is missing")
 	var definition := _catalog.get_level(LEVEL_ID)
 	_expect(definition.validate(), "stone dungeon definition is invalid")
+	_expect(definition.format_version == LevelDefinition.FORMAT_VERSION, "stone dungeon format version changed")
 	_expect(definition.presentation != null and definition.presentation.terrain_shader != null, "stone dungeon presentation is missing")
 	_expect(definition.presentation.terrain_shader.resource_path == "res://levels/presentation/level_terrain.gdshader", "stone dungeon terrain shader is not content-driven")
 	_expect(definition.presentation.return_door_block_id == BlockId.Type.LOG, "stone dungeon return-door block changed")
@@ -127,18 +111,23 @@ func _test_catalog_and_modules() -> void:
 	_expect(entry_module.return_door_marker.cell == Vector3i(3, 1, 1) and entry_module.return_door_marker.facing == LevelSocketDefinition.Direction.NORTH, "stone shared entrance/exit door changed")
 	_expect(is_equal_approx(_catalog.get_module(&"stone_hallway").weight, 4.0), "stone hallway weight changed")
 	_expect(is_equal_approx(_catalog.get_module(&"stone_master_room").weight, 1.0), "stone master-room weight changed")
-	_expect(definition.minimum_module_count == LIVE_MINIMUM_MODULE_COUNT and definition.maximum_module_count == LIVE_MAXIMUM_MODULE_COUNT, "live stone module-count range changed")
+	_expect(is_equal_approx(_catalog.get_module(&"stone_room").weight, 1.0), "stone room weight changed")
+	_expect(is_equal_approx(_catalog.get_module(&"stone_chest_room").weight, 1.0), "stone chest-room weight changed")
 	_expect(definition.maximum_extent == Vector3i(96, 16, 96), "level extent bound changed")
 	_expect(definition.maximum_explored_states == 10000, "search-state bound changed")
-	var actual_expansion_ids := definition.expansion_module_ids.duplicate()
-	actual_expansion_ids.sort()
-	var expected_expansion_ids := EXPECTED_EXPANSION_MODULE_IDS.duplicate()
-	expected_expansion_ids.sort()
-	_expect(actual_expansion_ids == expected_expansion_ids, "stone expansion pool changed: %s" % str(actual_expansion_ids))
-	_expect(definition.cap_module_ids.is_empty(), "optional stone openings must not require cap modules")
+	var actual_hallway_ids := definition.hallway_module_ids.duplicate()
+	actual_hallway_ids.sort()
+	var expected_hallway_ids := EXPECTED_HALLWAY_MODULE_IDS.duplicate()
+	expected_hallway_ids.sort()
+	_expect(actual_hallway_ids == expected_hallway_ids, "stone hallway pool changed: %s" % str(actual_hallway_ids))
+	_expect(_room_requirement_counts(definition) == EXPECTED_ROOM_COUNTS, "stone room requirements changed: %s" % str(_room_requirement_counts(definition)))
+	_expect(definition.get_room_count() == LIVE_ROOM_COUNT, "stone required room count changed")
+	_expect(definition.get_hallway_count(entry_module.sockets.size()) == LIVE_HALLWAY_COUNT, "stone required hallway count changed")
+	_expect(definition.get_target_module_count(entry_module.sockets.size()) == LIVE_TARGET_MODULE_COUNT, "stone target module count changed")
 	var stone_module_ids: Array[StringName] = [definition.start_module_id]
-	stone_module_ids.append_array(definition.expansion_module_ids)
-	stone_module_ids.append_array(definition.cap_module_ids)
+	stone_module_ids.append_array(definition.hallway_module_ids)
+	for requirement in definition.room_requirements:
+		stone_module_ids.append_array(requirement.module_ids)
 	var start_count := 0
 	for module in _catalog.modules:
 		_expect(module != null and module.validate(), "module failed validation: %s" % module.module_id)
@@ -151,7 +140,10 @@ func _test_catalog_and_modules() -> void:
 		for socket in module.sockets:
 			_expect(not seen_sockets.has(socket.socket_id), "duplicate socket ID in %s" % module.module_id)
 			seen_sockets[socket.socket_id] = true
-			_expect(socket.unused_fill_block_id == BlockId.Type.STONE_BRICKS, "production socket fill is not Stone Bricks in %s" % module.module_id)
+			if module.module_id == definition.start_module_id or module.module_id in definition.hallway_module_ids:
+				_expect(socket.requires_connection(), "production connector socket is sealable in %s" % module.module_id)
+			else:
+				_expect(socket.unused_fill_block_id == BlockId.Type.STONE_BRICKS, "production room socket fill is not Stone Bricks in %s" % module.module_id)
 			_expect(_is_boundary(socket.cell, module.size, socket.direction), "socket is not on its declared boundary in %s" % module.module_id)
 			var aperture := module.socket_aperture_cells(socket)
 			_expect(aperture.size() == 18, "production socket opening is not 18 cells in %s" % module.module_id)
@@ -185,8 +177,10 @@ func _test_catalog_and_modules() -> void:
 			_test_marker(module, module.return_door_marker, "entrance/exit door")
 		else:
 			_expect(module.return_door_marker == null, "module has an unpaired entrance/exit marker: %s" % module.module_id)
-		if module.module_id in definition.expansion_module_ids:
-			_expect(module.sockets.size() >= 2, "expansion module lacks two sockets: %s" % module.module_id)
+		if module.module_id in definition.hallway_module_ids:
+			_expect(module.sockets.size() == 2, "hallway module does not have exactly two sockets: %s" % module.module_id)
+		elif module.module_id != definition.start_module_id:
+			_expect(not _room_type_for_module(definition, module.module_id).is_empty(), "live module has no room requirement: %s" % module.module_id)
 	_expect(start_count == 1, "catalog must have exactly one entry module")
 
 func _test_marker(module: LevelModuleDefinition, marker: LevelMarkerDefinition, label: String) -> void:
@@ -246,6 +240,14 @@ func _test_variable_aperture_generation() -> void:
 		[{"id": &"east", "direction": LevelSocketDefinition.Direction.EAST, "width": 3, "height": 6, "seed_offset": 1}],
 		true,
 	)
+	var hub := _make_aperture_module(
+		&"aperture_hub",
+		[
+			{"id": &"west", "direction": LevelSocketDefinition.Direction.WEST, "width": 3, "height": 6, "seed_offset": 1, "fill": BlockId.Type.STONE_BRICKS},
+			{"id": &"east", "direction": LevelSocketDefinition.Direction.EAST, "width": 3, "height": 6, "seed_offset": 1, "fill": BlockId.Type.STONE_BRICKS},
+		],
+		false,
+	)
 	var hall := _make_aperture_module(
 		&"aperture_hall",
 		[
@@ -254,20 +256,28 @@ func _test_variable_aperture_generation() -> void:
 		],
 		false,
 	)
-	var cap := _make_aperture_module(
-		&"aperture_cap",
-		[{"id": &"north", "direction": LevelSocketDefinition.Direction.NORTH, "width": 3, "height": 6, "seed_offset": 1}],
+	var leaf := _make_aperture_module(
+		&"aperture_leaf",
+		[{"id": &"west", "direction": LevelSocketDefinition.Direction.WEST, "width": 3, "height": 6, "seed_offset": 1, "fill": BlockId.Type.STONE_BRICKS}],
 		false,
 	)
-	var definition := _make_aperture_level(start.module_id, hall.module_id, cap.module_id)
+	var definition := _make_level_definition(
+		&"variable_aperture_level",
+		start.module_id,
+		[hall.module_id],
+		[
+			_make_room_requirement(&"hub_room", 1, [hub.module_id]),
+			_make_room_requirement(&"leaf_room", 1, [leaf.module_id]),
+		]
+	)
 	var catalog := LevelCatalog.new()
-	catalog.modules.assign([start, hall, cap])
+	catalog.modules.assign([start, hub, hall, leaf])
 	catalog.levels.append(definition)
 	_expect(catalog.validate(), "variable-aperture catalog failed validation")
 	var result := LevelGenerator.new().generate(catalog, definition.level_id, 81, &"variable_aperture", Vector3i.ZERO)
 	_expect(result.succeeded, "matching 3×6 openings did not generate: %s" % result.failure_reason)
 	if result.succeeded:
-		_expect(result.layout.placed_modules.size() == 3, "variable-aperture layout placed the wrong module count")
+		_expect(result.layout.placed_modules.size() == 4, "variable-aperture layout placed the wrong module count")
 		var seam_edges: Dictionary = {}
 		var records: Array[Dictionary] = []
 		var rotated_hall := false
@@ -303,79 +313,190 @@ func _test_variable_aperture_generation() -> void:
 				var neighbor := cell + outward
 				_expect(result.layout.get_cell(cell) == StructureCell.AIR and result.layout.get_cell(neighbor) == StructureCell.AIR, "variable-aperture seam was not open")
 				seam_edges[_edge_key(cell, neighbor)] = true
-		_expect(seam_edges.size() == 36, "variable-aperture layout did not create two 18-cell seams")
-	var small_cap := _make_aperture_module(
-		&"small_aperture_cap",
-		[{"id": &"north", "direction": LevelSocketDefinition.Direction.NORTH, "width": 1, "height": 2, "seed_offset": 0}],
+		_expect(seam_edges.size() == 54, "variable-aperture layout did not create three 18-cell seams")
+	var small_leaf := _make_aperture_module(
+		&"small_aperture_leaf",
+		[{"id": &"west", "direction": LevelSocketDefinition.Direction.WEST, "width": 1, "height": 2, "seed_offset": 0, "fill": BlockId.Type.STONE_BRICKS}],
 		false,
 	)
-	var mismatch_definition := _make_aperture_level(start.module_id, hall.module_id, small_cap.module_id)
+	var mismatch_definition := _make_level_definition(
+		&"mismatched_aperture_level",
+		start.module_id,
+		[hall.module_id],
+		[
+			_make_room_requirement(&"hub_room", 1, [hub.module_id]),
+			_make_room_requirement(&"leaf_room", 1, [small_leaf.module_id]),
+		]
+	)
 	var mismatch_catalog := LevelCatalog.new()
-	mismatch_catalog.modules.assign([start, hall, small_cap])
+	mismatch_catalog.modules.assign([start, hub, hall, small_leaf])
 	mismatch_catalog.levels.append(mismatch_definition)
 	_expect(mismatch_catalog.validate(), "mismatched-aperture catalog was structurally invalid")
 	var mismatch := LevelGenerator.new().generate(mismatch_catalog, mismatch_definition.level_id, 81, &"variable_aperture", Vector3i.ZERO)
-	_expect(not mismatch.succeeded, "3×6 opening connected to a 1×2 cap")
-	var shape_cap := _make_aperture_module(
-		&"shape_aperture_cap",
-		[{"id": &"north", "direction": LevelSocketDefinition.Direction.NORTH, "width": 3, "height": 6, "seed_offset": 1}],
+	_expect(not mismatch.succeeded, "3×6 opening connected to a 1×2 room")
+	_expect(mismatch.failure_code == LevelGenerationResult.FailureCode.NO_LAYOUT, "structurally valid aperture mismatch returned the wrong failure")
+	var shape_leaf := _make_aperture_module(
+		&"shape_aperture_leaf",
+		[{"id": &"west", "direction": LevelSocketDefinition.Direction.WEST, "width": 3, "height": 6, "seed_offset": 1, "fill": BlockId.Type.STONE_BRICKS}],
 		false,
 	)
-	var missing_profile_cell := _aperture_boundary_cell(LevelSocketDefinition.Direction.NORTH, 2, 6, shape_cap.size)
-	shape_cap.cells[StructureCell.index_of(missing_profile_cell, shape_cap.size)] = BlockId.Type.STONE
-	_expect(shape_cap.validate(), "asymmetric 3×6 cap failed validation")
-	_expect(LevelSocketAperture.dimensions(shape_cap.socket_aperture_cells(shape_cap.sockets[0]), LevelSocketDefinition.Direction.NORTH) == Vector2i(3, 6), "asymmetric cap lost its 3×6 bounds")
-	var shape_definition := _make_aperture_level(start.module_id, hall.module_id, shape_cap.module_id)
+	var missing_profile_cell := _aperture_boundary_cell(LevelSocketDefinition.Direction.WEST, 2, 6, shape_leaf.size)
+	shape_leaf.cells[StructureCell.index_of(missing_profile_cell, shape_leaf.size)] = BlockId.Type.STONE
+	_expect(shape_leaf.validate(), "asymmetric 3×6 room failed validation")
+	_expect(LevelSocketAperture.dimensions(shape_leaf.socket_aperture_cells(shape_leaf.sockets[0]), LevelSocketDefinition.Direction.WEST) == Vector2i(3, 6), "asymmetric room lost its 3×6 bounds")
+	var shape_definition := _make_level_definition(
+		&"shape_aperture_level",
+		start.module_id,
+		[hall.module_id],
+		[
+			_make_room_requirement(&"hub_room", 1, [hub.module_id]),
+			_make_room_requirement(&"leaf_room", 1, [shape_leaf.module_id]),
+		]
+	)
 	var shape_catalog := LevelCatalog.new()
-	shape_catalog.modules.assign([start, hall, shape_cap])
+	shape_catalog.modules.assign([start, hub, hall, shape_leaf])
 	shape_catalog.levels.append(shape_definition)
 	_expect(shape_catalog.validate(), "asymmetric-aperture catalog was structurally invalid")
 	var shape_mismatch := LevelGenerator.new().generate(shape_catalog, shape_definition.level_id, 81, &"variable_aperture", Vector3i.ZERO)
 	_expect(not shape_mismatch.succeeded, "different opening shapes with identical 3×6 bounds connected")
+	_expect(shape_mismatch.failure_code == LevelGenerationResult.FailureCode.NO_LAYOUT, "shape mismatch returned the wrong generation failure")
 
 func _test_optional_socket_sealing() -> void:
 	var start := _make_aperture_module(
 		&"optional_start",
-		[
-			{"id": &"east", "direction": LevelSocketDefinition.Direction.EAST, "width": 3, "height": 6, "seed_offset": 1, "fill": BlockId.Type.STONE_BRICKS},
-			{"id": &"west", "direction": LevelSocketDefinition.Direction.WEST, "width": 3, "height": 6, "seed_offset": 1, "fill": BlockId.Type.DIRT},
-		],
+		[{"id": &"east", "direction": LevelSocketDefinition.Direction.EAST, "width": 3, "height": 6, "seed_offset": 1}],
 		true,
 	)
-	var hall := _make_aperture_module(
-		&"optional_hall",
+	var room := _make_aperture_module(
+		&"optional_room",
 		[
-			{"id": &"north", "direction": LevelSocketDefinition.Direction.NORTH, "width": 3, "height": 6, "seed_offset": 1},
-			{"id": &"south", "direction": LevelSocketDefinition.Direction.SOUTH, "width": 3, "height": 6, "seed_offset": 1},
+			{"id": &"west", "direction": LevelSocketDefinition.Direction.WEST, "width": 3, "height": 6, "seed_offset": 1, "fill": BlockId.Type.STONE_BRICKS},
+			{"id": &"north", "direction": LevelSocketDefinition.Direction.NORTH, "width": 3, "height": 6, "seed_offset": 1, "fill": BlockId.Type.DIRT},
+			{"id": &"south", "direction": LevelSocketDefinition.Direction.SOUTH, "width": 3, "height": 6, "seed_offset": 1, "fill": BlockId.Type.STONE_BRICKS},
 		],
 		false,
 	)
-	var cap := _make_aperture_module(
-		&"optional_cap",
-		[{"id": &"west", "direction": LevelSocketDefinition.Direction.WEST, "width": 3, "height": 6, "seed_offset": 1}],
-		false,
+	var definition := _make_level_definition(
+		&"optional_sealing_level",
+		start.module_id,
+		[],
+		[_make_room_requirement(&"sealed_room", 1, [room.module_id])]
 	)
-	var definition := _make_aperture_level(start.module_id, hall.module_id, cap.module_id)
-	definition.level_id = &"optional_sealing_level"
-	definition.minimum_module_count = 1
-	definition.maximum_module_count = 1
 	var catalog := LevelCatalog.new()
-	catalog.modules.assign([start, hall, cap])
+	catalog.modules.assign([start, room])
 	catalog.levels.append(definition)
 	_expect(catalog.validate(), "optional-sealing catalog failed validation")
 	var result := LevelGenerator.new().generate(catalog, definition.level_id, 91, &"optional_sealing", Vector3i.ZERO)
 	_expect(result.succeeded, "optional socket did not seal: %s" % result.failure_reason)
 	if not result.succeeded:
 		return
-	_expect(result.layout.placed_modules.size() == 1, "sealing an optional socket placed another module")
-	var placement := result.layout.placed_modules[0]
-	for socket in start.sockets:
-		var inward := -LevelSocketDefinition.vector_for(placement.world_direction(socket.direction))
-		for aperture_cell in placement.world_socket_aperture(socket):
-			_expect(result.layout.get_cell(aperture_cell) == socket.unused_fill_block_id, "optional socket aperture ignored its own fill block")
-			_expect(result.layout.get_cell(aperture_cell + inward) == StructureCell.AIR, "optional socket sealing changed inward clearance")
+	_expect(result.layout.placed_modules.size() == 2, "optional-socket layout placed the wrong module count")
+	var records := _socket_records(result.layout)
+	var connected_room_sockets := 0
+	var sealed_room_sockets := 0
+	for record_index in records.size():
+		var record := records[record_index]
+		if int(record["placement"]) != 1:
+			continue
+		var partner := _socket_partner_index(records, record_index)
+		var placement := result.layout.placed_modules[1] as LevelPlacedModule
+		var socket := placement.definition.sockets[int(record["socket"])]
+		if partner >= 0:
+			connected_room_sockets += 1
+			for aperture_cell in record["aperture"] as Array[Vector3i]:
+				_expect(result.layout.get_cell(aperture_cell) == StructureCell.AIR, "connected optional socket was sealed")
+		else:
+			sealed_room_sockets += 1
+			var inward := -LevelSocketDefinition.vector_for(record["direction"] as LevelSocketDefinition.Direction)
+			for aperture_cell in record["aperture"] as Array[Vector3i]:
+				_expect(result.layout.get_cell(aperture_cell) == socket.unused_fill_block_id, "optional room socket ignored its fill block")
+				_expect(result.layout.get_cell(aperture_cell + inward) == StructureCell.AIR, "optional socket sealing changed inward clearance")
+	_expect(connected_room_sockets == 1 and sealed_room_sockets == 2, "optional room sockets did not split into one connection and two seals")
 	var repeated := LevelGenerator.new().generate(catalog, definition.level_id, 91, &"optional_sealing", Vector3i.ZERO)
 	_expect(repeated.succeeded and _layout_digest(repeated.layout) == _layout_digest(result.layout), "optional socket sealing is not deterministic")
+
+func _test_extensible_room_requirements() -> void:
+	var fixture := _make_extensible_fixture(false)
+	var catalog := fixture["catalog"] as LevelCatalog
+	var definition := fixture["definition"] as LevelDefinition
+	_expect(catalog.validate(), "extensible room catalog failed validation")
+	var seen_boss_modules: Dictionary = {}
+	var generator := LevelGenerator.new()
+	for seed in range(32):
+		var result := generator.generate(catalog, definition.level_id, seed, &"extensible_rooms", Vector3i.ZERO)
+		_expect(result.succeeded, "extensible room generation failed for seed %d: %s" % [seed, result.failure_reason])
+		if not result.succeeded:
+			continue
+		var counts := _layout_room_counts(result.layout)
+		_expect(counts == {&"hub_room": 1, &"boss_room": 1}, "extensible room quota changed for seed %d: %s" % [seed, str(counts)])
+		for placement in result.layout.placed_modules:
+			if placement.room_type_id == &"boss_room":
+				seen_boss_modules[placement.definition.module_id] = true
+	_expect(seen_boss_modules.has(&"boss_room_a") and seen_boss_modules.has(&"boss_room_b"), "weighted boss-room variants were not both reachable")
+
+func _test_semantic_set_determinism() -> void:
+	var forward := _make_extensible_fixture(false)
+	var reversed := _make_extensible_fixture(true)
+	var forward_catalog := forward["catalog"] as LevelCatalog
+	var reversed_catalog := reversed["catalog"] as LevelCatalog
+	var forward_definition := forward["definition"] as LevelDefinition
+	var reversed_definition := reversed["definition"] as LevelDefinition
+	_expect(forward_catalog.validate() and reversed_catalog.validate(), "semantic-order catalogs failed validation")
+	var first := LevelGenerator.new().generate(forward_catalog, forward_definition.level_id, 417, &"semantic_order", Vector3i(3, 0, -8))
+	var second := LevelGenerator.new().generate(reversed_catalog, reversed_definition.level_id, 417, &"semantic_order", Vector3i(3, 0, -8))
+	_expect(first.succeeded and second.succeeded, "semantic-order generation failed")
+	if first.succeeded and second.succeeded:
+		_expect(_layout_digest(first.layout) == _layout_digest(second.layout), "requirements, module pools, or catalog order changed deterministic output")
+
+func _make_extensible_fixture(reverse_semantic_sets: bool) -> Dictionary:
+	var start := _make_aperture_module(
+		&"extensible_start",
+		[{"id": &"east", "direction": LevelSocketDefinition.Direction.EAST, "width": 1, "height": 2, "seed_offset": 0}],
+		true,
+	)
+	var hall_a := _make_aperture_module(
+		&"extensible_hall_a",
+		[
+			{"id": &"west", "direction": LevelSocketDefinition.Direction.WEST, "width": 1, "height": 2, "seed_offset": 0},
+			{"id": &"east", "direction": LevelSocketDefinition.Direction.EAST, "width": 1, "height": 2, "seed_offset": 0},
+		],
+		false,
+	)
+	var hall_b := hall_a.duplicate(true) as LevelModuleDefinition
+	hall_b.module_id = &"extensible_hall_b"
+	var hub := _make_aperture_module(
+		&"hub_room",
+		[
+			{"id": &"west", "direction": LevelSocketDefinition.Direction.WEST, "width": 1, "height": 2, "seed_offset": 0, "fill": BlockId.Type.STONE_BRICKS},
+			{"id": &"east", "direction": LevelSocketDefinition.Direction.EAST, "width": 1, "height": 2, "seed_offset": 0, "fill": BlockId.Type.STONE_BRICKS},
+		],
+		false,
+	)
+	var boss_a := _make_aperture_module(
+		&"boss_room_a",
+		[{"id": &"west", "direction": LevelSocketDefinition.Direction.WEST, "width": 1, "height": 2, "seed_offset": 0, "fill": BlockId.Type.STONE_BRICKS}],
+		false,
+	)
+	var boss_b := boss_a.duplicate(true) as LevelModuleDefinition
+	boss_b.module_id = &"boss_room_b"
+	var hallway_ids: Array[StringName] = [hall_a.module_id, hall_b.module_id]
+	var boss_ids: Array[StringName] = [boss_a.module_id, boss_b.module_id]
+	var modules: Array[LevelModuleDefinition] = [start, hall_a, hall_b, hub, boss_a, boss_b]
+	if reverse_semantic_sets:
+		hallway_ids.reverse()
+		boss_ids.reverse()
+		modules.reverse()
+	var requirements: Array[LevelRoomRequirement] = [
+		_make_room_requirement(&"hub_room", 1, [hub.module_id]),
+		_make_room_requirement(&"boss_room", 1, boss_ids),
+	]
+	if reverse_semantic_sets:
+		requirements.reverse()
+	var definition := _make_level_definition(&"extensible_level", start.module_id, hallway_ids, requirements)
+	var catalog := LevelCatalog.new()
+	catalog.modules.assign(modules)
+	catalog.levels.append(definition)
+	return {"catalog": catalog, "definition": definition}
 
 func _make_aperture_module(module_id: StringName, socket_specs: Array[Dictionary], with_markers: bool) -> LevelModuleDefinition:
 	var module := LevelModuleDefinition.new()
@@ -412,18 +533,76 @@ func _make_aperture_module(module_id: StringName, socket_specs: Array[Dictionary
 	_expect(module.validate(), "synthetic aperture module failed validation: %s" % module_id)
 	return module
 
-func _make_aperture_level(start_id: StringName, expansion_id: StringName, cap_id: StringName) -> LevelDefinition:
+func _make_level_definition(
+	level_id: StringName,
+	start_id: StringName,
+	hallway_ids: Array,
+	requirements: Array,
+) -> LevelDefinition:
 	var definition := LevelDefinition.new()
-	definition.level_id = &"variable_aperture_level"
+	definition.level_id = level_id
 	definition.presentation = _catalog.get_level(LEVEL_ID).presentation
 	definition.start_module_id = start_id
-	definition.expansion_module_ids.assign([expansion_id])
-	definition.cap_module_ids.assign([cap_id])
-	definition.minimum_module_count = 3
-	definition.maximum_module_count = 3
+	definition.hallway_module_ids.assign(hallway_ids)
+	definition.room_requirements.assign(requirements)
 	definition.maximum_extent = Vector3i(64, 16, 64)
 	definition.maximum_explored_states = 1000
 	return definition
+
+func _make_room_requirement(room_type_id: StringName, count: int, module_ids: Array) -> LevelRoomRequirement:
+	var requirement := LevelRoomRequirement.new()
+	requirement.room_type_id = room_type_id
+	requirement.count = count
+	requirement.module_ids.assign(module_ids)
+	return requirement
+
+func _room_requirement_counts(definition: LevelDefinition) -> Dictionary:
+	var counts: Dictionary = {}
+	for requirement in definition.room_requirements:
+		counts[requirement.room_type_id] = requirement.count
+	return counts
+
+func _room_type_for_module(definition: LevelDefinition, module_id: StringName) -> StringName:
+	for requirement in definition.room_requirements:
+		if requirement.module_ids.has(module_id):
+			return requirement.room_type_id
+	return &""
+
+func _layout_room_counts(layout: LevelLayout) -> Dictionary:
+	var counts: Dictionary = {}
+	for placement in layout.placed_modules:
+		if placement.room_type_id.is_empty():
+			continue
+		counts[placement.room_type_id] = int(counts.get(placement.room_type_id, 0)) + 1
+	return counts
+
+func _socket_records(layout: LevelLayout) -> Array[Dictionary]:
+	var records: Array[Dictionary] = []
+	for placement_index in layout.placed_modules.size():
+		var placement := layout.placed_modules[placement_index]
+		for socket_index in placement.definition.sockets.size():
+			var socket := placement.definition.sockets[socket_index]
+			records.append({
+				"placement": placement_index,
+				"socket": socket_index,
+				"direction": placement.world_direction(socket.direction),
+				"aperture": placement.world_socket_aperture(socket),
+			})
+	return records
+
+func _socket_partner_index(records: Array[Dictionary], record_index: int) -> int:
+	var record := records[record_index]
+	var direction := record["direction"] as LevelSocketDefinition.Direction
+	var outward := LevelSocketDefinition.vector_for(direction)
+	for other_index in records.size():
+		if other_index == record_index:
+			continue
+		var other := records[other_index]
+		if int(other["placement"]) == int(record["placement"]):
+			continue
+		if int(other["direction"]) == int(LevelSocketDefinition.opposite(direction)) and _translated_cells_equal(record["aperture"] as Array[Vector3i], outward, other["aperture"] as Array[Vector3i]):
+			return other_index
+	return -1
 
 func _aperture_boundary_cell(
 	direction: LevelSocketDefinition.Direction,
@@ -507,90 +686,56 @@ func _test_entrance_placement_stability() -> void:
 	_expect(blocked_mining.size() == 1 and not blocked_mining[0].is_success() and blocked_mining[0].result == BlockEdit.Result.FAIL_PROTECTED, "entrance foundation accepted mining")
 	_expect(voxel_world.get_block_edit_count() == 0, "rejected entrance edits changed voxel state")
 
-func _test_legacy_generation_golden() -> void:
-	var legacy_catalog := LevelCatalog.new()
-	var loaded_ids: Array[StringName] = []
-	for module_path in LEGACY_MODULE_PATHS:
-		var module := load(module_path) as LevelModuleDefinition
-		_expect(module != null, "legacy golden module did not load: %s" % module_path)
-		if module == null:
-			continue
-		legacy_catalog.modules.append(module)
-		loaded_ids.append(module.module_id)
-	loaded_ids.sort()
-	var expected_ids := LEGACY_MODULE_IDS.duplicate()
-	expected_ids.sort()
-	_expect(loaded_ids == expected_ids, "legacy golden module IDs changed: %s" % str(loaded_ids))
-	var definition := LevelDefinition.new()
-	definition.level_id = &"legacy_stone_dungeon"
-	definition.presentation = _catalog.get_level(LEVEL_ID).presentation
-	definition.start_module_id = &"dungeon_start_chamber"
-	definition.expansion_module_ids.assign([
-		&"dungeon_straight_hall",
-		&"dungeon_corner_hall",
-		&"dungeon_small_room",
-		&"dungeon_large_room",
-		&"dungeon_t_junction",
-	])
-	definition.cap_module_ids.assign([
-		&"dungeon_compact_dead_end",
-		&"dungeon_dead_end_chamber",
-	])
-	definition.minimum_module_count = 8
-	definition.maximum_module_count = 12
-	definition.maximum_extent = Vector3i(96, 16, 96)
-	definition.maximum_explored_states = 10000
-	legacy_catalog.levels.append(definition)
-	var catalog_is_valid := legacy_catalog.validate()
-	_expect(catalog_is_valid, "legacy golden catalog failed validation")
-	if not catalog_is_valid:
-		return
-	var result := LevelGenerator.new().generate(legacy_catalog, definition.level_id, 1337, ENTRANCE_ID, Vector3i(7, 0, -9))
-	_expect(result.succeeded, "legacy fixed golden layout failed generation")
-	if result.succeeded:
-		var digest := _layout_digest(result.layout)
-		_expect(digest == EXPECTED_LEGACY_GOLDEN_DIGEST, "legacy fixed layout digest changed: %s" % digest)
-
 func _test_generation_fuzz() -> int:
-	var saw_minimum := false
-	var saw_maximum := false
-	var seen_expansion_ids: Dictionary = {}
 	var successful_seeds := 0
+	var generator := LevelGenerator.new()
 	for seed_index in range(FUZZ_SEED_COUNT):
 		var world_seed := seed_index - 500
 		var entrance_coordinate := Vector3i(seed_index % 29 - 14, seed_index % 7, seed_index % 31 - 15)
-		var first := LevelGenerator.new().generate(_catalog, LEVEL_ID, world_seed, ENTRANCE_ID, entrance_coordinate)
+		var first := generator.generate(_catalog, LEVEL_ID, world_seed, ENTRANCE_ID, entrance_coordinate)
 		_expect(first.succeeded, "generation failed for fuzz seed %d: %s" % [seed_index, first.failure_reason])
 		if not first.succeeded:
 			continue
 		successful_seeds += 1
-		for placement in first.layout.placed_modules:
-			if placement.definition.module_id in EXPECTED_EXPANSION_MODULE_IDS:
-				seen_expansion_ids[placement.definition.module_id] = true
+		var fuzz_label := "fuzz seed %d" % seed_index
+		_validate_exact_composition(first.layout, fuzz_label)
+		_validate_module_graph(first.layout, fuzz_label)
 		if seed_index % DEEP_FUZZ_INTERVAL == 0:
 			_validate_layout(first.layout, seed_index)
 			var first_digest := _layout_digest(first.layout)
-			var second := LevelGenerator.new().generate(_catalog, LEVEL_ID, world_seed, ENTRANCE_ID, entrance_coordinate)
+			var second := generator.generate(_catalog, LEVEL_ID, world_seed, ENTRANCE_ID, entrance_coordinate)
 			_expect(second.succeeded, "repeat generation failed for fuzz seed %d: %s" % [seed_index, second.failure_reason])
 			if second.succeeded:
 				_expect(_layout_digest(second.layout) == first_digest, "layout changed across identical generation for fuzz seed %d" % seed_index)
-		if first.layout.placed_modules.size() == LIVE_MINIMUM_MODULE_COUNT:
-			saw_minimum = true
-		if first.layout.placed_modules.size() == LIVE_MAXIMUM_MODULE_COUNT:
-			saw_maximum = true
-	var golden_result := LevelGenerator.new().generate(_catalog, LEVEL_ID, 1337, ENTRANCE_ID, Vector3i(7, 0, -9))
+	var golden_result := generator.generate(_catalog, LEVEL_ID, 1337, ENTRANCE_ID, Vector3i(7, 0, -9))
 	_expect(golden_result.succeeded, "live fixed layout failed generation")
 	if golden_result.succeeded:
+		_validate_exact_composition(golden_result.layout, "live quota golden")
+		_validate_module_graph(golden_result.layout, "live quota golden")
 		var digest := _layout_digest(golden_result.layout)
 		_expect(digest == EXPECTED_LIVE_GOLDEN_DIGEST, "live fixed layout digest changed: %s" % digest)
 	_expect(successful_seeds == FUZZ_SEED_COUNT, "only %d/%d fuzz seeds generated" % [successful_seeds, FUZZ_SEED_COUNT])
-	_expect(saw_minimum, "1,000-seed fuzz never generated the minimum module count")
-	_expect(saw_maximum, "1,000-seed fuzz never generated the maximum module count")
-	for module_id in EXPECTED_EXPANSION_MODULE_IDS:
-		_expect(seen_expansion_ids.has(module_id), "1,000-seed fuzz never placed %s" % module_id)
 	_expect(_saw_connected_optional_socket, "1,000-seed fuzz never observed a connected optional socket")
 	_expect(_saw_sealed_optional_socket, "1,000-seed fuzz never observed a sealed optional socket")
 	return successful_seeds
+
+func _validate_exact_composition(layout: LevelLayout, label: String) -> void:
+	var definition := _catalog.get_level(LEVEL_ID)
+	_expect(layout.target_module_count == LIVE_TARGET_MODULE_COUNT, "target module count changed for %s" % label)
+	_expect(layout.placed_modules.size() == LIVE_TARGET_MODULE_COUNT, "placed module count changed for %s" % label)
+	_expect(_layout_room_counts(layout) == EXPECTED_ROOM_COUNTS, "room quotas changed for %s: %s" % [label, str(_layout_room_counts(layout))])
+	var hallway_count := 0
+	for placement_index in layout.placed_modules.size():
+		var placement := layout.placed_modules[placement_index]
+		if placement_index == 0:
+			_expect(placement.definition.module_id == definition.start_module_id and placement.room_type_id.is_empty(), "entry placement role changed for %s" % label)
+		elif placement.room_type_id.is_empty():
+			_expect(placement.definition.module_id in definition.hallway_module_ids, "untyped placement is not a hallway for %s" % label)
+			hallway_count += 1
+		else:
+			var expected_type := _room_type_for_module(definition, placement.definition.module_id)
+			_expect(placement.room_type_id == expected_type, "room type %s does not own %s for %s" % [placement.room_type_id, placement.definition.module_id, label])
+	_expect(hallway_count == LIVE_HALLWAY_COUNT, "hallway count changed for %s" % label)
 
 func _validate_layout(layout: LevelLayout, seed_index: int) -> void:
 	var label := "seed %d" % seed_index
@@ -598,7 +743,7 @@ func _validate_layout(layout: LevelLayout, seed_index: int) -> void:
 	if layout == null:
 		return
 	var definition := _catalog.get_level(LEVEL_ID)
-	_expect(layout.target_module_count >= LIVE_MINIMUM_MODULE_COUNT and layout.target_module_count <= LIVE_MAXIMUM_MODULE_COUNT, "target count escaped live bounds for %s" % label)
+	_validate_exact_composition(layout, label)
 	_expect(layout.placed_modules.size() == layout.target_module_count, "placed count does not match target for %s" % label)
 	_expect(layout.explored_state_count > 0 and layout.explored_state_count <= definition.maximum_explored_states, "explored-state count escaped bounds for %s" % label)
 	var ownership: Dictionary = {}
@@ -702,6 +847,7 @@ func _validate_layout(layout: LevelLayout, seed_index: int) -> void:
 				_expect(layout.get_cell(aperture_cell) == unused_fill_block_id, "unpaired optional socket was not sealed at %s for %s" % [aperture_cell, label])
 		else:
 			_expect(false, "socket has %d partners with fill %d at %s for %s" % [partner_count, unused_fill_block_id, cell, label])
+	_validate_module_graph(layout, label)
 	for cell in layout.cells:
 		if int(layout.cells[cell]) != StructureCell.AIR:
 			continue
@@ -738,6 +884,59 @@ func _validate_layout(layout: LevelLayout, seed_index: int) -> void:
 		var support := torch.cell + LevelSocketDefinition.vector_for(torch.wall_direction)
 		_expect(StructureCell.is_structure_solid(layout.get_cell(support)), "placed torch has no solid support for %s" % label)
 	_expect(actual_torches == expected_torches, "placed torch set differs from authored markers for %s" % label)
+
+func _validate_module_graph(layout: LevelLayout, label: String) -> void:
+	var definition := _catalog.get_level(LEVEL_ID)
+	var records := _socket_records(layout)
+	var adjacency: Array[Dictionary] = []
+	adjacency.resize(layout.placed_modules.size())
+	var paired_socket_counts := PackedInt32Array()
+	paired_socket_counts.resize(layout.placed_modules.size())
+	var edges: Dictionary = {}
+	for placement_index in layout.placed_modules.size():
+		adjacency[placement_index] = {}
+	for record_index in records.size():
+		var partner_index := _socket_partner_index(records, record_index)
+		if partner_index < 0:
+			continue
+		var placement_index := int(records[record_index]["placement"])
+		var other_placement_index := int(records[partner_index]["placement"])
+		paired_socket_counts[placement_index] += 1
+		adjacency[placement_index][other_placement_index] = true
+		edges[Vector2i(mini(placement_index, other_placement_index), maxi(placement_index, other_placement_index))] = true
+	for placement_index in layout.placed_modules.size():
+		var placement := layout.placed_modules[placement_index]
+		var paired_count := paired_socket_counts[placement_index]
+		if placement_index == 0:
+			_expect(placement.room_type_id.is_empty() and placement.definition.module_id == definition.start_module_id, "graph root is not the untyped entry for %s" % label)
+			_expect(paired_count == placement.definition.sockets.size(), "entry has an unpaired socket for %s" % label)
+			_expect(adjacency[placement_index].size() == placement.definition.sockets.size(), "entry sockets do not lead to distinct rooms for %s" % label)
+		elif placement.room_type_id.is_empty():
+			_expect(placement.definition.module_id in definition.hallway_module_ids, "graph connector is not a hallway for %s" % label)
+			_expect(placement.definition.sockets.size() == 2 and paired_count == 2, "hallway has an unpaired end for %s" % label)
+			_expect(adjacency[placement_index].size() == 2, "hallway does not connect two distinct rooms for %s" % label)
+		else:
+			_expect(not adjacency[placement_index].is_empty(), "room is disconnected for %s" % label)
+	for edge in edges:
+		var first_index := (edge as Vector2i).x
+		var second_index := (edge as Vector2i).y
+		var first_is_connector := (layout.placed_modules[first_index] as LevelPlacedModule).room_type_id.is_empty()
+		var second_is_connector := (layout.placed_modules[second_index] as LevelPlacedModule).room_type_id.is_empty()
+		_expect(first_is_connector != second_is_connector, "module graph contains a room-room or connector-connector edge for %s" % label)
+	_expect(edges.size() == layout.placed_modules.size() - 1, "module graph is not a tree for %s" % label)
+	var reached: Dictionary = {0: true}
+	var pending: Array[int] = [0]
+	var pending_index := 0
+	while pending_index < pending.size():
+		var placement_index := pending[pending_index]
+		pending_index += 1
+		for neighbor_variant in adjacency[placement_index]:
+			var neighbor := int(neighbor_variant)
+			if reached.has(neighbor):
+				continue
+			reached[neighbor] = true
+			pending.append(neighbor)
+	_expect(reached.size() == layout.placed_modules.size(), "module graph is disconnected for %s" % label)
 
 func _test_level_state_and_mesher() -> void:
 	var stone := Vector3i.ZERO
@@ -859,7 +1058,7 @@ func _layout_digest(layout: LevelLayout) -> String:
 	lines.append("seed=%d target=%d explored=%d" % [layout.seed_value, layout.target_module_count, layout.explored_state_count])
 	lines.append("spawn=%s:%d return=%s:%d bounds=%s:%s" % [layout.spawn_cell, int(layout.spawn_facing), layout.return_door_cell, int(layout.return_door_facing), layout.bounds_min, layout.bounds_max])
 	for placement in layout.placed_modules:
-		lines.append("module=%s:%s:%d" % [placement.definition.module_id, placement.origin, placement.rotation])
+		lines.append("module=%s:%s:%s:%d" % [placement.definition.module_id, placement.room_type_id, placement.origin, placement.rotation])
 	var ordered_cells: Array[Vector3i] = []
 	for cell in layout.cells:
 		ordered_cells.append(cell as Vector3i)

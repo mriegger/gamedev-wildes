@@ -1,16 +1,34 @@
-[gd_resource type="Resource" script_class="LevelDefinition" load_steps=3 format=3]
+[gd_resource type="Resource" script_class="LevelDefinition" load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://levels/definitions/level_definition.gd" id="1_definition"]
 [ext_resource type="Resource" path="res://levels/content/dungeons/stone/stone_dungeon_presentation.tres" id="2_presentation"]
+[ext_resource type="Script" path="res://levels/definitions/level_room_requirement.gd" id="3_requirement"]
+
+[sub_resource type="Resource" id="MasterRoomRequirement"]
+script = ExtResource("3_requirement")
+room_type_id = &"master_room"
+count = 1
+module_ids = Array[StringName]([&"stone_master_room"])
+
+[sub_resource type="Resource" id="NormalRoomRequirement"]
+script = ExtResource("3_requirement")
+room_type_id = &"normal_room"
+count = 3
+module_ids = Array[StringName]([&"stone_room"])
+
+[sub_resource type="Resource" id="ChestRoomRequirement"]
+script = ExtResource("3_requirement")
+room_type_id = &"chest_room"
+count = 3
+module_ids = Array[StringName]([&"stone_chest_room"])
 
 [resource]
 script = ExtResource("1_definition")
+format_version = 1
 level_id = &"stone_dungeon"
 presentation = ExtResource("2_presentation")
 start_module_id = &"stone_entry_path"
-expansion_module_ids = Array[StringName]([&"stone_hallway", &"stone_master_room"])
-cap_module_ids = Array[StringName]([])
-minimum_module_count = 4
-maximum_module_count = 6
+hallway_module_ids = Array[StringName]([&"stone_hallway"])
+room_requirements = Array[ExtResource("3_requirement")]([SubResource("MasterRoomRequirement"), SubResource("NormalRoomRequirement"), SubResource("ChestRoomRequirement")])
 maximum_extent = Vector3i(96, 16, 96)
 maximum_explored_states = 10000

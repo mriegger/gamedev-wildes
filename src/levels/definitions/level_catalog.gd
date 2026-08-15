@@ -13,6 +13,7 @@ class_name LevelCatalog
 
 var _modules_by_id: Dictionary = {}
 var _levels_by_id: Dictionary = {}
+var _valid_module_ids: Dictionary = {}
 var _lookup_ready: bool = false
 var _is_valid: bool = false
 
@@ -47,6 +48,7 @@ func _rebuild_lookup() -> void:
 	_is_valid = true
 	_modules_by_id.clear()
 	_levels_by_id.clear()
+	_valid_module_ids.clear()
 	if modules.is_empty() or levels.is_empty():
 		push_error("[LevelCatalog] Modules and levels are required")
 		_is_valid = false
@@ -55,12 +57,15 @@ func _rebuild_lookup() -> void:
 			push_error("[LevelCatalog] Null module definition")
 			_is_valid = false
 			continue
-		_is_valid = module.validate() and _is_valid
+		var module_is_valid := module.validate()
+		_is_valid = module_is_valid and _is_valid
 		if module.module_id.is_empty() or _modules_by_id.has(module.module_id):
 			push_error("[LevelCatalog] Empty or duplicate module ID: %s" % module.module_id)
 			_is_valid = false
 			continue
 		_modules_by_id[module.module_id] = module
+		if module_is_valid:
+			_valid_module_ids[module.module_id] = true
 	for level in levels:
 		if level == null:
 			push_error("[LevelCatalog] Null level definition")
@@ -79,44 +84,95 @@ func _validate_level_modules(level: LevelDefinition) -> bool:
 	if not _modules_by_id.has(level.start_module_id):
 		push_error("[LevelCatalog] Unknown start module %s for %s" % [level.start_module_id, level.level_id])
 		return false
+	if not _valid_module_ids.has(level.start_module_id):
+		push_error("[LevelCatalog] Invalid start module %s for %s" % [level.start_module_id, level.level_id])
+		return false
 	var start := _modules_by_id[level.start_module_id] as LevelModuleDefinition
-	if start.spawn_marker == null or start.return_door_marker == null or start.sockets.is_empty():
-		push_error("[LevelCatalog] Start module lacks markers or sockets for %s" % level.level_id)
+	if start.spawn_marker == null or start.return_door_marker == null or start.sockets.is_empty() or not _has_only_required_sockets(start):
+		push_error("[LevelCatalog] Start module must have markers and required sockets for %s" % level.level_id)
 		valid = false
-	var required_start_socket_count := 0
-	for socket in start.sockets:
-		if socket != null and socket.requires_connection():
-			required_start_socket_count += 1
-	var minimum_terminal_count := 1 + required_start_socket_count
-	if level.minimum_module_count < minimum_terminal_count:
-		push_error("[LevelCatalog] Minimum module count for %s cannot close all start sockets" % level.level_id)
+	elif not start.has_connected_traversable_air(false):
+		push_error("[LevelCatalog] Start module air must be connected for %s" % level.level_id)
 		valid = false
-	var capless_sockets_are_sealable := true
-	for socket in start.sockets:
-		if socket == null or socket.requires_connection():
-			capless_sockets_are_sealable = false
-	for module_id in level.expansion_module_ids:
+	var claimed_roles: Dictionary = {level.start_module_id: "start"}
+	for module_id in level.hallway_module_ids:
+		valid = _claim_role(module_id, "hallway", claimed_roles, level.level_id) and valid
 		if not _modules_by_id.has(module_id):
-			push_error("[LevelCatalog] Unknown expansion module %s for %s" % [module_id, level.level_id])
+			push_error("[LevelCatalog] Unknown hallway module %s for %s" % [module_id, level.level_id])
 			valid = false
 			continue
-		var module := _modules_by_id[module_id] as LevelModuleDefinition
-		if module.sockets.size() < 2 or module.spawn_marker != null:
-			push_error("[LevelCatalog] Invalid expansion module %s for %s" % [module_id, level.level_id])
-			valid = false
-		for socket in module.sockets:
-			if socket == null or socket.requires_connection():
-				capless_sockets_are_sealable = false
-	for module_id in level.cap_module_ids:
-		if not _modules_by_id.has(module_id):
-			push_error("[LevelCatalog] Unknown cap module %s for %s" % [module_id, level.level_id])
+		if not _valid_module_ids.has(module_id):
+			push_error("[LevelCatalog] Invalid hallway module %s for %s" % [module_id, level.level_id])
 			valid = false
 			continue
-		var module := _modules_by_id[module_id] as LevelModuleDefinition
-		if module.sockets.size() != 1 or module.spawn_marker != null:
-			push_error("[LevelCatalog] Invalid cap module %s for %s" % [module_id, level.level_id])
+		var hallway := _modules_by_id[module_id] as LevelModuleDefinition
+		if hallway.sockets.size() != 2 or hallway.spawn_marker != null or hallway.return_door_marker != null or not _has_only_required_sockets(hallway):
+			push_error("[LevelCatalog] Hallway module must have exactly two required sockets and no markers: %s for %s" % [module_id, level.level_id])
 			valid = false
-	if level.cap_module_ids.is_empty() and not capless_sockets_are_sealable:
-		push_error("[LevelCatalog] Capless level has required sockets for %s" % level.level_id)
+		elif not hallway.has_connected_traversable_air(false):
+			push_error("[LevelCatalog] Hallway module air must be connected: %s for %s" % [module_id, level.level_id])
+			valid = false
+	var room_branch_capacity := 0
+	for requirement in level.room_requirements:
+		if requirement == null:
+			continue
+		var maximum_extra_sockets := -1
+		for module_id in requirement.module_ids:
+			valid = _claim_role(module_id, "room", claimed_roles, level.level_id) and valid
+			if not _modules_by_id.has(module_id):
+				push_error("[LevelCatalog] Unknown room module %s for %s" % [module_id, level.level_id])
+				valid = false
+				continue
+			if not _valid_module_ids.has(module_id):
+				push_error("[LevelCatalog] Invalid room module %s for %s" % [module_id, level.level_id])
+				valid = false
+				continue
+			var room := _modules_by_id[module_id] as LevelModuleDefinition
+			if room.sockets.is_empty() or room.spawn_marker != null or room.return_door_marker != null or not _has_only_sealable_sockets(room):
+				push_error("[LevelCatalog] Room module must have sealable sockets and no markers: %s for %s" % [module_id, level.level_id])
+				valid = false
+			elif not room.has_connected_traversable_air(true):
+				push_error("[LevelCatalog] Room air must remain connected with unused sockets sealed: %s for %s" % [module_id, level.level_id])
+				valid = false
+			maximum_extra_sockets = maxi(maximum_extra_sockets, room.sockets.size() - 1)
+		if maximum_extra_sockets >= 0:
+			room_branch_capacity += requirement.count * maximum_extra_sockets
+	var room_count := level.get_room_count()
+	var start_socket_count := start.sockets.size()
+	if room_count < start_socket_count:
+		push_error("[LevelCatalog] Room count cannot satisfy all start sockets for %s" % level.level_id)
+		valid = false
+	var hallway_count := level.get_hallway_count(start_socket_count)
+	if hallway_count > 0 and level.hallway_module_ids.is_empty():
+		push_error("[LevelCatalog] Hallway modules are required for %s" % level.level_id)
+		valid = false
+	if level.get_target_module_count(start_socket_count) > LevelDefinition.HARD_MAX_MODULE_COUNT:
+		push_error("[LevelCatalog] Exact module count exceeds the hard limit for %s" % level.level_id)
+		valid = false
+	if hallway_count >= 0 and room_branch_capacity < hallway_count:
+		push_error("[LevelCatalog] Room modules lack branch capacity for %s" % level.level_id)
 		valid = false
 	return valid
+
+func _claim_role(module_id: StringName, role: String, claimed_roles: Dictionary, level_id: StringName) -> bool:
+	if claimed_roles.has(module_id):
+		push_error("[LevelCatalog] Module %s has conflicting %s and %s roles for %s" % [module_id, claimed_roles[module_id], role, level_id])
+		return false
+	claimed_roles[module_id] = role
+	return true
+
+func _has_only_required_sockets(module: LevelModuleDefinition) -> bool:
+	if module.sockets.is_empty():
+		return false
+	for socket in module.sockets:
+		if socket == null or not socket.requires_connection():
+			return false
+	return true
+
+func _has_only_sealable_sockets(module: LevelModuleDefinition) -> bool:
+	if module.sockets.is_empty():
+		return false
+	for socket in module.sockets:
+		if socket == null or socket.requires_connection() or not StructureCell.is_structure_solid(socket.unused_fill_block_id):
+			return false
+	return true

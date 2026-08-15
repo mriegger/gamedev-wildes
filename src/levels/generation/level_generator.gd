@@ -13,11 +13,18 @@ const NEIGHBORS: Array[Vector3i] = [
 	Vector3i.BACK,
 ]
 
+enum FrontierTarget {
+	ROOM,
+	HALLWAY,
+}
+
 class AssemblyState:
 	var cells: Dictionary = {}
 	var placed_modules: Array[LevelPlacedModule] = []
 	var torches: Array[LevelTorchPlacement] = []
 	var frontiers: Array[Dictionary] = []
+	var remaining_room_counts: Dictionary = {}
+	var remaining_hallway_count: int
 	var spawn_cell: Vector3i
 	var spawn_facing: LevelSocketDefinition.Direction
 	var return_door_cell: Vector3i
@@ -31,6 +38,8 @@ class AssemblyState:
 		copied.placed_modules.assign(placed_modules)
 		copied.torches.assign(torches)
 		copied.frontiers.assign(frontiers)
+		copied.remaining_room_counts = remaining_room_counts.duplicate()
+		copied.remaining_hallway_count = remaining_hallway_count
 		copied.spawn_cell = spawn_cell
 		copied.spawn_facing = spawn_facing
 		copied.return_door_cell = return_door_cell
@@ -44,8 +53,13 @@ var _definition: LevelDefinition
 var _rng: RandomNumberGenerator
 var _explored_states: int
 var _search_limit: int
-var _expansion_candidates_by_direction: Dictionary = {}
-var _cap_candidates_by_direction: Dictionary = {}
+var _target_module_count: int
+var _room_candidates_by_direction: Dictionary = {}
+var _hallway_candidates_by_direction: Dictionary = {}
+var _max_room_branch_capacity: Dictionary = {}
+var _max_room_footprint: Dictionary = {}
+var _rotated_snapshots_by_key: Dictionary = {}
+var _snapshot_catalog_id: int
 
 func generate(catalog: LevelCatalog, level_id: StringName, world_seed: int, entrance_id: StringName, entrance_coordinate: Vector3i) -> LevelGenerationResult:
 	if catalog == null or not catalog.validate():
@@ -56,22 +70,29 @@ func generate(catalog: LevelCatalog, level_id: StringName, world_seed: int, entr
 	_definition = catalog.get_level(level_id)
 	_explored_states = 0
 	_search_limit = mini(_definition.maximum_explored_states, LevelDefinition.HARD_MAX_EXPLORED_STATES)
+	if _snapshot_catalog_id != catalog.get_instance_id():
+		_rotated_snapshots_by_key.clear()
+		_snapshot_catalog_id = catalog.get_instance_id()
 	_build_candidate_tables()
 	var seed_value := derive_seed(world_seed, entrance_id, entrance_coordinate)
 	_rng = RandomNumberGenerator.new()
 	_rng.seed = seed_value
-	var target_module_count := _rng.randi_range(_definition.minimum_module_count, _definition.maximum_module_count)
-	var state := _create_initial_state(_catalog.get_module(_definition.start_module_id))
+	var start_module := _catalog.get_module(_definition.start_module_id)
+	var required_hallway_count := _definition.get_hallway_count(start_module.sockets.size())
+	_target_module_count = _definition.get_target_module_count(start_module.sockets.size())
+	var state := _create_initial_state(start_module)
 	if state == null:
 		return LevelGenerationResult.make_failure(LevelGenerationResult.FailureCode.INVALID_LAYOUT, "Start module exceeds the configured bounds")
-	var assembled := _assemble(state, target_module_count)
+	state.remaining_room_counts = _initial_room_counts()
+	state.remaining_hallway_count = required_hallway_count
+	var assembled := _assemble(state)
 	if assembled == null:
 		if _explored_states >= _search_limit:
 			return LevelGenerationResult.make_failure(LevelGenerationResult.FailureCode.SEARCH_LIMIT_REACHED, "Level assembly explored %d candidate states" % _explored_states)
-		return LevelGenerationResult.make_failure(LevelGenerationResult.FailureCode.NO_LAYOUT, "No valid %d-module layout was found" % target_module_count)
-	if not _validate_finished_state(assembled, target_module_count):
-		return LevelGenerationResult.make_failure(LevelGenerationResult.FailureCode.INVALID_LAYOUT, "Assembled level failed reachability validation")
-	return LevelGenerationResult.make_success(_make_layout(assembled, seed_value, target_module_count))
+		return LevelGenerationResult.make_failure(LevelGenerationResult.FailureCode.NO_LAYOUT, "No valid layout satisfied the required room composition")
+	if not _validate_finished_state(assembled, _target_module_count):
+		return LevelGenerationResult.make_failure(LevelGenerationResult.FailureCode.INVALID_LAYOUT, "Assembled level failed composition or reachability validation")
+	return LevelGenerationResult.make_success(_make_layout(assembled, seed_value, _target_module_count))
 
 static func derive_seed(world_seed: int, entrance_id: StringName, entrance_coordinate: Vector3i) -> int:
 	var identity := "%d|%s|%d,%d,%d" % [world_seed, entrance_id, entrance_coordinate.x, entrance_coordinate.y, entrance_coordinate.z]
@@ -83,7 +104,7 @@ static func derive_seed(world_seed: int, entrance_id: StringName, entrance_coord
 func _create_initial_state(module: LevelModuleDefinition) -> AssemblyState:
 	var state := AssemblyState.new()
 	var origin := Vector3i(-module.spawn_marker.cell.x, 0, -module.spawn_marker.cell.z)
-	var placement := LevelPlacedModule.new(module, origin, 0)
+	var placement := LevelPlacedModule.new(module, origin, 0, &"")
 	_write_placement(state, placement, _transformed_cells(placement))
 	state.spawn_cell = placement.world_cell(module.spawn_marker.cell)
 	state.spawn_facing = placement.world_direction(module.spawn_marker.facing)
@@ -93,62 +114,92 @@ func _create_initial_state(module: LevelModuleDefinition) -> AssemblyState:
 		return null
 	return state
 
-func _assemble(state: AssemblyState, target_module_count: int) -> AssemblyState:
-	while _explored_states < _search_limit:
-		var explored_before_attempt := _explored_states
-		var assembled := _assemble_attempt(state.copy(), target_module_count)
-		if assembled != null:
-			return assembled
-		if _explored_states == explored_before_attempt:
-			return null
-	return null
+func _initial_room_counts() -> Dictionary:
+	var counts: Dictionary = {}
+	for requirement in _definition.room_requirements:
+		counts[requirement.room_type_id] = requirement.count
+	return counts
 
-func _assemble_attempt(state: AssemblyState, target_module_count: int) -> AssemblyState:
-	while not state.frontiers.is_empty():
-		var required_frontier_count := _required_frontier_count(state.frontiers)
-		var minimum_finished_count := state.placed_modules.size() + required_frontier_count
-		if minimum_finished_count > target_module_count:
+func _remaining_room_count(state: AssemblyState) -> int:
+	var count := 0
+	for remaining in state.remaining_room_counts.values():
+		count += int(remaining)
+	return count
+
+func _assemble(state: AssemblyState) -> AssemblyState:
+	if _remaining_room_count(state) == 0:
+		if state.remaining_hallway_count != 0 or _required_frontier_count(state.frontiers) != 0:
 			return null
-		if state.placed_modules.size() == target_module_count:
-			if required_frontier_count > 0 or not _seal_optional_frontiers(state):
-				return null
-			break
-		var use_caps := minimum_finished_count == target_module_count
-		var placed := false
-		for frontier_index in _ordered_frontier_indices(state.frontiers):
-			var frontier := state.frontiers[frontier_index]
-			var required_direction := LevelSocketDefinition.opposite(frontier["direction"] as LevelSocketDefinition.Direction)
-			var candidates_by_direction := _cap_candidates_by_direction if use_caps else _expansion_candidates_by_direction
-			var candidates := candidates_by_direction[required_direction] as Array[Dictionary]
-			var frontier_profile := frontier["aperture_profile"] as Array[Vector2i]
-			for candidate in _weighted_candidate_order(_matching_candidates(candidates, frontier_profile)):
+		if not _seal_optional_frontiers(state):
+			return null
+		return state if _validate_finished_state(state, _target_module_count) else null
+	if _explored_states >= _search_limit or not _can_finish_composition(state):
+		return null
+	for frontier_index in _next_frontier_indices(state):
+		var frontier := state.frontiers[frontier_index]
+		var required_direction := LevelSocketDefinition.opposite(frontier["direction"] as LevelSocketDefinition.Direction)
+		var frontier_profile := frontier["aperture_profile"] as Array[Vector2i]
+		if int(frontier["target"]) == FrontierTarget.ROOM:
+			var room_candidates := _room_candidates_by_direction[required_direction] as Array[Dictionary]
+			for candidate in _ordered_room_candidates(room_candidates, frontier_profile, state.remaining_room_counts):
 				if _explored_states >= _search_limit:
 					return null
 				_explored_states += 1
-				var module := candidate["module"] as LevelModuleDefinition
-				var next_required_count := required_frontier_count
-				if bool(frontier["requires_connection"]):
-					next_required_count -= 1
-				var connected_socket := candidate["socket"] as LevelSocketDefinition
-				for next_socket in module.sockets:
-					if next_socket.socket_id != connected_socket.socket_id and next_socket.requires_connection():
-						next_required_count += 1
-				var next_minimum_count := state.placed_modules.size() + 1 + next_required_count
-				if next_minimum_count > target_module_count:
-					continue
-				var next_state := _try_place(state, frontier_index, candidate)
+				var room_type_id := candidate["room_type_id"] as StringName
+				var next_state := _try_place(state, frontier_index, candidate, room_type_id)
 				if next_state == null:
 					continue
-				state = next_state
-				placed = true
-				break
-			if placed:
-				break
-		if not placed:
-			return null
-	if state.placed_modules.size() == target_module_count:
-		return state
+				next_state.remaining_room_counts[room_type_id] = int(next_state.remaining_room_counts[room_type_id]) - 1
+				var assembled := _assemble(next_state)
+				if assembled != null:
+					return assembled
+		elif state.remaining_hallway_count > 0:
+			var hallway_candidates := _hallway_candidates_by_direction[required_direction] as Array[Dictionary]
+			for candidate in _weighted_candidate_order(_matching_candidates(hallway_candidates, frontier_profile)):
+				if _explored_states >= _search_limit:
+					return null
+				_explored_states += 1
+				var next_state := _try_place(state, frontier_index, candidate, &"")
+				if next_state == null:
+					continue
+				next_state.remaining_hallway_count -= 1
+				var assembled := _assemble(next_state)
+				if assembled != null:
+					return assembled
 	return null
+
+func _can_finish_composition(state: AssemblyState) -> bool:
+	var remaining_rooms := _remaining_room_count(state)
+	var required_room_frontiers := 0
+	var optional_hallway_frontiers := 0
+	for frontier in state.frontiers:
+		if bool(frontier["requires_connection"]):
+			if int(frontier["target"]) != FrontierTarget.ROOM:
+				return false
+			required_room_frontiers += 1
+		elif int(frontier["target"]) == FrontierTarget.HALLWAY:
+			optional_hallway_frontiers += 1
+	if remaining_rooms != required_room_frontiers + state.remaining_hallway_count:
+		return false
+	var future_branch_capacity := optional_hallway_frontiers
+	for room_type_id in state.remaining_room_counts:
+		future_branch_capacity += int(state.remaining_room_counts[room_type_id]) * int(_max_room_branch_capacity[room_type_id])
+	return future_branch_capacity >= state.remaining_hallway_count
+
+func _next_frontier_indices(state: AssemblyState) -> Array[int]:
+	var required: Array[int] = []
+	var optional_hallways: Array[int] = []
+	for index in state.frontiers.size():
+		var frontier := state.frontiers[index]
+		if bool(frontier["requires_connection"]):
+			required.append(index)
+		elif int(frontier["target"]) == FrontierTarget.HALLWAY:
+			optional_hallways.append(index)
+	if not required.is_empty():
+		return _ordered_frontier_indices(state.frontiers, required)
+	if state.remaining_hallway_count > 0:
+		return _ordered_frontier_indices(state.frontiers, optional_hallways)
+	return []
 
 func _required_frontier_count(frontiers: Array[Dictionary]) -> int:
 	var count := 0
@@ -174,11 +225,8 @@ func _seal_optional_frontiers(state: AssemblyState) -> bool:
 	state.frontiers.clear()
 	return true
 
-func _ordered_frontier_indices(frontiers: Array[Dictionary]) -> Array[int]:
-	var indices: Array[int] = []
-	indices.resize(frontiers.size())
-	for index in indices.size():
-		indices[index] = index
+func _ordered_frontier_indices(frontiers: Array[Dictionary], source_indices: Array[int]) -> Array[int]:
+	var indices := source_indices.duplicate()
 	indices.sort_custom(func(a: int, b: int) -> bool:
 		return _frontier_key(frontiers[a]) < _frontier_key(frontiers[b])
 	)
@@ -195,11 +243,33 @@ func _frontier_key(frontier: Dictionary) -> String:
 	return "%+05d:%+03d:%+05d:%d:%s:%s" % [cell.x, cell.y, cell.z, int(frontier["direction"]), frontier["module_id"], frontier["socket_id"]]
 
 func _build_candidate_tables() -> void:
-	_expansion_candidates_by_direction.clear()
-	_cap_candidates_by_direction.clear()
+	_room_candidates_by_direction.clear()
+	_hallway_candidates_by_direction.clear()
+	_max_room_branch_capacity.clear()
+	_max_room_footprint.clear()
+	for requirement in _definition.room_requirements:
+		var maximum_capacity := 0
+		var maximum_footprint := 0
+		for module_id in requirement.module_ids:
+			var module := _catalog.get_module(module_id)
+			maximum_capacity = maxi(maximum_capacity, module.sockets.size() - 1)
+			maximum_footprint = maxi(maximum_footprint, module.size.x * module.size.z)
+		_max_room_branch_capacity[requirement.room_type_id] = maximum_capacity
+		_max_room_footprint[requirement.room_type_id] = maximum_footprint
 	for required_direction in range(LevelSocketDefinition.Direction.size()):
-		_expansion_candidates_by_direction[required_direction] = _build_candidates(_definition.expansion_module_ids, required_direction as LevelSocketDefinition.Direction)
-		_cap_candidates_by_direction[required_direction] = _build_candidates(_definition.cap_module_ids, required_direction as LevelSocketDefinition.Direction)
+		var direction := required_direction as LevelSocketDefinition.Direction
+		_hallway_candidates_by_direction[direction] = _build_candidates(_definition.hallway_module_ids, direction)
+		var room_candidates: Array[Dictionary] = []
+		for requirement in _definition.room_requirements:
+			for candidate in _build_candidates(requirement.module_ids, direction):
+				var annotated := candidate.duplicate()
+				annotated["room_type_id"] = requirement.room_type_id
+				annotated["key"] = "%s:%s" % [requirement.room_type_id, candidate["key"]]
+				room_candidates.append(annotated)
+		room_candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+			return String(a["key"]) < String(b["key"])
+		)
+		_room_candidates_by_direction[direction] = room_candidates
 
 func _build_candidates(module_ids: Array[StringName], required_direction: LevelSocketDefinition.Direction) -> Array[Dictionary]:
 	var candidates: Array[Dictionary] = []
@@ -230,9 +300,40 @@ func _build_candidates(module_ids: Array[StringName], required_direction: LevelS
 func _matching_candidates(candidates: Array[Dictionary], profile: Array[Vector2i]) -> Array[Dictionary]:
 	var matching: Array[Dictionary] = []
 	for candidate in candidates:
-		if candidate["aperture_profile"] as Array[Vector2i] == profile:
+		if candidate["aperture_profile"] == profile:
 			matching.append(candidate)
 	return matching
+
+func _matching_room_candidates(candidates: Array[Dictionary], profile: Array[Vector2i], remaining_counts: Dictionary) -> Array[Dictionary]:
+	var matching: Array[Dictionary] = []
+	for candidate in candidates:
+		var room_type_id := candidate["room_type_id"] as StringName
+		var remaining := int(remaining_counts.get(room_type_id, 0))
+		if remaining <= 0 or candidate["aperture_profile"] != profile:
+			continue
+		var weighted := candidate.duplicate()
+		weighted["weight"] = float(candidate["weight"]) * remaining
+		matching.append(weighted)
+	return matching
+
+func _ordered_room_candidates(candidates: Array[Dictionary], profile: Array[Vector2i], remaining_counts: Dictionary) -> Array[Dictionary]:
+	var ordered := _weighted_candidate_order(_matching_room_candidates(candidates, profile, remaining_counts))
+	for index in ordered.size():
+		ordered[index]["random_rank"] = index
+	ordered.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var a_type := a["room_type_id"] as StringName
+		var b_type := b["room_type_id"] as StringName
+		var a_capacity := int(_max_room_branch_capacity[a_type])
+		var b_capacity := int(_max_room_branch_capacity[b_type])
+		if a_capacity != b_capacity:
+			return a_capacity > b_capacity
+		var a_footprint := int(_max_room_footprint[a_type])
+		var b_footprint := int(_max_room_footprint[b_type])
+		if a_footprint != b_footprint:
+			return a_footprint > b_footprint
+		return int(a["random_rank"]) < int(b["random_rank"])
+	)
+	return ordered
 
 func _weighted_candidate_order(candidates: Array[Dictionary]) -> Array[Dictionary]:
 	var remaining: Array[Dictionary] = []
@@ -253,7 +354,7 @@ func _weighted_candidate_order(candidates: Array[Dictionary]) -> Array[Dictionar
 		remaining.remove_at(selected_index)
 	return ordered
 
-func _try_place(state: AssemblyState, frontier_index: int, candidate: Dictionary) -> AssemblyState:
+func _try_place(state: AssemblyState, frontier_index: int, candidate: Dictionary, room_type_id: StringName) -> AssemblyState:
 	var frontier := state.frontiers[frontier_index]
 	var module := candidate["module"] as LevelModuleDefinition
 	var socket := candidate["socket"] as LevelSocketDefinition
@@ -270,40 +371,75 @@ func _try_place(state: AssemblyState, frontier_index: int, candidate: Dictionary
 		connected_aperture.append(origin + cell)
 	if not _same_cell_set(target_aperture, connected_aperture):
 		return null
-	var placement := LevelPlacedModule.new(module, origin, rotation)
-	var transformed_cells := _transformed_cells(placement)
-	for cell in transformed_cells:
-		if state.cells.has(cell):
-			return null
-	if not _has_only_connected_air_adjacency(state, transformed_cells, frontier_aperture, frontier_direction):
-		return null
-	var candidate_min := state.bounds_min
-	var candidate_max := state.bounds_max
-	for cell in transformed_cells:
-		candidate_min = candidate_min.min(cell)
-		candidate_max = candidate_max.max(cell)
+	var placement := LevelPlacedModule.new(module, origin, rotation, room_type_id)
+	var rotated_snapshot := _rotated_snapshot(module, rotation)
+	var candidate_min: Vector3i = state.bounds_min.min(origin + (rotated_snapshot["bounds_min"] as Vector3i))
+	var candidate_max: Vector3i = state.bounds_max.max(origin + (rotated_snapshot["bounds_max"] as Vector3i))
 	if not _fits_extent(candidate_min, candidate_max):
 		return null
-	state.frontiers.remove_at(frontier_index)
-	_write_placement(state, placement, transformed_cells, socket.socket_id)
-	return state
+	for rotated_cell_variant in rotated_snapshot["occupied_cells"] as Array[Vector3i]:
+		if state.cells.has(origin + (rotated_cell_variant as Vector3i)):
+			return null
+	if not _has_only_connected_air_adjacency(state, rotated_snapshot, origin, frontier_aperture, frontier_direction):
+		return null
+	var transformed_cells := _transformed_cells(placement, rotated_snapshot)
+	var next_state := state.copy()
+	next_state.frontiers.remove_at(frontier_index)
+	_write_placement(next_state, placement, transformed_cells, socket.socket_id)
+	return next_state
 
-func _transformed_cells(placement: LevelPlacedModule) -> Dictionary:
+func _transformed_cells(placement: LevelPlacedModule, rotated_snapshot: Dictionary = {}) -> Dictionary:
 	var transformed: Dictionary = {}
-	var module := placement.definition
+	if rotated_snapshot.is_empty():
+		rotated_snapshot = _rotated_snapshot(placement.definition, placement.rotation)
+	var rotated_cells := rotated_snapshot["cells"] as Dictionary
+	for rotated_cell_variant in rotated_cells:
+		var rotated_cell := rotated_cell_variant as Vector3i
+		transformed[placement.origin + rotated_cell] = rotated_cells[rotated_cell]
+	return transformed
+
+func _rotated_snapshot(module: LevelModuleDefinition, rotation: int) -> Dictionary:
+	var key := "%s:%d" % [module.module_id, posmod(rotation, 4)]
+	if _rotated_snapshots_by_key.has(key):
+		return _rotated_snapshots_by_key[key] as Dictionary
+	var rotated_cells: Dictionary = {}
+	var occupied_cells: Array[Vector3i] = []
 	for y in module.size.y:
 		for z in module.size.z:
 			for x in module.size.x:
 				var local_cell := Vector3i(x, y, z)
 				var value := module.cell_at(local_cell)
-				if value == StructureCell.VOID:
-					continue
-				transformed[placement.world_cell(local_cell)] = value
-	return transformed
+				if value != StructureCell.VOID:
+					var rotated_cell := module.rotate_cell(local_cell, rotation)
+					rotated_cells[rotated_cell] = value
+					occupied_cells.append(rotated_cell)
+	var exposed_air_cells: Array[Vector3i] = []
+	for rotated_cell in occupied_cells:
+		if int(rotated_cells[rotated_cell]) != StructureCell.AIR:
+			continue
+		for offset in NEIGHBORS:
+			if not rotated_cells.has(rotated_cell + offset):
+				exposed_air_cells.append(rotated_cell)
+				break
+	var bounds_min := occupied_cells[0]
+	var bounds_max := occupied_cells[0]
+	for rotated_cell in occupied_cells:
+		bounds_min = bounds_min.min(rotated_cell)
+		bounds_max = bounds_max.max(rotated_cell)
+	var snapshot := {
+		"cells": rotated_cells,
+		"occupied_cells": occupied_cells,
+		"exposed_air_cells": exposed_air_cells,
+		"bounds_min": bounds_min,
+		"bounds_max": bounds_max,
+	}
+	_rotated_snapshots_by_key[key] = snapshot
+	return snapshot
 
 func _has_only_connected_air_adjacency(
 	state: AssemblyState,
-	transformed_cells: Dictionary,
+	rotated_snapshot: Dictionary,
+	origin: Vector3i,
 	frontier_aperture: Array[Vector3i],
 	frontier_direction: LevelSocketDefinition.Direction,
 ) -> bool:
@@ -311,11 +447,12 @@ func _has_only_connected_air_adjacency(
 	var outward := LevelSocketDefinition.vector_for(frontier_direction)
 	for frontier_cell in frontier_aperture:
 		connected_neighbors[frontier_cell + outward] = frontier_cell
-	for cell in transformed_cells:
-		if int(transformed_cells[cell]) != StructureCell.AIR:
-			continue
-		var transformed_cell := cell as Vector3i
+	var rotated_cells := rotated_snapshot["cells"] as Dictionary
+	for rotated_cell in rotated_snapshot["exposed_air_cells"] as Array[Vector3i]:
+		var transformed_cell := origin + rotated_cell
 		for offset in NEIGHBORS:
+			if rotated_cells.has(rotated_cell + offset):
+				continue
 			var neighbor: Vector3i = transformed_cell + offset
 			if int(state.cells.get(neighbor, StructureCell.VOID)) != StructureCell.AIR:
 				continue
@@ -333,6 +470,7 @@ func _write_placement(state: AssemblyState, placement: LevelPlacedModule, transf
 		state.bounds_min = state.bounds_min.min(cell)
 		state.bounds_max = state.bounds_max.max(cell)
 	state.placed_modules.append(placement)
+	var frontier_target := FrontierTarget.ROOM if placement.room_type_id.is_empty() else FrontierTarget.HALLWAY
 	for socket in placement.definition.sockets:
 		if socket.socket_id == connected_socket_id:
 			continue
@@ -345,6 +483,7 @@ func _write_placement(state: AssemblyState, placement: LevelPlacedModule, transf
 			"direction": world_direction,
 			"aperture_cells": world_aperture,
 			"aperture_profile": LevelSocketAperture.normalized_profile(world_aperture, world_direction),
+			"target": frontier_target,
 			"requires_connection": socket.requires_connection(),
 			"unused_fill_block_id": socket.unused_fill_block_id,
 		})
@@ -380,26 +519,40 @@ func _same_cell_set(first: Array[Vector3i], second: Array[Vector3i]) -> bool:
 func _validate_finished_state(state: AssemblyState, target_module_count: int) -> bool:
 	if not state.frontiers.is_empty() or state.placed_modules.size() != target_module_count:
 		return false
+	if not _has_exact_composition(state):
+		return false
 	if not _fits_extent(state.bounds_min, state.bounds_max):
 		return false
 	if int(state.cells.get(state.spawn_cell, StructureCell.VOID)) != StructureCell.AIR:
 		return false
-	var reachable: Dictionary = {state.spawn_cell: true}
-	var pending: Array[Vector3i] = [state.spawn_cell]
-	var pending_index := 0
-	while pending_index < pending.size():
-		var cell := pending[pending_index]
-		pending_index += 1
-		for offset in NEIGHBORS:
-			var neighbor := cell + offset
-			if reachable.has(neighbor) or int(state.cells.get(neighbor, StructureCell.VOID)) != StructureCell.AIR:
-				continue
-			reachable[neighbor] = true
-			pending.append(neighbor)
-	for cell in state.cells:
-		if int(state.cells[cell]) == StructureCell.AIR and not reachable.has(cell):
-			return false
 	return true
+
+func _has_exact_composition(state: AssemblyState) -> bool:
+	if state.placed_modules.is_empty() or state.placed_modules[0].definition.module_id != _definition.start_module_id:
+		return false
+	var room_counts: Dictionary = {}
+	var requirements_by_type: Dictionary = {}
+	for requirement in _definition.room_requirements:
+		room_counts[requirement.room_type_id] = 0
+		requirements_by_type[requirement.room_type_id] = requirement
+	var hallway_count := 0
+	for index in range(1, state.placed_modules.size()):
+		var placement := state.placed_modules[index]
+		if placement.room_type_id.is_empty():
+			if not _definition.hallway_module_ids.has(placement.definition.module_id):
+				return false
+			hallway_count += 1
+			continue
+		if not requirements_by_type.has(placement.room_type_id):
+			return false
+		var requirement := requirements_by_type[placement.room_type_id] as LevelRoomRequirement
+		if not requirement.module_ids.has(placement.definition.module_id):
+			return false
+		room_counts[placement.room_type_id] = int(room_counts[placement.room_type_id]) + 1
+	for requirement in _definition.room_requirements:
+		if int(room_counts[requirement.room_type_id]) != requirement.count:
+			return false
+	return hallway_count == _definition.get_hallway_count(_catalog.get_module(_definition.start_module_id).sockets.size())
 
 func _make_layout(state: AssemblyState, seed_value: int, target_module_count: int) -> LevelLayout:
 	var layout := LevelLayout.new()

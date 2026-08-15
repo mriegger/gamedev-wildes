@@ -1,6 +1,15 @@
 extends Resource
 class_name LevelModuleDefinition
 
+const AIR_NEIGHBORS: Array[Vector3i] = [
+	Vector3i.LEFT,
+	Vector3i.RIGHT,
+	Vector3i.DOWN,
+	Vector3i.UP,
+	Vector3i.FORWARD,
+	Vector3i.BACK,
+]
+
 @export var module_id: StringName
 @export var size: Vector3i
 @export_range(0.01, 100.0, 0.01, "or_greater") var weight: float = 1.0
@@ -33,6 +42,40 @@ func rotate_cell(cell: Vector3i, quarter_turns: int) -> Vector3i:
 		3:
 			return Vector3i(cell.z, cell.y, size.x - 1 - cell.x)
 	return cell
+
+func has_connected_traversable_air(seal_unused_sockets: bool) -> bool:
+	var sealed_cells: Dictionary = {}
+	if seal_unused_sockets:
+		for socket in sockets:
+			if socket != null and not socket.requires_connection():
+				for aperture_cell in socket_aperture_cells(socket):
+					sealed_cells[aperture_cell] = true
+	var air_count := 0
+	var first_air := Vector3i(-1, -1, -1)
+	for y in size.y:
+		for z in size.z:
+			for x in size.x:
+				var cell := Vector3i(x, y, z)
+				if cell_at(cell) != StructureCell.AIR or sealed_cells.has(cell):
+					continue
+				if air_count == 0:
+					first_air = cell
+				air_count += 1
+	if air_count == 0:
+		return false
+	var reached: Dictionary = {first_air: true}
+	var pending: Array[Vector3i] = [first_air]
+	var pending_index := 0
+	while pending_index < pending.size():
+		var cell := pending[pending_index]
+		pending_index += 1
+		for offset in AIR_NEIGHBORS:
+			var neighbor := cell + offset
+			if reached.has(neighbor) or sealed_cells.has(neighbor) or not StructureCell.is_in_bounds(neighbor, size) or cell_at(neighbor) != StructureCell.AIR:
+				continue
+			reached[neighbor] = true
+			pending.append(neighbor)
+	return reached.size() == air_count
 
 func validate() -> bool:
 	var valid := true
