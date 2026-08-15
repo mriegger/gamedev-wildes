@@ -19,12 +19,18 @@ func supports_behavior(behavior: EntityBehaviorDefinition) -> bool:
 	return behavior is ZombieBehaviorDefinition
 
 
-func setup(p_runtime_id: int, p_definition: EntityDefinition, p_voxel_world: VoxelWorld, behavior_seed: int):
-	super.setup(p_runtime_id, p_definition, p_voxel_world, behavior_seed)
+func setup(
+	p_runtime_id: int,
+	p_definition: EntityDefinition,
+	p_voxel_space: VoxelSpace,
+	behavior_seed: int,
+	navigation_limits: EntityNavigationLimits,
+):
+	super.setup(p_runtime_id, p_definition, p_voxel_space, behavior_seed, navigation_limits)
 	_behavior = p_definition.behavior as ZombieBehaviorDefinition
 	assert(_behavior != null)
 	brain = ZombieBrain.new(_behavior, behavior_seed)
-	_path_follower = VoxelPathFollower.new(voxel_world, definition.body_width, definition.body_height, _behavior.repath_seconds)
+	_path_follower = VoxelPathFollower.new(voxel_space, definition.body_width, definition.body_height, _behavior.repath_seconds, navigation_limits)
 	max_speed = _behavior.wander_speed
 	_zombie_animation = animation_driver as ZombieAnimationDriver
 	assert(_zombie_animation != null)
@@ -33,7 +39,7 @@ func setup(p_runtime_id: int, p_definition: EntityDefinition, p_voxel_world: Vox
 
 
 func tick(delta: float, player_position: Vector3, separation_velocity: Vector3, navigation_search_budget: NavigationSearchBudget):
-	assert(brain != null and voxel_world != null)
+	assert(brain != null and voxel_space != null)
 	_advance_melee_contact(delta)
 	var visible := _sample_player_visibility(delta, player_position)
 	var previous_state := brain.state
@@ -105,5 +111,5 @@ func _sample_player_visibility(delta: float, player_position: Vector3) -> bool:
 		return _player_visible
 	var origin := global_position + Vector3.UP * minf(definition.body_height * 0.8, 1.4)
 	var target := player_position + Vector3.UP * 0.9
-	_player_visible = VoxelLineOfSight.has_clear_path(voxel_world, origin, target)
+	_player_visible = VoxelLineOfSight.has_clear_path(voxel_space, origin, target)
 	return _player_visible

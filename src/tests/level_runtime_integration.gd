@@ -201,7 +201,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	var structure_dialogs := (load(STRUCTURE_DIALOGS_SCENE) as PackedScene).instantiate() as StructureDesignerDialogs
 	var session := GameSession.new()
 	var coordinator := LevelInteractionCoordinator.new()
-	var entities := EntityCoordinator.new()
+	var entities := WorldEntityCoordinator.new()
 	var combat := MeleeCombatCoordinator.new()
 	var combat_hit_particles := (load("res://combat/particles/combat_hit_particles.tscn") as PackedScene).instantiate() as CombatHitParticles
 	var mining_break_particles := (load("res://mining/presentation/mining_break_particles.tscn") as PackedScene).instantiate()
@@ -217,7 +217,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	structure_dialogs.name = "StructureDesignerDialogs"
 	session.name = "GameSession"
 	coordinator.name = "LevelInteractionCoordinator"
-	entities.name = "Entities"
+	entities.name = "WorldEntities"
 	combat.name = "MeleeCombat"
 	combat_hit_particles.name = "CombatHitParticles"
 	mining_break_particles.name = "MiningBreakParticles"
@@ -284,8 +284,8 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	game.player_stats = ActorStats.new(game.player_stats_definition)
 	camera_rig.setup(player, game.input_buffer)
 	entities.setup(game.entity_catalog, voxel_world, 1337, _position_ready)
-	combat.setup(voxel_world, player, game.player_stats, entities)
-	player.setup(camera_rig, game.inventory_model, game.input_buffer, game.player_stats, combat, entities)
+	combat.setup(voxel_world, player, game.player_stats, entities.get_runtime())
+	player.setup(camera_rig, game.inventory_model, game.input_buffer, game.player_stats, combat, entities.get_runtime())
 	var world_spawn := voxel_world.get_spawn_position()
 	var doorway_anchor := world_spawn
 	player.global_position = doorway_anchor
@@ -375,7 +375,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 func _run_structure_designer_cycle(game: TransitionGame, in_level: bool, cycle: int) -> void:
 	var label := "%s cycle %d" % ["dungeon" if in_level else "overworld", cycle]
 	var world := game.world
-	var entities := game.entity_coordinator
+	var entities := game.world_entity_coordinator
 	var player := game.player
 	var camera_rig := game.camera_rig
 	var hud := game.hud

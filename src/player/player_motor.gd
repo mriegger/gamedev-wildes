@@ -37,27 +37,27 @@ var _jump_windup_remaining: float = 0.0
 var _jump_ready: bool = false
 var _defeated: bool = false
 
-func setup(p_camera_rig: CameraRig, p_inventory: InventoryModel, p_input_buffer: InputBuffer, p_stats: ActorStats, p_combat: MeleeCombatCoordinator, p_entity_coordinator: EntityCoordinator):
+func setup(p_camera_rig: CameraRig, p_inventory: InventoryModel, p_input_buffer: InputBuffer, p_stats: ActorStats, p_combat: MeleeCombatCoordinator, p_entity_runtime: EntityRuntime):
 	assert(p_camera_rig != null)
 	assert(p_inventory != null)
 	assert(p_input_buffer != null)
 	assert(p_stats != null)
 	assert(p_combat != null)
-	assert(p_entity_coordinator != null)
+	assert(p_entity_runtime != null)
 	if _is_setup:
 		assert(camera_rig == p_camera_rig)
 		assert(_inventory_model == p_inventory)
 		assert(_input_buffer == p_input_buffer)
 		assert(stats == p_stats)
 		assert(interactor.combat == p_combat)
-		assert(interactor.entity_coordinator == p_entity_coordinator)
+		assert(interactor.entity_runtime == p_entity_runtime)
 		return
 	camera_rig = p_camera_rig
 	_inventory_model = p_inventory
 	_input_buffer = p_input_buffer
 	stats = p_stats
 	stat_modifier_clock.setup(stats)
-	interactor.setup(p_camera_rig.camera, self, p_inventory, p_input_buffer, p_combat, p_entity_coordinator)
+	interactor.setup(p_camera_rig.camera, self, p_inventory, p_input_buffer, p_combat, p_entity_runtime)
 	targeting_view.setup(self, interactor)
 	animation_driver.setup(self, interactor)
 	held_item_view.setup(p_inventory)
@@ -65,6 +65,10 @@ func setup(p_camera_rig: CameraRig, p_inventory: InventoryModel, p_input_buffer:
 	_action_audio.setup(animation_driver, interactor, p_inventory, p_combat)
 	armor_view.setup(p_inventory)
 	_is_setup = true
+
+func bind_entity_runtime(p_entity_runtime: EntityRuntime) -> void:
+	assert(_is_setup)
+	interactor.bind_entity_runtime(p_entity_runtime)
 
 func bind_space(p_space: VoxelSpace, presentation_root: Node, spawn_position: Vector3, editable_voxel_world: VoxelWorld = null):
 	assert(_is_setup)

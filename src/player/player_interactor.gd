@@ -15,7 +15,7 @@ var camera: Camera3D = null
 var motor: PlayerMotor = null
 var inventory_model: InventoryModel = null
 var combat: MeleeCombatCoordinator = null
-var entity_coordinator: EntityCoordinator = null
+var entity_runtime: EntityRuntime = null
 var _input_buffer: InputBuffer = null
 var _is_setup: bool = false
 
@@ -46,28 +46,34 @@ var _melee_ray_origin: Vector3
 var _melee_ray_direction: Vector3
 var _melee_source_item_id: StringName = &""
 
-func setup(p_camera: Camera3D, p_motor: PlayerMotor, p_inventory: InventoryModel, p_input_buffer: InputBuffer, p_combat: MeleeCombatCoordinator, p_entity_coordinator: EntityCoordinator):
+func setup(p_camera: Camera3D, p_motor: PlayerMotor, p_inventory: InventoryModel, p_input_buffer: InputBuffer, p_combat: MeleeCombatCoordinator, p_entity_runtime: EntityRuntime):
 	assert(p_camera != null)
 	assert(p_motor != null)
 	assert(p_inventory != null)
 	assert(p_input_buffer != null)
 	assert(p_combat != null)
-	assert(p_entity_coordinator != null)
+	assert(p_entity_runtime != null)
 	if _is_setup:
 		assert(camera == p_camera)
 		assert(motor == p_motor)
 		assert(inventory_model == p_inventory)
 		assert(_input_buffer == p_input_buffer)
 		assert(combat == p_combat)
-		assert(entity_coordinator == p_entity_coordinator)
+		assert(entity_runtime == p_entity_runtime)
 		return
 	camera = p_camera
 	motor = p_motor
 	inventory_model = p_inventory
 	_input_buffer = p_input_buffer
 	combat = p_combat
-	entity_coordinator = p_entity_coordinator
+	entity_runtime = p_entity_runtime
 	_is_setup = true
+
+func bind_entity_runtime(p_entity_runtime: EntityRuntime) -> void:
+	assert(_is_setup)
+	assert(p_entity_runtime != null)
+	_clear_active_state()
+	entity_runtime = p_entity_runtime
 
 func bind_space(p_space: VoxelSpace, p_editable_voxel_world: VoxelWorld = null):
 	assert(_is_setup)
@@ -179,7 +185,7 @@ func _placement_collides_player(p: Vector3i) -> bool:
 
 func _placement_collides_entity(position: Vector3i) -> bool:
 	var block_bounds := AABB(Vector3(position), Vector3.ONE)
-	return entity_coordinator.has_entity_overlap(block_bounds)
+	return entity_runtime.has_entity_overlap(block_bounds)
 
 func _handle_item_actions(delta):
 	melee_chain_input_timer = max(0.0, melee_chain_input_timer - delta)

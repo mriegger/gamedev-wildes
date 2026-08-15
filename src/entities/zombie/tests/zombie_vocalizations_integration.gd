@@ -31,7 +31,7 @@ func _run():
 	var definition := entity_catalog.get_definition(&"zombie")
 	var actor := definition.actor_scene.instantiate() as ZombieActor
 	get_root().add_child(actor)
-	actor.setup(7, definition, world, 12345)
+	actor.setup(7, definition, world, 12345, EntityNavigationLimits.new(24, 256, 1))
 	var vocalizations := actor.get_node_or_null(actor.vocalizations_path) as EntityVocalizations
 	_expect(vocalizations != null, "zombie vocalizations missing")
 	var profile := vocalizations.profile

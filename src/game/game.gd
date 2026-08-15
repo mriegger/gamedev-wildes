@@ -27,7 +27,7 @@ signal main_menu_requested
 @onready var player: PlayerMotor = $Player as PlayerMotor
 @onready var camera_rig: CameraRig = $CameraRig as CameraRig
 @onready var game_environment: GameEnvironment = $Environment as GameEnvironment
-@onready var entity_coordinator: EntityCoordinator = $Entities as EntityCoordinator
+@onready var world_entity_coordinator: WorldEntityCoordinator = $WorldEntities as WorldEntityCoordinator
 @onready var melee_combat: MeleeCombatCoordinator = $MeleeCombat as MeleeCombatCoordinator
 @onready var combat_hit_particles: CombatHitParticles = $CombatHitParticles as CombatHitParticles
 @onready var hud: HUD = $HUD as HUD
@@ -188,14 +188,15 @@ func _restore_item_proficiency():
 
 func _setup_gameplay():
 	camera_rig.setup(player, input_buffer)
-	entity_coordinator.setup(entity_catalog, world.voxel_model, world.config.seed_value, world.is_position_streamed)
-	melee_combat.setup(world.voxel_model, player, player_stats, entity_coordinator)
-	entity_coordinator.entity_melee_contact_reached.connect(melee_combat.try_commit_entity_contact)
-	melee_combat.melee_outcome_committed.connect(entity_coordinator.record_melee_outcome)
+	world_entity_coordinator.setup(entity_catalog, world.voxel_model, world.config.seed_value, world.is_position_streamed)
+	var world_entities := world_entity_coordinator.get_runtime()
+	melee_combat.setup(world.voxel_model, player, player_stats, world_entities)
+	world_entities.entity_melee_contact_reached.connect(melee_combat.try_commit_entity_contact)
+	melee_combat.melee_outcome_committed.connect(world_entities.record_melee_outcome)
 	melee_combat.melee_outcome_committed.connect(combat_progression_coordinator.record_melee_outcome)
 	melee_combat.melee_outcome_committed.connect(_on_melee_outcome_committed)
 	combat_hit_particles.setup(melee_combat, combat_hit_particle_catalog)
-	player.setup(camera_rig, inventory_model, input_buffer, player_stats, melee_combat, entity_coordinator)
+	player.setup(camera_rig, inventory_model, input_buffer, player_stats, melee_combat, world_entities)
 	player_stats.health_depleted.connect(_on_player_defeated)
 	var mining_particle_tints := MiningParticleTintPalette.new(block_catalog)
 	mining_break_particles.setup(world.voxel_model, mining_particle_tints)
@@ -309,7 +310,7 @@ func _physics_process(delta):
 	if _location_state != null:
 		_location_state.update_world_position(player.global_position)
 	if _location_state == null or not _location_state.is_in_level():
-		entity_coordinator.tick(delta, player.global_position, game_environment.get_time_of_day())
+		world_entity_coordinator.tick(delta, player.global_position, game_environment.get_time_of_day())
 
 func _on_level_interaction_requested():
 	if _level_transitioning or _structure_transitioning or _structure_designer_runtime != null or _location_state == null:
@@ -340,7 +341,7 @@ func _enter_level():
 	player.unbind_space()
 	_location_state.enter_level(return_position)
 	world.suspend()
-	entity_coordinator.suspend()
+	world_entity_coordinator.suspend()
 	_level_entrance.visible = false
 	game_environment.set_outdoor_presentation_enabled(false)
 	_level_runtime = next_runtime
@@ -368,7 +369,7 @@ func _exit_level():
 	_location_state.return_to_world()
 	game_environment.set_outdoor_presentation_enabled(true)
 	world.resume()
-	entity_coordinator.resume()
+	world_entity_coordinator.resume()
 	_level_entrance.visible = true
 	_reset_camera_position()
 	_level_runtime.queue_free()
@@ -514,7 +515,7 @@ func _enter_structure_designer(draft: StructureDraft) -> void:
 		in_level,
 		game_session.is_saving_suspended(),
 		world.is_suspended(),
-		entity_coordinator.is_suspended(),
+		world_entity_coordinator.is_suspended(),
 		game_environment.is_clock_paused(),
 		game_environment.is_debug_panel_input_enabled(),
 		player,
@@ -546,7 +547,7 @@ func _enter_structure_designer(draft: StructureDraft) -> void:
 		_level_runtime.deactivate()
 	else:
 		world.suspend()
-		entity_coordinator.suspend()
+		world_entity_coordinator.suspend()
 		game_environment.set_outdoor_presentation_enabled(false)
 		if _level_entrance != null:
 			_level_entrance.visible = false
@@ -588,7 +589,7 @@ func _restore_structure_lifecycle() -> void:
 		if not snapshot.world_was_suspended:
 			world.resume()
 		if not snapshot.entities_were_suspended:
-			entity_coordinator.resume()
+			world_entity_coordinator.resume()
 		if _level_entrance != null:
 			_level_entrance.visible = snapshot.entrance_visible
 	player.process_mode = snapshot.player_process_mode
@@ -679,7 +680,7 @@ func _save_and_request_main_menu():
 	level_interaction.clear_target()
 	game_session.shutdown("quit_to_menu")
 	melee_combat.shutdown()
-	entity_coordinator.shutdown()
+	world_entity_coordinator.shutdown()
 	_teardown_level_runtime()
 	world.shutdown()
 	main_menu_requested.emit()
@@ -691,7 +692,7 @@ func _notification(what):
 		_deactivate_session()
 		game_session.shutdown("close")
 		melee_combat.shutdown()
-		entity_coordinator.shutdown()
+		world_entity_coordinator.shutdown()
 		_teardown_level_runtime()
 		world.shutdown()
 

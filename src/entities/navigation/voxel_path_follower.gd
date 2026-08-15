@@ -1,24 +1,30 @@
 extends RefCounted
 class_name VoxelPathFollower
 
-const MAX_SEARCH_RADIUS: int = 24
-const MAX_SEARCH_NODES: int = 256
-
-var _voxel_world: VoxelWorld
+var _voxel_space: VoxelSpace
 var _body_width: float
 var _body_height: float
 var _repath_seconds: float
+var _navigation_limits: EntityNavigationLimits
 var _path: Array[Vector3i] = []
 var _path_index: int = 0
 var _repath_remaining: float = 0.0
 
-func _init(p_voxel_world: VoxelWorld, p_body_width: float, p_body_height: float, p_repath_seconds: float):
-	assert(p_voxel_world != null)
+func _init(
+	p_voxel_space: VoxelSpace,
+	p_body_width: float,
+	p_body_height: float,
+	p_repath_seconds: float,
+	p_navigation_limits: EntityNavigationLimits,
+):
+	assert(p_voxel_space != null)
 	assert(p_body_width > 0.0 and p_body_height > 0.0 and p_repath_seconds > 0.0)
-	_voxel_world = p_voxel_world
+	assert(p_navigation_limits != null)
+	_voxel_space = p_voxel_space
 	_body_width = p_body_width
 	_body_height = p_body_height
 	_repath_seconds = p_repath_seconds
+	_navigation_limits = p_navigation_limits
 
 func advance(delta: float, position: Vector3, goal: Vector3, speed: float, on_ground: bool, search_budget: NavigationSearchBudget) -> VoxelPathFollowResult:
 	assert(delta >= 0.0 and position.is_finite() and goal.is_finite() and speed >= 0.0)
@@ -51,7 +57,15 @@ func request_repath():
 func _rebuild_path(position: Vector3, goal_cell: Vector3i) -> bool:
 	_repath_remaining = _repath_seconds
 	var start_cell := _resolve_feet_cell(position)
-	var result := VoxelPathfinder.find_path(_voxel_world, start_cell, goal_cell, _body_width, _body_height, MAX_SEARCH_RADIUS, MAX_SEARCH_NODES)
+	var result := VoxelPathfinder.find_path(
+		_voxel_space,
+		start_cell,
+		goal_cell,
+		_body_width,
+		_body_height,
+		_navigation_limits.get_max_search_radius(),
+		_navigation_limits.get_max_search_nodes(),
+	)
 	if result.is_success():
 		_path = result.path
 		_path_index = 1 if _path.size() > 1 else _path.size()
@@ -64,8 +78,8 @@ func _resolve_feet_cell(position: Vector3) -> Vector3i:
 	var x := floori(position.x)
 	var z := floori(position.z)
 	var probe := Vector3(float(x) + 0.5, position.y + 0.08, float(z) + 0.5)
-	var ground_y := VoxelBodySolver.get_ground_y(_voxel_world, probe, _body_width)
-	if ground_y == VoxelWorld.NO_SURFACE_Y:
+	var ground_y := VoxelBodySolver.get_ground_y(_voxel_space, probe, _body_width)
+	if ground_y == VoxelSpace.NO_SURFACE_Y:
 		ground_y = roundf(position.y)
 	return Vector3i(x, roundi(ground_y), z)
 

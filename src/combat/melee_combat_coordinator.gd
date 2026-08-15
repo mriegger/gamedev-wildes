@@ -12,28 +12,37 @@ const VoxelLineOfSightType := preload("res://combat/voxel_line_of_sight.gd")
 
 signal melee_outcome_committed(outcome: MeleeOutcomeType)
 
-var _voxel_world: VoxelWorld
+var _voxel_space: VoxelSpace
 var _player: PlayerMotor
 var _player_stats: ActorStats
-var _entity_coordinator: EntityCoordinator
+var _entity_runtime: EntityRuntime
 
 func setup(
-	p_voxel_world: VoxelWorld,
+	p_voxel_space: VoxelSpace,
 	p_player: PlayerMotor,
 	p_player_stats: ActorStats,
-	p_entity_coordinator: EntityCoordinator,
+	p_entity_runtime: EntityRuntime,
 ) -> void:
-	assert(p_voxel_world != null)
+	assert(p_voxel_space != null)
 	assert(p_player != null)
 	assert(p_player_stats != null)
 	assert(p_player_stats.has_stat(&"hp"))
 	assert(p_player_stats.has_stat(&"strength"))
 	assert(p_player_stats.has_stat(&"defense"))
-	assert(p_entity_coordinator != null)
-	_voxel_world = p_voxel_world
+	assert(p_entity_runtime != null)
 	_player = p_player
 	_player_stats = p_player_stats
-	_entity_coordinator = p_entity_coordinator
+	bind_context(p_voxel_space, p_entity_runtime)
+
+func bind_context(p_voxel_space: VoxelSpace, p_entity_runtime: EntityRuntime) -> void:
+	assert(p_voxel_space != null)
+	assert(p_entity_runtime != null)
+	_voxel_space = p_voxel_space
+	_entity_runtime = p_entity_runtime
+
+func unbind_context() -> void:
+	_voxel_space = null
+	_entity_runtime = null
 
 func acquire_player_targets(ray_origin: Vector3, ray_direction: Vector3, profile: MeleeAttackProfileType) -> Array[int]:
 	assert(_is_setup())
@@ -44,7 +53,7 @@ func acquire_player_targets(ray_origin: Vector3, ray_direction: Vector3, profile
 	var direction := ray_direction.normalized()
 	var player_origin := _get_player_center()
 	var reach_extent := Vector3.ONE * (profile.reach + GEOMETRY_EPSILON)
-	var candidate_ids := _entity_coordinator.get_active_runtime_ids_overlapping(AABB(player_origin - reach_extent, reach_extent * 2.0))
+	var candidate_ids := _entity_runtime.get_active_runtime_ids_overlapping(AABB(player_origin - reach_extent, reach_extent * 2.0))
 	if profile.sweep_degrees > 0.0:
 		var planar_aim := Vector3.ZERO
 		if profile.requires_planar_aim():
@@ -52,14 +61,14 @@ func acquire_player_targets(ray_origin: Vector3, ray_direction: Vector3, profile
 			if planar_aim.is_zero_approx():
 				return result
 		for runtime_id in candidate_ids:
-			var actor := _entity_coordinator.get_actor(runtime_id)
+			var actor := _entity_runtime.get_actor(runtime_id)
 			if actor != null and _get_valid_player_hit(actor, ray_origin, direction, planar_aim, profile) is Vector3:
 				result.append(runtime_id)
 		return result
 	var nearest_runtime_id := -1
 	var nearest_distance_squared := INF
 	for runtime_id in candidate_ids:
-		var actor := _entity_coordinator.get_actor(runtime_id)
+		var actor := _entity_runtime.get_actor(runtime_id)
 		if actor == null or actor.definition == null:
 			continue
 		var hit: Variant = _get_valid_player_hit(actor, ray_origin, direction, Vector3.ZERO, profile)
@@ -102,7 +111,7 @@ func try_commit_player_contacts(
 		if target_runtime_id <= PLAYER_RUNTIME_ID or target_runtime_id == previous_runtime_id:
 			continue
 		previous_runtime_id = target_runtime_id
-		var actor := _entity_coordinator.get_actor(target_runtime_id)
+		var actor := _entity_runtime.get_actor(target_runtime_id)
 		if actor == null or actor.definition == null:
 			continue
 		var hit: Variant = _get_valid_player_hit(actor, locked_ray_origin, direction, planar_aim, profile)
@@ -130,7 +139,7 @@ func try_commit_entity_contact(source_runtime_id: int, profile: MeleeAttackProfi
 	assert(profile != null)
 	if source_runtime_id <= PLAYER_RUNTIME_ID:
 		return false
-	var actor: EntityActor = _entity_coordinator.get_actor(source_runtime_id)
+	var actor: EntityActor = _entity_runtime.get_actor(source_runtime_id)
 	if not is_instance_valid(actor) or actor.definition == null:
 		return false
 	var source_position := actor.global_position
@@ -140,7 +149,7 @@ func try_commit_entity_contact(source_runtime_id: int, profile: MeleeAttackProfi
 	var source_origin := _get_bounds_center(actor.get_world_bounds())
 	var target_origin := _get_player_center()
 	var hit_direction := target_origin - source_origin
-	if hit_direction.is_zero_approx() or not VoxelLineOfSightType.has_clear_path(_voxel_world, source_origin, target_origin):
+	if hit_direction.is_zero_approx() or not VoxelLineOfSightType.has_clear_path(_voxel_space, source_origin, target_origin):
 		return false
 	var hit: Variant = _get_player_bounds().intersects_ray(source_origin, hit_direction.normalized())
 	if not hit is Vector3:
@@ -157,10 +166,10 @@ func try_commit_entity_contact(source_runtime_id: int, profile: MeleeAttackProfi
 	return _commit_contact(contact, profile, &"")
 
 func shutdown() -> void:
-	_voxel_world = null
+	_voxel_space = null
 	_player = null
 	_player_stats = null
-	_entity_coordinator = null
+	_entity_runtime = null
 
 func _commit_contact(contact: MeleeContactType, profile: MeleeAttackProfileType, source_item_id: StringName) -> bool:
 	assert(contact.attack_id == profile.id)
@@ -169,14 +178,14 @@ func _commit_contact(contact: MeleeContactType, profile: MeleeAttackProfileType,
 	if contact.source_runtime_id == PLAYER_RUNTIME_ID:
 		if _player_stats.is_dead():
 			return false
-		var target := _entity_coordinator.get_actor(contact.target_runtime_id)
+		var target := _entity_runtime.get_actor(contact.target_runtime_id)
 		if target == null or target.definition.id != contact.target_definition_id:
 			return false
 		var damage := profile.calculate_damage(
 			_player_stats.get_value(&"strength"),
-			_entity_coordinator.get_stat_value(contact.target_runtime_id, &"defense"),
+			_entity_runtime.get_stat_value(contact.target_runtime_id, &"defense"),
 		)
-		var damage_result := _entity_coordinator.try_apply_damage(contact.target_runtime_id, damage)
+		var damage_result := _entity_runtime.try_apply_damage(contact.target_runtime_id, damage)
 		if damage_result == null:
 			return false
 		applied_damage = damage_result.applied_damage
@@ -184,11 +193,11 @@ func _commit_contact(contact: MeleeContactType, profile: MeleeAttackProfileType,
 	else:
 		if contact.target_runtime_id != PLAYER_RUNTIME_ID or contact.target_definition_id != PLAYER_DEFINITION_ID or _player_stats.is_dead():
 			return false
-		var source := _entity_coordinator.get_actor(contact.source_runtime_id)
+		var source := _entity_runtime.get_actor(contact.source_runtime_id)
 		if source == null or source.definition.id != contact.source_definition_id:
 			return false
 		var damage := profile.calculate_damage(
-			_entity_coordinator.get_stat_value(contact.source_runtime_id, &"strength"),
+			_entity_runtime.get_stat_value(contact.source_runtime_id, &"strength"),
 			_player_stats.get_value(&"defense"),
 		)
 		applied_damage = _player_stats.damage(damage)
@@ -204,7 +213,7 @@ func _is_valid_player_geometry(
 ) -> bool:
 	if player_origin.distance_squared_to(hit_position) > profile.reach * profile.reach:
 		return false
-	return VoxelLineOfSightType.has_clear_path(_voxel_world, ray_origin, hit_position) and VoxelLineOfSightType.has_clear_path(_voxel_world, player_origin, hit_position)
+	return VoxelLineOfSightType.has_clear_path(_voxel_space, ray_origin, hit_position) and VoxelLineOfSightType.has_clear_path(_voxel_space, player_origin, hit_position)
 
 func _get_valid_player_hit(
 	actor: EntityActor,
@@ -238,7 +247,7 @@ func _get_valid_player_hit(
 	if profile.sweep_degrees > 0.0:
 		if player_origin.distance_squared_to(hit_position) > profile.reach * profile.reach:
 			return null
-		if not VoxelLineOfSightType.has_clear_path(_voxel_world, player_origin, hit_position):
+		if not VoxelLineOfSightType.has_clear_path(_voxel_space, player_origin, hit_position):
 			return null
 	elif not _is_valid_player_geometry(player_origin, ray_origin, hit_position, profile):
 		return null
@@ -272,4 +281,4 @@ func _get_bounds_center(bounds: AABB) -> Vector3:
 	return bounds.position + bounds.size * 0.5
 
 func _is_setup() -> bool:
-	return _voxel_world != null and _player != null and _player_stats != null and _entity_coordinator != null
+	return _voxel_space != null and _player != null and _player_stats != null and _entity_runtime != null

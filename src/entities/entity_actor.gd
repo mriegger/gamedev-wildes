@@ -12,7 +12,7 @@ signal melee_contact_reached(source_runtime_id: int, profile: MeleeAttackProfile
 
 var runtime_id: int = -1
 var definition: EntityDefinition
-var voxel_world: VoxelWorld
+var voxel_space: VoxelSpace
 var velocity: Vector3 = Vector3.ZERO
 var on_ground: bool = true
 var max_speed: float = 1.0
@@ -26,13 +26,19 @@ var _death_fade_started: bool = false
 func _ready():
 	set_process(false)
 
-func setup(p_runtime_id: int, p_definition: EntityDefinition, p_voxel_world: VoxelWorld, behavior_seed: int):
+func setup(
+	p_runtime_id: int,
+	p_definition: EntityDefinition,
+	p_voxel_space: VoxelSpace,
+	behavior_seed: int,
+	_navigation_limits: EntityNavigationLimits,
+):
 	assert(p_runtime_id >= 0)
 	assert(p_definition != null)
-	assert(p_voxel_world != null)
+	assert(p_voxel_space != null)
 	runtime_id = p_runtime_id
 	definition = p_definition
-	voxel_world = p_voxel_world
+	voxel_space = p_voxel_space
 	animation_driver = get_node(animation_driver_path) as EntityAnimationDriver
 	visual_fader = get_node(visual_fader_path) as EntityVisualFader
 	death_poof = get_node(death_poof_path) as EntityDeathPoof
@@ -152,11 +158,11 @@ func advance_voxel_motion(delta: float, desired_velocity: Vector3, gravity: floa
 	velocity.z = desired_velocity.z
 	if not on_ground:
 		velocity.y -= gravity * delta
-	var result := VoxelBodySolver.sweep(voxel_world, global_position, velocity, velocity * delta, definition.body_width, definition.body_height)
+	var result := VoxelBodySolver.sweep(voxel_space, global_position, velocity, velocity * delta, definition.body_width, definition.body_height)
 	global_position = result.position
 	velocity = result.velocity
-	var ground_y := VoxelBodySolver.get_ground_y(voxel_world, global_position, definition.body_width)
-	on_ground = velocity.y <= 0.0 and ground_y != VoxelWorld.NO_SURFACE_Y and absf(ground_y - global_position.y) < 0.12
+	var ground_y := VoxelBodySolver.get_ground_y(voxel_space, global_position, definition.body_width)
+	on_ground = velocity.y <= 0.0 and ground_y != VoxelSpace.NO_SURFACE_Y and absf(ground_y - global_position.y) < 0.12
 	if on_ground:
 		velocity.y = 0.0
 

@@ -7,7 +7,7 @@ var _inventory: InventoryModel
 var _interactor: PlayerInteractor
 var _input_buffer: InputBuffer
 var _voxel_world: VoxelWorld
-var _entity_coordinator: EntityCoordinator
+var _world_entity_coordinator: WorldEntityCoordinator
 var _combat: MeleeCombatCoordinator
 var _hotbar: InventoryHotbar
 var _stone_pos := Vector3i(1, 0, 0)
@@ -17,6 +17,9 @@ var _melee_attack_directions: Array[int] = []
 
 func _init():
 	call_deferred("_run")
+
+func _position_ready(_position: Vector3) -> bool:
+	return true
 
 func _run():
 	var block_catalog := load("res://blocks/block_catalog.tres") as BlockCatalog
@@ -164,15 +167,16 @@ func _run():
 	await process_frame
 	_input_buffer = InputBuffer.new()
 	_interactor = _player.interactor
-	_entity_coordinator = EntityCoordinator.new()
-	root.add_child(_entity_coordinator)
+	_world_entity_coordinator = WorldEntityCoordinator.new()
+	root.add_child(_world_entity_coordinator)
+	_world_entity_coordinator.setup(load("res://entities/entity_catalog.tres") as EntityCatalog, _voxel_world, 1337, _position_ready)
 	_combat = MeleeCombatCoordinator.new()
 	root.add_child(_combat)
 	var player_stats := ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
 	var inventory_stat_coordinator := InventoryStatCoordinator.new()
 	_expect(inventory_stat_coordinator.setup(_inventory, player_stats), "inventory stat coordinator setup failed")
-	_combat.setup(_voxel_world, _player, player_stats, _entity_coordinator)
-	_interactor.setup(_camera, _player, _inventory, _input_buffer, _combat, _entity_coordinator)
+	_combat.setup(_voxel_world, _player, player_stats, _world_entity_coordinator.get_runtime())
+	_interactor.setup(_camera, _player, _inventory, _input_buffer, _combat, _world_entity_coordinator.get_runtime())
 	_interactor.bind_space(_voxel_world, _voxel_world)
 	_interactor.melee_attack_started.connect(_on_melee_attack_started)
 	_interactor.set_physics_process(false)
@@ -339,7 +343,7 @@ func _run():
 	_player.queue_free()
 	_camera.queue_free()
 	_combat.queue_free()
-	_entity_coordinator.queue_free()
+	_world_entity_coordinator.queue_free()
 	_hotbar.queue_free()
 	await process_frame
 	await process_frame

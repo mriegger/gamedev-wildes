@@ -101,7 +101,7 @@ func _test_failed_path_repath_throttle() -> void:
 		blocking_edits[Vector3i(direction.x, FEET_Y, direction.z)] = BlockId.Type.STONE
 		blocking_edits[Vector3i(direction.x, FEET_Y + 1, direction.z)] = BlockId.Type.STONE
 	world.restore_block_edits(blocking_edits, {})
-	var follower := VoxelPathFollower.new(world, BODY_WIDTH, BODY_HEIGHT, 0.5)
+	var follower := VoxelPathFollower.new(world, BODY_WIDTH, BODY_HEIGHT, 0.5, EntityNavigationLimits.new(24, 256, 1))
 	var search_budget := NavigationSearchBudget.new(1)
 	var start := Vector3(0.5, float(FEET_Y), 0.5)
 	var goal := Vector3(4.5, float(FEET_Y), 0.5)
@@ -117,7 +117,7 @@ func _test_failed_path_repath_throttle() -> void:
 
 func _test_successful_path_repath_throttle() -> void:
 	var world := _make_flat_world()
-	var follower := VoxelPathFollower.new(world, BODY_WIDTH, BODY_HEIGHT, 0.5)
+	var follower := VoxelPathFollower.new(world, BODY_WIDTH, BODY_HEIGHT, 0.5, EntityNavigationLimits.new(24, 256, 1))
 	var search_budget := NavigationSearchBudget.new(1)
 	var start := Vector3(0.5, float(FEET_Y), 0.5)
 	var first := follower.advance(0.0, start, Vector3(4.5, float(FEET_Y), 0.5), 1.0, true, search_budget)
@@ -139,7 +139,7 @@ func _test_blocked_motion_keeps_repath_cadence() -> void:
 	var actor := definition.actor_scene.instantiate() as ZombieActor
 	get_root().add_child(actor)
 	actor.global_position = Vector3(0.5, float(FEET_Y), 0.5)
-	actor.setup(20, definition, world, 19)
+	actor.setup(20, definition, world, 19, EntityNavigationLimits.new(24, 256, 1))
 	actor._path_follower._repath_remaining = 0.3
 	actor.advance_voxel_motion(0.5, Vector3(2.0, 0.0, 0.0), actor._behavior.gravity)
 	_expect(is_zero_approx(actor.velocity.x), "blocked-motion test did not collide with its wall")
@@ -150,8 +150,8 @@ func _test_shared_navigation_search_budget() -> void:
 	var world := _make_flat_world()
 	var start := Vector3(0.5, float(FEET_Y), 0.5)
 	var goal := Vector3(4.5, float(FEET_Y), 0.5)
-	var first_follower := VoxelPathFollower.new(world, BODY_WIDTH, BODY_HEIGHT, 0.5)
-	var second_follower := VoxelPathFollower.new(world, BODY_WIDTH, BODY_HEIGHT, 0.5)
+	var first_follower := VoxelPathFollower.new(world, BODY_WIDTH, BODY_HEIGHT, 0.5, EntityNavigationLimits.new(24, 256, 1))
+	var second_follower := VoxelPathFollower.new(world, BODY_WIDTH, BODY_HEIGHT, 0.5, EntityNavigationLimits.new(24, 256, 1))
 	var search_budget := NavigationSearchBudget.new(1)
 	var first := first_follower.advance(0.0, start, goal, 1.0, true, search_budget)
 	var deferred := second_follower.advance(0.0, start, goal, 1.0, true, search_budget)
@@ -245,8 +245,8 @@ func _test_zombie_visibility_cadence() -> void:
 	get_root().add_child(second)
 	first.global_position = Vector3(0.5, float(FEET_Y), 0.5)
 	second.global_position = Vector3(0.5, float(FEET_Y), 1.5)
-	first.setup(1, definition, world, 31)
-	second.setup(2, definition, world, 32)
+	first.setup(1, definition, world, 31, EntityNavigationLimits.new(24, 256, 1))
+	second.setup(2, definition, world, 32, EntityNavigationLimits.new(24, 256, 1))
 	_expect(not is_equal_approx(first._vision_sample_remaining, second._vision_sample_remaining), "zombie visibility samples were not phase-staggered")
 	var target := Vector3(4.5, float(FEET_Y), 0.5)
 	first._vision_sample_remaining = 0.0
@@ -268,7 +268,7 @@ func _test_zombie_actor_movement_and_animation() -> void:
 	var actor := definition.actor_scene.instantiate() as ZombieActor
 	get_root().add_child(actor)
 	actor.global_position = Vector3(0.5, float(FEET_Y), 0.5)
-	actor.setup(1, definition, world, 99)
+	actor.setup(1, definition, world, 99, EntityNavigationLimits.new(24, 256, 1))
 	var target := Vector3(4.5, float(FEET_Y), 0.5)
 	var initial_distance := actor.global_position.distance_to(target)
 	var search_budget := NavigationSearchBudget.new(1)

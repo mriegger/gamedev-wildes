@@ -995,12 +995,12 @@ func _verify_player_defeat_flow() -> bool:
 		return false
 	_game.input_buffer.move_dir = Vector2.ONE
 	_game.input_buffer.primary_use_pressed = true
-	_game.entity_coordinator._spawn_elapsed = 0.25
+	_game.world_entity_coordinator._spawn_elapsed = 0.25
 	_game._physics_process(0.1)
 	if _game.input_buffer.move_dir != Vector2.ZERO or _game.input_buffer.primary_use_pressed:
 		_fail("defeated game retained buffered gameplay input")
 		return false
-	if not is_equal_approx(_game.entity_coordinator._spawn_elapsed, 0.35):
+	if not is_equal_approx(_game.world_entity_coordinator._spawn_elapsed, 0.35):
 		_fail("entity simulation stopped while the player was defeated")
 		return false
 	var game_clock := _game.game_environment._clock

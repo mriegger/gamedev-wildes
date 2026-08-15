@@ -21,7 +21,7 @@ func _run():
 	var definition := entity_catalog.get_definition(&"sheep")
 	var actor := definition.actor_scene.instantiate() as SheepActor
 	get_root().add_child(actor)
-	actor.setup(11, definition, world, 24680)
+	actor.setup(11, definition, world, 24680, EntityNavigationLimits.new(24, 256, 1))
 	var vocalizations := actor.get_node_or_null(actor.vocalizations_path) as EntityVocalizations
 	_expect(vocalizations != null, "sheep vocalizations missing")
 	var profile := vocalizations.profile

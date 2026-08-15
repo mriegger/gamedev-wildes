@@ -21,12 +21,12 @@ class OpenEntry:
 		estimated_cost = p_estimated_cost
 		sequence = p_sequence
 
-static func find_path(voxel_world: VoxelWorld, start_feet: Vector3i, goal_feet: Vector3i, body_width: float, body_height: float, max_radius: int = 24, max_nodes: int = 1024) -> VoxelPathResult:
+static func find_path(voxel_space: VoxelSpace, start_feet: Vector3i, goal_feet: Vector3i, body_width: float, body_height: float, max_radius: int = 24, max_nodes: int = 1024) -> VoxelPathResult:
 	if max_nodes <= 0:
 		return VoxelPathResult.new(VoxelPathResult.Status.LIMIT_REACHED, [], 0)
-	if not _is_walkable(voxel_world, start_feet, body_width, body_height):
+	if not _is_walkable(voxel_space, start_feet, body_width, body_height):
 		return VoxelPathResult.new(VoxelPathResult.Status.INVALID_START, [], 0)
-	if not _is_walkable(voxel_world, goal_feet, body_width, body_height):
+	if not _is_walkable(voxel_space, goal_feet, body_width, body_height):
 		return VoxelPathResult.new(VoxelPathResult.Status.INVALID_GOAL, [], 0)
 	if not _is_within_radius(start_feet, goal_feet, max_radius):
 		return VoxelPathResult.new(VoxelPathResult.Status.NO_PATH, [], 0)
@@ -58,11 +58,11 @@ static func find_path(voxel_world: VoxelWorld, start_feet: Vector3i, goal_feet: 
 				var neighbor := Vector3i(horizontal.x, current.y + height_offset, horizontal.z)
 				if not _is_within_radius(start_feet, neighbor, max_radius):
 					continue
-				if not _is_walkable(voxel_world, neighbor, body_width, body_height):
+				if not _is_walkable(voxel_space, neighbor, body_width, body_height):
 					continue
 				if height_offset == 1:
 					var raised_current := Vector3i(current.x, current.y + 1, current.z)
-					if not _has_body_clearance(voxel_world, raised_current, body_width, body_height):
+					if not _has_body_clearance(voxel_space, raised_current, body_width, body_height):
 						continue
 				var next_cost := best_known_cost + 1
 				var previous_cost := path_costs.get(neighbor, -1) as int
@@ -81,15 +81,15 @@ static func find_path(voxel_world: VoxelWorld, start_feet: Vector3i, goal_feet: 
 	var status := VoxelPathResult.Status.LIMIT_REACHED if limit_reached else VoxelPathResult.Status.NO_PATH
 	return VoxelPathResult.new(status, [], path_costs.size())
 
-static func _is_walkable(voxel_world: VoxelWorld, feet: Vector3i, body_width: float, body_height: float) -> bool:
-	if not _has_body_clearance(voxel_world, feet, body_width, body_height):
+static func _is_walkable(voxel_space: VoxelSpace, feet: Vector3i, body_width: float, body_height: float) -> bool:
+	if not _has_body_clearance(voxel_space, feet, body_width, body_height):
 		return false
 	var body_position := _body_position(feet)
-	return is_equal_approx(VoxelBodySolver.get_ground_y(voxel_world, body_position, body_width), float(feet.y))
+	return is_equal_approx(VoxelBodySolver.get_ground_y(voxel_space, body_position, body_width), float(feet.y))
 
-static func _has_body_clearance(voxel_world: VoxelWorld, feet: Vector3i, body_width: float, body_height: float) -> bool:
+static func _has_body_clearance(voxel_space: VoxelSpace, feet: Vector3i, body_width: float, body_height: float) -> bool:
 	var body_position := _body_position(feet)
-	if VoxelBodySolver.collides_at(voxel_world, body_position, body_width, body_height, false):
+	if VoxelBodySolver.collides_at(voxel_space, body_position, body_width, body_height, false):
 		return false
 	var min_x := int(floor(body_position.x - body_width * 0.5))
 	var max_x := int(floor(body_position.x + body_width * 0.5))
@@ -100,7 +100,7 @@ static func _has_body_clearance(voxel_world: VoxelWorld, feet: Vector3i, body_wi
 	for x in range(min_x, max_x + 1):
 		for y in range(min_y, max_y + 1):
 			for z in range(min_z, max_z + 1):
-				if voxel_world.get_block_id_at(Vector3i(x, y, z)) == BlockId.Type.WATER:
+				if voxel_space.get_block_id_at(Vector3i(x, y, z)) == BlockId.Type.WATER:
 					return false
 	return true
 

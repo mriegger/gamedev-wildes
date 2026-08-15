@@ -1,19 +1,12 @@
 extends Node3D
-class_name EntityCoordinator
+class_name EntityRuntime
 
 signal entity_melee_contact_reached(source_runtime_id: int, profile: MeleeAttackProfile)
+signal entity_defeated(runtime_id: int, definition_id: StringName)
 
-const SPAWN_INTERVAL_SECONDS: float = 2.0
-const SPAWN_ATTEMPTS: int = 4
-const MIN_SPAWN_DISTANCE: float = 18.0
-const MAX_SPAWN_DISTANCE: float = 36.0
-const DESPAWN_DISTANCE: float = 56.0
 const SPATIAL_CELL_SIZE: float = 4.0
 const SEPARATION_RADIUS: float = 1.2
 const SEPARATION_SPEED: float = 1.25
-const MAX_TOTAL_ACTIVE: int = 12
-const MAX_RETIRING_VISUALS: int = 12
-const MAX_NAVIGATION_SEARCHES_PER_TICK: int = 1
 
 class Retirement:
 	var actor: EntityActor
@@ -24,49 +17,58 @@ class Retirement:
 		sequence = p_sequence
 
 var _catalog: EntityCatalog
-var _voxel_world: VoxelWorld
-var _position_ready: Callable
-var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
+var _voxel_space: VoxelSpace
+var _navigation_limits: EntityNavigationLimits
+var _max_active: int = 0
+var _max_retiring_visuals: int = 0
 var _active: Dictionary = {}
 var _stats_by_runtime_id: Dictionary = {}
 var _retiring: Dictionary = {}
 var _spatial_index: EntitySpatialIndex = EntitySpatialIndex.new(SPATIAL_CELL_SIZE)
 var _prepared_actors: Dictionary = {}
-var _spawn_elapsed: float = 0.0
 var _next_runtime_id: int = 1
-var _navigation_search_budget: NavigationSearchBudget = NavigationSearchBudget.new(MAX_NAVIGATION_SEARCHES_PER_TICK)
+var _navigation_search_budget: NavigationSearchBudget
 var _actor_tick_start_index: int = 0
 var _prepared_definition_cursor: int = 0
 var _preparation_needed: bool = false
 var _next_retirement_sequence: int = 0
 var _suspended: bool = false
 
-func setup(p_catalog: EntityCatalog, p_voxel_world: VoxelWorld, world_seed: int, p_position_ready: Callable):
+func setup(
+	p_catalog: EntityCatalog,
+	p_voxel_space: VoxelSpace,
+	p_max_active: int,
+	p_max_retiring_visuals: int,
+	p_navigation_limits: EntityNavigationLimits,
+) -> void:
 	assert(p_catalog != null and p_catalog.validate())
-	assert(p_voxel_world != null)
-	assert(p_position_ready.is_valid())
+	assert(p_voxel_space != null)
+	assert(p_max_active > 0)
+	assert(p_max_retiring_visuals > 0)
+	assert(p_navigation_limits != null)
+	shutdown()
 	_catalog = p_catalog
-	_voxel_world = p_voxel_world
-	_position_ready = p_position_ready
-	_rng.seed = world_seed
-	_spawn_elapsed = 0.0
+	_voxel_space = p_voxel_space
+	_max_active = p_max_active
+	_max_retiring_visuals = p_max_retiring_visuals
+	_navigation_limits = p_navigation_limits
+	_navigation_search_budget = NavigationSearchBudget.new(p_navigation_limits.get_max_searches_per_tick())
+	_next_runtime_id = 1
 	_actor_tick_start_index = 0
 	_prepared_definition_cursor = 0
 	_next_retirement_sequence = 0
-	_spatial_index.clear()
-	_stats_by_runtime_id.clear()
-	_clear_prepared_actors()
 	_prepare_initial_actors()
 	_preparation_needed = false
 	_suspended = false
 	visible = true
 
-func tick(delta: float, player_position: Vector3, time_of_day: float):
-	assert(_catalog != null and _voxel_world != null)
+func tick(delta: float, player_position: Vector3) -> void:
+	assert(_catalog != null and _voxel_space != null)
 	assert(not _suspended)
+	assert(is_finite(delta) and delta >= 0.0)
+	assert(player_position.is_finite())
 	_prepare_one_actor()
 	_advance_retiring(delta)
-	_despawn_distant(player_position)
 	_navigation_search_budget.reset()
 	var runtime_ids: Array = _active.keys()
 	runtime_ids.sort()
@@ -88,41 +90,38 @@ func tick(delta: float, player_position: Vector3, time_of_day: float):
 		actor.tick(delta, player_position, separation_velocities[runtime_id] as Vector3, _navigation_search_budget)
 		if get_actor(runtime_id) == actor:
 			_spatial_index.upsert(actor.runtime_id, actor.global_position, actor.get_world_bounds())
-	_spawn_elapsed += delta
-	if _spawn_elapsed < SPAWN_INTERVAL_SECONDS:
-		return
-	_spawn_elapsed = fmod(_spawn_elapsed, SPAWN_INTERVAL_SECONDS)
-	if _active.size() >= MAX_TOTAL_ACTIVE:
-		return
-	var is_day := DayNightProfile.is_day_time(time_of_day)
-	for definition in _catalog.definitions:
-		if definition == null or _count_definition(definition.id) >= definition.max_active:
-			continue
-		if is_day != (definition.spawn_phase == EntityDefinition.SpawnPhase.DAY):
-			continue
-		if _try_spawn(definition, player_position):
-			return
 
-func _try_spawn(definition: EntityDefinition, player_position: Vector3) -> bool:
-	if not _has_prepared_actor(definition.id):
-		_preparation_needed = true
-		return false
-	for _attempt in range(SPAWN_ATTEMPTS):
-		var angle := _rng.randf_range(0.0, TAU)
-		var distance := _rng.randf_range(MIN_SPAWN_DISTANCE, MAX_SPAWN_DISTANCE)
-		var x := int(floor(player_position.x + cos(angle) * distance))
-		var z := int(floor(player_position.z + sin(angle) * distance))
-		var candidate_position := Vector3(float(x) + 0.5, player_position.y, float(z) + 0.5)
-		if not bool(_position_ready.call(candidate_position)):
-			continue
-		var feet_y := _find_spawn_y(definition, x, z)
-		if feet_y == VoxelWorld.NO_SURFACE_Y:
-			continue
-		var spawn_position := Vector3(float(x) + 0.5, feet_y, float(z) + 0.5)
-		var horizontal_offset := Vector2(spawn_position.x - player_position.x, spawn_position.z - player_position.z)
-		var horizontal_distance_squared := horizontal_offset.length_squared()
-		if horizontal_distance_squared < MIN_SPAWN_DISTANCE * MIN_SPAWN_DISTANCE or horizontal_distance_squared > MAX_SPAWN_DISTANCE * MAX_SPAWN_DISTANCE:
-			continue
+func try_spawn_batch(requests: Array[EntitySpawnRequest]) -> Array[int]:
+	var rejected: Array[int] = []
+	if _catalog == null or _voxel_space == null or _suspended or requests.is_empty():
+		return rejected
+	if _active.size() + requests.size() > _max_active:
+		return rejected
+	var definitions: Array[EntityDefinition] = []
+	var bounds: Array[AABB] = []
+	var required_by_definition: Dictionary = {}
+	for request in requests:
+		if request == null or not _catalog.has_definition(request.definition_id):
+			return rejected
+		var definition := _catalog.get_definition(request.definition_id)
+		if not _is_valid_spawn_position(definition, request.feet_position):
+			return rejected
+		var actor_bounds := _get_bounds(definition, request.feet_position)
+		if not _spatial_index.query_overlapping(actor_bounds).is_empty():
+			return rejected
+		for existing_bounds in bounds:
+			if existing_bounds.intersects(actor_bounds):
+				return rejected
+		definitions.append(definition)
+		bounds.append(actor_bounds)
+		required_by_definition[definition.id] = int(required_by_definition.get(definition.id, 0)) + 1
+	for definition_id in required_by_definition:
+		if not _prepare_count(definition_id, int(required_by_definition[definition_id])):
+			return rejected
+	var runtime_ids: Array[int] = []
+	for index in requests.size():
+		var request := requests[index]
+		var definition := definitions[index]
 		var actor := _take_prepared_actor(definition.id)
 		assert(actor != null)
 		var runtime_id := _next_runtime_id
@@ -132,46 +131,87 @@ func _try_spawn(definition: EntityDefinition, player_position: Vector3) -> bool:
 		stats.health_depleted.connect(_retire_defeated.bind(runtime_id))
 		_stats_by_runtime_id[runtime_id] = stats
 		actor.visible = true
-		actor.global_position = spawn_position
-		actor.setup(runtime_id, definition, _voxel_world, int(_rng.randi()))
+		actor.global_position = request.feet_position
+		actor.setup(runtime_id, definition, _voxel_space, request.behavior_seed, _navigation_limits)
 		actor.melee_contact_reached.connect(_on_actor_melee_contact_reached)
 		_spatial_index.upsert(runtime_id, actor.global_position, actor.get_world_bounds())
-		return true
-	return false
+		runtime_ids.append(runtime_id)
+	return runtime_ids
 
-func _find_spawn_y(definition: EntityDefinition, x: int, z: int) -> float:
-	var surface_y := _voxel_world.get_terrain_surface_y(x, z)
-	if surface_y == VoxelWorld.NO_SURFACE_Y:
-		return VoxelWorld.NO_SURFACE_Y
-	var floor_y := int(surface_y)
-	var floor_id := _voxel_world.get_block_id_at(Vector3i(x, floor_y, z))
-	if definition.can_spawn_on(floor_id) and _has_clearance(definition, x, floor_y + 1, z):
-		return float(floor_y + 1)
-	return VoxelWorld.NO_SURFACE_Y
+func try_despawn(runtime_id: int) -> bool:
+	var actor := _remove_active_actor(runtime_id)
+	if actor == null:
+		return false
+	_retain_retiring_actor(runtime_id, actor)
+	actor.begin_despawn_fade()
+	return true
 
-func _prepare_initial_actors():
+func _retire_defeated(runtime_id: int) -> void:
+	var actor := _remove_active_actor(runtime_id)
+	if actor == null:
+		return
+	var definition_id := actor.definition.id
+	_retain_retiring_actor(runtime_id, actor)
+	actor.begin_death_retirement()
+	entity_defeated.emit(runtime_id, definition_id)
+
+func _is_valid_spawn_position(definition: EntityDefinition, position: Vector3) -> bool:
+	if not position.is_finite():
+		return false
+	if not is_equal_approx(position.x - floorf(position.x), 0.5):
+		return false
+	if not is_equal_approx(position.y, roundf(position.y)):
+		return false
+	if not is_equal_approx(position.z - floorf(position.z), 0.5):
+		return false
+	if VoxelBodySolver.collides_at(_voxel_space, position, definition.body_width, definition.body_height, false):
+		return false
+	var ground_y := VoxelBodySolver.get_ground_y(_voxel_space, position, definition.body_width)
+	return ground_y != VoxelSpace.NO_SURFACE_Y and is_equal_approx(ground_y, position.y)
+
+func _get_bounds(definition: EntityDefinition, position: Vector3) -> AABB:
+	var half_width := definition.body_width * 0.5
+	return AABB(
+		position + Vector3(-half_width, 0.0, -half_width),
+		Vector3(definition.body_width, definition.body_height, definition.body_width)
+	)
+
+func _prepare_initial_actors() -> void:
 	for definition in _catalog.definitions:
-		if _prepared_actor_count() >= MAX_TOTAL_ACTIVE:
+		if _prepared_actor_count() >= _max_active:
 			return
 		_prepare_actor(definition)
 
-func _prepare_one_actor():
+func _prepare_one_actor() -> void:
 	if not _preparation_needed:
 		return
-	if _prepared_actor_count() >= MAX_TOTAL_ACTIVE or _catalog.definitions.is_empty():
+	if _prepared_actor_count() >= _max_active or _catalog.definitions.is_empty():
 		_preparation_needed = false
 		return
 	for offset in range(_catalog.definitions.size()):
 		var index := (_prepared_definition_cursor + offset) % _catalog.definitions.size()
 		var definition := _catalog.definitions[index]
-		if definition == null or _count_definition(definition.id) >= definition.max_active or _has_prepared_actor(definition.id):
+		if definition == null or _has_prepared_actor(definition.id):
 			continue
 		_prepare_actor(definition)
 		_prepared_definition_cursor = (index + 1) % _catalog.definitions.size()
 		return
 	_preparation_needed = false
 
-func _prepare_actor(definition: EntityDefinition):
+func _prepare_count(definition_id: StringName, required_count: int) -> bool:
+	var actors := _prepared_actors.get(definition_id, []) as Array
+	while actors.size() < required_count:
+		var definition := _catalog.get_definition(definition_id)
+		var actor := definition.actor_scene.instantiate() as EntityActor
+		if actor == null:
+			return false
+		actor.visible = false
+		add_child(actor)
+		actors.append(actor)
+	_prepared_actors[definition_id] = actors
+	return true
+
+func _prepare_actor(definition: EntityDefinition) -> void:
 	var actor := definition.actor_scene.instantiate() as EntityActor
 	assert(actor != null)
 	actor.visible = false
@@ -186,7 +226,6 @@ func _has_prepared_actor(definition_id: StringName) -> bool:
 
 func _take_prepared_actor(definition_id: StringName) -> EntityActor:
 	if not _has_prepared_actor(definition_id):
-		_preparation_needed = true
 		return null
 	_preparation_needed = true
 	return (_prepared_actors[definition_id] as Array).pop_back() as EntityActor
@@ -197,43 +236,12 @@ func _prepared_actor_count() -> int:
 		count += (actors as Array).size()
 	return count
 
-func _clear_prepared_actors():
+func _clear_prepared_actors() -> void:
 	for actors in _prepared_actors.values():
 		for actor in actors as Array:
 			if is_instance_valid(actor):
 				(actor as EntityActor).free()
 	_prepared_actors.clear()
-
-func _has_clearance(definition: EntityDefinition, x: int, feet_y: int, z: int) -> bool:
-	var required_height := ceili(definition.body_height)
-	for y in range(feet_y, feet_y + required_height):
-		if _voxel_world.is_solid(Vector3i(x, y, z)):
-			return false
-	return true
-
-func _despawn_distant(player_position: Vector3):
-	var max_distance_squared := DESPAWN_DISTANCE * DESPAWN_DISTANCE
-	var to_remove: Array[int] = []
-	for runtime_id in _active:
-		var actor := _active[runtime_id] as EntityActor
-		if not is_instance_valid(actor) or actor.global_position.distance_squared_to(player_position) > max_distance_squared or not bool(_position_ready.call(actor.global_position)):
-			to_remove.append(runtime_id)
-	for runtime_id in to_remove:
-		_despawn(runtime_id)
-
-func _despawn(runtime_id: int):
-	var actor := _remove_active_actor(runtime_id)
-	if actor == null:
-		return
-	_retain_retiring_actor(runtime_id, actor)
-	actor.begin_despawn_fade()
-
-func _retire_defeated(runtime_id: int):
-	var actor := _remove_active_actor(runtime_id)
-	if actor == null:
-		return
-	_retain_retiring_actor(runtime_id, actor)
-	actor.begin_death_retirement()
 
 func _remove_active_actor(runtime_id: int) -> EntityActor:
 	if not _active.has(runtime_id):
@@ -249,13 +257,13 @@ func _remove_active_actor(runtime_id: int) -> EntityActor:
 		return actor
 	return null
 
-func _retain_retiring_actor(runtime_id: int, actor: EntityActor):
+func _retain_retiring_actor(runtime_id: int, actor: EntityActor) -> void:
 	_make_retiring_capacity()
 	_retiring[runtime_id] = Retirement.new(actor, _next_retirement_sequence)
 	_next_retirement_sequence += 1
 
-func _make_retiring_capacity():
-	if _retiring.size() < MAX_RETIRING_VISUALS:
+func _make_retiring_capacity() -> void:
+	if _retiring.size() < _max_retiring_visuals:
 		return
 	var oldest_runtime_id: int = -1
 	var oldest_sequence: int = -1
@@ -267,7 +275,7 @@ func _make_retiring_capacity():
 	assert(oldest_runtime_id >= 0)
 	_finish_retiring(oldest_runtime_id)
 
-func _advance_retiring(delta: float):
+func _advance_retiring(delta: float) -> void:
 	var completed_ids: Array[int] = []
 	var runtime_ids: Array = _retiring.keys()
 	runtime_ids.sort()
@@ -279,14 +287,14 @@ func _advance_retiring(delta: float):
 	for runtime_id in completed_ids:
 		_finish_retiring(runtime_id)
 
-func _finish_retiring(runtime_id: int):
+func _finish_retiring(runtime_id: int) -> void:
 	var retirement := _retiring.get(runtime_id) as Retirement
 	_retiring.erase(runtime_id)
 	var actor := retirement.actor if retirement != null else null
 	if is_instance_valid(actor):
 		actor.queue_free()
 
-func _count_definition(definition_id: StringName) -> int:
+func get_definition_count(definition_id: StringName) -> int:
 	var count := 0
 	for actor in _active.values():
 		if is_instance_valid(actor) and (actor as EntityActor).definition.id == definition_id:
@@ -325,6 +333,7 @@ func get_active_actors() -> Array[EntityActor]:
 		if is_instance_valid(actor):
 			actors.append(actor as EntityActor)
 	return actors
+
 func get_actor(runtime_id: int) -> EntityActor:
 	if _suspended:
 		return null
@@ -358,21 +367,21 @@ func get_active_runtime_ids_overlapping(bounds: AABB) -> Array[int]:
 	assert(bounds.size.x > 0.0 and bounds.size.y > 0.0 and bounds.size.z > 0.0)
 	return _spatial_index.query_overlapping(bounds)
 
-func record_melee_outcome(outcome: MeleeOutcome):
+func record_melee_outcome(outcome: MeleeOutcome) -> void:
 	var target := get_actor(outcome.contact.target_runtime_id)
 	if target != null:
 		target.record_melee_contact(outcome.contact.hit_direction)
 
-func _on_actor_melee_contact_reached(source_runtime_id: int, profile: MeleeAttackProfile):
+func _on_actor_melee_contact_reached(source_runtime_id: int, profile: MeleeAttackProfile) -> void:
 	entity_melee_contact_reached.emit(source_runtime_id, profile)
 
-func suspend():
+func suspend() -> void:
 	if _suspended:
 		return
 	_suspended = true
 	visible = false
 
-func resume():
+func resume() -> void:
 	if not _suspended:
 		return
 	visible = true
@@ -381,7 +390,7 @@ func resume():
 func is_suspended() -> bool:
 	return _suspended
 
-func shutdown():
+func shutdown() -> void:
 	for runtime_id in _active.keys():
 		var actor := _active[runtime_id] as EntityActor
 		if is_instance_valid(actor):
@@ -396,9 +405,13 @@ func shutdown():
 	_spatial_index.clear()
 	_clear_prepared_actors()
 	_catalog = null
-	_voxel_world = null
-	_position_ready = Callable()
+	_voxel_space = null
+	_navigation_limits = null
+	_navigation_search_budget = null
+	_max_active = 0
+	_max_retiring_visuals = 0
 	_actor_tick_start_index = 0
+	_prepared_definition_cursor = 0
 	_preparation_needed = false
 	_next_retirement_sequence = 0
 	_suspended = false
