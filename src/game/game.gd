@@ -61,6 +61,7 @@ var _pause_menu: PauseMenu
 var _death_screen: PlayerDeathScreen
 var _level_entrance: LevelEntrance
 var _level_runtime: LevelRuntime
+var _active_entity_runtime: EntityRuntime
 var _entrance_coordinate: Vector3i
 var animation_tuning_panel: AnimationTuningPanel = null
 var player_stats_debug_panel: PlayerStatsDebugPanel = null
@@ -88,8 +89,9 @@ func _ready():
 	var combat_particle_catalog_valid := combat_hit_particle_catalog.validate(entity_catalog)
 	var player_stats_valid := player_stats_definition.validate()
 	var level_catalog_valid := level_catalog.validate()
+	var level_encounter_catalog_valid := level_catalog_valid and entity_catalog_valid and LevelEncounterCatalogValidator.validate(level_catalog, entity_catalog)
 	var level_entrance_valid := level_catalog_valid and level_entrance_definition != null and level_entrance_definition.validate(level_catalog)
-	if not block_catalog_valid or not item_catalog_valid or not crafting_catalog_valid or not entity_catalog_valid or not combat_particle_catalog_valid or not player_stats_valid or not level_catalog_valid or not level_entrance_valid:
+	if not block_catalog_valid or not item_catalog_valid or not crafting_catalog_valid or not entity_catalog_valid or not combat_particle_catalog_valid or not player_stats_valid or not level_catalog_valid or not level_encounter_catalog_valid or not level_entrance_valid:
 		push_error("[Game] Catalog validation failed")
 		return
 	var structure_file_store := StructureFileStore.new(ProjectSettings.globalize_path("res://../").simplify_path())
@@ -191,12 +193,11 @@ func _setup_gameplay():
 	world_entity_coordinator.setup(entity_catalog, world.voxel_model, world.config.seed_value, world.is_position_streamed)
 	var world_entities := world_entity_coordinator.get_runtime()
 	melee_combat.setup(world.voxel_model, player, player_stats, world_entities)
-	world_entities.entity_melee_contact_reached.connect(melee_combat.try_commit_entity_contact)
-	melee_combat.melee_outcome_committed.connect(world_entities.record_melee_outcome)
 	melee_combat.melee_outcome_committed.connect(combat_progression_coordinator.record_melee_outcome)
 	melee_combat.melee_outcome_committed.connect(_on_melee_outcome_committed)
 	combat_hit_particles.setup(melee_combat, combat_hit_particle_catalog)
 	player.setup(camera_rig, inventory_model, input_buffer, player_stats, melee_combat, world_entities)
+	_bind_entity_context(world.voxel_model, world_entities)
 	player_stats.health_depleted.connect(_on_player_defeated)
 	var mining_particle_tints := MiningParticleTintPalette.new(block_catalog)
 	mining_break_particles.setup(world.voxel_model, mining_particle_tints)
@@ -226,6 +227,8 @@ func _on_player_defeated():
 		return
 	game_session.suspend_saving()
 	player.enter_defeated_state()
+	if _location_state != null and _location_state.is_in_level() and _level_runtime != null:
+		_level_runtime.suspend_simulation()
 	camera_rig.set_gameplay_input_enabled(false)
 	hud.close_side_panel_immediate()
 	hud.hotbar.set_gameplay_selection_enabled(false)
@@ -246,12 +249,18 @@ func _on_respawn_requested():
 		return
 	var completed_screen := _death_screen
 	_death_screen = null
-	_restore_player_from_defeat()
 	completed_screen.queue_free()
+	if _location_state != null and _location_state.is_in_level():
+		_exit_level(true)
+		return
+	_restore_player_from_defeat()
 
-func _restore_player_from_defeat():
+func _restore_player_from_defeat(respawn_position: Variant = null):
 	if player.is_defeated() or player.stats.is_dead():
-		player.respawn_at(world.voxel_model.get_spawn_position() + Vector3(0.0, 0.1, 0.0))
+		var target_position := world.voxel_model.get_spawn_position() + Vector3(0.0, 0.1, 0.0)
+		if respawn_position is Vector3:
+			target_position = respawn_position as Vector3
+		player.respawn_at(target_position)
 		camera_rig.snap_to_follow_target()
 	camera_rig.set_gameplay_input_enabled(true)
 	hud.hotbar.set_gameplay_selection_enabled(true)
@@ -332,7 +341,7 @@ func _enter_level():
 	var next_runtime := level_runtime_scene.instantiate() as LevelRuntime
 	add_child(next_runtime)
 	var definition := level_catalog.get_level(level_entrance_definition.level_id)
-	next_runtime.setup(result.layout, definition, block_catalog, world.block_texture_set, settings)
+	next_runtime.setup(result.layout, definition, block_catalog, world.block_texture_set, settings, entity_catalog)
 	next_runtime.set_player_ref(player)
 	var return_position := player.global_position
 	player.set_physics_process(false)
@@ -348,6 +357,7 @@ func _enter_level():
 	_level_runtime.activate()
 	var level_spawn := _level_runtime.get_spawn_position()
 	player.global_position = level_spawn
+	_bind_entity_context(_level_runtime.get_voxel_space(), _level_runtime.get_entity_runtime())
 	player.bind_space(_level_runtime.get_voxel_space(), _level_runtime, level_spawn)
 	_reset_camera_position()
 	level_interaction.set_target(_level_runtime.get_return_door_position(), level_entrance_definition.return_prompt)
@@ -355,18 +365,22 @@ func _enter_level():
 	player.set_physics_process(true)
 	_level_transitioning = false
 
-func _exit_level():
+func _exit_level(restore_from_defeat: bool = false):
 	_level_transitioning = true
 	level_interaction.clear_target()
 	player.set_physics_process(false)
 	input_buffer.clear_gameplay()
+	_level_runtime.suspend_simulation()
 	await _fade_to(1.0)
 	player.unbind_space()
 	_level_runtime.deactivate()
 	player.global_position = _location_state.get_persisted_position()
 	var world_spawn := world.voxel_model.get_spawn_position()
+	_bind_entity_context(world.voxel_model, world_entity_coordinator.get_runtime())
 	player.bind_space(world.voxel_model, world, world_spawn, world.voxel_model)
 	_location_state.return_to_world()
+	if restore_from_defeat:
+		_restore_player_from_defeat(player.global_position)
 	game_environment.set_outdoor_presentation_enabled(true)
 	world.resume()
 	world_entity_coordinator.resume()
@@ -542,6 +556,8 @@ func _enter_structure_designer(draft: StructureDraft) -> void:
 	hud.process_mode = Node.PROCESS_MODE_DISABLED
 	hud.visible = false
 	level_interaction.process_mode = Node.PROCESS_MODE_DISABLED
+	if in_level:
+		_level_runtime.suspend_simulation()
 	await _fade_to(1.0)
 	if in_level:
 		_level_runtime.deactivate()
@@ -679,6 +695,7 @@ func _save_and_request_main_menu():
 	camera_rig.reset_panel_obstruction()
 	level_interaction.clear_target()
 	game_session.shutdown("quit_to_menu")
+	_unbind_entity_context()
 	melee_combat.shutdown()
 	world_entity_coordinator.shutdown()
 	_teardown_level_runtime()
@@ -691,6 +708,7 @@ func _notification(what):
 		_restore_player_from_defeat()
 		_deactivate_session()
 		game_session.shutdown("close")
+		_unbind_entity_context()
 		melee_combat.shutdown()
 		world_entity_coordinator.shutdown()
 		_teardown_level_runtime()
@@ -708,3 +726,22 @@ func _teardown_level_runtime():
 	_level_runtime.deactivate()
 	_level_runtime.queue_free()
 	_level_runtime = null
+
+func _bind_entity_context(space: VoxelSpace, runtime: EntityRuntime) -> void:
+	assert(space != null and runtime != null)
+	_unbind_entity_context()
+	player.bind_entity_runtime(runtime)
+	melee_combat.bind_context(space, runtime)
+	runtime.entity_melee_contact_reached.connect(melee_combat.try_commit_entity_contact)
+	melee_combat.melee_outcome_committed.connect(runtime.record_melee_outcome)
+	_active_entity_runtime = runtime
+
+func _unbind_entity_context() -> void:
+	if _active_entity_runtime == null:
+		return
+	if _active_entity_runtime.entity_melee_contact_reached.is_connected(melee_combat.try_commit_entity_contact):
+		_active_entity_runtime.entity_melee_contact_reached.disconnect(melee_combat.try_commit_entity_contact)
+	if melee_combat.melee_outcome_committed.is_connected(_active_entity_runtime.record_melee_outcome):
+		melee_combat.melee_outcome_committed.disconnect(_active_entity_runtime.record_melee_outcome)
+	melee_combat.unbind_context()
+	_active_entity_runtime = null

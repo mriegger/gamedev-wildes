@@ -3,7 +3,8 @@ extends SceneTree
 func _init() -> void:
 	var empty_result := LevelGenerator.new().generate(LevelCatalog.new(), &"stone_dungeon", 1, &"probe", Vector3i.ZERO)
 	var source_catalog := load("res://levels/content/dungeons/stone/level_catalog.tres") as LevelCatalog
-	if source_catalog == null:
+	var entity_catalog := load("res://entities/entity_catalog.tres") as EntityCatalog
+	if source_catalog == null or entity_catalog == null:
 		print("LEVEL_MALFORMED_PROBE FAILED")
 		quit(1)
 		return
@@ -44,6 +45,17 @@ func _init() -> void:
 	second_oversized_group.entity_id = &"second"
 	second_oversized_group.count = 1
 	oversized_encounter.enemy_groups.assign([first_oversized_group, second_oversized_group])
+	var unknown_enemy_level := source_level.duplicate(true) as LevelDefinition
+	unknown_enemy_level.room_requirements[0].encounter.enemy_groups[0].entity_id = &"missing_enemy"
+	var unknown_enemy_catalog := _catalog_with(source_catalog, unknown_enemy_level)
+	var oversized_entity_catalog := EntityCatalog.new()
+	var oversized_entity_definitions: Array[EntityDefinition] = []
+	for definition in entity_catalog.definitions:
+		var copied := definition.duplicate(true) as EntityDefinition
+		if copied.id == &"zombie":
+			copied.body_width = 100.0
+		oversized_entity_definitions.append(copied)
+	oversized_entity_catalog.definitions = oversized_entity_definitions
 	var empty_room_type := LevelRoomRequirement.new()
 	empty_room_type.count = 1
 	empty_room_type.module_ids.assign([&"stone_room"])
@@ -147,6 +159,9 @@ func _init() -> void:
 		not excessive_count_encounter.validate("probe"),
 		not duplicate_enemy_encounter.validate("probe"),
 		not oversized_encounter.validate("probe"),
+		LevelEncounterCatalogValidator.validate(source_catalog, entity_catalog),
+		not LevelEncounterCatalogValidator.validate(unknown_enemy_catalog, entity_catalog),
+		not LevelEncounterCatalogValidator.validate(source_catalog, oversized_entity_catalog),
 		not empty_room_type.validate("probe"),
 		not zero_room_count.validate("probe"),
 		not empty_room_pool.validate("probe"),

@@ -10,7 +10,7 @@ func build_mesh_data(state: LevelState) -> Variant:
 	return _cube_mesher.build_mesh_data(
 		state.get_solid_cells(),
 		Callable(state, "get_block_id_at"),
-		Callable(state, "is_interior_open")
+		Callable(state, "is_base_interior_open")
 	)
 
 func create_mesh(state: LevelState) -> ArrayMesh:

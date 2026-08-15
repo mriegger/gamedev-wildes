@@ -157,7 +157,14 @@ func _test_level_runtime_setting(block_catalog: BlockCatalog) -> void:
 	var settings := GameSettings.new()
 	settings.torch_shadow_count = 0
 	settings.dungeon_torch_shadow_count = SHADOW_LIMIT
-	runtime.setup(result.layout, level_catalog.get_level(&"stone_dungeon"), block_catalog, BlockTextureSet.new(block_catalog), settings)
+	runtime.setup(
+		result.layout,
+		level_catalog.get_level(&"stone_dungeon"),
+		block_catalog,
+		BlockTextureSet.new(block_catalog),
+		settings,
+		load("res://entities/entity_catalog.tres") as EntityCatalog,
+	)
 	var player := Node3D.new()
 	root.add_child(player)
 	player.global_position = runtime.get_spawn_position()

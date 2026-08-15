@@ -1,7 +1,21 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://levels/runtime/level_runtime.gd" id="1_runtime"]
 [ext_resource type="Script" path="res://blocks/presentation/torch_renderer.gd" id="2_torches"]
+[ext_resource type="Script" path="res://levels/presentation/level_door_renderer.gd" id="3_doors"]
+[ext_resource type="Script" path="res://levels/presentation/level_encounter_hud.gd" id="4_hud"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_encounter"]
+bg_color = Color(0.035, 0.025, 0.02, 0.9)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.55, 0.2, 0.12, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
 
 [node name="LevelRuntime" type="Node3D"]
 visible = false
@@ -12,8 +26,36 @@ script = ExtResource("1_runtime")
 [node name="Torches" type="Node3D" parent="."]
 script = ExtResource("2_torches")
 
+[node name="Doors" type="Node3D" parent="."]
+script = ExtResource("3_doors")
+
 [node name="ReturnPoint" type="Marker3D" parent="."]
 
 [node name="ReturnDoor" type="MeshInstance3D" parent="."]
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+
+[node name="EncounterHUD" type="CanvasLayer" parent="."]
+script = ExtResource("4_hud")
+
+[node name="Panel" type="PanelContainer" parent="EncounterHUD"]
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 420.0
+offset_top = 20.0
+offset_right = -420.0
+offset_bottom = 62.0
+grow_horizontal = 2
+theme_override_styles/panel = SubResource("StyleBox_encounter")
+
+[node name="Margin" type="MarginContainer" parent="EncounterHUD/Panel"]
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 8
+
+[node name="Label" type="Label" parent="EncounterHUD/Panel/Margin"]
+theme_override_colors/font_color = Color(1, 0.82, 0.7, 1)
+theme_override_font_sizes/font_size = 18
+text = "Room Locked"
+horizontal_alignment = 1

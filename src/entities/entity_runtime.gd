@@ -1,6 +1,8 @@
 extends Node3D
 class_name EntityRuntime
 
+const EntitySpawnGeometryType := preload("res://entities/entity_spawn_geometry.gd")
+
 signal entity_melee_contact_reached(source_runtime_id: int, profile: MeleeAttackProfile)
 signal entity_defeated(runtime_id: int, definition_id: StringName)
 
@@ -104,9 +106,9 @@ func try_spawn_batch(requests: Array[EntitySpawnRequest]) -> Array[int]:
 		if request == null or not _catalog.has_definition(request.definition_id):
 			return rejected
 		var definition := _catalog.get_definition(request.definition_id)
-		if not _is_valid_spawn_position(definition, request.feet_position):
+		if not EntitySpawnGeometryType.can_spawn(_voxel_space, definition, request.feet_position):
 			return rejected
-		var actor_bounds := _get_bounds(definition, request.feet_position)
+		var actor_bounds := EntitySpawnGeometryType.get_bounds(definition, request.feet_position)
 		if not _spatial_index.query_overlapping(actor_bounds).is_empty():
 			return rejected
 		for existing_bounds in bounds:
@@ -154,27 +156,6 @@ func _retire_defeated(runtime_id: int) -> void:
 	_retain_retiring_actor(runtime_id, actor)
 	actor.begin_death_retirement()
 	entity_defeated.emit(runtime_id, definition_id)
-
-func _is_valid_spawn_position(definition: EntityDefinition, position: Vector3) -> bool:
-	if not position.is_finite():
-		return false
-	if not is_equal_approx(position.x - floorf(position.x), 0.5):
-		return false
-	if not is_equal_approx(position.y, roundf(position.y)):
-		return false
-	if not is_equal_approx(position.z - floorf(position.z), 0.5):
-		return false
-	if VoxelBodySolver.collides_at(_voxel_space, position, definition.body_width, definition.body_height, false):
-		return false
-	var ground_y := VoxelBodySolver.get_ground_y(_voxel_space, position, definition.body_width)
-	return ground_y != VoxelSpace.NO_SURFACE_Y and is_equal_approx(ground_y, position.y)
-
-func _get_bounds(definition: EntityDefinition, position: Vector3) -> AABB:
-	var half_width := definition.body_width * 0.5
-	return AABB(
-		position + Vector3(-half_width, 0.0, -half_width),
-		Vector3(definition.body_width, definition.body_height, definition.body_width)
-	)
 
 func _prepare_initial_actors() -> void:
 	for definition in _catalog.definitions:

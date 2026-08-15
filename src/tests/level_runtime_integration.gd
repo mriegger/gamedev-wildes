@@ -14,12 +14,20 @@ const GAME_TRANSITION_CYCLES: int = 3
 class TransitionGame:
 	extends Game
 
+	var level_was_suspended_at_fade_start: bool = false
+
 	func _ready() -> void:
 		set_process(false)
 		set_physics_process(false)
 		set_process_unhandled_input(false)
 
 	func _fade_to(alpha: float) -> void:
+		if alpha > 0.0 and _level_runtime != null:
+			level_was_suspended_at_fade_start = not _level_runtime.is_processing() \
+				and not _level_runtime.is_physics_processing() \
+				and _level_runtime.get_entity_runtime().is_suspended() \
+				and _level_runtime._door_renderer.process_mode == Node.PROCESS_MODE_DISABLED \
+				and _level_runtime._encounter_hud.process_mode == Node.PROCESS_MODE_DISABLED
 		_fade.visible = not is_zero_approx(alpha)
 		_fade.color = Color(0.0, 0.0, 0.0, alpha)
 		await get_tree().process_frame
@@ -86,7 +94,9 @@ func _run_runtime_lifecycle(
 	await process_frame
 	_expect(runtime.is_node_ready(), "runtime was not ready before setup at iteration %d" % iteration)
 	_expect(not runtime.visible and not runtime.is_processing(), "runtime starts active at iteration %d" % iteration)
-	runtime.setup(layout, definition, block_catalog, texture_set, settings)
+	runtime.setup(layout, definition, block_catalog, texture_set, settings, load("res://entities/entity_catalog.tres") as EntityCatalog)
+	_expect(not runtime.is_processing() and not runtime.is_physics_processing() and runtime.get_entity_runtime().is_suspended(), "setup left dungeon simulation active at iteration %d" % iteration)
+	_expect(runtime._door_renderer.process_mode == Node.PROCESS_MODE_DISABLED and runtime._encounter_hud.process_mode == Node.PROCESS_MODE_DISABLED, "setup left dungeon presentation timers active at iteration %d" % iteration)
 	var state := runtime.get_voxel_space() as LevelState
 	_expect(state != null, "runtime did not expose LevelState at iteration %d" % iteration)
 	if state != null:
@@ -115,6 +125,8 @@ func _run_runtime_lifecycle(
 	for cycle in range(3):
 		runtime.activate()
 		_expect(runtime.visible and runtime.is_processing(), "activate failed at iteration %d cycle %d" % [iteration, cycle])
+		_expect(runtime.is_physics_processing() and not runtime.get_entity_runtime().is_suspended(), "activate did not resume dungeon simulation at iteration %d cycle %d" % [iteration, cycle])
+		_expect(runtime._door_renderer.process_mode == Node.PROCESS_MODE_INHERIT and runtime._encounter_hud.process_mode == Node.PROCESS_MODE_INHERIT, "activate did not resume dungeon presentation timers at iteration %d cycle %d" % [iteration, cycle])
 		_expect(environment_node.environment != null, "activate did not install the level environment at iteration %d cycle %d" % [iteration, cycle])
 		_expect(environment_node.environment.background_color == definition.presentation.background_color, "runtime ignored the authored background color at iteration %d cycle %d" % [iteration, cycle])
 		_expect(environment_node.environment.ambient_light_color == definition.presentation.ambient_light_color, "runtime ignored the authored ambient light at iteration %d cycle %d" % [iteration, cycle])
@@ -123,6 +135,8 @@ func _run_runtime_lifecycle(
 			_expect(not (light as OmniLight3D).shadow_enabled, "zero-shadow setting left a torch shadow enabled at iteration %d cycle %d" % [iteration, cycle])
 		runtime.deactivate()
 		_expect(not runtime.visible and not runtime.is_processing(), "deactivate failed at iteration %d cycle %d" % [iteration, cycle])
+		_expect(not runtime.is_processing() and not runtime.is_physics_processing() and runtime.get_entity_runtime().is_suspended(), "deactivate left dungeon simulation active at iteration %d cycle %d" % [iteration, cycle])
+		_expect(runtime._door_renderer.process_mode == Node.PROCESS_MODE_DISABLED and runtime._encounter_hud.process_mode == Node.PROCESS_MODE_DISABLED, "deactivate left dungeon presentation timers active at iteration %d cycle %d" % [iteration, cycle])
 		_expect(environment_node.environment == null, "deactivate retained the level environment at iteration %d cycle %d" % [iteration, cycle])
 	runtime.queue_free()
 	await process_frame
@@ -189,6 +203,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	game.level_catalog = catalog
 	game.level_entrance_definition = load("res://levels/content/dungeons/stone/entrance.tres") as LevelEntranceDefinition
 	game.level_runtime_scene = runtime_scene
+	game.player_death_screen_scene = load("res://ui/screens/death/player_death_screen.tscn") as PackedScene
 	game.structure_designer_runtime_scene = load(STRUCTURE_RUNTIME_SCENE) as PackedScene
 	game.structure_terrain_shader = load(STRUCTURE_TERRAIN_SHADER) as Shader
 	var world := (load(WORLD_SCENE) as PackedScene).instantiate() as WorldController
@@ -286,6 +301,8 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	entities.setup(game.entity_catalog, voxel_world, 1337, _position_ready)
 	combat.setup(voxel_world, player, game.player_stats, entities.get_runtime())
 	player.setup(camera_rig, game.inventory_model, game.input_buffer, game.player_stats, combat, entities.get_runtime())
+	game._bind_entity_context(voxel_world, entities.get_runtime())
+	var world_entity_runtime := entities.get_runtime()
 	var world_spawn := voxel_world.get_spawn_position()
 	var doorway_anchor := world_spawn
 	player.global_position = doorway_anchor
@@ -318,8 +335,13 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 		player.global_position = doorway_anchor
 		game._location_state.update_world_position(doorway_anchor)
 		await _run_structure_designer_cycle(game, false, cycle)
+		player.interactor.melee_attack_timer = 1.0
+		player.interactor.melee_attack_queue = 1
+		player.interactor._melee_contact_pending = true
+		player.interactor._melee_target_runtime_ids.assign([999999])
 		await game._enter_level()
 		var runtime := game._level_runtime
+		var dungeon_entity_runtime := runtime.get_entity_runtime()
 		_expect(runtime != null and is_instance_valid(runtime), "Game did not retain an active runtime in cycle %d" % cycle)
 		_expect(game._location_state.is_in_level(), "Game location did not enter level in cycle %d" % cycle)
 		_expect(game._get_persisted_position().is_equal_approx(doorway_anchor), "indoor persisted position differs from doorway anchor in cycle %d" % cycle)
@@ -329,6 +351,10 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 		_expect(environment._world_environment.environment == null and not environment._sun.visible and not environment._sun_fill.visible, "outdoor environment remained active in cycle %d" % cycle)
 		_expect(not environment._ambient_soundscape._running, "outdoor ambient audio remained active in cycle %d" % cycle)
 		_expect(runtime.visible and runtime.is_processing(), "level runtime is inactive in cycle %d" % cycle)
+		_expect(dungeon_entity_runtime != world_entity_runtime and not dungeon_entity_runtime.is_suspended(), "level entry did not activate a dedicated entity runtime in cycle %d" % cycle)
+		_expect(game._active_entity_runtime == dungeon_entity_runtime and player.interactor.entity_runtime == dungeon_entity_runtime, "level entry did not rebind player entity queries in cycle %d" % cycle)
+		_expect(combat._entity_runtime == dungeon_entity_runtime and combat._voxel_space == runtime.get_voxel_space(), "level entry did not rebind combat in cycle %d" % cycle)
+		_expect(player.interactor.melee_attack_timer == 0.0 and player.interactor.melee_attack_queue == 0 and not player.interactor._melee_contact_pending and player.interactor._melee_target_runtime_ids.is_empty(), "level entry retained a pending overworld attack in cycle %d" % cycle)
 		_expect(player.voxel_space == runtime.get_voxel_space(), "player is not bound to LevelState in cycle %d" % cycle)
 		_expect(player.interactor.voxel_space == runtime.get_voxel_space(), "interactor is not bound to LevelState in cycle %d" % cycle)
 		_expect(not player.interactor.is_editing_enabled() and player.interactor.editable_voxel_world == null, "level binding retained edit authority in cycle %d" % cycle)
@@ -343,7 +369,9 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 		await _run_structure_designer_cycle(game, true, cycle)
 		player.global_position += Vector3(2.0, 0.0, 1.0)
 		_expect(game._get_persisted_position().is_equal_approx(doorway_anchor), "level-local movement changed persisted anchor in cycle %d" % cycle)
+		game.level_was_suspended_at_fade_start = false
 		await game._exit_level()
+		_expect(game.level_was_suspended_at_fade_start, "level exit began fading before dungeon simulation suspended in cycle %d" % cycle)
 		_expect(not game._location_state.is_in_level(), "Game location remained in level after cycle %d" % cycle)
 		_expect(player.global_position.is_equal_approx(doorway_anchor), "Game restored %s instead of exact anchor %s in cycle %d" % [player.global_position, doorway_anchor, cycle])
 		_expect(player.voxel_space == voxel_world and player.interactor.voxel_space == voxel_world, "player world binding was not restored in cycle %d" % cycle)
@@ -351,6 +379,8 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 		_expect(player.targeting_view.voxel_space == voxel_world and player.targeting_view.selection_box.get_parent() == world, "world targeting presentation was not restored in cycle %d" % cycle)
 		_expect(not world.is_suspended() and not manager._suspended and not world.chunk_scheduler._suspended, "Game did not resume world streaming in cycle %d" % cycle)
 		_expect(not entities.is_suspended() and entities.visible, "Game did not resume overworld entities in cycle %d" % cycle)
+		_expect(game._active_entity_runtime == world_entity_runtime and player.interactor.entity_runtime == world_entity_runtime, "level exit did not restore player entity queries in cycle %d" % cycle)
+		_expect(combat._entity_runtime == world_entity_runtime and combat._voxel_space == voxel_world, "level exit did not restore overworld combat in cycle %d" % cycle)
 		_expect(world.visible and entrance.visible, "overworld presentation remained hidden after cycle %d" % cycle)
 		_expect(environment._world_environment.environment != null and environment._sun.visible and environment._sun_fill.visible, "outdoor environment was not restored after cycle %d" % cycle)
 		_expect(game._level_runtime == null and not is_instance_valid(runtime), "level runtime survived cycle %d teardown" % cycle)
@@ -361,7 +391,34 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 		_expect(coordinator._has_target and coordinator._prompt == "F  Enter Dungeon", "entry prompt was not restored in cycle %d" % cycle)
 		_expect(coordinator._target_position.is_equal_approx(entrance.interaction_position), "entry prompt target changed in cycle %d" % cycle)
 		_expect(coordinator.interaction_requested.get_connections().size() == 1, "transition duplicated interaction signal consumers in cycle %d" % cycle)
+	var defeat_anchor := Vector3(9.5, world_spawn.y, 4.5)
+	player.global_position = defeat_anchor
+	game._location_state.update_world_position(defeat_anchor)
+	await game._enter_level()
+	var defeated_runtime := game._level_runtime
+	var first_attempt_state := defeated_runtime._encounter_state
+	game.player_stats.damage(game.player_stats.current_hp)
+	game._on_player_defeated()
+	_expect(defeated_runtime.get_entity_runtime().is_suspended() and not defeated_runtime.is_processing() and not defeated_runtime.is_physics_processing(), "dungeon defeat left encounter simulation active")
+	_expect(defeated_runtime._door_renderer.process_mode == Node.PROCESS_MODE_DISABLED and defeated_runtime._encounter_hud.process_mode == Node.PROCESS_MODE_DISABLED, "dungeon defeat left encounter presentation timers active")
+	var completed_screen := game._death_screen
+	game._death_screen = null
+	completed_screen.queue_free()
+	await game._exit_level(true)
+	_expect(not player.is_defeated() and not game.player_stats.is_dead(), "dungeon defeat did not restore player health")
+	_expect(player.global_position.is_equal_approx(defeat_anchor), "dungeon defeat did not restore the exact overworld position")
+	_expect(game.inventory_model == inventory_identity and game.player_stats == stats_identity, "dungeon defeat replaced player-owned state")
+	_expect(game._active_entity_runtime == world_entity_runtime and player.interactor.entity_runtime == world_entity_runtime, "dungeon defeat did not restore the overworld entity runtime")
+	_expect(not world.is_suspended() and not entities.is_suspended() and world.visible and entities.visible, "dungeon defeat did not restore overworld systems")
+	_expect(environment._world_environment.environment != null and environment._sun.visible and environment._sun_fill.visible, "dungeon defeat did not restore the outdoor environment")
+	_expect(not game.game_session.is_saving_suspended(), "dungeon defeat did not restore saving")
+	_expect(game._level_runtime == null and not is_instance_valid(defeated_runtime), "dungeon defeat retained the failed runtime")
+	await game._enter_level()
+	var fresh_runtime := game._level_runtime
+	_expect(fresh_runtime._encounter_state != first_attempt_state and fresh_runtime._encounter_state.get_active_room_id() == -1, "dungeon re-entry did not create a fresh encounter attempt")
+	await game._exit_level()
 	player.unbind_space()
+	game._unbind_entity_context()
 	combat.shutdown()
 	entities.shutdown()
 	world.shutdown()
@@ -432,7 +489,11 @@ func _run_structure_designer_cycle(game: TransitionGame, in_level: bool, cycle: 
 	if draft == null:
 		return
 	game.structure_designer_workflow._draft = draft
+	if in_level:
+		game.level_was_suspended_at_fade_start = false
 	await game._enter_structure_designer(draft)
+	if in_level:
+		_expect(game.level_was_suspended_at_fade_start, "designer entry began fading before dungeon simulation suspended for %s" % label)
 	var designer_runtime := game._structure_designer_runtime
 	_expect(designer_runtime != null and is_instance_valid(designer_runtime), "designer runtime was not retained for %s" % label)
 	_expect(game._location_state == location_state and game._location_state.is_in_level() == in_level, "designer entry changed GameplayLocationState for %s" % label)
@@ -460,6 +521,7 @@ func _run_structure_designer_cycle(game: TransitionGame, in_level: bool, cycle: 
 	if in_level:
 		_expect(world.is_suspended() == world_suspended and entities.is_suspended() == entities_suspended, "designer entry changed suspended overworld systems for %s" % label)
 		_expect(level_runtime != null and not level_runtime.visible and not level_runtime.is_processing(), "designer entry did not suspend the level runtime for %s" % label)
+		_expect(level_runtime.get_entity_runtime().is_suspended(), "designer entry left dungeon entities active for %s" % label)
 		_expect((level_runtime.get_node("WorldEnvironment") as WorldEnvironment).environment == null, "designer entry retained the level environment for %s" % label)
 	else:
 		_expect(world.is_suspended() and entities.is_suspended() and not world.visible and not entities.visible, "designer entry did not suspend overworld systems for %s" % label)
@@ -487,6 +549,7 @@ func _run_structure_designer_cycle(game: TransitionGame, in_level: bool, cycle: 
 	_expect(environment._world_environment.environment == outdoor_environment and environment._sun.visible == outdoor_sun_visible and environment._sun_fill.visible == outdoor_fill_visible and environment._ambient_soundscape._running == outdoor_audio_running, "designer exit did not restore the outdoor environment for %s" % label)
 	if in_level:
 		_expect(level_runtime.visible == level_visible and level_runtime.is_processing() == level_processing, "designer exit did not reactivate the level runtime for %s" % label)
+		_expect(not level_runtime.get_entity_runtime().is_suspended(), "designer exit did not reactivate dungeon entities for %s" % label)
 		_expect((level_runtime.get_node("WorldEnvironment") as WorldEnvironment).environment == level_environment, "designer exit did not restore the level environment for %s" % label)
 	_expect(int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT)) == orphan_baseline, "designer cycle changed orphan count for %s" % label)
 	if saving_was_suspended:

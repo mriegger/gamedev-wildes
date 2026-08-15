@@ -499,6 +499,16 @@ jobs:
           bash .github/scripts/run_godot_check.sh \
             60 "LEVEL_RUNTIME PASS" /tmp/level_runtime.log -- \
             godot --headless --path src --script res://tests/level_runtime_integration.gd
+      - name: Run dungeon encounter state tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "LEVEL_ENCOUNTER_STATE PASS" /tmp/level_encounter_state.log -- \
+            godot --headless --path src --script res://tests/level_encounter_state.gd
+      - name: Run dungeon encounter runtime tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "LEVEL_ENCOUNTER_RUNTIME PASS" /tmp/level_encounter_runtime.log -- \
+            godot --headless --path src --script res://tests/level_encounter_runtime.gd
       - name: Run level save-position compatibility tests
         run: |
           bash .github/scripts/run_godot_check.sh \
