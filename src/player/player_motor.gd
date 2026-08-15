@@ -231,3 +231,11 @@ func _handle_movement(delta):
 
 	if global_position.y < -10:
 		_reset_motion_at(_respawn_position)
+
+func face_direction(world_direction: Vector3):
+	assert(world_direction.is_finite())
+	var planar_direction := Vector3(world_direction.x, 0.0, world_direction.z)
+	if planar_direction.is_zero_approx():
+		return
+	planar_direction = planar_direction.normalized()
+	model_root.rotation.y = atan2(planar_direction.x, planar_direction.z)

@@ -63,7 +63,8 @@ validation, so support, body collision, and centered-feet requirements cannot di
 `MeleeCombatCoordinator` validates cursor targeting, range, sweep arc, voxel visibility, target
 existence, and contact timing before changing health. `MeleeAttackProfile` owns base damage and an
 optional sweep angle. Player swings lock sorted spatial-index candidates from the cursor ray at
-attack start, then independently revalidate every locked target at contact; a zero-degree sweep
+attack start after rotating the player presentation toward that cursor ray, then independently
+revalidate every locked target at contact; a zero-degree sweep
 retains exact single-target ray selection, while a full-circle sweep is independent of planar cursor
 aim. The profile calculates
 `max(1, base damage + attacker strength - target defense)`. Each successful physical hit applies

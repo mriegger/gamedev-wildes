@@ -14,6 +14,7 @@ var _stone_pos := Vector3i(1, 0, 0)
 var _grass_pos := Vector3i(2, 0, 0)
 var _copper_pos := Vector3i(3, 0, 0)
 var _melee_attack_directions: Array[int] = []
+var _melee_attack_facings: Array[Vector3] = []
 
 func _init():
 	call_deferred("_run")
@@ -220,11 +221,20 @@ func _run():
 	_expect(_interactor.get_selected_primary_action() == sword_action, "sword melee action was not selected")
 	var resting_socket_position := _player.held_item_view.position
 	var resting_socket_rotation := _player.held_item_view.rotation
+	var attack_mouse_position := _interactor.get_viewport().get_mouse_position()
+	var attack_ray_origin := _camera.project_ray_origin(attack_mouse_position)
+	var attack_ray_direction := _camera.project_ray_normal(attack_mouse_position).normalized()
+	var player_center := _player.global_position + Vector3.UP * (_player.player_height * 0.5)
+	var attack_cursor_position: Variant = Plane(Vector3.UP, player_center.y).intersects_ray(attack_ray_origin, attack_ray_direction)
+	_expect(attack_cursor_position is Vector3, "sword cursor ray did not reach the player-facing plane")
+	var expected_attack_facing := ((attack_cursor_position as Vector3) - player_center).normalized()
+	_player.model_root.rotation.y = atan2(-expected_attack_facing.x, -expected_attack_facing.z)
 	_push_primary(true)
 	await process_frame
 	_input_buffer.poll()
 	_interactor._handle_item_actions(0.0)
 	_expect(_melee_attack_directions == [-1], "single sword click did not start left-to-right")
+	_expect(_melee_attack_facings.size() == 1 and _melee_attack_facings[0].dot(expected_attack_facing) > 0.999, "player did not face the mouse before the sword swing started")
 	_expect(_player.animation_driver.animator._attacking, "sword attack did not reach the animation driver")
 	_expect(is_equal_approx(_interactor.melee_attack_timer, sword_action.attack_profile.cooldown), "sword attack timer changed")
 	_player.on_ground = true
@@ -377,6 +387,7 @@ func _push_primary(pressed: bool):
 
 func _on_melee_attack_started(_action: MeleeAttackActionDefinition, direction: int):
 	_melee_attack_directions.append(direction)
+	_melee_attack_facings.append(_player.model_root.global_transform.basis * Vector3.BACK)
 
 func _expect(condition: bool, message: String):
 	if not condition:

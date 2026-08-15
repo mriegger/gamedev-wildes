@@ -274,6 +274,10 @@ func _start_melee_attack():
 	var mouse_position := get_viewport().get_mouse_position()
 	_melee_ray_origin = camera.project_ray_origin(mouse_position)
 	_melee_ray_direction = camera.project_ray_normal(mouse_position).normalized()
+	var player_center := motor.global_position + Vector3.UP * (motor.player_height * 0.5)
+	var cursor_position: Variant = Plane(Vector3.UP, player_center.y).intersects_ray(_melee_ray_origin, _melee_ray_direction)
+	if cursor_position is Vector3:
+		motor.face_direction((cursor_position as Vector3) - player_center)
 	_melee_target_runtime_ids = combat.acquire_player_targets(_melee_ray_origin, _melee_ray_direction, profile)
 	_melee_contact_pending = not _melee_target_runtime_ids.is_empty()
 	var attack_direction := next_melee_attack_direction
