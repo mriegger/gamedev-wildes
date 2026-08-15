@@ -116,20 +116,36 @@ func _run_runtime_lifecycle(
 	_expect(geometry != null and geometry._room_meshes.size() == runtime._topology.get_room_ids().size(), "runtime omitted room branch geometry at iteration %d" % iteration)
 	_expect(geometry != null and geometry._seal_meshes.size() == runtime._topology.get_doorways().size(), "runtime omitted authored doorway seals at iteration %d" % iteration)
 	_expect(runtime.get_entity_runtime()._max_active == runtime._topology.get_maximum_simultaneous_encounter_enemy_count(), "runtime ignored topology-derived encounter capacity at iteration %d" % iteration)
-	for material_value in geometry._room_materials.values():
-		var terrain_material := material_value as ShaderMaterial
-		_expect(terrain_material != null and terrain_material.shader.resource_path == "res://levels/presentation/level_terrain.gdshader", "runtime terrain shader changed at iteration %d" % iteration)
-		_expect(terrain_material.get_shader_parameter("terrain_textures") == texture_set.texture_array, "runtime terrain texture array changed at iteration %d" % iteration)
+	var entry_mesh := geometry.get_node("EntryGeometry") as MeshInstance3D
+	var terrain_material := entry_mesh.material_override as ShaderMaterial
+	_expect(terrain_material != null and terrain_material.shader.resource_path == "res://levels/presentation/level_terrain.gdshader", "runtime terrain shader changed at iteration %d" % iteration)
+	_expect(terrain_material != null and terrain_material.get_shader_parameter("terrain_textures") == texture_set.texture_array, "runtime terrain texture array changed at iteration %d" % iteration)
 	for room_id in runtime._topology.get_room_ids():
 		var progress := runtime._encounter_state._rooms[room_id] as LevelEncounterState.RoomProgress
-		var reveal_amount := float((geometry._room_materials[room_id] as ShaderMaterial).get_shader_parameter("reveal_amount"))
-		var expected_reveal := 0.0 if progress.status == LevelEncounterState.RoomStatus.LOCKED else 1.0
-		_expect(is_equal_approx(reveal_amount, expected_reveal), "runtime room branch reveal state changed at iteration %d room %d" % [iteration, room_id])
+		var discovered := progress.status != LevelEncounterState.RoomStatus.LOCKED
+		var room_mesh := geometry._room_meshes[room_id] as MeshInstance3D
+		_expect(room_mesh.material_override == terrain_material, "runtime room branch did not share the terrain material at iteration %d room %d" % [iteration, room_id])
+		_expect(room_mesh.visible == discovered, "runtime room branch visibility changed at iteration %d room %d" % [iteration, room_id])
+		_expect(is_equal_approx(room_mesh.transparency, 0.0 if discovered else 1.0), "runtime room branch transparency changed at iteration %d room %d" % [iteration, room_id])
+		_expect(
+			room_mesh.cast_shadow == (GeometryInstance3D.SHADOW_CASTING_SETTING_ON if discovered else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF),
+			"runtime room branch shadow state changed at iteration %d room %d" % [iteration, room_id],
+		)
 		for torch_cell in geometry._room_torch_cells[room_id] as Array[Vector3i]:
-			var torch_root := torch_renderer.torch_instances.get(torch_cell) as Node3D
-			var torch_stem := torch_root.get_node("Stem") as MeshInstance3D
-			var torch_reveal := 0.0 if not torch_stem.visible else 1.0 - torch_stem.transparency
-			_expect(is_equal_approx(torch_reveal, expected_reveal), "runtime torch reveal state changed at iteration %d room %d" % [iteration, room_id])
+			_expect_runtime_torch_discovery_state(torch_renderer, torch_cell, discovered, iteration, room_id)
+	var sealed_door_ids := runtime._encounter_state.get_sealed_door_ids()
+	for doorway in runtime._topology.get_doorways():
+		var owner_progress := runtime._encounter_state._rooms[doorway.room_id] as LevelEncounterState.RoomProgress
+		var owner_discovered := owner_progress.status != LevelEncounterState.RoomStatus.LOCKED
+		var expected_visible := sealed_door_ids.has(doorway.door_id) and owner_discovered
+		var seal_mesh := geometry._seal_meshes[doorway.door_id] as MeshInstance3D
+		_expect(seal_mesh.material_override == terrain_material, "runtime seal did not share the authored terrain material at iteration %d door %d" % [iteration, doorway.door_id])
+		_expect(seal_mesh.visible == expected_visible, "runtime seal visibility changed at iteration %d door %d" % [iteration, doorway.door_id])
+		_expect(is_equal_approx(seal_mesh.transparency, 0.0 if expected_visible else 1.0), "runtime seal transparency changed at iteration %d door %d" % [iteration, doorway.door_id])
+		_expect(
+			seal_mesh.cast_shadow == (GeometryInstance3D.SHADOW_CASTING_SETTING_ON if expected_visible else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF),
+			"runtime seal shadow state changed at iteration %d door %d" % [iteration, doorway.door_id],
+		)
 	_expect(runtime.get_node_or_null("Doors") == null, "runtime retained the removed sliding-door presentation at iteration %d" % iteration)
 	_expect(torch_renderer.torch_instances.size() == layout.torches.size(), "runtime spawned %d/%d authored torches at iteration %d" % [torch_renderer.torch_instances.size(), layout.torches.size(), iteration])
 	_expect((return_door.material_override as StandardMaterial3D).albedo_texture == block_catalog.get_definition(definition.presentation.return_door_block_id).side_texture, "runtime ignored the authored return-door block at iteration %d" % iteration)
@@ -567,6 +583,29 @@ func _run_structure_designer_cycle(game: TransitionGame, in_level: bool, cycle: 
 	_expect(int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT)) == orphan_baseline, "designer cycle changed orphan count for %s" % label)
 	if saving_was_suspended:
 		game.game_session.resume_saving()
+
+func _expect_runtime_torch_discovery_state(
+	torch_renderer: TorchRenderer,
+	cell: Vector3i,
+	discovered: bool,
+	iteration: int,
+	room_id: int,
+) -> void:
+	var torch_root := torch_renderer.torch_instances.get(cell) as Node3D
+	_expect(torch_root != null, "runtime omitted torch %s at iteration %d room %d" % [cell, iteration, room_id])
+	if torch_root == null:
+		return
+	var stem := torch_root.get_node("Stem") as MeshInstance3D
+	var flame := torch_root.get_node("Flame") as MeshInstance3D
+	var light := torch_renderer.torch_light_nodes.get(cell) as OmniLight3D
+	_expect(stem.visible == discovered, "runtime torch stem visibility changed at iteration %d room %d" % [iteration, room_id])
+	_expect(flame.visible == discovered, "runtime torch flame visibility changed at iteration %d room %d" % [iteration, room_id])
+	_expect(is_equal_approx(stem.transparency, 0.0 if discovered else 1.0), "runtime torch stem transparency changed at iteration %d room %d" % [iteration, room_id])
+	_expect(is_equal_approx(flame.transparency, 0.0 if discovered else 1.0), "runtime torch flame transparency changed at iteration %d room %d" % [iteration, room_id])
+	_expect(light != null and light.visible == discovered, "runtime torch light visibility changed at iteration %d room %d" % [iteration, room_id])
+	if light != null:
+		_expect((light.light_energy > 0.0) == discovered, "runtime torch light energy changed at iteration %d room %d" % [iteration, room_id])
+		_expect(not light.shadow_enabled, "runtime hidden or zero-shadow torch cast a shadow at iteration %d room %d" % [iteration, room_id])
 
 func _make_flat_world(block_catalog: BlockCatalog) -> VoxelWorld:
 	var voxel_world := VoxelWorld.new(20, 36, 5, 12.0, block_catalog)

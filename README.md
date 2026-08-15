@@ -80,13 +80,16 @@ register content through filesystem scans. A room requirement maps a stable room
 module pool, and encounter, so additional variants can join an existing type and new types such as
 small or boss rooms can be added without a dungeon-specific generator branch.
 Master rooms configure 40 zombies, normal rooms 25, and chest rooms 6. A room encounter activates
-only after the player is fully inside. Each room permits at most 20 active encounter enemies, with
-larger groups refilling authored spawn positions on later physics ticks. Locked connections reuse
-their room socket's authored wall-fill blocks for movement, pathfinding, targeting, and attacks;
-those blocks fade away after the room clears. Downstream rooms and hallways remain black with their
-torches disabled until they unlock, then their geometry and lighting fade in. The HUD shows separate
-active and pending counts. Killing the complete configured group opens every branch and readies
-child rooms. Leaving or dying discards that run, restores the exact overworld anchor and
+only after the player is fully inside. Every ready room can run a wave concurrently, and each wave
+permits at most 20 active enemies from its originating room while larger groups refill authored
+spawn positions on later physics ticks. Discovered retreat paths stay open, so enemies can roam
+between rooms while their wave ownership remains unchanged. The shared dungeon runtime derives its
+active capacity from the generated room tree's weighted antichain bound instead of imposing a fixed
+wave count. Undiscovered rooms and hallways are not rendered, including their torches, lights, and
+shadows. A discovered branch's authored textured wall-fill seal stays visible until its parent room
+clears; collision opens immediately, the seal fades out over 0.35 seconds, and the branch and its
+torches fade in over the same interval. Opened seals never close. The HUD aggregates wave, active,
+and pending counts. Leaving or dying discards that run, restores the exact overworld anchor and
 player-owned inventory, and creates fresh encounter state on re-entry.
 
 **Structure construction workspace.** `dev structure new` opens a document type, length, width, and

@@ -39,8 +39,9 @@ and cleanup bounds independently of the chunk renderer soak. Retired actors leav
 indexes and population counts immediately. Their fading presentations use a separate fixed bound.
 
 Finite dungeons do not reuse ambient spawning or streaming rules. Each `LevelRuntime` owns a
-dedicated 64-actor `EntityRuntime` over `LevelState`; room encounters feed it validated atomic
-batches and bounded navigation work. Entering a dungeon suspends the overworld coordinator without
-destroying its runtime. Leaving restores and resumes the same overworld instance before queuing the
-dungeon runtime for deletion; death suspends it immediately and follows that restore-then-retire
-order during the return flow.
+dedicated `EntityRuntime` over `LevelState`; its active bound is derived from the generated room
+tree's weighted antichain capacity, while retiring presentation remains capped at 64 actors.
+Concurrent room encounters feed it validated atomic batches and bounded navigation work. Entering
+a dungeon suspends the overworld coordinator without destroying its runtime. Leaving restores and
+resumes the same overworld instance before queuing the dungeon runtime for deletion; death suspends
+it immediately and follows that restore-then-retire order during the return flow.

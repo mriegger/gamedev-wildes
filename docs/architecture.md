@@ -183,25 +183,30 @@ Generation retains immutable `LevelConnection` records with stable placement IDs
 directions, and aperture cells without consuming additional random values. `LevelEncounterTopology`
 collapses hallway chains into the room tree. Node-independent `LevelEncounterState` owns `LOCKED`,
 `READY`, `ACTIVE`, and `CLEARED` room state, deterministic enemy order, assigned runtime IDs,
-pending queues, and logical door locks. Root rooms begin ready; child branches remain locked until
-their parent clears. Activation requires the player's complete body to be inside room air and clear
-of its incoming gate. Initial and refill batches validate before state commit, occupied positions
-remain pending, and a defeat cannot refill until a later physics frame.
-Configured encounters retain up to 64 enemies, while `LevelEncounterState` limits each room to 20
-active encounter enemies and continuously refills that capacity until the configured group clears.
+pending queues, and monotonic branch seals. Root rooms begin ready; child branches remain
+undiscovered until their parent clears. Every ready room can activate independently once the
+player's complete body is inside room air and clear of its incoming aperture. Initial and per-room
+refill batches validate before state commit, occupied positions remain pending, and a defeat cannot
+refill its originating wave until a later physics frame. Each room permits at most 20 active
+encounter enemies and continuously refills that capacity until its configured group clears. Enemies
+retain their originating room ownership while roaming, so concurrent waves progress independently.
 
-Each `LevelRuntime` owns a dedicated `EntityRuntime` capped at 64 active and 64 retiring actors.
+Each `LevelRuntime` owns a dedicated `EntityRuntime`. Its active capacity is the sum of the root
+room capacities, where each subtree contributes the greater of its room weight or the sum of its
+child capacities and room weight is `min(configured enemies, 20)`. Retiring presentation remains
+independently capped at 64 actors.
 Dungeon navigation is bounded to radius 48, 2,048 nodes per search, and two searches per physics
 tick. `Game` explicitly rebinds player queries and melee combat between overworld and dungeon voxel
 spaces while cancelling pending attacks. Connected room sockets reuse their authored unused-fill
 blocks: `LevelState` changes collision, raycast, attack, and pathfinding truth immediately, while
-`LevelGeometryRenderer` presents ordinary voxel cubes and fades them away over 0.35 seconds after
-clearance. The same renderer partitions hallways with their downstream rooms, renders locked
-branches black, disables their torch presentation and light, then fades both geometry and lighting
-in when the branch becomes ready.
-The encounter HUD reports active and pending enemies. Clearing opens the room and every child
-branch for that run. Level exit destroys the runtime; dungeon death suspends it immediately and
-destroys it while restoring the overworld, so the next entry starts fresh.
+`LevelGeometryRenderer` presents ordinary textured voxel cubes. Undiscovered hallway-and-room
+partitions are not rendered and cast no shadows; their torches and lights are disabled. The
+discovered side retains its authored textured seal until clearance opens collision immediately,
+fades the seal out over 0.35 seconds, and fades the newly discovered partition and torches in over
+the same interval. Seals never close, and discovered retreat paths stay open while concurrent room
+waves continue. The encounter HUD aggregates active-wave, active-enemy, and pending-enemy counts.
+Level exit destroys the runtime; dungeon death suspends it immediately and destroys it while
+restoring the overworld, so the next entry starts fresh.
 
 Content directories organize ownership without becoming runtime registries. Each destination
 dungeon keeps its catalog, entrance, definition, presentation, and modules together under

@@ -137,6 +137,7 @@ func _run() -> void:
 	for torch in generation.layout.torches:
 		torch_attachments[torch.cell] = LevelSocketDefinition.vector_for(torch.wall_direction)
 	torch_renderer.spawn_torches(torch_attachments)
+	var texture_set := BlockTextureSet.new(block_catalog)
 	var incompatible_shader := Shader.new()
 	incompatible_shader.code = "shader_type spatial; void fragment() { ALBEDO = vec3(1.0); }"
 	_expect(not renderer.setup(
@@ -145,11 +146,24 @@ func _run() -> void:
 		topology,
 		state.get_sealed_door_ids(),
 		state.get_discovered_room_ids(),
-		BlockTextureSet.new(block_catalog),
+		texture_set,
 		incompatible_shader,
 		torch_renderer,
-	), "geometry renderer accepted a shader without the reveal contract")
+	), "geometry renderer accepted a shader without the terrain texture contract")
 	_expect(renderer.get_child_count() == 0, "incompatible shader setup partially committed scene nodes")
+	_expect(renderer._room_meshes.is_empty() and renderer._seal_meshes.is_empty(), "incompatible shader setup partially committed geometry indexes")
+	var wrong_texture_type_shader := Shader.new()
+	wrong_texture_type_shader.code = "shader_type spatial; uniform sampler2D terrain_textures; void fragment() { ALBEDO = vec3(1.0); }"
+	_expect(not renderer.setup(
+		generation.layout,
+		level_state,
+		topology,
+		state.get_sealed_door_ids(),
+		state.get_discovered_room_ids(),
+		texture_set,
+		wrong_texture_type_shader,
+		torch_renderer,
+	), "geometry renderer accepted a two-dimensional terrain texture uniform")
 	var invalid_seals := state.get_sealed_door_ids()
 	invalid_seals.append(invalid_seals[0])
 	_expect(not renderer.setup(
@@ -158,23 +172,25 @@ func _run() -> void:
 		topology,
 		invalid_seals,
 		state.get_discovered_room_ids(),
-		BlockTextureSet.new(block_catalog),
+		texture_set,
 		definition.presentation.terrain_shader,
 		torch_renderer,
 	), "geometry renderer accepted duplicate seals")
 	_expect(renderer.get_child_count() == 0, "failed geometry setup partially committed scene nodes")
+	_expect(renderer._room_meshes.is_empty() and renderer._seal_meshes.is_empty(), "failed geometry setup partially committed geometry indexes")
 	for torch_cell in torch_attachments:
-		_expect(is_equal_approx(_torch_reveal_strength(torch_renderer, torch_cell as Vector3i), 1.0), "failed geometry setup partially changed torch reveal state")
+		_expect_torch_state(torch_renderer, torch_cell as Vector3i, 1.0, "failed geometry setup")
 	_expect(renderer.setup(
 		generation.layout,
 		level_state,
 		topology,
 		state.get_sealed_door_ids(),
 		state.get_discovered_room_ids(),
-		BlockTextureSet.new(block_catalog),
+		texture_set,
 		definition.presentation.terrain_shader,
 		torch_renderer,
 	), "geometry renderer setup failed")
+	_expect_initial_geometry_state(renderer, topology, state, torch_renderer, texture_set)
 	coordinator.set_player(player)
 	coordinator.seals_opened.connect(renderer.open_seals)
 	coordinator.encounter_summary_changed.connect(_on_summary_changed)
@@ -204,15 +220,42 @@ func _run() -> void:
 	_expect(runtime.get_active_count() == unrelated_ids.size(), "failed boundary activation spawned encounter entities")
 
 	var parent_seal := renderer._seal_meshes[room.parent_door_id] as MeshInstance3D
-	_expect(not parent_seal.visible and is_equal_approx(parent_seal.transparency, 1.0), "ready root incoming doorway retained a seal")
-	_expect(is_equal_approx(float((renderer._room_materials[room_id] as ShaderMaterial).get_shader_parameter("reveal_amount")), 1.0), "ready root room did not begin revealed")
+	_expect(
+		not parent_seal.visible \
+			and is_equal_approx(parent_seal.transparency, 1.0) \
+			and parent_seal.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF,
+		"ready root incoming doorway retained visible or shadow-casting seal geometry",
+	)
+	var root_room_mesh := renderer._room_meshes[room_id] as MeshInstance3D
+	_expect(
+		root_room_mesh.visible \
+			and is_zero_approx(root_room_mesh.transparency) \
+			and root_room_mesh.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_ON,
+		"ready root room did not begin fully visible and shadow-casting",
+	)
 	var revealed_child_room_id := room.child_room_ids[0]
-	var child_material := renderer._room_materials[revealed_child_room_id] as ShaderMaterial
-	_expect(is_zero_approx(float(child_material.get_shader_parameter("reveal_amount"))), "locked child branch did not begin completely dark")
+	var child_mesh := renderer._room_meshes[revealed_child_room_id] as MeshInstance3D
+	_expect(
+		not child_mesh.visible \
+			and is_equal_approx(child_mesh.transparency, 1.0) \
+			and child_mesh.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF,
+		"locked child branch remained visible or shadow-casting",
+	)
 	for torch_cell in renderer._room_torch_cells[revealed_child_room_id] as Array[Vector3i]:
-		_expect(is_zero_approx(_torch_reveal_strength(torch_renderer, torch_cell)), "locked child branch retained a visible torch")
+		_expect_torch_state(torch_renderer, torch_cell, 0.0, "locked child branch")
 	player.global_position = Vector3(constrained_spawn_cells[0]) + Vector3(0.5, 0.0, 0.5)
 	var sealed_before_activation := state.get_sealed_door_ids()
+	var visible_seal_id := _find_sealed_door_for_room(room, sealed_before_activation)
+	_expect(visible_seal_id >= 0, "ready root room had no visible authored seal to open")
+	var visible_seal := renderer._seal_meshes.get(visible_seal_id) as MeshInstance3D
+	_expect(
+		visible_seal != null \
+			and visible_seal.visible \
+			and is_zero_approx(visible_seal.transparency) \
+			and visible_seal.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_ON \
+			and visible_seal.material_override == _shared_terrain_material(renderer),
+		"ready root authored seal was not opaque, shadow-casting, and terrain-textured",
+	)
 	coordinator.tick()
 	var progress := _room_progress(state, room_id)
 	_expect(progress.status == LevelEncounterState.RoomStatus.ACTIVE, "fully contained player did not activate the ready room")
@@ -384,13 +427,27 @@ func _run() -> void:
 		tick_driver.queue_free()
 
 	var defeat_iterations := 0
+	var observed_clear_transition_start := false
 	while state.get_active_room_ids().has(room_id) and defeat_iterations < LevelRoomEncounterDefinition.MAX_ENEMY_COUNT + 2:
 		progress = _room_progress(state, room_id)
 		var runtime_id := _first_runtime_id(progress.active_entity_ids)
 		if runtime_id <= 0:
 			break
+		var clears_room := progress.next_spawn_index == progress.enemy_ids.size() \
+			and progress.defeated_count + 1 == progress.enemy_ids.size() \
+			and progress.active_entity_ids.size() == 1
 		var result := runtime.try_apply_damage(runtime_id, 10000.0)
 		_expect(result != null and result.defeated, "configured encounter enemy defeat failed at iteration %d" % defeat_iterations)
+		if clears_room:
+			observed_clear_transition_start = true
+			_expect(
+				visible_seal != null \
+					and visible_seal.visible \
+					and is_zero_approx(visible_seal.transparency) \
+					and visible_seal.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF,
+				"opening a visible seal did not disable its shadow before fading",
+			)
+			_expect_room_discovery_start(renderer, topology, state, torch_renderer, revealed_child_room_id)
 		await physics_frame
 		coordinator.tick()
 		defeat_iterations += 1
@@ -402,6 +459,7 @@ func _run() -> void:
 	_expect(progress.defeated_count == progress.enemy_ids.size(), "room cleared before every configured enemy died")
 	_expect(progress.active_entity_ids.is_empty(), "cleared room retained assigned runtime IDs")
 	_expect(_cleared_room_ids == [room_id], "clear signal did not identify exactly the cleared room")
+	_expect(observed_clear_transition_start, "room clearance did not expose the seal and branch transition start")
 	_expect(second_progress != null and second_progress.status == LevelEncounterState.RoomStatus.ACTIVE, "clearing one room stopped the other wave")
 	var remaining_summary := state.get_summary()
 	_expect(remaining_summary.active_wave_count == 1, "clearing one of two waves lost the remaining aggregate")
@@ -420,19 +478,27 @@ func _run() -> void:
 		var child_room := topology.get_room(child_room_id)
 		_expect(_room_progress(state, child_room_id).status == LevelEncounterState.RoomStatus.READY, "cleared room did not ready child %d" % child_room_id)
 		_expect(not state.get_sealed_door_ids().has(child_room.parent_door_id), "cleared room did not open child seal %d" % child_room.parent_door_id)
-	var fading_seal_id := -1
-	for seal_id in sealed_before_activation:
-		if not state.get_sealed_door_ids().has(seal_id):
-			fading_seal_id = seal_id
-			break
-	_expect(fading_seal_id >= 0, "room clear did not open a visible seal")
-	var fading_seal := renderer._seal_meshes.get(fading_seal_id) as MeshInstance3D
-	_expect(fading_seal != null and fading_seal.visible and fading_seal.transparency < 1.0, "opened seal disappeared without fading")
+	await create_timer(LevelGeometryRenderer.TRANSITION_SECONDS * 0.35).timeout
+	_expect(
+		visible_seal != null \
+			and visible_seal.visible \
+			and visible_seal.transparency > 0.0 \
+			and visible_seal.transparency < 1.0 \
+			and visible_seal.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF,
+		"opened seal did not fade without casting shadows",
+	)
+	_expect_room_discovery_midpoint(renderer, topology, state, torch_renderer, revealed_child_room_id)
 	await create_timer(LevelGeometryRenderer.TRANSITION_SECONDS + 0.05).timeout
-	_expect(fading_seal != null and not fading_seal.visible and is_equal_approx(fading_seal.transparency, 1.0), "opened seal did not finish fading")
-	_expect(is_equal_approx(float(child_material.get_shader_parameter("reveal_amount")), 1.0), "unlocked child branch did not finish fading in")
+	_expect(
+		visible_seal != null \
+			and not visible_seal.visible \
+			and is_equal_approx(visible_seal.transparency, 1.0) \
+			and visible_seal.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF,
+		"opened seal did not finish hidden and non-shadowing",
+	)
+	_expect_room_discovery_complete(renderer, topology, state, torch_renderer, revealed_child_room_id)
 	for torch_cell in renderer._room_torch_cells[revealed_child_room_id] as Array[Vector3i]:
-		_expect(is_equal_approx(_torch_reveal_strength(torch_renderer, torch_cell), 1.0), "unlocked child branch torch did not finish fading in")
+		_expect_torch_state(torch_renderer, torch_cell, 1.0, "unlocked child branch")
 	if gate_path.size() == 2:
 		var start_cell := gate_path[0]
 		var goal_cell := gate_path[1]
@@ -652,6 +718,197 @@ func _first_runtime_id(active_entity_ids: Dictionary) -> int:
 
 func _room_progress(state: LevelEncounterState, room_id: int) -> LevelEncounterState.RoomProgress:
 	return state._rooms[room_id] as LevelEncounterState.RoomProgress
+
+func _find_sealed_door_for_room(room: LevelEncounterRoom, sealed_door_ids: Array[int]) -> int:
+	for door_id in room.door_ids:
+		if sealed_door_ids.has(door_id):
+			return door_id
+	return -1
+
+func _expect_initial_geometry_state(
+	renderer: LevelGeometryRenderer,
+	topology: LevelEncounterTopology,
+	state: LevelEncounterState,
+	torch_renderer: TorchRenderer,
+	texture_set: BlockTextureSet,
+) -> void:
+	var terrain_material := _shared_terrain_material(renderer)
+	_expect(terrain_material != null, "geometry renderer did not retain one shared terrain material")
+	if terrain_material == null:
+		return
+	_expect(terrain_material.shader != null and terrain_material.shader.resource_path == "res://levels/presentation/level_terrain.gdshader", "geometry renderer did not use the level terrain shader")
+	_expect(terrain_material.get_shader_parameter("terrain_textures") == texture_set.texture_array, "geometry renderer did not bind the terrain texture array")
+	var entry_mesh := renderer.get_node_or_null("EntryGeometry") as MeshInstance3D
+	_expect(
+		entry_mesh != null \
+			and entry_mesh.visible \
+			and is_zero_approx(entry_mesh.transparency) \
+			and entry_mesh.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_ON \
+			and entry_mesh.material_override == terrain_material,
+		"entry geometry did not use the opaque shared terrain presentation",
+	)
+	var discovered_room_ids := state.get_discovered_room_ids()
+	var sealed_door_ids := state.get_sealed_door_ids()
+	for room_id in topology.get_room_ids():
+		var discovered := discovered_room_ids.has(room_id)
+		var room_mesh := renderer._room_meshes.get(room_id) as MeshInstance3D
+		_expect(room_mesh != null and room_mesh.material_override == terrain_material, "room %d did not use the shared terrain material" % room_id)
+		if room_mesh != null:
+			_expect(room_mesh.visible == discovered, "room %d visibility did not match discovery" % room_id)
+			_expect(is_equal_approx(room_mesh.transparency, 0.0 if discovered else 1.0), "room %d transparency did not match discovery" % room_id)
+			_expect(
+				room_mesh.cast_shadow == (GeometryInstance3D.SHADOW_CASTING_SETTING_ON if discovered else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF),
+				"room %d shadow state did not match discovery" % room_id,
+			)
+		for torch_cell in renderer._room_torch_cells[room_id] as Array[Vector3i]:
+			_expect_torch_state(torch_renderer, torch_cell, 1.0 if discovered else 0.0, "room %d" % room_id)
+	for doorway in topology.get_doorways():
+		var seal := renderer._seal_meshes.get(doorway.door_id) as MeshInstance3D
+		var owner_discovered := discovered_room_ids.has(doorway.room_id)
+		var expected_visible := sealed_door_ids.has(doorway.door_id) and owner_discovered
+		_expect(seal != null and seal.material_override == terrain_material, "seal %d did not use the authored shared terrain material" % doorway.door_id)
+		_expect(_seal_uses_authored_texture_layers(seal, doorway.fill_block_id, texture_set), "seal %d did not retain its authored fill-block texture layers" % doorway.door_id)
+		if seal != null:
+			_expect(seal.visible == expected_visible, "seal %d visibility ignored its seal or discovery state" % doorway.door_id)
+			_expect(is_equal_approx(seal.transparency, 0.0 if expected_visible else 1.0), "seal %d transparency ignored its seal or discovery state" % doorway.door_id)
+			_expect(
+				seal.cast_shadow == (GeometryInstance3D.SHADOW_CASTING_SETTING_ON if expected_visible else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF),
+				"seal %d shadow state ignored its seal or discovery state" % doorway.door_id,
+			)
+
+func _expect_room_discovery_start(
+	renderer: LevelGeometryRenderer,
+	topology: LevelEncounterTopology,
+	state: LevelEncounterState,
+	torch_renderer: TorchRenderer,
+	room_id: int,
+) -> void:
+	var room_mesh := renderer._room_meshes.get(room_id) as MeshInstance3D
+	_expect(
+		room_mesh != null \
+			and room_mesh.visible \
+			and is_equal_approx(room_mesh.transparency, 1.0) \
+			and room_mesh.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF,
+		"discovered branch did not start fully transparent and non-shadowing",
+	)
+	for torch_cell in renderer._room_torch_cells[room_id] as Array[Vector3i]:
+		_expect_torch_state(torch_renderer, torch_cell, 0.0, "discovered branch fade start")
+	_expect_owned_seals(renderer, topology, state, room_id, 1.0, false)
+
+func _expect_room_discovery_midpoint(
+	renderer: LevelGeometryRenderer,
+	topology: LevelEncounterTopology,
+	state: LevelEncounterState,
+	torch_renderer: TorchRenderer,
+	room_id: int,
+) -> void:
+	var room_mesh := renderer._room_meshes.get(room_id) as MeshInstance3D
+	_expect(
+		room_mesh != null \
+			and room_mesh.visible \
+			and room_mesh.transparency > 0.0 \
+			and room_mesh.transparency < 1.0 \
+			and room_mesh.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF,
+		"discovered branch did not fade in without casting shadows",
+	)
+	for torch_cell in renderer._room_torch_cells[room_id] as Array[Vector3i]:
+		var strength := _torch_reveal_strength(torch_renderer, torch_cell)
+		_expect(strength > 0.0 and strength < 1.0, "discovered branch torch did not fade in")
+		_expect_torch_light_state(torch_renderer, torch_cell, true, "discovered branch fade")
+	_expect_owned_seals(renderer, topology, state, room_id, room_mesh.transparency, false)
+
+func _expect_room_discovery_complete(
+	renderer: LevelGeometryRenderer,
+	topology: LevelEncounterTopology,
+	state: LevelEncounterState,
+	torch_renderer: TorchRenderer,
+	room_id: int,
+) -> void:
+	var room_mesh := renderer._room_meshes.get(room_id) as MeshInstance3D
+	_expect(
+		room_mesh != null \
+			and room_mesh.visible \
+			and is_zero_approx(room_mesh.transparency) \
+			and room_mesh.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_ON,
+		"discovered branch did not finish opaque, visible, and shadow-casting",
+	)
+	for torch_cell in renderer._room_torch_cells[room_id] as Array[Vector3i]:
+		_expect_torch_state(torch_renderer, torch_cell, 1.0, "discovered branch fade completion")
+	_expect_owned_seals(renderer, topology, state, room_id, 0.0, true)
+
+func _expect_owned_seals(
+	renderer: LevelGeometryRenderer,
+	topology: LevelEncounterTopology,
+	state: LevelEncounterState,
+	room_id: int,
+	visible_transparency: float,
+	visible_casts_shadow: bool,
+) -> void:
+	var sealed_door_ids := state.get_sealed_door_ids()
+	for doorway in topology.get_doorways():
+		if doorway.room_id != room_id:
+			continue
+		var seal := renderer._seal_meshes.get(doorway.door_id) as MeshInstance3D
+		var remains_sealed := sealed_door_ids.has(doorway.door_id)
+		_expect(seal != null and seal.material_override == _shared_terrain_material(renderer), "room %d seal %d lost the shared terrain material" % [room_id, doorway.door_id])
+		if seal == null:
+			continue
+		if remains_sealed:
+			_expect(seal.visible and is_equal_approx(seal.transparency, visible_transparency), "room %d sealed wall %d did not follow branch visibility" % [room_id, doorway.door_id])
+			_expect(
+				seal.cast_shadow == (GeometryInstance3D.SHADOW_CASTING_SETTING_ON if visible_casts_shadow else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF),
+				"room %d sealed wall %d used the wrong shadow state" % [room_id, doorway.door_id],
+			)
+		else:
+			_expect(
+				not seal.visible \
+					and is_equal_approx(seal.transparency, 1.0) \
+					and seal.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF,
+				"room %d opened incoming seal %d became visible during discovery" % [room_id, doorway.door_id],
+			)
+
+func _expect_torch_state(renderer: TorchRenderer, cell: Vector3i, expected_strength: float, context: String) -> void:
+	var root_node := renderer.torch_instances.get(cell) as Node3D
+	_expect(root_node != null, "%s omitted torch %s" % [context, cell])
+	if root_node == null:
+		return
+	var stem := root_node.get_node("Stem") as MeshInstance3D
+	var flame := root_node.get_node("Flame") as MeshInstance3D
+	var visible := expected_strength > 0.0
+	_expect(stem.visible == visible and is_equal_approx(stem.transparency, 1.0 - expected_strength), "%s torch %s stem visibility was incorrect" % [context, cell])
+	_expect(flame.visible == visible and is_equal_approx(flame.transparency, 1.0 - expected_strength), "%s torch %s flame visibility was incorrect" % [context, cell])
+	_expect_torch_light_state(renderer, cell, visible, context)
+
+func _expect_torch_light_state(renderer: TorchRenderer, cell: Vector3i, expected_visible: bool, context: String) -> void:
+	var light := renderer.torch_light_nodes.get(cell) as OmniLight3D
+	_expect(light != null, "%s omitted torch light %s" % [context, cell])
+	if light == null:
+		return
+	_expect(light.visible == expected_visible, "%s torch light %s visibility was incorrect" % [context, cell])
+	_expect((light.light_energy > 0.0) == expected_visible, "%s torch light %s energy was incorrect" % [context, cell])
+	_expect(not light.shadow_enabled, "%s torch light %s cast a shadow" % [context, cell])
+
+func _seal_uses_authored_texture_layers(seal: MeshInstance3D, block_id: int, texture_set: BlockTextureSet) -> bool:
+	var mesh := seal.mesh as ArrayMesh if seal != null else null
+	if mesh == null or mesh.get_surface_count() != 1:
+		return false
+	var arrays := mesh.surface_get_arrays(0)
+	var texture_layers := arrays[Mesh.ARRAY_TEX_UV2] as PackedVector2Array
+	if texture_layers.is_empty():
+		return false
+	var expected_layers: Dictionary = {
+		int(texture_set.top_layers[block_id]): true,
+		int(texture_set.side_layers[block_id]): true,
+		int(texture_set.bottom_layers[block_id]): true,
+	}
+	for layer in texture_layers:
+		if not expected_layers.has(roundi(layer.x)) or not is_zero_approx(layer.y):
+			return false
+	return true
+
+func _shared_terrain_material(renderer: LevelGeometryRenderer) -> ShaderMaterial:
+	var entry_mesh := renderer.get_node_or_null("EntryGeometry") as MeshInstance3D
+	return entry_mesh.material_override as ShaderMaterial if entry_mesh != null else null
 
 func _torch_reveal_strength(renderer: TorchRenderer, cell: Vector3i) -> float:
 	var root_node := renderer.torch_instances.get(cell) as Node3D
