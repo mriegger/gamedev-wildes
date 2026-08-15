@@ -83,6 +83,7 @@ func _run() -> void:
 	if topology == null or state == null:
 		_finish()
 		return
+	await _test_production_room_cap(topology, generation.layout, block_catalog, entity_catalog)
 
 	var room_id := _find_ready_root_with_child(topology, state)
 	_expect(room_id >= 0, "generated topology has no ready root room with a child")
@@ -108,35 +109,86 @@ func _run() -> void:
 
 	var runtime := EntityRuntime.new()
 	var coordinator := LevelEncounterCoordinator.new()
-	var renderer := LevelDoorRenderer.new()
+	var renderer := LevelGeometryRenderer.new()
+	var torch_renderer := TorchRenderer.new()
 	var hud := _make_hud()
 	var player := (load(PLAYER_SCENE_PATH) as PackedScene).instantiate() as PlayerMotor
 	runtime.name = "DungeonEntities"
 	coordinator.name = "EncounterCoordinator"
-	renderer.name = "Doors"
+	renderer.name = "Geometry"
+	torch_renderer.name = "Torches"
 	player.name = "Player"
 	player.process_mode = Node.PROCESS_MODE_DISABLED
 	root.add_child(runtime)
 	root.add_child(coordinator)
+	root.add_child(torch_renderer)
 	root.add_child(renderer)
 	root.add_child(hud)
 	root.add_child(player)
 	runtime.setup(entity_catalog, level_state, 64, 64, EntityNavigationLimits.new(48, 2048, 2))
 	_expect(coordinator.setup(topology, state, level_state, runtime, entity_catalog, generation.layout.seed_value), "encounter coordinator setup failed")
-	_expect(renderer.setup(topology.get_doorways(), state.get_door_locks(), block_catalog), "door renderer setup failed")
+	_expect(int(coordinator._capacity_by_room[room_id]) == 3, "static room capacity did not retain the three valid spawn cells")
+	_expect(
+		int(coordinator._capacity_by_room[room_id]) <= LevelEncounterState.MAX_CONCURRENT_ENEMIES_PER_ROOM,
+		"coordinator static capacity exceeded the per-room enemy cap",
+	)
+	torch_renderer.setup(block_catalog, 0, 0.0)
+	var torch_attachments: Dictionary = {}
+	for torch in generation.layout.torches:
+		torch_attachments[torch.cell] = LevelSocketDefinition.vector_for(torch.wall_direction)
+	torch_renderer.spawn_torches(torch_attachments)
+	var incompatible_shader := Shader.new()
+	incompatible_shader.code = "shader_type spatial; void fragment() { ALBEDO = vec3(1.0); }"
+	_expect(not renderer.setup(
+		generation.layout,
+		level_state,
+		topology,
+		state.get_door_locks(),
+		state.get_revealed_room_ids(),
+		BlockTextureSet.new(block_catalog),
+		incompatible_shader,
+		torch_renderer,
+	), "geometry renderer accepted a shader without the reveal contract")
+	_expect(renderer.get_child_count() == 0, "incompatible shader setup partially committed scene nodes")
+	var incomplete_locks := state.get_door_locks()
+	incomplete_locks.erase(incomplete_locks.keys()[0])
+	_expect(not renderer.setup(
+		generation.layout,
+		level_state,
+		topology,
+		incomplete_locks,
+		state.get_revealed_room_ids(),
+		BlockTextureSet.new(block_catalog),
+		definition.presentation.terrain_shader,
+		torch_renderer,
+	), "geometry renderer accepted incomplete doorway locks")
+	_expect(renderer.get_child_count() == 0, "failed geometry setup partially committed scene nodes")
+	for torch_cell in torch_attachments:
+		_expect(is_equal_approx(_torch_reveal_strength(torch_renderer, torch_cell as Vector3i), 1.0), "failed geometry setup partially changed torch reveal state")
+	_expect(renderer.setup(
+		generation.layout,
+		level_state,
+		topology,
+		state.get_door_locks(),
+		state.get_revealed_room_ids(),
+		BlockTextureSet.new(block_catalog),
+		definition.presentation.terrain_shader,
+		torch_renderer,
+	), "geometry renderer setup failed")
 	coordinator.set_player(player)
 	coordinator.door_locks_changed.connect(renderer.apply_door_locks)
 	coordinator.encounter_progress_changed.connect(_on_progress_changed)
 	coordinator.encounter_progress_changed.connect(hud.show_encounter)
 	coordinator.encounter_cleared.connect(_on_encounter_cleared)
 	coordinator.encounter_cleared.connect(hud.show_cleared)
+	coordinator.encounter_cleared.connect(func() -> void: renderer.reveal_rooms(state.get_revealed_room_ids()))
 
 	var unrelated_ids := _spawn_unrelated_entities(runtime, topology, level_state, entity_catalog, 2)
 	_expect(unrelated_ids.size() == 2, "could not create two unrelated dungeon entities")
 	var parent_doorway := _find_doorway(topology, room.parent_door_id)
 	_expect(parent_doorway != null, "root room parent doorway is missing")
 	if parent_doorway == null:
-		await _cleanup(runtime, coordinator, renderer, hud, player)
+		await _cleanup(runtime, coordinator, renderer, torch_renderer, hud, player)
 		_finish()
 		return
 
@@ -148,8 +200,14 @@ func _run() -> void:
 	_expect(_room_progress(state, room_id).status == LevelEncounterState.RoomStatus.READY, "failed boundary activation changed room state")
 	_expect(runtime.get_active_count() == unrelated_ids.size(), "failed boundary activation spawned encounter entities")
 
-	var parent_renderer_root := renderer._roots_by_id[room.parent_door_id] as Node3D
-	_expect(parent_renderer_root.position.y > 0.0, "ready root incoming gate was not visually open")
+	var parent_barrier := renderer._barrier_meshes[room.parent_door_id] as MeshInstance3D
+	_expect(not parent_barrier.visible and is_equal_approx(parent_barrier.transparency, 1.0), "ready root incoming doorway retained a fill block")
+	_expect(is_equal_approx(float((renderer._room_materials[room_id] as ShaderMaterial).get_shader_parameter("reveal_amount")), 1.0), "ready root room did not begin revealed")
+	var revealed_child_room_id := room.child_room_ids[0]
+	var child_material := renderer._room_materials[revealed_child_room_id] as ShaderMaterial
+	_expect(is_zero_approx(float(child_material.get_shader_parameter("reveal_amount"))), "locked child branch did not begin completely dark")
+	for torch_cell in renderer._room_torch_cells[revealed_child_room_id] as Array[Vector3i]:
+		_expect(is_zero_approx(_torch_reveal_strength(torch_renderer, torch_cell)), "locked child branch retained a visible torch")
 	player.global_position = Vector3(constrained_spawn_cells[0]) + Vector3(0.5, 0.0, 0.5)
 	coordinator.tick()
 	var progress := _room_progress(state, room_id)
@@ -164,15 +222,13 @@ func _run() -> void:
 		(hud.get_node("Panel/Margin/Label") as Label).text == "Room Locked  •  2 active  •  %d pending" % expected_pending,
 		"HUD did not present separate active and pending encounter counts",
 	)
-	_expect(parent_renderer_root.position.y > 0.0, "door presentation moved before its animation advanced")
-	await create_timer(LevelDoorRenderer.TRANSITION_SECONDS + 0.05).timeout
-	_expect(is_zero_approx(parent_renderer_root.position.y), "locked portcullis did not finish lowering in 0.35 seconds")
+	_expect(parent_barrier.visible and is_zero_approx(parent_barrier.transparency), "room activation did not restore its authored doorway fill")
 
 	for door_id in room.door_ids:
 		_expect(bool(state.get_door_locks()[door_id]), "activation did not logically lock room door %d" % door_id)
 		var doorway := _find_doorway(topology, door_id)
 		for cell in doorway.aperture_cells:
-			_expect(level_state.get_cell_value(cell) == BlockId.Type.WOOD_PLANKS, "locked door did not project wood planks at %s" % cell)
+			_expect(level_state.get_cell_value(cell) == doorway.fill_block_id, "locked door did not project its authored fill at %s" % cell)
 			_expect(level_state.is_solid(cell), "locked door did not block movement at %s" % cell)
 			_expect(level_state.is_raycast_solid(cell), "locked door did not block raycasts at %s" % cell)
 
@@ -262,8 +318,12 @@ func _run() -> void:
 		var child_room := topology.get_room(child_room_id)
 		_expect(_room_progress(state, child_room_id).status == LevelEncounterState.RoomStatus.READY, "cleared room did not ready child %d" % child_room_id)
 		_expect(not bool(state.get_door_locks()[child_room.parent_door_id]), "cleared room did not open child gate %d" % child_room.parent_door_id)
-	await create_timer(LevelDoorRenderer.TRANSITION_SECONDS + 0.05).timeout
-	_expect(parent_renderer_root.position.y > 0.0, "cleared portcullis did not finish raising in 0.35 seconds")
+	_expect(parent_barrier.visible and parent_barrier.transparency < 1.0, "cleared doorway fill disappeared without fading")
+	await create_timer(LevelGeometryRenderer.TRANSITION_SECONDS + 0.05).timeout
+	_expect(not parent_barrier.visible and is_equal_approx(parent_barrier.transparency, 1.0), "cleared doorway fill did not finish fading")
+	_expect(is_equal_approx(float(child_material.get_shader_parameter("reveal_amount")), 1.0), "unlocked child branch did not finish fading in")
+	for torch_cell in renderer._room_torch_cells[revealed_child_room_id] as Array[Vector3i]:
+		_expect(is_equal_approx(_torch_reveal_strength(torch_renderer, torch_cell), 1.0), "unlocked child branch torch did not finish fading in")
 	if gate_path.size() == 2:
 		var start_cell := gate_path[0]
 		var goal_cell := gate_path[1]
@@ -274,7 +334,7 @@ func _run() -> void:
 		_expect(VoxelLineOfSight.has_clear_path(level_state, ray_origin, ray_target), "line of sight did not reopen through the cleared incoming gate")
 		_expect(not VoxelBodySolver.collides_at(level_state, _aperture_body_position(parent_doorway), player.player_width, player.player_height, false), "player body still collided with the cleared gate")
 
-	await _cleanup(runtime, coordinator, renderer, hud, player)
+	await _cleanup(runtime, coordinator, renderer, torch_renderer, hud, player)
 	_finish()
 
 func _find_ready_root_with_child(topology: LevelEncounterTopology, state: LevelEncounterState) -> int:
@@ -313,6 +373,35 @@ func _test_module_spawn_geometry(level_catalog: LevelCatalog, source_entity: Ent
 			valid_count += 1
 	_expect(valid_count > 0, "module spawn geometry did not retain any fitting candidate")
 	_expect(LevelEncounterCatalogValidator._has_usable_candidate(module, entity), "catalog validation rejected a module with a fitting candidate subset")
+
+func _test_production_room_cap(
+	topology: LevelEncounterTopology,
+	layout: LevelLayout,
+	block_catalog: BlockCatalog,
+	entity_catalog: EntityCatalog,
+) -> void:
+	var state := LevelEncounterState.create(topology, layout.seed_value)
+	var level_state := LevelState.from_layout(layout, block_catalog)
+	var runtime := EntityRuntime.new()
+	var coordinator := LevelEncounterCoordinator.new()
+	root.add_child(runtime)
+	root.add_child(coordinator)
+	runtime.setup(entity_catalog, level_state, 64, 64, EntityNavigationLimits.new(48, 2048, 2))
+	_expect(coordinator.setup(topology, state, level_state, runtime, entity_catalog, layout.seed_value), "production room-cap coordinator setup failed")
+	var master_room_id := -1
+	for room_id in topology.get_room_ids():
+		var capacity := int(coordinator._capacity_by_room[room_id])
+		_expect(capacity <= LevelEncounterState.MAX_CONCURRENT_ENEMIES_PER_ROOM, "production room capacity exceeded twenty: %d" % room_id)
+		if state.get_configured_enemy_ids(room_id).size() == 40:
+			master_room_id = room_id
+			_expect(capacity == LevelEncounterState.MAX_CONCURRENT_ENEMIES_PER_ROOM, "production master room did not expose twenty concurrent slots")
+	_expect(master_room_id >= 0, "production topology has no forty-enemy master room")
+	coordinator.shutdown()
+	runtime.shutdown()
+	coordinator.queue_free()
+	runtime.queue_free()
+	await process_frame
+	await process_frame
 
 func _spawn_unrelated_entities(
 	runtime: EntityRuntime,
@@ -405,6 +494,12 @@ func _first_runtime_id(active_entity_ids: Dictionary) -> int:
 func _room_progress(state: LevelEncounterState, room_id: int) -> LevelEncounterState.RoomProgress:
 	return state._rooms[room_id] as LevelEncounterState.RoomProgress
 
+func _torch_reveal_strength(renderer: TorchRenderer, cell: Vector3i) -> float:
+	var root_node := renderer.torch_instances.get(cell) as Node3D
+	assert(root_node != null)
+	var stem := root_node.get_node("Stem") as MeshInstance3D
+	return 0.0 if not stem.visible else 1.0 - stem.transparency
+
 func _make_hud() -> LevelEncounterHUD:
 	var hud := LevelEncounterHUD.new()
 	var panel := PanelContainer.new()
@@ -434,7 +529,8 @@ func _on_encounter_cleared() -> void:
 func _cleanup(
 	runtime: EntityRuntime,
 	coordinator: LevelEncounterCoordinator,
-	renderer: LevelDoorRenderer,
+	renderer: LevelGeometryRenderer,
+	torch_renderer: TorchRenderer,
 	hud: LevelEncounterHUD,
 	player: PlayerMotor,
 ) -> void:
@@ -442,6 +538,7 @@ func _cleanup(
 	runtime.shutdown()
 	coordinator.queue_free()
 	renderer.queue_free()
+	torch_renderer.queue_free()
 	hud.queue_free()
 	player.queue_free()
 	runtime.queue_free()

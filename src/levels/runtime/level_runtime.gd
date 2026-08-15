@@ -2,18 +2,17 @@ extends Node3D
 class_name LevelRuntime
 
 const DUNGEON_TORCH_SHADOW_FADE_SECONDS: float = 0.45
-const MAX_ACTIVE_ENEMIES: int = LevelRoomEncounterDefinition.MAX_ENEMY_COUNT
-const MAX_RETIRING_ENEMIES: int = LevelRoomEncounterDefinition.MAX_ENEMY_COUNT
+const MAX_ACTIVE_ENTITIES: int = LevelRoomEncounterDefinition.MAX_ENEMY_COUNT
+const MAX_RETIRING_ENTITIES: int = LevelRoomEncounterDefinition.MAX_ENEMY_COUNT
 const MAX_NAVIGATION_SEARCH_RADIUS: int = 48
 const MAX_NAVIGATION_SEARCH_NODES: int = 2048
 const MAX_NAVIGATION_SEARCHES_PER_TICK: int = 2
 
-@onready var _geometry: MeshInstance3D = $Geometry
+@onready var _geometry_renderer: LevelGeometryRenderer = $Geometry as LevelGeometryRenderer
 @onready var _world_environment: WorldEnvironment = $WorldEnvironment
 @onready var _torch_renderer: TorchRenderer = $Torches
 @onready var _return_point: Marker3D = $ReturnPoint
 @onready var _return_door: MeshInstance3D = $ReturnDoor
-@onready var _door_renderer: LevelDoorRenderer = $Doors as LevelDoorRenderer
 @onready var _encounter_hud: LevelEncounterHUD = $EncounterHUD as LevelEncounterHUD
 
 var _state: LevelState
@@ -23,7 +22,6 @@ var _entity_runtime: EntityRuntime
 var _encounter_coordinator: LevelEncounterCoordinator
 var _player: PlayerMotor
 var _level_environment: Environment
-var _terrain_material: ShaderMaterial
 
 func _ready() -> void:
 	visible = false
@@ -55,8 +53,8 @@ func setup(
 	_entity_runtime.setup(
 		entity_catalog,
 		_state,
-		MAX_ACTIVE_ENEMIES,
-		MAX_RETIRING_ENEMIES,
+		MAX_ACTIVE_ENTITIES,
+		MAX_RETIRING_ENTITIES,
 		EntityNavigationLimits.new(
 			MAX_NAVIGATION_SEARCH_RADIUS,
 			MAX_NAVIGATION_SEARCH_NODES,
@@ -76,22 +74,23 @@ func setup(
 	))
 	_encounter_coordinator.door_locks_changed.connect(_on_door_locks_changed)
 	_encounter_coordinator.encounter_progress_changed.connect(_encounter_hud.show_encounter)
-	_encounter_coordinator.encounter_cleared.connect(_encounter_hud.show_cleared)
-	assert(_door_renderer.setup(_topology.get_doorways(), _encounter_state.get_door_locks(), block_catalog))
+	_encounter_coordinator.encounter_cleared.connect(_on_encounter_cleared)
 	_level_environment = _create_environment(presentation)
-	_terrain_material = ShaderMaterial.new()
-	_terrain_material.shader = presentation.terrain_shader
-	_terrain_material.set_shader_parameter("terrain_textures", texture_set.texture_array)
-	var mesher := LevelMesher.new(texture_set)
-	_geometry.mesh = mesher.create_mesh(_state)
-	assert(_geometry.mesh != null)
-	_geometry.material_override = _terrain_material
-	_geometry.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	_torch_renderer.setup(block_catalog, settings.dungeon_torch_shadow_count, DUNGEON_TORCH_SHADOW_FADE_SECONDS)
 	var torch_attachments: Dictionary = {}
 	for torch in layout.torches:
 		torch_attachments[torch.cell] = LevelSocketDefinition.vector_for(torch.wall_direction)
 	_torch_renderer.spawn_torches(torch_attachments)
+	assert(_geometry_renderer.setup(
+		layout,
+		_state,
+		_topology,
+		_encounter_state.get_door_locks(),
+		_encounter_state.get_revealed_room_ids(),
+		texture_set,
+		presentation.terrain_shader,
+		_torch_renderer,
+	))
 	_return_point.position = _state.get_return_door_position()
 	_setup_return_door(block_catalog, presentation.return_door_block_id)
 	suspend_simulation()
@@ -123,12 +122,12 @@ func suspend_simulation() -> void:
 	set_process(false)
 	set_physics_process(false)
 	_entity_runtime.suspend()
-	_door_renderer.process_mode = Node.PROCESS_MODE_DISABLED
+	_geometry_renderer.process_mode = Node.PROCESS_MODE_DISABLED
 	_encounter_hud.process_mode = Node.PROCESS_MODE_DISABLED
 
 func _resume_simulation() -> void:
 	assert(_state != null)
-	_door_renderer.process_mode = Node.PROCESS_MODE_INHERIT
+	_geometry_renderer.process_mode = Node.PROCESS_MODE_INHERIT
 	_encounter_hud.process_mode = Node.PROCESS_MODE_INHERIT
 	_entity_runtime.resume()
 	set_process(true)
@@ -158,7 +157,11 @@ func apply_settings(settings: GameSettings) -> void:
 	_torch_renderer.set_max_shadow_torches(settings.dungeon_torch_shadow_count)
 
 func _on_door_locks_changed(changes: Dictionary) -> void:
-	_door_renderer.apply_door_locks(changes)
+	_geometry_renderer.apply_door_locks(changes)
+
+func _on_encounter_cleared() -> void:
+	_geometry_renderer.reveal_rooms(_encounter_state.get_revealed_room_ids())
+	_encounter_hud.show_cleared()
 
 func _setup_return_door(block_catalog: BlockCatalog, door_block_id: int) -> void:
 	var mesh := BoxMesh.new()

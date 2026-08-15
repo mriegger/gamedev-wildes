@@ -26,7 +26,7 @@ class TransitionGame:
 			level_was_suspended_at_fade_start = not _level_runtime.is_processing() \
 				and not _level_runtime.is_physics_processing() \
 				and _level_runtime.get_entity_runtime().is_suspended() \
-				and _level_runtime._door_renderer.process_mode == Node.PROCESS_MODE_DISABLED \
+				and _level_runtime._geometry_renderer.process_mode == Node.PROCESS_MODE_DISABLED \
 				and _level_runtime._encounter_hud.process_mode == Node.PROCESS_MODE_DISABLED
 		_fade.visible = not is_zero_approx(alpha)
 		_fade.color = Color(0.0, 0.0, 0.0, alpha)
@@ -96,7 +96,7 @@ func _run_runtime_lifecycle(
 	_expect(not runtime.visible and not runtime.is_processing(), "runtime starts active at iteration %d" % iteration)
 	runtime.setup(layout, definition, block_catalog, texture_set, settings, load("res://entities/entity_catalog.tres") as EntityCatalog)
 	_expect(not runtime.is_processing() and not runtime.is_physics_processing() and runtime.get_entity_runtime().is_suspended(), "setup left dungeon simulation active at iteration %d" % iteration)
-	_expect(runtime._door_renderer.process_mode == Node.PROCESS_MODE_DISABLED and runtime._encounter_hud.process_mode == Node.PROCESS_MODE_DISABLED, "setup left dungeon presentation timers active at iteration %d" % iteration)
+	_expect(runtime._geometry_renderer.process_mode == Node.PROCESS_MODE_DISABLED and runtime._encounter_hud.process_mode == Node.PROCESS_MODE_DISABLED, "setup left dungeon presentation timers active at iteration %d" % iteration)
 	var state := runtime.get_voxel_space() as LevelState
 	_expect(state != null, "runtime did not expose LevelState at iteration %d" % iteration)
 	if state != null:
@@ -108,16 +108,28 @@ func _run_runtime_lifecycle(
 	var expected_return := runtime.to_global(Vector3(layout.return_door_cell) + Vector3(0.5, 0.0, 0.5))
 	_expect(runtime.get_spawn_position().is_equal_approx(expected_spawn), "runtime spawn position changed at iteration %d" % iteration)
 	_expect(runtime.get_return_door_position().is_equal_approx(expected_return), "runtime return position changed at iteration %d" % iteration)
-	var geometry := runtime.get_node("Geometry") as MeshInstance3D
+	var geometry := runtime.get_node("Geometry") as LevelGeometryRenderer
 	var environment_node := runtime.get_node("WorldEnvironment") as WorldEnvironment
 	var torch_renderer := runtime.get_node("Torches") as TorchRenderer
 	var return_door := runtime.get_node("ReturnDoor") as MeshInstance3D
-	_expect(geometry != null and geometry.mesh != null and geometry.mesh.get_surface_count() == 1, "runtime geometry was not built at iteration %d" % iteration)
-	_expect(geometry.material_override is ShaderMaterial, "runtime terrain material is not shader-backed at iteration %d" % iteration)
-	if geometry.material_override is ShaderMaterial:
-		var terrain_material := geometry.material_override as ShaderMaterial
-		_expect(terrain_material.shader != null and terrain_material.shader.resource_path == "res://levels/presentation/level_terrain.gdshader", "runtime terrain shader changed at iteration %d" % iteration)
+	_expect(geometry != null and geometry.get_node_or_null("EntryGeometry") is MeshInstance3D, "runtime entry geometry was not built at iteration %d" % iteration)
+	_expect(geometry != null and geometry._room_meshes.size() == runtime._topology.get_room_ids().size(), "runtime omitted room branch geometry at iteration %d" % iteration)
+	_expect(geometry != null and geometry._barrier_meshes.size() == runtime._topology.get_doorways().size(), "runtime omitted authored doorway fills at iteration %d" % iteration)
+	for material_value in geometry._room_materials.values():
+		var terrain_material := material_value as ShaderMaterial
+		_expect(terrain_material != null and terrain_material.shader.resource_path == "res://levels/presentation/level_terrain.gdshader", "runtime terrain shader changed at iteration %d" % iteration)
 		_expect(terrain_material.get_shader_parameter("terrain_textures") == texture_set.texture_array, "runtime terrain texture array changed at iteration %d" % iteration)
+	for room_id in runtime._topology.get_room_ids():
+		var progress := runtime._encounter_state._rooms[room_id] as LevelEncounterState.RoomProgress
+		var reveal_amount := float((geometry._room_materials[room_id] as ShaderMaterial).get_shader_parameter("reveal_amount"))
+		var expected_reveal := 0.0 if progress.status == LevelEncounterState.RoomStatus.LOCKED else 1.0
+		_expect(is_equal_approx(reveal_amount, expected_reveal), "runtime room branch reveal state changed at iteration %d room %d" % [iteration, room_id])
+		for torch_cell in geometry._room_torch_cells[room_id] as Array[Vector3i]:
+			var torch_root := torch_renderer.torch_instances.get(torch_cell) as Node3D
+			var torch_stem := torch_root.get_node("Stem") as MeshInstance3D
+			var torch_reveal := 0.0 if not torch_stem.visible else 1.0 - torch_stem.transparency
+			_expect(is_equal_approx(torch_reveal, expected_reveal), "runtime torch reveal state changed at iteration %d room %d" % [iteration, room_id])
+	_expect(runtime.get_node_or_null("Doors") == null, "runtime retained the removed sliding-door presentation at iteration %d" % iteration)
 	_expect(torch_renderer.torch_instances.size() == layout.torches.size(), "runtime spawned %d/%d authored torches at iteration %d" % [torch_renderer.torch_instances.size(), layout.torches.size(), iteration])
 	_expect((return_door.material_override as StandardMaterial3D).albedo_texture == block_catalog.get_definition(definition.presentation.return_door_block_id).side_texture, "runtime ignored the authored return-door block at iteration %d" % iteration)
 	for torch in layout.torches:
@@ -126,7 +138,7 @@ func _run_runtime_lifecycle(
 		runtime.activate()
 		_expect(runtime.visible and runtime.is_processing(), "activate failed at iteration %d cycle %d" % [iteration, cycle])
 		_expect(runtime.is_physics_processing() and not runtime.get_entity_runtime().is_suspended(), "activate did not resume dungeon simulation at iteration %d cycle %d" % [iteration, cycle])
-		_expect(runtime._door_renderer.process_mode == Node.PROCESS_MODE_INHERIT and runtime._encounter_hud.process_mode == Node.PROCESS_MODE_INHERIT, "activate did not resume dungeon presentation timers at iteration %d cycle %d" % [iteration, cycle])
+		_expect(runtime._geometry_renderer.process_mode == Node.PROCESS_MODE_INHERIT and runtime._encounter_hud.process_mode == Node.PROCESS_MODE_INHERIT, "activate did not resume dungeon presentation timers at iteration %d cycle %d" % [iteration, cycle])
 		_expect(environment_node.environment != null, "activate did not install the level environment at iteration %d cycle %d" % [iteration, cycle])
 		_expect(environment_node.environment.background_color == definition.presentation.background_color, "runtime ignored the authored background color at iteration %d cycle %d" % [iteration, cycle])
 		_expect(environment_node.environment.ambient_light_color == definition.presentation.ambient_light_color, "runtime ignored the authored ambient light at iteration %d cycle %d" % [iteration, cycle])
@@ -136,7 +148,7 @@ func _run_runtime_lifecycle(
 		runtime.deactivate()
 		_expect(not runtime.visible and not runtime.is_processing(), "deactivate failed at iteration %d cycle %d" % [iteration, cycle])
 		_expect(not runtime.is_processing() and not runtime.is_physics_processing() and runtime.get_entity_runtime().is_suspended(), "deactivate left dungeon simulation active at iteration %d cycle %d" % [iteration, cycle])
-		_expect(runtime._door_renderer.process_mode == Node.PROCESS_MODE_DISABLED and runtime._encounter_hud.process_mode == Node.PROCESS_MODE_DISABLED, "deactivate left dungeon presentation timers active at iteration %d cycle %d" % [iteration, cycle])
+		_expect(runtime._geometry_renderer.process_mode == Node.PROCESS_MODE_DISABLED and runtime._encounter_hud.process_mode == Node.PROCESS_MODE_DISABLED, "deactivate left dungeon presentation timers active at iteration %d cycle %d" % [iteration, cycle])
 		_expect(environment_node.environment == null, "deactivate retained the level environment at iteration %d cycle %d" % [iteration, cycle])
 	runtime.queue_free()
 	await process_frame
@@ -400,7 +412,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	game.player_stats.damage(game.player_stats.current_hp)
 	game._on_player_defeated()
 	_expect(defeated_runtime.get_entity_runtime().is_suspended() and not defeated_runtime.is_processing() and not defeated_runtime.is_physics_processing(), "dungeon defeat left encounter simulation active")
-	_expect(defeated_runtime._door_renderer.process_mode == Node.PROCESS_MODE_DISABLED and defeated_runtime._encounter_hud.process_mode == Node.PROCESS_MODE_DISABLED, "dungeon defeat left encounter presentation timers active")
+	_expect(defeated_runtime._geometry_renderer.process_mode == Node.PROCESS_MODE_DISABLED and defeated_runtime._encounter_hud.process_mode == Node.PROCESS_MODE_DISABLED, "dungeon defeat left encounter presentation timers active")
 	var completed_screen := game._death_screen
 	game._death_screen = null
 	completed_screen.queue_free()

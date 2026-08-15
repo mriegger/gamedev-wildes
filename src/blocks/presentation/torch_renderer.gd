@@ -20,6 +20,10 @@ var _shadow_target_positions: Dictionary = {}
 var _ordered_shadow_targets: Array[Vector3i] = []
 var _shadow_strengths: Dictionary = {}
 var _shadow_transition_active: bool = false
+var _torch_reveal_strengths: Dictionary = {}
+var _torch_stem_nodes: Dictionary = {}
+var _torch_flame_nodes: Dictionary = {}
+var _torch_emissive_energy: float
 var player_ref: Node3D
 
 var block_catalog: BlockCatalog
@@ -35,11 +39,15 @@ func setup(p_block_catalog: BlockCatalog, max_shadow_torches: int, shadow_transi
 	_ordered_shadow_targets.clear()
 	_shadow_strengths.clear()
 	_shadow_transition_active = false
+	_torch_reveal_strengths.clear()
+	_torch_stem_nodes.clear()
+	_torch_flame_nodes.clear()
 	_setup_materials_and_meshes()
 
 func _setup_materials_and_meshes():
 	var def = block_catalog.get_definition(BlockId.Type.TORCH)
 	var flame_col = def.emissive_color
+	_torch_emissive_energy = float(def.emissive_energy)
 
 	torch_base_material = StandardMaterial3D.new()
 	torch_base_material.albedo_texture = def.side_texture
@@ -50,7 +58,7 @@ func _setup_materials_and_meshes():
 	torch_flame_material.albedo_color = flame_col
 	torch_flame_material.emission_enabled = true
 	torch_flame_material.emission = flame_col
-	torch_flame_material.emission_energy_multiplier = def.emissive_energy
+	torch_flame_material.emission_energy_multiplier = _torch_emissive_energy
 	torch_flame_material.roughness = 0.6
 
 	torch_stem_mesh = BoxMesh.new()
@@ -84,6 +92,7 @@ func _create_torch(pos: Vector3i, attach_dir: Vector3i) -> Node3D:
 	add_child(root)
 
 	var stem = MeshInstance3D.new()
+	stem.name = "Stem"
 	stem.mesh = torch_stem_mesh
 	stem.position = Vector3(0, 0.05, 0)
 	stem.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -91,6 +100,7 @@ func _create_torch(pos: Vector3i, attach_dir: Vector3i) -> Node3D:
 	root.add_child(stem)
 
 	var flame = MeshInstance3D.new()
+	flame.name = "Flame"
 	flame.mesh = torch_flame_mesh
 	flame.position = Vector3(0, 0.38, 0)
 	flame.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -101,7 +111,7 @@ func _create_torch(pos: Vector3i, attach_dir: Vector3i) -> Node3D:
 	var light = OmniLight3D.new()
 	light.name = "TorchLight"
 	light.light_color = def.light_color
-	light.light_energy = def.emissive_energy
+	light.light_energy = _torch_emissive_energy
 	light.omni_range = def.light_range
 	light.omni_attenuation = 0.75
 	light.omni_shadow_mode = OmniLight3D.SHADOW_DUAL_PARABOLOID
@@ -116,6 +126,9 @@ func _create_torch(pos: Vector3i, attach_dir: Vector3i) -> Node3D:
 
 	torch_instances[pos] = root
 	torch_light_nodes[pos] = light
+	_torch_stem_nodes[pos] = stem
+	_torch_flame_nodes[pos] = flame
+	_torch_reveal_strengths[pos] = 1.0
 	_shadow_strengths[pos] = 0.0
 	return root
 
@@ -126,11 +139,17 @@ func remove_torch(pos: Vector3i) -> bool:
 			n.queue_free()
 		torch_instances.erase(pos)
 		torch_light_nodes.erase(pos)
+		_torch_stem_nodes.erase(pos)
+		_torch_flame_nodes.erase(pos)
+		_torch_reveal_strengths.erase(pos)
 		_shadow_target_positions.erase(pos)
 		_ordered_shadow_targets.erase(pos)
 		_shadow_strengths.erase(pos)
 		return true
 	torch_light_nodes.erase(pos)
+	_torch_stem_nodes.erase(pos)
+	_torch_flame_nodes.erase(pos)
+	_torch_reveal_strengths.erase(pos)
 	_shadow_target_positions.erase(pos)
 	_ordered_shadow_targets.erase(pos)
 	_shadow_strengths.erase(pos)
@@ -199,7 +218,8 @@ func _refresh_shadow_targets() -> void:
 		return
 	var positions: Array[Vector3i] = []
 	for position in torch_light_nodes:
-		positions.append(position as Vector3i)
+		if float(_torch_reveal_strengths.get(position, 1.0)) > 0.0:
+			positions.append(position as Vector3i)
 	if player_ref != null:
 		var player_position := player_ref.global_position
 		positions.sort_custom(func(a: Vector3i, b: Vector3i) -> bool:
@@ -315,3 +335,41 @@ func set_player_ref(p: Node3D):
 	player_ref = p
 	_refresh_shadow_targets()
 	_update_shadow_transitions(0.0)
+
+func set_torch_reveal_strength(pos: Vector3i, strength: float) -> bool:
+	assert(strength >= 0.0 and strength <= 1.0)
+	if not torch_instances.has(pos):
+		return false
+	var previous_strength := float(_torch_reveal_strengths.get(pos, 1.0))
+	if previous_strength == strength:
+		return true
+	_torch_reveal_strengths[pos] = strength
+	var stem := _torch_stem_nodes.get(pos) as MeshInstance3D
+	var flame := _torch_flame_nodes.get(pos) as MeshInstance3D
+	var light := torch_light_nodes.get(pos) as OmniLight3D
+	var revealed := strength > 0.0
+	if stem != null and is_instance_valid(stem):
+		stem.visible = revealed
+		stem.transparency = 1.0 - strength
+	if flame != null and is_instance_valid(flame):
+		flame.visible = revealed
+		flame.transparency = 1.0 - strength
+		var flame_material := flame.material_override as StandardMaterial3D
+		if flame_material == torch_flame_material:
+			flame_material = torch_flame_material.duplicate() as StandardMaterial3D
+			flame.material_override = flame_material
+		if flame_material != null:
+			flame_material.emission_energy_multiplier = _torch_emissive_energy * strength
+	if light != null and is_instance_valid(light):
+		light.visible = revealed
+		light.light_energy = _torch_emissive_energy * strength
+	if not revealed:
+		_shadow_target_positions.erase(pos)
+		_ordered_shadow_targets.erase(pos)
+		_shadow_strengths[pos] = 0.0
+		if light != null and is_instance_valid(light):
+			light.shadow_enabled = false
+			light.shadow_opacity = 0.0
+	if (previous_strength > 0.0) != revealed:
+		_shadow_update_timer = 0.0
+	return true

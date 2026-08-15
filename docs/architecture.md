@@ -173,11 +173,11 @@ doorway ID to a level ID and owns its current doorway presentation. `LevelDefini
 entry module, hallway module pool, exact typed room requirements, and `LevelPresentationDefinition`;
 `LevelCatalog` resolves the stable IDs. Each room requirement owns a stable room type, an exact
 count, a module pool, and one `LevelRoomEncounterDefinition`, so variants share count and behavior
-without teaching generation their individual IDs. Encounter groups use unique stable entity IDs and
-configure at most 64 enemies per room. `LevelEncounterCatalogValidator` proves every entity exists
+without teaching generation their individual IDs. Encounter groups use unique stable entity IDs.
+`LevelEncounterCatalogValidator` proves every entity exists
 and every referenced room module has at least one spawn position that fits that entity. Generated
 torch placements remain presentation-owned, while `LevelState` contains finite voxel-space truth,
-bounds, entry/return geometry, and a dynamic door overlay without rewriting base cells.
+bounds, entry/return geometry, and a dynamic authored-fill overlay without rewriting base cells.
 
 Generation retains immutable `LevelConnection` records with stable placement IDs, socket IDs,
 directions, and aperture cells without consuming additional random values. `LevelEncounterTopology`
@@ -187,13 +187,18 @@ pending queues, and logical door locks. Root rooms begin ready; child branches r
 their parent clears. Activation requires the player's complete body to be inside room air and clear
 of its incoming gate. Initial and refill batches validate before state commit, occupied positions
 remain pending, and a defeat cannot refill until a later physics frame.
+Configured encounters retain up to 64 enemies, while `LevelEncounterState` limits each room to 20
+active encounter enemies and continuously refills that capacity until the configured group clears.
 
 Each `LevelRuntime` owns a dedicated `EntityRuntime` capped at 64 active and 64 retiring actors.
 Dungeon navigation is bounded to radius 48, 2,048 nodes per search, and two searches per physics
 tick. `Game` explicitly rebinds player queries and melee combat between overworld and dungeon voxel
-spaces while cancelling pending attacks. Connected room sockets receive dynamic wood-plank
-portcullises: `LevelState` changes collision, raycast, attack, and pathfinding truth immediately,
-while `LevelDoorRenderer` animates the separate mesh over 0.35 seconds without remeshing terrain.
+spaces while cancelling pending attacks. Connected room sockets reuse their authored unused-fill
+blocks: `LevelState` changes collision, raycast, attack, and pathfinding truth immediately, while
+`LevelGeometryRenderer` presents ordinary voxel cubes and fades them away over 0.35 seconds after
+clearance. The same renderer partitions hallways with their downstream rooms, renders locked
+branches black, disables their torch presentation and light, then fades both geometry and lighting
+in when the branch becomes ready.
 The encounter HUD reports active and pending enemies. Clearing opens the room and every child
 branch for that run. Level exit destroys the runtime; dungeon death suspends it immediately and
 destroys it while restoring the overworld, so the next entry starts fresh.

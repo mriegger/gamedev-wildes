@@ -1,6 +1,8 @@
 extends RefCounted
 class_name LevelEncounterState
 
+const MAX_CONCURRENT_ENEMIES_PER_ROOM: int = 20
+
 enum RoomStatus {
 	LOCKED,
 	READY,
@@ -37,6 +39,14 @@ static func create(topology: LevelEncounterTopology, level_seed: int) -> LevelEn
 func get_active_room_id() -> int:
 	return _active_room_id
 
+func get_revealed_room_ids() -> Array[int]:
+	var room_ids: Array[int] = []
+	for room_id in _room_ids:
+		var room := _rooms[room_id] as RoomProgress
+		if room.status != RoomStatus.LOCKED:
+			room_ids.append(room_id)
+	return room_ids
+
 func get_door_locks() -> Dictionary:
 	return _door_locks.duplicate()
 
@@ -60,6 +70,7 @@ func can_commit_activation(room_id: int, entity_ids: Array[StringName], concurre
 		and room != null \
 		and not entity_ids.is_empty() \
 		and concurrent_capacity >= entity_ids.size() \
+		and concurrent_capacity <= MAX_CONCURRENT_ENEMIES_PER_ROOM \
 		and concurrent_capacity <= room.enemy_ids.size() \
 		and _entity_ids_match_next(room, entity_ids)
 
@@ -90,7 +101,8 @@ func get_refill_count(room_id: int) -> int:
 	if room == null or room.status != RoomStatus.ACTIVE:
 		return 0
 	var unspawned_count := room.enemy_ids.size() - room.next_spawn_index
-	return mini(unspawned_count, room.concurrent_capacity - room.active_entity_ids.size())
+	var available_slots := mini(room.concurrent_capacity, MAX_CONCURRENT_ENEMIES_PER_ROOM) - room.active_entity_ids.size()
+	return mini(unspawned_count, available_slots)
 
 func commit_activation(room_id: int, runtime_ids: Array[int], entity_ids: Array[StringName], concurrent_capacity: int) -> LevelEncounterTransition:
 	if not can_commit_activation(room_id, entity_ids, concurrent_capacity) or runtime_ids.is_empty():
@@ -165,7 +177,9 @@ func _initialize(topology: LevelEncounterTopology, level_seed: int) -> bool:
 	return true
 
 func _can_commit_spawns(room: RoomProgress, runtime_ids: Array[int], entity_ids: Array[StringName]) -> bool:
-	if runtime_ids.size() != entity_ids.size() or not _entity_ids_match_next(room, entity_ids):
+	if runtime_ids.size() != entity_ids.size() \
+		or room.active_entity_ids.size() + runtime_ids.size() > MAX_CONCURRENT_ENEMIES_PER_ROOM \
+		or not _entity_ids_match_next(room, entity_ids):
 		return false
 	var seen_runtime_ids: Dictionary = {}
 	for index in runtime_ids.size():

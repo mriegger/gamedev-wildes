@@ -80,11 +80,14 @@ register content through filesystem scans. A room requirement maps a stable room
 module pool, and encounter, so additional variants can join an existing type and new types such as
 small or boss rooms can be added without a dungeon-specific generator branch.
 Master rooms configure 40 zombies, normal rooms 25, and chest rooms 6. A room encounter activates
-only after the player is fully inside. Wood-plank portcullises immediately block movement,
-pathfinding, targeting, and attacks while the HUD shows separate active and pending counts. Defeated
-enemies refill authored spawn positions on a later physics tick; killing the complete configured
-group opens every branch and readies child rooms. Leaving or dying discards that run, restores the
-exact overworld anchor and player-owned inventory, and creates fresh encounter state on re-entry.
+only after the player is fully inside. Each room permits at most 20 active encounter enemies, with
+larger groups refilling authored spawn positions on later physics ticks. Locked connections reuse
+their room socket's authored wall-fill blocks for movement, pathfinding, targeting, and attacks;
+those blocks fade away after the room clears. Downstream rooms and hallways remain black with their
+torches disabled until they unlock, then their geometry and lighting fade in. The HUD shows separate
+active and pending counts. Killing the complete configured group opens every branch and readies
+child rooms. Leaving or dying discards that run, restores the exact overworld anchor and
+player-owned inventory, and creates fresh encounter state on re-entry.
 
 **Structure construction workspace.** `dev structure new` opens a document type, length, width, and
 height dialog, then enters an isolated first-person workspace for a generic structure or Level

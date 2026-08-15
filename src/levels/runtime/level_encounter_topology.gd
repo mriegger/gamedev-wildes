@@ -75,6 +75,7 @@ func _build(layout: LevelLayout, definition: LevelDefinition) -> bool:
 	var room_child_ids: Dictionary = {}
 	var room_door_ids: Dictionary = {}
 	var room_placement_ids: Array[int] = []
+	var reveal_placement_owners: Dictionary = {}
 	for placement_id in placements:
 		var placement := placements[placement_id] as LevelPlacedModule
 		if placement.room_type_id.is_empty():
@@ -101,23 +102,27 @@ func _build(layout: LevelLayout, definition: LevelDefinition) -> bool:
 	for connection_id in connection_ids:
 		var connection := connections[connection_id] as LevelConnection
 		if room_door_ids.has(connection.first_placement_id):
-			_append_doorway(
+			if not _append_doorway(
 				connection,
-				connection.first_placement_id,
+				placements[connection.first_placement_id] as LevelPlacedModule,
+				connection.first_socket_id,
 				connection.first_direction,
 				connection.first_aperture_cells,
 				room_door_ids,
 				door_key_to_id
-			)
+			):
+				return false
 		if room_door_ids.has(connection.second_placement_id):
-			_append_doorway(
+			if not _append_doorway(
 				connection,
-				connection.second_placement_id,
+				placements[connection.second_placement_id] as LevelPlacedModule,
+				connection.second_socket_id,
 				connection.second_direction,
 				connection.second_aperture_cells,
 				room_door_ids,
 				door_key_to_id
-			)
+			):
+				return false
 	for room_id in room_placement_ids:
 		var placement := placements[room_id] as LevelPlacedModule
 		var requirement := requirements[placement.room_type_id] as LevelRoomRequirement
@@ -146,8 +151,13 @@ func _build(layout: LevelLayout, definition: LevelDefinition) -> bool:
 		var door_ids: Array[int] = []
 		door_ids.assign(room_door_ids[room_id])
 		door_ids.sort()
-		if enemy_ids.is_empty() or spawn_cells.is_empty() or door_ids.is_empty():
+		var reveal_placement_ids := _collect_reveal_placement_ids(room_id, int(room_parent_ids[room_id]), parent_placement)
+		if enemy_ids.is_empty() or spawn_cells.is_empty() or door_ids.is_empty() or reveal_placement_ids.is_empty():
 			return false
+		for placement_id in reveal_placement_ids:
+			if placement_id == 0 or reveal_placement_owners.has(placement_id):
+				return false
+			reveal_placement_owners[placement_id] = room_id
 		_rooms_by_id[room_id] = LevelEncounterRoom.new(
 			room_id,
 			int(room_parent_ids[room_id]),
@@ -156,28 +166,54 @@ func _build(layout: LevelLayout, definition: LevelDefinition) -> bool:
 			door_ids,
 			enemy_ids,
 			spawn_cells,
+			reveal_placement_ids,
 			interior_cells
 		)
+	if reveal_placement_owners.size() != placements.size() - 1:
+		return false
 	_room_ids.assign(room_placement_ids)
 	return not _rooms_by_id.is_empty()
 
 func _append_doorway(
 	connection: LevelConnection,
-	room_id: int,
+	placement: LevelPlacedModule,
+	socket_id: StringName,
 	direction: LevelSocketDefinition.Direction,
 	aperture_cells: Array[Vector3i],
 	room_door_ids: Dictionary,
 	door_key_to_id: Dictionary,
-) -> void:
+) -> bool:
+	var fill_block_id := _find_socket_fill_block(placement.definition, socket_id)
+	if not StructureCell.is_structure_solid(fill_block_id):
+		return false
 	var door_id := _doorways.size()
 	_doorways.append(LevelDoorway.new(
 		door_id,
-		room_id,
+		placement.placement_id,
 		direction,
-		aperture_cells
+		aperture_cells,
+		fill_block_id,
 	))
-	(room_door_ids[room_id] as Array).append(door_id)
-	door_key_to_id[_door_key(room_id, connection.connection_id)] = door_id
+	(room_door_ids[placement.placement_id] as Array).append(door_id)
+	door_key_to_id[_door_key(placement.placement_id, connection.connection_id)] = door_id
+	return true
+
+func _find_socket_fill_block(module: LevelModuleDefinition, socket_id: StringName) -> int:
+	for socket in module.sockets:
+		if socket != null and socket.socket_id == socket_id:
+			return socket.unused_fill_block_id
+	return StructureCell.AIR
+
+func _collect_reveal_placement_ids(room_id: int, parent_room_id: int, parent_placement: Dictionary) -> Array[int]:
+	var result: Array[int] = []
+	var stop_placement_id := parent_room_id if parent_room_id >= 0 else 0
+	var placement_id := room_id
+	while placement_id != stop_placement_id:
+		if placement_id < 0 or not parent_placement.has(placement_id):
+			return []
+		result.push_front(placement_id)
+		placement_id = int(parent_placement[placement_id])
+	return result
 
 func _door_key(room_id: int, connection_id: int) -> String:
 	return "%d:%d" % [room_id, connection_id]

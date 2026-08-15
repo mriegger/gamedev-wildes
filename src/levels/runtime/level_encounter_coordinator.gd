@@ -37,6 +37,7 @@ func setup(
 	for room_id in topology.get_room_ids():
 		_spawn_cells_by_room[room_id] = _shuffle_spawn_cells(topology.get_room(room_id).spawn_cells, room_id)
 		var enemy_ids := state.get_configured_enemy_ids(room_id)
+		enemy_ids.resize(mini(enemy_ids.size(), LevelEncounterState.MAX_CONCURRENT_ENEMIES_PER_ROOM))
 		var static_batch := _build_spawn_batch(room_id, enemy_ids, true)
 		var capacity := (static_batch["requests"] as Array[EntitySpawnRequest]).size()
 		if capacity <= 0:

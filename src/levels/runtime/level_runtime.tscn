@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" path="res://levels/runtime/level_runtime.gd" id="1_runtime"]
 [ext_resource type="Script" path="res://blocks/presentation/torch_renderer.gd" id="2_torches"]
-[ext_resource type="Script" path="res://levels/presentation/level_door_renderer.gd" id="3_doors"]
+[ext_resource type="Script" path="res://levels/presentation/level_geometry_renderer.gd" id="3_geometry"]
 [ext_resource type="Script" path="res://levels/presentation/level_encounter_hud.gd" id="4_hud"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBox_encounter"]
@@ -21,13 +21,11 @@ corner_radius_bottom_left = 6
 visible = false
 script = ExtResource("1_runtime")
 
-[node name="Geometry" type="MeshInstance3D" parent="."]
+[node name="Geometry" type="Node3D" parent="."]
+script = ExtResource("3_geometry")
 
 [node name="Torches" type="Node3D" parent="."]
 script = ExtResource("2_torches")
-
-[node name="Doors" type="Node3D" parent="."]
-script = ExtResource("3_doors")
 
 [node name="ReturnPoint" type="Marker3D" parent="."]
 

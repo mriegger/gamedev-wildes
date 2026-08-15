@@ -38,7 +38,9 @@ func _run() -> void:
 	if topology == null:
 		_finish()
 		return
+	_test_reveal_partition(topology, generation.layout)
 	_test_progression(topology, generation.layout.seed_value)
+	_test_concurrent_enemy_limit()
 	_test_door_overlay(topology, generation.layout, block_catalog)
 	_finish()
 
@@ -52,10 +54,12 @@ func _test_progression(topology: LevelEncounterTopology, level_seed: int) -> voi
 	var root_with_child_id := -1
 	var ready_count := 0
 	var locked_count := 0
+	var expected_revealed_room_ids: Array[int] = []
 	for room_id in room_ids:
 		var room := topology.get_room(room_id)
 		if room.parent_room_id < 0:
 			ready_count += 1
+			expected_revealed_room_ids.append(room_id)
 			_expect(_room_progress(state, room_id).status == LevelEncounterState.RoomStatus.READY, "root room did not begin ready: %d" % room_id)
 			_expect(not bool(state.get_door_locks()[room.parent_door_id]), "root incoming door began locked: %d" % room_id)
 			if not room.child_room_ids.is_empty():
@@ -66,6 +70,10 @@ func _test_progression(topology: LevelEncounterTopology, level_seed: int) -> voi
 			_expect(bool(state.get_door_locks()[room.parent_door_id]), "child incoming door began open: %d" % room_id)
 	_expect(ready_count > 0, "topology has no ready root rooms")
 	_expect(locked_count > 0, "topology has no initially locked rooms")
+	_expect(state.get_revealed_room_ids() == expected_revealed_room_ids, "initial reveal query did not contain exactly the ready root rooms")
+	var copied_revealed_room_ids := state.get_revealed_room_ids()
+	copied_revealed_room_ids.clear()
+	_expect(state.get_revealed_room_ids() == expected_revealed_room_ids, "revealed-room query exposed mutable ownership")
 	_expect(root_with_child_id >= 0, "topology has no root room with a child branch")
 	if root_with_child_id < 0:
 		return
@@ -79,6 +87,10 @@ func _test_progression(topology: LevelEncounterTopology, level_seed: int) -> voi
 	var expected_spawn_count := copied_spawn_cells.size()
 	copied_spawn_cells.clear()
 	_expect(root_room.spawn_cells.size() == expected_spawn_count, "room spawn-cell query exposed mutable ownership")
+	var copied_reveal_placements := root_room.reveal_placement_ids
+	var expected_reveal_placements := copied_reveal_placements.duplicate()
+	copied_reveal_placements.clear()
+	_expect(root_room.reveal_placement_ids == expected_reveal_placements, "room reveal-placement query exposed mutable ownership")
 	var copied_locks := state.get_door_locks()
 	var copied_lock_id := int(copied_locks.keys()[0])
 	var authoritative_lock := bool(copied_locks[copied_lock_id])
@@ -193,6 +205,94 @@ func _test_progression(topology: LevelEncounterTopology, level_seed: int) -> voi
 		var child_room := topology.get_room(child_room_id)
 		_expect(_room_progress(state, child_room_id).status == LevelEncounterState.RoomStatus.READY, "cleared room did not unlock child branch: %d" % child_room_id)
 		_expect(not bool(state.get_door_locks()[child_room.parent_door_id]), "cleared room did not open child incoming door: %d" % child_room_id)
+		expected_revealed_room_ids.append(child_room_id)
+	expected_revealed_room_ids.sort()
+	_expect(state.get_revealed_room_ids() == expected_revealed_room_ids, "room clear did not reveal exactly its child branches")
+
+func _test_reveal_partition(topology: LevelEncounterTopology, layout: LevelLayout) -> void:
+	var placement_owners: Dictionary = {}
+	for room_id in topology.get_room_ids():
+		var room := topology.get_room(room_id)
+		_expect(not room.reveal_placement_ids.is_empty(), "room has no reveal placements: %d" % room_id)
+		for placement_id in room.reveal_placement_ids:
+			_expect(placement_id > 0, "room reveal partition claimed the entry placement")
+			_expect(not placement_owners.has(placement_id), "room reveal partitions overlap at placement %d" % placement_id)
+			placement_owners[placement_id] = room_id
+	_expect(placement_owners.size() == layout.placed_modules.size() - 1, "room reveal partitions did not cover every non-entry placement")
+
+func _test_concurrent_enemy_limit() -> void:
+	var enemy_ids: Array[StringName] = []
+	for _index in 40:
+		enemy_ids.append(&"zombie")
+	var doorway := LevelDoorway.new(
+		0,
+		0,
+		LevelSocketDefinition.Direction.NORTH,
+		[Vector3i.ZERO],
+		BlockId.Type.STONE_BRICKS,
+	)
+	var room := LevelEncounterRoom.new(
+		0,
+		-1,
+		0,
+		[],
+		[0],
+		enemy_ids,
+		[Vector3i(1, 1, 1)],
+		[1],
+		{Vector3i(1, 1, 1): true},
+	)
+	var topology := LevelEncounterTopology.new()
+	topology._rooms_by_id[0] = room
+	topology._room_ids.assign([0])
+	topology._doorways.assign([doorway])
+	var state := LevelEncounterState.create(topology, WORLD_SEED)
+	_expect(state != null, "forty-enemy encounter state creation failed")
+	if state == null:
+		return
+	_expect(state.get_configured_enemy_ids(0).size() == 40, "room cap changed the configured encounter total")
+	var oversized_enemy_ids := state.get_next_enemy_ids(0, LevelEncounterState.MAX_CONCURRENT_ENEMIES_PER_ROOM + 1)
+	var oversized_runtime_ids: Array[int] = []
+	for runtime_id in range(1, oversized_enemy_ids.size() + 1):
+		oversized_runtime_ids.append(runtime_id)
+	_expect(oversized_enemy_ids.size() == LevelEncounterState.MAX_CONCURRENT_ENEMIES_PER_ROOM + 1, "forty-enemy fixture did not expose an oversized activation batch")
+	_expect(
+		not state.can_commit_activation(0, oversized_enemy_ids, oversized_enemy_ids.size()),
+		"activation preflight accepted more than twenty concurrent enemies",
+	)
+	_expect(
+		state.commit_activation(0, oversized_runtime_ids, oversized_enemy_ids, oversized_enemy_ids.size()) == null,
+		"activation committed more than twenty concurrent enemies",
+	)
+	var initial_enemy_ids := state.get_next_enemy_ids(0, LevelEncounterState.MAX_CONCURRENT_ENEMIES_PER_ROOM)
+	var initial_runtime_ids: Array[int] = []
+	for runtime_id in range(1, initial_enemy_ids.size() + 1):
+		initial_runtime_ids.append(runtime_id)
+	var activation := state.commit_activation(
+		0,
+		initial_runtime_ids,
+		initial_enemy_ids,
+		LevelEncounterState.MAX_CONCURRENT_ENEMIES_PER_ROOM,
+	)
+	_expect(activation != null, "twenty-enemy activation did not commit")
+	if activation == null:
+		return
+	var progress := _room_progress(state, 0)
+	_expect(activation.active_enemy_count == LevelEncounterState.MAX_CONCURRENT_ENEMIES_PER_ROOM, "activation transition did not report the twenty-enemy cap")
+	_expect(activation.pending_enemy_count == 20, "activation transition did not retain twenty pending enemies")
+	_expect(progress.active_entity_ids.size() == LevelEncounterState.MAX_CONCURRENT_ENEMIES_PER_ROOM, "activation did not reach the twenty-enemy room cap")
+	_expect(state.get_spawned_enemy_count(0) == LevelEncounterState.MAX_CONCURRENT_ENEMIES_PER_ROOM, "activation did not preserve the remaining configured total")
+	_expect(state.get_refill_count(0) == 0, "full twenty-enemy room exposed a refill slot")
+	var next_enemy_ids := state.get_next_enemy_ids(0, 1)
+	_expect(state.commit_refill(0, [21], next_enemy_ids) == null, "full room accepted a twenty-first active enemy")
+	var defeated_entity_id := progress.active_entity_ids[1] as StringName
+	_expect(state.record_defeat(1, defeated_entity_id) != null, "room-cap fixture defeat did not commit")
+	_expect(state.get_refill_count(0) == 1, "one defeat did not open exactly one capped refill slot")
+	var refill := state.commit_refill(0, [21], next_enemy_ids)
+	_expect(refill != null, "capped room did not refill one available slot")
+	_expect(refill != null and refill.pending_enemy_count == 19, "capped refill did not retain the remaining configured enemies")
+	_expect(progress.active_entity_ids.size() == LevelEncounterState.MAX_CONCURRENT_ENEMIES_PER_ROOM, "refill did not restore the twenty-enemy room cap")
+	_expect(state.get_spawned_enemy_count(0) == LevelEncounterState.MAX_CONCURRENT_ENEMIES_PER_ROOM + 1, "refill did not advance the forty-enemy queue")
 
 func _test_door_overlay(topology: LevelEncounterTopology, layout: LevelLayout, block_catalog: BlockCatalog) -> void:
 	var encounter_state := LevelEncounterState.create(topology, layout.seed_value)
@@ -222,12 +322,13 @@ func _test_door_overlay(topology: LevelEncounterTopology, layout: LevelLayout, b
 	var authoritative_aperture := copied_aperture.duplicate()
 	copied_aperture.clear()
 	_expect(doorway.aperture_cells == authoritative_aperture, "door aperture query exposed mutable ownership")
+	_expect(doorway.fill_block_id == BlockId.Type.STONE_BRICKS, "stone doorway did not retain its authored Stone Bricks fill")
 	for cell in authoritative_aperture:
 		_expect(layout.get_cell(cell) == StructureCell.AIR, "connected doorway base cell is not AIR: %s" % cell)
 		_expect(level_state.has_cell(cell), "door overlay escaped level cells: %s" % cell)
-		_expect(level_state.get_cell_value(cell) == BlockId.Type.WOOD_PLANKS, "locked door cell did not read as wood planks: %s" % cell)
-		_expect(level_state.get_block_at(cell) == BlockId.Type.WOOD_PLANKS, "locked door block query did not return wood planks: %s" % cell)
-		_expect(level_state.get_block_id_at(cell) == BlockId.Type.WOOD_PLANKS, "locked door block ID did not return wood planks: %s" % cell)
+		_expect(level_state.get_cell_value(cell) == doorway.fill_block_id, "locked door cell did not read as its authored fill: %s" % cell)
+		_expect(level_state.get_block_at(cell) == doorway.fill_block_id, "locked door block query did not return its authored fill: %s" % cell)
+		_expect(level_state.get_block_id_at(cell) == doorway.fill_block_id, "locked door block ID did not return its authored fill: %s" % cell)
 		_expect(level_state.is_solid(cell), "locked door cell did not block movement: %s" % cell)
 		_expect(level_state.is_raycast_solid(cell), "locked door cell did not block raycasts: %s" % cell)
 		_expect(not level_state.is_interior_open(cell), "locked door cell remained open: %s" % cell)

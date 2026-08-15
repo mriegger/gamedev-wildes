@@ -86,7 +86,7 @@ func _build_solid_index() -> void:
 
 func get_cell_value(position: Vector3i) -> int:
 	if _locked_door_cells.has(position):
-		return BlockId.Type.WOOD_PLANKS
+		return int(_locked_door_cells[position])
 	return int(_cells.get(position, VOID))
 
 func has_cell(position: Vector3i) -> bool:
@@ -105,7 +105,7 @@ func get_block_at(position: Vector3i) -> Variant:
 	return block_id
 
 func get_block_id_at(position: Vector3i) -> int:
-	return BlockId.Type.WOOD_PLANKS if _locked_door_cells.has(position) else int(_cells.get(position, AIR))
+	return int(_locked_door_cells[position]) if _locked_door_cells.has(position) else int(_cells.get(position, AIR))
 
 func is_solid(position: Vector3i) -> bool:
 	var block: Variant = get_block_at(position)
@@ -191,4 +191,4 @@ func _rebuild_locked_door_cells() -> void:
 			continue
 		var doorway := _doorways_by_id[door_id] as LevelDoorway
 		for cell in doorway.aperture_cells:
-			_locked_door_cells[cell] = door_id
+			_locked_door_cells[cell] = doorway.fill_block_id

@@ -24,6 +24,7 @@ func _run() -> void:
 	await _test_settings()
 	await _test_fading_shadow_pool(block_catalog)
 	await _test_immediate_shadow_pool(block_catalog)
+	await _test_torch_reveal_strength(block_catalog)
 	await _test_level_runtime_setting(block_catalog)
 	_finish()
 
@@ -137,6 +138,43 @@ func _test_immediate_shadow_pool(block_catalog: BlockCatalog) -> void:
 	_advance(renderer, TorchRenderer.TORCH_SHADOW_UPDATE_INTERVAL + STEP_SECONDS)
 	_expect(_enabled_positions(renderer) == _position_set(range(8, 10)), "immediate pool did not switch directly to the nearest two torches")
 	_expect(_enabled_opacities_match(renderer, SHADOW_OPACITY), "immediate pool introduced a dungeon fade")
+	await _free_renderer_fixture(fixture)
+
+func _test_torch_reveal_strength(block_catalog: BlockCatalog) -> void:
+	var fixture := _make_renderer_fixture(block_catalog, 2, 0.0)
+	var renderer := fixture["renderer"] as TorchRenderer
+	var player := fixture["player"] as Node3D
+	player.global_position = Vector3(-20.0, 0.0, 0.0)
+	renderer.set_player_ref(player)
+	var position := Vector3i.ZERO
+	var torch_root := renderer.torch_instances.get(position) as Node3D
+	var stem := torch_root.get_node("Stem") as MeshInstance3D
+	var flame := torch_root.get_node("Flame") as MeshInstance3D
+	var light := renderer.torch_light_nodes.get(position) as OmniLight3D
+	var full_energy := light.light_energy
+	_expect(stem.visible and flame.visible and light.visible, "fully revealed torch presentation was hidden")
+	_expect(is_zero_approx(stem.transparency) and is_zero_approx(flame.transparency), "new torch did not default to fully revealed")
+	_expect(renderer.set_torch_reveal_strength(position, 0.4), "existing torch rejected reveal strength")
+	var flame_material := flame.material_override as StandardMaterial3D
+	_expect(flame_material != renderer.torch_flame_material, "faded torch mutated the shared flame material")
+	_expect(stem.visible and flame.visible and light.visible, "partially revealed torch presentation was hidden")
+	_expect(is_equal_approx(stem.transparency, 0.6) and is_equal_approx(flame.transparency, 0.6), "partial reveal did not fade torch mesh alpha")
+	_expect(is_equal_approx(flame_material.emission_energy_multiplier, full_energy * 0.4), "partial reveal did not fade torch emission")
+	_expect(is_equal_approx(light.light_energy, full_energy * 0.4), "partial reveal did not fade torch light energy")
+	_expect(renderer.set_torch_reveal_strength(position, 0.0), "existing torch rejected hidden strength")
+	_expect(not stem.visible and not flame.visible and not light.visible, "zero-strength torch presentation remained visible")
+	_expect(is_zero_approx(stem.transparency - 1.0) and is_zero_approx(flame.transparency - 1.0), "zero-strength torch mesh retained alpha")
+	_expect(is_zero_approx(flame_material.emission_energy_multiplier) and is_zero_approx(light.light_energy), "zero-strength torch retained emission or light")
+	_expect(not light.shadow_enabled and is_zero_approx(light.shadow_opacity), "zero-strength torch retained a shadow caster")
+	renderer.update_shadow_culling(STEP_SECONDS)
+	_expect(_enabled_positions(renderer) == _position_set(range(1, 3)), "hidden torch consumed a bounded shadow slot")
+	_expect(renderer.set_torch_reveal_strength(position, 1.0), "hidden torch rejected full reveal")
+	renderer.update_shadow_culling(STEP_SECONDS)
+	_expect(stem.visible and flame.visible and light.visible, "restored torch presentation remained hidden")
+	_expect(is_zero_approx(stem.transparency) and is_zero_approx(flame.transparency), "restored torch mesh retained transparency")
+	_expect(is_equal_approx(flame_material.emission_energy_multiplier, full_energy) and is_equal_approx(light.light_energy, full_energy), "restored torch did not recover full energy")
+	_expect(_enabled_positions(renderer) == _position_set(range(0, 2)), "restored torch did not reenter nearest shadow selection")
+	_expect(not renderer.set_torch_reveal_strength(Vector3i(999, 999, 999), 0.5), "missing torch accepted reveal strength")
 	await _free_renderer_fixture(fixture)
 
 func _test_level_runtime_setting(block_catalog: BlockCatalog) -> void:
