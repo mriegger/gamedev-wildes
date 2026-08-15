@@ -67,11 +67,10 @@ uses cutaway-facing geometry, a black void, and authored torch light. The overwo
 but its streaming and presentation are suspended until you return through the dungeon door.
 Doorway selection, module pools, terrain presentation, ambient lighting, and return-door materials
 are configured through typed level resources rather than hardcoded dungeon IDs. Each destination
-dungeon owns its definition, presentation, and modules under `levels/content/dungeons/<family>`,
-while overworld doorways are grouped under `levels/content/entrances/<region>`. The root
-`level_catalog.tres` remains the explicit registry; directories never register content through
-filesystem scans. The current stone modules target four to six placements within the 96×16×96
-level bound.
+dungeon owns its catalog, entrance, definition, presentation, and modules under
+`levels/content/dungeons/<family>`. Directories organize each self-contained family but never
+register content through filesystem scans. The current stone modules target four to six placements
+within the 96×16×96 level bound.
 
 **Structure construction workspace.** `dev structure new` opens a document type, length, width, and
 height dialog, then enters an isolated first-person workspace for a generic structure or Level

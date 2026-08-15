@@ -1,7 +1,7 @@
 extends SceneTree
 
 const BLOCK_CATALOG_PATH: String = "res://blocks/block_catalog.tres"
-const LEVEL_CATALOG_PATH: String = "res://levels/content/level_catalog.tres"
+const LEVEL_CATALOG_PATH: String = "res://levels/content/dungeons/stone/level_catalog.tres"
 const LEVEL_RUNTIME_SCENE_PATH: String = "res://levels/runtime/level_runtime.tscn"
 const SETTINGS_SCREEN_SCENE_PATH: String = "res://ui/screens/settings/settings_screen.tscn"
 const SHADOW_LIMIT: int = 6

@@ -2,7 +2,7 @@ extends SceneTree
 
 func _init() -> void:
 	var empty_result := LevelGenerator.new().generate(LevelCatalog.new(), &"stone_dungeon", 1, &"probe", Vector3i.ZERO)
-	var source_catalog := load("res://levels/content/level_catalog.tres") as LevelCatalog
+	var source_catalog := load("res://levels/content/dungeons/stone/level_catalog.tres") as LevelCatalog
 	var impossible_level := source_catalog.get_level(&"stone_dungeon").duplicate(true) as LevelDefinition
 	impossible_level.minimum_module_count = 1
 	impossible_level.maximum_module_count = 1

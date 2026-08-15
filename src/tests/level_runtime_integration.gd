@@ -6,7 +6,7 @@ const STRUCTURE_DIALOGS_SCENE: String = "res://structures/presentation/structure
 const STRUCTURE_TERRAIN_SHADER: String = "res://levels/presentation/level_terrain.gdshader"
 const STRUCTURE_RUNTIME_TEST = preload("res://structures/tests/structure_designer_runtime.gd")
 const WORLD_SCENE: String = "res://world/world.tscn"
-const CATALOG_PATH: String = "res://levels/content/level_catalog.tres"
+const CATALOG_PATH: String = "res://levels/content/dungeons/stone/level_catalog.tres"
 const BLOCK_CATALOG_PATH: String = "res://blocks/block_catalog.tres"
 const LIFECYCLE_ITERATIONS: int = 12
 const GAME_TRANSITION_CYCLES: int = 3
@@ -187,7 +187,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	game.entity_catalog = load("res://entities/entity_catalog.tres") as EntityCatalog
 	game.player_stats_definition = load("res://player/player_stats.tres") as CombatStatsDefinition
 	game.level_catalog = catalog
-	game.level_entrance_definition = load("res://levels/content/entrances/meadow/stone_dungeon_entrance.tres") as LevelEntranceDefinition
+	game.level_entrance_definition = load("res://levels/content/dungeons/stone/entrance.tres") as LevelEntranceDefinition
 	game.level_runtime_scene = runtime_scene
 	game.structure_designer_runtime_scene = load(STRUCTURE_RUNTIME_SCENE) as PackedScene
 	game.structure_terrain_shader = load(STRUCTURE_TERRAIN_SHADER) as Shader

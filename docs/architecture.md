@@ -168,9 +168,8 @@ torch placements remain presentation-owned, while `LevelState` contains only fin
 truth, bounds, and entry/return geometry.
 
 Content directories organize ownership without becoming runtime registries. Each destination
-dungeon keeps its definition, presentation, and modules together under
-`levels/content/dungeons/<family>`, while entrances are grouped by overworld region under
-`levels/content/entrances/<region>`. `level_catalog.tres` remains the sole explicit registry and
+dungeon keeps its catalog, entrance, definition, presentation, and modules together under
+`levels/content/dungeons/<family>`. The family catalog is the explicit registry and
 `LevelDefinition` remains the authority for start, expansion, and cap membership. A future iron
 dungeon can mirror the stone family without adding a parallel family ID to every module or scanning
 project files at runtime. Golden-only modules live under `tests/fixtures/levels` so they cannot be

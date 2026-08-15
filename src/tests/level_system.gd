@@ -1,8 +1,8 @@
 extends SceneTree
 
-const CATALOG_PATH: String = "res://levels/content/level_catalog.tres"
+const CATALOG_PATH: String = "res://levels/content/dungeons/stone/level_catalog.tres"
 const BLOCK_CATALOG_PATH: String = "res://blocks/block_catalog.tres"
-const ENTRANCE_DEFINITION_PATH: String = "res://levels/content/entrances/meadow/stone_dungeon_entrance.tres"
+const ENTRANCE_DEFINITION_PATH: String = "res://levels/content/dungeons/stone/entrance.tres"
 const LEVEL_ID: StringName = &"stone_dungeon"
 const ENTRANCE_ID: StringName = &"overworld_dungeon_entrance"
 const STONE_MODULE_DIRECTORY: String = "res://levels/content/dungeons/stone/modules"
