@@ -116,6 +116,9 @@ func _validate_level_modules(level: LevelDefinition) -> bool:
 	for requirement in level.room_requirements:
 		if requirement == null:
 			continue
+		if requirement.encounter == null:
+			push_error("[LevelCatalog] Room encounter is required for %s in %s" % [requirement.room_type_id, level.level_id])
+			valid = false
 		var maximum_extra_sockets := -1
 		for module_id in requirement.module_ids:
 			valid = _claim_role(module_id, "room", claimed_roles, level.level_id) and valid
@@ -128,6 +131,9 @@ func _validate_level_modules(level: LevelDefinition) -> bool:
 				valid = false
 				continue
 			var room := _modules_by_id[module_id] as LevelModuleDefinition
+			if room.enemy_spawn_zones.is_empty():
+				push_error("[LevelCatalog] Room module requires enemy spawn zones: %s for %s" % [module_id, level.level_id])
+				valid = false
 			if room.sockets.is_empty() or room.spawn_marker != null or room.return_door_marker != null or not _has_only_sealable_sockets(room):
 				push_error("[LevelCatalog] Room module must have sealable sockets and no markers: %s for %s" % [module_id, level.level_id])
 				valid = false

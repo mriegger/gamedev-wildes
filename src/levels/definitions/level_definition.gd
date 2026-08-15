@@ -1,12 +1,12 @@
 extends Resource
 class_name LevelDefinition
 
-const FORMAT_VERSION: int = 1
+const FORMAT_VERSION: int = 2
 const HARD_MAX_EXTENT: Vector3i = Vector3i(96, 16, 96)
 const HARD_MAX_EXPLORED_STATES: int = 10000
 const HARD_MAX_MODULE_COUNT: int = 64
 
-@export var format_version: int = FORMAT_VERSION
+@export var format_version: int = 0
 @export var level_id: StringName
 @export var presentation: LevelPresentationDefinition
 @export var start_module_id: StringName

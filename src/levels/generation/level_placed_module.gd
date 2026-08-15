@@ -1,12 +1,17 @@
 extends RefCounted
 class_name LevelPlacedModule
 
+var placement_id: int:
+	get:
+		return _placement_id
 var definition: LevelModuleDefinition
 var origin: Vector3i
 var rotation: int
 var room_type_id: StringName
+var _placement_id: int
 
-func _init(p_definition: LevelModuleDefinition, p_origin: Vector3i, p_rotation: int, p_room_type_id: StringName) -> void:
+func _init(p_placement_id: int, p_definition: LevelModuleDefinition, p_origin: Vector3i, p_rotation: int, p_room_type_id: StringName) -> void:
+	_placement_id = p_placement_id
 	definition = p_definition
 	origin = p_origin
 	rotation = posmod(p_rotation, 4)

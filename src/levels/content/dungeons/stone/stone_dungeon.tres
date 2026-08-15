@@ -1,30 +1,62 @@
-[gd_resource type="Resource" script_class="LevelDefinition" load_steps=7 format=3]
+[gd_resource type="Resource" script_class="LevelDefinition" load_steps=15 format=3]
 
 [ext_resource type="Script" path="res://levels/definitions/level_definition.gd" id="1_definition"]
 [ext_resource type="Resource" path="res://levels/content/dungeons/stone/stone_dungeon_presentation.tres" id="2_presentation"]
 [ext_resource type="Script" path="res://levels/definitions/level_room_requirement.gd" id="3_requirement"]
+[ext_resource type="Script" path="res://levels/definitions/level_enemy_group_definition.gd" id="4_enemy_group"]
+[ext_resource type="Script" path="res://levels/definitions/level_room_encounter_definition.gd" id="5_encounter"]
+
+[sub_resource type="Resource" id="MasterEnemyGroup"]
+script = ExtResource("4_enemy_group")
+entity_id = &"zombie"
+count = 40
+
+[sub_resource type="Resource" id="MasterEncounter"]
+script = ExtResource("5_encounter")
+enemy_groups = Array[ExtResource("4_enemy_group")]([SubResource("MasterEnemyGroup")])
 
 [sub_resource type="Resource" id="MasterRoomRequirement"]
 script = ExtResource("3_requirement")
 room_type_id = &"master_room"
 count = 1
 module_ids = Array[StringName]([&"stone_master_room"])
+encounter = SubResource("MasterEncounter")
+
+[sub_resource type="Resource" id="NormalEnemyGroup"]
+script = ExtResource("4_enemy_group")
+entity_id = &"zombie"
+count = 25
+
+[sub_resource type="Resource" id="NormalEncounter"]
+script = ExtResource("5_encounter")
+enemy_groups = Array[ExtResource("4_enemy_group")]([SubResource("NormalEnemyGroup")])
 
 [sub_resource type="Resource" id="NormalRoomRequirement"]
 script = ExtResource("3_requirement")
 room_type_id = &"normal_room"
 count = 3
 module_ids = Array[StringName]([&"stone_room"])
+encounter = SubResource("NormalEncounter")
+
+[sub_resource type="Resource" id="ChestEnemyGroup"]
+script = ExtResource("4_enemy_group")
+entity_id = &"zombie"
+count = 6
+
+[sub_resource type="Resource" id="ChestEncounter"]
+script = ExtResource("5_encounter")
+enemy_groups = Array[ExtResource("4_enemy_group")]([SubResource("ChestEnemyGroup")])
 
 [sub_resource type="Resource" id="ChestRoomRequirement"]
 script = ExtResource("3_requirement")
 room_type_id = &"chest_room"
 count = 3
 module_ids = Array[StringName]([&"stone_chest_room"])
+encounter = SubResource("ChestEncounter")
 
 [resource]
 script = ExtResource("1_definition")
-format_version = 1
+format_version = 2
 level_id = &"stone_dungeon"
 presentation = ExtResource("2_presentation")
 start_module_id = &"stone_entry_path"

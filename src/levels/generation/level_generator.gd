@@ -21,6 +21,7 @@ enum FrontierTarget {
 class AssemblyState:
 	var cells: Dictionary = {}
 	var placed_modules: Array[LevelPlacedModule] = []
+	var connections: Array[LevelConnection] = []
 	var torches: Array[LevelTorchPlacement] = []
 	var frontiers: Array[Dictionary] = []
 	var remaining_room_counts: Dictionary = {}
@@ -36,6 +37,7 @@ class AssemblyState:
 		var copied := AssemblyState.new()
 		copied.cells = cells.duplicate()
 		copied.placed_modules.assign(placed_modules)
+		copied.connections.assign(connections)
 		copied.torches.assign(torches)
 		copied.frontiers.assign(frontiers)
 		copied.remaining_room_counts = remaining_room_counts.duplicate()
@@ -104,7 +106,7 @@ static func derive_seed(world_seed: int, entrance_id: StringName, entrance_coord
 func _create_initial_state(module: LevelModuleDefinition) -> AssemblyState:
 	var state := AssemblyState.new()
 	var origin := Vector3i(-module.spawn_marker.cell.x, 0, -module.spawn_marker.cell.z)
-	var placement := LevelPlacedModule.new(module, origin, 0, &"")
+	var placement := LevelPlacedModule.new(0, module, origin, 0, &"")
 	_write_placement(state, placement, _transformed_cells(placement))
 	state.spawn_cell = placement.world_cell(module.spawn_marker.cell)
 	state.spawn_facing = placement.world_direction(module.spawn_marker.facing)
@@ -371,7 +373,7 @@ func _try_place(state: AssemblyState, frontier_index: int, candidate: Dictionary
 		connected_aperture.append(origin + cell)
 	if not _same_cell_set(target_aperture, connected_aperture):
 		return null
-	var placement := LevelPlacedModule.new(module, origin, rotation, room_type_id)
+	var placement := LevelPlacedModule.new(state.placed_modules.size(), module, origin, rotation, room_type_id)
 	var rotated_snapshot := _rotated_snapshot(module, rotation)
 	var candidate_min: Vector3i = state.bounds_min.min(origin + (rotated_snapshot["bounds_min"] as Vector3i))
 	var candidate_max: Vector3i = state.bounds_max.max(origin + (rotated_snapshot["bounds_max"] as Vector3i))
@@ -385,6 +387,17 @@ func _try_place(state: AssemblyState, frontier_index: int, candidate: Dictionary
 	var transformed_cells := _transformed_cells(placement, rotated_snapshot)
 	var next_state := state.copy()
 	next_state.frontiers.remove_at(frontier_index)
+	next_state.connections.append(LevelConnection.new(
+		next_state.connections.size(),
+		int(frontier["placement_id"]),
+		frontier["socket_id"] as StringName,
+		frontier_direction,
+		frontier_aperture,
+		placement.placement_id,
+		socket.socket_id,
+		placement.world_direction(socket.direction),
+		connected_aperture
+	))
 	_write_placement(next_state, placement, transformed_cells, socket.socket_id)
 	return next_state
 
@@ -477,6 +490,7 @@ func _write_placement(state: AssemblyState, placement: LevelPlacedModule, transf
 		var world_aperture := placement.world_socket_aperture(socket)
 		var world_direction := placement.world_direction(socket.direction)
 		state.frontiers.append({
+			"placement_id": placement.placement_id,
 			"module_id": placement.definition.module_id,
 			"socket_id": socket.socket_id,
 			"cell": placement.world_cell(socket.cell),
@@ -517,7 +531,7 @@ func _same_cell_set(first: Array[Vector3i], second: Array[Vector3i]) -> bool:
 	return true
 
 func _validate_finished_state(state: AssemblyState, target_module_count: int) -> bool:
-	if not state.frontiers.is_empty() or state.placed_modules.size() != target_module_count:
+	if not state.frontiers.is_empty() or state.placed_modules.size() != target_module_count or state.connections.size() != target_module_count - 1:
 		return false
 	if not _has_exact_composition(state):
 		return false
@@ -559,6 +573,7 @@ func _make_layout(state: AssemblyState, seed_value: int, target_module_count: in
 	layout.seed_value = seed_value
 	layout.cells = state.cells.duplicate()
 	layout.placed_modules.assign(state.placed_modules)
+	layout.connections.assign(state.connections)
 	layout.torches.assign(state.torches)
 	layout.spawn_cell = state.spawn_cell
 	layout.spawn_facing = state.spawn_facing

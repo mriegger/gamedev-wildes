@@ -4,6 +4,7 @@ class_name LevelLayout
 var seed_value: int
 var cells: Dictionary = {}
 var placed_modules: Array[LevelPlacedModule] = []
+var connections: Array[LevelConnection] = []
 var torches: Array[LevelTorchPlacement] = []
 var spawn_cell: Vector3i
 var spawn_facing: LevelSocketDefinition.Direction

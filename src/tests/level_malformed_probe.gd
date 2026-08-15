@@ -10,8 +10,40 @@ func _init() -> void:
 	var source_level := source_catalog.get_level(&"stone_dungeon")
 	var unsupported_version := source_level.duplicate(true) as LevelDefinition
 	unsupported_version.format_version = LevelDefinition.FORMAT_VERSION + 1
+	var unversioned := source_level.duplicate(true) as LevelDefinition
+	unversioned.format_version = 0
+	var obsolete_version := source_level.duplicate(true) as LevelDefinition
+	obsolete_version.format_version = LevelDefinition.FORMAT_VERSION - 1
 	var missing_presentation := source_catalog.get_level(&"stone_dungeon").duplicate(true) as LevelDefinition
 	missing_presentation.presentation = null
+	var missing_encounter := source_level.duplicate(true) as LevelDefinition
+	missing_encounter.room_requirements[0].encounter = null
+	var empty_encounter := LevelRoomEncounterDefinition.new()
+	var null_group_encounter := LevelRoomEncounterDefinition.new()
+	null_group_encounter.enemy_groups.append(null)
+	var empty_entity_group := LevelEnemyGroupDefinition.new()
+	var empty_entity_encounter := LevelRoomEncounterDefinition.new()
+	empty_entity_encounter.enemy_groups.append(empty_entity_group)
+	var zero_count_group := LevelEnemyGroupDefinition.new()
+	zero_count_group.entity_id = &"zero"
+	zero_count_group.count = 0
+	var zero_count_encounter := LevelRoomEncounterDefinition.new()
+	zero_count_encounter.enemy_groups.append(zero_count_group)
+	var excessive_count_group := LevelEnemyGroupDefinition.new()
+	excessive_count_group.entity_id = &"excessive"
+	excessive_count_group.count = LevelEnemyGroupDefinition.MAX_COUNT + 1
+	var excessive_count_encounter := LevelRoomEncounterDefinition.new()
+	excessive_count_encounter.enemy_groups.append(excessive_count_group)
+	var duplicate_enemy_encounter := source_level.room_requirements[0].encounter.duplicate(true) as LevelRoomEncounterDefinition
+	duplicate_enemy_encounter.enemy_groups.append(duplicate_enemy_encounter.enemy_groups[0].duplicate(true) as LevelEnemyGroupDefinition)
+	var oversized_encounter := LevelRoomEncounterDefinition.new()
+	var first_oversized_group := LevelEnemyGroupDefinition.new()
+	first_oversized_group.entity_id = &"first"
+	first_oversized_group.count = 64
+	var second_oversized_group := LevelEnemyGroupDefinition.new()
+	second_oversized_group.entity_id = &"second"
+	second_oversized_group.count = 1
+	oversized_encounter.enemy_groups.assign([first_oversized_group, second_oversized_group])
 	var empty_room_type := LevelRoomRequirement.new()
 	empty_room_type.count = 1
 	empty_room_type.module_ids.assign([&"stone_room"])
@@ -52,6 +84,9 @@ func _init() -> void:
 	var required_room := source_catalog.get_module(&"stone_room").duplicate(true) as LevelModuleDefinition
 	required_room.sockets[0].unused_fill_block_id = StructureCell.AIR
 	var required_room_catalog := _catalog_with(source_catalog, source_level, {required_room.module_id: required_room})
+	var missing_spawn_zones := source_catalog.get_module(&"stone_room").duplicate(true) as LevelModuleDefinition
+	missing_spawn_zones.enemy_spawn_zones.clear()
+	var missing_spawn_zones_catalog := _catalog_with(source_catalog, source_level, {missing_spawn_zones.module_id: missing_spawn_zones})
 	var disconnected_room := source_catalog.get_module(&"stone_chest_room").duplicate(true) as LevelModuleDefinition
 	disconnected_room.cells[StructureCell.index_of(Vector3i.ZERO, disconnected_room.size)] = StructureCell.AIR
 	var disconnected_room_catalog := _catalog_with(source_catalog, source_level, {disconnected_room.module_id: disconnected_room})
@@ -101,7 +136,17 @@ func _init() -> void:
 	var checks: Array[bool] = [
 		empty_failed,
 		not unsupported_version.validate(),
+		not unversioned.validate(),
+		not obsolete_version.validate(),
 		not missing_presentation.validate(),
+		not missing_encounter.validate(),
+		not empty_encounter.validate("probe"),
+		not null_group_encounter.validate("probe"),
+		not empty_entity_encounter.validate("probe"),
+		not zero_count_encounter.validate("probe"),
+		not excessive_count_encounter.validate("probe"),
+		not duplicate_enemy_encounter.validate("probe"),
+		not oversized_encounter.validate("probe"),
 		not empty_room_type.validate("probe"),
 		not zero_room_count.validate("probe"),
 		not empty_room_pool.validate("probe"),
@@ -115,6 +160,7 @@ func _init() -> void:
 		not one_socket_hallway_catalog.validate(),
 		not sealable_hallway_catalog.validate(),
 		not required_room_catalog.validate(),
+		not missing_spawn_zones_catalog.validate(),
 		not disconnected_room_catalog.validate(),
 		not too_few_rooms_catalog.validate(),
 		not oversized_composition_catalog.validate(),

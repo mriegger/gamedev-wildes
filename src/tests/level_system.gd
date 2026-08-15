@@ -33,6 +33,11 @@ const EXPECTED_ROOM_COUNTS: Dictionary = {
 	&"normal_room": 3,
 	&"chest_room": 3,
 }
+const EXPECTED_ENCOUNTER_COUNTS: Dictionary = {
+	&"master_room": 40,
+	&"normal_room": 25,
+	&"chest_room": 6,
+}
 
 var _failures: int = 0
 var _assertions: int = 0
@@ -121,6 +126,14 @@ func _test_catalog_and_modules() -> void:
 	expected_hallway_ids.sort()
 	_expect(actual_hallway_ids == expected_hallway_ids, "stone hallway pool changed: %s" % str(actual_hallway_ids))
 	_expect(_room_requirement_counts(definition) == EXPECTED_ROOM_COUNTS, "stone room requirements changed: %s" % str(_room_requirement_counts(definition)))
+	for requirement in definition.room_requirements:
+		_expect(requirement.encounter != null and requirement.encounter.validate(String(requirement.room_type_id)), "stone room encounter is invalid: %s" % requirement.room_type_id)
+		if requirement.encounter != null:
+			_expect(requirement.encounter.enemy_groups.size() == 1, "stone room encounter does not have exactly one enemy group: %s" % requirement.room_type_id)
+			if requirement.encounter.enemy_groups.size() == 1:
+				var group := requirement.encounter.enemy_groups[0]
+				_expect(group.entity_id == &"zombie", "stone room encounter does not use zombies: %s" % requirement.room_type_id)
+				_expect(group.count == int(EXPECTED_ENCOUNTER_COUNTS[requirement.room_type_id]), "stone room encounter count changed: %s" % requirement.room_type_id)
 	_expect(definition.get_room_count() == LIVE_ROOM_COUNT, "stone required room count changed")
 	_expect(definition.get_hallway_count(entry_module.sockets.size()) == LIVE_HALLWAY_COUNT, "stone required hallway count changed")
 	_expect(definition.get_target_module_count(entry_module.sockets.size()) == LIVE_TARGET_MODULE_COUNT, "stone target module count changed")
@@ -181,6 +194,7 @@ func _test_catalog_and_modules() -> void:
 			_expect(module.sockets.size() == 2, "hallway module does not have exactly two sockets: %s" % module.module_id)
 		elif module.module_id != definition.start_module_id:
 			_expect(not _room_type_for_module(definition, module.module_id).is_empty(), "live module has no room requirement: %s" % module.module_id)
+			_expect(not module.enemy_spawn_zones.is_empty() and not module.get_enemy_spawn_candidate_cells().is_empty(), "live room module has no usable enemy spawn zone: %s" % module.module_id)
 	_expect(start_count == 1, "catalog must have exactly one entry module")
 
 func _test_marker(module: LevelModuleDefinition, marker: LevelMarkerDefinition, label: String) -> void:
@@ -447,6 +461,7 @@ func _test_semantic_set_determinism() -> void:
 	_expect(first.succeeded and second.succeeded, "semantic-order generation failed")
 	if first.succeeded and second.succeeded:
 		_expect(_layout_digest(first.layout) == _layout_digest(second.layout), "requirements, module pools, or catalog order changed deterministic output")
+		_expect(_topology_digest(first.layout) == _topology_digest(second.layout), "requirements, module pools, or catalog order changed deterministic topology")
 
 func _make_extensible_fixture(reverse_semantic_sets: bool) -> Dictionary:
 	var start := _make_aperture_module(
@@ -531,6 +546,11 @@ func _make_aperture_module(module_id: StringName, socket_specs: Array[Dictionary
 		module.return_door_marker = LevelMarkerDefinition.new()
 		module.return_door_marker.cell = Vector3i(4, 1, 3)
 		module.return_door_marker.facing = LevelSocketDefinition.Direction.WEST
+	var spawn_zone := LevelEnemySpawnZone.new()
+	spawn_zone.zone_id = &"center"
+	spawn_zone.minimum_feet_cell = Vector3i(3, 1, 3)
+	spawn_zone.maximum_feet_cell = Vector3i(3, 1, 3)
+	module.enemy_spawn_zones.append(spawn_zone)
 	_expect(module.validate(), "synthetic aperture module failed validation: %s" % module_id)
 	return module
 
@@ -541,6 +561,7 @@ func _make_level_definition(
 	requirements: Array,
 ) -> LevelDefinition:
 	var definition := LevelDefinition.new()
+	definition.format_version = LevelDefinition.FORMAT_VERSION
 	definition.level_id = level_id
 	definition.presentation = _catalog.get_level(LEVEL_ID).presentation
 	definition.start_module_id = start_id
@@ -555,6 +576,11 @@ func _make_room_requirement(room_type_id: StringName, count: int, module_ids: Ar
 	requirement.room_type_id = room_type_id
 	requirement.count = count
 	requirement.module_ids.assign(module_ids)
+	var enemy_group := LevelEnemyGroupDefinition.new()
+	enemy_group.entity_id = &"zombie"
+	var encounter := LevelRoomEncounterDefinition.new()
+	encounter.enemy_groups.append(enemy_group)
+	requirement.encounter = encounter
 	return requirement
 
 func _room_requirement_counts(definition: LevelDefinition) -> Dictionary:
@@ -708,6 +734,7 @@ func _test_generation_fuzz() -> int:
 			_expect(second.succeeded, "repeat generation failed for fuzz seed %d: %s" % [seed_index, second.failure_reason])
 			if second.succeeded:
 				_expect(_layout_digest(second.layout) == first_digest, "layout changed across identical generation for fuzz seed %d" % seed_index)
+				_expect(_topology_digest(second.layout) == _topology_digest(first.layout), "topology changed across identical generation for fuzz seed %d" % seed_index)
 	var golden_result := generator.generate(_catalog, LEVEL_ID, 1337, ENTRANCE_ID, Vector3i(7, 0, -9))
 	_expect(golden_result.succeeded, "live fixed layout failed generation")
 	if golden_result.succeeded:
@@ -888,23 +915,55 @@ func _validate_layout(layout: LevelLayout, seed_index: int) -> void:
 
 func _validate_module_graph(layout: LevelLayout, label: String) -> void:
 	var definition := _catalog.get_level(LEVEL_ID)
-	var records := _socket_records(layout)
 	var adjacency: Array[Dictionary] = []
 	adjacency.resize(layout.placed_modules.size())
 	var paired_socket_counts := PackedInt32Array()
 	paired_socket_counts.resize(layout.placed_modules.size())
 	var edges: Dictionary = {}
+	var connected_sockets: Dictionary = {}
 	for placement_index in layout.placed_modules.size():
 		adjacency[placement_index] = {}
-	for record_index in records.size():
-		var partner_index := _socket_partner_index(records, record_index)
-		if partner_index < 0:
+		_expect(layout.placed_modules[placement_index].placement_id == placement_index, "placement ID is not stable for %s" % label)
+	_expect(layout.connections.size() == layout.placed_modules.size() - 1, "retained connection count changed for %s" % label)
+	for connection_index in layout.connections.size():
+		var connection := layout.connections[connection_index]
+		_expect(connection != null, "retained null connection for %s" % label)
+		if connection == null:
 			continue
-		var placement_index := int(records[record_index]["placement"])
-		var other_placement_index := int(records[partner_index]["placement"])
-		paired_socket_counts[placement_index] += 1
-		adjacency[placement_index][other_placement_index] = true
-		edges[Vector2i(mini(placement_index, other_placement_index), maxi(placement_index, other_placement_index))] = true
+		_expect(connection.connection_id == connection_index, "connection ID is not stable for %s" % label)
+		_expect(connection.first_placement_id >= 0 and connection.first_placement_id < layout.placed_modules.size(), "first connection placement escaped layout for %s" % label)
+		_expect(connection.second_placement_id == connection_index + 1 and connection.second_placement_id < layout.placed_modules.size(), "second connection placement is not insertion-stable for %s" % label)
+		if connection.first_placement_id < 0 or connection.first_placement_id >= layout.placed_modules.size() or connection.second_placement_id < 0 or connection.second_placement_id >= layout.placed_modules.size():
+			continue
+		var first_placement := layout.placed_modules[connection.first_placement_id]
+		var second_placement := layout.placed_modules[connection.second_placement_id]
+		var first_socket := _socket_with_id(first_placement.definition, connection.first_socket_id)
+		var second_socket := _socket_with_id(second_placement.definition, connection.second_socket_id)
+		_expect(first_socket != null and second_socket != null, "connection references an unknown socket for %s" % label)
+		if first_socket == null or second_socket == null:
+			continue
+		var first_aperture := connection.first_aperture_cells
+		var second_aperture := connection.second_aperture_cells
+		_expect(connection.first_direction == first_placement.world_direction(first_socket.direction), "first connection direction changed for %s" % label)
+		_expect(connection.second_direction == second_placement.world_direction(second_socket.direction), "second connection direction changed for %s" % label)
+		_expect(connection.second_direction == LevelSocketDefinition.opposite(connection.first_direction), "connection directions do not oppose for %s" % label)
+		_expect(first_aperture == first_placement.world_socket_aperture(first_socket), "first connection aperture changed for %s" % label)
+		_expect(second_aperture == second_placement.world_socket_aperture(second_socket), "second connection aperture changed for %s" % label)
+		_expect(_translated_cells_equal(first_aperture, LevelSocketDefinition.vector_for(connection.first_direction), second_aperture), "connection apertures do not meet for %s" % label)
+		var first_socket_key := "%d:%s" % [connection.first_placement_id, connection.first_socket_id]
+		var second_socket_key := "%d:%s" % [connection.second_placement_id, connection.second_socket_id]
+		_expect(not connected_sockets.has(first_socket_key) and not connected_sockets.has(second_socket_key), "socket belongs to multiple connections for %s" % label)
+		connected_sockets[first_socket_key] = true
+		connected_sockets[second_socket_key] = true
+		paired_socket_counts[connection.first_placement_id] += 1
+		paired_socket_counts[connection.second_placement_id] += 1
+		adjacency[connection.first_placement_id][connection.second_placement_id] = true
+		adjacency[connection.second_placement_id][connection.first_placement_id] = true
+		edges[Vector2i(connection.first_placement_id, connection.second_placement_id)] = true
+		if connection_index == 0:
+			first_aperture.clear()
+			second_aperture.clear()
+			_expect(not connection.first_aperture_cells.is_empty() and not connection.second_aperture_cells.is_empty(), "connection exposed mutable aperture ownership for %s" % label)
 	for placement_index in layout.placed_modules.size():
 		var placement := layout.placed_modules[placement_index]
 		var paired_count := paired_socket_counts[placement_index]
@@ -938,6 +997,12 @@ func _validate_module_graph(layout: LevelLayout, label: String) -> void:
 			reached[neighbor] = true
 			pending.append(neighbor)
 	_expect(reached.size() == layout.placed_modules.size(), "module graph is disconnected for %s" % label)
+
+func _socket_with_id(module: LevelModuleDefinition, socket_id: StringName) -> LevelSocketDefinition:
+	for socket in module.sockets:
+		if socket.socket_id == socket_id:
+			return socket
+	return null
 
 func _test_level_state_and_mesher() -> void:
 	var stone := Vector3i.ZERO
@@ -1074,6 +1139,14 @@ func _layout_digest(layout: LevelLayout) -> String:
 	torch_lines.sort()
 	for torch_line in torch_lines:
 		lines.append("torch=" + torch_line)
+	return "\n".join(lines).sha256_text()
+
+func _topology_digest(layout: LevelLayout) -> String:
+	var lines := PackedStringArray()
+	for placement in layout.placed_modules:
+		lines.append("placement=%d:%s" % [placement.placement_id, placement.definition.module_id])
+	for connection in layout.connections:
+		lines.append("connection=%d:%d:%s:%d>%d:%s:%d" % [connection.connection_id, connection.first_placement_id, connection.first_socket_id, int(connection.first_direction), connection.second_placement_id, connection.second_socket_id, int(connection.second_direction)])
 	return "\n".join(lines).sha256_text()
 
 func _torch_key(cell: Vector3i, direction: LevelSocketDefinition.Direction, module_id: StringName) -> String:
