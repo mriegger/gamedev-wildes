@@ -171,7 +171,8 @@ Module directories organize content families without becoming runtime registries
 dungeon's registered resources live under `levels/content/modules/stone`, while its
 `LevelDefinition` remains the sole authority for start, expansion, and cap membership. A future
 iron dungeon can use `modules/iron` and its own explicit pools without adding a parallel family ID
-to every module or scanning project files at runtime.
+to every module or scanning project files at runtime. The live stone definition targets four to six
+large-format modules so the authored dimensions remain feasible inside its 96×16×96 bound.
 
 ## Structure authoring
 
@@ -207,15 +208,16 @@ mode authors at most one doorway per cardinal side while the persisted module fo
 continue to support existing advanced multi-door resources.
 
 Each socket persists its stable ID, boundary seed, facing, and unused-fill block ID. AIR means the
-connection remains required, while a solid cube records the material future generation may use to
-seal the complete aperture when it is unused. New sockets infer that value from the carved wall or
+connection remains required, while a solid cube records the material generation uses to seal the
+complete aperture when it is unused. New sockets infer that value from the carved wall or
 supporting floor, and legacy resources that omit it remain required. The aperture itself is the
 complete connected AIR component on that boundary plane, keeping geometry authoritative without a
 parallel serialized shape. The draft protects the aperture, inward clearance, and supporting floor
 as one transactional footprint. Generation normalizes the complete aperture after rotation and
 joins only matching shapes and sizes, allowing arbitrary enclosed hallway cross-sections while
-rejecting truncated seams. It does not consume unused-fill metadata yet. Standard wall targeting
-carves 1×2; prebuilt openings retain their authored size.
+rejecting truncated seams. Once the target module count is reached, generation leaves connected
+apertures open and seals every remaining optional aperture without adding a module. Standard wall
+targeting carves 1×2; prebuilt openings retain their authored size.
 
 `Game` constructs and injects the dual-format file store while composing the console, authoring
 workflow, dialogs, and dedicated first-person runtime. It

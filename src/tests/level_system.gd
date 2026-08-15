@@ -7,7 +7,11 @@ const LEVEL_ID: StringName = &"stone_dungeon"
 const ENTRANCE_ID: StringName = &"overworld_dungeon_entrance"
 const STONE_MODULE_DIRECTORY: String = "res://levels/content/modules/stone"
 const FUZZ_SEED_COUNT: int = 1000
-const EXPECTED_GOLDEN_DIGEST: String = "54eb2e11958a406fe08aa8c6b86885a84859b3987f51c1ae1438751db5b4bce3"
+const DEEP_FUZZ_INTERVAL: int = 20
+const LIVE_MINIMUM_MODULE_COUNT: int = 4
+const LIVE_MAXIMUM_MODULE_COUNT: int = 6
+const EXPECTED_LIVE_GOLDEN_DIGEST: String = "91e901bdecfdb541d85b086b4d28a5a6557f9fa9f0b19a929b4b2ff2cec99a55"
+const EXPECTED_LEGACY_GOLDEN_DIGEST: String = "54eb2e11958a406fe08aa8c6b86885a84859b3987f51c1ae1438751db5b4bce3"
 const DIRECTIONS: Array[Vector3i] = [
 	Vector3i.LEFT,
 	Vector3i.RIGHT,
@@ -17,6 +21,25 @@ const DIRECTIONS: Array[Vector3i] = [
 	Vector3i.BACK,
 ]
 const EXPECTED_MODULE_IDS: Array[StringName] = [
+	&"stone_entry_path",
+	&"stone_hallway",
+	&"stone_master_room",
+]
+const EXPECTED_EXPANSION_MODULE_IDS: Array[StringName] = [
+	&"stone_hallway",
+	&"stone_master_room",
+]
+const LEGACY_MODULE_PATHS: Array[String] = [
+	"res://levels/content/modules/stone/start_chamber.tres",
+	"res://levels/content/modules/stone/straight_hall.tres",
+	"res://levels/content/modules/stone/corner_hall.tres",
+	"res://levels/content/modules/stone/small_room.tres",
+	"res://levels/content/modules/stone/large_room.tres",
+	"res://levels/content/modules/stone/t_junction.tres",
+	"res://levels/content/modules/stone/compact_dead_end.tres",
+	"res://levels/content/modules/stone/dead_end_chamber.tres",
+]
+const LEGACY_MODULE_IDS: Array[StringName] = [
 	&"dungeon_start_chamber",
 	&"dungeon_straight_hall",
 	&"dungeon_corner_hall",
@@ -31,6 +54,8 @@ var _failures: int = 0
 var _assertions: int = 0
 var _catalog: LevelCatalog
 var _block_catalog: BlockCatalog
+var _saw_connected_optional_socket: bool = false
+var _saw_sealed_optional_socket: bool = false
 
 func _init() -> void:
 	call_deferred("_run")
@@ -46,8 +71,10 @@ func _run() -> void:
 	_test_catalog_and_modules()
 	_test_rotations()
 	_test_variable_aperture_generation()
+	_test_optional_socket_sealing()
 	_test_seed_identity_and_failures()
 	_test_entrance_placement_stability()
+	_test_legacy_generation_golden()
 	var fuzz_started := Time.get_ticks_msec()
 	var successful_seeds := _test_generation_fuzz()
 	var fuzz_msec := Time.get_ticks_msec() - fuzz_started
@@ -72,7 +99,7 @@ func _test_catalog_and_modules() -> void:
 	_expect(not LevelSocketDefinition.is_valid_unused_fill_block(BlockId.Type.WATER), "water socket fill block was accepted")
 	_expect(not LevelSocketDefinition.is_valid_unused_fill_block(BlockId.Type.COUNT), "unknown socket fill block was accepted")
 	_expect(_catalog.validate(), "level catalog validation failed")
-	_expect(_catalog.modules.size() == EXPECTED_MODULE_IDS.size(), "catalog must contain exactly eight initial modules")
+	_expect(_catalog.modules.size() == EXPECTED_MODULE_IDS.size(), "catalog must contain exactly the three live stone modules")
 	_expect(_catalog.levels.size() == 1, "catalog must contain exactly one initial level")
 	var actual_ids: Array[StringName] = []
 	for module in _catalog.modules:
@@ -92,12 +119,21 @@ func _test_catalog_and_modules() -> void:
 	if entrance_definition != null:
 		_expect(entrance_definition.entrance_id == &"meadow_dungeon" and entrance_definition.level_id == LEVEL_ID, "meadow entrance IDs changed")
 		_expect(entrance_definition.arch_block_id == BlockId.Type.STONE and entrance_definition.door_block_id == BlockId.Type.LOG, "meadow entrance blocks changed")
-	_expect(definition.start_module_id == &"dungeon_start_chamber", "start module ID changed")
-	_expect(definition.minimum_module_count == 8 and definition.maximum_module_count == 12, "module-count range must remain 8-12")
+	_expect(definition.start_module_id == &"stone_entry_path", "stone entry path is not the selected start module")
+	var entry_module := _catalog.get_module(definition.start_module_id)
+	_expect(entry_module.spawn_marker.cell == Vector3i(7, 1, 3) and entry_module.spawn_marker.facing == LevelSocketDefinition.Direction.EAST, "stone entry player spawn changed")
+	_expect(entry_module.return_door_marker.cell == Vector3i(3, 1, 1) and entry_module.return_door_marker.facing == LevelSocketDefinition.Direction.NORTH, "stone shared entrance/exit door changed")
+	_expect(is_equal_approx(_catalog.get_module(&"stone_hallway").weight, 4.0), "stone hallway weight changed")
+	_expect(is_equal_approx(_catalog.get_module(&"stone_master_room").weight, 1.0), "stone master-room weight changed")
+	_expect(definition.minimum_module_count == LIVE_MINIMUM_MODULE_COUNT and definition.maximum_module_count == LIVE_MAXIMUM_MODULE_COUNT, "live stone module-count range changed")
 	_expect(definition.maximum_extent == Vector3i(96, 16, 96), "level extent bound changed")
 	_expect(definition.maximum_explored_states == 10000, "search-state bound changed")
-	_expect(definition.expansion_module_ids.size() == 5, "expansion pool must contain five modules")
-	_expect(definition.cap_module_ids.size() == 2, "cap pool must contain two modules")
+	var actual_expansion_ids := definition.expansion_module_ids.duplicate()
+	actual_expansion_ids.sort()
+	var expected_expansion_ids := EXPECTED_EXPANSION_MODULE_IDS.duplicate()
+	expected_expansion_ids.sort()
+	_expect(actual_expansion_ids == expected_expansion_ids, "stone expansion pool changed: %s" % str(actual_expansion_ids))
+	_expect(definition.cap_module_ids.is_empty(), "optional stone openings must not require cap modules")
 	var stone_module_ids: Array[StringName] = [definition.start_module_id]
 	stone_module_ids.append_array(definition.expansion_module_ids)
 	stone_module_ids.append_array(definition.cap_module_ids)
@@ -113,15 +149,17 @@ func _test_catalog_and_modules() -> void:
 		for socket in module.sockets:
 			_expect(not seen_sockets.has(socket.socket_id), "duplicate socket ID in %s" % module.module_id)
 			seen_sockets[socket.socket_id] = true
-			_expect(socket.unused_fill_block_id == StructureCell.AIR, "legacy module socket unexpectedly became optional in %s" % module.module_id)
+			_expect(socket.unused_fill_block_id == BlockId.Type.STONE_BRICKS, "production socket fill is not Stone Bricks in %s" % module.module_id)
 			_expect(_is_boundary(socket.cell, module.size, socket.direction), "socket is not on its declared boundary in %s" % module.module_id)
-			_expect(module.cell_at(socket.cell) == StructureCell.AIR, "socket lower aperture is not AIR in %s" % module.module_id)
-			_expect(module.cell_at(socket.cell + Vector3i.UP) == StructureCell.AIR, "socket upper aperture is not AIR in %s" % module.module_id)
+			var aperture := module.socket_aperture_cells(socket)
+			_expect(aperture.size() == 18, "production socket opening is not 18 cells in %s" % module.module_id)
+			_expect(LevelSocketAperture.dimensions(aperture, socket.direction) == Vector2i(3, 6), "production socket opening is not 3x6 in %s" % module.module_id)
+			for aperture_cell in aperture:
+				_expect(module.cell_at(aperture_cell) == StructureCell.AIR, "socket aperture is not AIR in %s" % module.module_id)
 			var inward := -LevelSocketDefinition.vector_for(socket.direction)
 			_expect(module.cell_at(socket.cell + inward) == StructureCell.AIR, "socket does not open into lower interior AIR in %s" % module.module_id)
 			_expect(module.cell_at(socket.cell + Vector3i.UP + inward) == StructureCell.AIR, "socket does not open into upper interior AIR in %s" % module.module_id)
 			_expect(StructureCell.is_structure_solid(module.cell_at(socket.cell + Vector3i.DOWN)), "socket floor is missing in %s" % module.module_id)
-			_expect(module.socket_aperture_cells(socket).size() == 2, "legacy socket opening changed in %s" % module.module_id)
 		var seen_torches: Dictionary = {}
 		for torch in module.torches:
 			_expect(not seen_torches.has(torch.cell), "duplicate torch cell in %s" % module.module_id)
@@ -139,17 +177,15 @@ func _test_catalog_and_modules() -> void:
 					_expect(StructureCell.is_valid(module.cell_at(cell)), "module contains an invalid cell in %s" % module.module_id)
 		if module.spawn_marker != null:
 			start_count += 1
-			_expect(module.module_id == definition.start_module_id, "non-start module has spawn markers: %s" % module.module_id)
-			_expect(module.return_door_marker != null, "start module return marker is missing")
+			_expect(module.module_id == definition.start_module_id, "non-entry module has entry markers: %s" % module.module_id)
+			_expect(module.return_door_marker != null, "entry module entrance/exit marker is missing")
 			_test_marker(module, module.spawn_marker, "spawn")
-			_test_marker(module, module.return_door_marker, "return")
+			_test_marker(module, module.return_door_marker, "entrance/exit door")
 		else:
-			_expect(module.return_door_marker == null, "module has an unpaired return marker: %s" % module.module_id)
+			_expect(module.return_door_marker == null, "module has an unpaired entrance/exit marker: %s" % module.module_id)
 		if module.module_id in definition.expansion_module_ids:
 			_expect(module.sockets.size() >= 2, "expansion module lacks two sockets: %s" % module.module_id)
-		if module.module_id in definition.cap_module_ids:
-			_expect(module.sockets.size() == 1, "cap module must have one socket: %s" % module.module_id)
-	_expect(start_count == 1, "catalog must have exactly one start module")
+	_expect(start_count == 1, "catalog must have exactly one entry module")
 
 func _test_marker(module: LevelModuleDefinition, marker: LevelMarkerDefinition, label: String) -> void:
 	_expect(StructureCell.is_in_bounds(marker.cell, module.size), "%s marker is outside %s" % [label, module.module_id])
@@ -295,6 +331,50 @@ func _test_variable_aperture_generation() -> void:
 	var shape_mismatch := LevelGenerator.new().generate(shape_catalog, shape_definition.level_id, 81, &"variable_aperture", Vector3i.ZERO)
 	_expect(not shape_mismatch.succeeded, "different opening shapes with identical 3×6 bounds connected")
 
+func _test_optional_socket_sealing() -> void:
+	var start := _make_aperture_module(
+		&"optional_start",
+		[
+			{"id": &"east", "direction": LevelSocketDefinition.Direction.EAST, "width": 3, "height": 6, "seed_offset": 1, "fill": BlockId.Type.STONE_BRICKS},
+			{"id": &"west", "direction": LevelSocketDefinition.Direction.WEST, "width": 3, "height": 6, "seed_offset": 1, "fill": BlockId.Type.DIRT},
+		],
+		true,
+	)
+	var hall := _make_aperture_module(
+		&"optional_hall",
+		[
+			{"id": &"north", "direction": LevelSocketDefinition.Direction.NORTH, "width": 3, "height": 6, "seed_offset": 1},
+			{"id": &"south", "direction": LevelSocketDefinition.Direction.SOUTH, "width": 3, "height": 6, "seed_offset": 1},
+		],
+		false,
+	)
+	var cap := _make_aperture_module(
+		&"optional_cap",
+		[{"id": &"west", "direction": LevelSocketDefinition.Direction.WEST, "width": 3, "height": 6, "seed_offset": 1}],
+		false,
+	)
+	var definition := _make_aperture_level(start.module_id, hall.module_id, cap.module_id)
+	definition.level_id = &"optional_sealing_level"
+	definition.minimum_module_count = 1
+	definition.maximum_module_count = 1
+	var catalog := LevelCatalog.new()
+	catalog.modules.assign([start, hall, cap])
+	catalog.levels.append(definition)
+	_expect(catalog.validate(), "optional-sealing catalog failed validation")
+	var result := LevelGenerator.new().generate(catalog, definition.level_id, 91, &"optional_sealing", Vector3i.ZERO)
+	_expect(result.succeeded, "optional socket did not seal: %s" % result.failure_reason)
+	if not result.succeeded:
+		return
+	_expect(result.layout.placed_modules.size() == 1, "sealing an optional socket placed another module")
+	var placement := result.layout.placed_modules[0]
+	for socket in start.sockets:
+		var inward := -LevelSocketDefinition.vector_for(placement.world_direction(socket.direction))
+		for aperture_cell in placement.world_socket_aperture(socket):
+			_expect(result.layout.get_cell(aperture_cell) == socket.unused_fill_block_id, "optional socket aperture ignored its own fill block")
+			_expect(result.layout.get_cell(aperture_cell + inward) == StructureCell.AIR, "optional socket sealing changed inward clearance")
+	var repeated := LevelGenerator.new().generate(catalog, definition.level_id, 91, &"optional_sealing", Vector3i.ZERO)
+	_expect(repeated.succeeded and _layout_digest(repeated.layout) == _layout_digest(result.layout), "optional socket sealing is not deterministic")
+
 func _make_aperture_module(module_id: StringName, socket_specs: Array[Dictionary], with_markers: bool) -> LevelModuleDefinition:
 	var module := LevelModuleDefinition.new()
 	module.module_id = module_id
@@ -318,6 +398,7 @@ func _make_aperture_module(module_id: StringName, socket_specs: Array[Dictionary
 		socket.socket_id = spec["id"] as StringName
 		socket.cell = _aperture_boundary_cell(direction, transverse_start + int(spec["seed_offset"]), 1, module.size)
 		socket.direction = direction
+		socket.unused_fill_block_id = int(spec.get("fill", StructureCell.AIR))
 		module.sockets.append(socket)
 	if with_markers:
 		module.spawn_marker = LevelMarkerDefinition.new()
@@ -424,11 +505,55 @@ func _test_entrance_placement_stability() -> void:
 	_expect(blocked_mining.size() == 1 and not blocked_mining[0].is_success() and blocked_mining[0].result == BlockEdit.Result.FAIL_PROTECTED, "entrance foundation accepted mining")
 	_expect(voxel_world.get_block_edit_count() == 0, "rejected entrance edits changed voxel state")
 
+func _test_legacy_generation_golden() -> void:
+	var legacy_catalog := LevelCatalog.new()
+	var loaded_ids: Array[StringName] = []
+	for module_path in LEGACY_MODULE_PATHS:
+		var module := load(module_path) as LevelModuleDefinition
+		_expect(module != null, "legacy golden module did not load: %s" % module_path)
+		if module == null:
+			continue
+		legacy_catalog.modules.append(module)
+		loaded_ids.append(module.module_id)
+	loaded_ids.sort()
+	var expected_ids := LEGACY_MODULE_IDS.duplicate()
+	expected_ids.sort()
+	_expect(loaded_ids == expected_ids, "legacy golden module IDs changed: %s" % str(loaded_ids))
+	var definition := LevelDefinition.new()
+	definition.level_id = &"legacy_stone_dungeon"
+	definition.presentation = _catalog.get_level(LEVEL_ID).presentation
+	definition.start_module_id = &"dungeon_start_chamber"
+	definition.expansion_module_ids.assign([
+		&"dungeon_straight_hall",
+		&"dungeon_corner_hall",
+		&"dungeon_small_room",
+		&"dungeon_large_room",
+		&"dungeon_t_junction",
+	])
+	definition.cap_module_ids.assign([
+		&"dungeon_compact_dead_end",
+		&"dungeon_dead_end_chamber",
+	])
+	definition.minimum_module_count = 8
+	definition.maximum_module_count = 12
+	definition.maximum_extent = Vector3i(96, 16, 96)
+	definition.maximum_explored_states = 10000
+	legacy_catalog.levels.append(definition)
+	var catalog_is_valid := legacy_catalog.validate()
+	_expect(catalog_is_valid, "legacy golden catalog failed validation")
+	if not catalog_is_valid:
+		return
+	var result := LevelGenerator.new().generate(legacy_catalog, definition.level_id, 1337, ENTRANCE_ID, Vector3i(7, 0, -9))
+	_expect(result.succeeded, "legacy fixed golden layout failed generation")
+	if result.succeeded:
+		var digest := _layout_digest(result.layout)
+		_expect(digest == EXPECTED_LEGACY_GOLDEN_DIGEST, "legacy fixed layout digest changed: %s" % digest)
+
 func _test_generation_fuzz() -> int:
 	var saw_minimum := false
 	var saw_maximum := false
+	var seen_expansion_ids: Dictionary = {}
 	var successful_seeds := 0
-	var golden_digest := ""
 	for seed_index in range(FUZZ_SEED_COUNT):
 		var world_seed := seed_index - 500
 		var entrance_coordinate := Vector3i(seed_index % 29 - 14, seed_index % 7, seed_index % 31 - 15)
@@ -437,26 +562,32 @@ func _test_generation_fuzz() -> int:
 		if not first.succeeded:
 			continue
 		successful_seeds += 1
-		_validate_layout(first.layout, seed_index)
-		var first_digest := _layout_digest(first.layout)
-		var second := LevelGenerator.new().generate(_catalog, LEVEL_ID, world_seed, ENTRANCE_ID, entrance_coordinate)
-		_expect(second.succeeded, "repeat generation failed for fuzz seed %d: %s" % [seed_index, second.failure_reason])
-		if second.succeeded:
-			_expect(_layout_digest(second.layout) == first_digest, "layout changed across identical generation for fuzz seed %d" % seed_index)
-		if first.layout.placed_modules.size() == 8:
+		for placement in first.layout.placed_modules:
+			if placement.definition.module_id in EXPECTED_EXPANSION_MODULE_IDS:
+				seen_expansion_ids[placement.definition.module_id] = true
+		if seed_index % DEEP_FUZZ_INTERVAL == 0:
+			_validate_layout(first.layout, seed_index)
+			var first_digest := _layout_digest(first.layout)
+			var second := LevelGenerator.new().generate(_catalog, LEVEL_ID, world_seed, ENTRANCE_ID, entrance_coordinate)
+			_expect(second.succeeded, "repeat generation failed for fuzz seed %d: %s" % [seed_index, second.failure_reason])
+			if second.succeeded:
+				_expect(_layout_digest(second.layout) == first_digest, "layout changed across identical generation for fuzz seed %d" % seed_index)
+		if first.layout.placed_modules.size() == LIVE_MINIMUM_MODULE_COUNT:
 			saw_minimum = true
-		if first.layout.placed_modules.size() == 12:
+		if first.layout.placed_modules.size() == LIVE_MAXIMUM_MODULE_COUNT:
 			saw_maximum = true
-		if world_seed == 1337:
-			golden_digest = first_digest
 	var golden_result := LevelGenerator.new().generate(_catalog, LEVEL_ID, 1337, ENTRANCE_ID, Vector3i(7, 0, -9))
-	_expect(golden_result.succeeded, "fixed golden layout failed generation")
+	_expect(golden_result.succeeded, "live fixed layout failed generation")
 	if golden_result.succeeded:
-		golden_digest = _layout_digest(golden_result.layout)
-		_expect(golden_digest == EXPECTED_GOLDEN_DIGEST, "fixed layout digest changed: %s" % golden_digest)
+		var digest := _layout_digest(golden_result.layout)
+		_expect(digest == EXPECTED_LIVE_GOLDEN_DIGEST, "live fixed layout digest changed: %s" % digest)
 	_expect(successful_seeds == FUZZ_SEED_COUNT, "only %d/%d fuzz seeds generated" % [successful_seeds, FUZZ_SEED_COUNT])
 	_expect(saw_minimum, "1,000-seed fuzz never generated the minimum module count")
 	_expect(saw_maximum, "1,000-seed fuzz never generated the maximum module count")
+	for module_id in EXPECTED_EXPANSION_MODULE_IDS:
+		_expect(seen_expansion_ids.has(module_id), "1,000-seed fuzz never placed %s" % module_id)
+	_expect(_saw_connected_optional_socket, "1,000-seed fuzz never observed a connected optional socket")
+	_expect(_saw_sealed_optional_socket, "1,000-seed fuzz never observed a sealed optional socket")
 	return successful_seeds
 
 func _validate_layout(layout: LevelLayout, seed_index: int) -> void:
@@ -465,7 +596,7 @@ func _validate_layout(layout: LevelLayout, seed_index: int) -> void:
 	if layout == null:
 		return
 	var definition := _catalog.get_level(LEVEL_ID)
-	_expect(layout.target_module_count >= 8 and layout.target_module_count <= 12, "target count escaped 8-12 for %s" % label)
+	_expect(layout.target_module_count >= LIVE_MINIMUM_MODULE_COUNT and layout.target_module_count <= LIVE_MAXIMUM_MODULE_COUNT, "target count escaped live bounds for %s" % label)
 	_expect(layout.placed_modules.size() == layout.target_module_count, "placed count does not match target for %s" % label)
 	_expect(layout.explored_state_count > 0 and layout.explored_state_count <= definition.maximum_explored_states, "explored-state count escaped bounds for %s" % label)
 	var ownership: Dictionary = {}
@@ -480,6 +611,21 @@ func _validate_layout(layout: LevelLayout, seed_index: int) -> void:
 		_expect(placement.definition != null and _catalog.has_module(placement.definition.module_id), "placement has unknown definition for %s" % label)
 		_expect(placement.rotation >= 0 and placement.rotation < 4, "placement rotation escaped quarter turns for %s" % label)
 		var module := placement.definition
+		var optional_fill_by_cell: Dictionary = {}
+		for socket in module.sockets:
+			var aperture := placement.world_socket_aperture(socket)
+			socket_records.append({
+				"placement": placement_index,
+				"cell": placement.world_cell(socket.cell),
+				"direction": placement.world_direction(socket.direction),
+				"aperture": aperture,
+				"unused_fill_block_id": socket.unused_fill_block_id,
+			})
+			if socket.unused_fill_block_id == StructureCell.AIR:
+				continue
+			for aperture_cell in aperture:
+				_expect(not optional_fill_by_cell.has(aperture_cell), "optional socket apertures overlap at %s for %s" % [aperture_cell, label])
+				optional_fill_by_cell[aperture_cell] = socket.unused_fill_block_id
 		for y in module.size.y:
 			for z in module.size.z:
 				for x in module.size.x:
@@ -491,7 +637,12 @@ func _validate_layout(layout: LevelLayout, seed_index: int) -> void:
 					_expect(not ownership.has(world_cell), "module overlap at %s for %s" % [world_cell, label])
 					ownership[world_cell] = placement_index
 					_expect(layout.has_cell(world_cell), "placement cell is unclaimed at %s for %s" % [world_cell, label])
-					_expect(layout.get_cell(world_cell) == value, "placement cell value changed at %s for %s" % [world_cell, label])
+					var actual_value := layout.get_cell(world_cell)
+					if optional_fill_by_cell.has(world_cell):
+						var optional_fill := int(optional_fill_by_cell[world_cell])
+						_expect(actual_value == value or actual_value == optional_fill, "optional aperture has an unexpected value at %s for %s" % [world_cell, label])
+					else:
+						_expect(actual_value == value, "placement cell value changed at %s for %s" % [world_cell, label])
 					if not has_rebuilt_bounds:
 						rebuilt_min = world_cell
 						rebuilt_max = world_cell
@@ -499,13 +650,6 @@ func _validate_layout(layout: LevelLayout, seed_index: int) -> void:
 					else:
 						rebuilt_min = rebuilt_min.min(world_cell)
 						rebuilt_max = rebuilt_max.max(world_cell)
-		for socket in module.sockets:
-			socket_records.append({
-				"placement": placement_index,
-				"cell": placement.world_cell(socket.cell),
-				"direction": placement.world_direction(socket.direction),
-				"aperture": placement.world_socket_aperture(socket),
-			})
 		for torch in module.torches:
 			var torch_cell := placement.world_cell(torch.cell)
 			var torch_direction := placement.world_direction(torch.wall_direction)
@@ -533,6 +677,7 @@ func _validate_layout(layout: LevelLayout, seed_index: int) -> void:
 		var direction := socket["direction"] as LevelSocketDefinition.Direction
 		var outward := LevelSocketDefinition.vector_for(direction)
 		var aperture := socket["aperture"] as Array[Vector3i]
+		var unused_fill_block_id := int(socket["unused_fill_block_id"])
 		var partner_count := 0
 		for other_index in socket_records.size():
 			if other_index == socket_index:
@@ -542,11 +687,19 @@ func _validate_layout(layout: LevelLayout, seed_index: int) -> void:
 				continue
 			if int(other["direction"]) == int(LevelSocketDefinition.opposite(direction)) and _translated_cells_equal(aperture, outward, other["aperture"] as Array[Vector3i]):
 				partner_count += 1
-		_expect(partner_count == 1, "socket has %d partners instead of one at %s for %s" % [partner_count, cell, label])
-		for aperture_cell in aperture:
-			var neighbor := aperture_cell + outward
-			_expect(layout.get_cell(aperture_cell) == StructureCell.AIR and layout.get_cell(neighbor) == StructureCell.AIR, "socket aperture is not open for %s" % label)
-			allowed_cross_module_edges[_edge_key(aperture_cell, neighbor)] = true
+		if partner_count == 1:
+			if unused_fill_block_id != StructureCell.AIR:
+				_saw_connected_optional_socket = true
+			for aperture_cell in aperture:
+				var neighbor := aperture_cell + outward
+				_expect(layout.get_cell(aperture_cell) == StructureCell.AIR and layout.get_cell(neighbor) == StructureCell.AIR, "connected socket aperture is not open for %s" % label)
+				allowed_cross_module_edges[_edge_key(aperture_cell, neighbor)] = true
+		elif partner_count == 0 and StructureCell.is_structure_solid(unused_fill_block_id):
+			_saw_sealed_optional_socket = true
+			for aperture_cell in aperture:
+				_expect(layout.get_cell(aperture_cell) == unused_fill_block_id, "unpaired optional socket was not sealed at %s for %s" % [aperture_cell, label])
+		else:
+			_expect(false, "socket has %d partners with fill %d at %s for %s" % [partner_count, unused_fill_block_id, cell, label])
 	for cell in layout.cells:
 		if int(layout.cells[cell]) != StructureCell.AIR:
 			continue

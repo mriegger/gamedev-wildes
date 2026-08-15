@@ -38,8 +38,8 @@ designer UI before offering to leave the designer. In Module Tools, `Place Conne
 first-person connection mode. Click a solid lower boundary wall for a standard 1×2 doorway, or
 click the floor beneath a prebuilt boundary opening to register its complete shape and size. Only
 matching openings connect. Each connection row can export either `Must connect` or a placeable cube
-to use when that doorway is eventually left unused. The current generator still closes every
-opening with a compatible module; consuming the new fill metadata is a separate generation change.
+to use when that doorway is left unused. `Must connect` openings require a compatible module;
+unused optional openings are sealed across their complete authored shape with the selected cube.
 Press `Esc` when finished. Two opposite connections form a straight hall; rooms can expose all four
 sides. Entry markers are authored as a player Spawn plus one shared Entrance / Exit Door; aim at
 each desired cell before opening Module Tools, set each marker from the target, then commit the pair.
@@ -61,14 +61,15 @@ and fill with water up to level 5.
 further out. Meshing runs on background threads so movement doesn't hitch; edits are stored
 globally and survive unload/reload.
 
-**Dungeon levels.** A doorway near the meadow spawn leads to a deterministic 8–12-module stone
-dungeon assembled from authored chambers, halls, junctions, and dead ends. The finite interior
+**Dungeon levels.** A doorway near the meadow spawn leads to a deterministic four-to-six-module
+stone dungeon assembled from an authored entry path, hallway, and master room. The finite interior
 uses cutaway-facing geometry, a black void, and authored torch light. The overworld stays loaded
 but its streaming and presentation are suspended until you return through the dungeon door.
 Doorway selection, module pools, terrain presentation, ambient lighting, and return-door materials
 are configured through typed level resources rather than hardcoded dungeon IDs. Active stone
 modules live under `levels/content/modules/stone`; future material families receive their own
-directory and `LevelDefinition` pools rather than being discovered through filesystem scans.
+directory and `LevelDefinition` pools rather than being discovered through filesystem scans. The
+current large-format stone modules target four to six placements within the 96×16×96 level bound.
 
 **Structure construction workspace.** `dev structure new` opens a document type, length, width, and
 height dialog, then enters an isolated first-person workspace for a generic structure or Level

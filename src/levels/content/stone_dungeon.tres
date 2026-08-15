@@ -7,10 +7,10 @@
 script = ExtResource("1_definition")
 level_id = &"stone_dungeon"
 presentation = ExtResource("2_presentation")
-start_module_id = &"dungeon_start_chamber"
-expansion_module_ids = Array[StringName]([&"dungeon_straight_hall", &"dungeon_corner_hall", &"dungeon_small_room", &"dungeon_large_room", &"dungeon_t_junction"])
-cap_module_ids = Array[StringName]([&"dungeon_compact_dead_end", &"dungeon_dead_end_chamber"])
-minimum_module_count = 8
-maximum_module_count = 12
+start_module_id = &"stone_entry_path"
+expansion_module_ids = Array[StringName]([&"stone_hallway", &"stone_master_room"])
+cap_module_ids = Array[StringName]([])
+minimum_module_count = 4
+maximum_module_count = 6
 maximum_extent = Vector3i(96, 16, 96)
 maximum_explored_states = 10000

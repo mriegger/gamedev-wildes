@@ -13,6 +13,9 @@ enum Direction {
 @export var direction: Direction = Direction.NORTH
 @export var unused_fill_block_id: BlockId.Type = BlockId.Type.AIR
 
+func requires_connection() -> bool:
+	return unused_fill_block_id == StructureCell.AIR
+
 static func is_valid_unused_fill_block(value: int) -> bool:
 	return value == StructureCell.AIR or StructureCell.is_structure_solid(value)
 

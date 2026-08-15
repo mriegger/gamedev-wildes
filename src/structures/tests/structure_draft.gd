@@ -226,6 +226,7 @@ func _test_module_authoring_transactions() -> void:
 		_expect(draft.get_cell(cell) == StructureCell.AIR and draft.get_cell(cell + Vector3i.UP) == StructureCell.AIR, "socket creation did not carve its aperture at %s" % cell)
 	var authored := draft.get_sockets()
 	_expect(authored.size() == 4, "four-face socket authoring changed socket count")
+	_expect(not draft.can_place_torch(authored[0].cell, Vector3i.RIGHT), "torch placement query accepted a socket aperture")
 	for index in sockets.size():
 		_expect(authored[index].socket_id == sockets[index].id and authored[index].direction == sockets[index].direction, "socket authoring changed direction-based IDs or order")
 		_expect(authored[index].unused_fill_block_id == BlockId.Type.STONE, "socket did not inherit its wall fill block")
@@ -251,6 +252,20 @@ func _test_module_authoring_transactions() -> void:
 	var blocked_snapshot := blocked.snapshot_cells()
 	_expect(not blocked.try_add_socket(Vector3i(3, 1, 0), LevelSocketDefinition.Direction.NORTH).succeeded, "socket with blocked inward body clearance was accepted")
 	_expect(blocked.snapshot_cells() == blocked_snapshot and blocked.get_sockets().is_empty(), "blocked-inward socket partially committed")
+	var torch_blocked := StructureDraft.create_level_module(Vector3i(7, 4, 7))
+	_build_boundary_wall(torch_blocked, LevelSocketDefinition.Direction.NORTH)
+	var occupied_aperture := Vector3i(3, 1, 0)
+	_expect(torch_blocked.try_remove_block(occupied_aperture).succeeded and torch_blocked.try_remove_block(occupied_aperture + Vector3i.UP).succeeded, "torch-overlap aperture setup failed")
+	_expect(torch_blocked.try_place_torch(occupied_aperture, Vector3i.RIGHT).succeeded, "torch-overlap fixture placement failed")
+	_expect(not torch_blocked.try_add_socket(occupied_aperture, LevelSocketDefinition.Direction.NORTH).succeeded, "socket accepted a torch inside its aperture")
+	var marker_blocked := StructureDraft.create_level_module(Vector3i(7, 4, 7))
+	_build_boundary_wall(marker_blocked, LevelSocketDefinition.Direction.NORTH)
+	var marked_aperture := Vector3i(3, 1, 0)
+	var marked_return := Vector3i(2, 1, 3)
+	_expect(marker_blocked.try_remove_block(marked_aperture).succeeded and marker_blocked.try_remove_block(marked_aperture + Vector3i.UP).succeeded, "marker-overlap aperture setup failed")
+	_expect(marker_blocked.try_place_block(marked_return + Vector3i.DOWN, BlockId.Type.STONE).succeeded, "marker-overlap return floor setup failed")
+	_expect(marker_blocked.try_set_markers(marked_aperture, LevelSocketDefinition.Direction.NORTH, marked_return, LevelSocketDefinition.Direction.SOUTH).succeeded, "marker-overlap fixture placement failed")
+	_expect(not marker_blocked.try_add_socket(marked_aperture, LevelSocketDefinition.Direction.NORTH).succeeded, "socket accepted a marker inside its aperture")
 	var repeated := StructureDraft.create_level_module(Vector3i(7, 4, 7))
 	_build_boundary_wall(repeated, LevelSocketDefinition.Direction.NORTH)
 	var first_north := Vector3i(1, 1, 0)
@@ -354,29 +369,19 @@ func _test_requirement_reference_counts() -> void:
 	var return_cell := Vector3i(4, 1, 4)
 	_expect(draft.try_place_block(return_cell + Vector3i.DOWN, BlockId.Type.STONE).succeeded, "overlap return floor setup failed")
 	_expect(draft.try_add_socket(socket_cell, LevelSocketDefinition.Direction.NORTH).succeeded, "overlap socket setup failed")
+	var before_invalid := StructureResourceAdapter.create_snapshot(draft, &"overlap_module") as LevelModuleDefinition
 	var marker_change := draft.try_set_markers(
 		socket_cell,
 		LevelSocketDefinition.Direction.NORTH,
 		return_cell,
 		LevelSocketDefinition.Direction.SOUTH,
 	)
-	_expect(marker_change.succeeded and marker_change.metadata_changed, "overlapping paired markers were rejected")
-	var copied_spawn := draft.get_spawn_marker()
-	copied_spawn.cell = Vector3i.ZERO
-	_expect(draft.get_spawn_marker().cell == socket_cell, "marker command exposed mutable state")
-	var before_invalid := StructureResourceAdapter.create_snapshot(draft, &"overlap_module") as LevelModuleDefinition
-	var invalid_pair := draft.try_set_markers(Vector3i(1, 1, 1), LevelSocketDefinition.Direction.EAST, Vector3i(3, 1, 3), LevelSocketDefinition.Direction.WEST)
-	_expect(not invalid_pair.succeeded, "marker pair without solid floors was accepted")
+	_expect(not marker_change.succeeded, "marker footprint overlapped a socket aperture")
 	var after_invalid := StructureResourceAdapter.create_snapshot(draft, &"overlap_module") as LevelModuleDefinition
-	_expect(StructureResourceAdapter.resources_equal(before_invalid, after_invalid), "failed marker pair partially committed")
-	_expect(draft.try_remove_socket(&"north").succeeded, "overlapping socket removal failed")
-	_expect(not draft.try_place_block(socket_cell, BlockId.Type.DIRT).succeeded, "marker AIR requirement disappeared with an overlapping socket")
-	_expect(not draft.try_remove_block(socket_cell + Vector3i.DOWN).succeeded, "marker floor requirement disappeared with an overlapping socket")
-	_expect(draft.try_clear_markers().succeeded, "paired marker clearing failed")
-	_expect(draft.get_spawn_marker() == null and draft.get_return_door_marker() == null, "paired marker clearing retained one marker")
-	_expect(draft.try_place_block(socket_cell, BlockId.Type.DIRT).succeeded, "cleared overlapping AIR requirements remained indexed")
-	_expect(draft.try_remove_block(socket_cell + Vector3i.DOWN).succeeded, "cleared overlapping solid requirements remained indexed")
-	_expect(not draft.try_clear_markers().succeeded, "empty marker clearing succeeded")
+	_expect(StructureResourceAdapter.resources_equal(before_invalid, after_invalid), "failed socket-overlap marker pair partially committed")
+	_expect(draft.try_remove_socket(&"north").succeeded, "socket removal failed after rejected marker overlap")
+	_expect(draft.try_place_block(socket_cell, BlockId.Type.DIRT).succeeded, "removed socket left a stale AIR requirement")
+	_expect(draft.try_remove_block(socket_cell + Vector3i.DOWN).succeeded, "removed socket left a stale solid requirement")
 	var coincident := StructureDraft.create_level_module(Vector3i(5, 4, 5))
 	var shared_cell := Vector3i(2, 1, 2)
 	var moved_return := Vector3i(3, 1, 3)

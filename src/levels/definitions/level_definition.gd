@@ -29,8 +29,8 @@ func validate() -> bool:
 	if start_module_id.is_empty():
 		push_error("[LevelDefinition] Empty start module ID for %s" % source)
 		valid = false
-	if expansion_module_ids.is_empty() or cap_module_ids.is_empty():
-		push_error("[LevelDefinition] Expansion and cap pools are required for %s" % source)
+	if expansion_module_ids.is_empty():
+		push_error("[LevelDefinition] An expansion pool is required for %s" % source)
 		valid = false
 	if minimum_module_count < 1 or maximum_module_count < minimum_module_count or maximum_module_count > HARD_MAX_MODULE_COUNT:
 		push_error("[LevelDefinition] Invalid module count range for %s" % source)

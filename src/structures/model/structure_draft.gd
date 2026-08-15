@@ -240,6 +240,8 @@ func try_set_void(cell: Vector3i) -> StructureDraftChange:
 func can_place_torch(cell: Vector3i, support_direction: Vector3i) -> bool:
 	if not is_in_bounds(cell) or get_cell(cell) != StructureCell.AIR or has_torch(cell):
 		return false
+	if _format == Format.LEVEL_MODULE and _socket_aperture_owners.has(cell):
+		return false
 	if not StructureTorchDefinition.is_horizontal_support(support_direction):
 		return false
 	var support_cell := cell + support_direction
@@ -317,6 +319,8 @@ func try_set_markers(
 	return_marker.facing = return_facing
 	if not _marker_is_valid(spawn) or not _marker_is_valid(return_marker):
 		return StructureDraftChange.reject()
+	if not _marker_is_socket_clear(spawn) or not _marker_is_socket_clear(return_marker):
+		return StructureDraftChange.reject()
 	if _markers_equal(_spawn_marker, spawn) and _markers_equal(_return_door_marker, return_marker):
 		return StructureDraftChange.reject()
 	_remove_marker_requirements(_spawn_marker)
@@ -386,6 +390,8 @@ func _prepare_socket_edit(cell: Vector3i, direction: LevelSocketDefinition.Direc
 	var aperture_cells := LevelSocketAperture.find_cells(socket, _size, _cells, changes)
 	for aperture_cell in aperture_cells:
 		if _socket_aperture_owners.has(aperture_cell):
+			return null
+		if has_torch(aperture_cell) or _marker_footprint_contains(aperture_cell):
 			return null
 	var edit := SocketEdit.new()
 	edit.socket = socket
@@ -540,6 +546,15 @@ func _marker_is_valid(marker: LevelMarkerDefinition) -> bool:
 	if not is_in_bounds(marker.cell) or not is_in_bounds(upper) or not is_in_bounds(floor_cell):
 		return false
 	return get_cell(marker.cell) == StructureCell.AIR and get_cell(upper) == StructureCell.AIR and StructureCell.is_structure_solid(get_cell(floor_cell))
+
+func _marker_is_socket_clear(marker: LevelMarkerDefinition) -> bool:
+	return not _socket_aperture_owners.has(marker.cell) and not _socket_aperture_owners.has(marker.cell + Vector3i.UP)
+
+func _marker_footprint_contains(cell: Vector3i) -> bool:
+	for marker in [_spawn_marker, _return_door_marker]:
+		if marker != null and (marker.cell == cell or marker.cell + Vector3i.UP == cell):
+			return true
+	return false
 
 func _next_socket_id(direction: LevelSocketDefinition.Direction) -> StringName:
 	var base := String(LevelSocketDefinition.Direction.find_key(direction)).to_lower()

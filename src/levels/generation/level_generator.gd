@@ -105,9 +105,14 @@ func _assemble(state: AssemblyState, target_module_count: int) -> AssemblyState:
 
 func _assemble_attempt(state: AssemblyState, target_module_count: int) -> AssemblyState:
 	while not state.frontiers.is_empty():
-		var minimum_finished_count := state.placed_modules.size() + state.frontiers.size()
+		var required_frontier_count := _required_frontier_count(state.frontiers)
+		var minimum_finished_count := state.placed_modules.size() + required_frontier_count
 		if minimum_finished_count > target_module_count:
 			return null
+		if state.placed_modules.size() == target_module_count:
+			if required_frontier_count > 0 or not _seal_optional_frontiers(state):
+				return null
+			break
 		var use_caps := minimum_finished_count == target_module_count
 		var placed := false
 		for frontier_index in _ordered_frontier_indices(state.frontiers):
@@ -121,11 +126,16 @@ func _assemble_attempt(state: AssemblyState, target_module_count: int) -> Assemb
 					return null
 				_explored_states += 1
 				var module := candidate["module"] as LevelModuleDefinition
-				if not use_caps:
-					var next_frontier_count := state.frontiers.size() - 1 + module.sockets.size() - 1
-					var next_minimum_count := state.placed_modules.size() + 1 + next_frontier_count
-					if next_minimum_count > target_module_count:
-						continue
+				var next_required_count := required_frontier_count
+				if bool(frontier["requires_connection"]):
+					next_required_count -= 1
+				var connected_socket := candidate["socket"] as LevelSocketDefinition
+				for next_socket in module.sockets:
+					if next_socket.socket_id != connected_socket.socket_id and next_socket.requires_connection():
+						next_required_count += 1
+				var next_minimum_count := state.placed_modules.size() + 1 + next_required_count
+				if next_minimum_count > target_module_count:
+					continue
 				var next_state := _try_place(state, frontier_index, candidate)
 				if next_state == null:
 					continue
@@ -139,6 +149,30 @@ func _assemble_attempt(state: AssemblyState, target_module_count: int) -> Assemb
 	if state.placed_modules.size() == target_module_count:
 		return state
 	return null
+
+func _required_frontier_count(frontiers: Array[Dictionary]) -> int:
+	var count := 0
+	for frontier in frontiers:
+		if bool(frontier["requires_connection"]):
+			count += 1
+	return count
+
+func _seal_optional_frontiers(state: AssemblyState) -> bool:
+	for frontier in state.frontiers:
+		if bool(frontier["requires_connection"]):
+			return false
+		var fill_block_id := int(frontier["unused_fill_block_id"])
+		if not StructureCell.is_structure_solid(fill_block_id):
+			return false
+		for cell in frontier["aperture_cells"] as Array[Vector3i]:
+			if not state.cells.has(cell) or int(state.cells[cell]) != StructureCell.AIR:
+				return false
+	for frontier in state.frontiers:
+		var fill_block_id := int(frontier["unused_fill_block_id"])
+		for cell in frontier["aperture_cells"] as Array[Vector3i]:
+			state.cells[cell] = fill_block_id
+	state.frontiers.clear()
+	return true
 
 func _ordered_frontier_indices(frontiers: Array[Dictionary]) -> Array[int]:
 	var indices: Array[int] = []
@@ -311,6 +345,8 @@ func _write_placement(state: AssemblyState, placement: LevelPlacedModule, transf
 			"direction": world_direction,
 			"aperture_cells": world_aperture,
 			"aperture_profile": LevelSocketAperture.normalized_profile(world_aperture, world_direction),
+			"requires_connection": socket.requires_connection(),
+			"unused_fill_block_id": socket.unused_fill_block_id,
 		})
 	for torch in placement.definition.torches:
 		state.torches.append(LevelTorchPlacement.new(

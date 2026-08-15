@@ -83,10 +83,18 @@ func _validate_level_modules(level: LevelDefinition) -> bool:
 	if start.spawn_marker == null or start.return_door_marker == null or start.sockets.is_empty():
 		push_error("[LevelCatalog] Start module lacks markers or sockets for %s" % level.level_id)
 		valid = false
-	var minimum_terminal_count := 1 + start.sockets.size()
+	var required_start_socket_count := 0
+	for socket in start.sockets:
+		if socket != null and socket.requires_connection():
+			required_start_socket_count += 1
+	var minimum_terminal_count := 1 + required_start_socket_count
 	if level.minimum_module_count < minimum_terminal_count:
 		push_error("[LevelCatalog] Minimum module count for %s cannot close all start sockets" % level.level_id)
 		valid = false
+	var capless_sockets_are_sealable := true
+	for socket in start.sockets:
+		if socket == null or socket.requires_connection():
+			capless_sockets_are_sealable = false
 	for module_id in level.expansion_module_ids:
 		if not _modules_by_id.has(module_id):
 			push_error("[LevelCatalog] Unknown expansion module %s for %s" % [module_id, level.level_id])
@@ -96,6 +104,9 @@ func _validate_level_modules(level: LevelDefinition) -> bool:
 		if module.sockets.size() < 2 or module.spawn_marker != null:
 			push_error("[LevelCatalog] Invalid expansion module %s for %s" % [module_id, level.level_id])
 			valid = false
+		for socket in module.sockets:
+			if socket == null or socket.requires_connection():
+				capless_sockets_are_sealable = false
 	for module_id in level.cap_module_ids:
 		if not _modules_by_id.has(module_id):
 			push_error("[LevelCatalog] Unknown cap module %s for %s" % [module_id, level.level_id])
@@ -105,4 +116,7 @@ func _validate_level_modules(level: LevelDefinition) -> bool:
 		if module.sockets.size() != 1 or module.spawn_marker != null:
 			push_error("[LevelCatalog] Invalid cap module %s for %s" % [module_id, level.level_id])
 			valid = false
+	if level.cap_module_ids.is_empty() and not capless_sockets_are_sealable:
+		push_error("[LevelCatalog] Capless level has required sockets for %s" % level.level_id)
+		valid = false
 	return valid

@@ -95,12 +95,17 @@ func validate() -> bool:
 			continue
 		torch_cells[torch.cell] = true
 		valid = _validate_torch(torch, source) and valid
+		if socket_aperture_owners.has(torch.cell):
+			push_error("[LevelModuleDefinition] Torch overlaps a socket aperture for %s" % source)
+			valid = false
 	if (spawn_marker == null) != (return_door_marker == null):
-		push_error("[LevelModuleDefinition] Spawn and return markers must be paired for %s" % source)
+		push_error("[LevelModuleDefinition] Player spawn and entrance/exit door markers must be paired for %s" % source)
 		valid = false
 	if spawn_marker != null:
 		valid = _validate_marker(spawn_marker, "spawn", source) and valid
-		valid = _validate_marker(return_door_marker, "return door", source) and valid
+		valid = _validate_marker(return_door_marker, "entrance/exit door", source) and valid
+		valid = _validate_marker_socket_clearance(spawn_marker, "spawn", socket_aperture_owners, source) and valid
+		valid = _validate_marker_socket_clearance(return_door_marker, "entrance/exit door", socket_aperture_owners, source) and valid
 	return valid
 
 func _validate_socket(socket: LevelSocketDefinition, source: String) -> bool:
@@ -144,5 +149,13 @@ func _validate_marker(marker: LevelMarkerDefinition, label: String, source: Stri
 	var floor_cell := marker.cell + Vector3i.DOWN
 	if not StructureCell.is_in_bounds(floor_cell, size) or not StructureCell.is_structure_solid(cell_at(floor_cell)):
 		push_error("[LevelModuleDefinition] %s marker has no floor for %s" % [label, source])
+		return false
+	return true
+
+func _validate_marker_socket_clearance(marker: LevelMarkerDefinition, label: String, socket_aperture_owners: Dictionary, source: String) -> bool:
+	if marker == null:
+		return true
+	if socket_aperture_owners.has(marker.cell) or socket_aperture_owners.has(marker.cell + Vector3i.UP):
+		push_error("[LevelModuleDefinition] %s marker overlaps a socket aperture for %s" % [label, source])
 		return false
 	return true
