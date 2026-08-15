@@ -9,6 +9,7 @@ var _input_buffer: InputBuffer
 var _voxel_world: VoxelWorld
 var _entity_coordinator: EntityCoordinator
 var _combat: MeleeCombatCoordinator
+var _hotbar: InventoryHotbar
 var _stone_pos := Vector3i(1, 0, 0)
 var _grass_pos := Vector3i(2, 0, 0)
 var _copper_pos := Vector3i(3, 0, 0)
@@ -168,6 +169,8 @@ func _run():
 	_combat = MeleeCombatCoordinator.new()
 	root.add_child(_combat)
 	var player_stats := ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
+	var inventory_stat_coordinator := InventoryStatCoordinator.new()
+	_expect(inventory_stat_coordinator.setup(_inventory, player_stats), "inventory stat coordinator setup failed")
 	_combat.setup(_voxel_world, _player, player_stats, _entity_coordinator)
 	_interactor.setup(_camera, _player, _inventory, _input_buffer, _combat, _entity_coordinator)
 	_interactor.bind_space(_voxel_world, _voxel_world)
@@ -176,6 +179,9 @@ func _run():
 	_player.animation_driver.setup(_player, _interactor)
 	_player.animation_driver.set_process(false)
 	_player.held_item_view.setup(_inventory)
+	_hotbar = (load("res://inventory/ui/inventory_hotbar.tscn") as PackedScene).instantiate() as InventoryHotbar
+	root.add_child(_hotbar)
+	_hotbar.setup(_inventory, inventory_stat_coordinator, ItemProficiency.new(item_catalog))
 	await process_frame
 	_expect(_player.held_item_view.held_node is PixelExtrudedItem, "pickaxe held scene missing")
 	_expect(is_equal_approx(_player.held_item_view.rotation.x, PI * 0.25), "held-item socket does not pitch items downward")
@@ -334,6 +340,7 @@ func _run():
 	_camera.queue_free()
 	_combat.queue_free()
 	_entity_coordinator.queue_free()
+	_hotbar.queue_free()
 	await process_frame
 	await process_frame
 	var orphan_count := int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))

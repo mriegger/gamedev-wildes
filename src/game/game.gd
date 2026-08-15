@@ -206,6 +206,7 @@ func _on_player_defeated():
 	player.enter_defeated_state()
 	camera_rig.set_gameplay_input_enabled(false)
 	hud.close_side_panel_immediate()
+	hud.hotbar.set_gameplay_selection_enabled(false)
 	hud.dev_console.close()
 	game_environment.close_debug_panel()
 	if animation_tuning_panel != null and animation_tuning_panel.is_open():
@@ -231,6 +232,7 @@ func _restore_player_from_defeat():
 		player.respawn_at(world.voxel_model.get_spawn_position() + Vector3(0.0, 0.1, 0.0))
 		camera_rig.snap_to_follow_target()
 	camera_rig.set_gameplay_input_enabled(true)
+	hud.hotbar.set_gameplay_selection_enabled(true)
 	game_environment.restore_debug_panel_input()
 	game_session.resume_saving()
 

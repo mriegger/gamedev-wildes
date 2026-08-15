@@ -518,12 +518,3 @@ func get_selected_placement_action() -> BlockPlacementActionDefinition:
 		return null
 	var action := inventory_model.item_catalog.get_definition(item_id).secondary_action
 	return action as BlockPlacementActionDefinition
-
-func _unhandled_input(event):
-	if motor != null and motor.is_defeated():
-		return
-	if event is InputEventKey and event.pressed:
-		if event.keycode >= KEY_1 and event.keycode < KEY_1 + InventoryModel.HOTBAR_SIZE:
-			var idx = event.keycode - KEY_1
-			if inventory_model:
-				inventory_model.select_slot(idx)

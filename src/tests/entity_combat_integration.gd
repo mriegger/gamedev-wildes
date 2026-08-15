@@ -373,13 +373,8 @@ func _run() -> void:
 	input_buffer.primary_use_just = true
 	player._physics_process(0.25)
 	player.interactor._physics_process(0.25)
-	var blocked_number_key := InputEventKey.new()
-	blocked_number_key.pressed = true
-	blocked_number_key.keycode = KEY_1
-	player.interactor._unhandled_input(blocked_number_key)
 	_expect(player.global_position.is_equal_approx(defeated_position) and player.velocity.is_zero_approx(), "defeated player processed movement input")
 	_expect(player.interactor.melee_attack_action == null and _contacts.size() == contact_count_before, "defeated player processed action input")
-	_expect(inventory.selected_slot == 3, "defeated player processed number-key input")
 	var respawn_position := Vector3(0.5, FEET_Y, 0.5)
 	player.respawn_at(respawn_position)
 	_expect(not player.is_defeated(), "player respawn did not clear the defeated state")

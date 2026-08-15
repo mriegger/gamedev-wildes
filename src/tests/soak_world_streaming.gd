@@ -974,9 +974,9 @@ func _verify_player_defeat_flow() -> bool:
 	var blocked_number_key := InputEventKey.new()
 	blocked_number_key.pressed = true
 	blocked_number_key.keycode = KEY_1
-	_player.interactor._unhandled_input(blocked_number_key)
+	_game.hud.hotbar._unhandled_key_input(blocked_number_key)
 	if _game.inventory_model.selected_slot != selected_slot_before:
-		_fail("defeated player processed a number-key selection")
+		_fail("defeated hotbar processed a number-key selection")
 		return false
 	_game.input_buffer.clear_gameplay()
 	var blocked_wheel := InputEventMouseButton.new()
