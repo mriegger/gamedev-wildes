@@ -6,7 +6,6 @@ class_name HUD
 @onready var experience_bar: PlayerExperienceBar = $PlayerExperienceBar as PlayerExperienceBar
 @onready var side_panel: SidePanel = $SidePanel as SidePanel
 @onready var crafting_panel: CraftingPanel = $CraftingPanel as CraftingPanel
-@onready var dev_console: DevConsole = $DevConsole as DevConsole
 @onready var player_hit_vignette: PlayerHitVignette = $PlayerHitVignette as PlayerHitVignette
 @onready var interaction_prompt: Label = $InteractionPrompt as Label
 
@@ -16,7 +15,6 @@ func setup_with_camera(p_inventory: InventoryModel, p_inventory_stat_coordinator
 	experience_bar.setup(stats)
 	side_panel.setup(p_inventory, p_inventory_stat_coordinator, item_proficiency, cam_rig, hotbar, CraftingPanel.PANEL_WIDTH)
 	crafting_panel.setup(p_crafting_coordinator, p_recipe_catalog, cam_rig)
-	dev_console.setup(p_inventory)
 	side_panel.progress_changed.connect(_on_side_panel_progress_changed)
 	_on_side_panel_progress_changed(side_panel.get_progress())
 

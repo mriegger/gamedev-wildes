@@ -1,6 +1,10 @@
 extends SceneTree
 
 const LEVEL_RUNTIME_SCENE: String = "res://levels/runtime/level_runtime.tscn"
+const STRUCTURE_RUNTIME_SCENE: String = "res://structures/runtime/structure_designer_runtime.tscn"
+const STRUCTURE_DIALOGS_SCENE: String = "res://structures/presentation/structure_designer_dialogs.tscn"
+const STRUCTURE_TERRAIN_SHADER: String = "res://levels/presentation/level_terrain.gdshader"
+const STRUCTURE_RUNTIME_TEST = preload("res://structures/tests/structure_designer_runtime.gd")
 const WORLD_SCENE: String = "res://world/world.tscn"
 const CATALOG_PATH: String = "res://levels/content/level_catalog.tres"
 const BLOCK_CATALOG_PATH: String = "res://blocks/block_catalog.tres"
@@ -54,6 +58,10 @@ func _run() -> void:
 	_expect(root.get_child_count() == root_child_baseline, "runtime lifecycle left children attached to SceneTree root")
 	await _test_world_suspension(world_scene)
 	await _test_game_transitions(catalog, block_catalog, runtime_scene)
+	var structure_runtime_test := STRUCTURE_RUNTIME_TEST.new()
+	var structure_runtime_failures: Array[String] = await structure_runtime_test.run(self)
+	for failure in structure_runtime_failures:
+		_expect(false, "structure runtime: %s" % failure)
 	await process_frame
 	await process_frame
 	var orphan_count := int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
@@ -181,11 +189,16 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	game.level_catalog = catalog
 	game.level_entrance_definition = load("res://levels/content/meadow_dungeon_entrance.tres") as LevelEntranceDefinition
 	game.level_runtime_scene = runtime_scene
+	game.structure_designer_runtime_scene = load(STRUCTURE_RUNTIME_SCENE) as PackedScene
+	game.structure_terrain_shader = load(STRUCTURE_TERRAIN_SHADER) as Shader
 	var world := (load(WORLD_SCENE) as PackedScene).instantiate() as WorldController
 	var player := (load("res://player/player.tscn") as PackedScene).instantiate() as PlayerMotor
 	var camera_rig := (load("res://player/camera/camera_rig.tscn") as PackedScene).instantiate() as CameraRig
 	var environment := (load("res://environment/environment.tscn") as PackedScene).instantiate() as GameEnvironment
 	var hud := (load("res://ui/hud/hud.tscn") as PackedScene).instantiate() as HUD
+	var dev_console := (load("res://dev_console/presentation/dev_console.tscn") as PackedScene).instantiate() as DevConsole
+	var structure_workflow := StructureDesignerWorkflow.new()
+	var structure_dialogs := (load(STRUCTURE_DIALOGS_SCENE) as PackedScene).instantiate() as StructureDesignerDialogs
 	var session := GameSession.new()
 	var coordinator := LevelInteractionCoordinator.new()
 	var entities := EntityCoordinator.new()
@@ -195,10 +208,13 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	var mining_hit_particles := (load("res://mining/presentation/mining_hit_particles.tscn") as PackedScene).instantiate()
 	world.name = "World"
 	player.name = "Player"
-	player.process_mode = Node.PROCESS_MODE_DISABLED
+	player.process_mode = Node.PROCESS_MODE_INHERIT
 	camera_rig.name = "CameraRig"
 	environment.name = "Environment"
 	hud.name = "HUD"
+	dev_console.name = "DevConsole"
+	structure_workflow.name = "StructureDesignerWorkflow"
+	structure_dialogs.name = "StructureDesignerDialogs"
 	session.name = "GameSession"
 	coordinator.name = "LevelInteractionCoordinator"
 	entities.name = "Entities"
@@ -214,6 +230,9 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	game.add_child(combat)
 	game.add_child(combat_hit_particles)
 	game.add_child(hud)
+	game.add_child(dev_console)
+	game.add_child(structure_workflow)
+	game.add_child(structure_dialogs)
 	game.add_child(session)
 	game.add_child(coordinator)
 	game.add_child(mining_break_particles)
@@ -237,7 +256,9 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	root.add_child(game)
 	await process_frame
 	_expect(game.world == world and game.player == player and game.camera_rig == camera_rig, "Game onready dependencies were not wired")
-	_expect(game.game_environment == environment and game.level_interaction == coordinator, "Game transition dependencies were not wired")
+	_expect(game.game_environment == environment and game.level_interaction == coordinator and game.dev_console == dev_console, "Game transition dependencies were not wired")
+	_expect(game.structure_designer_workflow == structure_workflow and game.structure_designer_dialogs == structure_dialogs, "Game structure designer dependencies were not wired")
+	_expect(game.structure_designer_runtime_scene != null and game.structure_terrain_shader != null, "Game structure designer resources were not wired")
 	var manager := ChunkManager.new()
 	manager.setup(world.config, voxel_world, world.chunk_scheduler, world.chunk_renderer)
 	world.chunk_manager = manager
@@ -248,6 +269,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	world.configure_settings(settings)
 	environment.setup(6.0, settings.get_shadow_distance())
 	environment.apply_settings(settings)
+	environment.start_clock()
 	game.inventory_model = InventoryModel.new(game.item_catalog)
 	game.inventory_model.setup_starter()
 	game.player_stats = ActorStats.new(game.player_stats_definition)
@@ -260,7 +282,8 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	player.global_position = doorway_anchor
 	player.bind_space(voxel_world, world, world_spawn, voxel_world)
 	game._location_state = GameplayLocationState.new(doorway_anchor)
-	coordinator.setup(player, hud)
+	structure_workflow.setup(structure_dialogs)
+	coordinator.setup(player, hud, Callable(game, "_is_gameplay_ui_blocked"))
 	coordinator.interaction_requested.connect(game._on_level_interaction_requested)
 	var entrance := LevelEntrance.new()
 	entrance.name = "TestLevelEntrance"
@@ -285,6 +308,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 		doorway_anchor = Vector3(0.5 + float(cycle), world_spawn.y, 0.5)
 		player.global_position = doorway_anchor
 		game._location_state.update_world_position(doorway_anchor)
+		await _run_structure_designer_cycle(game, false, cycle)
 		await game._enter_level()
 		var runtime := game._level_runtime
 		_expect(runtime != null and is_instance_valid(runtime), "Game did not retain an active runtime in cycle %d" % cycle)
@@ -307,6 +331,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 		_expect(is_equal_approx(camera_rig.camera.size, preserved_zoom), "level entry changed camera zoom in cycle %d" % cycle)
 		_expect(coordinator._has_target and coordinator._prompt == "F  Return to Wildes", "return prompt was not installed in cycle %d" % cycle)
 		_expect(coordinator._target_position.is_equal_approx(runtime.get_return_door_position()), "return prompt target changed in cycle %d" % cycle)
+		await _run_structure_designer_cycle(game, true, cycle)
 		player.global_position += Vector3(2.0, 0.0, 1.0)
 		_expect(game._get_persisted_position().is_equal_approx(doorway_anchor), "level-local movement changed persisted anchor in cycle %d" % cycle)
 		await game._exit_level()
@@ -337,6 +362,106 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	await process_frame
 	_expect(not is_instance_valid(game), "Game transition fixture survived teardown")
 	_expect(root.get_child_count() == root_child_baseline, "Game transition fixture left root children behind")
+
+func _run_structure_designer_cycle(game: TransitionGame, in_level: bool, cycle: int) -> void:
+	var label := "%s cycle %d" % ["dungeon" if in_level else "overworld", cycle]
+	var world := game.world
+	var entities := game.entity_coordinator
+	var player := game.player
+	var camera_rig := game.camera_rig
+	var hud := game.hud
+	var level_interaction := game.level_interaction
+	var environment := game.game_environment
+	var level_runtime := game._level_runtime
+	var location_state := game._location_state
+	var persisted_position := location_state.get_persisted_position()
+	var inventory_identity := game.inventory_model
+	var player_position := player.global_position
+	var player_voxel_space := player.voxel_space
+	var player_process_mode := player.process_mode
+	var player_physics_processing := player.is_physics_processing()
+	var player_visible := player.visible
+	var camera_process_mode := camera_rig.process_mode
+	var camera_visible := camera_rig.visible
+	var camera_current := camera_rig.camera.current
+	var camera_input_enabled := camera_rig._gameplay_input_enabled
+	var camera_yaw := camera_rig.current_yaw_deg
+	var camera_target_yaw := camera_rig.target_yaw_deg
+	var camera_size := camera_rig.camera.size
+	var hud_process_mode := hud.process_mode
+	var hud_visible := hud.visible
+	var hotbar_input_enabled := hud.hotbar._selection_input_enabled
+	var level_interaction_process_mode := level_interaction.process_mode
+	var world_suspended := world.is_suspended()
+	var world_visible := world.visible
+	var entities_suspended := entities.is_suspended()
+	var entities_visible := entities.visible
+	var entrance_visible := game._level_entrance.visible
+	var outdoor_environment := environment._world_environment.environment
+	var outdoor_sun_visible := environment._sun.visible
+	var outdoor_fill_visible := environment._sun_fill.visible
+	var outdoor_audio_running := environment._ambient_soundscape._running
+	var level_visible := level_runtime.visible if level_runtime != null else false
+	var level_processing := level_runtime.is_processing() if level_runtime != null else false
+	var level_environment := (level_runtime.get_node("WorldEnvironment") as WorldEnvironment).environment if level_runtime != null else null
+	var saving_was_suspended := cycle % 2 == 1
+	if saving_was_suspended:
+		game.game_session.suspend_saving()
+	else:
+		game.game_session.resume_saving()
+	var orphan_baseline := int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
+	var draft := StructureDraft.create(Vector3i(5, 4, 5))
+	_expect(draft != null, "structure draft creation failed for %s" % label)
+	if draft == null:
+		return
+	game.structure_designer_workflow._draft = draft
+	await game._enter_structure_designer(draft)
+	var designer_runtime := game._structure_designer_runtime
+	_expect(designer_runtime != null and is_instance_valid(designer_runtime), "designer runtime was not retained for %s" % label)
+	_expect(game._location_state == location_state and game._location_state.is_in_level() == in_level, "designer entry changed GameplayLocationState for %s" % label)
+	_expect(game._location_state.get_persisted_position().is_equal_approx(persisted_position), "designer entry changed the persisted position for %s" % label)
+	_expect(game.inventory_model == inventory_identity and game.structure_designer_workflow._draft == draft, "designer entry replaced owned state for %s" % label)
+	_expect(game.game_session.is_saving_suspended(), "designer entry did not suspend saving for %s" % label)
+	_expect(player.process_mode == Node.PROCESS_MODE_DISABLED and not player.visible, "designer entry left the normal player active for %s" % label)
+	_expect(camera_rig.process_mode == Node.PROCESS_MODE_DISABLED and not camera_rig.visible and not camera_rig.camera.current, "designer entry left the gameplay camera active for %s" % label)
+	_expect(hud.process_mode == Node.PROCESS_MODE_DISABLED and not hud.visible, "designer entry left the gameplay HUD active for %s" % label)
+	_expect(level_interaction.process_mode == Node.PROCESS_MODE_DISABLED, "designer entry left gameplay interaction active for %s" % label)
+	if designer_runtime != null:
+		var designer_controller := designer_runtime.get_node("StructureDesignerController") as StructureDesignerController
+		_expect(designer_runtime.visible and designer_runtime.is_processing(), "designer runtime was inactive for %s" % label)
+		_expect(designer_controller.camera.current and designer_controller._input_enabled and designer_controller.is_physics_processing(), "designer input and camera were inactive for %s" % label)
+	if in_level:
+		_expect(world.is_suspended() == world_suspended and entities.is_suspended() == entities_suspended, "designer entry changed suspended overworld systems for %s" % label)
+		_expect(level_runtime != null and not level_runtime.visible and not level_runtime.is_processing(), "designer entry did not suspend the level runtime for %s" % label)
+		_expect((level_runtime.get_node("WorldEnvironment") as WorldEnvironment).environment == null, "designer entry retained the level environment for %s" % label)
+	else:
+		_expect(world.is_suspended() and entities.is_suspended() and not world.visible and not entities.visible, "designer entry did not suspend overworld systems for %s" % label)
+		_expect(environment._world_environment.environment == null and not environment._sun.visible and not environment._sun_fill.visible, "designer entry retained the outdoor environment for %s" % label)
+	await game._exit_structure_designer()
+	await process_frame
+	_expect(game._structure_designer_runtime == null and not is_instance_valid(designer_runtime), "designer runtime survived exit for %s" % label)
+	_expect(game._location_state == location_state and game._location_state.is_in_level() == in_level, "designer exit changed GameplayLocationState for %s" % label)
+	_expect(game._location_state.get_persisted_position().is_equal_approx(persisted_position), "designer exit changed the persisted position for %s" % label)
+	_expect(game.inventory_model == inventory_identity and not game.structure_designer_workflow.has_active_draft(), "designer exit replaced inventory or retained the draft for %s" % label)
+	_expect(game.game_session.is_saving_suspended() == saving_was_suspended, "designer exit changed the prior saving state for %s" % label)
+	_expect(player.process_mode == player_process_mode and player.visible == player_visible and player.global_position.is_equal_approx(player_position), "designer exit did not restore the player for %s" % label)
+	_expect(player.is_physics_processing() == player_physics_processing, "designer exit changed player input processing for %s" % label)
+	_expect(player.voxel_space == player_voxel_space, "designer exit changed the player voxel binding for %s" % label)
+	_expect(camera_rig.process_mode == camera_process_mode and camera_rig.visible == camera_visible and camera_rig.camera.current == camera_current, "designer exit did not restore the gameplay camera for %s" % label)
+	_expect(camera_rig._gameplay_input_enabled == camera_input_enabled, "designer exit changed gameplay camera input for %s" % label)
+	_expect(is_equal_approx(camera_rig.current_yaw_deg, camera_yaw) and is_equal_approx(camera_rig.target_yaw_deg, camera_target_yaw) and is_equal_approx(camera_rig.camera.size, camera_size), "designer exit changed the gameplay camera transform for %s" % label)
+	_expect(hud.process_mode == hud_process_mode and hud.visible == hud_visible and hud.hotbar._selection_input_enabled == hotbar_input_enabled, "designer exit did not restore the HUD and hotbar input for %s" % label)
+	_expect(level_interaction.process_mode == level_interaction_process_mode, "designer exit did not restore gameplay interaction for %s" % label)
+	_expect(world.is_suspended() == world_suspended and world.visible == world_visible, "designer exit did not restore the world for %s" % label)
+	_expect(entities.is_suspended() == entities_suspended and entities.visible == entities_visible, "designer exit did not restore entities for %s" % label)
+	_expect(game._level_entrance.visible == entrance_visible, "designer exit did not restore the entrance for %s" % label)
+	_expect(environment._world_environment.environment == outdoor_environment and environment._sun.visible == outdoor_sun_visible and environment._sun_fill.visible == outdoor_fill_visible and environment._ambient_soundscape._running == outdoor_audio_running, "designer exit did not restore the outdoor environment for %s" % label)
+	if in_level:
+		_expect(level_runtime.visible == level_visible and level_runtime.is_processing() == level_processing, "designer exit did not reactivate the level runtime for %s" % label)
+		_expect((level_runtime.get_node("WorldEnvironment") as WorldEnvironment).environment == level_environment, "designer exit did not restore the level environment for %s" % label)
+	_expect(int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT)) == orphan_baseline, "designer cycle changed orphan count for %s" % label)
+	if saving_was_suspended:
+		game.game_session.resume_saving()
 
 func _make_flat_world(block_catalog: BlockCatalog) -> VoxelWorld:
 	var voxel_world := VoxelWorld.new(20, 36, 5, 12.0, block_catalog)

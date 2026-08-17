@@ -20,6 +20,8 @@ signal main_menu_requested
 @export var level_catalog: LevelCatalog
 @export var level_entrance_definition: LevelEntranceDefinition
 @export var level_runtime_scene: PackedScene
+@export var structure_designer_runtime_scene: PackedScene
+@export var structure_terrain_shader: Shader
 
 @onready var world: WorldController = $World as WorldController
 @onready var player: PlayerMotor = $Player as PlayerMotor
@@ -29,10 +31,13 @@ signal main_menu_requested
 @onready var melee_combat: MeleeCombatCoordinator = $MeleeCombat as MeleeCombatCoordinator
 @onready var combat_hit_particles: CombatHitParticles = $CombatHitParticles as CombatHitParticles
 @onready var hud: HUD = $HUD as HUD
+@onready var dev_console: DevConsole = $DevConsole as DevConsole
 @onready var game_session: GameSession = $GameSession as GameSession
 @onready var mining_break_particles: MiningBreakParticles = $MiningBreakParticles as MiningBreakParticles
 @onready var mining_hit_particles: MiningHitParticles = $MiningHitParticles as MiningHitParticles
 @onready var level_interaction: LevelInteractionCoordinator = $LevelInteractionCoordinator as LevelInteractionCoordinator
+@onready var structure_designer_workflow: StructureDesignerWorkflow = $StructureDesignerWorkflow as StructureDesignerWorkflow
+@onready var structure_designer_dialogs: StructureDesignerDialogs = $StructureDesignerDialogs as StructureDesignerDialogs
 @onready var _save_canvas: CanvasLayer = $SaveStatusLayer as CanvasLayer
 @onready var _save_label: Label = $SaveStatusLayer/SaveStatusLabel as Label
 @onready var _fade: ColorRect = $TransitionLayer/Fade as ColorRect
@@ -63,6 +68,9 @@ var _save_status_timer: float = 0.0
 var _session_active: bool = false
 var _recovered_defeated_save: bool = false
 var _level_transitioning: bool = false
+var _structure_transitioning: bool = false
+var _structure_designer_runtime: StructureDesignerRuntime
+var _structure_lifecycle_snapshot: StructureDesignerLifecycleSnapshot
 
 func configure_session(slot_id: int, save_data: Dictionary, p_settings: GameSettings):
 	_slot_id = slot_id
@@ -84,12 +92,22 @@ func _ready():
 	if not block_catalog_valid or not item_catalog_valid or not crafting_catalog_valid or not entity_catalog_valid or not combat_particle_catalog_valid or not player_stats_valid or not level_catalog_valid or not level_entrance_valid:
 		push_error("[Game] Catalog validation failed")
 		return
+	structure_designer_workflow.setup(structure_designer_dialogs)
+	structure_designer_workflow.designer_entry_requested.connect(_on_structure_designer_entry_requested)
+	structure_designer_workflow.designer_exit_requested.connect(_on_structure_designer_exit_requested)
+	structure_designer_dialogs.open_state_changed.connect(_on_structure_dialog_open_state_changed)
+	dev_console.open_state_changed.connect(_on_dev_console_open_state_changed)
 	settings.apply_display(get_viewport())
 	game_environment.setup(float(_save_data.get("time_of_day", 6.0)), settings.get_shadow_distance())
 	game_environment.apply_settings(settings)
 	world.block_catalog = block_catalog
 	world.configure_settings(settings)
 	inventory_model = InventoryModel.new(item_catalog)
+	dev_console.setup(
+		inventory_model,
+		Callable(self, "_request_new_structure"),
+		Callable(self, "_request_exit_structure")
+	)
 	player_stats = ActorStats.new(player_stats_definition)
 	item_proficiency = ItemProficiency.new(item_catalog)
 	_restore_inventory()
@@ -116,7 +134,7 @@ func _ready():
 	await world.initialize_world_async()
 	world.generation_progress.disconnect(_on_generation_progress)
 	_setup_gameplay()
-	level_interaction.setup(player, hud)
+	level_interaction.setup(player, hud, Callable(self, "_is_gameplay_ui_blocked"))
 	level_interaction.interaction_requested.connect(_on_level_interaction_requested)
 	_setup_level_entrance()
 	game_session.save_status_changed.connect(_show_save_status)
@@ -207,7 +225,7 @@ func _on_player_defeated():
 	camera_rig.set_gameplay_input_enabled(false)
 	hud.close_side_panel_immediate()
 	hud.hotbar.set_gameplay_selection_enabled(false)
-	hud.dev_console.close()
+	dev_console.close()
 	game_environment.close_debug_panel()
 	if animation_tuning_panel != null and animation_tuning_panel.is_open():
 		animation_tuning_panel.hide_panel()
@@ -274,7 +292,7 @@ func _process(delta):
 		_save_canvas.visible = false
 
 func _physics_process(delta):
-	if _level_transitioning:
+	if _level_transitioning or _structure_transitioning or _structure_designer_runtime != null:
 		input_buffer.clear_gameplay()
 		return
 	if player.is_defeated():
@@ -283,7 +301,7 @@ func _physics_process(delta):
 		if OS.is_debug_build() and Input.is_action_just_pressed("toggle_animation_tuner"):
 			_toggle_animation_tuning_panel()
 		input_buffer.poll()
-		if hud.dev_console.is_open() or (animation_tuning_panel != null and animation_tuning_panel.is_open()):
+		if dev_console.is_open() or structure_designer_workflow.is_dialog_open() or (animation_tuning_panel != null and animation_tuning_panel.is_open()):
 			input_buffer.clear_gameplay()
 	if _location_state != null:
 		_location_state.update_world_position(player.global_position)
@@ -291,7 +309,7 @@ func _physics_process(delta):
 		entity_coordinator.tick(delta, player.global_position, game_environment.get_time_of_day())
 
 func _on_level_interaction_requested():
-	if _level_transitioning or _location_state == null:
+	if _level_transitioning or _structure_transitioning or _structure_designer_runtime != null or _location_state == null:
 		return
 	if _location_state.is_in_level():
 		_exit_level()
@@ -379,6 +397,19 @@ func _get_persisted_position() -> Vector3:
 	return _location_state.get_persisted_position()
 
 func _unhandled_input(event):
+	if _structure_transitioning:
+		get_viewport().set_input_as_handled()
+		return
+	if _structure_designer_runtime != null:
+		if event.is_action_pressed("ui_cancel") or (event is InputEventKey and event.pressed and not event.echo and (event.keycode == KEY_ESCAPE or event.physical_keycode == KEY_ESCAPE)):
+			_handle_structure_designer_cancel()
+			get_viewport().set_input_as_handled()
+		return
+	if structure_designer_workflow.is_dialog_open():
+		if event.is_action_pressed("ui_cancel") or (event is InputEventKey and event.pressed and not event.echo and (event.keycode == KEY_ESCAPE or event.physical_keycode == KEY_ESCAPE)):
+			structure_designer_workflow.cancel_active_dialog()
+		get_viewport().set_input_as_handled()
+		return
 	if _level_transitioning or (_death_screen != null and is_instance_valid(_death_screen)):
 		get_viewport().set_input_as_handled()
 		return
@@ -429,8 +460,10 @@ func _toggle_player_stats_debug_panel():
 	player_stats_debug_panel.toggle_panel()
 
 func _handle_cancel():
-	if hud.dev_console.is_open():
-		hud.dev_console.close()
+	if dev_console.is_open():
+		dev_console.close()
+		return
+	if structure_designer_workflow.cancel_active_dialog():
 		return
 	if player_stats_debug_panel != null and player_stats_debug_panel.is_open():
 		player_stats_debug_panel.hide_panel()
@@ -442,6 +475,149 @@ func _handle_cancel():
 		hud.close_side_panel()
 		return
 	_show_pause_menu()
+
+func _is_gameplay_ui_blocked() -> bool:
+	return hud.is_side_panel_open() or dev_console.is_open() or structure_designer_workflow.is_dialog_open() or _structure_transitioning or _structure_designer_runtime != null
+
+func _request_new_structure() -> bool:
+	if not _session_active or _level_transitioning or _structure_transitioning or player.is_defeated():
+		return false
+	return structure_designer_workflow.request_new()
+
+func _request_exit_structure() -> bool:
+	if _structure_transitioning or _structure_designer_runtime == null:
+		return false
+	return structure_designer_workflow.request_exit()
+
+func _on_structure_designer_entry_requested(draft: StructureDraft) -> void:
+	assert(_structure_designer_runtime == null)
+	assert(_structure_lifecycle_snapshot == null)
+	_enter_structure_designer(draft)
+
+func _enter_structure_designer(draft: StructureDraft) -> void:
+	_structure_transitioning = true
+	var in_level := _location_state.is_in_level()
+	_structure_lifecycle_snapshot = StructureDesignerLifecycleSnapshot.new(
+		in_level,
+		game_session.is_saving_suspended(),
+		world.is_suspended(),
+		entity_coordinator.is_suspended(),
+		player,
+		camera_rig,
+		camera_rig.camera,
+		hud,
+		level_interaction,
+		_level_entrance != null and _level_entrance.visible
+	)
+	game_session.suspend_saving()
+	input_buffer.clear_gameplay()
+	hud.close_side_panel_immediate()
+	game_environment.close_debug_panel()
+	if animation_tuning_panel != null and animation_tuning_panel.is_open():
+		animation_tuning_panel.hide_panel()
+	if player_stats_debug_panel != null and player_stats_debug_panel.is_open():
+		player_stats_debug_panel.hide_panel()
+	player.process_mode = Node.PROCESS_MODE_DISABLED
+	player.visible = false
+	camera_rig.process_mode = Node.PROCESS_MODE_DISABLED
+	camera_rig.visible = false
+	camera_rig.camera.current = false
+	hud.process_mode = Node.PROCESS_MODE_DISABLED
+	hud.visible = false
+	level_interaction.process_mode = Node.PROCESS_MODE_DISABLED
+	await _fade_to(1.0)
+	if in_level:
+		_level_runtime.deactivate()
+	else:
+		world.suspend()
+		entity_coordinator.suspend()
+		game_environment.set_outdoor_presentation_enabled(false)
+		if _level_entrance != null:
+			_level_entrance.visible = false
+	_structure_designer_runtime = structure_designer_runtime_scene.instantiate() as StructureDesignerRuntime
+	assert(_structure_designer_runtime != null)
+	add_child(_structure_designer_runtime)
+	_structure_designer_runtime.setup(draft, block_catalog, item_catalog, world.block_texture_set, structure_terrain_shader)
+	_structure_designer_runtime.set_external_ui_blocked(dev_console.is_open() or structure_designer_workflow.is_dialog_open())
+	_structure_designer_runtime.activate()
+	await _fade_to(0.0)
+	_structure_transitioning = false
+
+func _on_structure_designer_exit_requested() -> void:
+	if _structure_designer_runtime == null or _structure_transitioning:
+		return
+	_exit_structure_designer()
+
+func _exit_structure_designer() -> void:
+	_structure_transitioning = true
+	dev_console.close()
+	_structure_designer_runtime.set_external_ui_blocked(true)
+	await _fade_to(1.0)
+	var completed_runtime := _structure_designer_runtime
+	_structure_designer_runtime = null
+	completed_runtime.queue_free()
+	await get_tree().process_frame
+	_restore_structure_lifecycle()
+	structure_designer_workflow.complete_exit()
+	await _fade_to(0.0)
+	_structure_transitioning = false
+
+func _restore_structure_lifecycle() -> void:
+	assert(_structure_lifecycle_snapshot != null)
+	var snapshot := _structure_lifecycle_snapshot
+	if snapshot.in_level:
+		_level_runtime.activate()
+	else:
+		game_environment.set_outdoor_presentation_enabled(true)
+		if not snapshot.world_was_suspended:
+			world.resume()
+		if not snapshot.entities_were_suspended:
+			entity_coordinator.resume()
+		if _level_entrance != null:
+			_level_entrance.visible = snapshot.entrance_visible
+	player.process_mode = snapshot.player_process_mode
+	player.visible = snapshot.player_visible
+	camera_rig.process_mode = snapshot.camera_process_mode
+	camera_rig.visible = snapshot.camera_visible
+	camera_rig.camera.current = snapshot.gameplay_camera_current
+	hud.process_mode = snapshot.hud_process_mode
+	hud.visible = snapshot.hud_visible
+	level_interaction.process_mode = snapshot.level_interaction_process_mode
+	if not snapshot.saving_was_suspended:
+		game_session.resume_saving()
+	_structure_lifecycle_snapshot = null
+
+func _restore_structure_designer_for_shutdown() -> void:
+	if _structure_lifecycle_snapshot == null:
+		return
+	if _structure_designer_runtime != null and is_instance_valid(_structure_designer_runtime):
+		_structure_designer_runtime.free()
+	_structure_designer_runtime = null
+	_restore_structure_lifecycle()
+	if structure_designer_workflow.has_active_draft():
+		structure_designer_workflow.complete_exit()
+	_structure_transitioning = false
+
+func _handle_structure_designer_cancel() -> void:
+	if dev_console.is_open():
+		dev_console.close()
+		return
+	if structure_designer_workflow.cancel_active_dialog():
+		return
+	if _structure_designer_runtime.cancel_active_ui():
+		return
+	structure_designer_workflow.request_exit()
+
+func _on_dev_console_open_state_changed(_open: bool) -> void:
+	_sync_structure_designer_ui_blocking()
+
+func _on_structure_dialog_open_state_changed(_open: bool) -> void:
+	_sync_structure_designer_ui_blocking()
+
+func _sync_structure_designer_ui_blocking() -> void:
+	if _structure_designer_runtime == null:
+		return
+	_structure_designer_runtime.set_external_ui_blocked(dev_console.is_open() or structure_designer_workflow.is_dialog_open())
 
 func _show_pause_menu():
 	_pause_menu = pause_menu_scene.instantiate() as PauseMenu
@@ -472,6 +648,7 @@ func _resume_from_pause():
 	get_tree().paused = false
 
 func _save_and_request_main_menu():
+	_restore_structure_designer_for_shutdown()
 	_restore_player_from_defeat()
 	_deactivate_session()
 	get_tree().paused = false
@@ -490,6 +667,7 @@ func _save_and_request_main_menu():
 
 func _notification(what):
 	if what == NOTIFICATION_WM_CLOSE_REQUEST and _session_active:
+		_restore_structure_designer_for_shutdown()
 		_restore_player_from_defeat()
 		_deactivate_session()
 		game_session.shutdown("close")

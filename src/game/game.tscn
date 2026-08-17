@@ -1,4 +1,4 @@
-[gd_scene load_steps=27 format=3 uid="uid://b22g4me0x1f3h"]
+[gd_scene load_steps=32 format=3 uid="uid://b22g4me0x1f3h"]
 
 [ext_resource type="Script" path="res://game/game.gd" id="1_game"]
 [ext_resource type="PackedScene" path="res://world/world.tscn" id="2_world"]
@@ -26,6 +26,11 @@
 [ext_resource type="PackedScene" path="res://levels/runtime/level_runtime.tscn" id="24_level_runtime"]
 [ext_resource type="Script" path="res://levels/entrance/level_interaction_coordinator.gd" id="25_level_interaction"]
 [ext_resource type="Resource" path="res://levels/content/meadow_dungeon_entrance.tres" id="26_level_entrance"]
+[ext_resource type="PackedScene" path="res://dev_console/presentation/dev_console.tscn" id="27_dev_console"]
+[ext_resource type="Script" path="res://structures/runtime/structure_designer_workflow.gd" id="28_structure_workflow"]
+[ext_resource type="PackedScene" path="res://structures/presentation/structure_designer_dialogs.tscn" id="29_structure_dialogs"]
+[ext_resource type="PackedScene" path="res://structures/runtime/structure_designer_runtime.tscn" id="30_structure_runtime"]
+[ext_resource type="Shader" path="res://levels/presentation/level_terrain.gdshader" id="31_structure_shader"]
 
 [node name="Game" type="Node3D"]
 script = ExtResource("1_game")
@@ -42,6 +47,8 @@ player_stats_definition = ExtResource("16_player_stats")
 level_catalog = ExtResource("23_level_catalog")
 level_entrance_definition = ExtResource("26_level_entrance")
 level_runtime_scene = ExtResource("24_level_runtime")
+structure_designer_runtime_scene = ExtResource("30_structure_runtime")
+structure_terrain_shader = ExtResource("31_structure_shader")
 
 [node name="World" parent="." instance=ExtResource("2_world")]
 
@@ -60,6 +67,13 @@ script = ExtResource("18_melee_combat")
 [node name="CombatHitParticles" parent="." instance=ExtResource("21_combat_particles")]
 
 [node name="HUD" parent="." instance=ExtResource("6_hud")]
+
+[node name="DevConsole" parent="." instance=ExtResource("27_dev_console")]
+
+[node name="StructureDesignerWorkflow" type="Node" parent="."]
+script = ExtResource("28_structure_workflow")
+
+[node name="StructureDesignerDialogs" parent="." instance=ExtResource("29_structure_dialogs")]
 
 [node name="GameSession" type="Node" parent="."]
 script = ExtResource("7_session")

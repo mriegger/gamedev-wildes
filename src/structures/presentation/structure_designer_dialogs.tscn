@@ -1,0 +1,73 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://structures/presentation/structure_designer_dialogs.gd" id="1_dialogs"]
+
+[node name="StructureDesignerDialogs" type="CanvasLayer"]
+process_mode = 3
+layer = 320
+script = ExtResource("1_dialogs")
+
+[node name="NewDialog" type="ConfirmationDialog" parent="."]
+title = "Buildable Plot Size"
+initial_position = 2
+size = Vector2i(420, 270)
+ok_button_text = "Create"
+
+[node name="Fields" type="VBoxContainer" parent="NewDialog"]
+offset_left = 16.0
+offset_top = 16.0
+offset_right = 404.0
+offset_bottom = 190.0
+theme_override_constants/separation = 12
+
+[node name="LengthRow" type="HBoxContainer" parent="NewDialog/Fields"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="NewDialog/Fields/LengthRow"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+text = "Length"
+
+[node name="Length" type="SpinBox" parent="NewDialog/Fields/LengthRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 1.0
+max_value = 64.0
+value = 16.0
+
+[node name="WidthRow" type="HBoxContainer" parent="NewDialog/Fields"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="NewDialog/Fields/WidthRow"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+text = "Width"
+
+[node name="Width" type="SpinBox" parent="NewDialog/Fields/WidthRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 1.0
+max_value = 64.0
+value = 16.0
+
+[node name="HeightRow" type="HBoxContainer" parent="NewDialog/Fields"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="NewDialog/Fields/HeightRow"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+text = "Height"
+
+[node name="Height" type="SpinBox" parent="NewDialog/Fields/HeightRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 1.0
+max_value = 64.0
+value = 16.0
+
+[node name="DiscardDialog" type="ConfirmationDialog" parent="."]
+title = "Discard Structure Draft"
+initial_position = 2
+size = Vector2i(460, 180)
+dialog_text = "Discard all changes and leave the structure workspace?"
+ok_button_text = "Discard"
