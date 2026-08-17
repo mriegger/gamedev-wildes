@@ -55,7 +55,7 @@ func _validate_cells() -> void:
 	for position in _cells:
 		assert(position is Vector3i)
 		var block_id := int(_cells[position])
-		assert(block_id != LevelCell.VOID and LevelCell.is_valid(block_id))
+		assert(block_id != StructureCell.VOID and StructureCell.is_valid(block_id))
 	assert(is_interior_open(_spawn_cell))
 	assert(is_interior_open(_spawn_cell + Vector3i.UP))
 	assert(is_solid(_spawn_cell + Vector3i.DOWN))

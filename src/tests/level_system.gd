@@ -54,15 +54,15 @@ func _run() -> void:
 	_finish(successful_seeds, fuzz_msec)
 
 func _test_catalog_and_modules() -> void:
-	_expect(LevelCell.VOID == -1, "VOID encoding changed")
-	_expect(LevelCell.AIR == 0, "AIR encoding changed")
-	_expect(LevelCell.is_valid(LevelCell.VOID), "VOID is not a valid module cell")
-	_expect(LevelCell.is_valid(LevelCell.AIR), "AIR is not a valid module cell")
-	_expect(LevelCell.is_valid(BlockId.Type.STONE), "stable stone block ID is invalid")
-	_expect(not LevelCell.is_valid(BlockId.Type.TORCH), "torch block ID was accepted as a dense module cell")
-	_expect(not LevelCell.is_valid(BlockId.Type.WATER), "water block ID was accepted as a dense module cell")
-	_expect(not LevelCell.is_valid(-2), "unknown negative cell value was accepted")
-	_expect(not LevelCell.is_valid(BlockId.Type.COUNT), "unknown positive block ID was accepted")
+	_expect(StructureCell.VOID == -1, "VOID encoding changed")
+	_expect(StructureCell.AIR == 0, "AIR encoding changed")
+	_expect(StructureCell.is_valid(StructureCell.VOID), "VOID is not a valid module cell")
+	_expect(StructureCell.is_valid(StructureCell.AIR), "AIR is not a valid module cell")
+	_expect(StructureCell.is_valid(BlockId.Type.STONE), "stable stone block ID is invalid")
+	_expect(not StructureCell.is_valid(BlockId.Type.TORCH), "torch block ID was accepted as a dense module cell")
+	_expect(not StructureCell.is_valid(BlockId.Type.WATER), "water block ID was accepted as a dense module cell")
+	_expect(not StructureCell.is_valid(-2), "unknown negative cell value was accepted")
+	_expect(not StructureCell.is_valid(BlockId.Type.COUNT), "unknown positive block ID was accepted")
 	_expect(_catalog.validate(), "level catalog validation failed")
 	_expect(_catalog.modules.size() == EXPECTED_MODULE_IDS.size(), "catalog must contain exactly eight initial modules")
 	_expect(_catalog.levels.size() == 1, "catalog must contain exactly one initial level")
@@ -101,27 +101,27 @@ func _test_catalog_and_modules() -> void:
 			_expect(not seen_sockets.has(socket.socket_id), "duplicate socket ID in %s" % module.module_id)
 			seen_sockets[socket.socket_id] = true
 			_expect(_is_boundary(socket.cell, module.size, socket.direction), "socket is not on its declared boundary in %s" % module.module_id)
-			_expect(module.cell_at(socket.cell) == LevelCell.AIR, "socket lower aperture is not AIR in %s" % module.module_id)
-			_expect(module.cell_at(socket.cell + Vector3i.UP) == LevelCell.AIR, "socket upper aperture is not AIR in %s" % module.module_id)
+			_expect(module.cell_at(socket.cell) == StructureCell.AIR, "socket lower aperture is not AIR in %s" % module.module_id)
+			_expect(module.cell_at(socket.cell + Vector3i.UP) == StructureCell.AIR, "socket upper aperture is not AIR in %s" % module.module_id)
 			var inward := -LevelSocketDefinition.vector_for(socket.direction)
-			_expect(module.cell_at(socket.cell + inward) == LevelCell.AIR, "socket does not open into lower interior AIR in %s" % module.module_id)
-			_expect(module.cell_at(socket.cell + Vector3i.UP + inward) == LevelCell.AIR, "socket does not open into upper interior AIR in %s" % module.module_id)
-			_expect(LevelCell.is_structure_solid(module.cell_at(socket.cell + Vector3i.DOWN)), "socket floor is missing in %s" % module.module_id)
+			_expect(module.cell_at(socket.cell + inward) == StructureCell.AIR, "socket does not open into lower interior AIR in %s" % module.module_id)
+			_expect(module.cell_at(socket.cell + Vector3i.UP + inward) == StructureCell.AIR, "socket does not open into upper interior AIR in %s" % module.module_id)
+			_expect(StructureCell.is_structure_solid(module.cell_at(socket.cell + Vector3i.DOWN)), "socket floor is missing in %s" % module.module_id)
 		var seen_torches: Dictionary = {}
 		for torch in module.torches:
 			_expect(not seen_torches.has(torch.cell), "duplicate torch cell in %s" % module.module_id)
 			seen_torches[torch.cell] = true
-			_expect(module.cell_at(torch.cell) == LevelCell.AIR, "torch is not in AIR in %s" % module.module_id)
+			_expect(module.cell_at(torch.cell) == StructureCell.AIR, "torch is not in AIR in %s" % module.module_id)
 			var support := torch.cell + LevelSocketDefinition.vector_for(torch.wall_direction)
-			_expect(LevelCell.is_in_bounds(support, module.size) and LevelCell.is_structure_solid(module.cell_at(support)), "torch wall support is missing in %s" % module.module_id)
+			_expect(StructureCell.is_in_bounds(support, module.size) and StructureCell.is_structure_solid(module.cell_at(support)), "torch wall support is missing in %s" % module.module_id)
 		for y in module.size.y:
 			for z in module.size.z:
 				for x in module.size.x:
 					var cell := Vector3i(x, y, z)
-					var index := LevelCell.index_of(cell, module.size)
+					var index := StructureCell.index_of(cell, module.size)
 					_expect(index >= 0 and index < module.cells.size(), "dense index escaped module bounds in %s" % module.module_id)
 					_expect(module.cell_at(cell) == module.cells[index], "dense cell lookup mismatch in %s" % module.module_id)
-					_expect(LevelCell.is_valid(module.cell_at(cell)), "module contains an invalid cell in %s" % module.module_id)
+					_expect(StructureCell.is_valid(module.cell_at(cell)), "module contains an invalid cell in %s" % module.module_id)
 		if module.spawn_marker != null:
 			start_count += 1
 			_expect(module.module_id == definition.start_module_id, "non-start module has spawn markers: %s" % module.module_id)
@@ -137,10 +137,10 @@ func _test_catalog_and_modules() -> void:
 	_expect(start_count == 1, "catalog must have exactly one start module")
 
 func _test_marker(module: LevelModuleDefinition, marker: LevelMarkerDefinition, label: String) -> void:
-	_expect(LevelCell.is_in_bounds(marker.cell, module.size), "%s marker is outside %s" % [label, module.module_id])
-	_expect(module.cell_at(marker.cell) == LevelCell.AIR, "%s marker is not in AIR in %s" % [label, module.module_id])
-	_expect(LevelCell.is_in_bounds(marker.cell + Vector3i.UP, module.size) and module.cell_at(marker.cell + Vector3i.UP) == LevelCell.AIR, "%s marker has no headroom in %s" % [label, module.module_id])
-	_expect(LevelCell.is_structure_solid(module.cell_at(marker.cell + Vector3i.DOWN)), "%s marker has no floor in %s" % [label, module.module_id])
+	_expect(StructureCell.is_in_bounds(marker.cell, module.size), "%s marker is outside %s" % [label, module.module_id])
+	_expect(module.cell_at(marker.cell) == StructureCell.AIR, "%s marker is not in AIR in %s" % [label, module.module_id])
+	_expect(StructureCell.is_in_bounds(marker.cell + Vector3i.UP, module.size) and module.cell_at(marker.cell + Vector3i.UP) == StructureCell.AIR, "%s marker has no headroom in %s" % [label, module.module_id])
+	_expect(StructureCell.is_structure_solid(module.cell_at(marker.cell + Vector3i.DOWN)), "%s marker has no floor in %s" % [label, module.module_id])
 
 func _test_rotations() -> void:
 	for module in _catalog.modules:
@@ -156,7 +156,7 @@ func _test_rotations() -> void:
 					for x in module.size.x:
 						var source := Vector3i(x, y, z)
 						var transformed := module.rotate_cell(source, quarter_turns)
-						_expect(LevelCell.is_in_bounds(transformed, rotated_size), "rotation escaped bounds for %s q%d" % [module.module_id, quarter_turns])
+						_expect(StructureCell.is_in_bounds(transformed, rotated_size), "rotation escaped bounds for %s q%d" % [module.module_id, quarter_turns])
 						_expect(not occupied.has(transformed), "rotation collapsed cells for %s q%d" % [module.module_id, quarter_turns])
 						occupied[transformed] = module.cell_at(source)
 			_expect(occupied.size() == module.cells.size(), "rotation did not preserve dense cell count for %s q%d" % [module.module_id, quarter_turns])
@@ -164,14 +164,14 @@ func _test_rotations() -> void:
 				var transformed_socket := module.rotate_cell(socket.cell, quarter_turns)
 				var transformed_direction := LevelSocketDefinition.rotate(socket.direction, quarter_turns)
 				_expect(_is_boundary(transformed_socket, rotated_size, transformed_direction), "rotated socket left its boundary for %s q%d" % [module.module_id, quarter_turns])
-				_expect(occupied[transformed_socket] == LevelCell.AIR, "rotated lower aperture changed for %s q%d" % [module.module_id, quarter_turns])
-				_expect(occupied[transformed_socket + Vector3i.UP] == LevelCell.AIR, "rotated upper aperture changed for %s q%d" % [module.module_id, quarter_turns])
+				_expect(occupied[transformed_socket] == StructureCell.AIR, "rotated lower aperture changed for %s q%d" % [module.module_id, quarter_turns])
+				_expect(occupied[transformed_socket + Vector3i.UP] == StructureCell.AIR, "rotated upper aperture changed for %s q%d" % [module.module_id, quarter_turns])
 			for torch in module.torches:
 				var transformed_torch := module.rotate_cell(torch.cell, quarter_turns)
 				var transformed_direction := LevelSocketDefinition.rotate(torch.wall_direction, quarter_turns)
 				var expected_support := module.rotate_cell(torch.cell + LevelSocketDefinition.vector_for(torch.wall_direction), quarter_turns)
 				_expect(transformed_torch + LevelSocketDefinition.vector_for(transformed_direction) == expected_support, "rotated torch direction detached from support in %s q%d" % [module.module_id, quarter_turns])
-				_expect(int(occupied[transformed_torch]) == LevelCell.AIR and LevelCell.is_structure_solid(int(occupied[expected_support])), "rotated torch cells changed in %s q%d" % [module.module_id, quarter_turns])
+				_expect(int(occupied[transformed_torch]) == StructureCell.AIR and StructureCell.is_structure_solid(int(occupied[expected_support])), "rotated torch cells changed in %s q%d" % [module.module_id, quarter_turns])
 			if module.spawn_marker != null:
 				_test_rotated_marker(module, module.spawn_marker, quarter_turns, occupied, "spawn")
 				_test_rotated_marker(module, module.return_door_marker, quarter_turns, occupied, "return")
@@ -182,9 +182,9 @@ func _test_rotated_marker(module: LevelModuleDefinition, marker: LevelMarkerDefi
 	var transformed := module.rotate_cell(marker.cell, quarter_turns)
 	var transformed_head := module.rotate_cell(marker.cell + Vector3i.UP, quarter_turns)
 	var transformed_floor := module.rotate_cell(marker.cell + Vector3i.DOWN, quarter_turns)
-	_expect(int(occupied[transformed]) == LevelCell.AIR, "rotated %s marker changed in %s q%d" % [label, module.module_id, quarter_turns])
-	_expect(int(occupied[transformed_head]) == LevelCell.AIR, "rotated %s marker headroom changed in %s q%d" % [label, module.module_id, quarter_turns])
-	_expect(LevelCell.is_structure_solid(int(occupied[transformed_floor])), "rotated %s marker floor changed in %s q%d" % [label, module.module_id, quarter_turns])
+	_expect(int(occupied[transformed]) == StructureCell.AIR, "rotated %s marker changed in %s q%d" % [label, module.module_id, quarter_turns])
+	_expect(int(occupied[transformed_head]) == StructureCell.AIR, "rotated %s marker headroom changed in %s q%d" % [label, module.module_id, quarter_turns])
+	_expect(StructureCell.is_structure_solid(int(occupied[transformed_floor])), "rotated %s marker floor changed in %s q%d" % [label, module.module_id, quarter_turns])
 	_expect(LevelSocketDefinition.rotate(marker.facing, quarter_turns) == ((int(marker.facing) + quarter_turns) % 4 as LevelSocketDefinition.Direction), "rotated %s marker facing changed in %s q%d" % [label, module.module_id, quarter_turns])
 
 func _test_seed_identity_and_failures() -> void:
@@ -313,7 +313,7 @@ func _validate_layout(layout: LevelLayout, seed_index: int) -> void:
 				for x in module.size.x:
 					var local_cell := Vector3i(x, y, z)
 					var value := module.cell_at(local_cell)
-					if value == LevelCell.VOID:
+					if value == StructureCell.VOID:
 						continue
 					var world_cell := placement.world_cell(local_cell)
 					_expect(not ownership.has(world_cell), "module overlap at %s for %s" % [world_cell, label])
@@ -349,7 +349,7 @@ func _validate_layout(layout: LevelLayout, seed_index: int) -> void:
 	_expect(ownership.size() == layout.cells.size(), "layout contains cells not owned by one module for %s" % label)
 	for cell in layout.cells:
 		_expect(ownership.has(cell), "layout cell has no module owner at %s for %s" % [cell, label])
-		_expect(LevelCell.is_valid(int(layout.cells[cell])) and int(layout.cells[cell]) != LevelCell.VOID, "layout contains invalid cell at %s for %s" % [cell, label])
+		_expect(StructureCell.is_valid(int(layout.cells[cell])) and int(layout.cells[cell]) != StructureCell.VOID, "layout contains invalid cell at %s for %s" % [cell, label])
 	_expect(layout.bounds_min == rebuilt_min and layout.bounds_max == rebuilt_max, "stored bounds differ from claimed cells for %s" % label)
 	var span := layout.bounds_max - layout.bounds_min + Vector3i.ONE
 	_expect(span.x <= definition.maximum_extent.x and span.y <= definition.maximum_extent.y and span.z <= definition.maximum_extent.z, "layout exceeds configured extent for %s" % label)
@@ -369,18 +369,18 @@ func _validate_layout(layout: LevelLayout, seed_index: int) -> void:
 			if other["cell"] == neighbor and int(other["direction"]) == int(LevelSocketDefinition.opposite(direction)):
 				partner_count += 1
 		_expect(partner_count == 1, "socket has %d partners instead of one at %s for %s" % [partner_count, cell, label])
-		_expect(layout.get_cell(cell) == LevelCell.AIR and layout.get_cell(cell + Vector3i.UP) == LevelCell.AIR, "socket aperture is not open for %s" % label)
-		_expect(layout.get_cell(neighbor) == LevelCell.AIR and layout.get_cell(neighbor + Vector3i.UP) == LevelCell.AIR, "socket partner aperture is not open for %s" % label)
+		_expect(layout.get_cell(cell) == StructureCell.AIR and layout.get_cell(cell + Vector3i.UP) == StructureCell.AIR, "socket aperture is not open for %s" % label)
+		_expect(layout.get_cell(neighbor) == StructureCell.AIR and layout.get_cell(neighbor + Vector3i.UP) == StructureCell.AIR, "socket partner aperture is not open for %s" % label)
 		allowed_cross_module_edges[_edge_key(cell, neighbor)] = true
 		allowed_cross_module_edges[_edge_key(cell + Vector3i.UP, neighbor + Vector3i.UP)] = true
 	for cell in layout.cells:
-		if int(layout.cells[cell]) != LevelCell.AIR:
+		if int(layout.cells[cell]) != StructureCell.AIR:
 			continue
 		var world_cell := cell as Vector3i
 		var owner := int(ownership[world_cell])
 		for direction in DIRECTIONS:
 			var neighbor := world_cell + direction
-			if not ownership.has(neighbor) or int(ownership[neighbor]) == owner or layout.get_cell(neighbor) != LevelCell.AIR:
+			if not ownership.has(neighbor) or int(ownership[neighbor]) == owner or layout.get_cell(neighbor) != StructureCell.AIR:
 				continue
 			_expect(allowed_cross_module_edges.has(_edge_key(world_cell, neighbor)), "unintended cross-module AIR adjacency at %s for %s" % [world_cell, label])
 	var reachable: Dictionary = {layout.spawn_cell: true}
@@ -391,13 +391,13 @@ func _validate_layout(layout: LevelLayout, seed_index: int) -> void:
 		pending_index += 1
 		for direction in DIRECTIONS:
 			var neighbor := cell + direction
-			if reachable.has(neighbor) or layout.get_cell(neighbor) != LevelCell.AIR:
+			if reachable.has(neighbor) or layout.get_cell(neighbor) != StructureCell.AIR:
 				continue
 			reachable[neighbor] = true
 			pending.append(neighbor)
 	var air_count := 0
 	for cell in layout.cells:
-		if int(layout.cells[cell]) == LevelCell.AIR:
+		if int(layout.cells[cell]) == StructureCell.AIR:
 			air_count += 1
 	_expect(reachable.size() == air_count, "only %d/%d AIR cells are reachable for %s" % [reachable.size(), air_count, label])
 	var actual_torches: Dictionary = {}
@@ -405,9 +405,9 @@ func _validate_layout(layout: LevelLayout, seed_index: int) -> void:
 		var key := _torch_key(torch.cell, torch.wall_direction, torch.module_id)
 		_expect(not actual_torches.has(key), "duplicate placed torch for %s" % label)
 		actual_torches[key] = true
-		_expect(layout.get_cell(torch.cell) == LevelCell.AIR, "placed torch is not in AIR for %s" % label)
+		_expect(layout.get_cell(torch.cell) == StructureCell.AIR, "placed torch is not in AIR for %s" % label)
 		var support := torch.cell + LevelSocketDefinition.vector_for(torch.wall_direction)
-		_expect(LevelCell.is_structure_solid(layout.get_cell(support)), "placed torch has no solid support for %s" % label)
+		_expect(StructureCell.is_structure_solid(layout.get_cell(support)), "placed torch has no solid support for %s" % label)
 	_expect(actual_torches == expected_torches, "placed torch set differs from authored markers for %s" % label)
 
 func _test_level_state_and_mesher() -> void:
@@ -417,8 +417,8 @@ func _test_level_state_and_mesher() -> void:
 		if direction == Vector3i.RIGHT:
 			continue
 		var air := stone + direction
-		cells[air] = LevelCell.AIR
-	cells[stone + Vector3i.UP * 2] = LevelCell.AIR
+		cells[air] = StructureCell.AIR
+	cells[stone + Vector3i.UP * 2] = StructureCell.AIR
 	var state := LevelState.new(
 		_block_catalog,
 		cells,
@@ -430,8 +430,8 @@ func _test_level_state_and_mesher() -> void:
 		Vector3i(1, 1, 1)
 	)
 	_expect(state.get_cell_value(stone) == BlockId.Type.STONE, "LevelState lost a solid block")
-	_expect(state.get_cell_value(stone + Vector3i.UP) == LevelCell.AIR, "LevelState lost claimed AIR")
-	_expect(state.get_cell_value(stone + Vector3i.RIGHT) == LevelCell.VOID, "LevelState does not distinguish VOID")
+	_expect(state.get_cell_value(stone + Vector3i.UP) == StructureCell.AIR, "LevelState lost claimed AIR")
+	_expect(state.get_cell_value(stone + Vector3i.RIGHT) == StructureCell.VOID, "LevelState does not distinguish VOID")
 	_expect(state.get_block_at(stone + Vector3i.UP) == null, "claimed AIR unexpectedly returns a block")
 	_expect(state.get_block_at(stone + Vector3i.RIGHT) == null, "VOID unexpectedly returns a block")
 	_expect(state.get_block_id_at(stone + Vector3i.UP) == BlockId.Type.AIR, "claimed AIR block ID query changed")

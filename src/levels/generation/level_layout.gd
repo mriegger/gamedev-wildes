@@ -15,7 +15,7 @@ var target_module_count: int
 var explored_state_count: int
 
 func get_cell(cell: Vector3i) -> int:
-	return int(cells.get(cell, LevelCell.VOID))
+	return int(cells.get(cell, StructureCell.VOID))
 
 func has_cell(cell: Vector3i) -> bool:
 	return cells.has(cell)

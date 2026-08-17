@@ -1,11 +1,14 @@
 extends RefCounted
-class_name LevelCell
+class_name StructureCell
 
 const VOID: int = -1
 const AIR: int = 0
 
 static func is_valid(value: int) -> bool:
-	return value == VOID or value == AIR or is_structure_solid(value)
+	return value == VOID or is_generic_valid(value)
+
+static func is_generic_valid(value: int) -> bool:
+	return value == AIR or is_structure_solid(value)
 
 static func is_structure_solid(value: int) -> bool:
 	return BlockId.is_chunk_cube(value)

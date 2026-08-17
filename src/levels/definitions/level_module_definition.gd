@@ -11,8 +11,8 @@ class_name LevelModuleDefinition
 @export var return_door_marker: LevelMarkerDefinition
 
 func cell_at(cell: Vector3i) -> int:
-	assert(LevelCell.is_in_bounds(cell, size))
-	return cells[LevelCell.index_of(cell, size)]
+	assert(StructureCell.is_in_bounds(cell, size))
+	return cells[StructureCell.index_of(cell, size)]
 
 func rotated_size(quarter_turns: int) -> Vector3i:
 	if posmod(quarter_turns, 2) == 0:
@@ -55,7 +55,7 @@ func validate() -> bool:
 		push_error("[LevelModuleDefinition] Weight must be positive for %s" % source)
 		valid = false
 	for value in cells:
-		if not LevelCell.is_valid(value):
+		if not StructureCell.is_valid(value):
 			push_error("[LevelModuleDefinition] Invalid block ID %d for %s" % [value, source])
 			valid = false
 	var socket_ids: Dictionary = {}
@@ -92,7 +92,7 @@ func validate() -> bool:
 
 func _validate_socket(socket: LevelSocketDefinition, source: String) -> bool:
 	var valid := true
-	if not LevelCell.is_in_bounds(socket.cell, size) or not LevelCell.is_in_bounds(socket.cell + Vector3i.UP, size):
+	if not StructureCell.is_in_bounds(socket.cell, size) or not StructureCell.is_in_bounds(socket.cell + Vector3i.UP, size):
 		push_error("[LevelModuleDefinition] Socket aperture outside %s" % source)
 		return false
 	var boundary_valid := false
@@ -111,38 +111,38 @@ func _validate_socket(socket: LevelSocketDefinition, source: String) -> bool:
 	var inward: Vector3i = -LevelSocketDefinition.vector_for(socket.direction)
 	var aperture_cells: Array[Vector3i] = [socket.cell, socket.cell + Vector3i.UP]
 	for aperture_cell in aperture_cells:
-		if cell_at(aperture_cell) != LevelCell.AIR:
+		if cell_at(aperture_cell) != StructureCell.AIR:
 			push_error("[LevelModuleDefinition] Socket aperture is not air for %s" % source)
 			valid = false
 		var inner_cell: Vector3i = aperture_cell + inward
-		if not LevelCell.is_in_bounds(inner_cell, size) or cell_at(inner_cell) != LevelCell.AIR:
+		if not StructureCell.is_in_bounds(inner_cell, size) or cell_at(inner_cell) != StructureCell.AIR:
 			push_error("[LevelModuleDefinition] Socket does not open into interior air for %s" % source)
 			valid = false
 	var floor_cell := socket.cell + Vector3i.DOWN
-	if not LevelCell.is_in_bounds(floor_cell, size) or not LevelCell.is_structure_solid(cell_at(floor_cell)):
+	if not StructureCell.is_in_bounds(floor_cell, size) or not StructureCell.is_structure_solid(cell_at(floor_cell)):
 		push_error("[LevelModuleDefinition] Socket has no floor for %s" % source)
 		valid = false
 	return valid
 
 func _validate_torch(torch: LevelTorchDefinition, source: String) -> bool:
-	if not LevelCell.is_in_bounds(torch.cell, size) or cell_at(torch.cell) != LevelCell.AIR:
+	if not StructureCell.is_in_bounds(torch.cell, size) or cell_at(torch.cell) != StructureCell.AIR:
 		push_error("[LevelModuleDefinition] Torch is not in interior air for %s" % source)
 		return false
 	var support_cell := torch.cell + LevelSocketDefinition.vector_for(torch.wall_direction)
-	if not LevelCell.is_in_bounds(support_cell, size) or not LevelCell.is_structure_solid(cell_at(support_cell)):
+	if not StructureCell.is_in_bounds(support_cell, size) or not StructureCell.is_structure_solid(cell_at(support_cell)):
 		push_error("[LevelModuleDefinition] Torch has no wall support for %s" % source)
 		return false
 	return true
 
 func _validate_marker(marker: LevelMarkerDefinition, label: String, source: String) -> bool:
-	if marker == null or not LevelCell.is_in_bounds(marker.cell, size) or not LevelCell.is_in_bounds(marker.cell + Vector3i.UP, size):
+	if marker == null or not StructureCell.is_in_bounds(marker.cell, size) or not StructureCell.is_in_bounds(marker.cell + Vector3i.UP, size):
 		push_error("[LevelModuleDefinition] Invalid %s marker for %s" % [label, source])
 		return false
-	if cell_at(marker.cell) != LevelCell.AIR or cell_at(marker.cell + Vector3i.UP) != LevelCell.AIR:
+	if cell_at(marker.cell) != StructureCell.AIR or cell_at(marker.cell + Vector3i.UP) != StructureCell.AIR:
 		push_error("[LevelModuleDefinition] Invalid %s marker for %s" % [label, source])
 		return false
 	var floor_cell := marker.cell + Vector3i.DOWN
-	if not LevelCell.is_in_bounds(floor_cell, size) or not LevelCell.is_structure_solid(cell_at(floor_cell)):
+	if not StructureCell.is_in_bounds(floor_cell, size) or not StructureCell.is_structure_solid(cell_at(floor_cell)):
 		push_error("[LevelModuleDefinition] %s marker has no floor for %s" % [label, source])
 		return false
 	return true

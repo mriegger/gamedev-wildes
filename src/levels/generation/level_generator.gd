@@ -240,19 +240,19 @@ func _transformed_cells(placement: LevelPlacedModule) -> Dictionary:
 			for x in module.size.x:
 				var local_cell := Vector3i(x, y, z)
 				var value := module.cell_at(local_cell)
-				if value == LevelCell.VOID:
+				if value == StructureCell.VOID:
 					continue
 				transformed[placement.world_cell(local_cell)] = value
 	return transformed
 
 func _has_only_connected_air_adjacency(state: AssemblyState, transformed_cells: Dictionary, frontier_cell: Vector3i, new_socket_world: Vector3i) -> bool:
 	for cell in transformed_cells:
-		if int(transformed_cells[cell]) != LevelCell.AIR:
+		if int(transformed_cells[cell]) != StructureCell.AIR:
 			continue
 		var transformed_cell := cell as Vector3i
 		for offset in NEIGHBORS:
 			var neighbor: Vector3i = transformed_cell + offset
-			if int(state.cells.get(neighbor, LevelCell.VOID)) != LevelCell.AIR:
+			if int(state.cells.get(neighbor, StructureCell.VOID)) != StructureCell.AIR:
 				continue
 			var is_lower_aperture: bool = transformed_cell == new_socket_world and neighbor == frontier_cell
 			var is_upper_aperture: bool = transformed_cell == new_socket_world + Vector3i.UP and neighbor == frontier_cell + Vector3i.UP
@@ -295,7 +295,7 @@ func _validate_finished_state(state: AssemblyState, target_module_count: int) ->
 		return false
 	if not _fits_extent(state.bounds_min, state.bounds_max):
 		return false
-	if int(state.cells.get(state.spawn_cell, LevelCell.VOID)) != LevelCell.AIR:
+	if int(state.cells.get(state.spawn_cell, StructureCell.VOID)) != StructureCell.AIR:
 		return false
 	var reachable: Dictionary = {state.spawn_cell: true}
 	var pending: Array[Vector3i] = [state.spawn_cell]
@@ -305,12 +305,12 @@ func _validate_finished_state(state: AssemblyState, target_module_count: int) ->
 		pending_index += 1
 		for offset in NEIGHBORS:
 			var neighbor := cell + offset
-			if reachable.has(neighbor) or int(state.cells.get(neighbor, LevelCell.VOID)) != LevelCell.AIR:
+			if reachable.has(neighbor) or int(state.cells.get(neighbor, StructureCell.VOID)) != StructureCell.AIR:
 				continue
 			reachable[neighbor] = true
 			pending.append(neighbor)
 	for cell in state.cells:
-		if int(state.cells[cell]) == LevelCell.AIR and not reachable.has(cell):
+		if int(state.cells[cell]) == StructureCell.AIR and not reachable.has(cell):
 			return false
 	return true
 
