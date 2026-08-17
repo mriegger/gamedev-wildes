@@ -31,8 +31,6 @@ func setup(
 	max_speed = _behavior.roam_speed
 	_skeleton_animation = animation_driver as SkeletonAnimationDriver
 	assert(_skeleton_animation != null)
-	_skeleton_animation.set_sprinting(false)
-	_skeleton_animation.set_hiding(false)
 
 func tick(
 	delta: float,
