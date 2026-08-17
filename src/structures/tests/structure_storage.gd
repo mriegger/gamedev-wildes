@@ -8,6 +8,13 @@ class FailingReplaceStore extends StructureFileStore:
 	func _replace_temporary(_temporary_path: String, _destination: String) -> Error:
 		return ERR_CANT_CREATE
 
+class InvalidRoundTripStore extends StructureFileStore:
+	func _save_temporary(resource: StructureDefinition, path: String) -> Error:
+		var result := super._save_temporary(resource, path)
+		if result == OK:
+			ResourceSaver.save(Resource.new(), path)
+		return result
+
 class ChangingBoundSourceStore extends StructureFileStore:
 	var replacement_path: String
 
@@ -119,6 +126,13 @@ func _test_export_failures(store: StructureFileStore, root_path: String, suffix:
 	var collision := store.export_draft(draft, existing_id)
 	_expect(not collision.succeeded and collision.message == "Export destination already exists", "first export overwrote an existing path")
 	_expect(FileAccess.get_file_as_bytes(existing_path) == existing_bytes and not draft.is_bound() and draft.is_dirty(), "collision changed the destination or draft binding")
+	var directory_collision_id := StringName("directory_collision_%s" % suffix)
+	var directory_collision_path := root_path.path_join("%s.tres" % directory_collision_id)
+	_directories_to_remove.append(directory_collision_path)
+	_expect(DirAccess.make_dir_absolute(directory_collision_path) == OK, "directory collision fixture could not be created")
+	var directory_collision := store.export_draft(draft, directory_collision_id)
+	_expect(not directory_collision.succeeded and directory_collision.message == "Export destination already exists", "first export replaced an existing directory")
+	_expect(DirAccess.dir_exists_absolute(directory_collision_path) and not draft.is_bound() and draft.is_dirty(), "directory collision changed the destination or draft binding")
 	var traversal := store.export_draft(draft, &"../escape")
 	_expect(not traversal.succeeded and traversal.message == "Export ID must be lowercase snake_case", "traversal export ID was accepted")
 	var empty := StructureDraft.create(Vector3i(2, 2, 2))
@@ -136,6 +150,12 @@ func _test_write_failure_preservation(store: StructureFileStore, root_path: Stri
 	var failed_save := FailingSaveStore.new(root_path).export_draft(save_failure_draft, save_failure_id)
 	_expect(not failed_save.succeeded and failed_save.message == "Temporary resource save failed", "temporary save failure was not reported")
 	_expect(not FileAccess.file_exists(save_failure_path) and not save_failure_draft.is_bound() and save_failure_draft.is_dirty(), "temporary save failure changed destination or draft state")
+	var validation_failure_id := StringName("validation_failure_%s" % suffix)
+	var validation_failure_path := _track_path(root_path.path_join("%s.tres" % validation_failure_id))
+	var validation_failure_draft := _make_draft()
+	var failed_validation := InvalidRoundTripStore.new(root_path).export_draft(validation_failure_draft, validation_failure_id)
+	_expect(not failed_validation.succeeded and failed_validation.message == "Temporary resource round trip failed", "invalid temporary round trip was accepted")
+	_expect(not FileAccess.file_exists(validation_failure_path) and not validation_failure_draft.is_bound() and validation_failure_draft.is_dirty(), "temporary validation failure changed destination or draft state")
 	var replacement_id := StringName("replace_failure_%s" % suffix)
 	var replacement_path := _track_path(root_path.path_join("%s.tres" % replacement_id))
 	var replacement_draft := _make_draft()
