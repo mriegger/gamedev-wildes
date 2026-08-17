@@ -68,37 +68,60 @@ func _run() -> void:
 	var replacement_offset := actor.brain.get_movement_goal() - failure_origin
 	_expect(Vector2(replacement_offset.x, replacement_offset.z).length() <= 30.0, "Failed path did not select a current-position-centered replacement")
 
-	var cover_position := actor.global_position
+	var cover_origin := Vector3(0.5, float(FEET_Y), 0.5)
+	actor.global_position = cover_origin
+	actor.velocity = Vector3.ZERO
+	actor.on_ground = true
+	actor._path_follower.request_repath()
+	for y in range(FEET_Y, FEET_Y + 2):
+		_expect(world.try_place_block(Vector3i(0, y, 1), BlockId.Type.STONE).is_success(), "Could not build off-position Skeleton cover fixture")
 	var nearby_observation := _make_observation(
-		cover_position + Vector3(0.0, 0.0, -10.0),
-		cover_position + Vector3(0.0, 0.9, -6.0),
+		Vector3(20.5, float(FEET_Y), 0.5),
+		Vector3(0.5, float(FEET_Y) + 0.9, -8.5),
 	)
-	budget.reset()
-	actor.tick(0.1, nearby_observation, Vector3.RIGHT * 2.0, budget)
-	_expect(actor.brain.state == SkeletonBrain.State.SEARCH_COVER, "Camera-exposed Skeleton did not search for cover")
-	_expect(Vector2(actor.velocity.x, actor.velocity.z).is_zero_approx(), "Cover-searching Skeleton did not stop")
-	_expect(Vector2(actor.global_position.x - cover_position.x, actor.global_position.z - cover_position.z).is_zero_approx(), "Cover-searching Skeleton changed position")
+	for _step in range(8):
+		budget.reset()
+		actor.tick(0.1, nearby_observation, Vector3.ZERO, budget)
+		if actor.brain.state == SkeletonBrain.State.MOVE_TO_COVER:
+			break
+	_expect(actor.brain.state == SkeletonBrain.State.MOVE_TO_COVER, "Exposed Skeleton did not find reachable off-position cover")
+	var cover_target := actor.brain.get_movement_goal()
+	var target_offset := Vector2(cover_target.x - cover_origin.x, cover_target.z - cover_origin.z)
+	_expect(target_offset.length() > 1.0, "Cover search accepted the exposed starting position")
 
-	var wall_z := floori(cover_position.z) - 3
-	var wall_x_min := floori(cover_position.x - definition.body_width * 0.5)
-	var wall_x_max := floori(cover_position.x + definition.body_width * 0.5)
-	for x in range(wall_x_min, wall_x_max + 1):
-		for y in range(FEET_Y, FEET_Y + 2):
-			_expect(world.try_place_block(Vector3i(x, y, wall_z), BlockId.Type.STONE).is_success(), "Could not build Skeleton cover fixture")
-	budget.reset()
-	actor.tick(0.1, nearby_observation, Vector3.RIGHT * 2.0, budget)
-	_expect(actor.brain.state == SkeletonBrain.State.HIDE, "Fully occluded Skeleton did not hide")
-	_expect(Vector2(actor.velocity.x, actor.velocity.z).is_zero_approx(), "Hiding Skeleton did not stop")
+	var maximum_travel := Vector2.ZERO
+	for _step in range(60):
+		budget.reset()
+		actor.tick(0.1, nearby_observation, Vector3.ZERO, budget)
+		var travel := Vector2(actor.global_position.x - cover_origin.x, actor.global_position.z - cover_origin.z)
+		if travel.length_squared() > maximum_travel.length_squared():
+			maximum_travel = travel
+		if actor.brain.state == SkeletonBrain.State.HIDE:
+			break
+	_expect(maximum_travel.length() > 1.0, "Skeleton did not move toward its off-position cover")
+	_expect(actor.brain.state == SkeletonBrain.State.HIDE, "Skeleton did not hide after reaching still-occluded cover")
+	var final_offset := Vector2(cover_target.x - actor.global_position.x, cover_target.z - actor.global_position.z)
+	_expect(final_offset.length() < 0.35, "Skeleton entered hide before reaching its cover target")
 	actor.animation_driver.advance(0.1)
 	_expect((actor.animation_driver as SkeletonAnimationDriver).get_current_state() == SkeletonAnimationDriver.HIDE, "Hiding Skeleton did not use its hide presentation")
 
-	var mined_edits := world.try_mine_block(Vector3i(wall_x_max, FEET_Y + 1, wall_z))
-	_expect(not mined_edits.is_empty() and (mined_edits[0] as BlockEdit).is_success(), "Could not expose the Skeleton cover fixture")
+	for y in range(FEET_Y, FEET_Y + 2):
+		var mined_edits := world.try_mine_block(Vector3i(0, y, 1))
+		_expect(not mined_edits.is_empty() and (mined_edits[0] as BlockEdit).is_success(), "Could not remove Skeleton cover fixture")
 	budget.reset()
-	actor.tick(0.1, nearby_observation, Vector3.RIGHT * 2.0, budget)
-	_expect(actor.brain.state == SkeletonBrain.State.SEARCH_COVER, "Partially exposed Skeleton did not resume cover search")
+	actor.tick(0.1, nearby_observation, Vector3.ZERO, budget)
+	_expect(actor.brain.state == SkeletonBrain.State.SEARCH_COVER, "Exposed Skeleton did not restart bounded cover search")
 	actor.animation_driver.advance(0.1)
 	_expect((actor.animation_driver as SkeletonAnimationDriver).get_current_state() == SkeletonAnimationDriver.IDLE, "Exposed Skeleton retained its hide presentation")
+
+	actor.brain.record_cover_found(actor.global_position + Vector3(40.0, 0.0, 0.0))
+	actor._path_follower.request_repath()
+	budget.reset()
+	actor.tick(0.0, nearby_observation, Vector3.ZERO, budget)
+	_expect(
+		actor.brain.state == SkeletonBrain.State.SEARCH_COVER and actor.brain.needs_cover_search(),
+		"Failed cover path did not request a replacement search",
+	)
 
 	actor.free()
 	await process_frame

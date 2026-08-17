@@ -72,10 +72,42 @@ func _test_detection_states() -> void:
 	brain.advance(0.0, self_position, self_position + Vector3(31.0, 0.0, 0.0), true)
 	_expect(brain.state == SkeletonBrainType.State.ROAM, "player leaving detection range did not restore roaming")
 
+func _test_cover_executor_contract() -> void:
+	var behavior := SkeletonBehaviorDefinitionType.new()
+	var brain := SkeletonBrainType.new(behavior, 928)
+	var self_position := Vector3(0.5, 1.0, 0.5)
+	var nearby_player := self_position + Vector3(10.0, 0.0, 0.0)
+	brain.advance(0.0, self_position, nearby_player, false)
+	_expect(brain.needs_cover_search(), "entering cover search did not request executor work")
+	brain.record_cover_search_started()
+	_expect(not brain.needs_cover_search(), "started cover search remained pending")
+	brain.record_cover_exhausted()
+	_expect(brain.needs_cover_search(), "exhausted cover search did not request a fresh bounded search")
+
+	brain.record_cover_search_started()
+	var cover_target := self_position + Vector3(3.0, 0.0, 2.0)
+	brain.record_cover_found(cover_target)
+	_expect(brain.state == SkeletonBrainType.State.MOVE_TO_COVER, "found cover did not enter movement state")
+	_expect(brain.get_movement_goal().is_equal_approx(cover_target), "found cover did not become the movement goal")
+	brain.advance(0.1, self_position, nearby_player, false)
+	_expect(brain.state == SkeletonBrainType.State.MOVE_TO_COVER, "cover movement was interrupted while the player remained detected")
+	brain.reject_cover_goal()
+	_expect(brain.state == SkeletonBrainType.State.SEARCH_COVER and brain.needs_cover_search(), "rejected cover did not restart searching")
+
+	brain.record_cover_search_started()
+	brain.record_cover_found(cover_target)
+	brain.record_cover_arrival(false)
+	_expect(brain.state == SkeletonBrainType.State.SEARCH_COVER and brain.needs_cover_search(), "exposed arrival was accepted as cover")
+	brain.record_cover_search_started()
+	brain.record_cover_found(cover_target)
+	brain.record_cover_arrival(true)
+	_expect(brain.state == SkeletonBrainType.State.HIDE, "occluded cover arrival did not enter hide state")
+
 func _run() -> void:
 	_test_definition_defaults()
 	_test_deterministic_drifting_roam()
 	_test_detection_states()
+	_test_cover_executor_contract()
 	if _failures == 0:
 		print("SKELETON_BRAIN PASS")
 		quit(0)

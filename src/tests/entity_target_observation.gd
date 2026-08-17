@@ -28,10 +28,30 @@ func _run() -> void:
 		_expect(observation.camera_forward == Vector3.FORWARD, "camera forward was not normalized")
 		_expect(observation.camera_right == Vector3.RIGHT, "camera right was not normalized")
 
+	var skewed_observation := EntityTargetObservation.create(
+		player_position,
+		camera_origin,
+		Vector3.FORWARD,
+		Vector3(2.0, 0.0, -1.0),
+	)
+	_expect(skewed_observation != null, "valid non-orthogonal camera axes were rejected")
+	if skewed_observation != null:
+		_expect(skewed_observation.camera_right == Vector3.RIGHT, "camera right was not orthogonalized")
+		_expect(is_zero_approx(skewed_observation.camera_forward.dot(skewed_observation.camera_right)), "stored camera axes were not orthogonal")
+
 	var invalid_position := EntityTargetObservation.create(Vector3(INF, 0.0, 0.0), camera_origin, Vector3.FORWARD, Vector3.RIGHT)
 	_expect(invalid_position == null, "non-finite player position was accepted")
 	var invalid_direction := EntityTargetObservation.create(player_position, camera_origin, Vector3.ZERO, Vector3.RIGHT)
 	_expect(invalid_direction == null, "zero camera direction was accepted")
+	var collinear_axes := EntityTargetObservation.create(player_position, camera_origin, Vector3.FORWARD, Vector3.FORWARD)
+	_expect(collinear_axes == null, "collinear camera axes were accepted")
+	var near_collinear_axes := EntityTargetObservation.create(
+		player_position,
+		camera_origin,
+		Vector3.FORWARD,
+		Vector3(0.00001, 0.0, -1.0),
+	)
+	_expect(near_collinear_axes == null, "near-collinear camera axes were accepted")
 
 	var camera_basis := Basis.from_euler(Vector3(0.2, 0.6, -0.1))
 	var camera_transform := Transform3D(camera_basis, camera_origin)

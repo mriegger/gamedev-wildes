@@ -1,6 +1,8 @@
 extends RefCounted
 class_name EntityTargetObservation
 
+const CAMERA_AXIS_MIN_SINE_SQUARED: float = 0.000001
+
 var player_position: Vector3:
 	get:
 		return _player_position
@@ -29,7 +31,7 @@ func _init(
 	_player_position = p_player_position
 	_camera_origin = p_camera_origin
 	_camera_forward = p_camera_forward.normalized()
-	_camera_right = p_camera_right.normalized()
+	_camera_right = (p_camera_right - _camera_forward * p_camera_right.dot(_camera_forward)).normalized()
 
 static func create(
 	player_position: Vector3,
@@ -58,6 +60,7 @@ func validate() -> bool:
 		_values_are_valid(_player_position, _camera_origin, _camera_forward, _camera_right)
 		and is_equal_approx(_camera_forward.length_squared(), 1.0)
 		and is_equal_approx(_camera_right.length_squared(), 1.0)
+		and is_zero_approx(_camera_forward.dot(_camera_right))
 	)
 
 static func _values_are_valid(
@@ -66,11 +69,12 @@ static func _values_are_valid(
 	camera_forward: Vector3,
 	camera_right: Vector3,
 ) -> bool:
-	return (
-		player_position.is_finite()
-		and camera_origin.is_finite()
-		and camera_forward.is_finite()
-		and not camera_forward.is_zero_approx()
-		and camera_right.is_finite()
-		and not camera_right.is_zero_approx()
-	)
+	if not player_position.is_finite() or not camera_origin.is_finite():
+		return false
+	if not camera_forward.is_finite() or camera_forward.is_zero_approx():
+		return false
+	if not camera_right.is_finite() or camera_right.is_zero_approx():
+		return false
+	var normalized_forward := camera_forward.normalized()
+	var normalized_right := camera_right.normalized()
+	return normalized_forward.cross(normalized_right).length_squared() >= CAMERA_AXIS_MIN_SINE_SQUARED

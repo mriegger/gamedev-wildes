@@ -31,6 +31,8 @@ func _run() -> void:
 	_test_partial_side_exposure()
 	_test_clear_view()
 	_test_camera_rotation()
+	_test_diagonal_pitched_full_cover()
+	_test_diagonal_pitched_corner_exposure()
 	if _failures == 0:
 		print("VOXEL_CAMERA_OCCLUSION PASS")
 		quit(0)
@@ -43,7 +45,7 @@ func _test_fully_hidden_body() -> void:
 	space.add_wall(2, -1, 1, 0, 2)
 	_expect(
 		VoxelCameraOcclusionType.is_hidden(space, _north_observation(), FEET_POSITION, BODY_WIDTH, BODY_HEIGHT),
-		"a wall covering all nine silhouette samples did not hide the body",
+		"a wall covering every silhouette sample did not hide the body",
 	)
 
 func _test_partial_head_exposure() -> void:
@@ -85,6 +87,31 @@ func _test_camera_rotation() -> void:
 	_expect(
 		not VoxelCameraOcclusionType.is_hidden(space, rotated_observation, FEET_POSITION, BODY_WIDTH, BODY_HEIGHT),
 		"rotating the camera did not expose the body beside the wall",
+	)
+
+func _test_diagonal_pitched_full_cover() -> void:
+	var space := TestVoxelSpace.new()
+	space.add_wall(2, -6, -1, -10, 10)
+	_expect(
+		VoxelCameraOcclusionType.is_hidden(space, _diagonal_pitched_observation(), FEET_POSITION, BODY_WIDTH, BODY_HEIGHT),
+		"a full diagonal cover wall did not hide the pitched body bounds",
+	)
+
+func _test_diagonal_pitched_corner_exposure() -> void:
+	var space := TestVoxelSpace.new()
+	space.add_wall(2, -6, -2, -10, 10)
+	_expect(
+		not VoxelCameraOcclusionType.is_hidden(space, _diagonal_pitched_observation(), FEET_POSITION, BODY_WIDTH, BODY_HEIGHT),
+		"an exposed depth corner was treated as hidden by a pitched diagonal camera",
+	)
+
+func _diagonal_pitched_observation() -> EntityTargetObservationType:
+	var camera_forward := Vector3(1.0, -0.35, 1.0).normalized()
+	return EntityTargetObservationType.new(
+		Vector3.ZERO,
+		Vector3(-5.5, 5.0, -0.5),
+		camera_forward,
+		Vector3(1.0, 0.0, -1.0),
 	)
 
 func _north_observation() -> EntityTargetObservationType:
