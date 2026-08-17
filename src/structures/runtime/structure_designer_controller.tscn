@@ -1,0 +1,16 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://structures/runtime/structure_designer_controller.gd" id="1_controller"]
+
+[node name="StructureDesignerController" type="Node3D"]
+script = ExtResource("1_controller")
+
+[node name="Pitch" type="Node3D" parent="."]
+position = Vector3(0, 1.62, 0)
+
+[node name="Camera3D" type="Camera3D" parent="Pitch"]
+current = false
+projection = 0
+fov = 75.0
+near = 0.05
+far = 1000.0

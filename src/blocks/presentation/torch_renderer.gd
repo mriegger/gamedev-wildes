@@ -135,6 +135,15 @@ func remove_torch(pos: Vector3i) -> bool:
 	_shadow_strengths.erase(pos)
 	return false
 
+func clear_torches() -> void:
+	var positions: Array[Vector3i] = []
+	for position in torch_instances:
+		positions.append(position as Vector3i)
+	for position in positions:
+		remove_torch(position)
+	_refresh_shadow_targets()
+	_update_shadow_transitions(0.0)
+
 func has_torch(pos: Vector3i) -> bool:
 	return torch_instances.has(pos)
 
