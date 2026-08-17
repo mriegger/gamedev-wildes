@@ -183,6 +183,19 @@ func try_remove_block(cell: Vector3i) -> StructureDraftChange:
 		_remove_torch(torch_cell)
 	return _commit_change([cell], [], removed_torch_cells)
 
+func try_set_void(cell: Vector3i) -> StructureDraftChange:
+	if _format != Format.LEVEL_MODULE or not is_in_bounds(cell):
+		return StructureDraftChange.reject()
+	if get_cell(cell) == StructureCell.VOID or has_torch(cell):
+		return StructureDraftChange.reject()
+	if _required_air_cells.has(cell) or _required_solid_cells.has(cell):
+		return StructureDraftChange.reject()
+	var removed_torch_cells := _get_torch_cells_supported_by(cell)
+	_set_cell(cell, StructureCell.VOID)
+	for torch_cell in removed_torch_cells:
+		_remove_torch(torch_cell)
+	return _commit_change([cell], [], removed_torch_cells)
+
 func can_place_torch(cell: Vector3i, support_direction: Vector3i) -> bool:
 	if not is_in_bounds(cell) or get_cell(cell) != StructureCell.AIR or has_torch(cell):
 		return false
@@ -206,6 +219,100 @@ func try_remove_torch(cell: Vector3i) -> StructureDraftChange:
 	_remove_torch(cell)
 	return _commit_change([], [], [cell])
 
+func try_add_socket(cell: Vector3i, direction: LevelSocketDefinition.Direction) -> StructureDraftChange:
+	if _format != Format.LEVEL_MODULE or not LevelSocketDefinition.is_valid_direction(direction):
+		return StructureDraftChange.reject()
+	if not _is_boundary(cell, direction):
+		return StructureDraftChange.reject()
+	for existing in _sockets:
+		if existing.cell == cell:
+			return StructureDraftChange.reject()
+	var upper := cell + Vector3i.UP
+	var floor_cell := cell + Vector3i.DOWN
+	var inward := -LevelSocketDefinition.vector_for(direction)
+	var inward_upper := upper + inward
+	var inward_lower := cell + inward
+	if not is_in_bounds(upper) or not is_in_bounds(floor_cell) or not is_in_bounds(inward_lower) or not is_in_bounds(inward_upper):
+		return StructureDraftChange.reject()
+	if not StructureCell.is_structure_solid(get_cell(floor_cell)):
+		return StructureDraftChange.reject()
+	if get_cell(inward_lower) != StructureCell.AIR or get_cell(inward_upper) != StructureCell.AIR:
+		return StructureDraftChange.reject()
+	if _required_solid_cells.has(cell) or _required_solid_cells.has(upper):
+		return StructureDraftChange.reject()
+	var socket := LevelSocketDefinition.new()
+	socket.socket_id = _next_socket_id(direction)
+	socket.cell = cell
+	socket.direction = direction
+	var changed_cells: Array[Vector3i] = []
+	for aperture_cell in [cell, upper]:
+		if get_cell(aperture_cell) != StructureCell.AIR:
+			changed_cells.append(aperture_cell)
+	var removed_torch_cells := _get_torch_cells_supported_by_many(changed_cells)
+	for changed_cell in changed_cells:
+		_set_cell(changed_cell, StructureCell.AIR)
+	for torch_cell in removed_torch_cells:
+		_remove_torch(torch_cell)
+	_sockets.append(socket)
+	_add_socket_requirements(socket)
+	return _commit_change(changed_cells, [], removed_torch_cells, true)
+
+func try_remove_socket(socket_id: StringName) -> StructureDraftChange:
+	if _format != Format.LEVEL_MODULE or socket_id.is_empty():
+		return StructureDraftChange.reject()
+	for index in _sockets.size():
+		var socket := _sockets[index]
+		if socket.socket_id != socket_id:
+			continue
+		_remove_socket_requirements(socket)
+		_sockets.remove_at(index)
+		return _commit_change([], [], [], true)
+	return StructureDraftChange.reject()
+
+func try_set_markers(
+	spawn_cell: Vector3i,
+	spawn_facing: LevelSocketDefinition.Direction,
+	return_cell: Vector3i,
+	return_facing: LevelSocketDefinition.Direction,
+) -> StructureDraftChange:
+	if _format != Format.LEVEL_MODULE:
+		return StructureDraftChange.reject()
+	if not LevelSocketDefinition.is_valid_direction(spawn_facing) or not LevelSocketDefinition.is_valid_direction(return_facing):
+		return StructureDraftChange.reject()
+	var spawn := LevelMarkerDefinition.new()
+	spawn.cell = spawn_cell
+	spawn.facing = spawn_facing
+	var return_marker := LevelMarkerDefinition.new()
+	return_marker.cell = return_cell
+	return_marker.facing = return_facing
+	if not _marker_is_valid(spawn) or not _marker_is_valid(return_marker):
+		return StructureDraftChange.reject()
+	if _markers_equal(_spawn_marker, spawn) and _markers_equal(_return_door_marker, return_marker):
+		return StructureDraftChange.reject()
+	_remove_marker_requirements(_spawn_marker)
+	_remove_marker_requirements(_return_door_marker)
+	_spawn_marker = spawn
+	_return_door_marker = return_marker
+	_add_marker_requirements(_spawn_marker)
+	_add_marker_requirements(_return_door_marker)
+	return _commit_change([], [], [], true)
+
+func try_clear_markers() -> StructureDraftChange:
+	if _format != Format.LEVEL_MODULE or _spawn_marker == null:
+		return StructureDraftChange.reject()
+	assert(_return_door_marker != null)
+	_remove_marker_requirements(_spawn_marker)
+	_remove_marker_requirements(_return_door_marker)
+	_spawn_marker = null
+	_return_door_marker = null
+	return _commit_change([], [], [], true)
+
+func try_set_weight(value: float) -> StructureDraftChange:
+	if _format != Format.LEVEL_MODULE or not is_finite(value) or value <= 0.0 or _weight == value:
+		return StructureDraftChange.reject()
+	_weight = value
+	return _commit_change([], [], [], true)
+
 func accept_export(identifier: StringName, source_path: String) -> bool:
 	var simplified_path := source_path.simplify_path()
 	if not StructureDefinition.is_valid_id(identifier) or not simplified_path.is_absolute_path():
@@ -221,9 +328,10 @@ func _commit_change(
 	changed_cells: Array[Vector3i],
 	added_torches: Array[StructureTorchDefinition] = [],
 	removed_torch_cells: Array[Vector3i] = [],
+	metadata_changed: bool = false,
 ) -> StructureDraftChange:
 	_dirty = true
-	return StructureDraftChange.success(changed_cells, added_torches, removed_torch_cells)
+	return StructureDraftChange.success(changed_cells, added_torches, removed_torch_cells, metadata_changed)
 
 func _set_cell(cell: Vector3i, value: int) -> void:
 	_cells[StructureCell.index_of(cell, _size)] = value
@@ -258,25 +366,99 @@ func _get_torch_cells_supported_by(support_cell: Vector3i) -> Array[Vector3i]:
 	cells.sort_custom(_cell_less)
 	return cells
 
+func _get_torch_cells_supported_by_many(support_cells: Array[Vector3i]) -> Array[Vector3i]:
+	var indexed: Dictionary = {}
+	for support_cell in support_cells:
+		for torch_cell in _get_torch_cells_supported_by(support_cell):
+			indexed[torch_cell] = true
+	var cells: Array[Vector3i] = []
+	for cell_value in indexed:
+		cells.append(cell_value as Vector3i)
+	cells.sort_custom(_cell_less)
+	return cells
+
 func _index_module_metadata() -> void:
 	assert(_format == Format.LEVEL_MODULE)
 	for socket in _sockets:
-		var inward := -LevelSocketDefinition.vector_for(socket.direction)
-		var upper := socket.cell + Vector3i.UP
-		_required_air_cells[socket.cell] = true
-		_required_air_cells[upper] = true
-		_required_air_cells[socket.cell + inward] = true
-		_required_air_cells[upper + inward] = true
-		_required_solid_cells[socket.cell + Vector3i.DOWN] = true
-	_index_marker(_spawn_marker)
-	_index_marker(_return_door_marker)
+		_add_socket_requirements(socket)
+	_add_marker_requirements(_spawn_marker)
+	_add_marker_requirements(_return_door_marker)
 
-func _index_marker(marker: LevelMarkerDefinition) -> void:
+func _add_socket_requirements(socket: LevelSocketDefinition) -> void:
+	var inward := -LevelSocketDefinition.vector_for(socket.direction)
+	var upper := socket.cell + Vector3i.UP
+	_increment_requirement(_required_air_cells, socket.cell)
+	_increment_requirement(_required_air_cells, upper)
+	_increment_requirement(_required_air_cells, socket.cell + inward)
+	_increment_requirement(_required_air_cells, upper + inward)
+	_increment_requirement(_required_solid_cells, socket.cell + Vector3i.DOWN)
+
+func _remove_socket_requirements(socket: LevelSocketDefinition) -> void:
+	var inward := -LevelSocketDefinition.vector_for(socket.direction)
+	var upper := socket.cell + Vector3i.UP
+	_decrement_requirement(_required_air_cells, socket.cell)
+	_decrement_requirement(_required_air_cells, upper)
+	_decrement_requirement(_required_air_cells, socket.cell + inward)
+	_decrement_requirement(_required_air_cells, upper + inward)
+	_decrement_requirement(_required_solid_cells, socket.cell + Vector3i.DOWN)
+
+func _add_marker_requirements(marker: LevelMarkerDefinition) -> void:
 	if marker == null:
 		return
-	_required_air_cells[marker.cell] = true
-	_required_air_cells[marker.cell + Vector3i.UP] = true
-	_required_solid_cells[marker.cell + Vector3i.DOWN] = true
+	_increment_requirement(_required_air_cells, marker.cell)
+	_increment_requirement(_required_air_cells, marker.cell + Vector3i.UP)
+	_increment_requirement(_required_solid_cells, marker.cell + Vector3i.DOWN)
+
+func _remove_marker_requirements(marker: LevelMarkerDefinition) -> void:
+	if marker == null:
+		return
+	_decrement_requirement(_required_air_cells, marker.cell)
+	_decrement_requirement(_required_air_cells, marker.cell + Vector3i.UP)
+	_decrement_requirement(_required_solid_cells, marker.cell + Vector3i.DOWN)
+
+func _increment_requirement(index: Dictionary, cell: Vector3i) -> void:
+	index[cell] = int(index.get(cell, 0)) + 1
+
+func _decrement_requirement(index: Dictionary, cell: Vector3i) -> void:
+	var count := int(index.get(cell, 0))
+	assert(count > 0)
+	if count == 1:
+		index.erase(cell)
+	else:
+		index[cell] = count - 1
+
+func _marker_is_valid(marker: LevelMarkerDefinition) -> bool:
+	var upper := marker.cell + Vector3i.UP
+	var floor_cell := marker.cell + Vector3i.DOWN
+	if not is_in_bounds(marker.cell) or not is_in_bounds(upper) or not is_in_bounds(floor_cell):
+		return false
+	return get_cell(marker.cell) == StructureCell.AIR and get_cell(upper) == StructureCell.AIR and StructureCell.is_structure_solid(get_cell(floor_cell))
+
+func _next_socket_id(direction: LevelSocketDefinition.Direction) -> StringName:
+	var base := String(LevelSocketDefinition.Direction.find_key(direction)).to_lower()
+	var used: Dictionary = {}
+	for socket in _sockets:
+		used[socket.socket_id] = true
+	if not used.has(StringName(base)):
+		return StringName(base)
+	var suffix := 2
+	while used.has(StringName("%s_%d" % [base, suffix])):
+		suffix += 1
+	return StringName("%s_%d" % [base, suffix])
+
+func _is_boundary(cell: Vector3i, direction: LevelSocketDefinition.Direction) -> bool:
+	if not is_in_bounds(cell):
+		return false
+	match direction:
+		LevelSocketDefinition.Direction.NORTH:
+			return cell.z == 0
+		LevelSocketDefinition.Direction.EAST:
+			return cell.x == _size.x - 1
+		LevelSocketDefinition.Direction.SOUTH:
+			return cell.z == _size.z - 1
+		LevelSocketDefinition.Direction.WEST:
+			return cell.x == 0
+	return false
 
 static func _air_cells(size: Vector3i) -> PackedInt32Array:
 	var cells := PackedInt32Array()
@@ -306,6 +488,11 @@ static func _copy_marker(source: LevelMarkerDefinition) -> LevelMarkerDefinition
 	copied.cell = source.cell
 	copied.facing = source.facing
 	return copied
+
+static func _markers_equal(first: LevelMarkerDefinition, second: LevelMarkerDefinition) -> bool:
+	if first == null or second == null:
+		return first == second
+	return first.cell == second.cell and first.facing == second.facing
 
 static func _cell_less(a: Vector3i, b: Vector3i) -> bool:
 	if a.x != b.x:
