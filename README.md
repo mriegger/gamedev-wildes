@@ -62,7 +62,7 @@ further out. Meshing runs on background threads so movement doesn't hitch; edits
 globally and survive unload/reload.
 
 **Dungeon levels.** A doorway near the meadow spawn leads to a deterministic four-to-six-module
-stone dungeon assembled from an authored entry path, hallway, and master room. The finite interior
+stone dungeon assembled from authored entry paths, hallways, and master rooms. The finite interior
 uses cutaway-facing geometry, a black void, and authored torch light. The overworld stays loaded
 but its streaming and presentation are suspended until you return through the dungeon door.
 Doorway selection, module pools, terrain presentation, ambient lighting, and return-door materials
@@ -79,8 +79,8 @@ later overwrites of that bound file. Successful exports keep the workspace open 
 current draft clean. `dev structure exit` leaves the workspace and confirms before discarding
 edited cells, torches, or Level Module metadata. Level Module tools edit precise weight, targeted
 `VOID` cells, connections selected from the outside face of a lower boundary wall, and an atomic
-spawn/return marker pair. Each connection can require a match or define the solid block used to
-fill its complete doorway when generation leaves it unused.
+player-spawn/shared entrance-exit marker pair. Each connection can require a match or define the
+solid block used to fill its complete doorway when generation leaves it unused.
 Torches remain normal first-person palette placements instead of panel metadata. Exported modules
 must still be added explicitly to the appropriate level content and catalog; repository-root files
 are not consumed or registered by generation automatically.
