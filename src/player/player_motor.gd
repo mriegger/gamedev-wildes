@@ -1,6 +1,8 @@
 extends Node3D
 class_name PlayerMotor
 
+const _TURN_RESPONSE: float = 10.0
+
 @export_range(0.01, 30.0, 0.01) var move_speed: float = 5.5
 @export_range(0.01, 30.0, 0.01) var sprint_speed: float = 8.0
 @export_range(0.0, 30.0, 0.01) var jump_velocity: float = 9.0
@@ -204,8 +206,7 @@ func _handle_movement(delta):
 		move_vec = (cam_right * input_dir.x + cam_forward * input_dir.y)
 		move_vec = move_vec.normalized() * (sprint_speed if is_sprinting else move_speed)
 		if move_vec.length() > 0.1:
-			var yaw = atan2(move_vec.x, move_vec.z)
-			model_root.rotation.y = lerp_angle(model_root.rotation.y, yaw, delta * 10.0)
+			_turn_toward_movement(move_vec, delta)
 
 	velocity.x = move_vec.x
 	velocity.z = move_vec.z
@@ -249,3 +250,27 @@ func face_direction(world_direction: Vector3):
 		return
 	planar_direction = planar_direction.normalized()
 	model_root.rotation.y = atan2(planar_direction.x, planar_direction.z)
+
+func turn_toward_direction(world_direction: Vector3, delta: float):
+	assert(world_direction.is_finite())
+	assert(is_finite(delta) and delta >= 0.0)
+	var planar_direction := Vector3(world_direction.x, 0.0, world_direction.z)
+	if planar_direction.is_zero_approx():
+		return
+	planar_direction = planar_direction.normalized()
+	var target_yaw := atan2(planar_direction.x, planar_direction.z)
+	var turn_weight := 1.0 - exp(-_TURN_RESPONSE * delta)
+	model_root.rotation.y = lerp_angle(model_root.rotation.y, target_yaw, turn_weight)
+
+func _turn_toward_movement(world_direction: Vector3, delta: float):
+	if _selected_item_uses_melee_action() and not is_sprinting:
+		return
+	turn_toward_direction(world_direction, delta)
+
+func _selected_item_uses_melee_action() -> bool:
+	if _inventory_model == null:
+		return false
+	var selected_item_id = _inventory_model.get_selected_item_id()
+	if selected_item_id == null:
+		return false
+	return _inventory_model.item_catalog.get_definition(selected_item_id).primary_action is MeleeAttackActionDefinition

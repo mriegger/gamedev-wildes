@@ -31,6 +31,7 @@ func _run():
 	_expect(is_equal_approx(profile.walk_leg_lift, 0.18), "exported walk leg lift was not adopted as the default")
 	_expect(is_equal_approx(profile.sprint_leg_lift, 0.40), "exported sprint leg lift was not adopted as the default")
 	_expect(is_equal_approx(profile.sprint_lean_degrees, 8.0), "exported sprint lean was not adopted as the default")
+	_expect(is_equal_approx(profile.gait_direction_response, 12.0), "exported gait direction response was not adopted as the default")
 	_expect(is_equal_approx(profile.attack_windup_degrees, 52.0), "exported attack windup was not adopted as the default")
 	_expect(is_equal_approx(profile.attack_follow_through_degrees, 76.0), "exported attack follow-through was not adopted as the default")
 	_expect(is_equal_approx(profile.attack_right_arm_pitch_degrees, -120.0), "exported attack arm pitch was not adopted as the default")
@@ -51,15 +52,21 @@ func _run():
 	_expect(player.velocity.y <= 0.0 and player._jump_windup_remaining <= 0.0 and not player._jump_ready, "jump windup launched after grounding was lost")
 	player.velocity = Vector3.ZERO
 	var default_bob = profile.sprint_bob_height
+	var default_gait_direction_response = profile.gait_direction_response
 	var move_speed_control = panel.find_child("character__move_speed", true, false) as SpinBox
 	var gait_hold_control = panel.find_child("animation__gait_contact_hold", true, false) as SpinBox
+	var gait_direction_control = panel.find_child("animation__gait_direction_response", true, false) as SpinBox
 	_expect(move_speed_control.min_value > 0.0 and not move_speed_control.allow_lesser, "movement speed control permits an invalid zero divisor")
 	_expect(not gait_hold_control.allow_greater, "declared animation ranges are not enforced by the tuner")
+	_expect(gait_direction_control != null and not gait_direction_control.allow_lesser and not gait_direction_control.allow_greater, "gait direction response control did not preserve its declared range")
 	var sprint_bob_control = panel.find_child("animation__sprint_bob_height", true, false) as SpinBox
 	_expect(sprint_bob_control != null, "sprint bob control was not generated")
 	if sprint_bob_control != null:
 		sprint_bob_control.value = default_bob + 0.123
 		_expect(is_equal_approx(profile.sprint_bob_height, default_bob + 0.123), "animation value did not update live")
+	if gait_direction_control != null:
+		gait_direction_control.value = default_gait_direction_response + 2.0
+		_expect(is_equal_approx(profile.gait_direction_response, default_gait_direction_response + 2.0), "gait direction response did not update live")
 	var part_selector = panel.get_node("Panel/VBox/Tabs/Parts/VBox/PartSelector") as OptionButton
 	part_selector.select(3)
 	part_selector.item_selected.emit(3)
@@ -70,9 +77,11 @@ func _run():
 	var preview_selector = panel.get_node("Panel/VBox/PreviewRow/PreviewSelector") as OptionButton
 	preview_selector.select(3)
 	preview_selector.item_selected.emit(3)
+	_expect(player.animation_driver.animator._gait_direction.is_equal_approx(Vector2(0.0, 1.0)), "sprint preview did not initialize a full forward gait")
 	for _frame in range(24):
 		await process_frame
 	_expect(player.animation_driver.animator.get_current_state() == BlockyHumanoidAnimator.SPRINT, "sprint preview did not play selected=%s driver=%s current=%s" % [preview_selector.get_item_text(preview_selector.selected), String(player.animation_driver._preview_state), String(player.animation_driver.animator.get_current_state())])
+	_expect(abs(player.animation_driver.animator.left_leg_locomotion.rotation.z) < 0.001, "sprint preview no longer used a forward gait")
 	_expect(is_equal_approx(player.animation_driver.animator.left_arm_action.position.x, 0.125), "left arm tuning did not reach the rendered rig")
 	var default_attack_position: Vector3 = attack_action.held_position_offset
 	var default_attack_rotation: Vector3 = attack_action.held_rotation_degrees
@@ -154,6 +163,7 @@ func _run():
 		_expect(exported.get("format", "") == "wildes_player_animation", "export format identifier missing")
 		_expect(int(exported.get("version", 0)) == 2, "attack tuning export version changed")
 		_expect(is_equal_approx(float((exported["animation"] as Dictionary)["sprint_bob_height"]), default_bob + 0.123), "exported animation value was not exact")
+		_expect(is_equal_approx(float((exported["animation"] as Dictionary)["gait_direction_response"]), default_gait_direction_response + 2.0), "exported gait direction response was not exact")
 		var exported_attack = exported["held_item_attack"] as Dictionary
 		_expect(is_equal_approx(float((exported_attack["position_offset"] as Array)[0]), default_attack_position.x + 0.075), "exported attack sword position was not exact")
 		_expect(is_equal_approx(float((exported_attack["rotation_degrees"] as Array)[1]), 18.0), "exported attack sword rotation was not exact")
@@ -163,6 +173,8 @@ func _run():
 	var reset_button = panel.get_node("Panel/VBox/Footer/ResetButton") as Button
 	reset_button.pressed.emit()
 	_expect(is_equal_approx(profile.sprint_bob_height, default_bob), "reset did not restore animation defaults")
+	_expect(is_equal_approx(profile.gait_direction_response, default_gait_direction_response), "reset did not restore gait direction response")
+	_expect(gait_direction_control == null or is_equal_approx(gait_direction_control.value, default_gait_direction_response), "reset did not restore the gait direction response control")
 	arm_transform = player.animation_driver.animator.get_tuning_transform(BlockyHumanoidAnimator.TUNING_LEFT_ARM)
 	_expect((arm_transform["position"] as Vector3).is_zero_approx(), "reset did not restore part transforms")
 	_expect(attack_action.held_position_offset.is_equal_approx(default_attack_position), "reset did not restore attack sword position")

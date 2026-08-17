@@ -295,9 +295,11 @@ func _run():
 	_expect(inventory_stat_coordinator.setup(_inventory, player_stats), "inventory stat coordinator setup failed")
 	_combat.setup(_voxel_world, _player, player_stats, _world_entity_coordinator.get_runtime())
 	_interactor.setup(_camera, _player, _inventory, _input_buffer, _combat, _world_entity_coordinator.get_runtime())
+	_player._inventory_model = _inventory
 	_interactor.bind_space(_voxel_world, _voxel_world)
 	_interactor.melee_attack_started.connect(_on_melee_attack_started)
 	_interactor.soil_tilled.connect(_on_soil_tilled)
+	_player.set_physics_process(false)
 	_interactor.set_physics_process(false)
 	_player.animation_driver.setup(_player, _interactor)
 	_player.animation_driver.set_process(false)
@@ -337,15 +339,97 @@ func _run():
 	var one_pixel_sword := PixelItemMeshBuilder.build(held_sword.texture, held_sword.grip_pixel, held_sword.max_dimension, 1.0)
 	_expect(is_equal_approx(held_sword.mesh_instance.mesh.get_aabb().size.z, one_pixel_sword.get_aabb().size.z), "sword mesh thickness changed")
 	_expect(_interactor.get_selected_primary_action() == sword_action, "sword melee action was not selected")
+	var movement_camera_rig := CameraRig.new()
+	movement_camera_rig.camera = _camera
+	_player.camera_rig = movement_camera_rig
+	_player._input_buffer = _input_buffer
+	_player.voxel_space = _voxel_world
+	_player.model_root.rotation.y = 0.0
+	_input_buffer.move_dir = Vector2.RIGHT
+	_player._handle_movement(0.0)
+	var armed_strafe_world_velocity := Vector3(_player.velocity.x, 0.0, _player.velocity.z)
+	var armed_strafe_local_velocity := _player.model_root.global_transform.basis.inverse() * armed_strafe_world_velocity
+	_expect(is_zero_approx(_player.model_root.rotation.y), "armed strafe changed player facing")
+	_expect(armed_strafe_local_velocity.x > _player.move_speed * 0.9 and absf(armed_strafe_local_velocity.z) < 0.01, "armed right movement was not a full local strafe")
+	_input_buffer.move_dir = Vector2(0.0, 1.0)
+	_player._handle_movement(0.0)
+	var armed_forward_world_velocity := Vector3(_player.velocity.x, 0.0, _player.velocity.z)
+	var armed_forward_local_velocity := _player.model_root.global_transform.basis.inverse() * armed_forward_world_velocity
+	_expect(armed_forward_local_velocity.z < -_player.move_speed * 0.9, "camera-forward movement did not become backward movement while aiming behind")
+	_input_buffer.move_dir = Vector2.ZERO
+
+	var facing_direction := Vector3(1.0, 0.0, 1.0).normalized()
+	var facing_target_yaw := atan2(facing_direction.x, facing_direction.z)
+	var facing_start_yaw := facing_target_yaw - 1.0
+	_player.model_root.rotation.y = facing_start_yaw
+	_player.turn_toward_direction(facing_direction, 0.1)
+	var single_step_yaw := _player.model_root.rotation.y
+	var expected_single_step_yaw := lerp_angle(facing_start_yaw, facing_target_yaw, 1.0 - exp(-10.0 * 0.1))
+	_expect(is_equal_approx(single_step_yaw, expected_single_step_yaw), "smooth facing did not use exponential response")
+	_expect(absf(wrapf(single_step_yaw - facing_target_yaw, -PI, PI)) > 0.1, "smooth facing snapped to its target")
+
+	_player.model_root.rotation.y = facing_start_yaw
+	_player.turn_toward_direction(facing_direction, 0.05)
+	_player.turn_toward_direction(facing_direction, 0.05)
+	_expect(absf(wrapf(_player.model_root.rotation.y - single_step_yaw, -PI, PI)) < 0.00001, "smooth facing changed with frame subdivision")
+
+	_player.model_root.rotation.y = facing_start_yaw
+	_player._turn_toward_movement(facing_direction, 0.1)
+	_expect(is_equal_approx(_player.model_root.rotation.y, facing_start_yaw), "movement changed facing while a melee weapon was selected")
+
+	_input_buffer.sprint_pressed = true
+	_input_buffer.move_dir = Vector2.RIGHT
+	_player._handle_movement(0.0)
+	var armed_sprint_velocity := Vector3(_player.velocity.x, 0.0, _player.velocity.z)
+	_expect(_player.is_sprinting, "armed movement did not enter sprinting")
+	_expect(is_equal_approx(armed_sprint_velocity.length(), _player.sprint_speed), "armed sprint speed changed")
+	_player.model_root.rotation.y = facing_start_yaw
+	_player._turn_toward_movement(facing_direction, 0.1)
+	_expect(is_equal_approx(_player.model_root.rotation.y, expected_single_step_yaw), "armed sprinting did not restore movement-facing")
+	_input_buffer.sprint_pressed = false
+	_input_buffer.move_dir = Vector2.ZERO
+	_player._handle_movement(0.0)
+
+	var aim_mouse_position := _interactor.get_viewport().get_mouse_position()
+	var aim_ray_origin := _camera.project_ray_origin(aim_mouse_position)
+	var aim_ray_direction := _camera.project_ray_normal(aim_mouse_position).normalized()
+	var aim_direction := _interactor._get_cursor_planar_direction(aim_ray_origin, aim_ray_direction)
+	_expect(not aim_direction.is_zero_approx(), "cursor aim did not reach the player-height plane")
+	var aim_target_yaw := atan2(aim_direction.x, aim_direction.z)
+	var aim_start_yaw := aim_target_yaw - 1.0
+	_player.model_root.rotation.y = aim_start_yaw
+	_player.is_sprinting = true
+	_interactor._update_melee_facing(0.1)
+	_expect(is_equal_approx(_player.model_root.rotation.y, aim_start_yaw), "armed sprinting tracked the cursor")
+	_player.is_sprinting = false
+
+	_player.model_root.rotation.y = aim_start_yaw
+	_player.on_ground = false
+	_player.velocity = Vector3(-2.0, 3.0, 1.0)
+	_interactor._update_melee_facing(0.1)
+	var expected_aim_yaw := lerp_angle(aim_start_yaw, aim_target_yaw, 1.0 - exp(-10.0 * 0.1))
+	_expect(is_equal_approx(_player.model_root.rotation.y, expected_aim_yaw), "airborne moving melee aim did not track the cursor smoothly")
+
+	var held_aim_yaw := _player.model_root.rotation.y
+	_interactor.pointer_over_ui = true
+	_interactor._update_melee_facing(0.2)
+	_expect(is_equal_approx(_player.model_root.rotation.y, held_aim_yaw), "melee aim changed while the pointer was over UI")
+	_interactor.pointer_over_ui = false
+	_player.velocity = Vector3.ZERO
+
+	var aim_plane_center := _player.global_position + Vector3.UP * (_player.player_height * 0.5)
+	var parallel_aim := _interactor._get_cursor_planar_direction(aim_plane_center + Vector3.UP, Vector3.RIGHT)
+	var centered_aim := _interactor._get_cursor_planar_direction(aim_plane_center + Vector3.UP, Vector3.DOWN)
+	_expect(parallel_aim.is_zero_approx(), "parallel cursor ray produced a facing direction")
+	_expect(centered_aim.is_zero_approx(), "cursor directly above the player produced a facing direction")
+
 	var resting_socket_position := _player.held_item_view.position
 	var resting_socket_rotation := _player.held_item_view.rotation
 	var attack_mouse_position := _interactor.get_viewport().get_mouse_position()
 	var attack_ray_origin := _camera.project_ray_origin(attack_mouse_position)
 	var attack_ray_direction := _camera.project_ray_normal(attack_mouse_position).normalized()
-	var player_center := _player.global_position + Vector3.UP * (_player.player_height * 0.5)
-	var attack_cursor_position: Variant = Plane(Vector3.UP, player_center.y).intersects_ray(attack_ray_origin, attack_ray_direction)
-	_expect(attack_cursor_position is Vector3, "sword cursor ray did not reach the player-facing plane")
-	var expected_attack_facing := ((attack_cursor_position as Vector3) - player_center).normalized()
+	var expected_attack_facing := _interactor._get_cursor_planar_direction(attack_ray_origin, attack_ray_direction)
+	_expect(not expected_attack_facing.is_zero_approx(), "sword cursor ray did not reach the player-facing plane")
 	_player.model_root.rotation.y = atan2(-expected_attack_facing.x, -expected_attack_facing.z)
 	_push_primary(true)
 	await process_frame
@@ -355,6 +439,26 @@ func _run():
 	_expect(_melee_attack_facings.size() == 1 and _melee_attack_facings[0].dot(expected_attack_facing) > 0.999, "player did not face the mouse before the sword swing started")
 	_expect(_player.animation_driver.animator._attacking, "sword attack did not reach the animation driver")
 	_expect(is_equal_approx(_interactor.melee_attack_timer, sword_action.attack_profile.cooldown), "sword attack timer changed")
+	_expect(_interactor._melee_ray_origin.is_equal_approx(attack_ray_origin), "sword attack facing and targeting used different ray origins")
+	_expect(_interactor._melee_ray_direction.is_equal_approx(attack_ray_direction), "sword attack facing and targeting used different ray directions")
+	var locked_attack_yaw := _player.model_root.rotation.y
+	_player.is_sprinting = true
+	_player._turn_toward_movement(-expected_attack_facing, 0.2)
+	_expect(not is_equal_approx(_player.model_root.rotation.y, locked_attack_yaw), "sprint movement did not turn the player during the attack lock test")
+	_interactor._update_melee_facing(0.0)
+	_expect(is_equal_approx(_player.model_root.rotation.y, locked_attack_yaw), "sprinting overrode the locked sword facing")
+	_player.is_sprinting = false
+
+	var attack_camera_transform := _camera.transform
+	_camera.look_at_from_position(Vector3(6.0, 6.0, 0.0), Vector3.ZERO)
+	var redirected_mouse_position := _interactor.get_viewport().get_mouse_position()
+	var redirected_ray_origin := _camera.project_ray_origin(redirected_mouse_position)
+	var redirected_ray_direction := _camera.project_ray_normal(redirected_mouse_position).normalized()
+	var redirected_aim := _interactor._get_cursor_planar_direction(redirected_ray_origin, redirected_ray_direction)
+	_expect(not redirected_aim.is_zero_approx() and redirected_aim.dot(expected_attack_facing) < 0.99, "attack lock test did not redirect the cursor ray")
+	_interactor._update_melee_facing(0.2)
+	_expect(is_equal_approx(_player.model_root.rotation.y, locked_attack_yaw), "player facing changed during an active sword swing")
+	_camera.transform = attack_camera_transform
 	_player.on_ground = true
 	_player.animation_driver._process(sword_action.attack_profile.duration * 0.5)
 	_expect(_player.held_item_view.position.is_equal_approx(resting_socket_position + sword_action.held_position_offset), "sword did not move toward the wrist during attack")
@@ -393,6 +497,19 @@ func _run():
 	_expect(_interactor.melee_attack_queue == 0, "stale sword chain input did not expire")
 	_interactor._handle_item_actions(sword_action.attack_profile.duration)
 	_expect(_melee_attack_directions == [-1, 1, -1], "expired sword clicks were flushed as attacks")
+	_player.model_root.rotation.y = facing_start_yaw
+	_player.is_sprinting = true
+	_player._turn_toward_movement(facing_direction, 0.1)
+	var post_attack_sprint_yaw := _player.model_root.rotation.y
+	_interactor._update_melee_facing(0.1)
+	_expect(is_equal_approx(_player.model_root.rotation.y, post_attack_sprint_yaw), "cursor-facing resumed during a post-attack sprint")
+	_player.is_sprinting = false
+
+	var resumed_aim_start_yaw := aim_target_yaw - 1.0
+	_player.model_root.rotation.y = resumed_aim_start_yaw
+	_interactor._update_melee_facing(0.1)
+	_expect(not is_equal_approx(_player.model_root.rotation.y, resumed_aim_start_yaw), "melee aim did not resume after the swing duration")
+	_expect(absf(wrapf(_player.model_root.rotation.y - aim_target_yaw, -PI, PI)) > 0.1, "resumed melee aim snapped to the cursor")
 	_player.animation_driver._process(sword_action.attack_profile.duration)
 	_expect(_player.held_item_view.position.is_equal_approx(resting_socket_position), "sword position did not recover after attacking")
 	_expect(_player.held_item_view.rotation.is_equal_approx(resting_socket_rotation), "sword rotation did not recover after attacking")
@@ -411,6 +528,21 @@ func _run():
 	_expect(_player.held_item_view.position.is_equal_approx(resting_socket_position), "mid-swing switch retained the sword position")
 	_expect(_player.held_item_view.rotation.is_equal_approx(resting_socket_rotation), "mid-swing switch retained the sword rotation")
 	_interactor._handle_item_actions(0.0)
+	var pickaxe_facing_start_yaw := -0.5
+	_player.model_root.rotation.y = pickaxe_facing_start_yaw
+	_player._turn_toward_movement(Vector3.RIGHT, 0.1)
+	_expect(not is_equal_approx(_player.model_root.rotation.y, pickaxe_facing_start_yaw), "non-melee movement stopped controlling facing")
+	var pickaxe_movement_yaw := _player.model_root.rotation.y
+	_interactor._update_melee_facing(0.5)
+	_expect(is_equal_approx(_player.model_root.rotation.y, pickaxe_movement_yaw), "non-melee item started cursor-facing")
+	_input_buffer.move_dir = Vector2(0.0, 1.0)
+	_player._handle_movement(0.0)
+	var pickaxe_world_velocity := Vector3(_player.velocity.x, 0.0, _player.velocity.z)
+	_expect(pickaxe_world_velocity.is_equal_approx(armed_forward_world_velocity), "melee cursor-facing changed camera-relative world velocity")
+	_input_buffer.move_dir = Vector2.ZERO
+	_player.voxel_space = null
+	_player.camera_rig = null
+	movement_camera_rig.free()
 	_push_primary(false)
 	await process_frame
 	_input_buffer.poll()

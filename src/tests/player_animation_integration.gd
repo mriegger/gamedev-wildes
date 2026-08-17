@@ -26,6 +26,7 @@ func _run():
 	_expect(arm_mesh.size.is_equal_approx(Vector3(0.225, 0.675, 0.225)), "rigid arm proportions changed")
 	_expect(leg_mesh.size.is_equal_approx(Vector3(0.225, 0.675, 0.225)), "rigid leg proportions changed")
 	_expect(is_equal_approx(leg_mesh.size.y + torso_mesh.size.y + head_mesh.size.y, 1.8), "visual height no longer matches collision height")
+	_expect(is_equal_approx(animator.profile.gait_direction_response, 12.0), "gait direction response default changed")
 	var left_leg = animator.get_node("RigRoot/LeftHip/LeftLegLocomotion") as Node3D
 	var right_leg = animator.get_node("RigRoot/RightHip/RightLegLocomotion") as Node3D
 	var left_leg_origin = left_leg.position
@@ -37,6 +38,9 @@ func _run():
 	_expect(not is_equal_approx(idle_y, animator.rig_root.position.y), "idle body motion did not advance")
 
 	state.set_motion(Vector3(0.0, 0.0, 5.5), 1.0, false, true, 0.0, 0.0, false, Vector3.ZERO)
+	_advance(animator, 1)
+	var initial_direction_response = 1.0 - exp(-animator.profile.gait_direction_response / 60.0)
+	_expect(animator._gait_direction.distance_to(Vector2(0.0, initial_direction_response)) < 0.0001, "gait direction did not use frame-rate-independent exponential response")
 	var max_walk_foot_lift = 0.0
 	var max_walk_detachment = 0.0
 	var max_walk_stretch = 1.0
@@ -178,6 +182,7 @@ func _run():
 	state.set_motion(Vector3(4.0, 0.0, 3.0), 1.0, false, true, 0.0, 5.0, false, Vector3.ZERO)
 	_advance(animator, 12)
 	_expect(abs(animator.body_secondary.rotation.z) > deg_to_rad(4.0), "turn and strafe lean was not applied")
+	_run_directional_gait_checks(animator, state, left_leg_origin, right_leg_origin)
 
 	var min_jump_anticipation = 0.0
 	var min_jump_anticipation_scale = 1.0
@@ -319,6 +324,111 @@ func _run():
 	else:
 		print("PLAYER_ANIMATION FAIL %s" % str(_errors))
 		quit(1)
+
+func _run_directional_gait_checks(animator: BlockyHumanoidAnimator, state: ActorAnimationState, left_leg_origin: Vector3, right_leg_origin: Vector3):
+	var left_leg = animator.left_leg_locomotion
+	var right_leg = animator.right_leg_locomotion
+	var directions: Array[Vector2] = [
+		Vector2(0.0, 1.0),
+		Vector2(0.0, -1.0),
+		Vector2(1.0, 0.0),
+		Vector2(-1.0, 0.0),
+		Vector2(1.0, 1.0).normalized(),
+		Vector2(-1.0, 1.0).normalized(),
+		Vector2(1.0, -1.0).normalized(),
+		Vector2(-1.0, -1.0).normalized(),
+	]
+	for sprinting in [false, true]:
+		var speed: float = 8.0 if sprinting else 5.5
+		var travel: float = animator.profile.sprint_leg_travel if sprinting else animator.profile.walk_leg_travel
+		var lift: float = animator.profile.sprint_leg_lift if sprinting else animator.profile.walk_leg_lift
+		var mode = "sprint" if sprinting else "walk"
+		for direction in directions:
+			state.set_motion(Vector3.ZERO, 0.0, false, true, 0.0, 0.0, false, Vector3.ZERO)
+			_advance(animator, 1)
+			_expect(animator._gait_direction.is_zero_approx(), "%s gait direction did not reset at rest" % mode)
+			state.set_motion(Vector3(direction.x * speed, 0.0, direction.y * speed), 1.0, sprinting, true, 0.0, 0.0, false, Vector3.ZERO)
+			_advance(animator, 60)
+			_expect(animator._gait_direction.distance_to(direction) < 0.001, "%s gait did not settle toward %s" % [mode, direction])
+			_expect(abs(animator._gait_direction.length() - 1.0) < 0.001, "%s diagonal blend lost full stride amplitude direction=%s" % [mode, direction])
+			var left_min = INF
+			var left_max = -INF
+			var right_min = INF
+			var right_max = -INF
+			var max_lift = -INF
+			var min_stance_height = INF
+			var max_stance_height = -INF
+			var min_opposition_product = INF
+			var max_x_rotation = 0.0
+			var max_z_rotation = 0.0
+			for _frame in range(80):
+				_advance(animator, 1)
+				var left_foot = animator.left_foot_marker.global_position
+				var right_foot = animator.right_foot_marker.global_position
+				var left_projection = Vector2(left_foot.x, left_foot.z).dot(direction)
+				var right_projection = Vector2(right_foot.x, right_foot.z).dot(direction)
+				left_min = min(left_min, left_projection)
+				left_max = max(left_max, left_projection)
+				right_min = min(right_min, right_projection)
+				right_max = max(right_max, right_projection)
+				max_lift = max(max_lift, left_foot.y)
+				var cycle = fposmod(animator._gait_phase() / TAU, 1.0)
+				if cycle < animator.profile.gait_push_pose:
+					min_stance_height = min(min_stance_height, left_foot.y)
+					max_stance_height = max(max_stance_height, left_foot.y)
+				var left_displacement = Vector2(left_leg.position.x - left_leg_origin.x, left_leg.position.z - left_leg_origin.z).dot(direction)
+				var right_displacement = Vector2(right_leg.position.x - right_leg_origin.x, right_leg.position.z - right_leg_origin.z).dot(direction)
+				min_opposition_product = min(min_opposition_product, left_displacement * right_displacement)
+				max_x_rotation = max(max_x_rotation, abs(left_leg.rotation.x))
+				max_z_rotation = max(max_z_rotation, abs(left_leg.rotation.z))
+			var left_range = left_max - left_min
+			var right_range = right_max - right_min
+			_expect(abs(left_range - travel * 2.0) < 0.015, "%s gait did not use full travel toward %s range=%.3f" % [mode, direction, left_range])
+			_expect(abs(left_range - right_range) < 0.002, "%s leg paths were not mirrored toward %s" % [mode, direction])
+			_expect(abs(max_lift - lift) < 0.005, "%s recovery lift changed toward %s height=%.3f" % [mode, direction, max_lift])
+			_expect(max_stance_height - min_stance_height < 0.002, "%s stance height changed toward %s" % [mode, direction])
+			_expect(min_opposition_product < -0.05, "%s legs lost half-cycle opposition toward %s" % [mode, direction])
+			if abs(direction.x) > 0.5:
+				_expect(max_z_rotation > deg_to_rad(20.0), "%s lateral gait did not rotate around its directional axis toward %s" % [mode, direction])
+			if abs(direction.y) > 0.5:
+				_expect(max_x_rotation > deg_to_rad(19.0), "%s longitudinal gait did not rotate around its directional axis toward %s" % [mode, direction])
+	state.set_motion(Vector3(0.0, 0.0, 5.5), 1.0, false, true, 0.0, 0.0, false, Vector3.ZERO)
+	_advance(animator, 60)
+	state.set_motion(Vector3(5.5, 0.0, 0.0), 1.0, false, true, 0.0, 0.0, false, Vector3.ZERO)
+	_advance(animator, 1)
+	var direction_response = 1.0 - exp(-animator.profile.gait_direction_response / 60.0)
+	var expected_quarter_turn = Vector2(direction_response, 1.0 - direction_response)
+	_expect(animator._gait_direction.distance_to(expected_quarter_turn) < 0.001, "90 degree gait transition did not use exponential smoothing direction=%s" % animator._gait_direction)
+	_expect(animator._gait_direction.length() < 0.9, "90 degree gait transition normalized before settling")
+	_advance(animator, 60)
+	_expect(animator._gait_direction.distance_to(Vector2(1.0, 0.0)) < 0.001, "90 degree gait transition did not settle")
+	state.set_motion(Vector3(-5.5, 0.0, 0.0), 1.0, false, true, 0.0, 0.0, false, Vector3.ZERO)
+	var minimum_reversal_strength = INF
+	var crossed_zero = false
+	var previous_x = animator._gait_direction.x
+	for _frame in range(8):
+		_advance(animator, 1)
+		minimum_reversal_strength = min(minimum_reversal_strength, animator._gait_direction.length())
+		if previous_x > 0.0 and animator._gait_direction.x < 0.0:
+			crossed_zero = true
+		previous_x = animator._gait_direction.x
+	_expect(crossed_zero and minimum_reversal_strength < 0.11, "180 degree gait reversal did not contract through zero strength=%.3f" % minimum_reversal_strength)
+	_advance(animator, 60)
+	var attack_foot_min = INF
+	var attack_foot_max = -INF
+	var max_attack_leg_rotation = 0.0
+	animator.play_attack(0.48, -1)
+	for _frame in range(29):
+		_advance(animator, 1)
+		var foot_projection = -animator.left_foot_marker.global_position.x
+		attack_foot_min = min(attack_foot_min, foot_projection)
+		attack_foot_max = max(attack_foot_max, foot_projection)
+		max_attack_leg_rotation = max(max_attack_leg_rotation, abs(left_leg.rotation.z - right_leg.rotation.z))
+	_expect(max_attack_leg_rotation > deg_to_rad(30.0), "moving attack replaced directional lower-body rotation")
+	_expect(attack_foot_max - attack_foot_min > 0.45, "moving attack stopped the directional foot path")
+	state.set_motion(Vector3.ZERO, 0.0, false, true, 0.0, 0.0, false, Vector3.ZERO)
+	_advance(animator, 1)
+	_expect(animator._gait_direction.is_zero_approx(), "stopping did not reset the gait direction")
 
 func _run_crowd_smoke(packed: PackedScene):
 	var crowd = Node3D.new()

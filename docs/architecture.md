@@ -63,9 +63,11 @@ validation, so support, body collision, and centered-feet requirements cannot di
 
 `MeleeCombatCoordinator` validates cursor targeting, range, sweep arc, voxel visibility, target
 existence, and contact timing before changing health. `MeleeAttackProfile` owns base damage and an
-optional sweep angle. Player swings lock sorted spatial-index candidates from the cursor ray at
-attack start after rotating the player presentation toward that cursor ray, then independently
-revalidate every locked target at contact; a zero-degree sweep
+optional sweep angle. Selecting a melee weapon makes the player presentation smoothly track the
+cursor independently of camera-relative movement whenever the player is not sprinting; sprinting
+restores movement-owned facing. Player swings snap to the current cursor ray, lock that facing for
+the attack duration even while sprinting, lock sorted spatial-index candidates from the same ray,
+then independently revalidate every locked target at contact; a zero-degree sweep
 retains exact single-target ray selection, while a full-circle sweep is independent of planar cursor
 aim. The profile calculates
 `max(1, base damage + attacker strength - target defense)`. Each successful physical hit applies

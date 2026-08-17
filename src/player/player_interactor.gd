@@ -56,6 +56,7 @@ var _melee_ray_direction: Vector3
 var _melee_source_item_id: StringName = &""
 var _primary_consumption_latched: bool = false
 var _primary_harvest_latched: bool = false
+var _melee_locked_facing_direction: Vector3 = Vector3.ZERO
 
 func setup(p_camera: Camera3D, p_motor: PlayerMotor, p_inventory: InventoryModel, p_input_buffer: InputBuffer, p_combat: MeleeCombatCoordinator, p_entity_runtime: EntityRuntime):
 	assert(p_camera != null)
@@ -174,6 +175,7 @@ func _physics_process(delta):
 		return
 	_handle_raycast()
 	_handle_item_actions(delta)
+	_update_melee_facing(delta)
 
 func _handle_raycast():
 	target_has = false
@@ -354,6 +356,7 @@ func _reset_melee_chain():
 	_melee_contact_pending = false
 	_melee_target_runtime_ids.clear()
 	_melee_source_item_id = &""
+	_melee_locked_facing_direction = Vector3.ZERO
 	melee_attack_timer = 0.0
 	melee_attack_elapsed = 0.0
 	melee_attack_queue = 0
@@ -372,10 +375,12 @@ func _start_melee_attack():
 	var mouse_position := get_viewport().get_mouse_position()
 	_melee_ray_origin = camera.project_ray_origin(mouse_position)
 	_melee_ray_direction = camera.project_ray_normal(mouse_position).normalized()
-	var player_center := motor.global_position + Vector3.UP * (motor.player_height * 0.5)
-	var cursor_position: Variant = Plane(Vector3.UP, player_center.y).intersects_ray(_melee_ray_origin, _melee_ray_direction)
-	if cursor_position is Vector3:
-		motor.face_direction((cursor_position as Vector3) - player_center)
+	var cursor_direction := _get_cursor_planar_direction(_melee_ray_origin, _melee_ray_direction)
+	if not cursor_direction.is_zero_approx():
+		motor.face_direction(cursor_direction)
+	_melee_locked_facing_direction = Vector3(
+		sin(motor.model_root.rotation.y), 0.0, cos(motor.model_root.rotation.y)
+	)
 	_melee_target_runtime_ids = combat.acquire_player_targets(_melee_ray_origin, _melee_ray_direction, profile)
 	_melee_contact_pending = not _melee_target_runtime_ids.is_empty()
 	var attack_direction := next_melee_attack_direction
@@ -395,6 +400,33 @@ func _advance_melee_attack(delta: float):
 	melee_attack_timer = maxf(melee_attack_timer - delta, 0.0)
 	if _melee_contact_pending and previous_elapsed < profile.contact_time and melee_attack_elapsed >= profile.contact_time:
 		_commit_melee_contacts()
+
+func _update_melee_facing(delta: float):
+	if pointer_over_ui or not get_selected_primary_action() is MeleeAttackActionDefinition:
+		return
+	if melee_attack_action != null and melee_attack_timer > 0.0 and melee_attack_elapsed < melee_attack_action.attack_profile.duration:
+		motor.face_direction(_melee_locked_facing_direction)
+		return
+	if motor.is_sprinting:
+		return
+	var mouse_position := get_viewport().get_mouse_position()
+	var ray_origin := camera.project_ray_origin(mouse_position)
+	var ray_direction := camera.project_ray_normal(mouse_position).normalized()
+	var cursor_direction := _get_cursor_planar_direction(ray_origin, ray_direction)
+	if cursor_direction.is_zero_approx():
+		return
+	motor.turn_toward_direction(cursor_direction, delta)
+
+func _get_cursor_planar_direction(ray_origin: Vector3, ray_direction: Vector3) -> Vector3:
+	var player_center := motor.global_position + Vector3.UP * (motor.player_height * 0.5)
+	var cursor_position: Variant = Plane(Vector3.UP, player_center.y).intersects_ray(ray_origin, ray_direction)
+	if not cursor_position is Vector3:
+		return Vector3.ZERO
+	var cursor_direction := (cursor_position as Vector3) - player_center
+	cursor_direction.y = 0.0
+	if not cursor_direction.is_finite() or cursor_direction.is_zero_approx():
+		return Vector3.ZERO
+	return cursor_direction.normalized()
 
 func _commit_melee_contacts():
 	var target_runtime_ids := _melee_target_runtime_ids

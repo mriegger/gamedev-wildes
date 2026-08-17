@@ -40,6 +40,7 @@ var _current_state: StringName = IDLE
 var _elapsed: float = 0.0
 var _walk_phase: float = 0.0
 var _shaped_gait_phase: float = 0.0
+var _gait_direction: Vector2 = Vector2.ZERO
 var _mine_phase: float = 0.0
 var _mine_blend: float = 0.0
 var _mining_active: bool = false
@@ -73,6 +74,7 @@ var _has_tuning_overrides: bool = false
 func setup(p_animation_state: ActorAnimationState):
 	animation_state = p_animation_state
 	assert(profile != null)
+	_gait_direction = Vector2.ZERO
 	_current_state = IDLE
 	_left_leg_origin = left_leg_locomotion.position
 	_right_leg_origin = right_leg_locomotion.position
@@ -155,6 +157,7 @@ func prepare_preview(grounded: bool):
 	_placing = false
 	_attacking = false
 	attack_pose_weight = 0.0
+	_gait_direction = Vector2(0.0, 1.0)
 
 func advance_animation(delta: float):
 	assert(animation_state != null)
@@ -169,6 +172,13 @@ func advance_animation(delta: float):
 	_was_grounded = animation_state.grounded
 
 func _update_locomotion(delta: float):
+	var target_gait_direction = Vector2(animation_state.local_velocity.x, animation_state.local_velocity.z)
+	if animation_state.speed_ratio <= 0.05 or target_gait_direction.is_zero_approx():
+		_gait_direction = Vector2.ZERO
+	else:
+		target_gait_direction = target_gait_direction.normalized()
+		var direction_response = 1.0 - exp(-profile.gait_direction_response * delta)
+		_gait_direction = _gait_direction.lerp(target_gait_direction, direction_response)
 	var landed = animation_state.grounded and not _was_grounded
 	if landed:
 		_landing_elapsed = 0.0
@@ -283,14 +293,15 @@ func _update_limb_expression():
 	var push_degrees = profile.sprint_leg_push_degrees if animation_state.sprinting else profile.walk_leg_push_degrees
 	var compression = profile.sprint_leg_compression if animation_state.sprinting else profile.walk_leg_compression
 	var stretch_distance = profile.sprint_limb_stretch if animation_state.sprinting else profile.walk_limb_stretch
+	var gait_direction = Vector3(_gait_direction.x, 0.0, _gait_direction.y)
 	var rig_inverse = rig_root.transform.affine_inverse()
-	_update_leg_locomotion(left_leg_locomotion, left_leg_base, left_hip, left_foot_marker, _left_leg_origin, rig_inverse, gait_phase, leg_travel, leg_lift, reach_degrees, push_degrees, compression, stretch_distance, locomotion_weight)
-	_update_leg_locomotion(right_leg_locomotion, right_leg_base, right_hip, right_foot_marker, _right_leg_origin, rig_inverse, gait_phase + PI, leg_travel, leg_lift, reach_degrees, push_degrees, compression, stretch_distance, locomotion_weight)
+	_update_leg_locomotion(left_leg_locomotion, left_leg_base, left_hip, left_foot_marker, _left_leg_origin, rig_inverse, gait_direction, gait_phase, leg_travel, leg_lift, reach_degrees, push_degrees, compression, stretch_distance, locomotion_weight)
+	_update_leg_locomotion(right_leg_locomotion, right_leg_base, right_hip, right_foot_marker, _right_leg_origin, rig_inverse, gait_direction, gait_phase + PI, leg_travel, leg_lift, reach_degrees, push_degrees, compression, stretch_distance, locomotion_weight)
 	var limb_stretch = 1.0 + stretch_distance * stride_strength
 	left_arm_action.scale = Vector3(1.0, limb_stretch, 1.0)
 	right_arm_action.scale = left_arm_action.scale
 
-func _update_leg_locomotion(locomotion: Node3D, leg_base: Node3D, hip: Node3D, foot_marker: Marker3D, origin: Vector3, rig_inverse: Transform3D, phase: float, travel: float, lift: float, reach_degrees: float, push_degrees: float, compression: float, stretch_distance: float, weight: float):
+func _update_leg_locomotion(locomotion: Node3D, leg_base: Node3D, hip: Node3D, foot_marker: Marker3D, origin: Vector3, rig_inverse: Transform3D, gait_direction: Vector3, phase: float, travel: float, lift: float, reach_degrees: float, push_degrees: float, compression: float, stretch_distance: float, weight: float):
 	var cycle = fposmod(phase / TAU, 1.0)
 	var progress: float
 	var forward_offset: float
@@ -326,14 +337,24 @@ func _update_leg_locomotion(locomotion: Node3D, leg_base: Node3D, hip: Node3D, f
 		leg_deformation = lerp(-compression, -compression * 0.45, progress)
 	var leg_stretch = leg_deformation * weight
 	leg_base.scale = Vector3(1.0 - leg_stretch * 0.35, 1.0 + leg_stretch, 1.0 - leg_stretch * 0.35)
-	var leg_rotation = deg_to_rad(rotation_degrees) * weight
-	locomotion.rotation = Vector3(leg_rotation, 0.0, 0.0)
+	var direction_strength = gait_direction.length()
+	var rotation_axis = Vector3.UP.cross(gait_direction).normalized() if direction_strength > 0.0001 else Vector3.RIGHT
+	var leg_rotation = deg_to_rad(rotation_degrees) * weight * direction_strength
+	var leg_rotation_basis = Basis(Quaternion(rotation_axis, leg_rotation))
+	locomotion.basis = leg_rotation_basis
 	var foot_height = 0.0 if stance else vertical_offset
-	var target_in_visual = Vector3(hip.position.x, foot_height, forward_offset)
+	var target_in_visual = Vector3(hip.position.x, foot_height, hip.position.z) + gait_direction * forward_offset
 	var target_in_rig = rig_inverse * target_in_visual
 	var target_from_hip = target_in_rig - hip.position
-	target_from_hip.x = 0.0
-	var foot_from_center = (foot_marker.position * leg_base.scale).rotated(Vector3.RIGHT, leg_rotation)
+	if direction_strength > 0.0001:
+		var planar_direction = gait_direction / direction_strength
+		var planar_distance = Vector3(target_from_hip.x, 0.0, target_from_hip.z).dot(planar_direction)
+		target_from_hip.x = planar_direction.x * planar_distance
+		target_from_hip.z = planar_direction.z * planar_distance
+	else:
+		target_from_hip.x = 0.0
+		target_from_hip.z = 0.0
+	var foot_from_center = leg_rotation_basis * (foot_marker.position * leg_base.scale)
 	var target_position = target_from_hip - foot_from_center
 	locomotion.position = origin.lerp(target_position, weight)
 

@@ -28,6 +28,7 @@ class_name BlockyHumanoidAnimationProfile
 @export_range(0.15, 0.30) var gait_down_pose: float = 0.22
 @export_range(0.38, 0.55) var gait_push_pose: float = 0.48
 @export_range(0.62, 0.82) var gait_passing_pose: float = 0.72
+@export_range(0.1, 30.0, 0.1) var gait_direction_response: float = 12.0
 @export var leg_follow_through_degrees: float = 9.0
 @export var locomotion_twist_degrees: float = 3.5
 @export var locomotion_sway_degrees: float = 2.5
