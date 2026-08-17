@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="SkeletonBehaviorDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://entities/skeleton/skeleton_behavior_definition.gd" id="1_behavior"]
+
+[resource]
+script = ExtResource("1_behavior")
+roam_speed = 2.4
+gravity = 30.0
+jump_velocity = 7.0
+roam_radius = 30.0
+roam_goal_seconds = 4.0
+repath_seconds = 0.5

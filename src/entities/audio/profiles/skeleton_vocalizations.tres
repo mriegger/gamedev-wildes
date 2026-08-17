@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="EntityVocalizationProfile" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://entities/audio/entity_vocalization_profile.gd" id="1_profile"]
+[ext_resource type="AudioStream" path="res://assets/audio/sfx/tools/impactGeneric_light_001.ogg" id="2_clack"]
+[ext_resource type="AudioStream" path="res://assets/audio/sfx/tools/impactGeneric_light_002.ogg" id="3_clack"]
+[ext_resource type="AudioStream" path="res://assets/audio/sfx/tools/impactGeneric_light_003.ogg" id="4_clack"]
+[ext_resource type="AudioStream" path="res://assets/audio/sfx/tools/impactGeneric_light_004.ogg" id="5_clack"]
+
+[resource]
+script = ExtResource("1_profile")
+streams = Array[AudioStream]([ExtResource("2_clack"), ExtResource("3_clack"), ExtResource("4_clack"), ExtResource("5_clack")])
+initial_delay_min_seconds = 2.0
+initial_delay_max_seconds = 6.0
+interval_min_seconds = 5.0
+interval_max_seconds = 11.0
+pitch_min = 1.35
+pitch_max = 1.62
+rng_salt = 73245191

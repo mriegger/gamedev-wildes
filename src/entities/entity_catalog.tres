@@ -1,10 +1,11 @@
-[gd_resource type="Resource" script_class="EntityCatalog" load_steps=5 format=3]
+[gd_resource type="Resource" script_class="EntityCatalog" load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://entities/entity_catalog.gd" id="1_catalog"]
 [ext_resource type="Script" path="res://entities/entity_definition.gd" id="2_definition"]
 [ext_resource type="Resource" path="res://entities/definitions/zombie.tres" id="3_zombie"]
 [ext_resource type="Resource" path="res://entities/definitions/sheep.tres" id="4_sheep"]
+[ext_resource type="Resource" path="res://entities/definitions/skeleton.tres" id="5_skeleton"]
 
 [resource]
 script = ExtResource("1_catalog")
-definitions = Array[ExtResource("2_definition")]([ExtResource("3_zombie"), ExtResource("4_sheep")])
+definitions = Array[ExtResource("2_definition")]([ExtResource("3_zombie"), ExtResource("4_sheep"), ExtResource("5_skeleton")])

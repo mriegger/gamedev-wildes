@@ -1,0 +1,66 @@
+[gd_resource type="Resource" script_class="BlockyHumanoidAnimationProfile" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://actors/animation/blocky_humanoid_animation_profile.gd" id="1_profile"]
+
+[resource]
+script = ExtResource("1_profile")
+walk_cycle_seconds = 0.68
+walk_bob_height = 0.055
+walk_leg_travel = 0.38
+walk_leg_lift = 0.16
+walk_leg_reach_degrees = 27.0
+walk_leg_push_degrees = 29.0
+walk_leg_compression = 0.045
+walk_limb_stretch = 0.02
+walk_rhythm_shape = 0.12
+walk_voxel_squash = 0.025
+walk_voxel_stretch = 0.01
+sprint_cycle_seconds = 0.38
+sprint_bob_height = 0.12
+sprint_leg_travel = 0.52
+sprint_leg_lift = 0.34
+sprint_leg_reach_degrees = 31.0
+sprint_leg_push_degrees = 42.0
+sprint_leg_compression = 0.1
+sprint_lean_degrees = 14.0
+sprint_limb_stretch = 0.055
+sprint_rhythm_shape = 0.04
+sprint_voxel_squash = 0.05
+sprint_voxel_stretch = 0.02
+gait_contact_hold = 0.025
+gait_down_pose = 0.2
+gait_push_pose = 0.46
+gait_passing_pose = 0.7
+gait_direction_response = 15.0
+leg_follow_through_degrees = 12.0
+locomotion_twist_degrees = 5.0
+locomotion_sway_degrees = 4.0
+sprint_arm_swing_degrees = 78.0
+walk_arm_swing_degrees = 52.0
+secondary_motion_lag = 0.25
+acceleration_overshoot_degrees = 11.0
+braking_overshoot_degrees = 16.0
+inertia_recovery = 9.0
+idle_bob_height = 0.009
+idle_cycle_seconds = 3.1
+idle_torso_pitch_degrees = 2.0
+idle_torso_sway_degrees = 2.5
+idle_arm_swing_degrees = 2.0
+body_lean_degrees = 10.0
+turn_lean_degrees = 12.0
+motion_response = 14.0
+head_response = 13.0
+idle_head_degrees = 6.0
+landing_seconds = 0.22
+landing_hold_seconds = 0.04
+landing_squash = 0.14
+landing_widen = 0.06
+landing_rebound_stretch = 0.07
+jump_stretch = 0.08
+attack_windup_degrees = 48.0
+attack_follow_through_degrees = 82.0
+attack_right_arm_pitch_degrees = -112.0
+attack_body_lean_degrees = 22.0
+attack_body_twist_degrees = 32.0
+attack_leg_brace_degrees = 15.0
+attack_crouch_depth = 0.08
