@@ -40,9 +40,6 @@ var melee_attack_elapsed: float = 0.0
 var melee_chain_input_timer: float = 0.0
 var next_melee_attack_direction: int = -1
 var secondary_use_timer: float = 0.0
-var _ray_hit_pos: Vector3i
-var _ray_place_pos: Vector3i
-var _ray_face_normal: Vector3i
 var _melee_target_runtime_ids: Array[int] = []
 var _melee_contact_pending: bool = false
 var _melee_ray_origin: Vector3
@@ -137,12 +134,13 @@ func _handle_raycast():
 	var ray_dir = camera.project_ray_normal(mouse_pos)
 
 	var max_dist = ray_origin.distance_to(motor.global_position) + reach + 1.0
-	if not _voxel_raycast(ray_origin, ray_dir, max_dist):
+	var hit := VoxelRaycast.cast(voxel_space, ray_origin, ray_dir, max_dist)
+	if hit == null:
 		return
 
-	var best_hit = _ray_hit_pos
-	var best_place = _ray_place_pos
-	var best_normal = _ray_face_normal
+	var best_hit := hit.target_cell
+	var best_place := hit.placement_cell
+	var best_normal := hit.face_normal
 
 	target_block = best_hit
 	target_has = true
@@ -161,100 +159,6 @@ func _handle_raycast():
 	else:
 		placement_has = false
 		can_place_target = false
-
-func _voxel_raycast(origin: Vector3, dir: Vector3, max_dist: float) -> bool:
-	dir = dir.normalized()
-	if dir.length_squared() < 0.0001:
-		return false
-	var current = Vector3i(floor(origin.x), floor(origin.y), floor(origin.z))
-	var can_hit := not voxel_space.is_raycast_solid(current)
-
-	var step_x = 1 if dir.x >= 0 else -1
-	var step_y = 1 if dir.y >= 0 else -1
-	var step_z = 1 if dir.z >= 0 else -1
-
-	var t_max_x: float
-	var t_max_y: float
-	var t_max_z: float
-	var t_delta_x: float
-	var t_delta_y: float
-	var t_delta_z: float
-
-	var frac_x = origin.x - floor(origin.x)
-	var frac_y = origin.y - floor(origin.y)
-	var frac_z = origin.z - floor(origin.z)
-
-	if dir.x != 0:
-		t_delta_x = abs(1.0 / dir.x)
-		t_max_x = (1.0 - frac_x) * t_delta_x if step_x > 0 else frac_x * t_delta_x
-	else:
-		t_max_x = 999999.0
-		t_delta_x = 999999.0
-
-	if dir.y != 0:
-		t_delta_y = abs(1.0 / dir.y)
-		t_max_y = (1.0 - frac_y) * t_delta_y if step_y > 0 else frac_y * t_delta_y
-	else:
-		t_max_y = 999999.0
-		t_delta_y = 999999.0
-
-	if dir.z != 0:
-		t_delta_z = abs(1.0 / dir.z)
-		t_max_z = (1.0 - frac_z) * t_delta_z if step_z > 0 else frac_z * t_delta_z
-	else:
-		t_max_z = 999999.0
-		t_delta_z = 999999.0
-
-	var traveled = 0.0
-	var last_pos = current
-
-	for _i in range(int(max_dist * 2 + 10)):
-		var current_is_solid := voxel_space.is_raycast_solid(current)
-		if current_is_solid and can_hit:
-			var face_normal: Vector3i
-			if last_pos.x != current.x:
-				face_normal = Vector3i(-step_x, 0, 0)
-			elif last_pos.y != current.y:
-				face_normal = Vector3i(0, -step_y, 0)
-			else:
-				face_normal = Vector3i(0, 0, -step_z)
-			if voxel_space.is_face_targetable(current, face_normal):
-				var place_pos = last_pos
-				if voxel_space.is_raycast_solid(place_pos):
-					place_pos = current + face_normal
-				_ray_hit_pos = current
-				_ray_place_pos = place_pos
-				_ray_face_normal = face_normal
-				return true
-		elif not current_is_solid:
-			can_hit = true
-
-		if t_max_x < t_max_y:
-			if t_max_x < t_max_z:
-				last_pos = current
-				current.x += step_x
-				traveled = t_max_x
-				t_max_x += t_delta_x
-			else:
-				last_pos = current
-				current.z += step_z
-				traveled = t_max_z
-				t_max_z += t_delta_z
-		else:
-			if t_max_y < t_max_z:
-				last_pos = current
-				current.y += step_y
-				traveled = t_max_y
-				t_max_y += t_delta_y
-			else:
-				last_pos = current
-				current.z += step_z
-				traveled = t_max_z
-				t_max_z += t_delta_z
-
-		if traveled > max_dist:
-			break
-	return false
 
 func _placement_collides_player(p: Vector3i) -> bool:
 	if motor == null:
