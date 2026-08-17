@@ -502,6 +502,8 @@ func _enter_structure_designer(draft: StructureDraft) -> void:
 		game_session.is_saving_suspended(),
 		world.is_suspended(),
 		entity_coordinator.is_suspended(),
+		game_environment.is_clock_paused(),
+		game_environment.is_debug_panel_input_enabled(),
 		player,
 		camera_rig,
 		camera_rig.camera,
@@ -510,6 +512,7 @@ func _enter_structure_designer(draft: StructureDraft) -> void:
 		_level_entrance != null and _level_entrance.visible
 	)
 	game_session.suspend_saving()
+	game_environment.set_clock_paused(true)
 	input_buffer.clear_gameplay()
 	hud.close_side_panel_immediate()
 	game_environment.close_debug_panel()
@@ -583,6 +586,9 @@ func _restore_structure_lifecycle() -> void:
 	hud.process_mode = snapshot.hud_process_mode
 	hud.visible = snapshot.hud_visible
 	level_interaction.process_mode = snapshot.level_interaction_process_mode
+	game_environment.set_clock_paused(snapshot.clock_was_paused)
+	if snapshot.debug_panel_input_was_enabled:
+		game_environment.restore_debug_panel_input()
 	if not snapshot.saving_was_suspended:
 		game_session.resume_saving()
 	_structure_lifecycle_snapshot = null

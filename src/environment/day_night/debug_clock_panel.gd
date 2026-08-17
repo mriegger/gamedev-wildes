@@ -187,6 +187,9 @@ func hide_panel():
 func is_open() -> bool:
 	return visible
 
+func is_input_enabled() -> bool:
+	return _input_enabled
+
 func disable_input():
 	hide_panel()
 	_input_enabled = false

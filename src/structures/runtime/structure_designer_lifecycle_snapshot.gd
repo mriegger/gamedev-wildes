@@ -5,6 +5,8 @@ var in_level: bool
 var saving_was_suspended: bool
 var world_was_suspended: bool
 var entities_were_suspended: bool
+var clock_was_paused: bool
+var debug_panel_input_was_enabled: bool
 var player_process_mode: Node.ProcessMode
 var player_visible: bool
 var camera_process_mode: Node.ProcessMode
@@ -20,6 +22,8 @@ func _init(
 	p_saving_was_suspended: bool,
 	p_world_was_suspended: bool,
 	p_entities_were_suspended: bool,
+	p_clock_was_paused: bool,
+	p_debug_panel_input_was_enabled: bool,
 	p_player: Node3D,
 	p_camera_rig: Node3D,
 	p_gameplay_camera: Camera3D,
@@ -31,6 +35,8 @@ func _init(
 	saving_was_suspended = p_saving_was_suspended
 	world_was_suspended = p_world_was_suspended
 	entities_were_suspended = p_entities_were_suspended
+	clock_was_paused = p_clock_was_paused
+	debug_panel_input_was_enabled = p_debug_panel_input_was_enabled
 	player_process_mode = p_player.process_mode
 	player_visible = p_player.visible
 	camera_process_mode = p_camera_rig.process_mode

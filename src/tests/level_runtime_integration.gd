@@ -404,6 +404,14 @@ func _run_structure_designer_cycle(game: TransitionGame, in_level: bool, cycle: 
 	var level_visible := level_runtime.visible if level_runtime != null else false
 	var level_processing := level_runtime.is_processing() if level_runtime != null else false
 	var level_environment := (level_runtime.get_node("WorldEnvironment") as WorldEnvironment).environment if level_runtime != null else null
+	var clock_was_paused := cycle % 2 == 1
+	var debug_panel_input_was_enabled := cycle % 2 == 0
+	environment.set_clock_paused(clock_was_paused)
+	if debug_panel_input_was_enabled:
+		environment.restore_debug_panel_input()
+	else:
+		environment.close_debug_panel()
+	var clock_time_before_designer := environment.get_time_of_day()
 	var saving_was_suspended := cycle % 2 == 1
 	if saving_was_suspended:
 		game.game_session.suspend_saving()
@@ -422,6 +430,9 @@ func _run_structure_designer_cycle(game: TransitionGame, in_level: bool, cycle: 
 	_expect(game._location_state.get_persisted_position().is_equal_approx(persisted_position), "designer entry changed the persisted position for %s" % label)
 	_expect(game.inventory_model == inventory_identity and game.structure_designer_workflow._draft == draft, "designer entry replaced owned state for %s" % label)
 	_expect(game.game_session.is_saving_suspended(), "designer entry did not suspend saving for %s" % label)
+	_expect(environment.is_clock_paused(), "designer entry did not suspend the world clock for %s" % label)
+	_expect(not environment.is_debug_panel_input_enabled(), "designer entry left environment debug input active for %s" % label)
+	_expect(is_equal_approx(environment.get_time_of_day(), clock_time_before_designer), "world clock advanced during designer entry for %s" % label)
 	_expect(player.process_mode == Node.PROCESS_MODE_DISABLED and not player.visible, "designer entry left the normal player active for %s" % label)
 	_expect(camera_rig.process_mode == Node.PROCESS_MODE_DISABLED and not camera_rig.visible and not camera_rig.camera.current, "designer entry left the gameplay camera active for %s" % label)
 	_expect(hud.process_mode == Node.PROCESS_MODE_DISABLED and not hud.visible, "designer entry left the gameplay HUD active for %s" % label)
@@ -444,6 +455,8 @@ func _run_structure_designer_cycle(game: TransitionGame, in_level: bool, cycle: 
 	_expect(game._location_state.get_persisted_position().is_equal_approx(persisted_position), "designer exit changed the persisted position for %s" % label)
 	_expect(game.inventory_model == inventory_identity and not game.structure_designer_workflow.has_active_draft(), "designer exit replaced inventory or retained the draft for %s" % label)
 	_expect(game.game_session.is_saving_suspended() == saving_was_suspended, "designer exit changed the prior saving state for %s" % label)
+	_expect(environment.is_clock_paused() == clock_was_paused, "designer exit changed the prior world clock state for %s" % label)
+	_expect(environment.is_debug_panel_input_enabled() == debug_panel_input_was_enabled, "designer exit changed the prior environment debug input state for %s" % label)
 	_expect(player.process_mode == player_process_mode and player.visible == player_visible and player.global_position.is_equal_approx(player_position), "designer exit did not restore the player for %s" % label)
 	_expect(player.is_physics_processing() == player_physics_processing, "designer exit changed player input processing for %s" % label)
 	_expect(player.voxel_space == player_voxel_space, "designer exit changed the player voxel binding for %s" % label)

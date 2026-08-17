@@ -45,6 +45,12 @@ func get_time_of_day() -> float:
 func get_formatted_time() -> String:
 	return _clock.get_formatted()
 
+func set_clock_paused(paused: bool) -> void:
+	_clock.set_paused(paused)
+
+func is_clock_paused() -> bool:
+	return _clock.is_paused()
+
 func close_debug_panel():
 	_debug_clock_panel.disable_input()
 
@@ -53,3 +59,6 @@ func restore_debug_panel_input():
 
 func is_debug_panel_open() -> bool:
 	return _debug_clock_panel.is_open()
+
+func is_debug_panel_input_enabled() -> bool:
+	return _debug_clock_panel.is_input_enabled()
