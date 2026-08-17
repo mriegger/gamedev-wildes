@@ -30,6 +30,11 @@ world time. Copper deposits regenerate deterministically from the world seed.
 Reach is 6 blocks. The block under the cursor is outlined, and a ghost block previews where a
 placement would land; placements that would overlap you are rejected.
 
+The Structure Designer uses first-person `WASD` movement, mouse look, `Space`/`Ctrl` to
+ascend/descend, and `Shift` acceleration. Left-click removes, right-click places, `Tab` opens the
+infinite creative palette, `/` opens the developer console, and `Esc` closes active designer UI
+before offering to leave the designer.
+
 The animation tuner is a compact right-side debug-build panel. Its Movement, Animation, Parts,
 and Attack tabs update the live player immediately, while preview modes let you hold idle, walk,
 sprint, jump, fall, or sword-attack behavior. `Export Values to Project Root` writes the complete
@@ -53,6 +58,11 @@ uses cutaway-facing geometry, a black void, and authored torch light. The overwo
 but its streaming and presentation are suspended until you return through the dungeon door.
 Doorway selection, module pools, terrain presentation, ambient lighting, and return-door materials
 are configured through typed level resources rather than hardcoded dungeon IDs.
+
+**Structure construction workspace.** `dev structure new` opens a length, width, and height dialog,
+then enters an isolated first-person workspace for a generic plot. `dev structure exit` leaves the
+workspace and confirms before discarding edited blocks or torches. This initial workspace is
+intentionally unsaved; import, export, and level-module authoring are not part of this slice.
 
 **Blocks.** Grass, dirt, sand, stone, wood, leaves, cobblestone, mossy stone bricks, stone bricks,
 terracotta bricks, and wood planks are minable and placeable. Copper is minable but not placeable.
@@ -85,9 +95,9 @@ enabled Craft button is pressed, playing one success sound.
 **Developer console.** Press `/` to open a command line at the bottom of the screen. The
 `spawn <item> <count>` command adds any catalog item directly to the backpack for testing. Item
 IDs and display names are accepted; equipment IDs remain material-qualified, such as
-`copper_pickaxe` and `copper_sword`. Press `/` again or `Esc` to close the console without
-opening the pause menu. Copper can be mined from deposits or added directly with
-`spawn copper <count>`.
+`copper_pickaxe` and `copper_sword`. Structure construction uses `dev structure new` and
+`dev structure exit`. Press `/` again or `Esc` to close the console without opening the pause
+menu. Copper can be mined from deposits or added directly with `spawn copper <count>`.
 
 **UI & saves.** Backpack and hotbar stacks can be split by scrolling while left-dragging. The side
 panel includes a trash drop target that accepts backpack, hotbar, and equipped items. A
@@ -120,6 +130,7 @@ src/                    Godot project. Entry scene: app/app.tscn
 ├── environment/        Packaged environment scene and day_night/ system
 ├── inventory/          Inventory model and inventory-owned ui/
 ├── settings/           Persistent display and rendering settings
+├── structures/         Construction drafts, first-person runtime, presentation, and focused tests
 ├── ui/                 Shared components/, hud/, screens/, and theme/
 ├── save/               Three-slot JSON save manager
 └── tests/              Headless behavior, determinism, fuzz, and streaming checks

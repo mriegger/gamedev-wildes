@@ -24,6 +24,7 @@ player/                      player behavior, camera, and visuals
 progression/                 combat rewards and shared item proficiency
 save/                        save encoding and storage
 settings/                    persistent display and rendering configuration
+structures/                  construction drafts, first-person runtime, and presentation
 ui/                          app screens, HUD, shared controls, and theme
 world/
   chunks/                    streaming, scheduling, meshing, and rendering
@@ -166,8 +167,21 @@ module pools and `LevelPresentationDefinition`; `LevelCatalog` resolves the stab
 torch placements remain presentation-owned, while `LevelState` contains only finite voxel-space
 truth, bounds, and entry/return geometry.
 
-Handmade structure tooling should export validated `LevelModuleDefinition` resources and add them
-explicitly to `LevelCatalog`; runtime generation does not consume editor drafts or scan folders.
+## Structure authoring
+
+`StructureDraft` is the Node-independent mutable owner for a construction session. Its commands
+commit block and supported wall-torch changes atomically, while copied snapshots keep the chunk
+renderer and presentation from mutating draft collections.
+
+`Game` composes the console, authoring workflow, dialogs, and dedicated first-person runtime. It
+snapshots and suspends the active overworld or dungeon presentation without changing
+`GameplayLocationState`, disables the gameplay player, camera, HUD, and saving, then restores the
+same inventory and exact lifecycle state on exit. Designer cells render in bounded 16-cube chunks;
+the deterministic voxel raycast is shared with player interaction, while designer movement and
+creative selection remain independent from combat and finite inventory state. The workspace is
+currently unsaved and supports only generic construction plots; persistence and level-module
+authoring remain separate follow-up capabilities.
+
 Each future content family, such as containers or encounters, adds its typed authored definition,
 transformed placement, state owner, runtime coordinator, and real caller together. Generic marker
 payloads, module graphs, persistent placement IDs, and new socket profiles wait until a feature
