@@ -1,11 +1,12 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://structures/runtime/structure_designer_runtime.gd" id="1_runtime"]
 [ext_resource type="PackedScene" path="res://structures/runtime/structure_designer_controller.tscn" id="2_controller"]
 [ext_resource type="Script" path="res://structures/presentation/structure_chunk_renderer.gd" id="3_chunks"]
 [ext_resource type="Script" path="res://blocks/presentation/torch_renderer.gd" id="4_torches"]
 [ext_resource type="Script" path="res://structures/presentation/structure_designer_guide_view.gd" id="5_guide"]
-[ext_resource type="PackedScene" path="res://structures/presentation/structure_designer_ui.tscn" id="6_ui"]
+[ext_resource type="Script" path="res://structures/presentation/structure_metadata_overlay.gd" id="6_metadata"]
+[ext_resource type="PackedScene" path="res://structures/presentation/structure_designer_ui.tscn" id="7_ui"]
 
 [node name="StructureDesignerRuntime" type="Node3D"]
 visible = false
@@ -19,6 +20,9 @@ script = ExtResource("4_torches")
 
 [node name="StructureDesignerGuideView" type="Node3D" parent="."]
 script = ExtResource("5_guide")
+
+[node name="StructureMetadataOverlay" type="Node3D" parent="."]
+script = ExtResource("6_metadata")
 
 [node name="StructureDesignerController" parent="." instance=ExtResource("2_controller")]
 
@@ -36,4 +40,4 @@ light_color = Color(0.52, 0.68, 0.9, 1)
 light_energy = 0.38
 shadow_enabled = false
 
-[node name="StructureDesignerUI" parent="." instance=ExtResource("6_ui")]
+[node name="StructureDesignerUI" parent="." instance=ExtResource("7_ui")]

@@ -43,6 +43,188 @@ theme_override_font_sizes/font_size = 24
 
 [node name="HotbarView" parent="." instance=ExtResource("2_hotbar")]
 
+[node name="ModuleToolsHint" type="Label" parent="."]
+visible = false
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -216.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = 46.0
+grow_horizontal = 0
+mouse_filter = 2
+text = "M  Module Tools"
+horizontal_alignment = 2
+theme_override_colors/font_color = Color(1, 1, 1, 0.9)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.9)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+theme_override_font_sizes/font_size = 18
+
+[node name="ModulePanel" type="PanelContainer" parent="."]
+visible = false
+z_index = 2
+anchors_preset = 6
+anchor_left = 1.0
+anchor_top = 0.5
+anchor_right = 1.0
+anchor_bottom = 0.5
+offset_left = -350.0
+offset_top = -300.0
+offset_right = -16.0
+offset_bottom = 300.0
+grow_horizontal = 0
+grow_vertical = 2
+mouse_filter = 0
+theme_override_styles/panel = SubResource("StyleBox_panel")
+
+[node name="Margin" type="MarginContainer" parent="ModulePanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 14
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 14
+
+[node name="VBox" type="VBoxContainer" parent="ModulePanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Header" type="HBoxContainer" parent="ModulePanel/Margin/VBox"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="ModulePanel/Margin/VBox/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "LEVEL MODULE"
+theme_override_font_sizes/font_size = 20
+
+[node name="Close" type="Button" parent="ModulePanel/Margin/VBox/Header"]
+layout_mode = 2
+text = "Close (M)"
+
+[node name="WeightRow" type="HBoxContainer" parent="ModulePanel/Margin/VBox"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="ModulePanel/Margin/VBox/WeightRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Weight"
+
+[node name="Weight" type="SpinBox" parent="ModulePanel/Margin/VBox/WeightRow"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+min_value = 0.1
+max_value = 100.0
+allow_greater = true
+allow_lesser = true
+step = 0.0
+value = 1.0
+
+[node name="SetVoid" type="Button" parent="ModulePanel/Margin/VBox"]
+layout_mode = 2
+text = "Set targeted cell to VOID"
+
+[node name="SocketHeader" type="HBoxContainer" parent="ModulePanel/Margin/VBox"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="ModulePanel/Margin/VBox/SocketHeader"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Connection Sockets"
+
+[node name="AddSocket" type="Button" parent="ModulePanel/Margin/VBox/SocketHeader"]
+layout_mode = 2
+text = "Create from target"
+
+[node name="SocketHelp" type="Label" parent="ModulePanel/Margin/VBox"]
+layout_mode = 2
+text = "Aim at the outside face of a lower boundary wall block. A socket carves a two-block-high doorway for generation."
+autowrap_mode = 2
+
+[node name="SocketScroll" type="ScrollContainer" parent="ModulePanel/Margin/VBox"]
+custom_minimum_size = Vector2(0, 92)
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="SocketList" type="VBoxContainer" parent="ModulePanel/Margin/VBox/SocketScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="MarkersTitle" type="Label" parent="ModulePanel/Margin/VBox"]
+layout_mode = 2
+text = "Markers"
+
+[node name="Markers" type="VBoxContainer" parent="ModulePanel/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Spawn" type="VBoxContainer" parent="ModulePanel/Margin/VBox/Markers"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="ModulePanel/Margin/VBox/Markers/Spawn"]
+layout_mode = 2
+text = "Spawn"
+
+[node name="Current" type="Label" parent="ModulePanel/Margin/VBox/Markers/Spawn"]
+layout_mode = 2
+text = "Current: not set"
+
+[node name="Pending" type="Label" parent="ModulePanel/Margin/VBox/Markers/Spawn"]
+layout_mode = 2
+text = "Pending: not set"
+
+[node name="Controls" type="HBoxContainer" parent="ModulePanel/Margin/VBox/Markers/Spawn"]
+layout_mode = 2
+
+[node name="Facing" type="OptionButton" parent="ModulePanel/Margin/VBox/Markers/Spawn/Controls"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Set" type="Button" parent="ModulePanel/Margin/VBox/Markers/Spawn/Controls"]
+layout_mode = 2
+text = "Set from target"
+
+[node name="Return" type="VBoxContainer" parent="ModulePanel/Margin/VBox/Markers"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="ModulePanel/Margin/VBox/Markers/Return"]
+layout_mode = 2
+text = "Return"
+
+[node name="Current" type="Label" parent="ModulePanel/Margin/VBox/Markers/Return"]
+layout_mode = 2
+text = "Current: not set"
+
+[node name="Pending" type="Label" parent="ModulePanel/Margin/VBox/Markers/Return"]
+layout_mode = 2
+text = "Pending: not set"
+
+[node name="Controls" type="HBoxContainer" parent="ModulePanel/Margin/VBox/Markers/Return"]
+layout_mode = 2
+
+[node name="Facing" type="OptionButton" parent="ModulePanel/Margin/VBox/Markers/Return/Controls"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Set" type="Button" parent="ModulePanel/Margin/VBox/Markers/Return/Controls"]
+layout_mode = 2
+text = "Set from target"
+
+[node name="Actions" type="HBoxContainer" parent="ModulePanel/Margin/VBox/Markers"]
+layout_mode = 2
+
+[node name="Commit" type="Button" parent="ModulePanel/Margin/VBox/Markers/Actions"]
+layout_mode = 2
+size_flags_horizontal = 3
+disabled = true
+text = "Commit pair"
+
+[node name="Clear" type="Button" parent="ModulePanel/Margin/VBox/Markers/Actions"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Clear pair"
+
 [node name="PaletteOverlay" type="Control" parent="."]
 visible = false
 z_index = 1

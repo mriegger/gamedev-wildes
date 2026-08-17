@@ -2,6 +2,13 @@ extends SceneTree
 
 var _failures: Array[String] = []
 var _blocking_states: Array[bool] = []
+var _weights: Array[float] = []
+var _void_request_count: int
+var _socket_add_count: int
+var _removed_sockets: Array[StringName] = []
+var _marker_targets: Array[Array] = []
+var _marker_commits: Array[Array] = []
+var _marker_clear_count: int
 
 func _init() -> void:
 	call_deferred("_run")
@@ -20,10 +27,14 @@ func _run() -> void:
 	var assignment_copy := toolbelt.get_assigned_item_ids()
 	assignment_copy[0] = &"torch"
 	_expect(toolbelt.get_assigned_item_ids()[0] == expected_placeables[0], "assignment query exposed mutable state")
+	var placeable_copy := toolbelt.get_placeable_item_ids()
+	placeable_copy.clear()
+	_expect(toolbelt.get_placeable_item_ids().size() == 12, "placeable query exposed mutable state")
 	_expect(not toolbelt.try_assign(-1, &"torch"), "negative assignment index was accepted")
 	_expect(not toolbelt.try_assign(9, &"torch"), "out-of-range assignment index was accepted")
 	_expect(not toolbelt.try_assign(0, &"copper_pickaxe"), "non-placeable assignment was accepted")
-	await _test_palette(item_catalog, toolbelt)
+	await _test_generic_ui(item_catalog, toolbelt)
+	await _test_module_ui(item_catalog)
 	if _failures.is_empty():
 		print("STRUCTURE_DESIGNER_UI PASS")
 		quit(0)
@@ -32,16 +43,16 @@ func _run() -> void:
 			push_error(failure)
 		quit(1)
 
-func _test_palette(item_catalog: ItemCatalog, toolbelt: CreativeToolbelt) -> void:
-	var ui := (load("res://structures/presentation/structure_designer_ui.tscn") as PackedScene).instantiate() as StructureDesignerUI
-	root.add_child(ui)
-	await process_frame
-	ui.setup(item_catalog, toolbelt)
-	await process_frame
+func _test_generic_ui(item_catalog: ItemCatalog, toolbelt: CreativeToolbelt) -> void:
+	var ui := await _create_ui(item_catalog, toolbelt, StructureDraft.Format.GENERIC_STRUCTURE)
+	var module_panel := ui.get_node("ModulePanel") as PanelContainer
+	var module_tools_hint := ui.get_node("ModuleToolsHint") as Label
 	var palette_grid := ui.get_node("PaletteOverlay/PalettePanel/Margin/VBox/Scroll/PaletteGrid") as GridContainer
 	var crosshair := ui.get_node("Crosshair") as Label
 	var hotbar := ui.get_node("HotbarView") as HotbarView
-	_expect(not ui.has_node("ModulePanel"), "generic workspace retained a Level Module panel")
+	_expect(not module_panel.visible and not module_tools_hint.visible, "generic structure exposed Level Module tools")
+	ui.open_module_panel()
+	_expect(not ui.is_module_panel_open() and not ui.is_ui_blocking(), "generic structure opened Level Module tools")
 	_expect(palette_grid.get_child_count() == 12, "palette did not contain every placeable item")
 	_expect(crosshair.get_global_rect().get_center().is_equal_approx(root.get_visible_rect().get_center()), "crosshair was not centered")
 	_expect(hotbar.slot_nodes.size() == CreativeToolbelt.SLOT_COUNT, "designer hotbar did not contain nine slots")
@@ -76,8 +87,124 @@ func _test_palette(item_catalog: ItemCatalog, toolbelt: CreativeToolbelt) -> voi
 	ui.queue_free()
 	await process_frame
 
+func _test_module_ui(item_catalog: ItemCatalog) -> void:
+	var toolbelt := CreativeToolbelt.new()
+	_expect(toolbelt.setup(item_catalog), "module toolbelt setup failed")
+	var ui := await _create_ui(item_catalog, toolbelt, StructureDraft.Format.LEVEL_MODULE)
+	var module_panel := ui.get_node("ModulePanel") as PanelContainer
+	var module_tools_hint := ui.get_node("ModuleToolsHint") as Label
+	var weight_input := ui.get_node("ModulePanel/Margin/VBox/WeightRow/Weight") as SpinBox
+	var socket_list := ui.get_node("ModulePanel/Margin/VBox/SocketScroll/SocketList") as VBoxContainer
+	var socket_help := ui.get_node("ModulePanel/Margin/VBox/SocketHelp") as Label
+	var marker_commit := ui.get_node("ModulePanel/Margin/VBox/Markers/Actions/Commit") as Button
+	_expect(not module_panel.visible and module_tools_hint.visible, "Level Module did not start in first-person build mode")
+	_expect(socket_help.text.contains("outside face") and socket_help.text.contains("two-block-high doorway"), "socket controls did not explain boundary targeting")
+	_expect(module_panel.find_children("*Torch*", "Control", true, false).is_empty(), "Level Module panel retained torch metadata clutter")
+	var blocking_state_start := _blocking_states.size()
+	ui.ui_blocking_changed.connect(_on_ui_blocking_changed)
+	ui.open_module_panel()
+	_expect(ui.is_module_panel_open() and module_panel.visible and not module_tools_hint.visible, "opening module tools did not show the panel")
+	_expect(ui.is_ui_blocking(), "open module tools did not block first-person input")
+	ui.open_palette()
+	_expect(ui.is_palette_open() and not ui.is_module_panel_open() and not module_panel.visible, "palette did not replace module tools")
+	ui.open_module_panel()
+	_expect(not ui.is_palette_open() and ui.is_module_panel_open() and module_panel.visible, "module tools did not replace the palette")
+	_expect(_blocking_states.slice(blocking_state_start) == [true], "switching designer panels toggled input blocking")
+	ui.weight_requested.connect(_on_weight_requested)
+	ui.void_requested.connect(_on_void_requested)
+	ui.socket_add_requested.connect(_on_socket_add_requested)
+	ui.socket_remove_requested.connect(_on_socket_remove_requested)
+	ui.marker_target_requested.connect(_on_marker_target_requested)
+	ui.markers_commit_requested.connect(_on_markers_commit_requested)
+	ui.markers_clear_requested.connect(_on_markers_clear_requested)
+	var north_socket := LevelSocketDefinition.new()
+	north_socket.socket_id = &"north"
+	north_socket.cell = Vector3i(3, 1, 0)
+	north_socket.direction = LevelSocketDefinition.Direction.NORTH
+	var east_socket := LevelSocketDefinition.new()
+	east_socket.socket_id = &"east"
+	east_socket.cell = Vector3i(6, 1, 3)
+	east_socket.direction = LevelSocketDefinition.Direction.EAST
+	var spawn_marker := LevelMarkerDefinition.new()
+	spawn_marker.cell = Vector3i(1, 1, 1)
+	spawn_marker.facing = LevelSocketDefinition.Direction.SOUTH
+	var return_marker := LevelMarkerDefinition.new()
+	return_marker.cell = Vector3i(5, 1, 5)
+	return_marker.facing = LevelSocketDefinition.Direction.WEST
+	var sockets: Array[LevelSocketDefinition] = [north_socket, east_socket]
+	ui.present_module_state(0.05, sockets, spawn_marker, return_marker)
+	_expect(weight_input.value == 0.05 and _weights.is_empty(), "module weight presentation changed or re-emitted an imported sub-tenth value")
+	_expect(is_zero_approx(weight_input.step) and weight_input.allow_lesser and weight_input.allow_greater, "module weight editor did not preserve the positive finite weight contract")
+	_expect(socket_list.get_child_count() == 2, "module socket list presentation mismatch")
+	weight_input.value = 3.25
+	_expect(_weights == [3.25], "weight editor quantized a non-tenth request")
+	(ui.get_node("ModulePanel/Margin/VBox/SetVoid") as Button).pressed.emit()
+	_expect(_void_request_count == 1, "VOID control did not emit an intent")
+	(ui.get_node("ModulePanel/Margin/VBox/SocketHeader/AddSocket") as Button).pressed.emit()
+	_expect(_socket_add_count == 1, "socket add control did not emit an intent")
+	(socket_list.get_child(1).get_child(1) as Button).pressed.emit()
+	_expect(_removed_sockets == [&"east"], "socket remove control emitted the wrong ID")
+	var spawn_facing := ui.get_node("ModulePanel/Margin/VBox/Markers/Spawn/Controls/Facing") as OptionButton
+	spawn_facing.select(LevelSocketDefinition.Direction.EAST)
+	(ui.get_node("ModulePanel/Margin/VBox/Markers/Spawn/Controls/Set") as Button).pressed.emit()
+	_expect(_marker_targets == [[StructureDesignerUI.MarkerRole.SPAWN, LevelSocketDefinition.Direction.EAST]], "spawn target control emitted the wrong role or facing")
+	var return_facing := ui.get_node("ModulePanel/Margin/VBox/Markers/Return/Controls/Facing") as OptionButton
+	return_facing.select(LevelSocketDefinition.Direction.WEST)
+	(ui.get_node("ModulePanel/Margin/VBox/Markers/Return/Controls/Set") as Button).pressed.emit()
+	_expect(_marker_targets == [
+		[StructureDesignerUI.MarkerRole.SPAWN, LevelSocketDefinition.Direction.EAST],
+		[StructureDesignerUI.MarkerRole.RETURN, LevelSocketDefinition.Direction.WEST],
+	], "return target control emitted the wrong role or facing")
+	ui.set_pending_marker(StructureDesignerUI.MarkerRole.SPAWN, Vector3i(1, 1, 2), LevelSocketDefinition.Direction.EAST)
+	_expect(marker_commit.disabled, "one pending marker enabled paired commit")
+	ui.set_pending_marker(StructureDesignerUI.MarkerRole.RETURN, Vector3i(4, 1, 5), LevelSocketDefinition.Direction.WEST)
+	_expect(not marker_commit.disabled, "two pending markers did not enable paired commit")
+	marker_commit.pressed.emit()
+	_expect(_marker_commits == [[Vector3i(1, 1, 2), LevelSocketDefinition.Direction.EAST, Vector3i(4, 1, 5), LevelSocketDefinition.Direction.WEST]], "paired marker commit emitted incorrect candidates")
+	(ui.get_node("ModulePanel/Margin/VBox/Markers/Actions/Clear") as Button).pressed.emit()
+	_expect(_marker_clear_count == 1 and marker_commit.disabled, "marker clear did not emit or retained pending state")
+	(ui.get_node("ModulePanel/Margin/VBox/Header/Close") as Button).pressed.emit()
+	_expect(not ui.is_module_panel_open() and not module_panel.visible and module_tools_hint.visible, "module close control did not restore build mode")
+	_expect(not ui.is_ui_blocking() and _blocking_states.slice(blocking_state_start) == [true, false], "closing module tools did not release input blocking")
+	ui.queue_free()
+	await process_frame
+
+func _create_ui(item_catalog: ItemCatalog, toolbelt: CreativeToolbelt, format: StructureDraft.Format) -> StructureDesignerUI:
+	var ui := (load("res://structures/presentation/structure_designer_ui.tscn") as PackedScene).instantiate() as StructureDesignerUI
+	root.add_child(ui)
+	await process_frame
+	ui.setup(item_catalog, toolbelt, format)
+	await process_frame
+	return ui
+
 func _on_ui_blocking_changed(blocking: bool) -> void:
 	_blocking_states.append(blocking)
+
+func _on_weight_requested(weight: float) -> void:
+	_weights.append(weight)
+
+func _on_void_requested() -> void:
+	_void_request_count += 1
+
+func _on_socket_add_requested() -> void:
+	_socket_add_count += 1
+
+func _on_socket_remove_requested(socket_id: StringName) -> void:
+	_removed_sockets.append(socket_id)
+
+func _on_marker_target_requested(role: StructureDesignerUI.MarkerRole, facing: LevelSocketDefinition.Direction) -> void:
+	_marker_targets.append([role, facing])
+
+func _on_markers_commit_requested(
+	spawn_cell: Vector3i,
+	spawn_facing: LevelSocketDefinition.Direction,
+	return_cell: Vector3i,
+	return_facing: LevelSocketDefinition.Direction,
+) -> void:
+	_marker_commits.append([spawn_cell, spawn_facing, return_cell, return_facing])
+
+func _on_markers_clear_requested() -> void:
+	_marker_clear_count += 1
 
 func _expect(condition: bool, message: String) -> void:
 	if not condition:

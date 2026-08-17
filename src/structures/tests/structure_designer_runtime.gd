@@ -33,6 +33,7 @@ func run(tree: SceneTree) -> Array[String]:
 	_texture_set = BlockTextureSet.new(_block_catalog)
 	await _test_shadow_disabled_torch_updates()
 	await _test_runtime()
+	await _test_module_runtime()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	if _failures.is_empty():
 		print("STRUCTURE_DESIGNER_RUNTIME PASS")
@@ -66,8 +67,9 @@ func _test_runtime() -> void:
 	var ui := runtime.get_node("StructureDesignerUI") as StructureDesignerUI
 	var guide := runtime.get_node("StructureDesignerGuideView") as StructureDesignerGuideView
 	var torch_renderer := runtime.get_node("TorchRenderer") as TorchRenderer
+	var metadata_overlay := runtime.get_node("StructureMetadataOverlay") as StructureMetadataOverlay
 	_expect(runtime.visible and ui.visible, "activated runtime was not visible")
-	_expect(not runtime.has_node("StructureMetadataOverlay"), "generic runtime retained Level Module metadata presentation")
+	_expect(metadata_overlay.get_child_count() == 0, "generic runtime created Level Module metadata geometry")
 	_expect(controller.camera.current and controller.camera.projection == Camera3D.PROJECTION_PERSPECTIVE, "runtime camera was not active and perspective")
 	var crosshair := ui.get_node("Crosshair") as Label
 	_expect(crosshair.get_global_rect().get_center().is_equal_approx(_tree.root.get_visible_rect().get_center()), "runtime crosshair was not centered")
@@ -95,12 +97,14 @@ func _test_runtime() -> void:
 	var tab := InputEventKey.new()
 	tab.pressed = true
 	tab.keycode = KEY_TAB
-	runtime._unhandled_input(tab)
+	runtime._input(tab)
 	_expect(ui.is_palette_open() and ui.is_ui_blocking(), "Tab did not open the creative palette")
 	_expect(not controller._input_enabled and not controller._mouse_capture_enabled, "open palette did not release designer control")
 	_expect(runtime.cancel_active_ui(), "cancellation hook did not consume the open palette")
 	_expect(not ui.is_palette_open() and controller._input_enabled, "cancellation hook did not restore designer control")
 	_expect(not runtime.cancel_active_ui(), "cancellation hook consumed without active UI")
+	_toggle_module_tools(runtime)
+	_expect(not ui.is_module_panel_open() and controller._input_enabled and controller._mouse_capture_enabled, "generic M opened or blocked Level Module tools")
 	_assign_torch_to_selected_slot(ui)
 	var support_cell := Vector3i(1, 1, 4)
 	var torch_cell := Vector3i(1, 1, 5)
@@ -135,6 +139,135 @@ func _test_runtime() -> void:
 	_expect(torch_renderer.torch_instances.get(second_torch) == retained_torch_node, "torch edit rebuilt an unaffected torch node")
 	await _free_runtime(runtime)
 
+func _test_module_runtime() -> void:
+	var draft := StructureDraft.create_level_module(Vector3i(32, 4, 32))
+	_expect(draft != null, "Level Module draft creation failed")
+	if draft == null:
+		return
+	for cell in [
+		Vector3i(3, 0, 0),
+		Vector3i(3, 1, 0),
+		Vector3i(3, 2, 0),
+		Vector3i(1, 0, 2),
+		Vector3i(2, 0, 2),
+		Vector3i(5, 0, 4),
+		Vector3i(1, 1, 4),
+		Vector3i(20, 1, 20),
+	]:
+		_expect(draft.try_place_block(cell, BlockId.Type.STONE).succeeded, "Level Module runtime seed failed at %s" % cell)
+	var carved_torch := Vector3i(3, 2, 1)
+	var retained_torch := Vector3i(1, 1, 5)
+	_expect(draft.try_place_torch(carved_torch, Vector3i.FORWARD).succeeded, "socket-support torch seed failed")
+	_expect(draft.try_place_torch(retained_torch, Vector3i.FORWARD).succeeded, "unrelated torch seed failed")
+	_expect(draft.try_set_weight(3.25).succeeded, "Level Module weight seed failed")
+	var snapshot := StructureResourceAdapter.create_snapshot(draft, &"runtime_module") as LevelModuleDefinition
+	draft = StructureResourceAdapter.create_draft(snapshot, "/tmp/runtime_module.tres")
+	_expect(draft != null and draft.get_weight() == 3.25, "Level Module runtime fixture did not round-trip its exact weight")
+	if draft == null:
+		return
+	var runtime := await _create_runtime(draft)
+	if runtime == null:
+		return
+	var controller := runtime.get_node("StructureDesignerController") as StructureDesignerController
+	var ui := runtime.get_node("StructureDesignerUI") as StructureDesignerUI
+	var overlay := runtime.get_node("StructureMetadataOverlay") as StructureMetadataOverlay
+	var torch_renderer := runtime.get_node("TorchRenderer") as TorchRenderer
+	var module_panel := ui.get_node("ModulePanel") as PanelContainer
+	var module_tools_hint := ui.get_node("ModuleToolsHint") as Label
+	var socket_list := ui.get_node("ModulePanel/Margin/VBox/SocketScroll/SocketList") as VBoxContainer
+	var weight_input := ui.get_node("ModulePanel/Margin/VBox/WeightRow/Weight") as SpinBox
+	var retained_torch_node := torch_renderer.torch_instances.get(retained_torch) as Node3D
+	_expect(not module_panel.visible and module_tools_hint.visible, "Level Module runtime did not start in build mode")
+	_expect(weight_input.value == 3.25, "Level Module runtime quantized an imported weight")
+	_expect(overlay.get_child_count() == 0, "empty Level Module created metadata geometry")
+	_expect(torch_renderer.has_torch(carved_torch) and retained_torch_node != null, "Level Module runtime omitted seeded torches")
+	_aim_at(controller, Vector3(1.5, 3.0, 2.5), Vector3(1.5, 0.5, 2.5))
+	runtime._process(0.0)
+	_aim_at(controller, Vector3(2.5, 3.0, 2.5), Vector3(2.5, 0.5, 2.5))
+	_toggle_module_tools(runtime)
+	_expect(ui.is_module_panel_open() and module_panel.visible and not module_tools_hint.visible, "M did not open Level Module tools")
+	_expect(not controller._input_enabled and not controller._mouse_capture_enabled and Input.mouse_mode == Input.MOUSE_MODE_VISIBLE, "Level Module tools did not release first-person input and cursor")
+	var blocked_cells := draft.snapshot_cells()
+	_click(runtime, MOUSE_BUTTON_RIGHT)
+	_expect(draft.snapshot_cells() == blocked_cells, "open Level Module tools allowed a world click")
+	(ui.get_node("ModulePanel/Margin/VBox/SetVoid") as Button).pressed.emit()
+	_expect(draft.get_cell(Vector3i(2, 0, 2)) == StructureCell.VOID, "Level Module tools used a stale target instead of the centered target captured on open")
+	_expect(draft.get_cell(Vector3i(1, 0, 2)) == BlockId.Type.STONE, "Level Module VOID action changed the stale target")
+	weight_input.value = 0.0
+	_expect(draft.get_weight() == 3.25 and weight_input.value == 3.25, "rejected weight input diverged from draft truth")
+	_expect(runtime.cancel_active_ui(), "Esc cancellation hook did not consume Level Module tools")
+	_expect(not ui.is_module_panel_open() and controller._input_enabled and controller._mouse_capture_enabled, "Esc cancellation did not restore first-person build mode")
+	_aim_at(controller, Vector3(3.5, 0.0, -2.5), Vector3(3.5, 1.5, 0.5))
+	var socket_hit := controller.get_centered_raycast()
+	_expect(socket_hit != null and socket_hit.target_cell == Vector3i(3, 1, 0) and socket_hit.face_normal == Vector3i.FORWARD, "connection target did not resolve the selected outside boundary face")
+	var distant_chunk_before := _chunk_mesh_id(runtime, Vector3i(1, 0, 1))
+	_toggle_module_tools(runtime)
+	(ui.get_node("ModulePanel/Margin/VBox/SocketHeader/AddSocket") as Button).pressed.emit()
+	var sockets := draft.get_sockets()
+	_expect(sockets.size() == 1 and sockets[0].socket_id == &"north" and sockets[0].direction == LevelSocketDefinition.Direction.NORTH, "connection intent did not commit its boundary direction")
+	_expect(draft.get_cell(Vector3i(3, 1, 0)) == StructureCell.AIR and draft.get_cell(Vector3i(3, 2, 0)) == StructureCell.AIR, "connection intent did not carve its two-block aperture")
+	_expect(not torch_renderer.has_torch(carved_torch), "connection carving retained a torch whose support was removed")
+	_expect(torch_renderer.torch_instances.get(retained_torch) == retained_torch_node, "connection carving rebuilt an unrelated torch node")
+	_expect(_chunk_mesh_id(runtime, Vector3i(1, 0, 1)) == distant_chunk_before, "connection carving rebuilt an unrelated chunk")
+	_expect(socket_list.get_child_count() == 1 and overlay.get_child_count() == 1 and overlay.has_node("Socket_north"), "connection metadata presentation did not refresh exactly once")
+	_expect(not runtime._can_preview_placement(Vector3i(3, 1, 0), BlockId.Type.DIRT, Vector3i.FORWARD), "connection aperture presented an invalid block placement")
+	_expect_overlay_color(overlay.get_node("Socket_north") as Node3D, StructureMetadataOverlay.SOCKET_COLOR, "connection")
+	var socket_root := overlay.get_node("Socket_north") as Node3D
+	weight_input.value = 0.0
+	_expect(overlay.get_node("Socket_north") == socket_root and overlay.get_child_count() == 1, "rejected weight rebuilt or duplicated metadata geometry")
+	weight_input.value = 2.7
+	_expect(draft.get_weight() == 2.7 and weight_input.value == 2.7, "valid weight intent did not update exact draft and UI truth")
+	_expect(overlay.get_child_count() == 1 and overlay.get_node("Socket_north") != socket_root, "metadata change did not refresh its overlay exactly once")
+	socket_root = overlay.get_node("Socket_north") as Node3D
+	var void_change := draft.try_set_void(Vector3i(6, 3, 6))
+	runtime._apply_change(void_change)
+	_expect(void_change.succeeded and overlay.get_node("Socket_north") == socket_root, "ordinary VOID edit rebuilt metadata presentation")
+	(socket_list.get_child(0).get_child(1) as Button).pressed.emit()
+	_expect(draft.get_sockets().is_empty() and socket_list.get_child_count() == 0 and overlay.get_child_count() == 0, "connection removal retained domain or presentation state")
+	_expect(draft.get_cell(Vector3i(3, 1, 0)) == StructureCell.AIR and draft.get_cell(Vector3i(3, 2, 0)) == StructureCell.AIR, "connection removal refilled its aperture")
+	_toggle_module_tools(runtime)
+	_expect(not ui.is_module_panel_open() and controller._input_enabled, "M did not close Level Module tools")
+	_aim_at(controller, Vector3(1.5, 3.0, 2.5), Vector3(1.5, 0.5, 2.5))
+	_toggle_module_tools(runtime)
+	var spawn_facing := ui.get_node("ModulePanel/Margin/VBox/Markers/Spawn/Controls/Facing") as OptionButton
+	spawn_facing.select(LevelSocketDefinition.Direction.EAST)
+	(ui.get_node("ModulePanel/Margin/VBox/Markers/Spawn/Controls/Set") as Button).pressed.emit()
+	_toggle_module_tools(runtime)
+	_aim_at(controller, Vector3(5.5, 3.0, 4.5), Vector3(5.5, 0.5, 4.5))
+	_toggle_module_tools(runtime)
+	var return_facing := ui.get_node("ModulePanel/Margin/VBox/Markers/Return/Controls/Facing") as OptionButton
+	return_facing.select(LevelSocketDefinition.Direction.WEST)
+	(ui.get_node("ModulePanel/Margin/VBox/Markers/Return/Controls/Set") as Button).pressed.emit()
+	(ui.get_node("ModulePanel/Margin/VBox/Markers/Actions/Commit") as Button).pressed.emit()
+	var spawn_marker := draft.get_spawn_marker()
+	var return_marker := draft.get_return_door_marker()
+	_expect(spawn_marker != null and spawn_marker.cell == Vector3i(1, 1, 2) and spawn_marker.facing == LevelSocketDefinition.Direction.EAST, "spawn marker target did not commit")
+	_expect(return_marker != null and return_marker.cell == Vector3i(5, 1, 4) and return_marker.facing == LevelSocketDefinition.Direction.WEST, "return marker target did not commit")
+	_expect(overlay.get_child_count() == 2 and overlay.has_node("SpawnMarker") and overlay.has_node("ReturnMarker"), "paired marker overlays did not refresh without duplicates")
+	_expect_overlay_color(overlay.get_node("SpawnMarker") as Node3D, StructureMetadataOverlay.SPAWN_COLOR, "spawn marker")
+	_expect_overlay_color(overlay.get_node("ReturnMarker") as Node3D, StructureMetadataOverlay.RETURN_COLOR, "return marker")
+	(ui.get_node("ModulePanel/Margin/VBox/Markers/Actions/Clear") as Button).pressed.emit()
+	_expect(draft.get_spawn_marker() == null and draft.get_return_door_marker() == null and overlay.get_child_count() == 0, "marker clear retained paired domain or overlay state")
+	(ui.get_node("ModulePanel/Margin/VBox/Header/Close") as Button).pressed.emit()
+	_expect(not ui.is_module_panel_open() and controller._input_enabled and controller._mouse_capture_enabled, "module close button did not restore first-person input")
+	_expect(torch_renderer.torch_instances.get(retained_torch) == retained_torch_node, "metadata authoring rebuilt an unrelated torch node")
+	_aim_at(controller, Vector3(1.5, 0.0, 6.5), Vector3(1.5, 1.5, 4.5))
+	_click(runtime, MOUSE_BUTTON_LEFT)
+	_expect(not draft.has_torch(retained_torch) and not torch_renderer.has_torch(retained_torch), "Level Module first-person removal did not remove its torch")
+	_assign_torch_to_selected_slot(ui)
+	_click(runtime, MOUSE_BUTTON_RIGHT)
+	_expect(draft.has_torch(retained_torch) and torch_renderer.has_torch(retained_torch), "Level Module first-person placement did not restore its torch")
+	await _free_runtime(runtime)
+
+func _expect_overlay_color(root_node: Node3D, expected: Color, label: String) -> void:
+	var meshes := root_node.find_children("*", "MeshInstance3D", true, false)
+	_expect(not meshes.is_empty(), "%s overlay contained no geometry" % label)
+	for node in meshes:
+		var mesh := node as MeshInstance3D
+		var material := mesh.material_override as StandardMaterial3D
+		_expect(mesh.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF, "%s overlay geometry cast shadows" % label)
+		_expect(material != null and material.emission_enabled and material.albedo_color.is_equal_approx(expected), "%s overlay color or emission changed" % label)
+
 func _create_runtime(draft: StructureDraft) -> StructureDesignerRuntime:
 	var runtime := _runtime_scene.instantiate() as StructureDesignerRuntime
 	_expect(runtime != null, "structure designer runtime scene root had the wrong type")
@@ -159,6 +292,12 @@ func _click(runtime: StructureDesignerRuntime, button: MouseButton) -> void:
 	event.pressed = true
 	event.button_index = button
 	runtime._unhandled_input(event)
+
+func _toggle_module_tools(runtime: StructureDesignerRuntime) -> void:
+	var event := InputEventKey.new()
+	event.pressed = true
+	event.keycode = KEY_M
+	runtime._input(event)
 
 func _aim_at(controller: StructureDesignerController, feet_position: Vector3, target: Vector3) -> void:
 	controller.global_position = feet_position

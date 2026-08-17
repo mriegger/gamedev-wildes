@@ -5,6 +5,7 @@ class_name StructureDesignerRuntime
 @onready var _chunk_renderer: StructureChunkRenderer = $StructureChunkRenderer as StructureChunkRenderer
 @onready var _torch_renderer: TorchRenderer = $TorchRenderer as TorchRenderer
 @onready var _guide_view: StructureDesignerGuideView = $StructureDesignerGuideView as StructureDesignerGuideView
+@onready var _metadata_overlay: StructureMetadataOverlay = $StructureMetadataOverlay as StructureMetadataOverlay
 @onready var _designer_ui: StructureDesignerUI = $StructureDesignerUI as StructureDesignerUI
 @onready var _world_environment: WorldEnvironment = $WorldEnvironment as WorldEnvironment
 
@@ -19,6 +20,7 @@ func _ready() -> void:
 	visible = false
 	_designer_ui.visible = false
 	set_process(false)
+	set_process_input(false)
 	set_process_unhandled_input(false)
 
 func setup(
@@ -40,9 +42,18 @@ func setup(
 	_chunk_renderer.setup(_draft, texture_set, terrain_shader)
 	_torch_renderer.setup(block_catalog, 0, 0.0)
 	_guide_view.setup(_draft.get_size())
-	_designer_ui.setup(item_catalog, _toolbelt)
+	_metadata_overlay.setup(_draft)
+	_designer_ui.setup(item_catalog, _toolbelt, _draft.get_format())
 	_designer_ui.ui_blocking_changed.connect(_on_ui_blocking_changed)
+	_designer_ui.weight_requested.connect(_on_weight_requested)
+	_designer_ui.void_requested.connect(_on_void_requested)
+	_designer_ui.socket_add_requested.connect(_on_socket_add_requested)
+	_designer_ui.socket_remove_requested.connect(_on_socket_remove_requested)
+	_designer_ui.marker_target_requested.connect(_on_marker_target_requested)
+	_designer_ui.markers_commit_requested.connect(_on_markers_commit_requested)
+	_designer_ui.markers_clear_requested.connect(_on_markers_clear_requested)
 	_spawn_initial_torches()
+	_sync_module_presentation()
 	_setup_environment()
 
 func activate() -> void:
@@ -52,6 +63,7 @@ func activate() -> void:
 	_designer_ui.visible = true
 	_controller.set_camera_active(true)
 	set_process(true)
+	set_process_input(true)
 	set_process_unhandled_input(true)
 	_sync_input_state()
 
@@ -60,10 +72,7 @@ func set_external_ui_blocked(blocked: bool) -> void:
 	_sync_input_state()
 
 func cancel_active_ui() -> bool:
-	if not _designer_ui.is_palette_open():
-		return false
-	_designer_ui.close_palette()
-	return true
+	return _designer_ui.close_active_overlay()
 
 func _process(_delta: float) -> void:
 	if not _active or _external_ui_blocked or _designer_ui.is_ui_blocking():
@@ -78,7 +87,7 @@ func _process(_delta: float) -> void:
 	var cell := _current_hit.placement_cell
 	_guide_view.show_preview(cell, _can_preview_placement(cell, block_id, _current_hit.face_normal))
 
-func _unhandled_input(event: InputEvent) -> void:
+func _input(event: InputEvent) -> void:
 	if not _active or _external_ui_blocked:
 		return
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -87,6 +96,15 @@ func _unhandled_input(event: InputEvent) -> void:
 			_designer_ui.toggle_palette()
 			get_viewport().set_input_as_handled()
 			return
+		if _draft.get_format() == StructureDraft.Format.LEVEL_MODULE and (key_event.keycode == KEY_M or key_event.physical_keycode == KEY_M):
+			if not _designer_ui.is_module_panel_open():
+				_current_hit = _controller.get_centered_raycast()
+			_designer_ui.toggle_module_panel()
+			get_viewport().set_input_as_handled()
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not _active or _external_ui_blocked:
+		return
 	if _designer_ui.is_ui_blocking() or not event is InputEventMouseButton:
 		return
 	var mouse_event := event as InputEventMouseButton
@@ -131,12 +149,25 @@ func _apply_change(change: StructureDraftChange) -> void:
 		_torch_renderer.remove_torch(cell)
 	for torch in change.added_torches:
 		_torch_renderer.spawn_torch(torch.cell, torch.support_direction)
+	if change.metadata_changed:
+		_metadata_overlay.rebuild()
+		_sync_module_presentation()
 
 func _spawn_initial_torches() -> void:
 	var attachments: Dictionary = {}
 	for torch in _draft.get_torches():
 		attachments[torch.cell] = torch.support_direction
 	_torch_renderer.spawn_torches(attachments)
+
+func _sync_module_presentation() -> void:
+	if _draft.get_format() != StructureDraft.Format.LEVEL_MODULE:
+		return
+	_designer_ui.present_module_state(
+		_draft.get_weight(),
+		_draft.get_sockets(),
+		_draft.get_spawn_marker(),
+		_draft.get_return_door_marker(),
+	)
 
 func _can_preview_placement(cell: Vector3i, block_id: int, face_normal: Vector3i) -> bool:
 	if _controller.body_intersects_cell(cell):
@@ -145,8 +176,8 @@ func _can_preview_placement(cell: Vector3i, block_id: int, face_normal: Vector3i
 		return _draft.can_place_torch(cell, -face_normal)
 	return _draft.can_place_block(cell, block_id)
 
-func _on_ui_blocking_changed(_blocking: bool) -> void:
-	if _designer_ui.is_ui_blocking():
+func _on_ui_blocking_changed(blocking: bool) -> void:
+	if blocking:
 		_guide_view.clear_preview()
 	_sync_input_state()
 
@@ -156,6 +187,47 @@ func _sync_input_state() -> void:
 	var enabled := _active and not _external_ui_blocked and not _designer_ui.is_ui_blocking()
 	_controller.set_mouse_capture_enabled(enabled)
 	_controller.set_input_enabled(enabled)
+
+func _on_weight_requested(weight: float) -> void:
+	var change := _draft.try_set_weight(weight)
+	_apply_change(change)
+	if not change.succeeded:
+		_sync_module_presentation()
+
+func _on_void_requested() -> void:
+	if _current_hit == null or not _draft.is_in_bounds(_current_hit.target_cell):
+		return
+	_apply_change(_draft.try_set_void(_current_hit.target_cell))
+
+func _on_socket_add_requested() -> void:
+	if _current_hit == null:
+		return
+	var direction: Variant = LevelSocketDefinition.direction_for_vector(_current_hit.face_normal)
+	if direction == null:
+		return
+	_apply_change(_draft.try_add_socket(_current_hit.target_cell, direction as LevelSocketDefinition.Direction))
+
+func _on_socket_remove_requested(socket_id: StringName) -> void:
+	_apply_change(_draft.try_remove_socket(socket_id))
+
+func _on_marker_target_requested(role: StructureDesignerUI.MarkerRole, facing: LevelSocketDefinition.Direction) -> void:
+	if _current_hit == null or not _draft.is_in_bounds(_current_hit.placement_cell):
+		return
+	_designer_ui.set_pending_marker(role, _current_hit.placement_cell, facing)
+
+func _on_markers_commit_requested(
+	spawn_cell: Vector3i,
+	spawn_facing: LevelSocketDefinition.Direction,
+	return_cell: Vector3i,
+	return_facing: LevelSocketDefinition.Direction,
+) -> void:
+	var change := _draft.try_set_markers(spawn_cell, spawn_facing, return_cell, return_facing)
+	_apply_change(change)
+	if change.succeeded:
+		_designer_ui.clear_pending_markers()
+
+func _on_markers_clear_requested() -> void:
+	_apply_change(_draft.try_clear_markers())
 
 func _setup_environment() -> void:
 	var environment := Environment.new()

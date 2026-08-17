@@ -1,0 +1,96 @@
+extends Node3D
+class_name StructureMetadataOverlay
+
+const SOCKET_COLOR := Color(0.12, 0.9, 1.0, 0.48)
+const SPAWN_COLOR := Color(0.2, 1.0, 0.36, 0.78)
+const RETURN_COLOR := Color(1.0, 0.52, 0.12, 0.78)
+
+var _draft: StructureDraft
+
+func setup(draft: StructureDraft) -> void:
+	assert(draft != null)
+	assert(_draft == null)
+	_draft = draft
+	rebuild()
+
+func rebuild() -> void:
+	for child in get_children():
+		remove_child(child)
+		child.queue_free()
+	if _draft.get_format() != StructureDraft.Format.LEVEL_MODULE:
+		return
+	for socket in _draft.get_sockets():
+		_add_socket(socket)
+	var spawn_marker := _draft.get_spawn_marker()
+	var return_marker := _draft.get_return_door_marker()
+	if spawn_marker != null:
+		_add_marker("Spawn", spawn_marker.cell, spawn_marker.facing, SPAWN_COLOR)
+	if return_marker != null:
+		_add_marker("Return", return_marker.cell, return_marker.facing, RETURN_COLOR)
+
+func _add_socket(socket: LevelSocketDefinition) -> void:
+	var root := Node3D.new()
+	root.name = "Socket_%s" % socket.socket_id
+	add_child(root)
+	var material := _make_material(SOCKET_COLOR)
+	for offset in [Vector3i.ZERO, Vector3i.UP]:
+		var aperture := MeshInstance3D.new()
+		var aperture_mesh := BoxMesh.new()
+		aperture_mesh.size = Vector3.ONE * 0.92
+		aperture.mesh = aperture_mesh
+		aperture.position = Vector3(socket.cell + offset) + Vector3.ONE * 0.5
+		aperture.material_override = material
+		aperture.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		root.add_child(aperture)
+	_add_arrow(root, Vector3(socket.cell) + Vector3(0.5, 1.0, 0.5), LevelSocketDefinition.vector_for(socket.direction), material)
+
+func _add_marker(label: String, cell: Vector3i, facing: LevelSocketDefinition.Direction, color: Color) -> void:
+	var root := Node3D.new()
+	root.name = "%sMarker" % label
+	add_child(root)
+	var material := _make_material(color)
+	var marker := MeshInstance3D.new()
+	var marker_mesh := CylinderMesh.new()
+	marker_mesh.top_radius = 0.18
+	marker_mesh.bottom_radius = 0.34
+	marker_mesh.height = 0.12
+	marker.mesh = marker_mesh
+	marker.position = Vector3(cell) + Vector3(0.5, 0.08, 0.5)
+	marker.material_override = material
+	marker.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(marker)
+	_add_arrow(root, Vector3(cell) + Vector3(0.5, 0.18, 0.5), LevelSocketDefinition.vector_for(facing), material)
+
+func _add_arrow(root: Node3D, origin: Vector3, direction: Vector3i, material: Material) -> void:
+	var shaft := MeshInstance3D.new()
+	var shaft_mesh := BoxMesh.new()
+	shaft_mesh.size = Vector3(0.12, 0.08, 0.72)
+	shaft.mesh = shaft_mesh
+	shaft.position = origin + Vector3(direction) * 0.36
+	shaft.rotation.y = PI * 0.5 if direction.x != 0 else 0.0
+	shaft.material_override = material
+	shaft.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(shaft)
+	var head := MeshInstance3D.new()
+	var head_mesh := CylinderMesh.new()
+	head_mesh.top_radius = 0.0
+	head_mesh.bottom_radius = 0.22
+	head_mesh.height = 0.38
+	head_mesh.radial_segments = 4
+	head.mesh = head_mesh
+	head.position = origin + Vector3(direction) * 0.78
+	head.rotation.x = PI * 0.5
+	head.rotation.y = atan2(float(direction.x), float(direction.z))
+	head.material_override = material
+	head.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(head)
+
+func _make_material(color: Color) -> StandardMaterial3D:
+	var material := StandardMaterial3D.new()
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.albedo_color = color
+	material.emission_enabled = true
+	material.emission = Color(color.r, color.g, color.b)
+	material.emission_energy_multiplier = 0.8
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	return material
