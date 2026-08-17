@@ -361,6 +361,25 @@ jobs:
             30 "ENTITY_NAVIGATION_INTEGRATION PASS" /tmp/entity_navigation.log -- \
             godot --headless --path src --script res://tests/entity_navigation_integration.gd
 
+  skeleton-roaming:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run Skeleton brain tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "SKELETON_BRAIN PASS" /tmp/skeleton_brain.log -- \
+            godot --headless --path src --script res://entities/skeleton/tests/skeleton_brain.gd
+      - name: Run Skeleton roaming integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "SKELETON_ROAMING PASS" /tmp/skeleton_roaming.log -- \
+            godot --headless --path src --script res://entities/skeleton/tests/skeleton_roaming_integration.gd
+
   entity-combat-integration:
     runs-on: ubuntu-latest
     timeout-minutes: 10

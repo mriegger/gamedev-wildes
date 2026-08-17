@@ -31,6 +31,14 @@ func _position_ready(_position: Vector3) -> bool:
 	_ready_calls += 1
 	return _streaming_ready
 
+func _make_zombie_catalog() -> EntityCatalog:
+	var definitions: Array[EntityDefinition] = [
+		load("res://entities/definitions/zombie.tres") as EntityDefinition,
+	]
+	var catalog := EntityCatalog.new()
+	catalog.definitions = definitions
+	return catalog
+
 func _sorted_actors(coordinator: WorldEntityCoordinator) -> Array[EntityActor]:
 	var actors := coordinator.get_runtime().get_active_actors()
 	actors.sort_custom(func(left: EntityActor, right: EntityActor) -> bool: return left.runtime_id < right.runtime_id)
@@ -49,7 +57,7 @@ func _index_actors(coordinator: WorldEntityCoordinator, actors: Array[EntityActo
 		coordinator.get_runtime()._spatial_index.upsert(actor.runtime_id, actor.global_position, actor.get_world_bounds())
 
 func _run() -> void:
-	var catalog := load("res://entities/entity_catalog.tres") as EntityCatalog
+	var catalog := _make_zombie_catalog()
 	var world := _make_world()
 	var coordinator := WorldEntityCoordinator.new()
 	get_root().add_child(coordinator)

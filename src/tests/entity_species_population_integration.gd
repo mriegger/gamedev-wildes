@@ -34,7 +34,7 @@ func _is_position_streamed(_position: Vector3) -> bool:
 	return _streaming_enabled
 
 func _species_counts(coordinator: WorldEntityCoordinator) -> Dictionary:
-	var counts: Dictionary = {&"sheep": 0, &"zombie": 0}
+	var counts: Dictionary = {&"sheep": 0, &"zombie": 0, &"skeleton": 0}
 	for actor in coordinator.get_runtime().get_active_actors():
 		counts[actor.definition.id] = int(counts.get(actor.definition.id, 0)) + 1
 	return counts
@@ -55,22 +55,25 @@ func _first_species(coordinator: WorldEntityCoordinator, definition_id: StringNa
 
 func _assert_catalog(catalog: EntityCatalog) -> void:
 	_expect(catalog != null and catalog.validate(), "entity catalog failed validation")
-	_expect(catalog.definitions.size() == 2, "entity catalog did not contain exactly two stable species")
+	_expect(catalog.definitions.size() == 3, "entity catalog did not contain exactly three stable species")
 	_expect(catalog.has_definition(&"sheep"), "stable sheep ID was missing")
 	_expect(catalog.has_definition(&"zombie"), "stable zombie ID was missing")
+	_expect(catalog.has_definition(&"skeleton"), "stable Skeleton ID was missing")
 	var sheep := catalog.get_definition(&"sheep")
 	var zombie := catalog.get_definition(&"zombie")
-	_expect(sheep.id == &"sheep" and zombie.id == &"zombie", "species IDs changed")
+	var skeleton := catalog.get_definition(&"skeleton")
+	_expect(sheep.id == &"sheep" and zombie.id == &"zombie" and skeleton.id == &"skeleton", "species IDs changed")
 	_expect(sheep.ambient_spawn_phase == EntityDefinition.SpawnPhase.DAY, "sheep were not day-spawned")
 	_expect(zombie.ambient_spawn_phase == EntityDefinition.SpawnPhase.NIGHT, "zombies were not night-spawned")
-	_expect(sheep.ambient_max_active == 6 and zombie.ambient_max_active == 6, "per-species caps were not six")
+	_expect(skeleton.ambient_spawn_phase == EntityDefinition.SpawnPhase.NIGHT, "Skeletons were not night-spawned")
+	_expect(sheep.ambient_max_active == 6 and zombie.ambient_max_active == 6 and skeleton.ambient_max_active == 3, "per-species caps changed")
 
 func _spawn_day_population(coordinator: WorldEntityCoordinator, player_position: Vector3) -> Dictionary:
 	for _spawn in range(6):
 		coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, player_position, DAY_TIME)
 	var counts := _species_counts(coordinator)
 	_expect(coordinator.get_runtime().get_active_count() == 6, "day population did not reach six")
-	_expect(counts[&"sheep"] == 6 and counts[&"zombie"] == 0, "day spawned a non-sheep species")
+	_expect(counts[&"sheep"] == 6 and counts[&"zombie"] == 0 and counts[&"skeleton"] == 0, "day spawned a non-sheep species")
 	var sheep_ids := _runtime_id_set(coordinator)
 	coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, player_position, DAY_TIME)
 	_expect(coordinator.get_runtime().get_active_count() == 6, "day population exceeded the sheep cap")
@@ -82,7 +85,7 @@ func _spawn_night_population(coordinator: WorldEntityCoordinator, player_positio
 		coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, player_position, NIGHT_TIME)
 	var counts := _species_counts(coordinator)
 	_expect(coordinator.get_runtime().get_active_count() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "mixed population did not reach twelve")
-	_expect(counts[&"sheep"] == 6 and counts[&"zombie"] == 6, "night did not produce six zombies beside six sheep")
+	_expect(counts[&"sheep"] == 6 and counts[&"zombie"] == 3 and counts[&"skeleton"] == 3, "first six night spawns were not balanced between Zombies and Skeletons")
 	for runtime_id in sheep_ids:
 		var actor := coordinator.get_runtime().get_actor(runtime_id)
 		_expect(actor != null and actor.definition.id == &"sheep", "day sheep did not persist into night")

@@ -8,15 +8,16 @@ const MAX_SPAWN_DISTANCE: float = 36.0
 const DESPAWN_DISTANCE: float = 56.0
 const MAX_TOTAL_ACTIVE: int = 12
 const MAX_RETIRING_VISUALS: int = 12
-const MAX_NAVIGATION_SEARCH_RADIUS: int = 24
-const MAX_NAVIGATION_SEARCH_NODES: int = 256
-const MAX_NAVIGATION_SEARCHES_PER_TICK: int = 1
+const MAX_NAVIGATION_SEARCH_RADIUS: int = 32
+const MAX_NAVIGATION_SEARCH_NODES: int = 512
+const MAX_NAVIGATION_SEARCHES_PER_TICK: int = 2
 
 var _catalog: EntityCatalog
 var _voxel_world: VoxelWorld
 var _position_ready: Callable
 var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 var _runtime: EntityRuntime
+var _ambient_definition_cursor: int = 0
 var _spawn_elapsed: float = 0.0
 var _suspended: bool = false
 
@@ -31,6 +32,7 @@ func setup(p_catalog: EntityCatalog, p_voxel_world: VoxelWorld, world_seed: int,
 	_voxel_world = p_voxel_world
 	_position_ready = p_position_ready
 	_rng.seed = world_seed
+	_ambient_definition_cursor = 0
 	_spawn_elapsed = 0.0
 	_suspended = false
 	visible = true
@@ -58,12 +60,16 @@ func tick(delta: float, player_position: Vector3, time_of_day: float) -> void:
 	if _runtime.get_active_count() >= MAX_TOTAL_ACTIVE:
 		return
 	var is_day := DayNightProfile.is_day_time(time_of_day)
-	for definition in _catalog.definitions:
+	var definition_count := _catalog.definitions.size()
+	for offset in range(definition_count):
+		var definition_index := (_ambient_definition_cursor + offset) % definition_count
+		var definition := _catalog.definitions[definition_index]
 		if definition == null or _runtime.get_definition_count(definition.id) >= definition.ambient_max_active:
 			continue
 		if is_day != (definition.ambient_spawn_phase == EntityDefinition.SpawnPhase.DAY):
 			continue
 		if _try_spawn(definition, player_position):
+			_ambient_definition_cursor = (definition_index + 1) % definition_count
 			return
 
 func _try_spawn(definition: EntityDefinition, player_position: Vector3) -> bool:
@@ -141,5 +147,6 @@ func shutdown() -> void:
 	_catalog = null
 	_voxel_world = null
 	_position_ready = Callable()
+	_ambient_definition_cursor = 0
 	_spawn_elapsed = 0.0
 	_suspended = false
