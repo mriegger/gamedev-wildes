@@ -20,11 +20,10 @@ func setup(draft: StructureDraft, texture_set: BlockTextureSet, terrain_shader: 
 func rebuild_all() -> void:
 	assert(_draft != null)
 	var chunk_extent := _chunk_extent()
-	var cells := _draft.snapshot_cells()
 	for y in range(chunk_extent.y):
 		for z in range(chunk_extent.z):
 			for x in range(chunk_extent.x):
-				_rebuild_chunk(Vector3i(x, y, z), cells)
+				_rebuild_chunk(Vector3i(x, y, z))
 
 func rebuild_for_cells(changed_cells: Array[Vector3i]) -> void:
 	assert(_draft != null)
@@ -55,11 +54,11 @@ func rebuild_for_cells(changed_cells: Array[Vector3i]) -> void:
 	for chunk_value in queued:
 		ordered.append(chunk_value as Vector3i)
 	ordered.sort_custom(_chunk_less)
-	var cells := _draft.snapshot_cells()
 	for chunk in ordered:
-		_rebuild_chunk(chunk, cells)
+		_rebuild_chunk(chunk)
 
-func _rebuild_chunk(chunk: Vector3i, cells: PackedInt32Array) -> void:
+func _rebuild_chunk(chunk: Vector3i) -> void:
+	var cells := _draft.copy_cells_for_chunk(chunk, StructureChunkMesher.CHUNK_SIZE)
 	var data: Variant = _mesher.build_mesh_data(cells, _draft.get_size(), chunk)
 	var existing := _chunks.get(chunk) as MeshInstance3D
 	if data == null:

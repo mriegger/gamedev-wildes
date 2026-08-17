@@ -7,7 +7,8 @@ const MAX_CELL_COUNT: int = 262144
 
 var _size: Vector3i
 var _cells: PackedInt32Array
-var _torches: Array[StructureTorchDefinition] = []
+var _torches_by_cell: Dictionary = {}
+var _torch_cells_by_support: Dictionary = {}
 var _dirty: bool
 
 func _init(p_size: Vector3i, p_cells: PackedInt32Array) -> void:
@@ -43,11 +44,41 @@ func get_cell(cell: Vector3i) -> int:
 func snapshot_cells() -> PackedInt32Array:
 	return _cells.duplicate()
 
-func get_torches() -> Array[StructureTorchDefinition]:
-	var copied: Array[StructureTorchDefinition] = []
-	for torch in _torches:
-		copied.append(_copy_torch(torch))
+func copy_cells_for_chunk(chunk: Vector3i, chunk_size: int) -> Dictionary:
+	assert(chunk_size > 0)
+	assert(chunk.x >= 0 and chunk.y >= 0 and chunk.z >= 0)
+	var start := chunk * chunk_size
+	assert(start.x < _size.x and start.y < _size.y and start.z < _size.z)
+	var minimum := Vector3i(
+		maxi(start.x - 1, 0),
+		maxi(start.y - 1, 0),
+		maxi(start.z - 1, 0)
+	)
+	var maximum := Vector3i(
+		mini(start.x + chunk_size + 1, _size.x),
+		mini(start.y + chunk_size + 1, _size.y),
+		mini(start.z + chunk_size + 1, _size.z)
+	)
+	var copied: Dictionary = {}
+	for y in range(minimum.y, maximum.y):
+		for z in range(minimum.z, maximum.z):
+			for x in range(minimum.x, maximum.x):
+				var cell := Vector3i(x, y, z)
+				copied[cell] = _cells[StructureCell.index_of(cell, _size)]
 	return copied
+
+func get_torches() -> Array[StructureTorchDefinition]:
+	var cells: Array[Vector3i] = []
+	for cell_value in _torches_by_cell:
+		cells.append(cell_value as Vector3i)
+	cells.sort_custom(_cell_less)
+	var copied: Array[StructureTorchDefinition] = []
+	for cell in cells:
+		copied.append(_copy_torch(_torches_by_cell[cell] as StructureTorchDefinition))
+	return copied
+
+func has_torch(cell: Vector3i) -> bool:
+	return _torches_by_cell.has(cell)
 
 func is_dirty() -> bool:
 	return _dirty
@@ -55,7 +86,7 @@ func is_dirty() -> bool:
 func can_place_block(cell: Vector3i, block_id: int) -> bool:
 	if not is_in_bounds(cell) or not StructureCell.is_structure_solid(block_id):
 		return false
-	return not StructureCell.is_structure_solid(get_cell(cell)) and _torch_index_at(cell) == -1
+	return not StructureCell.is_structure_solid(get_cell(cell)) and not has_torch(cell)
 
 func try_place_block(cell: Vector3i, block_id: int) -> StructureDraftChange:
 	if not can_place_block(cell, block_id):
@@ -66,13 +97,14 @@ func try_place_block(cell: Vector3i, block_id: int) -> StructureDraftChange:
 func try_remove_block(cell: Vector3i) -> StructureDraftChange:
 	if not is_in_bounds(cell) or not StructureCell.is_structure_solid(get_cell(cell)):
 		return StructureDraftChange.reject()
-	var removed_torches := _torch_cells_supported_by(cell)
+	var removed_torch_cells := _get_torch_cells_supported_by(cell)
 	_set_cell(cell, StructureCell.AIR)
-	_remove_torches(removed_torches)
-	return _commit_change([cell], not removed_torches.is_empty())
+	for torch_cell in removed_torch_cells:
+		_remove_torch(torch_cell)
+	return _commit_change([cell], [], removed_torch_cells)
 
 func can_place_torch(cell: Vector3i, support_direction: Vector3i) -> bool:
-	if not is_in_bounds(cell) or get_cell(cell) != StructureCell.AIR or _torch_index_at(cell) != -1:
+	if not is_in_bounds(cell) or get_cell(cell) != StructureCell.AIR or has_torch(cell):
 		return false
 	if not StructureTorchDefinition.is_horizontal_support(support_direction):
 		return false
@@ -85,40 +117,55 @@ func try_place_torch(cell: Vector3i, support_direction: Vector3i) -> StructureDr
 	var torch := StructureTorchDefinition.new()
 	torch.cell = cell
 	torch.support_direction = support_direction
-	_torches.append(torch)
-	return _commit_change([], true)
+	_add_torch(torch)
+	return _commit_change([], [torch])
 
 func try_remove_torch(cell: Vector3i) -> StructureDraftChange:
-	var index := _torch_index_at(cell)
-	if index == -1:
+	if not has_torch(cell):
 		return StructureDraftChange.reject()
-	_torches.remove_at(index)
-	return _commit_change([], true)
+	_remove_torch(cell)
+	return _commit_change([], [], [cell])
 
-func _commit_change(changed_cells: Array[Vector3i], torches_changed: bool = false) -> StructureDraftChange:
+func _commit_change(
+	changed_cells: Array[Vector3i],
+	added_torches: Array[StructureTorchDefinition] = [],
+	removed_torch_cells: Array[Vector3i] = [],
+) -> StructureDraftChange:
 	_dirty = true
-	return StructureDraftChange.success(changed_cells, torches_changed)
+	return StructureDraftChange.success(changed_cells, added_torches, removed_torch_cells)
 
 func _set_cell(cell: Vector3i, value: int) -> void:
 	_cells[StructureCell.index_of(cell, _size)] = value
 
-func _torch_index_at(cell: Vector3i) -> int:
-	for index in _torches.size():
-		if _torches[index].cell == cell:
-			return index
-	return -1
+func _add_torch(torch: StructureTorchDefinition) -> void:
+	_torches_by_cell[torch.cell] = torch
+	var support_cell := torch.cell + torch.support_direction
+	var supported_cells: Dictionary
+	if _torch_cells_by_support.has(support_cell):
+		supported_cells = _torch_cells_by_support[support_cell] as Dictionary
+	else:
+		supported_cells = {}
+		_torch_cells_by_support[support_cell] = supported_cells
+	supported_cells[torch.cell] = true
 
-func _torch_cells_supported_by(support_cell: Vector3i) -> Dictionary:
-	var cells: Dictionary = {}
-	for torch in _torches:
-		if torch.cell + torch.support_direction == support_cell:
-			cells[torch.cell] = true
+func _remove_torch(cell: Vector3i) -> void:
+	var torch := _torches_by_cell[cell] as StructureTorchDefinition
+	var support_cell := torch.cell + torch.support_direction
+	var supported_cells := _torch_cells_by_support[support_cell] as Dictionary
+	supported_cells.erase(cell)
+	if supported_cells.is_empty():
+		_torch_cells_by_support.erase(support_cell)
+	_torches_by_cell.erase(cell)
+
+func _get_torch_cells_supported_by(support_cell: Vector3i) -> Array[Vector3i]:
+	var cells: Array[Vector3i] = []
+	if not _torch_cells_by_support.has(support_cell):
+		return cells
+	var indexed := _torch_cells_by_support[support_cell] as Dictionary
+	for cell_value in indexed:
+		cells.append(cell_value as Vector3i)
+	cells.sort_custom(_cell_less)
 	return cells
-
-func _remove_torches(cells: Dictionary) -> void:
-	for index in range(_torches.size() - 1, -1, -1):
-		if cells.has(_torches[index].cell):
-			_torches.remove_at(index)
 
 static func _air_cells(size: Vector3i) -> PackedInt32Array:
 	var cells := PackedInt32Array()
@@ -131,3 +178,10 @@ static func _copy_torch(source: StructureTorchDefinition) -> StructureTorchDefin
 	copied.cell = source.cell
 	copied.support_direction = source.support_direction
 	return copied
+
+static func _cell_less(a: Vector3i, b: Vector3i) -> bool:
+	if a.x != b.x:
+		return a.x < b.x
+	if a.y != b.y:
+		return a.y < b.y
+	return a.z < b.z

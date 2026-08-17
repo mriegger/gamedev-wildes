@@ -2,26 +2,19 @@ extends VoxelSpace
 class_name StructureDesignerSpace
 
 var _draft: StructureDraft
-var _torch_cells: Dictionary = {}
 
 func _init(draft: StructureDraft, p_block_catalog: BlockCatalog) -> void:
 	assert(draft != null)
 	assert(p_block_catalog != null)
 	_draft = draft
 	block_catalog = p_block_catalog
-	refresh_torches()
-
-func refresh_torches() -> void:
-	_torch_cells.clear()
-	for torch in _draft.get_torches():
-		_torch_cells[torch.cell] = true
 
 func get_block_at(position: Vector3i) -> Variant:
 	if is_guide_cell(position):
 		return BlockId.Type.STONE
 	if not _draft.is_in_bounds(position):
 		return null
-	if _torch_cells.has(position):
+	if _draft.has_torch(position):
 		return BlockId.Type.TORCH
 	var value := _draft.get_cell(position)
 	if not StructureCell.is_structure_solid(value):
@@ -42,7 +35,7 @@ func is_solid(position: Vector3i) -> bool:
 	return StructureCell.is_structure_solid(_draft.get_cell(position))
 
 func is_raycast_solid(position: Vector3i) -> bool:
-	return is_guide_cell(position) or _torch_cells.has(position) or is_solid(position)
+	return is_guide_cell(position) or _draft.has_torch(position) or is_solid(position)
 
 func is_face_targetable(block_position: Vector3i, _face_normal: Vector3i) -> bool:
 	return is_raycast_solid(block_position)

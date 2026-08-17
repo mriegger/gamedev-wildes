@@ -11,6 +11,13 @@ var _terrain_shader: Shader
 var _runtime_scene: PackedScene
 var _tree: SceneTree
 
+class TrackingTorchRenderer extends TorchRenderer:
+	var shadow_refresh_count: int
+
+	func _refresh_shadow_targets() -> void:
+		shadow_refresh_count += 1
+		super._refresh_shadow_targets()
+
 func run(tree: SceneTree) -> Array[String]:
 	_tree = tree
 	_block_catalog = load("res://blocks/block_catalog.tres") as BlockCatalog
@@ -24,11 +31,27 @@ func run(tree: SceneTree) -> Array[String]:
 	if _block_catalog == null or _item_catalog == null or _terrain_shader == null or _runtime_scene == null:
 		return _failures.duplicate()
 	_texture_set = BlockTextureSet.new(_block_catalog)
+	await _test_shadow_disabled_torch_updates()
 	await _test_runtime()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	if _failures.is_empty():
 		print("STRUCTURE_DESIGNER_RUNTIME PASS")
 	return _failures.duplicate()
+
+func _test_shadow_disabled_torch_updates() -> void:
+	var renderer := TrackingTorchRenderer.new()
+	_tree.root.add_child(renderer)
+	renderer.setup(_block_catalog, 0, 0.0)
+	var first_cell := Vector3i(1, 1, 1)
+	var second_cell := Vector3i(2, 1, 1)
+	var first_node := renderer.spawn_torch(first_cell, Vector3i.LEFT)
+	renderer.spawn_torch(second_cell, Vector3i.LEFT)
+	_expect(renderer.shadow_refresh_count == 0, "shadow-disabled torch additions performed a global shadow refresh")
+	_expect(renderer.torch_instances.get(first_cell) == first_node, "second torch addition replaced the first torch node")
+	renderer.remove_torch(second_cell)
+	_expect(renderer.torch_instances.get(first_cell) == first_node, "torch removal replaced an unaffected torch node")
+	renderer.queue_free()
+	await _tree.process_frame
 
 func _test_runtime() -> void:
 	var draft := StructureDraft.create(Vector3i(8, 4, 8))
@@ -97,6 +120,19 @@ func _test_runtime() -> void:
 	_click(runtime, MOUSE_BUTTON_LEFT)
 	_expect(draft.get_cell(support_cell) == StructureCell.AIR, "left click did not remove the torch support")
 	_expect(draft.get_torches().is_empty() and not torch_renderer.has_torch(torch_cell), "support removal did not clean up its torch")
+	var first_support := Vector3i(3, 1, 3)
+	var first_torch := Vector3i(4, 1, 3)
+	var second_support := Vector3i(5, 1, 5)
+	var second_torch := Vector3i(6, 1, 5)
+	runtime._apply_change(draft.try_place_block(first_support, BlockId.Type.STONE))
+	runtime._apply_change(draft.try_place_block(second_support, BlockId.Type.STONE))
+	runtime._apply_change(draft.try_place_torch(first_torch, Vector3i.LEFT))
+	runtime._apply_change(draft.try_place_torch(second_torch, Vector3i.LEFT))
+	var retained_torch_node := torch_renderer.torch_instances.get(second_torch) as Node3D
+	_expect(torch_renderer.has_torch(first_torch) and retained_torch_node != null, "incremental torch fixture did not render both torches")
+	runtime._apply_change(draft.try_remove_block(first_support))
+	_expect(not torch_renderer.has_torch(first_torch), "support removal retained its rendered torch")
+	_expect(torch_renderer.torch_instances.get(second_torch) == retained_torch_node, "torch edit rebuilt an unaffected torch node")
 	await _free_runtime(runtime)
 
 func _create_runtime(draft: StructureDraft) -> StructureDesignerRuntime:

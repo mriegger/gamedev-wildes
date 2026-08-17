@@ -8,8 +8,7 @@ var _cube_mesher: VoxelCubeMesher
 func _init(texture_set: BlockTextureSet) -> void:
 	_cube_mesher = VoxelCubeMesher.new(texture_set)
 
-func build_mesh_data(cells: PackedInt32Array, size: Vector3i, chunk: Vector3i) -> Variant:
-	assert(cells.size() == size.x * size.y * size.z)
+func build_mesh_data(cells: Dictionary, size: Vector3i, chunk: Vector3i) -> Variant:
 	var solid_cells: Array[Vector3i] = []
 	var start := chunk * CHUNK_SIZE
 	var end := Vector3i(
@@ -34,7 +33,8 @@ func build_mesh_data(cells: PackedInt32Array, size: Vector3i, chunk: Vector3i) -
 func create_mesh_from_data(data: Variant) -> ArrayMesh:
 	return _cube_mesher.create_mesh_from_data(data)
 
-func _cell_at(cells: PackedInt32Array, size: Vector3i, cell: Vector3i) -> int:
+func _cell_at(cells: Dictionary, size: Vector3i, cell: Vector3i) -> int:
 	if not StructureCell.is_in_bounds(cell, size):
 		return StructureCell.VOID
-	return cells[StructureCell.index_of(cell, size)]
+	assert(cells.has(cell))
+	return int(cells[cell])

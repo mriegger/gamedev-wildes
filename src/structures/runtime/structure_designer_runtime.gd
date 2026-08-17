@@ -42,7 +42,7 @@ func setup(
 	_guide_view.setup(_draft.get_size())
 	_designer_ui.setup(item_catalog, _toolbelt)
 	_designer_ui.ui_blocking_changed.connect(_on_ui_blocking_changed)
-	_sync_torches()
+	_spawn_initial_torches()
 	_setup_environment()
 
 func activate() -> void:
@@ -127,12 +127,12 @@ func _apply_change(change: StructureDraftChange) -> void:
 		return
 	if not change.changed_cells.is_empty():
 		_chunk_renderer.rebuild_for_cells(change.changed_cells)
-	if change.torches_changed:
-		_space.refresh_torches()
-		_sync_torches()
+	for cell in change.removed_torch_cells:
+		_torch_renderer.remove_torch(cell)
+	for torch in change.added_torches:
+		_torch_renderer.spawn_torch(torch.cell, torch.support_direction)
 
-func _sync_torches() -> void:
-	_torch_renderer.clear_torches()
+func _spawn_initial_torches() -> void:
 	var attachments: Dictionary = {}
 	for torch in _draft.get_torches():
 		attachments[torch.cell] = torch.support_direction

@@ -38,8 +38,8 @@ class TrackingRenderer extends StructureChunkRenderer:
 		rebuilt_chunks.clear()
 		super.rebuild_for_cells(changed_cells)
 
-	func _rebuild_chunk(chunk: Vector3i, cells: PackedInt32Array) -> void:
-		super._rebuild_chunk(chunk, cells)
+	func _rebuild_chunk(chunk: Vector3i) -> void:
+		super._rebuild_chunk(chunk)
 		rebuilt_chunks.append(chunk)
 		rebuild_counts[chunk] = int(rebuild_counts.get(chunk, 0)) + 1
 
@@ -97,18 +97,16 @@ func _test_level_mesh_equivalence() -> void:
 
 func _test_structure_chunk_mesher() -> void:
 	var size := Vector3i(17, 1, 1)
-	var cells := PackedInt32Array()
-	cells.resize(size.x * size.y * size.z)
-	cells.fill(StructureCell.AIR)
-	cells[StructureCell.index_of(Vector3i(15, 0, 0), size)] = BlockId.Type.STONE
-	cells[StructureCell.index_of(Vector3i(16, 0, 0), size)] = BlockId.Type.DIRT
+	var draft := StructureDraft.create(size)
+	_expect(draft.try_place_block(Vector3i(15, 0, 0), BlockId.Type.STONE).succeeded, "first mesher fixture block was rejected")
+	_expect(draft.try_place_block(Vector3i(16, 0, 0), BlockId.Type.DIRT).succeeded, "second mesher fixture block was rejected")
 	var mesher := StructureChunkMesher.new(_texture_set)
-	var first := mesher.build_mesh_data(cells, size, Vector3i.ZERO) as Dictionary
-	var partial := mesher.build_mesh_data(cells, size, Vector3i(1, 0, 0)) as Dictionary
+	var first := mesher.build_mesh_data(draft.copy_cells_for_chunk(Vector3i.ZERO, StructureChunkMesher.CHUNK_SIZE), size, Vector3i.ZERO) as Dictionary
+	var partial := mesher.build_mesh_data(draft.copy_cells_for_chunk(Vector3i(1, 0, 0), StructureChunkMesher.CHUNK_SIZE), size, Vector3i(1, 0, 0)) as Dictionary
 	_expect(first != null and (first["vertices"] as PackedVector3Array).size() == 20, "first chunk did not hide its cross-chunk shared face")
 	_expect(partial != null and (partial["vertices"] as PackedVector3Array).size() == 20, "partial chunk did not render the targetable plot exterior")
-	cells[StructureCell.index_of(Vector3i(16, 0, 0), size)] = StructureCell.AIR
-	var beside_air := mesher.build_mesh_data(cells, size, Vector3i.ZERO) as Dictionary
+	_expect(draft.try_remove_block(Vector3i(16, 0, 0)).succeeded, "mesher fixture block removal was rejected")
+	var beside_air := mesher.build_mesh_data(draft.copy_cells_for_chunk(Vector3i.ZERO, StructureChunkMesher.CHUNK_SIZE), size, Vector3i.ZERO) as Dictionary
 	_expect(beside_air != null and (beside_air["vertices"] as PackedVector3Array).size() == 24, "in-bounds AIR did not expose its neighboring face")
 
 func _test_renderer_locality() -> void:

@@ -3,16 +3,23 @@ class_name StructureDraftChange
 
 var succeeded: bool
 var changed_cells: Array[Vector3i]
-var torches_changed: bool
+var added_torches: Array[StructureTorchDefinition]
+var removed_torch_cells: Array[Vector3i]
 
 static func success(
 	p_changed_cells: Array[Vector3i] = [],
-	p_torches_changed: bool = false,
+	p_added_torches: Array[StructureTorchDefinition] = [],
+	p_removed_torch_cells: Array[Vector3i] = [],
 ) -> StructureDraftChange:
 	var change := StructureDraftChange.new()
 	change.succeeded = true
 	change.changed_cells.assign(p_changed_cells)
-	change.torches_changed = p_torches_changed
+	for torch in p_added_torches:
+		var copied := StructureTorchDefinition.new()
+		copied.cell = torch.cell
+		copied.support_direction = torch.support_direction
+		change.added_torches.append(copied)
+	change.removed_torch_cells.assign(p_removed_torch_cells)
 	return change
 
 static func reject() -> StructureDraftChange:

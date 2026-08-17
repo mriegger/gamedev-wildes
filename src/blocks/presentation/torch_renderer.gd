@@ -60,8 +60,9 @@ func _setup_materials_and_meshes():
 
 func spawn_torch(pos: Vector3i, attach_dir: Vector3i) -> Node3D:
 	var root := _create_torch(pos, attach_dir)
-	_refresh_shadow_targets()
-	_update_shadow_transitions(0.0)
+	if _max_shadow_torches > 0:
+		_refresh_shadow_targets()
+		_update_shadow_transitions(0.0)
 	return root
 
 func spawn_torches(torch_attachments: Dictionary) -> int:
@@ -69,7 +70,7 @@ func spawn_torches(torch_attachments: Dictionary) -> int:
 	for position in torch_attachments:
 		_create_torch(position as Vector3i, torch_attachments[position] as Vector3i)
 		spawned += 1
-	if spawned > 0:
+	if spawned > 0 and _max_shadow_torches > 0:
 		_refresh_shadow_targets()
 		_update_shadow_transitions(0.0)
 	return spawned
@@ -141,8 +142,9 @@ func clear_torches() -> void:
 		positions.append(position as Vector3i)
 	for position in positions:
 		remove_torch(position)
-	_refresh_shadow_targets()
-	_update_shadow_transitions(0.0)
+	if _max_shadow_torches > 0:
+		_refresh_shadow_targets()
+		_update_shadow_transitions(0.0)
 
 func has_torch(pos: Vector3i) -> bool:
 	return torch_instances.has(pos)
