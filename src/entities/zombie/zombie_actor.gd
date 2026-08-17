@@ -4,9 +4,9 @@ class_name ZombieActor
 const VISION_SAMPLE_INTERVAL_SECONDS: float = 0.125
 const VISION_PHASE_COUNT: int = 8
 
-var brain: ZombieBrain
+var brain: GroundMeleeEnemyBrain
 
-var _behavior: ZombieBehaviorDefinition
+var _behavior: GroundMeleeEnemyBehaviorDefinition
 var _zombie_animation: ZombieAnimationDriver
 var _path_follower: VoxelPathFollower
 var _melee_profile: MeleeAttackProfile
@@ -16,7 +16,7 @@ var _player_visible: bool = false
 var _vision_sample_remaining: float = 0.0
 
 func supports_behavior(behavior: EntityBehaviorDefinition) -> bool:
-	return behavior is ZombieBehaviorDefinition
+	return behavior is GroundMeleeEnemyBehaviorDefinition
 
 
 func setup(
@@ -27,9 +27,9 @@ func setup(
 	navigation_limits: EntityNavigationLimits,
 ):
 	super.setup(p_runtime_id, p_definition, p_voxel_space, behavior_seed, navigation_limits)
-	_behavior = p_definition.behavior as ZombieBehaviorDefinition
+	_behavior = p_definition.behavior as GroundMeleeEnemyBehaviorDefinition
 	assert(_behavior != null)
-	brain = ZombieBrain.new(_behavior, behavior_seed)
+	brain = GroundMeleeEnemyBrain.new(_behavior, behavior_seed)
 	_path_follower = VoxelPathFollower.new(voxel_space, definition.body_width, definition.body_height, _behavior.repath_seconds, navigation_limits)
 	max_speed = _behavior.wander_speed
 	_zombie_animation = animation_driver as ZombieAnimationDriver
@@ -44,10 +44,10 @@ func tick(delta: float, player_position: Vector3, separation_velocity: Vector3, 
 	var visible := _sample_player_visibility(delta, player_position)
 	var previous_state := brain.state
 	brain.advance(delta, global_position, player_position, visible)
-	if brain.state != previous_state and brain.state != ZombieBrain.State.ATTACK:
+	if brain.state != previous_state and brain.state != GroundMeleeEnemyBrain.State.ATTACK:
 		_path_follower.request_repath()
-	var attacking := brain.state == ZombieBrain.State.ATTACK
-	var chasing := brain.state == ZombieBrain.State.CHASE
+	var attacking := brain.state == GroundMeleeEnemyBrain.State.ATTACK
+	var chasing := brain.state == GroundMeleeEnemyBrain.State.CHASE
 	_zombie_animation.set_chasing(chasing)
 	if brain.consume_attack_started():
 		var melee_profile := _behavior.melee_profile

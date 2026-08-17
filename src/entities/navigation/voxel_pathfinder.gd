@@ -1,13 +1,19 @@
 extends RefCounted
 class_name VoxelPathfinder
 
-const CARDINAL_DIRECTIONS: Array[Vector3i] = [
+const HORIZONTAL_DIRECTIONS: Array[Vector3i] = [
 	Vector3i(-1, 0, 0),
 	Vector3i(0, 0, -1),
 	Vector3i(0, 0, 1),
 	Vector3i(1, 0, 0),
+	Vector3i(-1, 0, -1),
+	Vector3i(-1, 0, 1),
+	Vector3i(1, 0, -1),
+	Vector3i(1, 0, 1),
 ]
 const STEP_HEIGHT_OFFSETS: Array[int] = [0, 1, -1]
+const ORTHOGONAL_COST: int = 10
+const DIAGONAL_COST: int = 14
 
 class OpenEntry:
 	var position: Vector3i
@@ -52,31 +58,39 @@ static func find_path(voxel_space: VoxelSpace, start_feet: Vector3i, goal_feet: 
 		if current == goal_feet:
 			return VoxelPathResult.new(VoxelPathResult.Status.FOUND, _reconstruct_path(came_from, start_feet, goal_feet), path_costs.size())
 
-		for direction in CARDINAL_DIRECTIONS:
+		var candidates: Array[OpenEntry] = []
+		var candidate_sequence := 0
+		for direction in HORIZONTAL_DIRECTIONS:
 			var horizontal := current + direction
 			for height_offset in STEP_HEIGHT_OFFSETS:
 				var neighbor := Vector3i(horizontal.x, current.y + height_offset, horizontal.z)
 				if not _is_within_radius(start_feet, neighbor, max_radius):
 					continue
-				if not _is_walkable(voxel_space, neighbor, body_width, body_height):
+				if not _is_valid_transition(voxel_space, current, neighbor, body_width, body_height):
 					continue
-				if height_offset == 1:
-					var raised_current := Vector3i(current.x, current.y + 1, current.z)
-					if not _has_body_clearance(voxel_space, raised_current, body_width, body_height):
-						continue
-				var next_cost := best_known_cost + 1
+				if _is_diagonal(direction) and not _has_clear_diagonal_sides(voxel_space, current, direction, neighbor.y, body_width, body_height):
+					continue
+				var next_cost := best_known_cost + _get_step_cost(direction)
 				var previous_cost := path_costs.get(neighbor, -1) as int
 				if previous_cost >= 0 and next_cost >= previous_cost:
 					break
-				if previous_cost < 0 and path_costs.size() >= max_nodes:
-					limit_reached = true
-					break
-				path_costs[neighbor] = next_cost
-				came_from[neighbor] = current
-				sequence += 1
+				candidate_sequence += 1
 				var estimated_cost := next_cost + _estimate_cost(neighbor, goal_feet)
-				_heap_push(open_heap, OpenEntry.new(neighbor, next_cost, estimated_cost, sequence))
+				_heap_push(candidates, OpenEntry.new(neighbor, next_cost, estimated_cost, candidate_sequence))
 				break
+
+		while not candidates.is_empty():
+			var candidate := _heap_pop(candidates)
+			var previous_cost := path_costs.get(candidate.position, -1) as int
+			if previous_cost >= 0 and candidate.path_cost >= previous_cost:
+				continue
+			if previous_cost < 0 and path_costs.size() >= max_nodes:
+				limit_reached = true
+				continue
+			path_costs[candidate.position] = candidate.path_cost
+			came_from[candidate.position] = current
+			sequence += 1
+			_heap_push(open_heap, OpenEntry.new(candidate.position, candidate.path_cost, candidate.estimated_cost, sequence))
 
 	var status := VoxelPathResult.Status.LIMIT_REACHED if limit_reached else VoxelPathResult.Status.NO_PATH
 	return VoxelPathResult.new(status, [], path_costs.size())
@@ -86,6 +100,25 @@ static func _is_walkable(voxel_space: VoxelSpace, feet: Vector3i, body_width: fl
 		return false
 	var body_position := _body_position(feet)
 	return is_equal_approx(VoxelBodySolver.get_ground_y(voxel_space, body_position, body_width), float(feet.y))
+
+static func _is_valid_transition(voxel_space: VoxelSpace, current: Vector3i, neighbor: Vector3i, body_width: float, body_height: float) -> bool:
+	if not _is_walkable(voxel_space, neighbor, body_width, body_height):
+		return false
+	if neighbor.y == current.y + 1:
+		var raised_current := Vector3i(current.x, current.y + 1, current.z)
+		return _has_body_clearance(voxel_space, raised_current, body_width, body_height)
+	return true
+
+static func _has_clear_diagonal_sides(voxel_space: VoxelSpace, current: Vector3i, direction: Vector3i, target_y: int, body_width: float, body_height: float) -> bool:
+	var x_side := Vector3i(current.x + direction.x, target_y, current.z)
+	var z_side := Vector3i(current.x, target_y, current.z + direction.z)
+	return _is_valid_transition(voxel_space, current, x_side, body_width, body_height) and _is_valid_transition(voxel_space, current, z_side, body_width, body_height)
+
+static func _is_diagonal(direction: Vector3i) -> bool:
+	return direction.x != 0 and direction.z != 0
+
+static func _get_step_cost(direction: Vector3i) -> int:
+	return DIAGONAL_COST if _is_diagonal(direction) else ORTHOGONAL_COST
 
 static func _has_body_clearance(voxel_space: VoxelSpace, feet: Vector3i, body_width: float, body_height: float) -> bool:
 	var body_position := _body_position(feet)
@@ -113,7 +146,11 @@ static func _is_within_radius(origin: Vector3i, position: Vector3i, max_radius: 
 	return delta_x * delta_x + delta_z * delta_z <= max_radius * max_radius
 
 static func _estimate_cost(from: Vector3i, to: Vector3i) -> int:
-	return abs(from.x - to.x) + abs(from.z - to.z)
+	var delta_x := absi(from.x - to.x)
+	var delta_z := absi(from.z - to.z)
+	var diagonal_steps := mini(delta_x, delta_z)
+	var orthogonal_steps := maxi(delta_x, delta_z) - diagonal_steps
+	return diagonal_steps * DIAGONAL_COST + orthogonal_steps * ORTHOGONAL_COST
 
 static func _reconstruct_path(came_from: Dictionary, start_feet: Vector3i, goal_feet: Vector3i) -> Array[Vector3i]:
 	var path: Array[Vector3i] = [goal_feet]

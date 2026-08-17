@@ -43,10 +43,14 @@ references an actor scene, typed behavior, and validated combat stats. `EntityRu
 `ActorStats` instance for every runtime ID alongside spawn/despawn lifecycle, the bounded spatial
 index, active actors, prepared actors, retiring presentation, and defeat notifications.
 `WorldEntityCoordinator` owns ambient time-of-day spawning, streamed-position rejection, distance
-despawning, and overworld population limits around that runtime. Zombies and sheep own only their
-deterministic behavior state; the shared voxel solver and bounded path follower own reusable
-movement calculations. Their custom animation drivers present actor state without deciding gameplay
-outcomes. Spawned actors fade in through instance-local geometry transparency. Despawn or lethal
+despawning, and overworld population limits around that runtime. `GroundMeleeEnemyBrain` owns the
+reusable deterministic wander, perception-memory, chase, and melee-attack decisions configured by
+`GroundMeleeEnemyBehaviorDefinition`; zombie actors coordinate that brain with their species-owned
+combat and presentation. Sheep retain their distinct deterministic decision state. The shared voxel
+solver and bounded path follower own reusable movement calculations. Voxel A* expands eight planar
+directions with distance-weighted diagonal edges and refuses diagonals through blocked orthogonal
+corners. Custom animation drivers present actor state without deciding gameplay outcomes. Spawned
+actors fade in through instance-local geometry transparency. Despawn or lethal
 damage removes stats, active state, targeting, and spatial entries together. Lethal retirement
 plays the species-owned death pose, then starts an actor-owned one-shot smoke poof and model fade
 together; the scene is freed only after both complete. Ordinary distance and streaming retirement

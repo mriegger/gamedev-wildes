@@ -1,5 +1,5 @@
 extends RefCounted
-class_name ZombieBrain
+class_name GroundMeleeEnemyBrain
 
 enum State {
 	WANDER,
@@ -9,7 +9,7 @@ enum State {
 
 var state: State = State.WANDER
 
-var _definition: ZombieBehaviorDefinition
+var _definition: GroundMeleeEnemyBehaviorDefinition
 var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 var _last_seen_position: Vector3 = Vector3.ZERO
 var _wander_goal: Vector3 = Vector3.ZERO
@@ -19,7 +19,7 @@ var _attack_remaining: float = 0.0
 var _attack_cooldown_remaining: float = 0.0
 var _attack_started: bool = false
 
-func _init(definition: ZombieBehaviorDefinition, seed_value: int):
+func _init(definition: GroundMeleeEnemyBehaviorDefinition, seed_value: int):
 	assert(definition != null)
 	_definition = definition
 	_rng.seed = seed_value

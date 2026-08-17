@@ -132,6 +132,15 @@ func _run() -> void:
 			var context := "region %d cycle %d" % [region_index, cycle]
 			_assert_population(coordinator, player_position, context)
 			_assert_path_budget(world, catalog, _ready_region, time_of_day, cycle, context)
+		for refill_cycle in range(CYCLES_PER_REGION):
+			if coordinator.get_runtime().get_active_count() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE:
+				break
+			var cycle := CYCLES_PER_REGION + refill_cycle
+			var time_of_day := DAY_TIME if cycle % 2 == 0 else NIGHT_TIME
+			coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, player_position, time_of_day)
+			var context := "region %d refill cycle %d" % [region_index, refill_cycle]
+			_assert_population(coordinator, player_position, context)
+			_assert_path_budget(world, catalog, _ready_region, time_of_day, cycle, context)
 		_expect(coordinator.get_runtime().get_active_count() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "region %d did not reach the total population cap" % region_index)
 		if region_index % 2 == 1:
 			_streaming_enabled = false

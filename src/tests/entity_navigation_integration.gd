@@ -5,6 +5,18 @@ const FEET_Y: int = FLAT_HEIGHT + 1
 const TEST_RADIUS: int = 12
 const BODY_WIDTH: float = 0.6
 const BODY_HEIGHT: float = 1.8
+const ORTHOGONAL_EDGE_COST: int = 10
+const DIAGONAL_EDGE_COST: int = 14
+const PLANAR_NEIGHBOR_DIRECTIONS: Array[Vector3i] = [
+	Vector3i(-1, 0, -1),
+	Vector3i(-1, 0, 0),
+	Vector3i(-1, 0, 1),
+	Vector3i(0, 0, -1),
+	Vector3i(0, 0, 1),
+	Vector3i(1, 0, -1),
+	Vector3i(1, 0, 0),
+	Vector3i(1, 0, 1),
+]
 
 var _failures: int = 0
 
@@ -30,11 +42,26 @@ func _set_height(world: VoxelWorld, x: int, z: int, height: int) -> void:
 	world.height_map_dict[Vector2i(x, z)] = height
 	world.type_map_dict[Vector2i(x, z)] = BlockId.Type.GRASS
 
-func _expect_cardinal_path(path: Array[Vector3i], message: String) -> void:
+func _edge_cost(from: Vector3i, to: Vector3i) -> int:
+	var offset := to - from
+	var abs_x := absi(offset.x)
+	var abs_z := absi(offset.z)
+	if absi(offset.y) > 1 or abs_x > 1 or abs_z > 1 or abs_x + abs_z == 0:
+		return -1
+	return DIAGONAL_EDGE_COST if abs_x == 1 and abs_z == 1 else ORTHOGONAL_EDGE_COST
+
+func _path_cost(path: Array[Vector3i]) -> int:
+	var total := 0
 	for index in range(1, path.size()):
-		var offset := path[index] - path[index - 1]
-		_expect(abs(offset.x) + abs(offset.z) == 1, "%s used a non-cardinal edge at %d" % [message, index])
-		_expect(abs(offset.y) <= 1, "%s exceeded one block of elevation at %d" % [message, index])
+		var edge_cost := _edge_cost(path[index - 1], path[index])
+		if edge_cost < 0:
+			return -1
+		total += edge_cost
+	return total
+
+func _expect_eight_way_path(path: Array[Vector3i], message: String) -> void:
+	for index in range(1, path.size()):
+		_expect(_edge_cost(path[index - 1], path[index]) >= 0, "%s used an invalid edge at %d" % [message, index])
 
 func _test_deterministic_bounded_pathfinding() -> void:
 	var world := _make_flat_world()
@@ -44,10 +71,11 @@ func _test_deterministic_bounded_pathfinding() -> void:
 	var second := VoxelPathfinder.find_path(world, start, goal, BODY_WIDTH, BODY_HEIGHT, 8, 128)
 	_expect(first.is_success(), "flat-ground path was not found")
 	_expect(first.path == second.path, "same search inputs produced different paths")
-	_expect(first.path.size() == 8, "flat path was not the seven-edge shortest path")
+	_expect(first.path.size() == 5, "flat path did not use the four-edge octile route")
+	_expect(_path_cost(first.path) == 52, "flat path did not use the lowest weighted cost")
 	_expect(first.path.front() == start and first.path.back() == goal, "path endpoints changed")
 	_expect(first.visited_nodes <= 128, "successful search exceeded its node budget")
-	_expect_cardinal_path(first.path, "flat path")
+	_expect_eight_way_path(first.path, "flat path")
 
 	var outside_radius := VoxelPathfinder.find_path(world, start, Vector3i(5, FEET_Y, 0), BODY_WIDTH, BODY_HEIGHT, 4, 128)
 	_expect(outside_radius.status == VoxelPathResult.Status.NO_PATH, "goal outside radius did not fail")
@@ -57,27 +85,91 @@ func _test_deterministic_bounded_pathfinding() -> void:
 	_expect(limited.status == VoxelPathResult.Status.LIMIT_REACHED, "node-limited search did not report its limit")
 	_expect(limited.visited_nodes <= 2, "node-limited search exceeded its budget")
 
+func _test_adjacent_goals_fit_tight_node_limit() -> void:
+	var world := _make_flat_world()
+	var start := Vector3i(0, FEET_Y, 0)
+	for direction in PLANAR_NEIGHBOR_DIRECTIONS:
+		var goal := start + direction
+		var result := VoxelPathfinder.find_path(world, start, goal, BODY_WIDTH, BODY_HEIGHT, 2, 2)
+		_expect(result.is_success(), "adjacent goal %s was rejected by direction-biased node admission" % direction)
+		_expect(result.path == [start, goal], "adjacent goal %s did not use its direct edge" % direction)
+		_expect(result.visited_nodes == 2, "adjacent goal %s did not respect the exact node budget" % direction)
+
+func _test_diagonal_corner_blocking() -> void:
+	var world := _make_flat_world()
+	world.restore_block_edits({
+		Vector3i(1, FEET_Y, 0): BlockId.Type.STONE,
+		Vector3i(1, FEET_Y + 1, 0): BlockId.Type.STONE,
+	}, {})
+	var start := Vector3i(0, FEET_Y, 0)
+	var goal := Vector3i(1, FEET_Y, 1)
+	var result := VoxelPathfinder.find_path(world, start, goal, BODY_WIDTH, BODY_HEIGHT, 4, 64)
+	_expect(result.is_success(), "blocked diagonal did not retain its open orthogonal route")
+	_expect(result.path.size() == 3, "blocked diagonal cut through the obstacle corner")
+	_expect(_path_cost(result.path) == 20, "blocked diagonal did not use two orthogonal edges")
+	_expect_eight_way_path(result.path, "blocked diagonal path")
+
+func _test_diagonal_elevation_transitions() -> void:
+	var step_up_world := _make_flat_world()
+	_set_height(step_up_world, 1, 0, FLAT_HEIGHT + 1)
+	_set_height(step_up_world, 0, 1, FLAT_HEIGHT + 1)
+	_set_height(step_up_world, 1, 1, FLAT_HEIGHT + 1)
+	var step_up_start := Vector3i(0, FEET_Y, 0)
+	var step_up_goal := Vector3i(1, FEET_Y + 1, 1)
+	var step_up := VoxelPathfinder.find_path(step_up_world, step_up_start, step_up_goal, BODY_WIDTH, BODY_HEIGHT, 4, 64)
+	_expect(step_up.path == [step_up_start, step_up_goal], "open diagonal step-up did not use one diagonal edge")
+	_expect(_path_cost(step_up.path) == DIAGONAL_EDGE_COST, "diagonal step-up cost changed")
+
+	var step_down_world := _make_flat_world()
+	_set_height(step_down_world, 0, 0, FLAT_HEIGHT + 1)
+	var step_down_start := Vector3i(0, FEET_Y + 1, 0)
+	var step_down_goal := Vector3i(1, FEET_Y, 1)
+	var step_down := VoxelPathfinder.find_path(step_down_world, step_down_start, step_down_goal, BODY_WIDTH, BODY_HEIGHT, 4, 64)
+	_expect(step_down.path == [step_down_start, step_down_goal], "open diagonal step-down did not use one diagonal edge")
+	_expect(_path_cost(step_down.path) == DIAGONAL_EDGE_COST, "diagonal step-down cost changed")
+
+func _test_weighted_path_selection() -> void:
+	var world := _make_flat_world()
+	var blocking_edits: Dictionary = {}
+	for z in range(3):
+		blocking_edits[Vector3i(1, FEET_Y, z)] = BlockId.Type.STONE
+		blocking_edits[Vector3i(1, FEET_Y + 1, z)] = BlockId.Type.STONE
+	world.restore_block_edits(blocking_edits, {})
+	var result := VoxelPathfinder.find_path(
+		world,
+		Vector3i(0, FEET_Y, 0),
+		Vector3i(5, FEET_Y, 3),
+		BODY_WIDTH,
+		BODY_HEIGHT,
+		8,
+		256,
+	)
+	_expect(result.is_success(), "weighted-route fixture did not find a path")
+	_expect(result.path.size() == 9, "weighted search preferred the shorter 82-cost route")
+	_expect(_path_cost(result.path) == 80, "weighted search did not choose the lowest-cost route")
+	_expect_eight_way_path(result.path, "weighted path")
+
 func _test_elevation_clearance_and_water() -> void:
 	var step_up_world := _make_flat_world()
 	_set_height(step_up_world, 1, 0, FLAT_HEIGHT + 1)
 	var step_up := VoxelPathfinder.find_path(step_up_world, Vector3i(0, FEET_Y, 0), Vector3i(2, FEET_Y, 0), BODY_WIDTH, BODY_HEIGHT, 4, 64)
 	_expect(step_up.is_success(), "one-block rise was not traversable")
 	_expect(step_up.path.has(Vector3i(1, FEET_Y + 1, 0)), "one-block rise was not represented in the path")
-	_expect_cardinal_path(step_up.path, "step-up path")
+	_expect_eight_way_path(step_up.path, "step-up path")
 
 	var step_down_world := _make_flat_world()
 	_set_height(step_down_world, 1, 0, FLAT_HEIGHT - 1)
 	var step_down := VoxelPathfinder.find_path(step_down_world, Vector3i(0, FEET_Y, 0), Vector3i(2, FEET_Y, 0), BODY_WIDTH, BODY_HEIGHT, 4, 64)
 	_expect(step_down.is_success(), "one-block drop was not traversable")
 	_expect(step_down.path.has(Vector3i(1, FEET_Y - 1, 0)), "one-block drop was not represented in the path")
-	_expect_cardinal_path(step_down.path, "step-down path")
+	_expect_eight_way_path(step_down.path, "step-down path")
 
 	var ceiling_world := _make_flat_world()
 	_set_height(ceiling_world, 1, 0, FLAT_HEIGHT + 1)
 	ceiling_world.restore_block_edits({Vector3i(0, FEET_Y + 2, 0): BlockId.Type.STONE}, {})
 	var ceiling_detour := VoxelPathfinder.find_path(ceiling_world, Vector3i(0, FEET_Y, 0), Vector3i(2, FEET_Y, 0), BODY_WIDTH, BODY_HEIGHT, 4, 64)
 	_expect(ceiling_detour.is_success(), "step obstruction prevented a valid detour")
-	_expect(ceiling_detour.path.size() > 3, "step obstruction did not require a detour")
+	_expect(_path_cost(ceiling_detour.path) > 20, "step obstruction did not require a detour")
 	_expect(ceiling_detour.path.size() < 2 or ceiling_detour.path[1] != Vector3i(1, FEET_Y + 1, 0), "path stepped directly through insufficient head clearance")
 
 	var invalid_goal_world := _make_flat_world()
@@ -97,7 +189,7 @@ func _test_elevation_clearance_and_water() -> void:
 func _test_failed_path_repath_throttle() -> void:
 	var world := _make_flat_world()
 	var blocking_edits: Dictionary = {}
-	for direction in VoxelPathfinder.CARDINAL_DIRECTIONS:
+	for direction in PLANAR_NEIGHBOR_DIRECTIONS:
 		blocking_edits[Vector3i(direction.x, FEET_Y, direction.z)] = BlockId.Type.STONE
 		blocking_edits[Vector3i(direction.x, FEET_Y + 1, direction.z)] = BlockId.Type.STONE
 	world.restore_block_edits(blocking_edits, {})
@@ -128,6 +220,22 @@ func _test_successful_path_repath_throttle() -> void:
 	search_budget.reset()
 	var rebuilt := follower.advance(0.4, start, Vector3(-4.5, float(FEET_Y), 0.5), 1.0, true, search_budget)
 	_expect(rebuilt.desired_velocity.x < 0.0, "changed successful goal was not applied after the repath interval")
+
+func _test_diagonal_path_follower_speed() -> void:
+	var world := _make_flat_world()
+	var follower := VoxelPathFollower.new(world, BODY_WIDTH, BODY_HEIGHT, 0.5, EntityNavigationLimits.new(24, 256, 1))
+	var search_budget := NavigationSearchBudget.new(1)
+	var result := follower.advance(
+		0.0,
+		Vector3(0.5, float(FEET_Y), 0.5),
+		Vector3(4.5, float(FEET_Y), 4.5),
+		3.0,
+		true,
+		search_budget,
+	)
+	_expect(result.desired_velocity.x > 0.0 and result.desired_velocity.z > 0.0, "diagonal follower did not move on both planar axes")
+	_expect(is_equal_approx(result.desired_velocity.length(), 3.0), "diagonal follower changed its requested movement speed")
+	_expect(is_equal_approx(result.desired_velocity.x, result.desired_velocity.z), "diagonal follower did not aim equally along both axes")
 
 func _test_blocked_motion_keeps_repath_cadence() -> void:
 	var world := _make_flat_world()
@@ -179,8 +287,8 @@ func _test_shared_body_solver() -> void:
 	_expect(is_equal_approx(falling_motion.position.y, float(FEET_Y)), "solver did not snap a short fall to ground")
 	_expect(is_zero_approx(falling_motion.velocity.y), "solver retained downward velocity after landing")
 
-func _make_behavior() -> ZombieBehaviorDefinition:
-	var behavior := ZombieBehaviorDefinition.new()
+func _make_ground_melee_behavior() -> GroundMeleeEnemyBehaviorDefinition:
+	var behavior := GroundMeleeEnemyBehaviorDefinition.new()
 	behavior.wander_speed = 1.0
 	behavior.chase_speed = 2.0
 	behavior.gravity = 30.0
@@ -200,41 +308,41 @@ func _make_behavior() -> ZombieBehaviorDefinition:
 	behavior.repath_seconds = 0.5
 	return behavior
 
-func _test_zombie_brain_transitions() -> void:
-	var behavior := _make_behavior()
-	_expect(behavior.validate("test"), "valid zombie behavior definition was rejected")
+func _test_ground_melee_enemy_brain_transitions() -> void:
+	var behavior := _make_ground_melee_behavior()
+	_expect(behavior.validate("test"), "valid ground melee behavior definition was rejected")
 	var self_position := Vector3.ZERO
-	var first := ZombieBrain.new(behavior, 1337)
-	var second := ZombieBrain.new(behavior, 1337)
+	var first := GroundMeleeEnemyBrain.new(behavior, 1337)
+	var second := GroundMeleeEnemyBrain.new(behavior, 1337)
 	first.advance(0.1, self_position, Vector3(20.0, 0.0, 0.0), false)
 	second.advance(0.1, self_position, Vector3(20.0, 0.0, 0.0), false)
-	_expect(first.state == ZombieBrain.State.WANDER, "unaware zombie did not wander")
+	_expect(first.state == GroundMeleeEnemyBrain.State.WANDER, "unaware ground melee enemy did not wander")
 	_expect(first.get_movement_goal() == second.get_movement_goal(), "wander goal was not deterministic for its seed")
 
 	var seen_position := Vector3(5.0, 0.0, 0.0)
 	first.advance(0.1, self_position, seen_position, true)
-	_expect(first.state == ZombieBrain.State.CHASE, "visible target inside detection range was not chased")
+	_expect(first.state == GroundMeleeEnemyBrain.State.CHASE, "visible target inside detection range was not chased")
 	_expect(first.get_movement_goal() == seen_position, "chase goal did not use the last seen position")
 	first.advance(1.0, self_position, Vector3(6.0, 0.0, 0.0), false)
-	_expect(first.state == ZombieBrain.State.CHASE, "zombie forgot its target before memory elapsed")
+	_expect(first.state == GroundMeleeEnemyBrain.State.CHASE, "ground melee enemy forgot its target before memory elapsed")
 	_expect(first.get_movement_goal() == seen_position, "hidden target changed the remembered chase goal")
 	first.advance(1.1, self_position, Vector3(6.0, 0.0, 0.0), false)
-	_expect(first.state == ZombieBrain.State.WANDER, "zombie did not return to wander after memory elapsed")
+	_expect(first.state == GroundMeleeEnemyBrain.State.WANDER, "ground melee enemy did not return to wander after memory elapsed")
 
-	var attacker := ZombieBrain.new(behavior, 7)
+	var attacker := GroundMeleeEnemyBrain.new(behavior, 7)
 	var attack_target := Vector3(1.0, 0.0, 0.0)
 	attacker.advance(0.1, self_position, attack_target, true)
-	_expect(attacker.state == ZombieBrain.State.ATTACK, "target inside attack range did not start an attack")
+	_expect(attacker.state == GroundMeleeEnemyBrain.State.ATTACK, "target inside attack range did not start an attack")
 	_expect(attacker.consume_attack_started(), "attack start was not exposed once")
 	_expect(not attacker.consume_attack_started(), "attack start was exposed more than once")
 	attacker.advance(0.25, self_position, attack_target, true)
-	_expect(attacker.state == ZombieBrain.State.ATTACK, "attack ended before its duration")
+	_expect(attacker.state == GroundMeleeEnemyBrain.State.ATTACK, "attack ended before its duration")
 	attacker.advance(0.3, self_position, attack_target, true)
-	_expect(attacker.state == ZombieBrain.State.ATTACK, "attack state was not retained on its completion tick")
+	_expect(attacker.state == GroundMeleeEnemyBrain.State.ATTACK, "attack state was not retained on its completion tick")
 	attacker.advance(0.01, self_position, attack_target, true)
-	_expect(attacker.state == ZombieBrain.State.CHASE, "attack cooldown did not suppress an immediate repeat")
+	_expect(attacker.state == GroundMeleeEnemyBrain.State.CHASE, "attack cooldown did not suppress an immediate repeat")
 	attacker.advance(0.5, self_position, attack_target, true)
-	_expect(attacker.state == ZombieBrain.State.ATTACK and attacker.consume_attack_started(), "attack did not restart after cooldown")
+	_expect(attacker.state == GroundMeleeEnemyBrain.State.ATTACK and attacker.consume_attack_started(), "attack did not restart after cooldown")
 
 func _test_zombie_visibility_cadence() -> void:
 	var world := _make_flat_world()
@@ -269,15 +377,19 @@ func _test_zombie_actor_movement_and_animation() -> void:
 	get_root().add_child(actor)
 	actor.global_position = Vector3(0.5, float(FEET_Y), 0.5)
 	actor.setup(1, definition, world, 99, EntityNavigationLimits.new(24, 256, 1))
-	var target := Vector3(4.5, float(FEET_Y), 0.5)
+	var target := Vector3(4.5, float(FEET_Y), 4.5)
+	var initial_position := actor.global_position
 	var initial_distance := actor.global_position.distance_to(target)
 	var search_budget := NavigationSearchBudget.new(1)
 	for _step in range(5):
 		search_budget.reset()
 		actor.tick(0.1, target, Vector3.ZERO, search_budget)
 	actor.animation_driver.advance(0.1)
-	_expect(actor.brain.state == ZombieBrain.State.CHASE, "zombie actor did not enter chase")
+	_expect(actor.brain.state == GroundMeleeEnemyBrain.State.CHASE, "zombie actor did not enter chase")
 	_expect(actor.global_position.distance_to(target) < initial_distance, "zombie actor did not move toward its target")
+	var displacement := actor.global_position - initial_position
+	_expect(displacement.x > 0.0 and displacement.z > 0.0, "zombie actor did not follow its diagonal path on both axes")
+	_expect(is_equal_approx(displacement.x, displacement.z), "zombie actor diagonal movement favored one axis")
 	_expect((actor.animation_driver as ZombieAnimationDriver).get_current_state() == ZombieAnimationDriver.CHASE, "custom zombie animation did not enter chase")
 
 	actor.global_position = target - Vector3(1.0, 0.0, 0.0)
@@ -285,7 +397,7 @@ func _test_zombie_actor_movement_and_animation() -> void:
 	search_budget.reset()
 	actor.tick(0.01, target, Vector3.ZERO, search_budget)
 	actor.animation_driver.advance(0.0)
-	_expect(actor.brain.state == ZombieBrain.State.ATTACK, "zombie actor did not enter attack at melee range")
+	_expect(actor.brain.state == GroundMeleeEnemyBrain.State.ATTACK, "zombie actor did not enter attack at melee range")
 	var animation := actor.animation_driver as ZombieAnimationDriver
 	_expect(animation.get_current_state() == ZombieAnimationDriver.ATTACK, "custom zombie animation did not enter attack")
 	animation.play_hit(Vector3.RIGHT)
@@ -295,13 +407,18 @@ func _test_zombie_actor_movement_and_animation() -> void:
 
 func _run() -> void:
 	_test_deterministic_bounded_pathfinding()
+	_test_adjacent_goals_fit_tight_node_limit()
+	_test_diagonal_corner_blocking()
+	_test_diagonal_elevation_transitions()
+	_test_weighted_path_selection()
 	_test_elevation_clearance_and_water()
 	_test_failed_path_repath_throttle()
 	_test_successful_path_repath_throttle()
+	_test_diagonal_path_follower_speed()
 	_test_blocked_motion_keeps_repath_cadence()
 	_test_shared_navigation_search_budget()
 	_test_shared_body_solver()
-	_test_zombie_brain_transitions()
+	_test_ground_melee_enemy_brain_transitions()
 	_test_zombie_visibility_cadence()
 	_test_zombie_actor_movement_and_animation()
 	if _failures == 0:

@@ -1,6 +1,6 @@
-[gd_resource type="Resource" script_class="ZombieBehaviorDefinition" load_steps=3 format=3]
+[gd_resource type="Resource" script_class="GroundMeleeEnemyBehaviorDefinition" load_steps=3 format=3]
 
-[ext_resource type="Script" path="res://entities/zombie/zombie_behavior_definition.gd" id="1_behavior"]
+[ext_resource type="Script" path="res://entities/ground_melee_enemy/ground_melee_enemy_behavior_definition.gd" id="1_behavior"]
 [ext_resource type="Resource" path="res://combat/profiles/zombie_melee.tres" id="2_profile"]
 
 [resource]

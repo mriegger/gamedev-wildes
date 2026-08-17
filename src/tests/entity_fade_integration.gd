@@ -155,7 +155,7 @@ func _test_species_death_retirement(catalog: EntityCatalog, world: VoxelWorld) -
 		var death_seconds := SheepAnimationDriver.DEATH_SECONDS
 		if actor is ZombieActor:
 			var zombie := actor as ZombieActor
-			zombie._arm_melee_contact((definition.behavior as ZombieBehaviorDefinition).melee_profile)
+			zombie._arm_melee_contact((definition.behavior as GroundMeleeEnemyBehaviorDefinition).melee_profile)
 			death_seconds = ZombieAnimationDriver.DEATH_SECONDS
 		actor.begin_death_retirement()
 		_expect(not actor.is_processing(), "%s kept normal animation processing after lethal retirement" % definition.id)
@@ -268,9 +268,11 @@ func _test_retiring_bound_and_population_independence(catalog: EntityCatalog, wo
 	coordinator.setup(catalog, world, 8842, _position_ready)
 	var player_position := Vector3(0.5, FEET_Y, 0.5)
 	for _spawn in range(6):
-		coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, player_position, 20.0)
+		coordinator._spawn_elapsed = WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS
+		coordinator.tick(0.0, player_position, 20.0)
 	for _spawn in range(6):
-		coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, player_position, 12.0)
+		coordinator._spawn_elapsed = WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS
+		coordinator.tick(0.0, player_position, 12.0)
 	_expect(coordinator.get_runtime().get_active_count() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "retiring-cap setup did not reach twelve active entities")
 	var actors := coordinator.get_runtime().get_active_actors()
 	actors.sort_custom(func(left: EntityActor, right: EntityActor) -> bool: return left.runtime_id < right.runtime_id)
