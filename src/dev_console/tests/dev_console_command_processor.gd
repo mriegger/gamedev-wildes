@@ -32,6 +32,8 @@ func _init() -> void:
 	_expect(inventory.get_slot(InventoryModel.HOTBAR_SIZE).count == 15, "spawn did not add to the existing backpack stack")
 	_expect(inventory.get_slot(InventoryModel.HOTBAR_SIZE + 1) == null, "spawn created a redundant backpack stack")
 	_expect(inventory.get_slot(0).count == 4, "spawn changed the matching hotbar stack")
+	_expect(processor.execute("spawn pumpkin 1"), "pumpkin spawn command failed")
+	_expect(inventory.get_inventory_item_count(&"pumpkin") == 1, "pumpkin spawn did not add one inventory item")
 
 	var all_items_inventory := InventoryModel.new(item_catalog)
 	var all_items_processor := DevConsoleCommandProcessor.new()

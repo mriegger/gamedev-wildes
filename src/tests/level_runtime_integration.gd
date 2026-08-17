@@ -263,7 +263,9 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	player.global_position = doorway_anchor
 	player.bind_space(voxel_world, world, world_spawn, voxel_world)
 	game._location_state = GameplayLocationState.new(doorway_anchor)
-	coordinator.setup(player, hud)
+	var prompt_coordinator := InteractionPromptCoordinator.new()
+	prompt_coordinator.setup(hud)
+	coordinator.setup(player, prompt_coordinator)
 	coordinator.interaction_requested.connect(game._on_level_interaction_requested)
 	var entrance := LevelEntrance.new()
 	entrance.name = "TestLevelEntrance"

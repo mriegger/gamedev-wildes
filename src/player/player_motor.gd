@@ -66,6 +66,11 @@ func setup(p_camera_rig: CameraRig, p_inventory: InventoryModel, p_input_buffer:
 	armor_view.setup(p_inventory)
 	_is_setup = true
 
+func setup_harvesting(harvest_coordinator: PumpkinHarvestCoordinator) -> void:
+	assert(_is_setup and harvest_coordinator != null)
+	interactor.setup_harvesting(harvest_coordinator)
+	_action_audio.setup_harvesting(harvest_coordinator)
+
 func bind_space(p_space: VoxelSpace, presentation_root: Node, spawn_position: Vector3, editable_voxel_world: VoxelWorld = null):
 	assert(_is_setup)
 	assert(p_space != null)

@@ -37,23 +37,27 @@ func _run():
 	var player_hit = action_audio.get_node_or_null("PlayerHitPlayer") as AudioStreamPlayer
 	var equip = action_audio.get_node_or_null("EquipPlayer") as AudioStreamPlayer
 	var till = action_audio.get_node_or_null("TillPlayer") as AudioStreamPlayer
+	var harvest_player = action_audio.get_node_or_null("HarvestPlayer") as AudioStreamPlayer
 	_expect(clunk != null, "ClunkPlayer missing")
 	_expect(action_audio.get_node_or_null("SwingPlayer") == null, "SwingPlayer still present")
 	_expect(creature_hit != null, "CreatureHitPlayer missing")
 	_expect(player_hit != null, "PlayerHitPlayer missing")
 	_expect(equip != null, "EquipPlayer missing")
 	_expect(till != null, "TillPlayer missing")
+	_expect(harvest_player != null, "HarvestPlayer missing")
 	_expect(action_audio.get_node_or_null("DrawPlayer") == null, "legacy DrawPlayer still present")
 	_expect(clunk.bus == &"SFX", "clunk bus not SFX is %s" % clunk.bus)
 	_expect(creature_hit.bus == &"SFX", "creature hit bus not SFX is %s" % creature_hit.bus)
 	_expect(player_hit.bus == &"SFX", "player hit bus not SFX is %s" % player_hit.bus)
 	_expect(equip.bus == &"SFX", "equip bus not SFX is %s" % equip.bus)
 	_expect(till.bus == &"SFX", "till bus not SFX is %s" % till.bus)
+	_expect(harvest_player.bus == &"SFX", "harvest bus not SFX is %s" % harvest_player.bus)
 	_expect(action_audio._clunk_streams.size() == 4, "clunk streams expected 4 got %d" % action_audio._clunk_streams.size())
 	_expect(action_audio._creature_hit_streams.size() == 3, "creature hit streams expected 3 got %d" % action_audio._creature_hit_streams.size())
 	_expect(action_audio._player_hit_streams.size() == 1, "player hit streams expected 1 got %d" % action_audio._player_hit_streams.size())
 	_expect(action_audio._till_streams.size() == 3, "till streams expected 3 got %d" % action_audio._till_streams.size())
-	for stream in action_audio._clunk_streams + action_audio._creature_hit_streams + action_audio._player_hit_streams + action_audio._till_streams:
+	_expect(action_audio._harvest_streams.size() == 3, "harvest streams expected 3 got %d" % action_audio._harvest_streams.size())
+	for stream in action_audio._clunk_streams + action_audio._creature_hit_streams + action_audio._player_hit_streams + action_audio._till_streams + action_audio._harvest_streams:
 		_expect(stream != null, "action audio stream is null")
 
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
@@ -77,6 +81,8 @@ func _run():
 	animation_driver.setup(player, interactor)
 	animation_driver.set_process(false)
 	action_audio.setup(animation_driver, interactor, inventory, combat)
+	var harvest := PumpkinHarvestCoordinator.new()
+	action_audio.setup_harvesting(harvest)
 	await process_frame
 
 	var has_mining = false
@@ -85,6 +91,7 @@ func _run():
 	var has_creature_hit = false
 	var has_inventory = false
 	var has_till = false
+	var has_harvest = false
 	for c in animation_driver.mining_impact.get_connections():
 		if c["callable"].get_object() == action_audio:
 			has_mining = true
@@ -103,12 +110,16 @@ func _run():
 	for c in interactor.soil_tilled.get_connections():
 		if c["callable"].get_object() == action_audio:
 			has_till = true
+	for c in harvest.harvest_completed.get_connections():
+		if c["callable"].get_object() == action_audio:
+			has_harvest = true
 	_expect(has_mining, "mining impact not connected to action audio")
 	_expect(has_terrain_hit, "melee_terrain_hit not connected")
 	_expect(not has_swing, "melee_attack_started still connected to action audio")
 	_expect(has_creature_hit, "melee_outcome_committed not connected")
 	_expect(has_inventory, "inventory_changed not connected")
 	_expect(has_till, "soil_tilled not connected")
+	_expect(has_harvest, "harvest_completed not connected")
 	_expect(equip.stream == null, "initial selected item played an equip sound")
 
 	animation_driver._update_mining_impact(0.0, true)
@@ -136,6 +147,15 @@ func _run():
 	var first_till_stream: AudioStream = till.stream
 	interactor.soil_tilled.emit()
 	_expect(till.stream != first_till_stream, "consecutive tills repeated the same sound")
+
+	harvest.harvest_completed.emit()
+	await process_frame
+	_expect(action_audio._harvest_streams.has(harvest_player.stream), "harvest did not select a harvest sound")
+	_expect(harvest_player.pitch_scale >= 0.96 and harvest_player.pitch_scale <= 1.04, "harvest pitch out of range %f" % harvest_player.pitch_scale)
+	_expect(abs(harvest_player.volume_db - (-8.0)) < 0.1, "harvest volume expected -8 got %f" % harvest_player.volume_db)
+	var first_harvest_stream: AudioStream = harvest_player.stream
+	harvest.harvest_completed.emit()
+	_expect(harvest_player.stream != first_harvest_stream, "consecutive harvests repeated the same sound")
 
 	var sword_action := item_catalog.get_definition(&"copper_sword").primary_action as MeleeAttackActionDefinition
 	var player_contact := MeleeContact.new(MeleeCombatCoordinator.PLAYER_RUNTIME_ID, &"player", 1, &"zombie", sword_action.attack_profile.id, Vector3.ONE, Vector3.RIGHT)

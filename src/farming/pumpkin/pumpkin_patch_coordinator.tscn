@@ -1,4 +1,4 @@
-[gd_scene load_steps=16 format=3]
+[gd_scene load_steps=15 format=3]
 
 [ext_resource type="Script" path="res://farming/pumpkin/pumpkin_patch_coordinator.gd" id="1_coordinator"]
 [ext_resource type="Texture2D" path="res://assets/textures/blocks/farmland_dry.png" id="2_soil"]
@@ -8,7 +8,6 @@
 [ext_resource type="PackedScene" path="res://assets/models/farming/pumpkin/Pumpkin 3 FBX.fbx" id="6_stage_3"]
 [ext_resource type="PackedScene" path="res://assets/models/farming/pumpkin/Pumpkin 4 FBX.fbx" id="7_stage_4"]
 [ext_resource type="PackedScene" path="res://assets/models/farming/pumpkin/Pumpkin Crop FBX.fbx" id="8_crop"]
-[ext_resource type="PackedScene" path="res://assets/models/farming/pumpkin/Pumpkin Harvested FBX.fbx" id="9_harvested"]
 
 [sub_resource type="Resource" id="GrowthState_stage_1"]
 script = ExtResource("3_definition")
@@ -34,13 +33,16 @@ model_scene = ExtResource("7_stage_4")
 script = ExtResource("3_definition")
 id = &"crop"
 model_scene = ExtResource("8_crop")
+harvest_item_id = &"pumpkin"
+harvest_count = 1
+harvest_result_state_id = &"empty"
 
-[sub_resource type="Resource" id="GrowthState_harvested"]
+[sub_resource type="Resource" id="GrowthState_empty"]
 script = ExtResource("3_definition")
-id = &"harvested"
-model_scene = ExtResource("9_harvested")
+id = &"empty"
+generate_in_new_patch = false
 
 [node name="PumpkinPatch" type="Node3D"]
 script = ExtResource("1_coordinator")
 soil_texture = ExtResource("2_soil")
-growth_states = Array[ExtResource("3_definition")]([SubResource("GrowthState_stage_1"), SubResource("GrowthState_stage_2"), SubResource("GrowthState_stage_3"), SubResource("GrowthState_stage_4"), SubResource("GrowthState_crop"), SubResource("GrowthState_harvested")])
+growth_states = Array[ExtResource("3_definition")]([SubResource("GrowthState_stage_1"), SubResource("GrowthState_stage_2"), SubResource("GrowthState_stage_3"), SubResource("GrowthState_stage_4"), SubResource("GrowthState_crop"), SubResource("GrowthState_empty")])
