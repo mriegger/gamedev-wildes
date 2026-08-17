@@ -24,12 +24,17 @@ func _make_world() -> VoxelWorld:
 			world.type_map_dict[Vector2i(x, z)] = BlockId.Type.GRASS
 	return world
 
-func _make_observation(player_position: Vector3, camera_origin: Vector3) -> EntityTargetObservation:
+func _make_observation(
+	player_position: Vector3,
+	camera_origin: Vector3,
+	camera_forward: Vector3 = Vector3.BACK,
+	camera_right: Vector3 = Vector3.RIGHT,
+) -> EntityTargetObservation:
 	var observation := EntityTargetObservation.create(
 		player_position,
 		camera_origin,
-		Vector3.BACK,
-		Vector3.RIGHT,
+		camera_forward,
+		camera_right,
 	)
 	assert(observation != null)
 	return observation
@@ -105,12 +110,36 @@ func _run() -> void:
 	actor.animation_driver.advance(0.1)
 	_expect((actor.animation_driver as SkeletonAnimationDriver).get_current_state() == SkeletonAnimationDriver.HIDE, "Hiding Skeleton did not use its hide presentation")
 
+	var rotated_observation := _make_observation(
+		nearby_observation.player_position,
+		Vector3(-8.5, float(FEET_Y) + 0.9, actor.global_position.z),
+		Vector3.RIGHT,
+		Vector3.BACK,
+	)
+	budget.reset()
+	actor.tick(0.124, rotated_observation, Vector3.ZERO, budget)
+	_expect(actor.brain.state == SkeletonBrain.State.HIDE, "Camera change invalidated cover before the 0.125-second cadence")
+	budget.reset()
+	budget.try_acquire()
+	budget.try_acquire()
+	actor.tick(0.001, rotated_observation, Vector3.ZERO, budget)
+	_expect(actor.brain.state == SkeletonBrain.State.SEARCH_COVER, "Camera rotation did not invalidate hidden cover at 0.125 seconds")
+	budget.reset()
+	actor.tick(0.0, distant_observation, Vector3.ZERO, budget)
+	_expect(actor.brain.state == SkeletonBrain.State.ROAM, "Skeleton did not return to roaming immediately outside detection range")
+	budget.reset()
+	actor.tick(0.0, nearby_observation, Vector3.ZERO, budget)
+	_expect(actor.brain.state == SkeletonBrain.State.HIDE, "Skeleton did not recognize restored current-position cover")
+
 	for y in range(FEET_Y, FEET_Y + 2):
 		var mined_edits := world.try_mine_block(Vector3i(0, y, 1))
 		_expect(not mined_edits.is_empty() and (mined_edits[0] as BlockEdit).is_success(), "Could not remove Skeleton cover fixture")
 	budget.reset()
-	actor.tick(0.1, nearby_observation, Vector3.ZERO, budget)
-	_expect(actor.brain.state == SkeletonBrain.State.SEARCH_COVER, "Exposed Skeleton did not restart bounded cover search")
+	actor.tick(0.124, nearby_observation, Vector3.ZERO, budget)
+	_expect(actor.brain.state == SkeletonBrain.State.HIDE, "Mined cover invalidated hide before the 0.125-second cadence")
+	budget.reset()
+	actor.tick(0.001, nearby_observation, Vector3.ZERO, budget)
+	_expect(actor.brain.state == SkeletonBrain.State.SEARCH_COVER, "Mined cover did not restart bounded cover search at 0.125 seconds")
 	actor.animation_driver.advance(0.1)
 	_expect((actor.animation_driver as SkeletonAnimationDriver).get_current_state() == SkeletonAnimationDriver.IDLE, "Exposed Skeleton retained its hide presentation")
 
@@ -123,7 +152,117 @@ func _run() -> void:
 		"Failed cover path did not request a replacement search",
 	)
 
+	var sprint_world := _make_world()
+	var sprint_actor := definition.actor_scene.instantiate() as SkeletonActor
+	get_root().add_child(sprint_actor)
+	sprint_actor.global_position = Vector3(0.5, float(FEET_Y), 0.5)
+	sprint_actor.setup(78, definition, sprint_world, 442, EntityNavigationLimits.new(32, 512, 2))
+	sprint_actor.set_process(false)
+	var sprint_observation := _make_observation(
+		Vector3(20.5, float(FEET_Y), 0.5),
+		Vector3(0.5, float(FEET_Y) + 0.9, -8.5),
+	)
+	var sprint_budget := NavigationSearchBudget.new(2)
+	for _step in range(100):
+		sprint_budget.reset()
+		sprint_actor.tick(0.0, sprint_observation, Vector3.ZERO, sprint_budget)
+		if sprint_actor.brain.state == SkeletonBrain.State.SPRINT:
+			break
+	_expect(sprint_actor.brain.state == SkeletonBrain.State.SPRINT, "No-cover search did not exhaust into sprint fallback")
+	_expect(is_equal_approx(sprint_actor.max_speed, 5.5), "Sprint fallback did not update the actor speed limit")
+	_expect(is_equal_approx(Vector2(sprint_actor.velocity.x, sprint_actor.velocity.z).length(), 5.5), "Sprint fallback did not move at 5.5 blocks per second")
+	sprint_actor.animation_driver.advance(0.01)
+	_expect((sprint_actor.animation_driver as SkeletonAnimationDriver).get_current_state() == SkeletonAnimationDriver.SPRINT, "Sprint fallback did not use its sprint presentation")
+
+	var before_retry := sprint_actor.global_position
+	sprint_budget.reset()
+	sprint_actor.tick(0.999, sprint_observation, Vector3.ZERO, sprint_budget)
+	_expect(not sprint_actor.brain.needs_cover_search() and not sprint_actor.brain.is_cover_search_in_progress(), "Cover retry started before one second")
+	_expect(sprint_actor.global_position.distance_to(before_retry) > 1.0, "Skeleton stopped sprinting before cover retry")
+	var retry_boundary_position := sprint_actor.global_position
+	sprint_budget.reset()
+	sprint_actor.tick(0.001, sprint_observation, Vector3.ZERO, sprint_budget)
+	_expect(sprint_actor.brain.is_cover_search_in_progress(), "Cover retry did not start at exactly one second")
+	_expect(sprint_actor.brain.state == SkeletonBrain.State.SPRINT, "Background retry interrupted sprint state")
+	_expect(sprint_actor.global_position.distance_to(retry_boundary_position) > 0.0, "Background retry froze sprint movement")
+	var active_retry_position := sprint_actor.global_position
+	sprint_budget.reset()
+	sprint_actor.tick(0.1, sprint_observation, Vector3.ZERO, sprint_budget)
+	_expect(sprint_actor.global_position.distance_to(active_retry_position) > 0.1, "Active bounded cover search froze sprint movement")
+	var outside_observation := _make_observation(
+		Vector3(100.0, float(FEET_Y), 100.0),
+		Vector3(0.5, float(FEET_Y) + 0.9, -8.5),
+	)
+	sprint_budget.reset()
+	sprint_actor.tick(0.0, outside_observation, Vector3.ZERO, sprint_budget)
+	_expect(sprint_actor.brain.state == SkeletonBrain.State.ROAM, "Sprint fallback did not return to roam immediately outside 30 blocks")
+	_expect(is_equal_approx(sprint_actor.max_speed, 2.4), "Returning to roam retained the sprint speed limit")
+	sprint_actor.animation_driver.advance(0.01)
+	_expect((sprint_actor.animation_driver as SkeletonAnimationDriver).get_current_state() != SkeletonAnimationDriver.SPRINT, "Returning to roam retained sprint presentation")
+
+	var stale_world := _make_world()
+	for y in range(FEET_Y, FEET_Y + 2):
+		_expect(stale_world.try_place_block(Vector3i(0, y, 5), BlockId.Type.STONE).is_success(), "Could not build stale-cover fixture")
+	var stale_actor := definition.actor_scene.instantiate() as SkeletonActor
+	get_root().add_child(stale_actor)
+	stale_actor.global_position = Vector3(0.5, float(FEET_Y), 0.5)
+	stale_actor.setup(79, definition, stale_world, 443, EntityNavigationLimits.new(32, 512, 2))
+	stale_actor.set_process(false)
+	var stale_initial_observation := _make_observation(
+		Vector3(20.5, float(FEET_Y), 0.5),
+		Vector3(0.5, float(FEET_Y) + 0.9, -8.5),
+	)
+	var stale_latest_observation := _make_observation(
+		stale_initial_observation.player_position,
+		Vector3(-8.5, float(FEET_Y) + 0.9, 6.5),
+		Vector3.RIGHT,
+		Vector3.BACK,
+	)
+	var stale_budget := NavigationSearchBudget.new(2)
+	stale_budget.reset()
+	stale_actor.tick(0.0, stale_initial_observation, Vector3.ZERO, stale_budget)
+	_expect(stale_actor.brain.is_cover_search_in_progress(), "Stale-cover fixture did not begin an incremental search")
+	for _step in range(40):
+		stale_budget.reset()
+		stale_actor.tick(0.0, stale_latest_observation, Vector3.ZERO, stale_budget)
+		if stale_actor.brain.needs_cover_search():
+			break
+	_expect(stale_actor.brain.state == SkeletonBrain.State.SEARCH_COVER and stale_actor.brain.needs_cover_search(), "Cover found from an old camera snapshot was accepted against the latest camera")
+
+	var result_world := _make_world()
+	for y in range(FEET_Y, FEET_Y + 2):
+		_expect(result_world.try_place_block(Vector3i(0, y, 1), BlockId.Type.STONE).is_success(), "Could not build background-result fixture")
+	var result_actor := definition.actor_scene.instantiate() as SkeletonActor
+	get_root().add_child(result_actor)
+	result_actor.global_position = Vector3(0.5, float(FEET_Y), 0.5)
+	result_actor.setup(80, definition, result_world, 444, EntityNavigationLimits.new(32, 512, 2))
+	result_actor.set_process(false)
+	result_actor.brain.advance(0.0, result_actor.global_position, sprint_observation.player_position, false)
+	result_actor.brain.record_cover_search_started()
+	result_actor.brain.record_cover_exhausted()
+	result_actor.brain.advance(1.0, result_actor.global_position, sprint_observation.player_position, false)
+	var result_budget := NavigationSearchBudget.new(1)
+	var starved_retry_position := result_actor.global_position
+	result_budget.reset()
+	result_actor.tick(0.1, sprint_observation, Vector3.ZERO, result_budget)
+	_expect(result_actor.brain.state == SkeletonBrain.State.SPRINT and result_actor.brain.is_cover_search_in_progress(), "Budget-starved background cover retry interrupted sprint state")
+	_expect(result_actor.global_position.distance_to(starved_retry_position) > 0.1, "Budget-starved background cover retry froze sprint movement")
+	var result_transitioned := false
+	for _step in range(30):
+		var before_result := result_actor.global_position
+		result_budget.reset()
+		result_actor.tick(0.1, sprint_observation, Vector3.ZERO, result_budget)
+		if result_actor.brain.state == SkeletonBrain.State.MOVE_TO_COVER:
+			result_transitioned = true
+			_expect(result_actor.global_position.is_equal_approx(before_result), "Accepted background cover applied stale sprint velocity")
+			break
+	_expect(result_transitioned, "Background cover retry did not accept reachable latest cover")
+	_expect(is_equal_approx(result_actor.max_speed, 2.4), "Accepted background cover retained sprint speed")
+
 	actor.free()
+	sprint_actor.free()
+	stale_actor.free()
+	result_actor.free()
 	await process_frame
 	await process_frame
 	if _failures == 0:

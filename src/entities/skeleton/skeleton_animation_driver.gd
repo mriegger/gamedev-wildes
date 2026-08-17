@@ -3,6 +3,7 @@ class_name SkeletonAnimationDriver
 
 const IDLE: StringName = &"Idle"
 const WALK: StringName = &"Walk"
+const SPRINT: StringName = &"Sprint"
 const HIDE: StringName = &"Hide"
 const HIT: StringName = &"Hit"
 const DEATH: StringName = &"Death"
@@ -15,6 +16,7 @@ var _current_state: StringName = IDLE
 var _hit_elapsed: float = HIT_SECONDS
 var _hit_direction: Vector3 = Vector3.BACK
 var _hiding: bool = false
+var _sprinting: bool = false
 var _dying: bool = false
 var _death_elapsed: float = 0.0
 var _previous_yaw: float = 0.0
@@ -42,6 +44,9 @@ func play_attack(duration: float):
 func set_hiding(hiding: bool):
 	_hiding = hiding
 
+func set_sprinting(sprinting: bool):
+	_sprinting = sprinting
+
 func play_hit(local_hit_direction: Vector3 = Vector3.BACK):
 	if _dying:
 		return
@@ -52,6 +57,8 @@ func play_death():
 	_dying = true
 	_death_elapsed = 0.0
 	_hit_elapsed = HIT_SECONDS
+	_sprinting = false
+	_hiding = false
 	_current_state = DEATH
 
 func is_death_complete() -> bool:
@@ -81,7 +88,7 @@ func advance(delta: float):
 	var turn_rate := wrapf(current_yaw - _previous_yaw, -PI, PI) / maxf(delta, 0.0001)
 	_previous_yaw = current_yaw
 	var grounded: bool = actor.get(&"on_ground")
-	_animation_state.set_motion(local_velocity, speed_ratio, false, grounded, 0.0, turn_rate, false, Vector3.ZERO)
+	_animation_state.set_motion(local_velocity, speed_ratio, _sprinting and planar_speed > 0.1, grounded, 0.0, turn_rate, false, Vector3.ZERO)
 	animator.advance_animation(delta)
 	_advance_hit_timer(delta)
 	_apply_hit_pose()
@@ -128,6 +135,8 @@ func _select_state(planar_speed: float):
 		_current_state = HIT
 	elif _hiding:
 		_current_state = HIDE
+	elif _sprinting and planar_speed > 0.1:
+		_current_state = SPRINT
 	elif planar_speed > 0.1:
 		_current_state = WALK
 	else:

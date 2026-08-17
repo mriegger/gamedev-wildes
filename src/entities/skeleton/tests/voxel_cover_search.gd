@@ -10,25 +10,38 @@ const ORIGIN := Vector3(0.5, FEET_Y, 0.5)
 class TestVoxelSpace:
 	extends VoxelSpace
 
-	var has_ground: bool = true
+	var default_ground_y: float = FEET_Y
+	var ground_heights: Dictionary = {}
 	var highest_top_queries: int = 0
 	var movement_solids: Dictionary = {}
 	var raycast_solids: Dictionary = {}
 
 	func add_wall(x: int, z: int, blocks_movement: bool = true) -> void:
-		for y in range(1, 3):
+		add_wall_levels(x, z, 1, 2, blocks_movement)
+
+	func add_wall_levels(x: int, z: int, min_y: int, max_y: int, blocks_movement: bool = false) -> void:
+		for y in range(min_y, max_y + 1):
 			var cell := Vector3i(x, y, z)
 			raycast_solids[cell] = true
 			if blocks_movement:
 				movement_solids[cell] = true
 
+	func clear_raycast_solids() -> void:
+		raycast_solids.clear()
+
 	func add_movement_column(x: int, z: int) -> void:
 		for y in range(1, 3):
 			movement_solids[Vector3i(x, y, z)] = true
 
-	func get_highest_top(_x: int, _z: int) -> float:
+	func add_supporting_block(x: int, z: int, top: int) -> void:
+		movement_solids[Vector3i(x, top - 1, z)] = true
+
+	func set_ground_height(x: int, z: int, height: float) -> void:
+		ground_heights[Vector2i(x, z)] = height
+
+	func get_highest_top(x: int, z: int) -> float:
 		highest_top_queries += 1
-		return FEET_Y if has_ground else VoxelSpace.NO_SURFACE_Y
+		return float(ground_heights.get(Vector2i(x, z), default_ground_y))
 
 	func is_solid(position: Vector3i) -> bool:
 		return movement_solids.has(position)
@@ -44,7 +57,15 @@ func _init() -> void:
 func _run() -> void:
 	_test_nearest_reachable_hidden_position()
 	_test_closer_unreachable_position_is_rejected()
+	_test_off_center_columns_use_exact_distance()
+	_test_exact_radius_boundary()
 	_test_candidate_columns_are_bounded_per_tick()
+	_test_resumed_column_counts_toward_tick_bound()
+	_test_reachable_one_block_up_position()
+	_test_reachable_one_block_down_position()
+	_test_reachable_multi_step_hill_endpoint()
+	_test_budget_starvation_retains_candidate_elevation()
+	_test_canopy_top_is_not_selected()
 	_test_no_cover_exhausts_search()
 	_test_equal_distance_result_is_deterministic()
 	if _failures == 0:
@@ -81,14 +102,121 @@ func _test_closer_unreachable_position_is_rejected() -> void:
 	if search.status == VoxelCoverSearchType.Status.FOUND:
 		_expect(search.get_target().is_equal_approx(Vector3(4.5, FEET_Y, 0.5)), "search accepted a closer unreachable hidden position")
 
+func _test_off_center_columns_use_exact_distance() -> void:
+	var search := _make_search(TestVoxelSpace.new())
+	search.begin(Vector3(0.9, FEET_Y, 0.1), _observation())
+	var exact_nearest_index := -1
+	var integer_tie_index := -1
+	for index in range(16):
+		var entry = search._take_next_entry()
+		if entry.column == Vector2i(1, 0):
+			exact_nearest_index = index
+		if entry.column == Vector2i(0, 1):
+			integer_tie_index = index
+	_expect(exact_nearest_index >= 0 and integer_tie_index >= 0, "off-center comparison columns were omitted")
+	_expect(exact_nearest_index < integer_tie_index, "candidate order did not use exact distance from the actor position")
+
+func _test_exact_radius_boundary() -> void:
+	var search := _make_search(TestVoxelSpace.new())
+	search.begin(ORIGIN, _observation())
+	var found_negative_boundary := false
+	var found_positive_boundary := false
+	while true:
+		var entry = search._take_next_entry()
+		if entry == null:
+			break
+		found_negative_boundary = found_negative_boundary or entry.column == Vector2i(-30, 0)
+		found_positive_boundary = found_positive_boundary or entry.column == Vector2i(30, 0)
+		_expect(entry.distance_squared <= float(VoxelCoverSearchType.SEARCH_RADIUS * VoxelCoverSearchType.SEARCH_RADIUS), "column beyond the exact search radius was returned")
+	_expect(found_negative_boundary and found_positive_boundary, "columns exactly 30 blocks away were excluded")
+
 func _test_candidate_columns_are_bounded_per_tick() -> void:
 	var space := TestVoxelSpace.new()
-	space.has_ground = false
 	var search := _make_search(space)
 	search.begin(ORIGIN, _observation())
+	_expect(search.get("_queued_columns").size() == 1, "search eagerly enumerated candidate columns at begin")
 	search.advance(NavigationSearchBudget.new(2))
 	_expect(space.highest_top_queries == VoxelCoverSearchType.CANDIDATES_PER_TICK, "one advance examined more than 32 candidate columns")
 	_expect(search.status == VoxelCoverSearchType.Status.SEARCHING, "bounded search exhausted all candidates in one advance")
+
+func _test_resumed_column_counts_toward_tick_bound() -> void:
+	var space := TestVoxelSpace.new()
+	space.add_wall_levels(0, -1, 0, 3)
+	var search := _make_search(space)
+	search.begin(ORIGIN, _observation())
+	var budget := NavigationSearchBudget.new(1)
+	budget.try_acquire()
+	search.advance(budget)
+	_expect(search.get("_has_current_column"), "budget starvation did not retain the current column")
+	var queries_before_resume := space.highest_top_queries
+	space.clear_raycast_solids()
+	budget.reset()
+	search.advance(budget)
+	var resumed_query_count := space.highest_top_queries - queries_before_resume
+	_expect(resumed_query_count == VoxelCoverSearchType.CANDIDATES_PER_TICK - 1, "resumed column did not count toward the 32-column bound")
+	_expect(search.status == VoxelCoverSearchType.Status.SEARCHING, "resumed bounded search terminated unexpectedly")
+
+func _test_reachable_one_block_up_position() -> void:
+	var space := TestVoxelSpace.new()
+	space.set_ground_height(0, 2, FEET_Y + 1.0)
+	space.add_wall_levels(0, 1, 1, 4)
+	var search := _make_search(space)
+	search.begin(ORIGIN, _observation())
+	_run_to_completion(search)
+	_expect(search.status == VoxelCoverSearchType.Status.FOUND, "reachable one-block-up cover was not found")
+	if search.status == VoxelCoverSearchType.Status.FOUND:
+		_expect(search.get_target().is_equal_approx(Vector3(0.5, FEET_Y + 1.0, 2.5)), "one-block-up cover resolved to the wrong elevation")
+
+func _test_reachable_one_block_down_position() -> void:
+	var space := TestVoxelSpace.new()
+	space.set_ground_height(0, 2, FEET_Y - 1.0)
+	space.add_wall_levels(0, 1, -1, 2)
+	var search := _make_search(space)
+	search.begin(ORIGIN, _observation())
+	_run_to_completion(search)
+	_expect(search.status == VoxelCoverSearchType.Status.FOUND, "reachable one-block-down cover was not found")
+	if search.status == VoxelCoverSearchType.Status.FOUND:
+		_expect(search.get_target().is_equal_approx(Vector3(0.5, FEET_Y - 1.0, 2.5)), "one-block-down cover resolved to the wrong elevation")
+
+func _test_reachable_multi_step_hill_endpoint() -> void:
+	var space := TestVoxelSpace.new()
+	space.set_ground_height(1, 0, FEET_Y + 1.0)
+	space.set_ground_height(2, 0, FEET_Y + 2.0)
+	space.set_ground_height(3, 0, FEET_Y + 3.0)
+	space.add_wall_levels(2, 0, 1, 7)
+	var search := _make_search(space)
+	search.begin(ORIGIN, _side_observation())
+	_run_to_completion(search)
+	_expect(search.status == VoxelCoverSearchType.Status.FOUND, "reachable multi-step hill cover was not found")
+	if search.status == VoxelCoverSearchType.Status.FOUND:
+		_expect(search.get_target().is_equal_approx(Vector3(3.5, FEET_Y + 3.0, 0.5)), "multi-step hill cover resolved to the wrong elevation")
+
+func _test_budget_starvation_retains_candidate_elevation() -> void:
+	var space := TestVoxelSpace.new()
+	space.set_ground_height(0, 2, FEET_Y + 1.0)
+	space.add_wall_levels(0, 1, 1, 4)
+	var search := _make_search(space)
+	search.begin(ORIGIN, _observation())
+	var budget := NavigationSearchBudget.new(1)
+	search.advance(budget)
+	_expect(search.status == VoxelCoverSearchType.Status.SEARCHING, "budget-starved search skipped its pending elevation")
+	budget.reset()
+	search.advance(budget)
+	_expect(search.status == VoxelCoverSearchType.Status.FOUND, "budget-starved candidate was not retried")
+	if search.status == VoxelCoverSearchType.Status.FOUND:
+		_expect(search.get_target().is_equal_approx(Vector3(0.5, FEET_Y + 1.0, 2.5)), "budget starvation advanced past the pending candidate")
+
+func _test_canopy_top_is_not_selected() -> void:
+	var space := TestVoxelSpace.new()
+	space.set_ground_height(0, 2, FEET_Y + 5.0)
+	space.add_supporting_block(0, 2, int(FEET_Y))
+	space.add_wall_levels(0, 1, 1, 7)
+	var search := _make_search(space)
+	search.begin(ORIGIN, _observation())
+	_run_to_completion(search)
+	_expect(search.status == VoxelCoverSearchType.Status.FOUND, "walkable ground beneath a canopy was not found")
+	if search.status == VoxelCoverSearchType.Status.FOUND:
+		_expect(search.get_target().is_equal_approx(Vector3(0.5, FEET_Y, 2.5)), "search selected an arbitrary canopy top")
 
 func _test_no_cover_exhausts_search() -> void:
 	var search := _make_search(TestVoxelSpace.new())
@@ -120,6 +248,14 @@ func _observation() -> EntityTargetObservation:
 		Vector3(0.5, FEET_Y + BODY_HEIGHT * 0.5, -8.5),
 		Vector3.BACK,
 		Vector3.RIGHT,
+	)
+
+func _side_observation() -> EntityTargetObservation:
+	return EntityTargetObservation.new(
+		Vector3(20.5, FEET_Y, 0.5),
+		Vector3(-8.5, FEET_Y + BODY_HEIGHT * 0.5, 0.5),
+		Vector3.RIGHT,
+		Vector3.BACK,
 	)
 
 func _run_to_completion(search: VoxelCoverSearchType) -> void:

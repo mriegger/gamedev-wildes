@@ -49,16 +49,26 @@ func tick(
 ):
 	assert(brain != null and voxel_space != null and observation != null)
 	var current_position_hidden := false
-	if brain.is_player_in_detection_range(global_position, observation.player_position):
+	if brain.needs_detection_occlusion_check(global_position, observation.player_position):
 		current_position_hidden = _is_hidden(global_position, observation)
 	var previous_state := brain.state
 	brain.advance(delta, global_position, observation.player_position, current_position_hidden)
 	_apply_state_change(previous_state)
 
+	if brain.is_cover_revalidation_due():
+		previous_state = brain.state
+		var position_to_validate := global_position
+		if brain.state == SkeletonBrain.State.MOVE_TO_COVER:
+			position_to_validate = brain.get_movement_goal()
+		brain.record_cover_revalidated(_is_hidden(position_to_validate, observation))
+		_apply_state_change(previous_state)
+
+	var cover_work_advanced := false
 	if brain.state == SkeletonBrain.State.SEARCH_COVER:
 		previous_state = brain.state
 		_advance_cover_search(observation, navigation_search_budget)
 		_apply_state_change(previous_state)
+		cover_work_advanced = true
 
 	var desired_velocity := Vector3.ZERO
 	match brain.state:
@@ -67,6 +77,7 @@ func tick(
 				delta,
 				separation_velocity,
 				navigation_search_budget,
+				_behavior.roam_speed,
 				false,
 			)
 		SkeletonBrain.State.MOVE_TO_COVER:
@@ -79,8 +90,23 @@ func tick(
 					delta,
 					separation_velocity,
 					navigation_search_budget,
+					_behavior.roam_speed,
 					true,
 				)
+		SkeletonBrain.State.SPRINT:
+			desired_velocity = _follow_movement_goal(
+				delta,
+				separation_velocity,
+				navigation_search_budget,
+				_behavior.sprint_speed,
+				false,
+			)
+			if not cover_work_advanced and (brain.needs_cover_search() or brain.is_cover_search_in_progress()):
+				previous_state = brain.state
+				_advance_cover_search(observation, navigation_search_budget)
+				_apply_state_change(previous_state)
+				if brain.state != SkeletonBrain.State.SPRINT:
+					desired_velocity = Vector3.ZERO
 	advance_voxel_motion(delta, desired_velocity, _behavior.gravity)
 
 	if brain.state == SkeletonBrain.State.MOVE_TO_COVER and _has_reached_movement_goal():
@@ -95,9 +121,14 @@ func _advance_cover_search(
 	if brain.needs_cover_search():
 		_cover_search.begin(global_position, observation)
 		brain.record_cover_search_started()
+	if not brain.is_cover_search_in_progress():
+		return
 	var status := _cover_search.advance(navigation_search_budget)
 	if status == VoxelCoverSearchType.Status.FOUND:
-		brain.record_cover_found(_cover_search.get_target())
+		var target := _cover_search.get_target()
+		brain.record_cover_found(target)
+		if not _is_hidden(target, observation):
+			brain.reject_cover_goal()
 	elif status == VoxelCoverSearchType.Status.EXHAUSTED:
 		brain.record_cover_exhausted()
 
@@ -105,13 +136,14 @@ func _follow_movement_goal(
 	delta: float,
 	separation_velocity: Vector3,
 	navigation_search_budget: NavigationSearchBudget,
+	speed: float,
 	is_cover_goal: bool,
 ) -> Vector3:
 	var result := _path_follower.advance(
 		delta,
 		global_position,
 		brain.get_movement_goal(),
-		_behavior.roam_speed,
+		speed,
 		on_ground,
 		navigation_search_budget,
 	)
@@ -124,7 +156,7 @@ func _follow_movement_goal(
 			brain.reject_movement_goal(global_position)
 		return Vector3.ZERO
 	var desired_velocity := apply_path_follow_result(result, delta, _behavior.jump_velocity)
-	return limit_planar_velocity(desired_velocity + separation_velocity, _behavior.roam_speed)
+	return limit_planar_velocity(desired_velocity + separation_velocity, speed)
 
 func _has_reached_movement_goal() -> bool:
 	var goal := brain.get_movement_goal()
@@ -144,4 +176,6 @@ func _apply_state_change(previous_state: SkeletonBrain.State):
 	if brain.state == previous_state:
 		return
 	_path_follower.request_repath()
+	max_speed = _behavior.sprint_speed if brain.state == SkeletonBrain.State.SPRINT else _behavior.roam_speed
 	_skeleton_animation.set_hiding(brain.state == SkeletonBrain.State.HIDE)
+	_skeleton_animation.set_sprinting(brain.state == SkeletonBrain.State.SPRINT)

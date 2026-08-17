@@ -9,6 +9,21 @@ enum Status {
 
 const SEARCH_RADIUS: int = 30
 const CANDIDATES_PER_TICK: int = 32
+const ELEVATION_OFFSETS: Array[int] = [0, 1, -1]
+const CARDINAL_DIRECTIONS: Array[Vector2i] = [
+	Vector2i(-1, 0),
+	Vector2i(0, -1),
+	Vector2i(0, 1),
+	Vector2i(1, 0),
+]
+
+class CandidateEntry:
+	var column: Vector2i
+	var distance_squared: float
+
+	func _init(p_column: Vector2i, p_distance_squared: float) -> void:
+		column = p_column
+		distance_squared = p_distance_squared
 
 var status: Status:
 	get:
@@ -18,12 +33,16 @@ var _voxel_space: VoxelSpace
 var _body_width: float
 var _body_height: float
 var _navigation_limits: EntityNavigationLimits
-var _candidate_offsets: Array[Vector2i]
 var _status: Status = Status.EXHAUSTED
 var _origin: Vector3
 var _origin_feet: Vector3i
 var _observation: EntityTargetObservation
-var _candidate_index: int = 0
+var _candidate_frontier: Array[CandidateEntry] = []
+var _queued_columns: Dictionary = {}
+var _current_column: Vector2i
+var _has_current_column: bool = false
+var _current_elevations: Array[int] = []
+var _elevation_index: int = 0
 var _target: Vector3 = Vector3.ZERO
 
 func _init(
@@ -40,7 +59,6 @@ func _init(
 	_body_width = p_body_width
 	_body_height = p_body_height
 	_navigation_limits = p_navigation_limits
-	_candidate_offsets = _build_candidate_offsets()
 
 func begin(origin: Vector3, observation: EntityTargetObservation) -> void:
 	assert(origin.is_finite())
@@ -53,7 +71,12 @@ func begin(origin: Vector3, observation: EntityTargetObservation) -> void:
 		observation.camera_forward,
 		observation.camera_right,
 	)
-	_candidate_index = 0
+	_candidate_frontier.clear()
+	_queued_columns.clear()
+	_queue_nearest_columns()
+	_has_current_column = false
+	_current_elevations.clear()
+	_elevation_index = 0
 	_target = Vector3.ZERO
 	_status = Status.SEARCHING
 
@@ -62,61 +85,135 @@ func advance(search_budget: NavigationSearchBudget) -> Status:
 	if _status != Status.SEARCHING:
 		return _status
 	var processed_columns := 0
-	while processed_columns < CANDIDATES_PER_TICK and _candidate_index < _candidate_offsets.size():
-		var offset := _candidate_offsets[_candidate_index]
-		var candidate := _resolve_candidate(offset)
+	while processed_columns < CANDIDATES_PER_TICK:
+		if not _has_current_column:
+			var entry := _take_next_entry()
+			if entry == null:
+				_status = Status.EXHAUSTED
+				return _status
+			_current_column = entry.column
+			_has_current_column = true
+			_current_elevations = _resolve_candidate_elevations(_current_column)
+			_elevation_index = 0
 		processed_columns += 1
-		if is_equal_approx(candidate.y, VoxelSpace.NO_SURFACE_Y):
-			_candidate_index += 1
-			continue
-		if not VoxelCameraOcclusion.is_hidden(_voxel_space, _observation, candidate, _body_width, _body_height):
-			_candidate_index += 1
-			continue
-		if not search_budget.try_acquire():
-			return _status
-		var result := VoxelPathfinder.find_path(
-			_voxel_space,
-			_origin_feet,
-			Vector3i(floori(candidate.x), roundi(candidate.y), floori(candidate.z)),
-			_body_width,
-			_body_height,
-			_navigation_limits.get_max_search_radius(),
-			_navigation_limits.get_max_search_nodes(),
-		)
-		_candidate_index += 1
-		if result.is_success():
-			_target = candidate
-			_status = Status.FOUND
-			return _status
-	if _candidate_index >= _candidate_offsets.size():
-		_status = Status.EXHAUSTED
+		while _elevation_index < _current_elevations.size():
+			var candidate_feet := Vector3i(
+				_current_column.x,
+				_current_elevations[_elevation_index],
+				_current_column.y,
+			)
+			var candidate := Vector3(
+				float(candidate_feet.x) + 0.5,
+				float(candidate_feet.y),
+				float(candidate_feet.z) + 0.5,
+			)
+			if not VoxelCameraOcclusion.is_hidden(_voxel_space, _observation, candidate, _body_width, _body_height):
+				_elevation_index += 1
+				continue
+			if not search_budget.try_acquire():
+				return _status
+			var result := VoxelPathfinder.find_path(
+				_voxel_space,
+				_origin_feet,
+				candidate_feet,
+				_body_width,
+				_body_height,
+				_navigation_limits.get_max_search_radius(),
+				_navigation_limits.get_max_search_nodes(),
+			)
+			_elevation_index += 1
+			if result.is_success():
+				_target = candidate
+				_status = Status.FOUND
+				return _status
+		_has_current_column = false
 	return _status
 
 func get_target() -> Vector3:
 	assert(_status == Status.FOUND)
 	return _target
 
-func _resolve_candidate(offset: Vector2i) -> Vector3:
-	var x := floori(_origin.x) + offset.x
-	var z := floori(_origin.z) + offset.y
-	var probe := Vector3(float(x) + 0.5, _origin.y + 0.08, float(z) + 0.5)
-	var ground_y := VoxelBodySolver.get_ground_y(_voxel_space, probe, _body_width)
-	return Vector3(probe.x, ground_y, probe.z)
+func _resolve_candidate_elevations(column: Vector2i) -> Array[int]:
+	var elevations: Array[int] = []
+	for offset in ELEVATION_OFFSETS:
+		var elevation := _origin_feet.y + offset
+		if not elevations.has(elevation):
+			elevations.append(elevation)
+	var surface_y := _voxel_space.get_highest_top(column.x, column.y)
+	if surface_y != VoxelSpace.NO_SURFACE_Y:
+		var surface_elevation := roundi(surface_y)
+		if not elevations.has(surface_elevation):
+			elevations.append(surface_elevation)
+	return elevations
 
-func _build_candidate_offsets() -> Array[Vector2i]:
-	var offsets: Array[Vector2i] = []
-	for x in range(-SEARCH_RADIUS, SEARCH_RADIUS + 1):
-		for z in range(-SEARCH_RADIUS, SEARCH_RADIUS + 1):
-			var offset := Vector2i(x, z)
-			if offset.length_squared() <= SEARCH_RADIUS * SEARCH_RADIUS:
-				offsets.append(offset)
-	offsets.sort_custom(func(left: Vector2i, right: Vector2i) -> bool:
-		var left_distance := left.length_squared()
-		var right_distance := right.length_squared()
-		if left_distance != right_distance:
-			return left_distance < right_distance
-		if left.x != right.x:
-			return left.x < right.x
-		return left.y < right.y
-	)
-	return offsets
+func _queue_nearest_columns() -> void:
+	var floor_x := floori(_origin.x)
+	var floor_z := floori(_origin.z)
+	var x_columns: Array[int] = [floor_x]
+	var z_columns: Array[int] = [floor_z]
+	if _origin.x == float(floor_x):
+		x_columns.push_front(floor_x - 1)
+	if _origin.z == float(floor_z):
+		z_columns.push_front(floor_z - 1)
+	for x in x_columns:
+		for z in z_columns:
+			_queue_column(Vector2i(x, z))
+
+func _queue_column(column: Vector2i) -> void:
+	if _queued_columns.has(column):
+		return
+	_queued_columns[column] = true
+	var center := Vector2(float(column.x) + 0.5, float(column.y) + 0.5)
+	var distance_squared := center.distance_squared_to(Vector2(_origin.x, _origin.z))
+	_heap_push(CandidateEntry.new(column, distance_squared))
+
+func _take_next_entry() -> CandidateEntry:
+	if _candidate_frontier.is_empty():
+		return null
+	var entry := _heap_pop()
+	if entry.distance_squared > float(SEARCH_RADIUS * SEARCH_RADIUS):
+		return null
+	for direction in CARDINAL_DIRECTIONS:
+		_queue_column(entry.column + direction)
+	return entry
+
+func _heap_push(entry: CandidateEntry) -> void:
+	_candidate_frontier.append(entry)
+	var index := _candidate_frontier.size() - 1
+	while index > 0:
+		var parent := (index - 1) / 2
+		if not _entry_precedes(_candidate_frontier[index], _candidate_frontier[parent]):
+			break
+		var parent_entry := _candidate_frontier[parent]
+		_candidate_frontier[parent] = _candidate_frontier[index]
+		_candidate_frontier[index] = parent_entry
+		index = parent
+
+func _heap_pop() -> CandidateEntry:
+	var first := _candidate_frontier[0]
+	var last := _candidate_frontier.pop_back() as CandidateEntry
+	if not _candidate_frontier.is_empty():
+		_candidate_frontier[0] = last
+		var index := 0
+		while true:
+			var left := index * 2 + 1
+			var right := left + 1
+			var smallest := index
+			if left < _candidate_frontier.size() and _entry_precedes(_candidate_frontier[left], _candidate_frontier[smallest]):
+				smallest = left
+			if right < _candidate_frontier.size() and _entry_precedes(_candidate_frontier[right], _candidate_frontier[smallest]):
+				smallest = right
+			if smallest == index:
+				break
+			var smallest_entry := _candidate_frontier[smallest]
+			_candidate_frontier[smallest] = _candidate_frontier[index]
+			_candidate_frontier[index] = smallest_entry
+			index = smallest
+	return first
+
+func _entry_precedes(left: CandidateEntry, right: CandidateEntry) -> bool:
+	if left.distance_squared != right.distance_squared:
+		return left.distance_squared < right.distance_squared
+	if left.column.x != right.column.x:
+		return left.column.x < right.column.x
+	return left.column.y < right.column.y
