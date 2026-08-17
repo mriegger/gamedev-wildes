@@ -62,12 +62,21 @@ static func is_valid(
 	var socket_floor := socket.cell + Vector3i.DOWN
 	if not StructureCell.is_in_bounds(socket_floor, size) or not StructureCell.is_structure_solid(_cell_value(socket_floor, size, cells, changes)):
 		return false
+	var perimeter_offsets: Array[Vector3i] = [
+		Vector3i.UP,
+		Vector3i.DOWN,
+		_transverse_vector(socket.direction),
+		-_transverse_vector(socket.direction),
+	]
 	for cell in aperture:
-		var floor_cell := cell + Vector3i.DOWN
-		if aperture_lookup.has(floor_cell):
-			continue
-		if not StructureCell.is_structure_solid(_cell_value(floor_cell, size, cells, changes)):
-			return false
+		for offset in perimeter_offsets:
+			var perimeter_cell := cell + offset
+			if aperture_lookup.has(perimeter_cell):
+				continue
+			if not is_boundary(perimeter_cell, size, socket.direction):
+				return false
+			if not StructureCell.is_structure_solid(_cell_value(perimeter_cell, size, cells, changes)):
+				return false
 	return true
 
 static func dimensions(aperture: Array[Vector3i], direction: LevelSocketDefinition.Direction) -> Vector2i:

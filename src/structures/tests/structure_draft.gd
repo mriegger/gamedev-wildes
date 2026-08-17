@@ -301,6 +301,13 @@ func _test_variable_connection_aperture() -> void:
 		for z in range(2, 5):
 			_expect(draft.try_remove_block(Vector3i(0, y, z)).succeeded, "large opening setup failed at %s" % Vector3i(0, y, z))
 	var seed := Vector3i(0, 1, 3)
+	var exposed_perimeter := Vector3i(0, 7, 3)
+	_expect(draft.try_set_void(exposed_perimeter).succeeded, "exposed opening setup failed")
+	var exposed_snapshot := draft.snapshot_cells()
+	_expect(not draft.can_add_socket(seed, LevelSocketDefinition.Direction.WEST), "socket query accepted an opening with a VOID perimeter")
+	_expect(not draft.try_add_socket(seed, LevelSocketDefinition.Direction.WEST).succeeded, "socket registration accepted an opening with a VOID perimeter")
+	_expect(draft.snapshot_cells() == exposed_snapshot and draft.get_sockets().is_empty(), "rejected exposed opening partially committed")
+	_expect(draft.try_place_block(exposed_perimeter, BlockId.Type.STONE).succeeded, "exposed opening perimeter could not be repaired")
 	var before := draft.snapshot_cells()
 	var candidate := draft.get_socket_candidate_cells(seed, LevelSocketDefinition.Direction.WEST)
 	_expect(candidate.size() == 18, "large opening candidate did not include all 18 cells")
