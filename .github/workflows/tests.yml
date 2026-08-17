@@ -441,11 +441,21 @@ jobs:
       - uses: ./.github/actions/setup_godot
         with:
           version: "4.7"
+      - name: Run generic structure resource validation tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "STRUCTURE_DEFINITION PASS" /tmp/structure_definition.log -- \
+            godot --headless --path src --script res://structures/tests/structure_definition.gd
       - name: Run structure draft transaction tests
         run: |
           bash .github/scripts/run_godot_check.sh \
             30 "STRUCTURE_DRAFT PASS" /tmp/structure_draft.log -- \
             godot --headless --path src --script res://structures/tests/structure_draft.gd
+      - name: Run generic structure file storage tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "STRUCTURE_STORAGE PASS" /tmp/structure_storage.log -- \
+            godot --headless --path src --script res://structures/tests/structure_storage.gd
       - name: Run structure designer controller tests
         run: |
           bash .github/scripts/run_godot_check.sh \

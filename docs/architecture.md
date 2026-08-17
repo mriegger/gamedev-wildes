@@ -24,7 +24,7 @@ player/                      player behavior, camera, and visuals
 progression/                 combat rewards and shared item proficiency
 save/                        save encoding and storage
 settings/                    persistent display and rendering configuration
-structures/                  construction drafts, first-person runtime, and presentation
+structures/                  generic definitions, drafts, root-file storage, runtime, and presentation
 ui/                          app screens, HUD, shared controls, and theme
 world/
   chunks/                    streaming, scheduling, meshing, and rendering
@@ -171,16 +171,28 @@ truth, bounds, and entry/return geometry.
 
 `StructureDraft` is the Node-independent mutable owner for a construction session. Its commands
 commit block and supported wall-torch changes atomically, while copied snapshots keep the chunk
-renderer and presentation from mutating draft collections.
+renderer and presentation from mutating draft collections. Imported definitions are copied into a
+clean draft with an immutable ID and source binding; successful exports are the only operation that
+changes a draft's binding or clears its dirty state.
 
-`Game` composes the console, authoring workflow, dialogs, and dedicated first-person runtime. It
+`StructureDefinition` format version one persists a lowercase snake_case ID, bounded dimensions,
+dense canonical cube cells, and typed supported wall torches. Dense cells use
+`x + size.x * (z + size.z * y)` indexing and reject `VOID`, non-cube blocks, unsupported torches,
+and empty structures. `StructureFileStore` scans only direct `.tres` files in the globalized
+repository root and bypasses the resource cache during discovery, import, and validation. Export
+saves a temporary resource, reloads and compares every persisted field, then renames the validated
+file into place; collisions, stale bound sources, or failures leave the prior file and draft state
+unchanged.
+
+`Game` constructs and injects the generic file store while composing the console, authoring
+workflow, dialogs, and dedicated first-person runtime. It
 snapshots and suspends the active overworld or dungeon presentation without changing
 `GameplayLocationState`, disables the gameplay player, camera, HUD, and saving, then restores the
 same inventory and exact lifecycle state on exit. Designer cells render in bounded 16-cube chunks;
 the deterministic voxel raycast is shared with player interaction, while designer movement and
-creative selection remain independent from combat and finite inventory state. The workspace is
-currently unsaved and supports only generic construction plots; persistence and level-module
-authoring remain separate follow-up capabilities.
+creative selection remain independent from combat and finite inventory state. New and imported
+generic drafts use the same runtime. Level modules retain their independent resource behavior and
+are not discovered, converted, imported, or exported by this workflow.
 
 Each future content family, such as containers or encounters, adds its typed authored definition,
 transformed placement, state owner, runtime coordinator, and real caller together. Generic marker

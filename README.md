@@ -60,9 +60,12 @@ Doorway selection, module pools, terrain presentation, ambient lighting, and ret
 are configured through typed level resources rather than hardcoded dungeon IDs.
 
 **Structure construction workspace.** `dev structure new` opens a length, width, and height dialog,
-then enters an isolated first-person workspace for a generic plot. `dev structure exit` leaves the
-workspace and confirms before discarding edited blocks or torches. This initial workspace is
-intentionally unsaved; import, export, and level-module authoring are not part of this slice.
+then enters an isolated first-person workspace for a generic plot. `dev structure import` lists
+valid generic `.tres` resources stored directly beside `src/`, while `dev structure export` asks
+for a lowercase snake_case ID on first save and confirms later overwrites of that bound file.
+Successful exports keep the workspace open and mark the current draft clean. `dev structure exit`
+leaves the workspace and confirms before discarding edited blocks or torches. Level-module import,
+export, and metadata authoring remain outside this generic workflow.
 
 **Blocks.** Grass, dirt, sand, stone, wood, leaves, cobblestone, mossy stone bricks, stone bricks,
 terracotta bricks, and wood planks are minable and placeable. Copper is minable but not placeable.
@@ -95,9 +98,10 @@ enabled Craft button is pressed, playing one success sound.
 **Developer console.** Press `/` to open a command line at the bottom of the screen. The
 `spawn <item> <count>` command adds any catalog item directly to the backpack for testing. Item
 IDs and display names are accepted; equipment IDs remain material-qualified, such as
-`copper_pickaxe` and `copper_sword`. Structure construction uses `dev structure new` and
-`dev structure exit`. Press `/` again or `Esc` to close the console without opening the pause
-menu. Copper can be mined from deposits or added directly with `spawn copper <count>`.
+`copper_pickaxe` and `copper_sword`. Structure construction uses `dev structure new`,
+`dev structure import`, `dev structure export`, and `dev structure exit`. Press `/` again or
+`Esc` to close the console without opening the pause menu. Copper can be mined from deposits or
+added directly with `spawn copper <count>`.
 
 **UI & saves.** Backpack and hotbar stacks can be split by scrolling while left-dragging. The side
 panel includes a trash drop target that accepts backpack, hotbar, and equipped items. A
@@ -130,7 +134,7 @@ src/                    Godot project. Entry scene: app/app.tscn
 ├── environment/        Packaged environment scene and day_night/ system
 ├── inventory/          Inventory model and inventory-owned ui/
 ├── settings/           Persistent display and rendering settings
-├── structures/         Construction drafts, first-person runtime, presentation, and focused tests
+├── structures/         Generic definitions, drafts, root-file storage, runtime, presentation, and tests
 ├── ui/                 Shared components/, hud/, screens/, and theme/
 ├── save/               Three-slot JSON save manager
 └── tests/              Headless behavior, determinism, fuzz, and streaming checks
