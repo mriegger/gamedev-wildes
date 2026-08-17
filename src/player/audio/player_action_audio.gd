@@ -6,11 +6,13 @@ class_name PlayerActionAudio
 @onready var _player_hit_player: AudioStreamPlayer = $PlayerHitPlayer
 @onready var _equip_player: AudioStreamPlayer = $EquipPlayer
 @onready var _till_player: AudioStreamPlayer = $TillPlayer
+@onready var _harvest_player: AudioStreamPlayer = $HarvestPlayer
 
 var _interactor: PlayerInteractor
 var _animation_driver: PlayerAnimationDriver
 var _inventory: InventoryModel
 var _combat: MeleeCombatCoordinator
+var _harvest: PumpkinHarvestCoordinator
 var _selected_item_id: StringName
 var _clunk_streams: Array[AudioStream] = [
 	preload("res://assets/audio/sfx/tools/impactGeneric_light_001.ogg"),
@@ -31,10 +33,16 @@ var _till_streams: Array[AudioStream] = [
 	preload("res://assets/audio/sfx/farming/tilling/bookFlip2.ogg"),
 	preload("res://assets/audio/sfx/farming/tilling/bookFlip3.ogg"),
 ]
+var _harvest_streams: Array[AudioStream] = [
+	preload("res://assets/audio/sfx/farming/harvesting/pop_generic_01_CC0.wav"),
+	preload("res://assets/audio/sfx/farming/harvesting/pop_generic_02_CC0.wav"),
+	preload("res://assets/audio/sfx/farming/harvesting/pop_generic_03_CC0.wav"),
+]
 var _last_clunk_idx: int = -1
 var _last_creature_hit_idx: int = -1
 var _last_player_hit_idx: int = -1
 var _last_till_idx: int = -1
+var _last_harvest_idx: int = -1
 var _last_equip_indices: Dictionary = {}
 
 
@@ -57,6 +65,11 @@ func setup(
 	if _clunk_player.stream == null and not _clunk_streams.is_empty():
 		_clunk_player.stream = _clunk_streams[0]
 
+func setup_harvesting(harvest: PumpkinHarvestCoordinator) -> void:
+	assert(_interactor != null and harvest != null and _harvest == null)
+	_harvest = harvest
+	_harvest.harvest_completed.connect(_on_harvest_completed)
+
 
 func _on_mining_impact():
 	_play_clunk(-6.0)
@@ -68,6 +81,9 @@ func _on_melee_terrain_hit(_pos: Vector3i):
 
 func _on_soil_tilled():
 	_last_till_idx = _play_random(_till_player, _till_streams, _last_till_idx, 0.96, 1.04)
+
+func _on_harvest_completed():
+	_last_harvest_idx = _play_random(_harvest_player, _harvest_streams, _last_harvest_idx, 0.96, 1.04)
 
 
 func _on_melee_outcome_committed(outcome: MeleeOutcome):
@@ -138,21 +154,26 @@ func _exit_tree():
 			_interactor.soil_tilled.disconnect(_on_soil_tilled)
 	if _combat != null and _combat.melee_outcome_committed.is_connected(_on_melee_outcome_committed):
 		_combat.melee_outcome_committed.disconnect(_on_melee_outcome_committed)
+	if _harvest != null and _harvest.harvest_completed.is_connected(_on_harvest_completed):
+		_harvest.harvest_completed.disconnect(_on_harvest_completed)
 	if _inventory != null and _inventory.inventory_changed.is_connected(_on_inventory_changed):
 		_inventory.inventory_changed.disconnect(_on_inventory_changed)
 	_animation_driver = null
 	_interactor = null
 	_inventory = null
 	_combat = null
+	_harvest = null
 	_release_player(_clunk_player)
 	_release_player(_creature_hit_player)
 	_release_player(_player_hit_player)
 	_release_player(_equip_player)
 	_release_player(_till_player)
+	_release_player(_harvest_player)
 	_clunk_streams.clear()
 	_creature_hit_streams.clear()
 	_player_hit_streams.clear()
 	_till_streams.clear()
+	_harvest_streams.clear()
 	_last_equip_indices.clear()
 
 
