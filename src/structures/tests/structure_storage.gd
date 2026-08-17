@@ -135,7 +135,7 @@ func _test_export_failures(store: StructureFileStore, root_path: String, suffix:
 	_expect(DirAccess.dir_exists_absolute(directory_collision_path) and not draft.is_bound() and draft.is_dirty(), "directory collision changed the destination or draft binding")
 	var traversal := store.export_draft(draft, &"../escape")
 	_expect(not traversal.succeeded and traversal.message == "Export ID must be lowercase snake_case", "traversal export ID was accepted")
-	var empty := StructureDraft.create(Vector3i(2, 2, 2))
+	var empty := StructureDraft.create_generic(Vector3i(2, 2, 2))
 	_expect(not store.export_draft(empty, StringName("empty_%s" % suffix)).succeeded, "empty draft was exported")
 	var missing_root := root_path.path_join("structure_storage_missing_%s" % suffix)
 	var missing_store := StructureFileStore.new(missing_root)
@@ -198,7 +198,7 @@ func _make_definition(identifier: StringName, block_id: int) -> StructureDefinit
 	return definition
 
 func _make_draft() -> StructureDraft:
-	var draft := StructureDraft.create(Vector3i(3, 3, 3))
+	var draft := StructureDraft.create_generic(Vector3i(3, 3, 3))
 	_expect(draft != null, "storage draft could not be created")
 	if draft == null:
 		return null

@@ -97,7 +97,7 @@ func _test_level_mesh_equivalence() -> void:
 
 func _test_structure_chunk_mesher() -> void:
 	var size := Vector3i(17, 1, 1)
-	var draft := StructureDraft.create(size)
+	var draft := StructureDraft.create_generic(size)
 	_expect(draft.try_place_block(Vector3i(15, 0, 0), BlockId.Type.STONE).succeeded, "first mesher fixture block was rejected")
 	_expect(draft.try_place_block(Vector3i(16, 0, 0), BlockId.Type.DIRT).succeeded, "second mesher fixture block was rejected")
 	var mesher := StructureChunkMesher.new(_texture_set)
@@ -108,9 +108,21 @@ func _test_structure_chunk_mesher() -> void:
 	_expect(draft.try_remove_block(Vector3i(16, 0, 0)).succeeded, "mesher fixture block removal was rejected")
 	var beside_air := mesher.build_mesh_data(draft.copy_cells_for_chunk(Vector3i.ZERO, StructureChunkMesher.CHUNK_SIZE), size, Vector3i.ZERO) as Dictionary
 	_expect(beside_air != null and (beside_air["vertices"] as PackedVector3Array).size() == 24, "in-bounds AIR did not expose its neighboring face")
+	var module_definition := LevelModuleDefinition.new()
+	module_definition.module_id = &"void_rendering"
+	module_definition.size = size
+	module_definition.cells.resize(size.x * size.y * size.z)
+	module_definition.cells.fill(StructureCell.AIR)
+	module_definition.cells[StructureCell.index_of(Vector3i(15, 0, 0), size)] = BlockId.Type.STONE
+	module_definition.cells[StructureCell.index_of(Vector3i(16, 0, 0), size)] = StructureCell.VOID
+	var module := StructureDraft.restore_level_module(module_definition, ProjectSettings.globalize_path("res://../void_rendering.tres"))
+	_expect(module != null, "VOID rendering module did not restore")
+	if module != null:
+		var beside_void := mesher.build_mesh_data(module.copy_cells_for_chunk(Vector3i.ZERO, StructureChunkMesher.CHUNK_SIZE), size, Vector3i.ZERO) as Dictionary
+		_expect(beside_void != null and (beside_void["vertices"] as PackedVector3Array).size() == 20, "in-bounds VOID exposed its neighboring face")
 
 func _test_renderer_locality() -> void:
-	var draft := StructureDraft.create(Vector3i(32, 32, 32))
+	var draft := StructureDraft.create_generic(Vector3i(32, 32, 32))
 	var seeded_cells: Array[Vector3i] = [
 		Vector3i(1, 1, 1),
 		Vector3i(17, 1, 1),
@@ -183,7 +195,7 @@ func _test_renderer_locality() -> void:
 	await process_frame
 
 func _test_empty_chunk_removal() -> void:
-	var draft := StructureDraft.create(Vector3i(32, 16, 16))
+	var draft := StructureDraft.create_generic(Vector3i(32, 16, 16))
 	var retained_cell := Vector3i(1, 1, 1)
 	var removed_cell := Vector3i(17, 1, 1)
 	_expect(draft.try_place_block(retained_cell, BlockId.Type.STONE).succeeded, "failed to seed retained chunk")
@@ -208,7 +220,7 @@ func _test_empty_chunk_removal() -> void:
 	await process_frame
 
 func _test_maximum_chunk_bounds() -> void:
-	var draft := StructureDraft.create(Vector3i(64, 64, 64))
+	var draft := StructureDraft.create_generic(Vector3i(64, 64, 64))
 	var maximum_cell := Vector3i(63, 63, 63)
 	_expect(draft.try_place_block(maximum_cell, BlockId.Type.STONE).succeeded, "maximum-boundary block was rejected")
 	var renderer := _create_renderer(draft)

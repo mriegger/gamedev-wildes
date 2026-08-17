@@ -427,7 +427,7 @@ func _run_structure_designer_cycle(game: TransitionGame, in_level: bool, cycle: 
 	else:
 		game.game_session.resume_saving()
 	var orphan_baseline := int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
-	var draft := StructureDraft.create(Vector3i(5, 4, 5))
+	var draft := StructureDraft.create_generic(Vector3i(5, 4, 5))
 	_expect(draft != null, "structure draft creation failed for %s" % label)
 	if draft == null:
 		return

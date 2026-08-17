@@ -54,7 +54,7 @@ func _test_shadow_disabled_torch_updates() -> void:
 	await _tree.process_frame
 
 func _test_runtime() -> void:
-	var draft := StructureDraft.create(Vector3i(8, 4, 8))
+	var draft := StructureDraft.create_generic(Vector3i(8, 4, 8))
 	_expect(draft != null, "draft creation failed")
 	if draft == null:
 		return

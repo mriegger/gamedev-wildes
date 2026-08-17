@@ -59,7 +59,7 @@ func complete_exit() -> void:
 	_draft = null
 
 func _on_new_draft_requested(size: Vector3i) -> void:
-	var next_draft := StructureDraft.create(size)
+	var next_draft := StructureDraft.create_generic(size)
 	assert(next_draft != null)
 	_begin_draft(next_draft)
 

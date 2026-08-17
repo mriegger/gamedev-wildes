@@ -12,6 +12,9 @@ enum Direction {
 @export var cell: Vector3i
 @export var direction: Direction = Direction.NORTH
 
+static func is_valid_direction(value: int) -> bool:
+	return value >= 0 and value < Direction.size()
+
 static func vector_for(value: Direction) -> Vector3i:
 	match value:
 		Direction.NORTH:

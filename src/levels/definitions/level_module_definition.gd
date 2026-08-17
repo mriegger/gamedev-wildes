@@ -3,7 +3,7 @@ class_name LevelModuleDefinition
 
 @export var module_id: StringName
 @export var size: Vector3i
-@export_range(0.01, 100.0, 0.01) var weight: float = 1.0
+@export_range(0.01, 100.0, 0.01, "or_greater") var weight: float = 1.0
 @export var cells: PackedInt32Array
 @export var sockets: Array[LevelSocketDefinition] = []
 @export var torches: Array[LevelTorchDefinition] = []
@@ -51,8 +51,8 @@ func validate() -> bool:
 		push_error("[LevelModuleDefinition] Dense cell count mismatch for %s" % source)
 		valid = false
 		return valid
-	if weight <= 0.0:
-		push_error("[LevelModuleDefinition] Weight must be positive for %s" % source)
+	if not is_finite(weight) or weight <= 0.0:
+		push_error("[LevelModuleDefinition] Weight must be positive and finite for %s" % source)
 		valid = false
 	for value in cells:
 		if not StructureCell.is_valid(value):
@@ -92,6 +92,9 @@ func validate() -> bool:
 
 func _validate_socket(socket: LevelSocketDefinition, source: String) -> bool:
 	var valid := true
+	if not LevelSocketDefinition.is_valid_direction(socket.direction):
+		push_error("[LevelModuleDefinition] Socket direction is invalid for %s" % source)
+		return false
 	if not StructureCell.is_in_bounds(socket.cell, size) or not StructureCell.is_in_bounds(socket.cell + Vector3i.UP, size):
 		push_error("[LevelModuleDefinition] Socket aperture outside %s" % source)
 		return false
@@ -125,6 +128,9 @@ func _validate_socket(socket: LevelSocketDefinition, source: String) -> bool:
 	return valid
 
 func _validate_torch(torch: LevelTorchDefinition, source: String) -> bool:
+	if not LevelSocketDefinition.is_valid_direction(torch.wall_direction):
+		push_error("[LevelModuleDefinition] Torch direction is invalid for %s" % source)
+		return false
 	if not StructureCell.is_in_bounds(torch.cell, size) or cell_at(torch.cell) != StructureCell.AIR:
 		push_error("[LevelModuleDefinition] Torch is not in interior air for %s" % source)
 		return false
@@ -135,7 +141,10 @@ func _validate_torch(torch: LevelTorchDefinition, source: String) -> bool:
 	return true
 
 func _validate_marker(marker: LevelMarkerDefinition, label: String, source: String) -> bool:
-	if marker == null or not StructureCell.is_in_bounds(marker.cell, size) or not StructureCell.is_in_bounds(marker.cell + Vector3i.UP, size):
+	if marker == null or not LevelSocketDefinition.is_valid_direction(marker.facing):
+		push_error("[LevelModuleDefinition] Invalid %s marker facing for %s" % [label, source])
+		return false
+	if not StructureCell.is_in_bounds(marker.cell, size) or not StructureCell.is_in_bounds(marker.cell + Vector3i.UP, size):
 		push_error("[LevelModuleDefinition] Invalid %s marker for %s" % [label, source])
 		return false
 	if cell_at(marker.cell) != StructureCell.AIR or cell_at(marker.cell + Vector3i.UP) != StructureCell.AIR:

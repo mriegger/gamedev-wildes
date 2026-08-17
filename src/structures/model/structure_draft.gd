@@ -1,36 +1,84 @@
 extends RefCounted
 class_name StructureDraft
 
+enum Format {
+	GENERIC_STRUCTURE,
+	LEVEL_MODULE,
+}
+
+const DEFAULT_LEVEL_MODULE_SIZE: Vector3i = Vector3i(7, 4, 7)
+
+var _format: Format
 var _size: Vector3i
 var _cells: PackedInt32Array
 var _torches_by_cell: Dictionary = {}
 var _torch_cells_by_support: Dictionary = {}
+var _sockets: Array[LevelSocketDefinition] = []
+var _spawn_marker: LevelMarkerDefinition
+var _return_door_marker: LevelMarkerDefinition
+var _weight: float = 1.0
+var _required_air_cells: Dictionary = {}
+var _required_solid_cells: Dictionary = {}
 var _identifier: StringName
 var _source_path: String
 var _dirty: bool
 
-func _init(p_size: Vector3i, p_cells: PackedInt32Array) -> void:
-	assert(StructureDefinition.is_valid_size(p_size))
+func _init(p_format: Format, p_size: Vector3i, p_cells: PackedInt32Array) -> void:
+	assert(p_format == Format.GENERIC_STRUCTURE or p_format == Format.LEVEL_MODULE)
+	assert(StructureDefinition.is_valid_size(p_size) if p_format == Format.GENERIC_STRUCTURE else is_valid_level_module_size(p_size))
 	assert(p_cells.size() == p_size.x * p_size.y * p_size.z)
 	for value in p_cells:
-		assert(StructureCell.is_generic_valid(value))
+		assert(StructureCell.is_generic_valid(value) if p_format == Format.GENERIC_STRUCTURE else StructureCell.is_valid(value))
+	_format = p_format
 	_size = p_size
 	_cells = p_cells.duplicate()
 
-static func create(size: Vector3i = StructureDefinition.DEFAULT_SIZE) -> StructureDraft:
+static func create_generic(size: Vector3i = StructureDefinition.DEFAULT_SIZE) -> StructureDraft:
 	if not StructureDefinition.is_valid_size(size):
 		return null
-	return StructureDraft.new(size, _air_cells(size))
+	return StructureDraft.new(Format.GENERIC_STRUCTURE, size, _air_cells(size))
 
-static func restore(definition: StructureDefinition, source_path: String) -> StructureDraft:
+static func create_level_module(size: Vector3i = DEFAULT_LEVEL_MODULE_SIZE) -> StructureDraft:
+	if not is_valid_level_module_size(size):
+		return null
+	return StructureDraft.new(Format.LEVEL_MODULE, size, _air_cells(size))
+
+static func restore_structure(definition: StructureDefinition, source_path: String) -> StructureDraft:
 	if definition == null or not definition.validate() or not source_path.is_absolute_path():
 		return null
-	var draft := StructureDraft.new(definition.size, definition.cells)
+	var draft := StructureDraft.new(Format.GENERIC_STRUCTURE, definition.size, definition.cells)
 	draft._identifier = definition.structure_id
 	draft._source_path = source_path.simplify_path()
 	for torch in definition.torches:
 		draft._add_torch(_copy_torch(torch))
 	return draft
+
+static func restore_level_module(definition: LevelModuleDefinition, source_path: String) -> StructureDraft:
+	if definition == null or not definition.validate() or not source_path.is_absolute_path():
+		return null
+	var draft := StructureDraft.new(Format.LEVEL_MODULE, definition.size, definition.cells)
+	draft._identifier = definition.module_id
+	draft._source_path = source_path.simplify_path()
+	draft._weight = definition.weight
+	for torch in definition.torches:
+		var copied_torch := StructureTorchDefinition.new()
+		copied_torch.cell = torch.cell
+		copied_torch.support_direction = LevelSocketDefinition.vector_for(torch.wall_direction)
+		draft._add_torch(copied_torch)
+	for socket in definition.sockets:
+		draft._sockets.append(_copy_socket(socket))
+	draft._spawn_marker = _copy_marker(definition.spawn_marker)
+	draft._return_door_marker = _copy_marker(definition.return_door_marker)
+	draft._index_module_metadata()
+	return draft
+
+static func is_valid_level_module_size(value: Vector3i) -> bool:
+	if value.x <= 0 or value.y <= 0 or value.z <= 0:
+		return false
+	return value.x <= LevelDefinition.HARD_MAX_EXTENT.x and value.y <= LevelDefinition.HARD_MAX_EXTENT.y and value.z <= LevelDefinition.HARD_MAX_EXTENT.z
+
+func get_format() -> Format:
+	return _format
 
 func get_size() -> Vector3i:
 	return _size
@@ -69,17 +117,29 @@ func copy_cells_for_chunk(chunk: Vector3i, chunk_size: int) -> Dictionary:
 	return copied
 
 func get_torches() -> Array[StructureTorchDefinition]:
-	var cells: Array[Vector3i] = []
-	for cell_value in _torches_by_cell:
-		cells.append(cell_value as Vector3i)
-	cells.sort_custom(_cell_less)
 	var copied: Array[StructureTorchDefinition] = []
-	for cell in cells:
+	for cell_value in _torches_by_cell:
+		var cell := cell_value as Vector3i
 		copied.append(_copy_torch(_torches_by_cell[cell] as StructureTorchDefinition))
 	return copied
 
 func has_torch(cell: Vector3i) -> bool:
 	return _torches_by_cell.has(cell)
+
+func get_sockets() -> Array[LevelSocketDefinition]:
+	var copied: Array[LevelSocketDefinition] = []
+	for socket in _sockets:
+		copied.append(_copy_socket(socket))
+	return copied
+
+func get_spawn_marker() -> LevelMarkerDefinition:
+	return _copy_marker(_spawn_marker)
+
+func get_return_door_marker() -> LevelMarkerDefinition:
+	return _copy_marker(_return_door_marker)
+
+func get_weight() -> float:
+	return _weight
 
 func get_identifier() -> StringName:
 	return _identifier
@@ -102,7 +162,9 @@ func is_empty() -> bool:
 func can_place_block(cell: Vector3i, block_id: int) -> bool:
 	if not is_in_bounds(cell) or not StructureCell.is_structure_solid(block_id):
 		return false
-	return not StructureCell.is_structure_solid(get_cell(cell)) and not has_torch(cell)
+	if StructureCell.is_structure_solid(get_cell(cell)) or has_torch(cell):
+		return false
+	return not _required_air_cells.has(cell)
 
 func try_place_block(cell: Vector3i, block_id: int) -> StructureDraftChange:
 	if not can_place_block(cell, block_id):
@@ -112,6 +174,8 @@ func try_place_block(cell: Vector3i, block_id: int) -> StructureDraftChange:
 
 func try_remove_block(cell: Vector3i) -> StructureDraftChange:
 	if not is_in_bounds(cell) or not StructureCell.is_structure_solid(get_cell(cell)):
+		return StructureDraftChange.reject()
+	if _required_solid_cells.has(cell):
 		return StructureDraftChange.reject()
 	var removed_torch_cells := _get_torch_cells_supported_by(cell)
 	_set_cell(cell, StructureCell.AIR)
@@ -194,6 +258,26 @@ func _get_torch_cells_supported_by(support_cell: Vector3i) -> Array[Vector3i]:
 	cells.sort_custom(_cell_less)
 	return cells
 
+func _index_module_metadata() -> void:
+	assert(_format == Format.LEVEL_MODULE)
+	for socket in _sockets:
+		var inward := -LevelSocketDefinition.vector_for(socket.direction)
+		var upper := socket.cell + Vector3i.UP
+		_required_air_cells[socket.cell] = true
+		_required_air_cells[upper] = true
+		_required_air_cells[socket.cell + inward] = true
+		_required_air_cells[upper + inward] = true
+		_required_solid_cells[socket.cell + Vector3i.DOWN] = true
+	_index_marker(_spawn_marker)
+	_index_marker(_return_door_marker)
+
+func _index_marker(marker: LevelMarkerDefinition) -> void:
+	if marker == null:
+		return
+	_required_air_cells[marker.cell] = true
+	_required_air_cells[marker.cell + Vector3i.UP] = true
+	_required_solid_cells[marker.cell + Vector3i.DOWN] = true
+
 static func _air_cells(size: Vector3i) -> PackedInt32Array:
 	var cells := PackedInt32Array()
 	cells.resize(size.x * size.y * size.z)
@@ -204,6 +288,23 @@ static func _copy_torch(source: StructureTorchDefinition) -> StructureTorchDefin
 	var copied := StructureTorchDefinition.new()
 	copied.cell = source.cell
 	copied.support_direction = source.support_direction
+	return copied
+
+static func _copy_socket(source: LevelSocketDefinition) -> LevelSocketDefinition:
+	if source == null:
+		return null
+	var copied := LevelSocketDefinition.new()
+	copied.socket_id = source.socket_id
+	copied.cell = source.cell
+	copied.direction = source.direction
+	return copied
+
+static func _copy_marker(source: LevelMarkerDefinition) -> LevelMarkerDefinition:
+	if source == null:
+		return null
+	var copied := LevelMarkerDefinition.new()
+	copied.cell = source.cell
+	copied.facing = source.facing
 	return copied
 
 static func _cell_less(a: Vector3i, b: Vector3i) -> bool:

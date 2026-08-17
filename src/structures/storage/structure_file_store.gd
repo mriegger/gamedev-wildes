@@ -35,7 +35,7 @@ func import_entry(entry: StructureFileEntry) -> StructureFileResult:
 	var definition := _load_definition(entry.absolute_path)
 	if definition == null or definition.structure_id != entry.identifier:
 		return StructureFileResult.failure("Import resource type or ID changed")
-	var draft := StructureDraft.restore(definition, entry.absolute_path)
+	var draft := StructureDraft.restore_structure(definition, entry.absolute_path)
 	if draft == null:
 		return StructureFileResult.failure("Import resource is invalid")
 	return StructureFileResult.success(draft, entry)
