@@ -173,9 +173,13 @@ truth, bounds, and entry/return geometry.
 construction session. Its commands commit block and supported wall-torch changes atomically, while
 copied snapshots keep the chunk renderer and presentation from mutating draft collections. Imported
 module weight, sockets, torches, and paired markers are copied into the draft, and indexed required
-air and floor cells reject ordinary edits that would invalidate sockets or markers without scanning
-all metadata. Imported definitions have an immutable type, ID, dimensions, and source binding;
-successful exports are the only operation that changes a draft's binding or clears its dirty state.
+air and floor reference counts reject ordinary edits that would invalidate overlapping sockets or
+markers without scanning all metadata. Module-only commands validate complete VOID, connection,
+paired-marker, and precise positive-weight changes before committing. Cell and torch deltas remain
+localized, connection removal never refills its aperture, and torch support removal reports only
+the attached torches. Imported definitions have an immutable type, ID, dimensions, and source
+binding; successful exports are the only operation that changes a draft's binding or clears its
+dirty state.
 
 `StructureDefinition` format version one persists a lowercase snake_case ID, bounded dimensions,
 dense canonical cube cells, and typed supported wall torches. Dense cells use
@@ -195,8 +199,15 @@ snapshots and suspends the active overworld or dungeon presentation without chan
 same inventory and exact lifecycle state on exit. Designer cells render in bounded 16-cube chunks;
 the deterministic voxel raycast is shared with player interaction, while designer movement and
 creative selection remain independent from combat and finite inventory state. New and imported
-generic structures and Level Modules use the same runtime. The workflow can preserve existing
-module metadata but does not expose metadata authoring commands or presentation.
+generic structures and Level Modules use the same runtime. Level Module tools release the cursor,
+capture the current centered target, and stage spawn and return markers before one atomic commit.
+Colored metadata overlays present copied socket and marker state; ordinary edits rebuild only
+affected chunks and torch nodes, while metadata commits alone refresh the panel and overlays.
+Torches continue through the normal first-person palette rather than a second metadata workflow.
+
+Repository-root Level Module exports remain authoring artifacts until they are explicitly added to
+the appropriate level content and catalog. Runtime generation does not scan the repository root,
+consume drafts, or register exported modules automatically.
 
 Each future content family, such as containers or encounters, adds its typed authored definition,
 transformed placement, state owner, runtime coordinator, and real caller together. Generic marker

@@ -32,8 +32,9 @@ placement would land; placements that would overlap you are rejected.
 
 The Structure Designer uses first-person `WASD` movement, mouse look, `Space`/`Ctrl` to
 ascend/descend, and `Shift` acceleration. Left-click removes, right-click places, `Tab` opens the
-infinite creative palette, `/` opens the developer console, and `Esc` closes active designer UI
-before offering to leave the designer.
+infinite creative palette, and `M` opens Level Module tools with a free cursor. Closing either
+panel returns to first-person building. `/` opens the developer console, and `Esc` closes active
+designer UI before offering to leave the designer.
 
 The animation tuner is a compact right-side debug-build panel. Its Movement, Animation, Parts,
 and Attack tabs update the live player immediately, while preview modes let you hold idle, walk,
@@ -65,8 +66,12 @@ Module plot. `dev structure import` lists valid resources of both types stored d
 `src/`, while `dev structure export` asks for a lowercase snake_case ID on first save and confirms
 later overwrites of that bound file. Successful exports keep the workspace open and mark the
 current draft clean. `dev structure exit` leaves the workspace and confirms before discarding
-edited blocks or torches. Imported Level Module weight, sockets, ordered torches, and paired markers
-round-trip unchanged; authoring that metadata remains outside this workflow.
+edited cells, torches, or Level Module metadata. Level Module tools edit precise weight, targeted
+`VOID` cells, connections selected from the outside face of a lower boundary wall, and an atomic
+spawn/return marker pair.
+Torches remain normal first-person palette placements instead of panel metadata. Exported modules
+must still be added explicitly to the appropriate level content and catalog; repository-root files
+are not consumed or registered by generation automatically.
 
 **Blocks.** Grass, dirt, sand, stone, wood, leaves, cobblestone, mossy stone bricks, stone bricks,
 terracotta bricks, and wood planks are minable and placeable. Copper is minable but not placeable.
