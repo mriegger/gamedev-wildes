@@ -59,13 +59,14 @@ but its streaming and presentation are suspended until you return through the du
 Doorway selection, module pools, terrain presentation, ambient lighting, and return-door materials
 are configured through typed level resources rather than hardcoded dungeon IDs.
 
-**Structure construction workspace.** `dev structure new` opens a length, width, and height dialog,
-then enters an isolated first-person workspace for a generic plot. `dev structure import` lists
-valid generic `.tres` resources stored directly beside `src/`, while `dev structure export` asks
-for a lowercase snake_case ID on first save and confirms later overwrites of that bound file.
-Successful exports keep the workspace open and mark the current draft clean. `dev structure exit`
-leaves the workspace and confirms before discarding edited blocks or torches. Level-module import,
-export, and metadata authoring remain outside this generic workflow.
+**Structure construction workspace.** `dev structure new` opens a document type, length, width, and
+height dialog, then enters an isolated first-person workspace for a generic structure or Level
+Module plot. `dev structure import` lists valid resources of both types stored directly beside
+`src/`, while `dev structure export` asks for a lowercase snake_case ID on first save and confirms
+later overwrites of that bound file. Successful exports keep the workspace open and mark the
+current draft clean. `dev structure exit` leaves the workspace and confirms before discarding
+edited blocks or torches. Imported Level Module weight, sockets, ordered torches, and paired markers
+round-trip unchanged; authoring that metadata remains outside this workflow.
 
 **Blocks.** Grass, dirt, sand, stone, wood, leaves, cobblestone, mossy stone bricks, stone bricks,
 terracotta bricks, and wood planks are minable and placeable. Copper is minable but not placeable.
