@@ -47,8 +47,8 @@ func _test_dialog_contracts() -> void:
 	dialogs._on_new_confirmed()
 	_expect(_new_requests == [Vector3i(11, 7, 13)], "dialog did not map length, height, and width to x, y, and z")
 	_expect(_open_states == [true, false] and not dialogs.is_open(), "new confirmation did not close its dialog")
-	var first_entry := StructureFileEntry.new(&"first_structure", "/first_structure.tres")
-	var second_entry := StructureFileEntry.new(&"second_structure", "/second_structure.tres")
+	var first_entry := StructureFileEntry.new(&"first_structure", StructureDraft.Format.GENERIC_STRUCTURE, "/first_structure.tres")
+	var second_entry := StructureFileEntry.new(&"second_structure", StructureDraft.Format.GENERIC_STRUCTURE, "/second_structure.tres")
 	_expect(dialogs.show_import_dialog([first_entry, second_entry]), "import dialog did not open")
 	var import_list := dialogs.get_node("ImportDialog/ImportList") as ItemList
 	_expect(import_list.item_count == 2 and import_list.get_item_text(0) == "first_structure" and not import_list.get_item_text(0).contains("Module"), "import dialog did not present generic IDs only")

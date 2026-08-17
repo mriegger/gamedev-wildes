@@ -20,10 +20,11 @@ func list_importable() -> Array[StructureFileEntry]:
 		if not StructureDefinition.is_valid_id(identifier):
 			continue
 		var path := _root_path.path_join(filename).simplify_path()
-		var definition := _load_definition(path)
-		if definition == null or definition.structure_id != identifier:
+		var resource := _load_resource(path)
+		var format: Variant = _resource_format(resource)
+		if format == null or _resource_identifier(resource) != identifier:
 			continue
-		entries.append(StructureFileEntry.new(identifier, path))
+		entries.append(StructureFileEntry.new(identifier, format as StructureDraft.Format, path))
 	entries.sort_custom(func(first: StructureFileEntry, second: StructureFileEntry) -> bool:
 		return String(first.identifier) < String(second.identifier)
 	)
@@ -32,10 +33,11 @@ func list_importable() -> Array[StructureFileEntry]:
 func import_entry(entry: StructureFileEntry) -> StructureFileResult:
 	if entry == null or not _is_valid_entry_path(entry):
 		return StructureFileResult.failure("Import entry is outside the repository root")
-	var definition := _load_definition(entry.absolute_path)
-	if definition == null or definition.structure_id != entry.identifier:
+	var resource := _load_resource(entry.absolute_path)
+	var format: Variant = _resource_format(resource)
+	if format == null or format as StructureDraft.Format != entry.format or _resource_identifier(resource) != entry.identifier:
 		return StructureFileResult.failure("Import resource type or ID changed")
-	var draft := StructureDraft.restore_structure(definition, entry.absolute_path)
+	var draft := StructureResourceAdapter.create_draft(resource, entry.absolute_path)
 	if draft == null:
 		return StructureFileResult.failure("Import resource is invalid")
 	return StructureFileResult.success(draft, entry)
@@ -54,12 +56,12 @@ func export_draft(draft: StructureDraft, requested_id: StringName = &"") -> Stru
 	if not _is_direct_resource_path(destination, identifier):
 		return StructureFileResult.failure("Export destination is outside the repository root")
 	if draft.is_bound():
-		var current := _load_definition(destination)
-		if current == null or current.structure_id != identifier:
+		var current := _load_resource(destination)
+		if _resource_format(current) != draft.get_format() or _resource_identifier(current) != identifier:
 			return StructureFileResult.failure("Bound source type or ID changed")
 	elif _path_exists(destination):
 		return StructureFileResult.failure("Export destination already exists")
-	var snapshot := _create_snapshot(draft, identifier)
+	var snapshot := StructureResourceAdapter.create_snapshot(draft, identifier)
 	if snapshot == null:
 		return StructureFileResult.failure("Draft cannot produce a valid resource")
 	var temporary_path := _temporary_path(identifier)
@@ -67,13 +69,13 @@ func export_draft(draft: StructureDraft, requested_id: StringName = &"") -> Stru
 	if save_error != OK:
 		_remove_temporary(temporary_path)
 		return StructureFileResult.failure("Temporary resource save failed")
-	var reloaded := _load_definition(temporary_path)
-	if reloaded == null or not _resources_equal(snapshot, reloaded):
+	var reloaded := _load_resource(temporary_path)
+	if reloaded == null or not StructureResourceAdapter.resources_equal(snapshot, reloaded):
 		_remove_temporary(temporary_path)
 		return StructureFileResult.failure("Temporary resource round trip failed")
 	if draft.is_bound():
-		var current := _load_definition(destination)
-		if current == null or current.structure_id != identifier:
+		var current := _load_resource(destination)
+		if _resource_format(current) != draft.get_format() or _resource_identifier(current) != identifier:
 			_remove_temporary(temporary_path)
 			return StructureFileResult.failure("Bound source type or ID changed")
 	elif _path_exists(destination):
@@ -85,46 +87,19 @@ func export_draft(draft: StructureDraft, requested_id: StringName = &"") -> Stru
 		return StructureFileResult.failure("Validated resource could not replace the destination")
 	var accepted := draft.accept_export(identifier, destination)
 	assert(accepted)
-	return StructureFileResult.success(draft, StructureFileEntry.new(identifier, destination))
+	return StructureFileResult.success(draft, StructureFileEntry.new(identifier, draft.get_format(), destination))
 
-func _create_snapshot(draft: StructureDraft, identifier: StringName) -> StructureDefinition:
-	if draft == null or draft.is_empty() or not StructureDefinition.is_valid_id(identifier):
-		return null
-	if draft.is_bound() and draft.get_identifier() != identifier:
-		return null
-	var definition := StructureDefinition.new()
-	definition.format_version = StructureDefinition.CURRENT_FORMAT_VERSION
-	definition.structure_id = identifier
-	definition.size = draft.get_size()
-	definition.cells = draft.snapshot_cells()
-	definition.torches.assign(draft.get_torches())
-	if not definition.validate():
-		return null
-	return definition
-
-func _resources_equal(first: StructureDefinition, second: StructureDefinition) -> bool:
-	if first == null or second == null or not second.validate():
-		return false
-	if first.format_version != second.format_version or first.structure_id != second.structure_id or first.size != second.size or first.cells != second.cells:
-		return false
-	if first.torches.size() != second.torches.size():
-		return false
-	for index in first.torches.size():
-		var left := first.torches[index]
-		var right := second.torches[index]
-		if left == null or right == null or left.cell != right.cell or left.support_direction != right.support_direction:
-			return false
-	return true
-
-func _load_definition(path: String) -> StructureDefinition:
+func _load_resource(path: String) -> Resource:
 	var resource := ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE)
-	if not resource is StructureDefinition:
-		return null
-	var definition := resource as StructureDefinition
-	return definition if definition.validate() else null
+	if resource is StructureDefinition:
+		return resource if (resource as StructureDefinition).validate() else null
+	if resource is LevelModuleDefinition:
+		return resource if (resource as LevelModuleDefinition).validate() else null
+	return null
 
 func _is_valid_entry_path(entry: StructureFileEntry) -> bool:
-	return StructureDefinition.is_valid_id(entry.identifier) and _is_direct_resource_path(entry.absolute_path, entry.identifier)
+	var format_valid := entry.format == StructureDraft.Format.GENERIC_STRUCTURE or entry.format == StructureDraft.Format.LEVEL_MODULE
+	return format_valid and StructureDefinition.is_valid_id(entry.identifier) and _is_direct_resource_path(entry.absolute_path, entry.identifier)
 
 func _is_direct_resource_path(path: String, identifier: StringName) -> bool:
 	var simplified := path.simplify_path()
@@ -139,7 +114,7 @@ func _temporary_path(identifier: StringName) -> String:
 		suffix += 1
 	return ""
 
-func _save_temporary(resource: StructureDefinition, path: String) -> Error:
+func _save_temporary(resource: Resource, path: String) -> Error:
 	return ResourceSaver.save(resource, path)
 
 func _replace_temporary(temporary_path: String, destination: String) -> Error:
@@ -151,3 +126,17 @@ func _remove_temporary(path: String) -> void:
 
 func _path_exists(path: String) -> bool:
 	return FileAccess.file_exists(path) or DirAccess.dir_exists_absolute(path)
+
+func _resource_format(resource: Resource) -> Variant:
+	if resource is StructureDefinition:
+		return StructureDraft.Format.GENERIC_STRUCTURE
+	if resource is LevelModuleDefinition:
+		return StructureDraft.Format.LEVEL_MODULE
+	return null
+
+func _resource_identifier(resource: Resource) -> StringName:
+	if resource is StructureDefinition:
+		return (resource as StructureDefinition).structure_id
+	if resource is LevelModuleDefinition:
+		return (resource as LevelModuleDefinition).module_id
+	return &""

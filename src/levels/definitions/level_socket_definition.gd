@@ -27,6 +27,18 @@ static func vector_for(value: Direction) -> Vector3i:
 			return Vector3i(-1, 0, 0)
 	return Vector3i.ZERO
 
+static func direction_for_vector(value: Vector3i) -> Variant:
+	match value:
+		Vector3i(0, 0, -1):
+			return Direction.NORTH
+		Vector3i(1, 0, 0):
+			return Direction.EAST
+		Vector3i(0, 0, 1):
+			return Direction.SOUTH
+		Vector3i(-1, 0, 0):
+			return Direction.WEST
+	return null
+
 static func opposite(value: Direction) -> Direction:
 	return ((int(value) + 2) % 4) as Direction
 

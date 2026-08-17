@@ -4,13 +4,18 @@ class_name StructureFileEntry
 var identifier: StringName:
 	get:
 		return _identifier
+var format: StructureDraft.Format:
+	get:
+		return _format
 var absolute_path: String:
 	get:
 		return _absolute_path
 
 var _identifier: StringName
+var _format: StructureDraft.Format
 var _absolute_path: String
 
-func _init(p_identifier: StringName, p_absolute_path: String) -> void:
+func _init(p_identifier: StringName, p_format: StructureDraft.Format, p_absolute_path: String) -> void:
 	_identifier = p_identifier
+	_format = p_format
 	_absolute_path = p_absolute_path
