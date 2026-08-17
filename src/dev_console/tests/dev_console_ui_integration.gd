@@ -20,6 +20,8 @@ func _process(_delta: float) -> bool:
 		_console.setup(
 			_inventory,
 			Callable(self, "_handle_structure_command").bind(&"new"),
+			Callable(self, "_handle_structure_command").bind(&"import"),
+			Callable(self, "_handle_structure_command").bind(&"export"),
 			Callable(self, "_handle_structure_command").bind(&"exit"),
 		)
 		_check_closed_layout()

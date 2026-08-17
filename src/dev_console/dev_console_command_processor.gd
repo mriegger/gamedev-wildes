@@ -13,19 +13,27 @@ const ITEM_ALIASES: Dictionary[StringName, StringName] = {
 
 var inventory_model: InventoryModel
 var _new_structure: Callable
+var _import_structure: Callable
+var _export_structure: Callable
 var _exit_structure: Callable
 
 func setup(
 	p_inventory_model: InventoryModel,
 	p_new_structure: Callable,
+	p_import_structure: Callable,
+	p_export_structure: Callable,
 	p_exit_structure: Callable,
 ) -> void:
 	assert(p_inventory_model != null)
 	assert(inventory_model == null)
 	assert(p_new_structure.is_valid())
+	assert(p_import_structure.is_valid())
+	assert(p_export_structure.is_valid())
 	assert(p_exit_structure.is_valid())
 	inventory_model = p_inventory_model
 	_new_structure = p_new_structure
+	_import_structure = p_import_structure
+	_export_structure = p_export_structure
 	_exit_structure = p_exit_structure
 
 func execute(command_line: String) -> ExecutionResult:
@@ -66,6 +74,10 @@ func _execute_dev(tokens: PackedStringArray) -> ExecutionResult:
 	var action := tokens[2].to_lower()
 	if action == "new":
 		return _execute_structure_action(_new_structure)
+	if action == "import":
+		return _execute_structure_action(_import_structure)
+	if action == "export":
+		return _execute_structure_action(_export_structure)
 	if action == "exit":
 		return _execute_structure_action(_exit_structure)
 	return ExecutionResult.REJECTED

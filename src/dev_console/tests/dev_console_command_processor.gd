@@ -54,13 +54,13 @@ func _init() -> void:
 	_structure_calls.clear()
 	_structure_commands_accepted = true
 	_expect_result(processor.execute("DeV StRuCtUrE NeW"), DevConsoleCommandProcessor.ExecutionResult.CLOSE, "new structure command did not close")
+	_expect_result(processor.execute("dev STRUCTURE import"), DevConsoleCommandProcessor.ExecutionResult.CLOSE, "import structure command did not close")
+	_expect_result(processor.execute("DEV structure EXPORT"), DevConsoleCommandProcessor.ExecutionResult.CLOSE, "export structure command did not close")
 	_expect_result(processor.execute("dev structure exit"), DevConsoleCommandProcessor.ExecutionResult.CLOSE, "exit structure command did not close")
-	_expect(_structure_calls == [&"new", &"exit"], "structure commands did not route to their injected handlers")
-	_expect_result(processor.execute("dev structure import"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "unimplemented import command was accepted")
-	_expect_result(processor.execute("DEV STRUCTURE EXPORT"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "unimplemented export command was accepted")
+	_expect(_structure_calls == [&"new", &"import", &"export", &"exit"], "structure commands did not route to their injected handlers")
 	_structure_commands_accepted = false
-	_expect_result(processor.execute("dev structure new"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "rejected structure handler closed the console")
-	_expect(_structure_calls.back() == &"new", "rejected structure command did not call its handler")
+	_expect_result(processor.execute("dev structure export"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "rejected structure handler closed the console")
+	_expect(_structure_calls.back() == &"export", "rejected structure command did not call its handler")
 	var structure_call_count := _structure_calls.size()
 	for invalid_command in [
 		"dev structure",
@@ -114,6 +114,8 @@ func _setup_processor(processor: DevConsoleCommandProcessor, inventory: Inventor
 	processor.setup(
 		inventory,
 		Callable(self, "_handle_structure_command").bind(&"new"),
+		Callable(self, "_handle_structure_command").bind(&"import"),
+		Callable(self, "_handle_structure_command").bind(&"export"),
 		Callable(self, "_handle_structure_command").bind(&"exit"),
 	)
 

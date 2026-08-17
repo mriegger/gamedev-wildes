@@ -16,12 +16,14 @@ func _ready() -> void:
 func setup(
 	inventory_model: InventoryModel,
 	new_structure: Callable,
+	import_structure: Callable,
+	export_structure: Callable,
 	exit_structure: Callable,
 ) -> void:
 	assert(inventory_model != null)
 	assert(_command_processor == null)
 	_command_processor = DevConsoleCommandProcessor.new()
-	_command_processor.setup(inventory_model, new_structure, exit_structure)
+	_command_processor.setup(inventory_model, new_structure, import_structure, export_structure, exit_structure)
 	set_process_input(true)
 
 func _input(event: InputEvent) -> void:

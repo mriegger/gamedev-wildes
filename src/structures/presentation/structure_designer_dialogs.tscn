@@ -65,9 +65,53 @@ min_value = 1.0
 max_value = 64.0
 value = 16.0
 
+[node name="ImportDialog" type="ConfirmationDialog" parent="."]
+title = "Import Structure"
+initial_position = 2
+size = Vector2i(520, 420)
+ok_button_text = "Import"
+
+[node name="ImportList" type="ItemList" parent="ImportDialog"]
+offset_left = 16.0
+offset_top = 16.0
+offset_right = 504.0
+offset_bottom = 340.0
+select_mode = 0
+
+[node name="ExportDialog" type="ConfirmationDialog" parent="."]
+title = "Export Structure"
+initial_position = 2
+size = Vector2i(440, 210)
+ok_button_text = "Export"
+
+[node name="Fields" type="VBoxContainer" parent="ExportDialog"]
+offset_left = 16.0
+offset_top = 16.0
+offset_right = 424.0
+offset_bottom = 130.0
+theme_override_constants/separation = 8
+
+[node name="Label" type="Label" parent="ExportDialog/Fields"]
+layout_mode = 2
+text = "Lowercase snake_case ID"
+
+[node name="Identifier" type="LineEdit" parent="ExportDialog/Fields"]
+layout_mode = 2
+placeholder_text = "stone_arch"
+
+[node name="OverwriteDialog" type="ConfirmationDialog" parent="."]
+title = "Confirm Overwrite"
+initial_position = 2
+size = Vector2i(460, 180)
+ok_button_text = "Overwrite"
+
 [node name="DiscardDialog" type="ConfirmationDialog" parent="."]
 title = "Discard Structure Draft"
 initial_position = 2
 size = Vector2i(460, 180)
 dialog_text = "Discard all changes and leave the structure workspace?"
 ok_button_text = "Discard"
+
+[node name="MessageDialog" type="AcceptDialog" parent="."]
+initial_position = 2
+size = Vector2i(480, 190)

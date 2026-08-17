@@ -272,6 +272,15 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	environment.start_clock()
 	game.inventory_model = InventoryModel.new(game.item_catalog)
 	game.inventory_model.setup_starter()
+	dev_console.setup(
+		game.inventory_model,
+		Callable(game, "_request_new_structure"),
+		Callable(game, "_request_import_structure"),
+		Callable(game, "_request_export_structure"),
+		Callable(game, "_request_exit_structure")
+	)
+	dev_console.open_state_changed.connect(game._on_dev_console_open_state_changed)
+	structure_dialogs.open_state_changed.connect(game._on_structure_dialog_open_state_changed)
 	game.player_stats = ActorStats.new(game.player_stats_definition)
 	camera_rig.setup(player, game.input_buffer)
 	entities.setup(game.entity_catalog, voxel_world, 1337, _position_ready)
@@ -282,7 +291,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	player.global_position = doorway_anchor
 	player.bind_space(voxel_world, world, world_spawn, voxel_world)
 	game._location_state = GameplayLocationState.new(doorway_anchor)
-	structure_workflow.setup(structure_dialogs)
+	structure_workflow.setup(structure_dialogs, StructureFileStore.new(ProjectSettings.globalize_path("res://../").simplify_path()))
 	coordinator.setup(player, hud, Callable(game, "_is_gameplay_ui_blocked"))
 	coordinator.interaction_requested.connect(game._on_level_interaction_requested)
 	var entrance := LevelEntrance.new()
@@ -441,6 +450,13 @@ func _run_structure_designer_cycle(game: TransitionGame, in_level: bool, cycle: 
 		var designer_controller := designer_runtime.get_node("StructureDesignerController") as StructureDesignerController
 		_expect(designer_runtime.visible and designer_runtime.is_processing(), "designer runtime was inactive for %s" % label)
 		_expect(designer_controller.camera.current and designer_controller._input_enabled and designer_controller.is_physics_processing(), "designer input and camera were inactive for %s" % label)
+		game.dev_console.open()
+		_expect(game.dev_console.is_open() and not designer_controller._input_enabled, "open console did not block designer input for %s" % label)
+		_expect(game._request_export_structure(), "export command did not open its dialog for %s" % label)
+		game.dev_console.close()
+		_expect(game.structure_designer_workflow.is_dialog_open() and not designer_controller._input_enabled, "closing the console bypassed the open export dialog for %s" % label)
+		game.structure_designer_dialogs.close_active()
+		_expect(designer_controller._input_enabled, "closing the export dialog did not restore designer input for %s" % label)
 	if in_level:
 		_expect(world.is_suspended() == world_suspended and entities.is_suspended() == entities_suspended, "designer entry changed suspended overworld systems for %s" % label)
 		_expect(level_runtime != null and not level_runtime.visible and not level_runtime.is_processing(), "designer entry did not suspend the level runtime for %s" % label)

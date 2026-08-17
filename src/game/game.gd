@@ -92,7 +92,8 @@ func _ready():
 	if not block_catalog_valid or not item_catalog_valid or not crafting_catalog_valid or not entity_catalog_valid or not combat_particle_catalog_valid or not player_stats_valid or not level_catalog_valid or not level_entrance_valid:
 		push_error("[Game] Catalog validation failed")
 		return
-	structure_designer_workflow.setup(structure_designer_dialogs)
+	var structure_file_store := StructureFileStore.new(ProjectSettings.globalize_path("res://../").simplify_path())
+	structure_designer_workflow.setup(structure_designer_dialogs, structure_file_store)
 	structure_designer_workflow.designer_entry_requested.connect(_on_structure_designer_entry_requested)
 	structure_designer_workflow.designer_exit_requested.connect(_on_structure_designer_exit_requested)
 	structure_designer_dialogs.open_state_changed.connect(_on_structure_dialog_open_state_changed)
@@ -106,6 +107,8 @@ func _ready():
 	dev_console.setup(
 		inventory_model,
 		Callable(self, "_request_new_structure"),
+		Callable(self, "_request_import_structure"),
+		Callable(self, "_request_export_structure"),
 		Callable(self, "_request_exit_structure")
 	)
 	player_stats = ActorStats.new(player_stats_definition)
@@ -483,6 +486,16 @@ func _request_new_structure() -> bool:
 	if not _session_active or _level_transitioning or _structure_transitioning or player.is_defeated():
 		return false
 	return structure_designer_workflow.request_new()
+
+func _request_import_structure() -> bool:
+	if not _session_active or _level_transitioning or _structure_transitioning or player.is_defeated():
+		return false
+	return structure_designer_workflow.request_import()
+
+func _request_export_structure() -> bool:
+	if _structure_transitioning or _structure_designer_runtime == null:
+		return false
+	return structure_designer_workflow.request_export()
 
 func _request_exit_structure() -> bool:
 	if _structure_transitioning or _structure_designer_runtime == null:
