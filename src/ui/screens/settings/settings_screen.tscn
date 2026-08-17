@@ -103,9 +103,18 @@ size_flags_horizontal = 3
 
 [node name="TorchShadowsLabel" type="Label" parent="VBox/SettingsGrid"]
 layout_mode = 2
-text = "Torch shadows"
+text = "Overworld Torch Shadows"
 
 [node name="TorchShadows" type="OptionButton" parent="VBox/SettingsGrid"]
+custom_minimum_size = Vector2(220, 38)
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="DungeonTorchShadowsLabel" type="Label" parent="VBox/SettingsGrid"]
+layout_mode = 2
+text = "Dungeon Torch Shadows"
+
+[node name="DungeonTorchShadows" type="OptionButton" parent="VBox/SettingsGrid"]
 custom_minimum_size = Vector2(220, 38)
 layout_mode = 2
 size_flags_horizontal = 3

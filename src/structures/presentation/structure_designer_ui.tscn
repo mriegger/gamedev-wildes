@@ -1,0 +1,374 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://structures/presentation/structure_designer_ui.gd" id="1_ui"]
+[ext_resource type="PackedScene" path="res://inventory/ui/hotbar_view.tscn" id="2_hotbar"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_panel"]
+bg_color = Color(0.055, 0.065, 0.075, 0.94)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 0.2)
+
+[node name="StructureDesignerUI" type="CanvasLayer"]
+layer = 10
+script = ExtResource("1_ui")
+
+[node name="Crosshair" type="Label" parent="."]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -12.0
+offset_top = -15.0
+offset_right = 12.0
+offset_bottom = 15.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+text = "+"
+horizontal_alignment = 1
+vertical_alignment = 1
+theme_override_colors/font_color = Color(1, 1, 1, 0.9)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.9)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+theme_override_font_sizes/font_size = 24
+
+[node name="HotbarView" parent="." instance=ExtResource("2_hotbar")]
+
+[node name="ModuleToolsHint" type="Label" parent="."]
+visible = false
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -216.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = 46.0
+grow_horizontal = 0
+mouse_filter = 2
+text = "M  Module Tools"
+horizontal_alignment = 2
+theme_override_colors/font_color = Color(1, 1, 1, 0.9)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.9)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+theme_override_font_sizes/font_size = 18
+
+[node name="ConnectionModeHint" type="Label" parent="."]
+visible = false
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 180.0
+offset_top = 16.0
+offset_right = -180.0
+offset_bottom = 48.0
+grow_horizontal = 2
+mouse_filter = 2
+text = "CONNECTION MODE  •  Aim at a lower outer boundary wall  •  Esc when done"
+horizontal_alignment = 1
+vertical_alignment = 1
+theme_override_colors/font_color = Color(0.35, 0.95, 1, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.95)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 2
+theme_override_font_sizes/font_size = 18
+
+[node name="EnemySpawnZoneModeHint" type="Label" parent="."]
+visible = false
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 120.0
+offset_top = 16.0
+offset_right = -120.0
+offset_bottom = 48.0
+grow_horizontal = 2
+mouse_filter = 2
+text = "ENEMY SPAWN ZONE  •  Click two floor corners  •  Right-click or Esc to cancel"
+horizontal_alignment = 1
+vertical_alignment = 1
+theme_override_colors/font_color = Color(0.82, 0.46, 1, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.95)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 2
+theme_override_font_sizes/font_size = 18
+
+[node name="ModulePanel" type="PanelContainer" parent="."]
+visible = false
+z_index = 2
+anchors_preset = 6
+anchor_left = 1.0
+anchor_top = 0.5
+anchor_right = 1.0
+anchor_bottom = 0.5
+offset_left = -350.0
+offset_top = -315.0
+offset_right = -16.0
+offset_bottom = 315.0
+grow_horizontal = 0
+grow_vertical = 2
+mouse_filter = 0
+theme_override_styles/panel = SubResource("StyleBox_panel")
+
+[node name="Margin" type="MarginContainer" parent="ModulePanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 14
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 14
+
+[node name="VBox" type="VBoxContainer" parent="ModulePanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Header" type="HBoxContainer" parent="ModulePanel/Margin/VBox"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="ModulePanel/Margin/VBox/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "LEVEL MODULE"
+theme_override_font_sizes/font_size = 20
+
+[node name="Close" type="Button" parent="ModulePanel/Margin/VBox/Header"]
+layout_mode = 2
+text = "Close (M)"
+
+[node name="WeightRow" type="HBoxContainer" parent="ModulePanel/Margin/VBox"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="ModulePanel/Margin/VBox/WeightRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Weight"
+
+[node name="Weight" type="SpinBox" parent="ModulePanel/Margin/VBox/WeightRow"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+min_value = 0.1
+max_value = 100.0
+allow_greater = true
+allow_lesser = true
+step = 0.0
+value = 1.0
+
+[node name="SetVoid" type="Button" parent="ModulePanel/Margin/VBox"]
+layout_mode = 2
+text = "Set targeted cell to VOID"
+
+[node name="ConnectionHeader" type="HBoxContainer" parent="ModulePanel/Margin/VBox"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="ModulePanel/Margin/VBox/ConnectionHeader"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Doorway Connections"
+
+[node name="PlaceConnections" type="Button" parent="ModulePanel/Margin/VBox/ConnectionHeader"]
+layout_mode = 2
+text = "Place Connections"
+
+[node name="SocketHelp" type="Label" parent="ModulePanel/Margin/VBox"]
+layout_mode = 2
+text = "Click a wall for a 1×2 doorway, or click a prebuilt opening's floor to use its full size. Choose how each unused doorway is filled; Must connect keeps it required."
+autowrap_mode = 2
+
+[node name="ConnectionSummary" type="Label" parent="ModulePanel/Margin/VBox"]
+layout_mode = 2
+text = "No connections • not yet usable by generation"
+autowrap_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.9, 1, 1)
+
+[node name="SocketScroll" type="ScrollContainer" parent="ModulePanel/Margin/VBox"]
+custom_minimum_size = Vector2(0, 92)
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="SocketList" type="VBoxContainer" parent="ModulePanel/Margin/VBox/SocketScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="DetailsScroll" type="ScrollContainer" parent="ModulePanel/Margin/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="Details" type="VBoxContainer" parent="ModulePanel/Margin/VBox/DetailsScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="EnemySpawnZoneHeader" type="HBoxContainer" parent="ModulePanel/Margin/VBox/DetailsScroll/Details"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="ModulePanel/Margin/VBox/DetailsScroll/Details/EnemySpawnZoneHeader"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Enemy Spawn Zones"
+
+[node name="Add" type="Button" parent="ModulePanel/Margin/VBox/DetailsScroll/Details/EnemySpawnZoneHeader"]
+layout_mode = 2
+text = "Add Zone"
+
+[node name="EnemySpawnZoneHelp" type="Label" parent="ModulePanel/Margin/VBox/DetailsScroll/Details"]
+layout_mode = 2
+text = "Click two opposite floor corners. Usable cells need solid floor, two blocks of air, and doorway clearance."
+autowrap_mode = 2
+
+[node name="EnemySpawnZoneSummary" type="Label" parent="ModulePanel/Margin/VBox/DetailsScroll/Details"]
+layout_mode = 2
+text = "No enemy spawn zones"
+theme_override_colors/font_color = Color(0.82, 0.58, 1, 1)
+
+[node name="EnemySpawnZoneList" type="VBoxContainer" parent="ModulePanel/Margin/VBox/DetailsScroll/Details"]
+layout_mode = 2
+
+[node name="MarkersTitle" type="Label" parent="ModulePanel/Margin/VBox/DetailsScroll/Details"]
+layout_mode = 2
+text = "Entry Markers — aim before opening Module Tools"
+
+[node name="Markers" type="VBoxContainer" parent="ModulePanel/Margin/VBox/DetailsScroll/Details"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Spawn" type="VBoxContainer" parent="ModulePanel/Margin/VBox/DetailsScroll/Details/Markers"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Spawn"]
+layout_mode = 2
+text = "Player Spawn"
+
+[node name="Current" type="Label" parent="ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Spawn"]
+layout_mode = 2
+text = "Current: not set"
+
+[node name="Pending" type="Label" parent="ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Spawn"]
+layout_mode = 2
+text = "Pending: not set"
+
+[node name="Controls" type="HBoxContainer" parent="ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Spawn"]
+layout_mode = 2
+
+[node name="Facing" type="OptionButton" parent="ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Spawn/Controls"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Set" type="Button" parent="ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Spawn/Controls"]
+layout_mode = 2
+text = "Set from target"
+
+[node name="Return" type="VBoxContainer" parent="ModulePanel/Margin/VBox/DetailsScroll/Details/Markers"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Return"]
+layout_mode = 2
+text = "Entrance / Exit Door"
+
+[node name="Current" type="Label" parent="ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Return"]
+layout_mode = 2
+text = "Current: not set"
+
+[node name="Pending" type="Label" parent="ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Return"]
+layout_mode = 2
+text = "Pending: not set"
+
+[node name="Controls" type="HBoxContainer" parent="ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Return"]
+layout_mode = 2
+
+[node name="Facing" type="OptionButton" parent="ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Return/Controls"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Set" type="Button" parent="ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Return/Controls"]
+layout_mode = 2
+text = "Set from target"
+
+[node name="Actions" type="HBoxContainer" parent="ModulePanel/Margin/VBox/DetailsScroll/Details/Markers"]
+layout_mode = 2
+
+[node name="Commit" type="Button" parent="ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Actions"]
+layout_mode = 2
+size_flags_horizontal = 3
+disabled = true
+text = "Commit entry pair"
+
+[node name="Clear" type="Button" parent="ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Actions"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Clear pair"
+
+[node name="PaletteOverlay" type="Control" parent="."]
+visible = false
+z_index = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+
+[node name="Shade" type="ColorRect" parent="PaletteOverlay"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0, 0, 0, 0.45)
+
+[node name="PalettePanel" type="PanelContainer" parent="PaletteOverlay"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -430.0
+offset_top = -290.0
+offset_right = 430.0
+offset_bottom = 290.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBox_panel")
+
+[node name="Margin" type="MarginContainer" parent="PaletteOverlay/PalettePanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 18
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 18
+
+[node name="VBox" type="VBoxContainer" parent="PaletteOverlay/PalettePanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Title" type="Label" parent="PaletteOverlay/PalettePanel/Margin/VBox"]
+layout_mode = 2
+text = "CREATIVE PALETTE"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 24
+
+[node name="Help" type="Label" parent="PaletteOverlay/PalettePanel/Margin/VBox"]
+layout_mode = 2
+text = "Hover a block and press 1-9 to assign it. Press Tab to close."
+horizontal_alignment = 1
+
+[node name="Scroll" type="ScrollContainer" parent="PaletteOverlay/PalettePanel/Margin/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="PaletteGrid" type="GridContainer" parent="PaletteOverlay/PalettePanel/Margin/VBox/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+columns = 4
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 8

@@ -25,6 +25,10 @@ var _terrain_results: Array[ChunkBuildResult] = []
 var _workers: Array[Thread] = []
 var _workers_started: bool = false
 var _stopped: bool = false
+var _suspend_mutex := Mutex.new()
+var _resume_available := Semaphore.new()
+var _suspended: bool = false
+var _resume_waiter_count: int = 0
 
 func setup(p_mesher: ChunkMesher, p_terrain_generator: TerrainGenerator, p_voxel_model: VoxelWorld, p_chunk_size: int, p_max_build_y: int):
 	_mesher = p_mesher
@@ -34,6 +38,10 @@ func setup(p_mesher: ChunkMesher, p_terrain_generator: TerrainGenerator, p_voxel
 	_max_build_y = p_max_build_y
 	_reset_queues()
 	_stopped = false
+	_suspend_mutex.lock()
+	_suspended = false
+	_resume_waiter_count = 0
+	_suspend_mutex.unlock()
 
 func _exit_tree():
 	shutdown()
@@ -77,6 +85,22 @@ func pending_count() -> int:
 	_state_mutex.unlock()
 	return count
 
+func suspend():
+	_suspend_mutex.lock()
+	_suspended = true
+	_suspend_mutex.unlock()
+
+func resume():
+	_suspend_mutex.lock()
+	if not _suspended:
+		_suspend_mutex.unlock()
+		return
+	_suspended = false
+	var waiter_count := _resume_waiter_count
+	_suspend_mutex.unlock()
+	for _index in waiter_count:
+		_resume_available.post()
+
 func cancel(coord: Vector2i):
 	_state_mutex.lock()
 	_pending_generations.erase(coord)
@@ -91,7 +115,6 @@ func cancel(coord: Vector2i):
 	_job_mutex.unlock()
 
 func shutdown():
-	_stopped = true
 	_stop_workers()
 	_reset_queues()
 
@@ -155,7 +178,7 @@ func _ensure_workers():
 func _worker_loop():
 	while true:
 		_job_available.wait()
-		if _stopped:
+		if not _wait_until_resumed():
 			_terrain_generator.release_thread_caches(OS.get_thread_caller_id())
 			return
 		var job := _pop_job()
@@ -169,6 +192,23 @@ func _worker_loop():
 		if not _is_current(job.coord, job.generation):
 			continue
 		_push_result(result)
+
+func _wait_until_resumed() -> bool:
+	while true:
+		_suspend_mutex.lock()
+		if _stopped:
+			_suspend_mutex.unlock()
+			return false
+		if not _suspended:
+			_suspend_mutex.unlock()
+			return true
+		_resume_waiter_count += 1
+		_suspend_mutex.unlock()
+		_resume_available.wait()
+		_suspend_mutex.lock()
+		_resume_waiter_count -= 1
+		_suspend_mutex.unlock()
+	return false
 
 func _push_result(result: ChunkBuildResult):
 	if result.terrain_only:
@@ -256,12 +296,18 @@ func _drop_queued_jobs(coord: Vector2i):
 	_job_mutex.unlock()
 
 func _stop_workers():
+	_suspend_mutex.lock()
 	_stopped = true
+	_suspended = false
+	var resume_waiter_count := _resume_waiter_count
+	_suspend_mutex.unlock()
 	_job_mutex.lock()
 	_job_queue.clear()
 	_job_mutex.unlock()
 	for _worker in _workers:
 		_job_available.post()
+	for _index in resume_waiter_count:
+		_resume_available.post()
 	for worker in _workers:
 		if worker.is_started():
 			worker.wait_to_finish()

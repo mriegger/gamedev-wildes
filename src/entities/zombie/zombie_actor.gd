@@ -4,13 +4,10 @@ class_name ZombieActor
 const VISION_SAMPLE_INTERVAL_SECONDS: float = 0.125
 const VISION_PHASE_COUNT: int = 8
 
-@export_node_path("AudioStreamPlayer3D") var vocalizations_path: NodePath
-
 var brain: ZombieBrain
 
 var _behavior: ZombieBehaviorDefinition
 var _zombie_animation: ZombieAnimationDriver
-var _vocalizations: ZombieVocalizations
 var _path_follower: VoxelPathFollower
 var _melee_profile: MeleeAttackProfile
 var _melee_elapsed: float = 0.0
@@ -22,36 +19,27 @@ func supports_behavior(behavior: EntityBehaviorDefinition) -> bool:
 	return behavior is ZombieBehaviorDefinition
 
 
-func has_valid_presentation() -> bool:
-	return (
-		super.has_valid_presentation()
-		and not vocalizations_path.is_empty()
-		and get_node_or_null(vocalizations_path) is ZombieVocalizations
-	)
-
-
-func setup(p_runtime_id: int, p_definition: EntityDefinition, p_voxel_world: VoxelWorld, behavior_seed: int):
-	super.setup(p_runtime_id, p_definition, p_voxel_world, behavior_seed)
+func setup(
+	p_runtime_id: int,
+	p_definition: EntityDefinition,
+	p_voxel_space: VoxelSpace,
+	behavior_seed: int,
+	navigation_limits: EntityNavigationLimits,
+):
+	super.setup(p_runtime_id, p_definition, p_voxel_space, behavior_seed, navigation_limits)
 	_behavior = p_definition.behavior as ZombieBehaviorDefinition
 	assert(_behavior != null)
 	brain = ZombieBrain.new(_behavior, behavior_seed)
-	_path_follower = VoxelPathFollower.new(voxel_world, definition.body_width, definition.body_height, _behavior.repath_seconds)
+	_path_follower = VoxelPathFollower.new(voxel_space, definition.body_width, definition.body_height, _behavior.repath_seconds, navigation_limits)
 	max_speed = _behavior.wander_speed
 	_zombie_animation = animation_driver as ZombieAnimationDriver
 	assert(_zombie_animation != null)
-	_vocalizations = get_node(vocalizations_path) as ZombieVocalizations
-	assert(_vocalizations != null)
-	_vocalizations.setup(behavior_seed)
 	_player_visible = false
 	_vision_sample_remaining = VISION_SAMPLE_INTERVAL_SECONDS * float(runtime_id % VISION_PHASE_COUNT) / float(VISION_PHASE_COUNT)
 
 
-func begin_despawn_fade():
-	_vocalizations.stop_vocalizations()
-	super.begin_despawn_fade()
-
 func tick(delta: float, player_position: Vector3, separation_velocity: Vector3, navigation_search_budget: NavigationSearchBudget):
-	assert(brain != null and voxel_world != null)
+	assert(brain != null and voxel_space != null)
 	_advance_melee_contact(delta)
 	var visible := _sample_player_visibility(delta, player_position)
 	var previous_state := brain.state
@@ -123,5 +111,5 @@ func _sample_player_visibility(delta: float, player_position: Vector3) -> bool:
 		return _player_visible
 	var origin := global_position + Vector3.UP * minf(definition.body_height * 0.8, 1.4)
 	var target := player_position + Vector3.UP * 0.9
-	_player_visible = VoxelLineOfSight.has_clear_path(voxel_world, origin, target)
+	_player_visible = VoxelLineOfSight.has_clear_path(voxel_space, origin, target)
 	return _player_visible

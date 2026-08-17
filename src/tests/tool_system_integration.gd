@@ -7,15 +7,25 @@ var _inventory: InventoryModel
 var _interactor: PlayerInteractor
 var _input_buffer: InputBuffer
 var _voxel_world: VoxelWorld
-var _entity_coordinator: EntityCoordinator
+var _world_entity_coordinator: WorldEntityCoordinator
 var _combat: MeleeCombatCoordinator
+var _hotbar: InventoryHotbar
 var _stone_pos := Vector3i(1, 0, 0)
 var _grass_pos := Vector3i(2, 0, 0)
 var _copper_pos := Vector3i(3, 0, 0)
+var _till_grass_pos := Vector3i(1, 0, 1)
+var _till_dirt_pos := Vector3i(2, 0, 1)
+var _covered_dirt_pos := Vector3i(3, 0, 1)
+var _nonsoil_pos := Vector3i(4, 0, 1)
 var _melee_attack_directions: Array[int] = []
+var _melee_attack_facings: Array[Vector3] = []
+var _soil_tilled_count: int = 0
 
 func _init():
 	call_deferred("_run")
+
+func _position_ready(_position: Vector3) -> bool:
+	return true
 
 func _run():
 	var block_catalog := load("res://blocks/block_catalog.tres") as BlockCatalog
@@ -51,6 +61,26 @@ func _run():
 	var sword_action := sword.primary_action as MeleeAttackActionDefinition
 	_expect(is_equal_approx(sword_action.attack_profile.duration, 0.48), "sword attack duration changed")
 	_expect(is_equal_approx(sword_action.chain_input_window, 0.26), "sword chain input window changed")
+	var hoe := item_catalog.get_definition(&"copper_hoe")
+	_expect(hoe.max_stack == 1, "copper hoe stack limit is not one")
+	_expect(hoe.primary_action is TillingActionDefinition and hoe.secondary_action == null, "copper hoe action configuration is incorrect")
+	var tilling_action := hoe.primary_action as TillingActionDefinition
+	var farmland := block_catalog.get_definition(BlockId.Type.FARMLAND_DRY)
+	_expect(tilling_action.can_till(block_catalog.get_definition(BlockId.Type.GRASS)), "copper hoe cannot till grass")
+	_expect(tilling_action.can_till(block_catalog.get_definition(BlockId.Type.DIRT)), "copper hoe cannot till dirt")
+	_expect(not tilling_action.can_till(block_catalog.get_definition(BlockId.Type.STONE)), "copper hoe can till stone")
+	_expect(tilling_action.result_block == farmland, "copper hoe does not use the canonical dry farmland block")
+	_expect(farmland.drop_item_id == &"dirt_block", "dry farmland does not drop dirt")
+	_expect(farmland.top_texture.resource_path == "res://assets/textures/blocks/farmland_dry.png", "dry farmland uses the wrong top texture")
+	_expect(farmland.side_texture.resource_path == "res://assets/textures/blocks/dirt.png", "dry farmland sides are not dirt")
+	_expect(hoe.icon.resource_path == "res://assets/textures/tools/hoe/copper_hoe.png", "copper hoe uses the wrong inventory icon")
+	_expect(hoe.icon.get_image().get_size() == Vector2i(64, 64), "copper hoe inventory icon is not 64x64")
+	_expect(hoe.equip_audio != null and hoe.equip_audio.streams.size() == 3, "copper hoe equip audio is not configured")
+	_expect(hoe.held_scene != null, "copper hoe held scene is missing")
+	var hoe_held := hoe.held_scene.instantiate() as Node3D
+	var hoe_model := hoe_held.get_node_or_null("Model") as Node3D
+	_expect(hoe_model != null and hoe_model.scale.is_equal_approx(Vector3.ONE * 4.6875), "copper hoe held scale is incorrect")
+	hoe_held.free()
 	var stone := block_catalog.get_definition(BlockId.Type.STONE)
 	var copper := block_catalog.get_definition(BlockId.Type.COPPER)
 	var unarmed_action := load("res://items/actions/definitions/unarmed_mining.tres") as MiningActionDefinition
@@ -86,7 +116,11 @@ func _run():
 	_expect(restored.get_slot(test_totem_slot) is InventoryStack and restored.get_slot(test_totem_slot).item_id == &"test_totem", "restored test totem missing")
 	_expect(restored.starter_item_migration_version == InventoryModel.STARTER_ITEM_MIGRATION_VERSION, "starter item migration version did not restore")
 	var existing_pickaxe_encoded := encoded.duplicate(true)
-	existing_pickaxe_encoded["regions"]["hotbar"][0] = {"item_id": "copper_pickaxe", "count": 1}
+	existing_pickaxe_encoded["regions"]["hotbar"][0] = {
+		"item_id": "copper_pickaxe",
+		"count": 1,
+		"socketed_rune_ids": [],
+	}
 	existing_pickaxe_encoded.erase("starter_item_migration_version")
 	var existing_pickaxe_save := InventoryModel.new(item_catalog)
 	_expect(existing_pickaxe_save.from_dict(existing_pickaxe_encoded), "existing copper pickaxe save did not restore")
@@ -147,6 +181,11 @@ func _run():
 		_stone_pos: BlockId.Type.STONE,
 		_grass_pos: BlockId.Type.GRASS,
 		_copper_pos: BlockId.Type.COPPER,
+		_till_grass_pos: BlockId.Type.GRASS,
+		_till_dirt_pos: BlockId.Type.DIRT,
+		_covered_dirt_pos: BlockId.Type.DIRT,
+		_covered_dirt_pos + Vector3i.UP: BlockId.Type.DIRT,
+		_nonsoil_pos: BlockId.Type.SAND,
 	}, {})
 	_player = (load("res://player/player.tscn") as PackedScene).instantiate() as PlayerMotor
 	root.add_child(_player)
@@ -159,18 +198,26 @@ func _run():
 	await process_frame
 	_input_buffer = InputBuffer.new()
 	_interactor = _player.interactor
-	_entity_coordinator = EntityCoordinator.new()
-	root.add_child(_entity_coordinator)
+	_world_entity_coordinator = WorldEntityCoordinator.new()
+	root.add_child(_world_entity_coordinator)
+	_world_entity_coordinator.setup(load("res://entities/entity_catalog.tres") as EntityCatalog, _voxel_world, 1337, _position_ready)
 	_combat = MeleeCombatCoordinator.new()
 	root.add_child(_combat)
 	var player_stats := ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
-	_combat.setup(_voxel_world, _player, player_stats, _entity_coordinator)
-	_interactor.setup(_voxel_world, _camera, _player, _inventory, _input_buffer, _combat, _entity_coordinator)
+	var inventory_stat_coordinator := InventoryStatCoordinator.new()
+	_expect(inventory_stat_coordinator.setup(_inventory, player_stats), "inventory stat coordinator setup failed")
+	_combat.setup(_voxel_world, _player, player_stats, _world_entity_coordinator.get_runtime())
+	_interactor.setup(_camera, _player, _inventory, _input_buffer, _combat, _world_entity_coordinator.get_runtime())
+	_interactor.bind_space(_voxel_world, _voxel_world)
 	_interactor.melee_attack_started.connect(_on_melee_attack_started)
+	_interactor.soil_tilled.connect(_on_soil_tilled)
 	_interactor.set_physics_process(false)
 	_player.animation_driver.setup(_player, _interactor)
 	_player.animation_driver.set_process(false)
 	_player.held_item_view.setup(_inventory)
+	_hotbar = (load("res://inventory/ui/inventory_hotbar.tscn") as PackedScene).instantiate() as InventoryHotbar
+	root.add_child(_hotbar)
+	_hotbar.setup(_inventory, inventory_stat_coordinator, ItemProficiency.new(item_catalog))
 	await process_frame
 	_expect(_player.held_item_view.held_node is PixelExtrudedItem, "pickaxe held scene missing")
 	_expect(is_equal_approx(_player.held_item_view.rotation.x, PI * 0.25), "held-item socket does not pitch items downward")
@@ -205,11 +252,20 @@ func _run():
 	_expect(_interactor.get_selected_primary_action() == sword_action, "sword melee action was not selected")
 	var resting_socket_position := _player.held_item_view.position
 	var resting_socket_rotation := _player.held_item_view.rotation
+	var attack_mouse_position := _interactor.get_viewport().get_mouse_position()
+	var attack_ray_origin := _camera.project_ray_origin(attack_mouse_position)
+	var attack_ray_direction := _camera.project_ray_normal(attack_mouse_position).normalized()
+	var player_center := _player.global_position + Vector3.UP * (_player.player_height * 0.5)
+	var attack_cursor_position: Variant = Plane(Vector3.UP, player_center.y).intersects_ray(attack_ray_origin, attack_ray_direction)
+	_expect(attack_cursor_position is Vector3, "sword cursor ray did not reach the player-facing plane")
+	var expected_attack_facing := ((attack_cursor_position as Vector3) - player_center).normalized()
+	_player.model_root.rotation.y = atan2(-expected_attack_facing.x, -expected_attack_facing.z)
 	_push_primary(true)
 	await process_frame
 	_input_buffer.poll()
 	_interactor._handle_item_actions(0.0)
 	_expect(_melee_attack_directions == [-1], "single sword click did not start left-to-right")
+	_expect(_melee_attack_facings.size() == 1 and _melee_attack_facings[0].dot(expected_attack_facing) > 0.999, "player did not face the mouse before the sword swing started")
 	_expect(_player.animation_driver.animator._attacking, "sword attack did not reach the animation driver")
 	_expect(is_equal_approx(_interactor.melee_attack_timer, sword_action.attack_profile.cooldown), "sword attack timer changed")
 	_player.on_ground = true
@@ -280,7 +336,7 @@ func _run():
 	_expect(unarmed != null and unarmed.can_mine(stone), "unarmed mining cannot mine stone")
 	_expect(not unarmed.can_mine(copper), "unarmed mining bypasses copper requirement")
 	_prepare_target(_stone_pos, unarmed)
-	_expect(_interactor.can_mine_target, "unarmed action cannot target stone")
+	_expect(_interactor.can_primary_target, "unarmed action cannot target stone")
 	_push_primary(true)
 	await process_frame
 	_input_buffer.poll()
@@ -297,7 +353,7 @@ func _run():
 	_expect(_inventory.selected_slot == 0, "pickaxe hotbar selection failed")
 	_expect(_player.held_item_view.held_node is PixelExtrudedItem, "pickaxe did not reappear")
 	_prepare_target(_copper_pos, pickaxe_action)
-	_expect(_interactor.can_mine_target, "stone pickaxe cannot target copper")
+	_expect(_interactor.can_primary_target, "stone pickaxe cannot target copper")
 	_push_primary(true)
 	await process_frame
 	_input_buffer.poll()
@@ -314,7 +370,7 @@ func _run():
 	await process_frame
 	unarmed = _interactor.get_selected_primary_action() as MiningActionDefinition
 	_prepare_target(_grass_pos, unarmed)
-	_expect(_interactor.can_mine_target, "unarmed action cannot target grass")
+	_expect(_interactor.can_primary_target, "unarmed action cannot target grass")
 	_push_primary(true)
 	await process_frame
 	_input_buffer.poll()
@@ -325,10 +381,59 @@ func _run():
 	await process_frame
 	_input_buffer.poll()
 
+	_inventory.slots[0] = InventoryStack.new(&"copper_hoe", 1)
+	_push_hotbar_key(KEY_1)
+	await process_frame
+	_expect(_interactor.get_selected_primary_action() == tilling_action, "copper hoe tilling action was not selected")
+	_expect(_interactor._can_till_position(_till_grass_pos, Vector3i.UP, tilling_action), "copper hoe cannot target an exposed grass top")
+	_expect(not _interactor._can_till_position(_till_grass_pos, Vector3i.RIGHT, tilling_action), "copper hoe can till a side face")
+	_expect(not _interactor._can_till_position(_covered_dirt_pos, Vector3i.UP, tilling_action), "copper hoe can till below an occupied cell")
+	_expect(not _interactor._can_till_position(_nonsoil_pos, Vector3i.UP, tilling_action), "copper hoe can till a non-soil block")
+	var stale_edit := _voxel_world.try_replace_block(_till_dirt_pos, BlockId.Type.GRASS, BlockId.Type.FARMLAND_DRY)
+	_expect(not stale_edit.is_success() and stale_edit.result == BlockEdit.Result.FAIL_BLOCK_CHANGED, "atomic replacement accepted a stale source block")
+	var grass_revision := _voxel_world.get_revision(_till_grass_pos)
+	_prepare_till_target(_till_grass_pos, tilling_action)
+	_input_buffer.primary_use_just = true
+	_interactor._handle_item_actions(0.0)
+	_expect(_voxel_world.get_block_id_at(_till_grass_pos) == BlockId.Type.FARMLAND_DRY, "copper hoe did not till grass")
+	_expect(_voxel_world.get_revision(_till_grass_pos) == grass_revision + 1, "tilling grass did not commit one world edit")
+	_expect(_soil_tilled_count == 1, "successful grass till did not emit one completed action")
+	var tilled_revision := _voxel_world.get_revision(_till_grass_pos)
+	_prepare_till_target(_till_grass_pos, tilling_action)
+	_input_buffer.primary_use_just = true
+	_interactor._handle_item_actions(0.0)
+	_expect(_voxel_world.get_revision(_till_grass_pos) == tilled_revision, "repeated tilling changed dry farmland")
+	_expect(_soil_tilled_count == 1, "failed repeated till emitted a completed action")
+	_prepare_till_target(_till_dirt_pos, tilling_action)
+	_input_buffer.primary_use_just = true
+	_interactor._handle_item_actions(0.0)
+	_expect(_voxel_world.get_block_id_at(_till_dirt_pos) == BlockId.Type.FARMLAND_DRY, "copper hoe did not till dirt")
+	_expect(_soil_tilled_count == 2, "successful dirt till did not emit a completed action")
+	var edit_snapshot := _voxel_world.snapshot_block_edits()
+	var restored_world := VoxelWorld.new(20, 36, 5, 12.0, block_catalog)
+	restored_world.restore_block_edits(edit_snapshot["placed"], edit_snapshot["removed"])
+	_expect(restored_world.get_block_id_at(_till_grass_pos) == BlockId.Type.FARMLAND_DRY, "dry farmland did not survive block-edit restore")
+	var dirt_count_before := _inventory.get_inventory_item_count(&"dirt_block")
+	_push_hotbar_key(KEY_2)
+	await process_frame
+	unarmed = _interactor.get_selected_primary_action() as MiningActionDefinition
+	_prepare_target(_till_dirt_pos, unarmed)
+	_push_primary(true)
+	await process_frame
+	_input_buffer.poll()
+	_interactor._handle_item_actions(0.0)
+	_interactor._handle_item_actions(farmland.mine_duration + 0.01)
+	_expect(_voxel_world.get_block_id_at(_till_dirt_pos) == BlockId.Type.AIR, "dry farmland could not be mined")
+	_expect(_inventory.get_inventory_item_count(&"dirt_block") == dirt_count_before + 1, "mined dry farmland did not add dirt")
+	_push_primary(false)
+	await process_frame
+	_input_buffer.poll()
+
 	_player.queue_free()
 	_camera.queue_free()
 	_combat.queue_free()
-	_entity_coordinator.queue_free()
+	_world_entity_coordinator.queue_free()
+	_hotbar.queue_free()
 	await process_frame
 	await process_frame
 	var orphan_count := int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
@@ -343,7 +448,16 @@ func _run():
 func _prepare_target(pos: Vector3i, action: MiningActionDefinition):
 	_interactor.target_block = pos
 	_interactor.target_has = true
-	_interactor.can_mine_target = _interactor._can_mine_position(pos, action)
+	_interactor.can_primary_target = _interactor._can_mine_position(pos, action)
+
+func _prepare_till_target(pos: Vector3i, action: TillingActionDefinition):
+	_interactor.target_block = pos
+	_interactor.target_has = true
+	_interactor.last_ray_normal = Vector3i.UP
+	_interactor.can_primary_target = _interactor._can_till_position(pos, Vector3i.UP, action)
+
+func _on_soil_tilled():
+	_soil_tilled_count += 1
 
 func _push_hotbar_key(keycode: Key):
 	var event := InputEventKey.new()
@@ -361,6 +475,7 @@ func _push_primary(pressed: bool):
 
 func _on_melee_attack_started(_action: MeleeAttackActionDefinition, direction: int):
 	_melee_attack_directions.append(direction)
+	_melee_attack_facings.append(_player.model_root.global_transform.basis * Vector3.BACK)
 
 func _expect(condition: bool, message: String):
 	if not condition:

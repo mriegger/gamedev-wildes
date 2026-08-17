@@ -32,13 +32,26 @@ Create and register an `ItemDefinition` in the same way. Assign only the actions
 
 Item IDs are `StringName` values at runtime and JSON strings in saves. `BlockId` integers remain limited to world generation, voxel edits, meshing, and world persistence.
 
-Inventory slots contain typed `InventoryStack` objects at runtime. Saves keep the same `{item_id, count}` stack shape. New worlds begin with every inventory region empty and record the current starter-item migration version so a reload cannot grant legacy items. When a pre-tool save is restored, its one-time migration still preserves every existing stack and inserts the historical starter items when fillable inventory space is available. Previously saved tools remain untouched even when they are no longer granted to new worlds.
+Inventory slots contain typed `InventoryStack` objects at runtime. Saves encode each stack as `{item_id, count, socketed_rune_ids}`. The rune IDs are empty for ordinary stacks and preserve the installed runes on each physical gear copy. New worlds begin with every inventory region empty and record the current starter-item migration version so a reload cannot grant legacy items. When a pre-tool save is restored, its one-time migration still preserves every existing stack and inserts the historical starter items when fillable inventory space is available. Previously saved tools remain untouched even when they are no longer granted to new worlds.
+
+## Add a rune
+
+Create a `RuneDefinition` under `src/items/runes/definitions`, assign a stable item ID, icon,
+stack size, canonical rarity, compatibility flags, and permanent socket modifiers. Armor-compatible
+runes must also declare the supported head, chest, legs, or feet slots. Register the resource in
+`src/items/item_catalog.tres`; acquisition remains separate content, such as a canonical crafting
+recipe. Rune modifiers do not belong in the inherited selected-item modifier list because they are
+activated only through socketed gear.
 
 ## Add a mining tool
 
 Create a `MiningActionDefinition` with one or more `MiningToolStat` entries, then assign it as the item's primary action. Each stat has a `StringName` tag, power, and speed multiplier. Blocks declare a mining tag, minimum power, and base duration. A minimum power of zero keeps hand mining available; a positive value requires a matching tool stat.
 
-Primary actions currently accept mining and melee definitions. Secondary actions currently accept block placement. Catalog validation rejects action types in slots that do not yet have an execution path, and new action types must add their runtime handler and catalog allowance together.
+## Add a tilling tool
+
+Create a `TillingActionDefinition` with canonical source block resources and one canonical result block, then assign it as the item's primary action. The copper hoe maps grass and dirt to dry farmland. Tilling requires the top face, an air block directly above it, and normal interaction reach. The voxel world validates and commits the replacement atomically.
+
+Primary actions currently accept mining, melee, and tilling definitions. Secondary actions currently accept block placement. Catalog validation rejects action types in slots that do not yet have an execution path, and new action types must add their runtime handler and catalog allowance together.
 
 Held items reference a scene through `ItemDefinition.held_scene`. Pixel-art tools can use `PixelExtrudedItem` to turn a square transparent texture into a shaded one-draw-call silhouette mesh with real depth. Custom modeled items can provide any other `Node3D` scene through the same field.
 

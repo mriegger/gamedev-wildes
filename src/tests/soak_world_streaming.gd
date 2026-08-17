@@ -974,9 +974,9 @@ func _verify_player_defeat_flow() -> bool:
 	var blocked_number_key := InputEventKey.new()
 	blocked_number_key.pressed = true
 	blocked_number_key.keycode = KEY_1
-	_player.interactor._unhandled_input(blocked_number_key)
+	_game.hud.hotbar._unhandled_key_input(blocked_number_key)
 	if _game.inventory_model.selected_slot != selected_slot_before:
-		_fail("defeated player processed a number-key selection")
+		_fail("defeated hotbar processed a number-key selection")
 		return false
 	_game.input_buffer.clear_gameplay()
 	var blocked_wheel := InputEventMouseButton.new()
@@ -995,12 +995,12 @@ func _verify_player_defeat_flow() -> bool:
 		return false
 	_game.input_buffer.move_dir = Vector2.ONE
 	_game.input_buffer.primary_use_pressed = true
-	_game.entity_coordinator._spawn_elapsed = 0.25
+	_game.world_entity_coordinator._spawn_elapsed = 0.25
 	_game._physics_process(0.1)
 	if _game.input_buffer.move_dir != Vector2.ZERO or _game.input_buffer.primary_use_pressed:
 		_fail("defeated game retained buffered gameplay input")
 		return false
-	if not is_equal_approx(_game.entity_coordinator._spawn_elapsed, 0.35):
+	if not is_equal_approx(_game.world_entity_coordinator._spawn_elapsed, 0.35):
 		_fail("entity simulation stopped while the player was defeated")
 		return false
 	var game_clock := _game.game_environment._clock

@@ -3,8 +3,8 @@ class_name SaveManager
 
 const SAVE_DIR: String = "user://saves"
 const SLOT_COUNT: int = 3
-const CURRENT_SAVE_VERSION: int = 5
-const MIGRATABLE_SAVE_VERSION: int = 4
+const CURRENT_SAVE_VERSION: int = 6
+const MINIMUM_MIGRATABLE_SAVE_VERSION: int = 4
 
 static func ensure_save_dir() -> void:
 	if not DirAccess.dir_exists_absolute(SAVE_DIR):
@@ -191,14 +191,55 @@ static func load_slot(slot_id: int) -> Dictionary:
 	return info
 
 static func _migrate_save_data(data: Dictionary) -> bool:
-	var version := int(data.get("version", 0))
-	if version == MIGRATABLE_SAVE_VERSION:
-		data["item_proficiency"] = {}
-		data["version"] = CURRENT_SAVE_VERSION
-		return true
-	return version == CURRENT_SAVE_VERSION
+	var migrated := data.duplicate(true)
+	var version := int(migrated.get("version", 0))
+	if version < MINIMUM_MIGRATABLE_SAVE_VERSION or version > CURRENT_SAVE_VERSION:
+		return false
+	while version < CURRENT_SAVE_VERSION:
+		match version:
+			4:
+				migrated["item_proficiency"] = {}
+				version = 5
+			5:
+				if not _migrate_inventory_socket_data(migrated):
+					return false
+				version = 6
+			_:
+				return false
+		migrated["version"] = version
+	data.clear()
+	data.merge(migrated, true)
+	return true
 
-static func save_world_state(slot_id: int, current_data: Dictionary, voxel_model: VoxelWorld, player: PlayerMotor, inventory: InventoryModel, item_proficiency: ItemProficiency, extra_seconds: float, time_of_day: float) -> bool:
+static func _migrate_inventory_socket_data(data: Dictionary) -> bool:
+	var inventory = data.get("inventory", null)
+	if inventory == null:
+		return true
+	if not inventory is Dictionary:
+		return false
+	var regions = (inventory as Dictionary).get("regions", null)
+	if not regions is Dictionary:
+		return false
+	for region_name in ["hotbar", "backpack", "equipment"]:
+		var encoded_region = (regions as Dictionary).get(region_name, null)
+		if not encoded_region is Array:
+			return false
+		for raw_stack in encoded_region as Array:
+			if raw_stack == null:
+				continue
+			if not raw_stack is Dictionary:
+				return false
+			var encoded_stack := raw_stack as Dictionary
+			if (
+				not encoded_stack.has("item_id")
+				or not encoded_stack.has("count")
+				or encoded_stack.has("socketed_rune_ids")
+			):
+				return false
+			encoded_stack["socketed_rune_ids"] = []
+	return true
+
+static func save_world_state(slot_id: int, current_data: Dictionary, voxel_model: VoxelWorld, persisted_player_position: Vector3, player_stats: ActorStats, inventory: InventoryModel, item_proficiency: ItemProficiency, extra_seconds: float, time_of_day: float) -> bool:
 	assert(item_proficiency != null)
 	var updated = current_data.duplicate()
 	updated["last_played"] = _now_str()
@@ -211,9 +252,9 @@ static func save_world_state(slot_id: int, current_data: Dictionary, voxel_model
 	updated["torch_attachments"] = serialize_vector3i_dict(voxel_model.torch_attachments)
 	updated.erase("copper_blocks")
 	updated.erase("generated_copper_chunks")
-	var p = player.global_position
+	var p = persisted_player_position
 	updated["player_position"] = [p.x, p.y, p.z]
-	updated["player_stats"] = player.stats.snapshot_progression()
+	updated["player_stats"] = player_stats.snapshot_progression()
 	updated["inventory"] = inventory.to_dict()
 	updated["item_proficiency"] = item_proficiency.snapshot()
 	updated["time_of_day"] = fmod(time_of_day, GameClock.HOURS_PER_DAY)

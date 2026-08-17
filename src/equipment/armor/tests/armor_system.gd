@@ -145,7 +145,7 @@ func _init() -> void:
 
 	var restored_before_invalid := restored_inventory.to_dict()
 	var wrong_slot_save := encoded.duplicate(true)
-	wrong_slot_save["regions"]["equipment"][ArmorDefinition.Slot.HEAD] = {"item_id": "copper_chest_plate", "count": 1}
+	wrong_slot_save["regions"]["equipment"][ArmorDefinition.Slot.HEAD] = {"item_id": "copper_chest_plate", "count": 1, "socketed_rune_ids": []}
 	_expect(not restored_inventory.from_dict(wrong_slot_save), "wrong-slot armor save restored")
 	_expect(restored_inventory.to_dict() == restored_before_invalid, "failed wrong-slot restore changed inventory")
 	var stacked_armor_save := encoded.duplicate(true)

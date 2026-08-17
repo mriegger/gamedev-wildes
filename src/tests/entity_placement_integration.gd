@@ -12,7 +12,7 @@ var _player: PlayerMotor
 var _camera: Camera3D
 var _interactor: PlayerInteractor
 var _input_buffer: InputBuffer
-var _coordinator: EntityCoordinator
+var _coordinator: WorldEntityCoordinator
 var _combat: MeleeCombatCoordinator
 var _block_placed_count: int = 0
 var _world_place_count: int = 0
@@ -38,7 +38,7 @@ func _make_world() -> VoxelWorld:
 func _make_one_zombie_catalog() -> EntityCatalog:
 	var source := load("res://entities/definitions/zombie.tres") as EntityDefinition
 	var definition := source.duplicate(true) as EntityDefinition
-	definition.max_active = 1
+	definition.ambient_max_active = 1
 	var definitions: Array[EntityDefinition] = [definition]
 	var catalog := EntityCatalog.new()
 	catalog.definitions = definitions
@@ -48,7 +48,7 @@ func _always_ready(_position: Vector3) -> bool:
 	return true
 
 func _index_actor(actor: EntityActor) -> void:
-	_coordinator._spatial_index.upsert(actor.runtime_id, actor.global_position, actor.get_world_bounds())
+	_coordinator.get_runtime()._spatial_index.upsert(actor.runtime_id, actor.global_position, actor.get_world_bounds())
 
 func _grass_count() -> int:
 	var stack := _inventory.get_slot(GRASS_SLOT)
@@ -74,7 +74,7 @@ func _on_block_placed() -> void:
 	_block_placed_count += 1
 
 func _on_block_edit(edit: BlockEdit) -> void:
-	if edit.is_success() and not edit.is_mine():
+	if edit.is_success() and edit.is_place():
 		_world_place_count += 1
 
 func _aim_at_placement(position: Vector3i) -> void:
@@ -93,7 +93,7 @@ func _run() -> void:
 
 	_player = (load("res://player/player.tscn") as PackedScene).instantiate() as PlayerMotor
 	_camera = Camera3D.new()
-	_coordinator = EntityCoordinator.new()
+	_coordinator = WorldEntityCoordinator.new()
 	_combat = MeleeCombatCoordinator.new()
 	get_root().add_child(_player)
 	get_root().add_child(_camera)
@@ -109,12 +109,13 @@ func _run() -> void:
 	_player.animation_driver.set_process(false)
 	_coordinator.setup(_make_one_zombie_catalog(), _world, 1337, _always_ready)
 	var player_stats := ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
-	_combat.setup(_world, _player, player_stats, _coordinator)
-	_interactor.setup(_world, _camera, _player, _inventory, _input_buffer, _combat, _coordinator)
+	_combat.setup(_world, _player, player_stats, _coordinator.get_runtime())
+	_interactor.setup(_camera, _player, _inventory, _input_buffer, _combat, _coordinator.get_runtime())
+	_interactor.bind_space(_world, _world)
 	_interactor.block_placed.connect(_on_block_placed)
 	_world.block_edit_committed.connect(_on_block_edit)
-	_coordinator.tick(EntityCoordinator.SPAWN_INTERVAL_SECONDS, _player.global_position, 20.0)
-	var actors := _coordinator.get_active_actors()
+	_coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, _player.global_position, 20.0)
+	var actors := _coordinator.get_runtime().get_active_actors()
 	_expect(actors.size() == 1, "coordinator did not spawn exactly one zombie")
 	if actors.size() != 1:
 		await _cleanup()
@@ -165,12 +166,12 @@ func _run() -> void:
 	_interactor._commit_place(target_b, grass_action)
 	_expect_unchanged(target_b, moved_after_preview, "entity movement after preview")
 
-	zombie.global_position = Vector3(EntityCoordinator.DESPAWN_DISTANCE + 1.0, FEET_Y, 0.5)
+	zombie.global_position = Vector3(WorldEntityCoordinator.DESPAWN_DISTANCE + 1.0, FEET_Y, 0.5)
 	_coordinator.tick(0.0, _player.global_position, 20.0)
-	_expect(_coordinator.get_active_count() == 0, "despawn retained the zombie")
-	_expect(_coordinator._spatial_index.get_entry_count() == 0, "despawn retained a spatial entry")
-	_expect(_coordinator._spatial_index.get_cell_count() == 0, "despawn retained spatial cells")
-	_expect(not _coordinator.has_entity_overlap(AABB(Vector3(target_b), Vector3.ONE)), "despawn retained an overlap query result")
+	_expect(_coordinator.get_runtime().get_active_count() == 0, "despawn retained the zombie")
+	_expect(_coordinator.get_runtime()._spatial_index.get_entry_count() == 0, "despawn retained a spatial entry")
+	_expect(_coordinator.get_runtime()._spatial_index.get_cell_count() == 0, "despawn retained spatial cells")
+	_expect(not _coordinator.get_runtime().has_entity_overlap(AABB(Vector3(target_b), Vector3.ONE)), "despawn retained an overlap query result")
 	var before_despawn_success := _grass_count()
 	var signals_before_despawn_success := _block_placed_count
 	var world_signals_before_despawn_success := _world_place_count

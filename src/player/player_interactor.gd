@@ -4,25 +4,28 @@ class_name PlayerInteractor
 signal block_placed
 signal melee_attack_started(action: MeleeAttackActionDefinition, direction: int)
 signal melee_terrain_hit(position: Vector3i)
+signal soil_tilled
 
 @export var reach: float = 6.0
 @export var place_cooldown: float = 0.18
 @export var unarmed_primary_action: MiningActionDefinition
 
-var voxel_world: VoxelWorld = null
+var voxel_space: VoxelSpace = null
+var editable_voxel_world: VoxelWorld = null
 var camera: Camera3D = null
 var motor: PlayerMotor = null
 var inventory_model: InventoryModel = null
 var combat: MeleeCombatCoordinator = null
-var entity_coordinator: EntityCoordinator = null
+var entity_runtime: EntityRuntime = null
 var _input_buffer: InputBuffer = null
+var _is_setup: bool = false
 
 var target_block: Vector3i = Vector3i(-999, -999, -999)
 var target_has: bool = false
 var placement_block: Vector3i = Vector3i(-999, -999, -999)
 var placement_has: bool = false
 var last_ray_normal: Vector3i = Vector3i.UP
-var can_mine_target: bool = false
+var can_primary_target: bool = false
 var can_place_target: bool = false
 var pointer_over_ui: bool = false
 
@@ -38,24 +41,65 @@ var melee_attack_elapsed: float = 0.0
 var melee_chain_input_timer: float = 0.0
 var next_melee_attack_direction: int = -1
 var secondary_use_timer: float = 0.0
-var _ray_hit_pos: Vector3i
-var _ray_place_pos: Vector3i
-var _ray_face_normal: Vector3i
 var _melee_target_runtime_ids: Array[int] = []
 var _melee_contact_pending: bool = false
 var _melee_ray_origin: Vector3
 var _melee_ray_direction: Vector3
 var _melee_source_item_id: StringName = &""
 
-func setup(p_voxel_world: VoxelWorld, p_camera: Camera3D, p_motor: PlayerMotor, p_inventory: InventoryModel, p_input_buffer: InputBuffer, p_combat: MeleeCombatCoordinator, p_entity_coordinator: EntityCoordinator):
-	assert(p_combat != null and p_entity_coordinator != null)
-	voxel_world = p_voxel_world
+func setup(p_camera: Camera3D, p_motor: PlayerMotor, p_inventory: InventoryModel, p_input_buffer: InputBuffer, p_combat: MeleeCombatCoordinator, p_entity_runtime: EntityRuntime):
+	assert(p_camera != null)
+	assert(p_motor != null)
+	assert(p_inventory != null)
+	assert(p_input_buffer != null)
+	assert(p_combat != null)
+	assert(p_entity_runtime != null)
+	if _is_setup:
+		assert(camera == p_camera)
+		assert(motor == p_motor)
+		assert(inventory_model == p_inventory)
+		assert(_input_buffer == p_input_buffer)
+		assert(combat == p_combat)
+		assert(entity_runtime == p_entity_runtime)
+		return
 	camera = p_camera
 	motor = p_motor
 	inventory_model = p_inventory
 	_input_buffer = p_input_buffer
 	combat = p_combat
-	entity_coordinator = p_entity_coordinator
+	entity_runtime = p_entity_runtime
+	_is_setup = true
+
+func bind_entity_runtime(p_entity_runtime: EntityRuntime) -> void:
+	assert(_is_setup)
+	assert(p_entity_runtime != null)
+	_clear_active_state()
+	entity_runtime = p_entity_runtime
+
+func bind_space(p_space: VoxelSpace, p_editable_voxel_world: VoxelWorld = null):
+	assert(_is_setup)
+	assert(p_space != null)
+	assert(p_editable_voxel_world == null or p_editable_voxel_world == p_space)
+	_clear_active_state()
+	voxel_space = p_space
+	editable_voxel_world = p_editable_voxel_world
+
+func unbind_space():
+	_clear_active_state()
+	voxel_space = null
+	editable_voxel_world = null
+
+func is_editing_enabled() -> bool:
+	return editable_voxel_world != null
+
+func _clear_active_state():
+	target_has = false
+	placement_has = false
+	can_primary_target = false
+	can_place_target = false
+	_reset_mining()
+	_reset_melee_chain()
+	secondary_use_timer = 0.0
 
 func cancel_actions():
 	_reset_mining()
@@ -63,11 +107,11 @@ func cancel_actions():
 	secondary_use_timer = 0.0
 	target_has = false
 	placement_has = false
-	can_mine_target = false
+	can_primary_target = false
 	can_place_target = false
 
 func _physics_process(delta):
-	if voxel_world == null or motor == null or camera == null or inventory_model == null or _input_buffer == null:
+	if voxel_space == null or motor == null or camera == null or inventory_model == null or _input_buffer == null:
 		return
 	if motor.is_defeated():
 		return
@@ -75,7 +119,7 @@ func _physics_process(delta):
 	if pointer_over_ui:
 		target_has = false
 		placement_has = false
-		can_mine_target = false
+		can_primary_target = false
 		can_place_target = false
 		if is_mining:
 			_reset_mining()
@@ -89,7 +133,7 @@ func _physics_process(delta):
 func _handle_raycast():
 	target_has = false
 	placement_has = false
-	can_mine_target = false
+	can_primary_target = false
 	can_place_target = false
 
 	var mouse_pos = get_viewport().get_mouse_position()
@@ -97,12 +141,13 @@ func _handle_raycast():
 	var ray_dir = camera.project_ray_normal(mouse_pos)
 
 	var max_dist = ray_origin.distance_to(motor.global_position) + reach + 1.0
-	if not _voxel_raycast(ray_origin, ray_dir, max_dist):
+	var hit := VoxelRaycast.cast(voxel_space, ray_origin, ray_dir, max_dist)
+	if hit == null:
 		return
 
-	var best_hit = _ray_hit_pos
-	var best_place = _ray_place_pos
-	var best_normal = _ray_face_normal
+	var best_hit := hit.target_cell
+	var best_place := hit.placement_cell
+	var best_normal := hit.face_normal
 
 	target_block = best_hit
 	target_has = true
@@ -112,108 +157,18 @@ func _handle_raycast():
 	var motor_pos = motor.global_position
 	var reach_squared = reach * reach
 	var selected_primary := get_selected_primary_action()
-	can_mine_target = selected_primary is MiningActionDefinition and _can_mine_position(best_hit, selected_primary as MiningActionDefinition)
+	if selected_primary is MiningActionDefinition:
+		can_primary_target = _can_mine_position(best_hit, selected_primary as MiningActionDefinition)
+	elif selected_primary is TillingActionDefinition:
+		can_primary_target = _can_till_position(best_hit, best_normal, selected_primary as TillingActionDefinition)
 
-	if voxel_world.get_block_at(best_place) == null:
+	if editable_voxel_world != null and not editable_voxel_world.is_edit_protected(best_place) and voxel_space.get_block_at(best_place) == null:
 		if not _placement_collides_player(best_place) and not _placement_collides_entity(best_place):
 			placement_has = true
 			can_place_target = motor_pos.distance_squared_to(Vector3(best_place.x + 0.5, best_place.y + 0.5, best_place.z + 0.5)) <= reach_squared
 	else:
 		placement_has = false
 		can_place_target = false
-
-func _voxel_raycast(origin: Vector3, dir: Vector3, max_dist: float) -> bool:
-	dir = dir.normalized()
-	if dir.length_squared() < 0.0001:
-		return false
-	var current = Vector3i(floor(origin.x), floor(origin.y), floor(origin.z))
-
-	if voxel_world.is_raycast_solid(current):
-		origin = origin + dir * 0.6
-		current = Vector3i(floor(origin.x), floor(origin.y), floor(origin.z))
-
-	var step_x = 1 if dir.x >= 0 else -1
-	var step_y = 1 if dir.y >= 0 else -1
-	var step_z = 1 if dir.z >= 0 else -1
-
-	var t_max_x: float
-	var t_max_y: float
-	var t_max_z: float
-	var t_delta_x: float
-	var t_delta_y: float
-	var t_delta_z: float
-
-	var frac_x = origin.x - floor(origin.x)
-	var frac_y = origin.y - floor(origin.y)
-	var frac_z = origin.z - floor(origin.z)
-
-	if dir.x != 0:
-		t_delta_x = abs(1.0 / dir.x)
-		t_max_x = (1.0 - frac_x) * t_delta_x if step_x > 0 else frac_x * t_delta_x
-	else:
-		t_max_x = 999999.0
-		t_delta_x = 999999.0
-
-	if dir.y != 0:
-		t_delta_y = abs(1.0 / dir.y)
-		t_max_y = (1.0 - frac_y) * t_delta_y if step_y > 0 else frac_y * t_delta_y
-	else:
-		t_max_y = 999999.0
-		t_delta_y = 999999.0
-
-	if dir.z != 0:
-		t_delta_z = abs(1.0 / dir.z)
-		t_max_z = (1.0 - frac_z) * t_delta_z if step_z > 0 else frac_z * t_delta_z
-	else:
-		t_max_z = 999999.0
-		t_delta_z = 999999.0
-
-	var traveled = 0.0
-	var last_pos = current
-
-	for _i in range(int(max_dist * 2 + 10)):
-		if voxel_world.is_raycast_solid(current):
-			var face_normal: Vector3i
-			if last_pos.x != current.x:
-				face_normal = Vector3i(-step_x, 0, 0)
-			elif last_pos.y != current.y:
-				face_normal = Vector3i(0, -step_y, 0)
-			else:
-				face_normal = Vector3i(0, 0, -step_z)
-			var place_pos = last_pos
-			if voxel_world.is_raycast_solid(place_pos):
-				place_pos = current + face_normal
-			_ray_hit_pos = current
-			_ray_place_pos = place_pos
-			_ray_face_normal = face_normal
-			return true
-
-		if t_max_x < t_max_y:
-			if t_max_x < t_max_z:
-				last_pos = current
-				current.x += step_x
-				traveled = t_max_x
-				t_max_x += t_delta_x
-			else:
-				last_pos = current
-				current.z += step_z
-				traveled = t_max_z
-				t_max_z += t_delta_z
-		else:
-			if t_max_y < t_max_z:
-				last_pos = current
-				current.y += step_y
-				traveled = t_max_y
-				t_max_y += t_delta_y
-			else:
-				last_pos = current
-				current.z += step_z
-				traveled = t_max_z
-				t_max_z += t_delta_z
-
-		if traveled > max_dist:
-			break
-	return false
 
 func _placement_collides_player(p: Vector3i) -> bool:
 	if motor == null:
@@ -234,7 +189,7 @@ func _placement_collides_player(p: Vector3i) -> bool:
 
 func _placement_collides_entity(position: Vector3i) -> bool:
 	var block_bounds := AABB(Vector3(position), Vector3.ONE)
-	return entity_coordinator.has_entity_overlap(block_bounds)
+	return entity_runtime.has_entity_overlap(block_bounds)
 
 func _handle_item_actions(delta):
 	melee_chain_input_timer = max(0.0, melee_chain_input_timer - delta)
@@ -244,21 +199,22 @@ func _handle_item_actions(delta):
 	var selected_primary := get_selected_primary_action()
 	var selected_mining := selected_primary as MiningActionDefinition
 	var selected_melee := selected_primary as MeleeAttackActionDefinition
-	if _input_buffer.primary_use_pressed and target_has and can_mine_target and selected_mining != null:
+	var selected_tilling := selected_primary as TillingActionDefinition
+	if _input_buffer.primary_use_pressed and target_has and can_primary_target and selected_mining != null:
 		if not is_mining:
 			mine_target = target_block
-			mine_target_rev = voxel_world.get_revision(mine_target)
+			mine_target_rev = editable_voxel_world.get_revision(mine_target)
 			mine_timer = 0.0
 			mine_action = selected_mining
 			is_mining = true
 		else:
 			if mine_target != target_block or mine_action != selected_mining:
 				mine_target = target_block
-				mine_target_rev = voxel_world.get_revision(mine_target)
+				mine_target_rev = editable_voxel_world.get_revision(mine_target)
 				mine_timer = 0.0
 				mine_action = selected_mining
 			else:
-				var cur_rev = voxel_world.get_revision(mine_target)
+				var cur_rev = editable_voxel_world.get_revision(mine_target)
 				if cur_rev != mine_target_rev:
 					_reset_mining()
 				else:
@@ -286,6 +242,8 @@ func _handle_item_actions(delta):
 			_start_melee_attack()
 		else:
 			_reset_melee_chain()
+	if primary_use_just and target_has and selected_tilling != null:
+		_commit_till(target_block, last_ray_normal, selected_tilling)
 
 	var selected_placement := get_selected_placement_action()
 	if (_input_buffer.secondary_use_just or _input_buffer.secondary_use_pressed) and secondary_use_timer <= 0.0:
@@ -323,12 +281,16 @@ func _start_melee_attack():
 	var mouse_position := get_viewport().get_mouse_position()
 	_melee_ray_origin = camera.project_ray_origin(mouse_position)
 	_melee_ray_direction = camera.project_ray_normal(mouse_position).normalized()
+	var player_center := motor.global_position + Vector3.UP * (motor.player_height * 0.5)
+	var cursor_position: Variant = Plane(Vector3.UP, player_center.y).intersects_ray(_melee_ray_origin, _melee_ray_direction)
+	if cursor_position is Vector3:
+		motor.face_direction((cursor_position as Vector3) - player_center)
 	_melee_target_runtime_ids = combat.acquire_player_targets(_melee_ray_origin, _melee_ray_direction, profile)
 	_melee_contact_pending = not _melee_target_runtime_ids.is_empty()
 	var attack_direction := next_melee_attack_direction
 	next_melee_attack_direction = -next_melee_attack_direction
 	melee_attack_started.emit(melee_attack_action, attack_direction)
-	if target_has and voxel_world != null and voxel_world.is_solid(target_block):
+	if target_has and voxel_space != null and voxel_space.is_solid(target_block):
 		melee_terrain_hit.emit(target_block)
 	if _melee_contact_pending and is_zero_approx(profile.contact_time):
 		_commit_melee_contacts()
@@ -350,23 +312,51 @@ func _commit_melee_contacts():
 	combat.try_commit_player_contacts(target_runtime_ids, _melee_ray_origin, _melee_ray_direction, melee_attack_action.attack_profile, _melee_source_item_id)
 
 func _can_mine_position(pos: Vector3i, action: MiningActionDefinition) -> bool:
-	if action == null or voxel_world == null or motor == null:
+	if action == null or voxel_space == null or editable_voxel_world == null or motor == null:
+		return false
+	if editable_voxel_world.is_edit_protected(pos):
 		return false
 	var center := Vector3(pos) + Vector3(0.5, 0.5, 0.5)
 	if motor.global_position.distance_squared_to(center) > reach * reach:
 		return false
-	var block_id := voxel_world.get_block_id_at(pos)
+	var block_id := voxel_space.get_block_id_at(pos)
 	if block_id == BlockId.Type.AIR:
 		return false
-	return action.can_mine(voxel_world.block_catalog.get_definition(block_id))
+	return action.can_mine(voxel_space.block_catalog.get_definition(block_id))
+
+func _can_till_position(pos: Vector3i, face_normal: Vector3i, action: TillingActionDefinition) -> bool:
+	if action == null or voxel_space == null or editable_voxel_world == null or motor == null:
+		return false
+	if editable_voxel_world.is_edit_protected(pos):
+		return false
+	if get_selected_primary_action() != action or face_normal != Vector3i.UP:
+		return false
+	var center := Vector3(pos) + Vector3(0.5, 0.5, 0.5)
+	if motor.global_position.distance_squared_to(center) > reach * reach:
+		return false
+	if voxel_space.get_block_id_at(pos + Vector3i.UP) != BlockId.Type.AIR:
+		return false
+	var block_id := voxel_space.get_block_id_at(pos)
+	if block_id == BlockId.Type.AIR:
+		return false
+	return action.can_till(voxel_space.block_catalog.get_definition(block_id))
+
+func _commit_till(pos: Vector3i, face_normal: Vector3i, action: TillingActionDefinition) -> void:
+	if not _can_till_position(pos, face_normal, action):
+		return
+	var old_id := voxel_space.get_block_id_at(pos)
+	var edit := editable_voxel_world.try_replace_block(pos, old_id, action.result_block.id)
+	if edit.is_success():
+		soil_tilled.emit()
+		_handle_raycast()
 
 func get_mine_duration() -> float:
 	assert(is_mining and mine_action != null)
-	var block_id := voxel_world.get_block_id_at(mine_target)
-	return mine_action.get_mine_duration(voxel_world.block_catalog.get_definition(block_id))
+	var block_id := voxel_space.get_block_id_at(mine_target)
+	return mine_action.get_mine_duration(voxel_space.block_catalog.get_definition(block_id))
 
 func has_mining_impact_target() -> bool:
-	return is_mining and target_has and can_mine_target and mine_target == target_block
+	return is_mining and target_has and can_primary_target and mine_target == target_block
 
 func get_mining_impact_position() -> Vector3:
 	assert(has_mining_impact_target())
@@ -378,7 +368,7 @@ func get_mining_impact_normal() -> Vector3i:
 
 func get_mining_impact_block_id() -> int:
 	assert(has_mining_impact_target())
-	return voxel_world.get_block_id_at(mine_target)
+	return voxel_space.get_block_id_at(mine_target)
 
 func _can_place(action: BlockPlacementActionDefinition) -> bool:
 	if not placement_has or not can_place_target:
@@ -386,11 +376,13 @@ func _can_place(action: BlockPlacementActionDefinition) -> bool:
 	return _validate_placement(placement_block, action)
 
 func _validate_placement(position: Vector3i, action: BlockPlacementActionDefinition) -> bool:
-	if action == null or voxel_world == null or inventory_model == null or motor == null:
+	if action == null or voxel_space == null or editable_voxel_world == null or inventory_model == null or motor == null:
+		return false
+	if editable_voxel_world.is_edit_protected(position):
 		return false
 	if get_selected_placement_action() != action or not inventory_model.can_consume_selected():
 		return false
-	if voxel_world.get_block_id_at(position) != BlockId.Type.AIR:
+	if voxel_space.get_block_id_at(position) != BlockId.Type.AIR:
 		return false
 	var center := Vector3(position) + Vector3(0.5, 0.5, 0.5)
 	if motor.global_position.distance_squared_to(center) > reach * reach:
@@ -402,24 +394,24 @@ func _commit_mine(pos: Vector3i, action: MiningActionDefinition):
 		_reset_mining()
 		return
 	_reset_mining()
-	if voxel_world == null or inventory_model == null:
+	if voxel_space == null or editable_voxel_world == null or inventory_model == null:
 		return
 
-	var preview_id = voxel_world.get_block_id_at(pos)
+	var preview_id = voxel_space.get_block_id_at(pos)
 	if preview_id == BlockId.Type.AIR:
 		return
 
 	var item_ids_to_collect: Array[StringName] = []
 	_append_block_drop(item_ids_to_collect, preview_id)
-	for torch_pos in voxel_world.get_attached_torches(pos):
-		var tid = voxel_world.get_block_id_at(torch_pos)
+	for torch_pos in editable_voxel_world.get_attached_torches(pos):
+		var tid = voxel_space.get_block_id_at(torch_pos)
 		if tid != BlockId.Type.AIR:
 			_append_block_drop(item_ids_to_collect, tid)
 
 	if not inventory_model.can_add_batch(item_ids_to_collect):
 		return
 
-	var batch = voxel_world.try_mine_block(pos)
+	var batch = editable_voxel_world.try_mine_block(pos)
 	if batch is Array and batch.size() > 0 and batch[0] is BlockEdit:
 		if not (batch[0] as BlockEdit).is_success():
 			return
@@ -432,7 +424,7 @@ func _commit_mine(pos: Vector3i, action: MiningActionDefinition):
 	_handle_raycast()
 
 func _append_block_drop(item_ids: Array[StringName], block_id: int):
-	var drop_item_id := voxel_world.block_catalog.get_definition(block_id).drop_item_id
+	var drop_item_id := voxel_space.block_catalog.get_definition(block_id).drop_item_id
 	if not drop_item_id.is_empty():
 		item_ids.append(drop_item_id)
 
@@ -443,7 +435,7 @@ func _commit_place(pos: Vector3i, action: BlockPlacementActionDefinition):
 	var block_id := int(action.block.id)
 
 	var attach_dir = -last_ray_normal if block_id == BlockId.Type.TORCH else Vector3i.ZERO
-	var edit: BlockEdit = voxel_world.try_place_block(pos, block_id, attach_dir)
+	var edit: BlockEdit = editable_voxel_world.try_place_block(pos, block_id, attach_dir)
 
 	if edit.is_success():
 		var consumed := inventory_model.consume_selected()
@@ -473,12 +465,3 @@ func get_selected_placement_action() -> BlockPlacementActionDefinition:
 		return null
 	var action := inventory_model.item_catalog.get_definition(item_id).secondary_action
 	return action as BlockPlacementActionDefinition
-
-func _unhandled_input(event):
-	if motor != null and motor.is_defeated():
-		return
-	if event is InputEventKey and event.pressed:
-		if event.keycode >= KEY_1 and event.keycode < KEY_1 + InventoryModel.HOTBAR_SIZE:
-			var idx = event.keycode - KEY_1
-			if inventory_model:
-				inventory_model.select_slot(idx)

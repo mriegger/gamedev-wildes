@@ -88,7 +88,7 @@ func _test_species_visual_fades(catalog: EntityCatalog, world: VoxelWorld) -> vo
 		_expect(not geometries.is_empty(), "%s visual contained no fade geometry" % definition.id)
 		get_root().add_child(actor)
 		actor.global_position = Vector3(float(index) + 0.5, FEET_Y, 0.5)
-		actor.setup(index + 1, definition, world, 100 + index)
+		actor.setup(index + 1, definition, world, 100 + index, EntityNavigationLimits.new(24, 256, 1))
 		var poof := actor.death_poof
 		_expect(poof.amount == 12, "%s death poof amount is not twelve" % definition.id)
 		_expect(is_equal_approx(poof.lifetime, 0.35), "%s death poof lifetime is not 0.35 seconds" % definition.id)
@@ -133,8 +133,8 @@ func _test_instance_isolation(catalog: EntityCatalog, world: VoxelWorld) -> void
 	var second_geometries := _get_geometries(second.get_node(^"ModelRoot"))
 	get_root().add_child(first)
 	get_root().add_child(second)
-	first.setup(10, definition, world, 10)
-	second.setup(11, definition, world, 11)
+	first.setup(10, definition, world, 10, EntityNavigationLimits.new(24, 256, 1))
+	second.setup(11, definition, world, 11, EntityNavigationLimits.new(24, 256, 1))
 	first.advance_visual_fade(first.visual_fader.fade_in_seconds)
 	_expect(is_equal_approx(first_geometries[0].transparency, 0.0), "first zombie did not become opaque")
 	_expect(is_equal_approx(second_geometries[0].transparency, 1.0), "fading one zombie changed another instance")
@@ -148,7 +148,7 @@ func _test_species_death_retirement(catalog: EntityCatalog, world: VoxelWorld) -
 		var actor := definition.actor_scene.instantiate() as EntityActor
 		get_root().add_child(actor)
 		actor.global_position = Vector3(float(index) + 0.5, FEET_Y, 2.5)
-		actor.setup(index + 20, definition, world, 200 + index)
+		actor.setup(index + 20, definition, world, 200 + index, EntityNavigationLimits.new(24, 256, 1))
 		actor.advance_visual_fade(actor.visual_fader.fade_in_seconds)
 		actor.velocity = Vector3(1.0, 2.0, 3.0)
 		actor.play_hit(Vector3.RIGHT)
@@ -198,7 +198,7 @@ func _test_retirement_waits_for_poof(catalog: EntityCatalog, world: VoxelWorld) 
 	var actor := definition.actor_scene.instantiate() as EntityActor
 	get_root().add_child(actor)
 	actor.global_position = Vector3(1.5, FEET_Y, 3.5)
-	actor.setup(29, definition, world, 299)
+	actor.setup(29, definition, world, 299, EntityNavigationLimits.new(24, 256, 1))
 	actor.advance_visual_fade(actor.visual_fader.fade_in_seconds)
 	actor.visual_fader.fade_out_seconds = 0.15
 	actor.begin_death_retirement()
@@ -215,7 +215,7 @@ func _test_oversized_death_retirement_delta(catalog: EntityCatalog, world: Voxel
 	var actor := definition.actor_scene.instantiate() as EntityActor
 	get_root().add_child(actor)
 	actor.global_position = Vector3(0.5, FEET_Y, 3.5)
-	actor.setup(30, definition, world, 300)
+	actor.setup(30, definition, world, 300, EntityNavigationLimits.new(24, 256, 1))
 	actor.advance_visual_fade(actor.visual_fader.fade_in_seconds)
 	actor.begin_death_retirement()
 	var retirement_seconds := ZombieAnimationDriver.DEATH_SECONDS + maxf(actor.visual_fader.fade_out_seconds, actor.death_poof.lifetime)
@@ -224,12 +224,12 @@ func _test_oversized_death_retirement_delta(catalog: EntityCatalog, world: Voxel
 	actor.free()
 
 func _test_coordinator_retirement(catalog: EntityCatalog, world: VoxelWorld) -> void:
-	var coordinator := EntityCoordinator.new()
+	var coordinator := WorldEntityCoordinator.new()
 	get_root().add_child(coordinator)
 	coordinator.setup(catalog, world, 7021, _position_ready)
 	var player_position := Vector3(0.5, FEET_Y, 0.5)
-	coordinator.tick(EntityCoordinator.SPAWN_INTERVAL_SECONDS, player_position, 20.0)
-	var actors := coordinator.get_active_actors()
+	coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, player_position, 20.0)
+	var actors := coordinator.get_runtime().get_active_actors()
 	_expect(actors.size() == 1, "coordinator did not spawn the fade test zombie")
 	if actors.is_empty():
 		coordinator.shutdown()
@@ -242,19 +242,19 @@ func _test_coordinator_retirement(catalog: EntityCatalog, world: VoxelWorld) -> 
 	var interrupted_opacity := actor.get_visual_opacity()
 	_expect(interrupted_opacity > 0.0 and interrupted_opacity < 1.0, "interrupted fade setup was not partially visible")
 	var former_bounds := actor.get_world_bounds()
-	actor.global_position = player_position + Vector3(EntityCoordinator.DESPAWN_DISTANCE + 1.0, 0.0, 0.0)
+	actor.global_position = player_position + Vector3(WorldEntityCoordinator.DESPAWN_DISTANCE + 1.0, 0.0, 0.0)
 	coordinator.tick(0.0, player_position, 20.0)
-	_expect(coordinator.get_actor(runtime_id) == null and coordinator.get_active_count() == 0, "retiring actor remained active")
-	_expect(coordinator._spatial_index.get_entry_count() == 0, "retiring actor remained spatially indexed")
-	_expect(not coordinator.has_entity_overlap(former_bounds), "retiring actor still blocked placement")
-	_expect(coordinator._retiring.size() == 1 and is_instance_valid(actor), "retiring visual was not retained")
+	_expect(coordinator.get_runtime().get_actor(runtime_id) == null and coordinator.get_runtime().get_active_count() == 0, "retiring actor remained active")
+	_expect(coordinator.get_runtime()._spatial_index.get_entry_count() == 0, "retiring actor remained spatially indexed")
+	_expect(not coordinator.get_runtime().has_entity_overlap(former_bounds), "retiring actor still blocked placement")
+	_expect(coordinator.get_runtime()._retiring.size() == 1 and is_instance_valid(actor), "retiring visual was not retained")
 	_expect(is_equal_approx(actor.get_visual_opacity(), interrupted_opacity), "interrupted fade-out changed opacity at transition")
 	_expect(not actor.death_poof.has_played(), "ordinary coordinator despawn emitted a death poof")
 	var fade_out_seconds := actor.visual_fader.fade_out_seconds
 	coordinator.tick(fade_out_seconds * 0.5, player_position, 20.0)
 	_expect(actor.get_visual_opacity() < interrupted_opacity and actor.get_visual_opacity() > 0.0, "retiring visual did not fade gradually")
 	coordinator.tick(fade_out_seconds * 0.5, player_position, 20.0)
-	_expect(coordinator._retiring.is_empty(), "completed retiring visual remained owned")
+	_expect(coordinator.get_runtime()._retiring.is_empty(), "completed retiring visual remained owned")
 	await process_frame
 	_expect(not is_instance_valid(actor), "completed retiring visual was not freed")
 	coordinator.shutdown()
@@ -263,35 +263,35 @@ func _test_coordinator_retirement(catalog: EntityCatalog, world: VoxelWorld) -> 
 	await process_frame
 
 func _test_retiring_bound_and_population_independence(catalog: EntityCatalog, world: VoxelWorld) -> void:
-	var coordinator := EntityCoordinator.new()
+	var coordinator := WorldEntityCoordinator.new()
 	get_root().add_child(coordinator)
 	coordinator.setup(catalog, world, 8842, _position_ready)
 	var player_position := Vector3(0.5, FEET_Y, 0.5)
 	for _spawn in range(6):
-		coordinator.tick(EntityCoordinator.SPAWN_INTERVAL_SECONDS, player_position, 20.0)
+		coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, player_position, 20.0)
 	for _spawn in range(6):
-		coordinator.tick(EntityCoordinator.SPAWN_INTERVAL_SECONDS, player_position, 12.0)
-	_expect(coordinator.get_active_count() == EntityCoordinator.MAX_TOTAL_ACTIVE, "retiring-cap setup did not reach twelve active entities")
-	var actors := coordinator.get_active_actors()
+		coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, player_position, 12.0)
+	_expect(coordinator.get_runtime().get_active_count() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "retiring-cap setup did not reach twelve active entities")
+	var actors := coordinator.get_runtime().get_active_actors()
 	actors.sort_custom(func(left: EntityActor, right: EntityActor) -> bool: return left.runtime_id < right.runtime_id)
 	var first_retired_actor := actors[1]
 	var first_retired_runtime_id := first_retired_actor.runtime_id
 	var newest_at_capacity := actors[0]
 	for index in range(1, actors.size()):
-		coordinator._despawn(actors[index].runtime_id)
-	coordinator._despawn(newest_at_capacity.runtime_id)
-	_expect(coordinator.get_active_count() == 0, "mass retirement retained active entities")
-	_expect(coordinator._retiring.size() == EntityCoordinator.MAX_RETIRING_VISUALS, "mass retirement did not fill the visual bound")
-	coordinator._spawn_elapsed = EntityCoordinator.SPAWN_INTERVAL_SECONDS - 0.1
+		coordinator.get_runtime().try_despawn(actors[index].runtime_id)
+	coordinator.get_runtime().try_despawn(newest_at_capacity.runtime_id)
+	_expect(coordinator.get_runtime().get_active_count() == 0, "mass retirement retained active entities")
+	_expect(coordinator.get_runtime()._retiring.size() == WorldEntityCoordinator.MAX_RETIRING_VISUALS, "mass retirement did not fill the visual bound")
+	coordinator._spawn_elapsed = WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS - 0.1
 	coordinator.tick(0.1, player_position, 20.0)
-	_expect(coordinator.get_active_count() == 1, "retiring visuals suppressed an available population slot")
-	var replacement := coordinator.get_active_actors()[0]
-	replacement.global_position = player_position + Vector3(EntityCoordinator.DESPAWN_DISTANCE + 1.0, 0.0, 0.0)
+	_expect(coordinator.get_runtime().get_active_count() == 1, "retiring visuals suppressed an available population slot")
+	var replacement := coordinator.get_runtime().get_active_actors()[0]
+	replacement.global_position = player_position + Vector3(WorldEntityCoordinator.DESPAWN_DISTANCE + 1.0, 0.0, 0.0)
 	coordinator.tick(0.0, player_position, 20.0)
-	_expect(coordinator._retiring.size() == EntityCoordinator.MAX_RETIRING_VISUALS, "thirteenth retirement exceeded the visual bound")
-	_expect(not coordinator._retiring.has(first_retired_runtime_id), "retiring bound did not evict the earliest retained visual")
-	_expect(coordinator._retiring.has(newest_at_capacity.runtime_id), "retiring bound evicted by runtime ID instead of retirement age")
-	_expect(coordinator._retiring.has(replacement.runtime_id), "retiring bound dropped the newest visual")
+	_expect(coordinator.get_runtime()._retiring.size() == WorldEntityCoordinator.MAX_RETIRING_VISUALS, "thirteenth retirement exceeded the visual bound")
+	_expect(not coordinator.get_runtime()._retiring.has(first_retired_runtime_id), "retiring bound did not evict the earliest retained visual")
+	_expect(coordinator.get_runtime()._retiring.has(newest_at_capacity.runtime_id), "retiring bound evicted by runtime ID instead of retirement age")
+	_expect(coordinator.get_runtime()._retiring.has(replacement.runtime_id), "retiring bound dropped the newest visual")
 	await process_frame
 	_expect(not is_instance_valid(first_retired_actor), "evicted retiring visual was not freed")
 	coordinator.shutdown()

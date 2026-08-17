@@ -3,7 +3,9 @@ class_name PlayerActionAudio
 
 @onready var _clunk_player: AudioStreamPlayer = $ClunkPlayer
 @onready var _creature_hit_player: AudioStreamPlayer = $CreatureHitPlayer
-@onready var _draw_player: AudioStreamPlayer = $DrawPlayer
+@onready var _player_hit_player: AudioStreamPlayer = $PlayerHitPlayer
+@onready var _equip_player: AudioStreamPlayer = $EquipPlayer
+@onready var _till_player: AudioStreamPlayer = $TillPlayer
 
 var _interactor: PlayerInteractor
 var _animation_driver: PlayerAnimationDriver
@@ -21,15 +23,19 @@ var _creature_hit_streams: Array[AudioStream] = [
 	preload("res://assets/audio/combat/impacts/creature/Stab_Knife_01.wav"),
 	preload("res://assets/audio/combat/impacts/creature/Stab_Knife_02.wav"),
 ]
-var _draw_streams: Array[AudioStream] = [
-	preload("res://assets/audio/combat/weapons/sword/draw/drawKnife1.ogg"),
-	preload("res://assets/audio/combat/weapons/sword/draw/drawKnife2.ogg"),
-	preload("res://assets/audio/combat/weapons/sword/draw/drawKnife3.ogg"),
+var _player_hit_streams: Array[AudioStream] = [
+	preload("res://assets/audio/combat/impacts/player/player_hit.wav"),
 ]
-
+var _till_streams: Array[AudioStream] = [
+	preload("res://assets/audio/sfx/farming/tilling/bookFlip1.ogg"),
+	preload("res://assets/audio/sfx/farming/tilling/bookFlip2.ogg"),
+	preload("res://assets/audio/sfx/farming/tilling/bookFlip3.ogg"),
+]
 var _last_clunk_idx: int = -1
 var _last_creature_hit_idx: int = -1
-var _last_draw_idx: int = -1
+var _last_player_hit_idx: int = -1
+var _last_till_idx: int = -1
+var _last_equip_indices: Dictionary = {}
 
 
 func setup(
@@ -45,6 +51,7 @@ func setup(
 	_selected_item_id = _get_selected_item_id()
 	_animation_driver.mining_impact.connect(_on_mining_impact)
 	_interactor.melee_terrain_hit.connect(_on_melee_terrain_hit)
+	_interactor.soil_tilled.connect(_on_soil_tilled)
 	_combat.melee_outcome_committed.connect(_on_melee_outcome_committed)
 	_inventory.inventory_changed.connect(_on_inventory_changed)
 	if _clunk_player.stream == null and not _clunk_streams.is_empty():
@@ -59,10 +66,17 @@ func _on_melee_terrain_hit(_pos: Vector3i):
 	_play_clunk(-4.0)
 
 
+func _on_soil_tilled():
+	_last_till_idx = _play_random(_till_player, _till_streams, _last_till_idx, 0.96, 1.04)
+
+
 func _on_melee_outcome_committed(outcome: MeleeOutcome):
-	if outcome.contact.source_runtime_id != MeleeCombatCoordinator.PLAYER_RUNTIME_ID:
+	var contact := outcome.contact
+	if contact.source_runtime_id == MeleeCombatCoordinator.PLAYER_RUNTIME_ID:
+		_last_creature_hit_idx = _play_random(_creature_hit_player, _creature_hit_streams, _last_creature_hit_idx, 0.94, 1.06)
 		return
-	_last_creature_hit_idx = _play_random(_creature_hit_player, _creature_hit_streams, _last_creature_hit_idx, 0.94, 1.06)
+	if contact.target_runtime_id == MeleeCombatCoordinator.PLAYER_RUNTIME_ID:
+		_last_player_hit_idx = _play_random(_player_hit_player, _player_hit_streams, _last_player_hit_idx, 0.96, 1.04)
 
 
 func _on_inventory_changed():
@@ -70,8 +84,7 @@ func _on_inventory_changed():
 	if selected_item_id == _selected_item_id:
 		return
 	_selected_item_id = selected_item_id
-	if _selected_item_is_melee():
-		_last_draw_idx = _play_random(_draw_player, _draw_streams, _last_draw_idx, 0.98, 1.02)
+	_play_selected_item_equip()
 
 
 func _get_selected_item_id() -> StringName:
@@ -79,10 +92,15 @@ func _get_selected_item_id() -> StringName:
 	return StringName(selected_item_id) if selected_item_id != null else &""
 
 
-func _selected_item_is_melee() -> bool:
+func _play_selected_item_equip():
 	if _selected_item_id.is_empty():
-		return false
-	return _inventory.item_catalog.get_definition(_selected_item_id).primary_action is MeleeAttackActionDefinition
+		return
+	var profile := _inventory.item_catalog.get_definition(_selected_item_id).equip_audio
+	if profile == null:
+		return
+	_equip_player.volume_db = profile.volume_db
+	var last_index := int(_last_equip_indices.get(profile, -1))
+	_last_equip_indices[profile] = _play_random(_equip_player, profile.streams, last_index, profile.pitch_min, profile.pitch_max)
 
 
 func _play_clunk(volume_db: float = -6.0):
@@ -116,6 +134,8 @@ func _exit_tree():
 	if _interactor != null:
 		if _interactor.melee_terrain_hit.is_connected(_on_melee_terrain_hit):
 			_interactor.melee_terrain_hit.disconnect(_on_melee_terrain_hit)
+		if _interactor.soil_tilled.is_connected(_on_soil_tilled):
+			_interactor.soil_tilled.disconnect(_on_soil_tilled)
 	if _combat != null and _combat.melee_outcome_committed.is_connected(_on_melee_outcome_committed):
 		_combat.melee_outcome_committed.disconnect(_on_melee_outcome_committed)
 	if _inventory != null and _inventory.inventory_changed.is_connected(_on_inventory_changed):
@@ -126,10 +146,14 @@ func _exit_tree():
 	_combat = null
 	_release_player(_clunk_player)
 	_release_player(_creature_hit_player)
-	_release_player(_draw_player)
+	_release_player(_player_hit_player)
+	_release_player(_equip_player)
+	_release_player(_till_player)
 	_clunk_streams.clear()
 	_creature_hit_streams.clear()
-	_draw_streams.clear()
+	_player_hit_streams.clear()
+	_till_streams.clear()
+	_last_equip_indices.clear()
 
 
 func _release_player(player: AudioStreamPlayer):

@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="LevelCatalog" load_steps=10 format=3]
+
+[ext_resource type="Script" path="res://levels/definitions/level_catalog.gd" id="1_catalog"]
+[ext_resource type="Script" path="res://levels/definitions/level_module_definition.gd" id="2_module"]
+[ext_resource type="Script" path="res://levels/definitions/level_definition.gd" id="3_level"]
+[ext_resource type="Resource" path="res://levels/content/dungeons/stone/modules/stone_entry_path.tres" id="4_entry"]
+[ext_resource type="Resource" path="res://levels/content/dungeons/stone/modules/stone_hallway.tres" id="5_hallway"]
+[ext_resource type="Resource" path="res://levels/content/dungeons/stone/modules/stone_master_room.tres" id="6_master_room"]
+[ext_resource type="Resource" path="res://levels/content/dungeons/stone/stone_dungeon.tres" id="7_dungeon"]
+[ext_resource type="Resource" path="res://levels/content/dungeons/stone/modules/stone_room.tres" id="8_room"]
+[ext_resource type="Resource" path="res://levels/content/dungeons/stone/modules/stone_chest_room.tres" id="9_chest_room"]
+
+[resource]
+script = ExtResource("1_catalog")
+modules = Array[ExtResource("2_module")]([ExtResource("4_entry"), ExtResource("5_hallway"), ExtResource("6_master_room"), ExtResource("8_room"), ExtResource("9_chest_room")])
+levels = Array[ExtResource("3_level")]([ExtResource("7_dungeon")])

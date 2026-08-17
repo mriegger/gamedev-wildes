@@ -22,7 +22,7 @@ const TAB_TITLES: Dictionary = {
 @onready var _equipment_button: WildesButton = $Margin/Content/ActionButtons/EquipmentButton
 @onready var _trash_target: Panel = $Margin/Content/ActionButtons/InventoryTrashTarget as Panel
 
-var hotbar: Hotbar = null
+var hotbar: InventoryHotbar = null
 var inventory_model: InventoryModel = null
 var camera_rig: CameraRig = null
 
@@ -64,7 +64,7 @@ func _ready():
 	_update_hotbar_position(_progress)
 	set_process(false)
 
-func setup(inv: InventoryModel, inventory_stat_coordinator: InventoryStatCoordinator, item_proficiency: ItemProficiency, cam_rig: CameraRig, hb: Hotbar, left_panel_width: float):
+func setup(inv: InventoryModel, inventory_stat_coordinator: InventoryStatCoordinator, item_proficiency: ItemProficiency, cam_rig: CameraRig, hb: InventoryHotbar, left_panel_width: float):
 	inventory_model = inv
 	camera_rig = cam_rig
 	hotbar = hb

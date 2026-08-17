@@ -1,0 +1,61 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://combat/particles/combat_hit_particle_burst.gd" id="1_script"]
+
+[sub_resource type="Gradient" id="Gradient_fade"]
+offsets = PackedFloat32Array(0, 0.65, 1)
+colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0)
+
+[sub_resource type="StandardMaterial3D" id="Material_chunk"]
+transparency = 1
+shading_mode = 0
+vertex_color_use_as_albedo = true
+billboard_mode = 1
+billboard_keep_scale = true
+
+[sub_resource type="QuadMesh" id="Mesh_chunk"]
+material = SubResource("Material_chunk")
+size = Vector2(0.1, 0.1)
+
+[node name="CombatHitParticleBurst" type="Node3D"]
+script = ExtResource("1_script")
+
+[node name="Primary" type="CPUParticles3D" parent="."]
+emitting = false
+amount = 10
+lifetime = 0.42
+one_shot = true
+explosiveness = 1.0
+visibility_aabb = AABB(-3, -3, -3, 6, 6, 6)
+local_coords = false
+direction = Vector3(0, 1, 0)
+spread = 48.0
+gravity = Vector3(0, -4.5, 0)
+initial_velocity_min = 2.625
+initial_velocity_max = 4.25
+angular_velocity_min = -360.0
+angular_velocity_max = 360.0
+scale_amount_min = 0.75
+scale_amount_max = 1.35
+color_ramp = SubResource("Gradient_fade")
+mesh = SubResource("Mesh_chunk")
+
+[node name="Accent" type="CPUParticles3D" parent="."]
+emitting = false
+amount = 6
+lifetime = 0.42
+one_shot = true
+explosiveness = 1.0
+visibility_aabb = AABB(-3, -3, -3, 6, 6, 6)
+local_coords = false
+direction = Vector3(0, 1, 0)
+spread = 48.0
+gravity = Vector3(0, -4.5, 0)
+initial_velocity_min = 2.25
+initial_velocity_max = 3.75
+angular_velocity_min = -360.0
+angular_velocity_max = 360.0
+scale_amount_min = 0.65
+scale_amount_max = 1.15
+color_ramp = SubResource("Gradient_fade")
+mesh = SubResource("Mesh_chunk")

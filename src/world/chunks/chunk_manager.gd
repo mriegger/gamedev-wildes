@@ -28,6 +28,7 @@ var _max_loads_per_frame: int
 var _max_unloads_per_frame: int
 var _visible_set: Dictionary = {}
 var _keep_set: Dictionary = {}
+var _suspended: bool = false
 
 func setup(p_config: WorldConfig, p_voxel_model: VoxelWorld, p_scheduler: ChunkBuildScheduler, p_renderer: ChunkRenderer):
 	_config = p_config
@@ -39,10 +40,13 @@ func setup(p_config: WorldConfig, p_voxel_model: VoxelWorld, p_scheduler: ChunkB
 	_max_loads_per_frame = _config.max_chunk_loads_per_frame
 	_max_unloads_per_frame = _config.max_chunk_unloads_per_frame
 	_clear_tracking()
+	_suspended = false
 	_voxel_model.configure_terrain_cache(_render_distance, _config.unload_padding)
 	_voxel_model.terrain_chunk_evicted.connect(_on_terrain_evicted)
 
 func tick(player_pos: Vector3):
+	if _suspended:
+		return
 	var current_chunk := ChunkCoord.world_to_chunk(player_pos, _config.chunk_size)
 	if current_chunk != _last_player_chunk:
 		_recompute_streaming(current_chunk)
@@ -54,6 +58,8 @@ func tick(player_pos: Vector3):
 	_flush_dirty()
 
 func poll_completed():
+	if _suspended:
+		return
 	var results := _scheduler.take_completed(_max_loads_per_frame, _max_loads_per_frame)
 	for result in results:
 		if result.terrain_only:
@@ -110,6 +116,18 @@ func shutdown():
 	_clear_tracking()
 	_scheduler.shutdown()
 	_renderer.clear()
+
+func suspend():
+	if _suspended:
+		return
+	_suspended = true
+	_scheduler.suspend()
+
+func resume():
+	if not _suspended:
+		return
+	_scheduler.resume()
+	_suspended = false
 
 func _recompute_streaming(current_chunk: Vector2i):
 	var desired_visible := ChunkCoord.get_chunks_in_radius_infinite(current_chunk, _render_distance)

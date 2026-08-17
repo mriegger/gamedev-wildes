@@ -13,6 +13,14 @@ volume_db = -6.0
 bus = &"SFX"
 volume_db = -3.0
 
-[node name="DrawPlayer" type="AudioStreamPlayer" parent="."]
+[node name="PlayerHitPlayer" type="AudioStreamPlayer" parent="."]
+bus = &"SFX"
+volume_db = -11.0
+
+[node name="EquipPlayer" type="AudioStreamPlayer" parent="."]
 bus = &"SFX"
 volume_db = -6.0
+
+[node name="TillPlayer" type="AudioStreamPlayer" parent="."]
+bus = &"SFX"
+volume_db = -8.0

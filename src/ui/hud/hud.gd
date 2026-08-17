@@ -1,12 +1,13 @@
 extends CanvasLayer
 class_name HUD
 
-@onready var hotbar: Hotbar = $Hotbar as Hotbar
+@onready var hotbar: InventoryHotbar = $InventoryHotbar as InventoryHotbar
 @onready var health_bar: PlayerHealthBar = $HealthBar as PlayerHealthBar
 @onready var experience_bar: PlayerExperienceBar = $PlayerExperienceBar as PlayerExperienceBar
 @onready var side_panel: SidePanel = $SidePanel as SidePanel
 @onready var crafting_panel: CraftingPanel = $CraftingPanel as CraftingPanel
-@onready var dev_console: DevConsole = $DevConsole as DevConsole
+@onready var player_hit_vignette: PlayerHitVignette = $PlayerHitVignette as PlayerHitVignette
+@onready var interaction_prompt: Label = $InteractionPrompt as Label
 
 func setup_with_camera(p_inventory: InventoryModel, p_inventory_stat_coordinator: InventoryStatCoordinator, p_crafting_coordinator: CraftingCoordinator, p_recipe_catalog: CraftingRecipeCatalog, cam_rig: CameraRig, stats: ActorStats, item_proficiency: ItemProficiency):
 	hotbar.setup(p_inventory, p_inventory_stat_coordinator, item_proficiency)
@@ -14,9 +15,15 @@ func setup_with_camera(p_inventory: InventoryModel, p_inventory_stat_coordinator
 	experience_bar.setup(stats)
 	side_panel.setup(p_inventory, p_inventory_stat_coordinator, item_proficiency, cam_rig, hotbar, CraftingPanel.PANEL_WIDTH)
 	crafting_panel.setup(p_crafting_coordinator, p_recipe_catalog, cam_rig)
-	dev_console.setup(p_inventory)
 	side_panel.progress_changed.connect(_on_side_panel_progress_changed)
 	_on_side_panel_progress_changed(side_panel.get_progress())
+
+func setup_socketing(
+	inventory: InventoryModel,
+	socketing_coordinator: RuneSocketingCoordinator,
+	item_proficiency: ItemProficiency,
+) -> void:
+	crafting_panel.setup_socketing(inventory, socketing_coordinator, item_proficiency)
 
 func _on_side_panel_progress_changed(progress: float):
 	var right_inset := SidePanel.PANEL_WIDTH * progress
@@ -50,3 +57,13 @@ func close_side_panel():
 func close_side_panel_immediate():
 	side_panel.close_immediate()
 	crafting_panel.close_immediate()
+
+func play_player_hit():
+	player_hit_vignette.play()
+
+func show_interaction_prompt(text: String):
+	interaction_prompt.text = text
+	interaction_prompt.visible = true
+
+func hide_interaction_prompt():
+	interaction_prompt.visible = false

@@ -24,6 +24,15 @@ func start_clock():
 	_ambient_soundscape.start()
 	_clock.start()
 
+func set_outdoor_presentation_enabled(enabled: bool):
+	_world_environment.environment = _values.env if enabled else null
+	_sun.visible = enabled
+	_sun_fill.visible = enabled
+	if enabled:
+		_ambient_soundscape.start()
+	else:
+		_ambient_soundscape.stop()
+
 func apply_settings(settings: GameSettings):
 	_values.volumetric_fog_enabled = settings.volumetric_fog_enabled
 	_values.set_shadow_enabled(settings.sun_shadows_enabled)
@@ -36,6 +45,12 @@ func get_time_of_day() -> float:
 func get_formatted_time() -> String:
 	return _clock.get_formatted()
 
+func set_clock_paused(paused: bool) -> void:
+	_clock.set_paused(paused)
+
+func is_clock_paused() -> bool:
+	return _clock.is_paused()
+
 func close_debug_panel():
 	_debug_clock_panel.disable_input()
 
@@ -44,3 +59,6 @@ func restore_debug_panel_input():
 
 func is_debug_panel_open() -> bool:
 	return _debug_clock_panel.is_open()
+
+func is_debug_panel_input_enabled() -> bool:
+	return _debug_clock_panel.is_input_enabled()

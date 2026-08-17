@@ -85,25 +85,25 @@ func _assert_runtime_ids(actors: Array[EntityActor], context: String) -> void:
 		else:
 			_instance_by_runtime_id[runtime_id] = instance_id
 
-func _assert_population(coordinator: EntityCoordinator, player_position: Vector3, context: String) -> void:
-	var actors := coordinator.get_active_actors()
-	var active_count := coordinator.get_active_count()
-	var retiring_count := coordinator._retiring.size()
+func _assert_population(coordinator: WorldEntityCoordinator, player_position: Vector3, context: String) -> void:
+	var actors := coordinator.get_runtime().get_active_actors()
+	var active_count := coordinator.get_runtime().get_active_count()
+	var retiring_count := coordinator.get_runtime()._retiring.size()
 	_expect(actors.size() == active_count, "%s active actor query returned %d of %d" % [context, actors.size(), active_count])
-	_expect(active_count <= EntityCoordinator.MAX_TOTAL_ACTIVE, "%s exceeded the twelve-entity cap" % context)
-	_expect(retiring_count <= EntityCoordinator.MAX_RETIRING_VISUALS, "%s exceeded the retiring-visual cap" % context)
+	_expect(active_count <= WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "%s exceeded the twelve-entity cap" % context)
+	_expect(retiring_count <= WorldEntityCoordinator.MAX_RETIRING_VISUALS, "%s exceeded the retiring-visual cap" % context)
 	var species_counts: Dictionary = {&"sheep": 0, &"zombie": 0}
 	for actor in actors:
 		if actor.definition == null or not species_counts.has(actor.definition.id):
 			_expect(false, "%s contained an unknown entity definition" % context)
 			continue
 		species_counts[actor.definition.id] = int(species_counts[actor.definition.id]) + 1
-		_expect(actor.global_position.distance_squared_to(player_position) <= EntityCoordinator.DESPAWN_DISTANCE * EntityCoordinator.DESPAWN_DISTANCE, "%s retained runtime ID %d beyond despawn distance" % [context, actor.runtime_id])
+		_expect(actor.global_position.distance_squared_to(player_position) <= WorldEntityCoordinator.DESPAWN_DISTANCE * WorldEntityCoordinator.DESPAWN_DISTANCE, "%s retained runtime ID %d beyond despawn distance" % [context, actor.runtime_id])
 		_expect(_is_position_streamed(actor.global_position), "%s retained runtime ID %d outside the streamed region" % [context, actor.runtime_id])
 	_expect(int(species_counts[&"sheep"]) <= 6, "%s exceeded the six-sheep cap" % context)
 	_expect(int(species_counts[&"zombie"]) <= 6, "%s exceeded the six-zombie cap" % context)
 	_assert_runtime_ids(actors, context)
-	var spatial_index := coordinator._spatial_index as EntitySpatialIndex
+	var spatial_index := coordinator.get_runtime()._spatial_index as EntitySpatialIndex
 	var entry_count := spatial_index.get_entry_count()
 	var cell_count := spatial_index.get_cell_count()
 	_expect(entry_count == active_count, "%s spatial entries %d diverged from active count %d" % [context, entry_count, active_count])
@@ -115,7 +115,7 @@ func _run() -> void:
 	var catalog := load("res://entities/entity_catalog.tres") as EntityCatalog
 	_expect(catalog != null and catalog.validate(), "entity catalog failed validation")
 	var world := _make_flat_world()
-	var coordinator := EntityCoordinator.new()
+	var coordinator := WorldEntityCoordinator.new()
 	get_root().add_child(coordinator)
 	coordinator.setup(catalog, world, 730241, _is_position_streamed)
 
@@ -124,20 +124,20 @@ func _run() -> void:
 		var player_position := _player_position(_ready_region)
 		coordinator.tick(0.0, player_position, DAY_TIME)
 		_assert_population(coordinator, player_position, "region %d entry" % region_index)
-		_expect(coordinator.get_active_count() == 0, "region %d entry did not clear the previous population" % region_index)
+		_expect(coordinator.get_runtime().get_active_count() == 0, "region %d entry did not clear the previous population" % region_index)
 		await process_frame
 		for cycle in range(CYCLES_PER_REGION):
 			var time_of_day := DAY_TIME if cycle % 2 == 0 else NIGHT_TIME
-			coordinator.tick(EntityCoordinator.SPAWN_INTERVAL_SECONDS, player_position, time_of_day)
+			coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, player_position, time_of_day)
 			var context := "region %d cycle %d" % [region_index, cycle]
 			_assert_population(coordinator, player_position, context)
 			_assert_path_budget(world, catalog, _ready_region, time_of_day, cycle, context)
-		_expect(coordinator.get_active_count() == EntityCoordinator.MAX_TOTAL_ACTIVE, "region %d did not reach the total population cap" % region_index)
+		_expect(coordinator.get_runtime().get_active_count() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "region %d did not reach the total population cap" % region_index)
 		if region_index % 2 == 1:
 			_streaming_enabled = false
 			coordinator.tick(0.0, player_position, NIGHT_TIME)
 			_assert_population(coordinator, player_position, "region %d streaming loss" % region_index)
-			_expect(coordinator.get_active_count() == 0, "region %d streaming loss retained actors" % region_index)
+			_expect(coordinator.get_runtime().get_active_count() == 0, "region %d streaming loss retained actors" % region_index)
 			_streaming_enabled = true
 			await process_frame
 
@@ -147,10 +147,10 @@ func _run() -> void:
 	_assert_population(coordinator, final_position, "final streaming loss")
 	_expect(_instance_by_runtime_id.size() == STREAM_REGIONS.size() * CYCLES_PER_REGION, "soak observed %d unique runtime IDs instead of %d" % [_instance_by_runtime_id.size(), STREAM_REGIONS.size() * CYCLES_PER_REGION])
 	coordinator.shutdown()
-	_expect(coordinator.get_active_count() == 0, "shutdown retained active actors")
-	_expect(coordinator._retiring.is_empty(), "shutdown retained fading actors")
-	_expect(coordinator._spatial_index.get_entry_count() == 0, "shutdown retained spatial entries")
-	_expect(coordinator._spatial_index.get_cell_count() == 0, "shutdown retained spatial cells")
+	_expect(coordinator.get_runtime().get_active_count() == 0, "shutdown retained active actors")
+	_expect(coordinator.get_runtime()._retiring.is_empty(), "shutdown retained fading actors")
+	_expect(coordinator.get_runtime()._spatial_index.get_entry_count() == 0, "shutdown retained spatial entries")
+	_expect(coordinator.get_runtime()._spatial_index.get_cell_count() == 0, "shutdown retained spatial cells")
 	coordinator.queue_free()
 	await process_frame
 	await process_frame

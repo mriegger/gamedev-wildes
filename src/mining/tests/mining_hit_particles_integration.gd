@@ -62,7 +62,7 @@ func _run():
 	var stone_target := Vector3i(2, 2, 3)
 	voxel_world.restore_block_edits({dirt_target: BlockId.Type.DIRT, stone_target: BlockId.Type.STONE}, {})
 	var interactor := player.interactor
-	interactor.voxel_world = voxel_world
+	interactor.voxel_space = voxel_world
 	var tint_palette := MiningParticleTintPalette.new(block_catalog)
 	particles.setup(player.animation_driver, interactor, tint_palette)
 	player.animation_driver.mining_impact.emit()
@@ -71,7 +71,7 @@ func _run():
 
 	interactor.is_mining = true
 	interactor.target_has = true
-	interactor.can_mine_target = true
+	interactor.can_primary_target = true
 	interactor.mine_target = dirt_target
 	interactor.target_block = interactor.mine_target
 	interactor.last_ray_normal = Vector3i.RIGHT

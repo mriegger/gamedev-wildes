@@ -1,6 +1,8 @@
 extends Node
 class_name PlayerFootsteps
 
+@export var catalog: FootstepAudioCatalog
+
 @onready var _player: AudioStreamPlayer = $FootstepPlayer
 
 var _motor: PlayerMotor
@@ -9,39 +11,24 @@ var _step_timer: float = 0.0
 var _last_stream: AudioStream
 var _water_state_initialized: bool = false
 var _was_in_water: bool = false
-
-var _dirt_streams: Array[AudioStream] = [
-	preload("res://assets/audio/footsteps/dirt/Footstep_Dirt_01.wav"),
-	preload("res://assets/audio/footsteps/dirt/Footstep_Dirt_02.wav"),
-	preload("res://assets/audio/footsteps/dirt/Footstep_Dirt_03.wav"),
-	preload("res://assets/audio/footsteps/dirt/Footstep_Dirt_04.wav"),
-	preload("res://assets/audio/footsteps/dirt/Footstep_Dirt_05.wav"),
-	preload("res://assets/audio/footsteps/dirt/Footstep_Dirt_06.wav"),
-	preload("res://assets/audio/footsteps/dirt/Footstep_Dirt_07.wav"),
-	preload("res://assets/audio/footsteps/dirt/Footstep_Dirt_08.wav"),
-	preload("res://assets/audio/footsteps/dirt/Footstep_Dirt_09.wav"),
-]
-
-var _water_streams: Array[AudioStream] = [
-	preload("res://assets/audio/footsteps/water/Footstep_Water_00.wav"),
-	preload("res://assets/audio/footsteps/water/Footstep_Water_01.wav"),
-	preload("res://assets/audio/footsteps/water/Footstep_Water_02.wav"),
-	preload("res://assets/audio/footsteps/water/Footstep_Water_03.wav"),
-	preload("res://assets/audio/footsteps/water/Footstep_Water_04.wav"),
-	preload("res://assets/audio/footsteps/water/Footstep_Water_05.wav"),
-	preload("res://assets/audio/footsteps/water/Footstep_Water_06.wav"),
-	preload("res://assets/audio/footsteps/water/Footstep_Water_07.wav"),
-]
+var _base_volume_db: float
 
 const MIN_PLANAR_SPEED: float = 0.2
 
 
+func _ready():
+	_base_volume_db = _player.volume_db
+
+
 func setup(p_motor: PlayerMotor, p_profile: BlockyHumanoidAnimationProfile):
+	assert(catalog != null and catalog.validate())
 	_motor = p_motor
 	_profile = p_profile
 	_water_state_initialized = false
-	if _player.stream == null and not _dirt_streams.is_empty():
-		_player.stream = _dirt_streams[0]
+	if _player.stream == null:
+		var fallback_profile := catalog.fallback_profile
+		_player.stream = fallback_profile.streams[0]
+		_player.volume_db = _base_volume_db + fallback_profile.volume_offset_db
 
 
 func _process(delta: float):
@@ -55,7 +42,7 @@ func _process(delta: float):
 		_was_in_water = is_in_water
 		if is_in_water:
 			_step_timer = 0.0
-			_play_random_stream(_water_streams)
+			_play_random_stream(catalog.get_profile(BlockId.Type.WATER))
 			return
 	if not _motor.on_ground:
 		_step_timer = 0.0
@@ -73,16 +60,17 @@ func _process(delta: float):
 
 
 func _play_step():
-	var streams := _water_streams if _motor.is_in_water() else _dirt_streams
-	_play_random_stream(streams)
+	var profile := catalog.get_profile(_motor.get_footstep_surface_block_id())
+	_play_random_stream(profile)
 
 
-func _play_random_stream(streams: Array[AudioStream]):
-	var stream := _select_random_stream(streams)
+func _play_random_stream(profile: FootstepAudioProfile):
+	var stream := _select_random_stream(profile.streams)
 	if stream == null:
 		return
 	_player.stop()
 	_player.stream = stream
+	_player.volume_db = _base_volume_db + profile.volume_offset_db
 	_player.pitch_scale = randf_range(0.92, 1.08)
 	_player.play()
 
@@ -104,8 +92,7 @@ func _exit_tree():
 	_last_stream = null
 	_water_state_initialized = false
 	_was_in_water = false
-	_dirt_streams.clear()
-	_water_streams.clear()
 	if _player:
 		_player.stop()
 		_player.stream = null
+		_player.volume_db = _base_volume_db

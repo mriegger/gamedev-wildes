@@ -48,10 +48,10 @@ func _make_definition(behavior: SheepBehaviorDefinition) -> EntityDefinition:
 	definition.stats_definition = load("res://entities/sheep/sheep_stats.tres") as CombatStatsDefinition
 	definition.body_width = BODY_WIDTH
 	definition.body_height = BODY_HEIGHT
-	definition.spawn_phase = EntityDefinition.SpawnPhase.DAY
-	definition.max_active = 6
-	var spawn_floor_ids: Array[int] = [BlockId.Type.GRASS]
-	definition.spawn_floor_ids = spawn_floor_ids
+	definition.ambient_spawn_phase = EntityDefinition.SpawnPhase.DAY
+	definition.ambient_max_active = 6
+	var ambient_spawn_floor_ids: Array[int] = [BlockId.Type.GRASS]
+	definition.ambient_spawn_floor_ids = ambient_spawn_floor_ids
 	return definition
 
 func _test_deterministic_wander_and_flee() -> void:
@@ -86,7 +86,7 @@ func _test_actor_movement_and_animation() -> SheepActor:
 	var actor := definition.actor_scene.instantiate() as SheepActor
 	get_root().add_child(actor)
 	actor.global_position = Vector3(0.5, float(FEET_Y), 0.5)
-	actor.setup(7, definition, _make_flat_world(), 882)
+	actor.setup(7, definition, _make_flat_world(), 882, EntityNavigationLimits.new(24, 256, 1))
 	var animation := actor.animation_driver as SheepAnimationDriver
 	var search_budget := NavigationSearchBudget.new(1)
 	animation.advance(0.05)

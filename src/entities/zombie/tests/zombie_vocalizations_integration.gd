@@ -31,33 +31,35 @@ func _run():
 	var definition := entity_catalog.get_definition(&"zombie")
 	var actor := definition.actor_scene.instantiate() as ZombieActor
 	get_root().add_child(actor)
-	actor.setup(7, definition, world, 12345)
-	var vocalizations := actor.get_node_or_null(actor.vocalizations_path) as ZombieVocalizations
+	actor.setup(7, definition, world, 12345, EntityNavigationLimits.new(24, 256, 1))
+	var vocalizations := actor.get_node_or_null(actor.vocalizations_path) as EntityVocalizations
 	_expect(vocalizations != null, "zombie vocalizations missing")
+	var profile := vocalizations.profile
+	_expect(profile != null and profile.validate(), "zombie vocalization profile invalid")
 	_expect(vocalizations.bus == &"SFX", "vocalizations bus was %s" % vocalizations.bus)
 	_expect(is_equal_approx(vocalizations.volume_db, -6.0), "vocalizations volume was %.2f" % vocalizations.volume_db)
 	_expect(is_equal_approx(vocalizations.unit_size, 4.0), "vocalizations unit size was %.2f" % vocalizations.unit_size)
 	_expect(is_equal_approx(vocalizations.max_distance, 26.0), "vocalizations max distance was %.2f" % vocalizations.max_distance)
-	_expect(vocalizations._streams.size() == 6, "expected 6 vocalizations, got %d" % vocalizations._streams.size())
-	for stream in vocalizations._streams:
+	_expect(profile.streams.size() == 6, "expected 6 vocalizations, got %d" % profile.streams.size())
+	for stream in profile.streams:
 		_expect(stream != null, "vocalization stream was null")
 	_expect(
-		vocalizations._remaining_seconds >= ZombieVocalizations.INITIAL_DELAY_MIN_SECONDS
-		and vocalizations._remaining_seconds <= ZombieVocalizations.INITIAL_DELAY_MAX_SECONDS,
+		vocalizations._remaining_seconds >= profile.initial_delay_min_seconds
+		and vocalizations._remaining_seconds <= profile.initial_delay_max_seconds,
 		"initial delay was %.2f" % vocalizations._remaining_seconds,
 	)
 
 	vocalizations._remaining_seconds = 0.0
 	vocalizations._process(0.0)
-	_expect(vocalizations._streams.has(vocalizations.stream), "due vocalization did not select a stream")
+	_expect(profile.streams.has(vocalizations.stream), "due vocalization did not select a stream")
 	_expect(
-		vocalizations.pitch_scale >= ZombieVocalizations.PITCH_MIN
-		and vocalizations.pitch_scale <= ZombieVocalizations.PITCH_MAX,
+		vocalizations.pitch_scale >= profile.pitch_min
+		and vocalizations.pitch_scale <= profile.pitch_max,
 		"vocalization pitch was %.3f" % vocalizations.pitch_scale,
 	)
 	_expect(
-		vocalizations._remaining_seconds >= ZombieVocalizations.INTERVAL_MIN_SECONDS
-		and vocalizations._remaining_seconds <= ZombieVocalizations.INTERVAL_MAX_SECONDS,
+		vocalizations._remaining_seconds >= profile.interval_min_seconds
+		and vocalizations._remaining_seconds <= profile.interval_max_seconds,
 		"next interval was %.2f" % vocalizations._remaining_seconds,
 	)
 	var first_index := vocalizations._last_stream_index

@@ -13,9 +13,9 @@ enum SpawnPhase {
 @export_range(0, 999999999, 1, "or_greater") var experience_reward: int = 0
 @export_range(0.1, 4.0, 0.01) var body_width: float = 0.6
 @export_range(0.1, 4.0, 0.01) var body_height: float = 1.8
-@export var spawn_phase: SpawnPhase = SpawnPhase.NIGHT
-@export_range(1, 64, 1) var max_active: int = 1
-@export var spawn_floor_ids: Array[int] = []
+@export var ambient_spawn_phase: SpawnPhase = SpawnPhase.NIGHT
+@export_range(1, 64, 1) var ambient_max_active: int = 1
+@export var ambient_spawn_floor_ids: Array[int] = []
 
 func validate(source: String) -> bool:
 	var valid := true
@@ -45,13 +45,13 @@ func validate(source: String) -> bool:
 	if body_width <= 0.0 or body_height <= 0.0:
 		push_error("[EntityDefinition] Invalid body dimensions for %s at %s" % [id, source])
 		valid = false
-	if max_active < 1:
+	if ambient_max_active < 1:
 		push_error("[EntityDefinition] Invalid active cap for %s at %s" % [id, source])
 		valid = false
-	if spawn_floor_ids.is_empty():
+	if ambient_spawn_floor_ids.is_empty():
 		push_error("[EntityDefinition] Missing spawn floors for %s at %s" % [id, source])
 		valid = false
-	for block_id in spawn_floor_ids:
+	for block_id in ambient_spawn_floor_ids:
 		if not BlockId.is_valid(block_id) or block_id in [BlockId.Type.AIR, BlockId.Type.WATER]:
 			push_error("[EntityDefinition] Invalid spawn floor %d for %s at %s" % [block_id, id, source])
 			valid = false
@@ -71,5 +71,5 @@ func is_actor_compatible() -> bool:
 	actor_root.free()
 	return compatible
 
-func can_spawn_on(block_id: int) -> bool:
-	return block_id in spawn_floor_ids
+func can_spawn_ambiently_on(block_id: int) -> bool:
+	return block_id in ambient_spawn_floor_ids

@@ -56,6 +56,8 @@ func _rebuild_lookup() -> void:
 			if scene_state.get_node_count() == 0 or not ClassDB.is_parent_class(scene_state.get_node_type(0), &"Node3D"):
 				push_error("[ItemCatalog] Held scene root must be Node3D for %s at %s" % [definition.id, source])
 				_is_valid = false
+		if definition.equip_audio != null:
+			_is_valid = definition.equip_audio.validate(source) and _is_valid
 		for action in [definition.primary_action, definition.secondary_action]:
 			if action == null:
 				continue
@@ -73,7 +75,7 @@ func _rebuild_lookup() -> void:
 		_definitions_by_block[block_id] = definition
 
 func _is_supported_primary_action(action: ItemActionDefinition) -> bool:
-	return action == null or action is MiningActionDefinition or action is MeleeAttackActionDefinition
+	return action == null or action is MiningActionDefinition or action is MeleeAttackActionDefinition or action is TillingActionDefinition
 
 func _is_supported_secondary_action(action: ItemActionDefinition) -> bool:
 	return action == null or action is BlockPlacementActionDefinition
@@ -96,6 +98,7 @@ func validate(block_catalog: BlockCatalog) -> bool:
 		if definition == null:
 			continue
 		var armor := definition as ArmorDefinition
+		var rune := definition as RuneDefinition
 		var combat_item := _is_combat_definition(definition)
 		if combat_item and definition.proficiency == null:
 			push_error("[ItemCatalog] Missing proficiency for combat item %s" % definition.id)
@@ -125,11 +128,22 @@ func validate(block_catalog: BlockCatalog) -> bool:
 				else:
 					armor_sets_by_id[armor_set.id] = armor_set
 					valid = armor_set.validate(armor_set.resource_path) and valid
+		if rune != null:
+			valid = rune.validate(definition.resource_path) and valid
 		var placement := definition.secondary_action as BlockPlacementActionDefinition
 		if placement != null and placement.block != null and BlockId.is_valid(placement.block.id):
 			if block_catalog.get_definition(placement.block.id) != placement.block:
 				push_error("[ItemCatalog] Non-canonical block resource for %s" % definition.id)
 				valid = false
+		var tilling := definition.primary_action as TillingActionDefinition
+		if tilling != null:
+			if tilling.result_block != null and BlockId.is_valid(tilling.result_block.id) and block_catalog.get_definition(tilling.result_block.id) != tilling.result_block:
+				push_error("[ItemCatalog] Non-canonical tilling result for %s" % definition.id)
+				valid = false
+			for source_block in tilling.source_blocks:
+				if source_block != null and BlockId.is_valid(source_block.id) and block_catalog.get_definition(source_block.id) != source_block:
+					push_error("[ItemCatalog] Non-canonical tilling source for %s" % definition.id)
+					valid = false
 		var mining := definition.primary_action as MiningActionDefinition
 		if mining == null:
 			continue

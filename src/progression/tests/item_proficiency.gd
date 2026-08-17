@@ -25,6 +25,7 @@ func _init() -> void:
 	_expect(not _definition([10.0], [-1]).validate(), "negative slot unlock level passed validation")
 	_expect(not _definition([10.0, 20.0], [2, 1]).validate(), "descending slot unlock levels passed validation")
 	_expect(not _definition([10.0], [2]).validate(), "unreachable slot unlock level passed validation")
+	_expect(not _definition([10.0], [0, 0, 0, 0]).validate(), "more than three rune slots passed validation")
 
 	var common_sword := _item(&"common_sword", common)
 	var rare_sword := _item(&"rare_sword", rare)

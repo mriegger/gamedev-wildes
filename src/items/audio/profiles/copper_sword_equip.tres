@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="ItemEquipAudioProfile" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://items/audio/item_equip_audio_profile.gd" id="1_profile"]
+[ext_resource type="AudioStream" path="res://assets/audio/combat/weapons/sword/draw/drawKnife1.ogg" id="2_draw"]
+[ext_resource type="AudioStream" path="res://assets/audio/combat/weapons/sword/draw/drawKnife2.ogg" id="3_draw"]
+[ext_resource type="AudioStream" path="res://assets/audio/combat/weapons/sword/draw/drawKnife3.ogg" id="4_draw"]
+
+[resource]
+script = ExtResource("1_profile")
+streams = Array[AudioStream]([ExtResource("2_draw"), ExtResource("3_draw"), ExtResource("4_draw")])
+volume_db = -6.0

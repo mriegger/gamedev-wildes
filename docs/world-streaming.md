@@ -14,6 +14,11 @@ A chunk enters `visible_chunks` only after its mesh is restored or applied. Torc
 
 Worker threads only produce data. Godot scene nodes, `ArrayMesh` assignment, pooling, and signal-driven visual updates remain on the main thread. Shutdown stops and joins workers before clearing renderer-owned nodes.
 
+Entering a finite dungeon suspends `WorldController`, `ChunkManager`, and `ChunkBuildScheduler`.
+Loaded chunk nodes and caches remain owned by the world, queued jobs stop being dequeued, and at
+most the two already-running builds may finish without being applied. Resume releases those
+workers and continues streaming around the unchanged overworld player anchor.
+
 `VoxelWorld` indexes placed blocks, removed blocks, generated tree blocks, and seeded copper deposits
 by chunk. A full chunk build derives copper from the world seed and chunk origin after base terrain
 exists; terrain-only preloads do not generate it. Deposits and empty-chunk markers stay in memory
@@ -25,9 +30,18 @@ distant accumulated edits do not turn every rebuild into a full-world scan.
 The streaming soak test instantiates the real gameplay scene, moves the real player, edits the real voxel model, and checks visible/data/terrain bounds, pending work, orphan nodes, and drag-preview leaks.
 
 Transient entities use the same readiness boundary through `WorldController.is_position_streamed`.
-`EntityCoordinator` rejects spawn candidates outside streamed regions and removes active actors as
-soon as their position is no longer streamed or exceeds the despawn radius. Removal also clears the
-actor's spatial-index entry. The entity streaming soak
+`WorldEntityCoordinator` rejects ambient spawn candidates outside streamed regions and removes
+active actors as soon as their position is no longer streamed or exceeds the despawn radius.
+`EntityRuntime` owns those actors, their stats, spatial entries, and retirement; removal clears all
+gameplay indexes together. The entity streaming soak
 moves across regions while alternating day and night, and asserts population, pathfinding, index,
 and cleanup bounds independently of the chunk renderer soak. Retired actors leave all gameplay
 indexes and population counts immediately. Their fading presentations use a separate fixed bound.
+
+Finite dungeons do not reuse ambient spawning or streaming rules. Each `LevelRuntime` owns a
+dedicated `EntityRuntime` over `LevelState`; its active bound is derived from the generated room
+tree's weighted antichain capacity, while retiring presentation remains capped at 64 actors.
+Concurrent room encounters feed it validated atomic batches and bounded navigation work. Entering
+a dungeon suspends the overworld coordinator without destroying its runtime. Leaving restores and
+resumes the same overworld instance before queuing the dungeon runtime for deletion; death suspends
+it immediately and follows that restore-then-retire order during the return flow.

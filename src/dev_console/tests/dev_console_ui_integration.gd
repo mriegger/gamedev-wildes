@@ -5,6 +5,8 @@ var _phase: int = 0
 var _errors: Array[String] = []
 var _console: DevConsole
 var _inventory: InventoryModel
+var _structure_calls: Array[StringName] = []
+var _structure_commands_accepted: bool = false
 
 func _init() -> void:
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
@@ -15,8 +17,15 @@ func _init() -> void:
 func _process(_delta: float) -> bool:
 	_frame += 1
 	if _phase == 0 and _frame == 2:
-		_console.setup(_inventory)
+		_console.setup(
+			_inventory,
+			Callable(self, "_handle_structure_command").bind(&"new"),
+			Callable(self, "_handle_structure_command").bind(&"import"),
+			Callable(self, "_handle_structure_command").bind(&"export"),
+			Callable(self, "_handle_structure_command").bind(&"exit"),
+		)
 		_check_closed_layout()
+		_check_scene_ownership()
 		_send_slash()
 		_phase = 1
 	elif _phase == 1 and _frame == 4:
@@ -31,17 +40,39 @@ func _process(_delta: float) -> bool:
 		_expect(_inventory.get_slot(0) == null, "submitted command spawned into the hotbar")
 		_expect(_console.get_command_input().text.is_empty(), "submitted command did not clear the input")
 		_expect(_console.get_command_input().has_focus(), "submitted command did not retain input focus")
-		_send_escape()
+		_expect(_console.is_open(), "keep-open command closed the developer console")
+		var command_input := _console.get_command_input()
+		command_input.text = "dev structure new"
+		command_input.text_submitted.emit(command_input.text)
 		_phase = 3
 	elif _phase == 3 and _frame == 8:
-		_expect(not _console.is_open(), "escape did not close the developer console")
-		_send_slash()
+		_expect(_console.is_open(), "rejected command closed the developer console")
+		_expect(_console.get_command_input().text.is_empty(), "rejected command did not clear the input")
+		_expect(_console.get_command_input().has_focus(), "rejected command did not retain input focus")
+		_expect(_structure_calls == [&"new"], "rejected structure command did not route to new")
+		_structure_commands_accepted = true
+		var command_input := _console.get_command_input()
+		command_input.text = "dev structure new"
+		command_input.text_submitted.emit(command_input.text)
 		_phase = 4
 	elif _phase == 4 and _frame == 10:
-		_expect(_console.is_open(), "slash did not reopen the developer console")
+		_expect(not _console.is_open(), "close command kept the developer console open")
+		_expect(_structure_calls == [&"new", &"new"], "accepted structure command did not route to new")
 		_send_slash()
 		_phase = 5
 	elif _phase == 5 and _frame == 12:
+		_expect(_console.is_open(), "slash did not reopen the developer console")
+		_send_escape()
+		_phase = 6
+	elif _phase == 6 and _frame == 14:
+		_expect(not _console.is_open(), "escape did not close the developer console")
+		_send_slash()
+		_phase = 7
+	elif _phase == 7 and _frame == 16:
+		_expect(_console.is_open(), "slash did not reopen the developer console after escape")
+		_send_slash()
+		_phase = 8
+	elif _phase == 8 and _frame == 18:
 		_expect(not _console.is_open(), "slash did not close the developer console")
 		_finish()
 	return false
@@ -69,6 +100,12 @@ func _check_closed_layout() -> void:
 	_expect(panel_style != null and panel_style.bg_color.get_luminance() < 0.05, "developer console background was not black")
 	_expect(panel_style != null and panel_style.content_margin_left >= 12.0, "developer console prompt did not have horizontal padding")
 
+func _check_scene_ownership() -> void:
+	var game := (load("res://game/game.tscn") as PackedScene).instantiate() as Game
+	_expect(game.get_node_or_null("DevConsole") is DevConsole, "Game does not own the developer console")
+	_expect(game.get_node_or_null("HUD/DevConsole") == null, "HUD still owns the developer console")
+	game.free()
+
 func _send_slash() -> void:
 	var event := InputEventKey.new()
 	event.pressed = true
@@ -90,6 +127,10 @@ func _action_uses_key(action: StringName, key: Key) -> bool:
 			if key_event.keycode == key or key_event.physical_keycode == key:
 				return true
 	return false
+
+func _handle_structure_command(action: StringName) -> bool:
+	_structure_calls.append(action)
+	return _structure_commands_accepted
 
 func _finish() -> void:
 	if _errors.is_empty():

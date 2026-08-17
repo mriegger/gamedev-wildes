@@ -19,14 +19,17 @@ class_name PlayerMotor
 @onready var armor_view: PlayerArmorView = $ModelRoot/PlayerVisual/ArmorView as PlayerArmorView
 @onready var stat_modifier_clock: StatModifierClock = $StatModifierClock as StatModifierClock
 
-var voxel_world: VoxelWorld = null
+var voxel_space: VoxelSpace = null
 var camera_rig: CameraRig = null
 var _input_buffer: InputBuffer = null
 var stats: ActorStats
+var _inventory_model: InventoryModel = null
+var _respawn_position: Vector3 = Vector3.ZERO
+var _is_setup: bool = false
 
 var on_ground: bool = false
 var is_sprinting: bool = false
-var ground_y: float = VoxelWorld.NO_SURFACE_Y
+var ground_y: float = VoxelSpace.NO_SURFACE_Y
 var velocity: Vector3 = Vector3.ZERO
 var jump_anticipation: float = 0.0
 
@@ -34,19 +37,69 @@ var _jump_windup_remaining: float = 0.0
 var _jump_ready: bool = false
 var _defeated: bool = false
 
-func setup(p_world: WorldController, p_camera_rig: CameraRig, p_inventory: InventoryModel, p_input_buffer: InputBuffer, p_stats: ActorStats, p_combat: MeleeCombatCoordinator, p_entity_coordinator: EntityCoordinator):
-	voxel_world = p_world.voxel_model
+func setup(p_camera_rig: CameraRig, p_inventory: InventoryModel, p_input_buffer: InputBuffer, p_stats: ActorStats, p_combat: MeleeCombatCoordinator, p_entity_runtime: EntityRuntime):
+	assert(p_camera_rig != null)
+	assert(p_inventory != null)
+	assert(p_input_buffer != null)
+	assert(p_stats != null)
+	assert(p_combat != null)
+	assert(p_entity_runtime != null)
+	if _is_setup:
+		assert(camera_rig == p_camera_rig)
+		assert(_inventory_model == p_inventory)
+		assert(_input_buffer == p_input_buffer)
+		assert(stats == p_stats)
+		assert(interactor.combat == p_combat)
+		assert(interactor.entity_runtime == p_entity_runtime)
+		return
 	camera_rig = p_camera_rig
+	_inventory_model = p_inventory
 	_input_buffer = p_input_buffer
 	stats = p_stats
 	stat_modifier_clock.setup(stats)
-	interactor.setup(voxel_world, p_camera_rig.camera, self, p_inventory, p_input_buffer, p_combat, p_entity_coordinator)
-	targeting_view.setup(p_world, voxel_world, self, interactor)
+	interactor.setup(p_camera_rig.camera, self, p_inventory, p_input_buffer, p_combat, p_entity_runtime)
+	targeting_view.setup(self, interactor)
 	animation_driver.setup(self, interactor)
 	held_item_view.setup(p_inventory)
 	_footsteps.setup(self, animation_driver.animator.profile)
 	_action_audio.setup(animation_driver, interactor, p_inventory, p_combat)
 	armor_view.setup(p_inventory)
+	_is_setup = true
+
+func bind_entity_runtime(p_entity_runtime: EntityRuntime) -> void:
+	assert(_is_setup)
+	interactor.bind_entity_runtime(p_entity_runtime)
+
+func bind_space(p_space: VoxelSpace, presentation_root: Node, spawn_position: Vector3, editable_voxel_world: VoxelWorld = null):
+	assert(_is_setup)
+	assert(p_space != null)
+	assert(presentation_root != null)
+	assert(editable_voxel_world == null or editable_voxel_world == p_space)
+	voxel_space = p_space
+	_respawn_position = spawn_position
+	velocity = Vector3.ZERO
+	on_ground = false
+	ground_y = VoxelSpace.NO_SURFACE_Y
+	_jump_windup_remaining = 0.0
+	_jump_ready = false
+	jump_anticipation = 0.0
+	interactor.bind_space(p_space, editable_voxel_world)
+	targeting_view.bind_space(p_space, presentation_root)
+
+func unbind_space():
+	if voxel_space == null:
+		return
+	interactor.unbind_space()
+	targeting_view.unbind_space()
+	voxel_space = null
+	velocity = Vector3.ZERO
+	on_ground = false
+	ground_y = VoxelSpace.NO_SURFACE_Y
+	_jump_windup_remaining = 0.0
+	_jump_ready = false
+	jump_anticipation = 0.0
+	if _input_buffer != null:
+		_input_buffer.clear_gameplay()
 
 func respawn_at(spawn_position: Vector3):
 	assert(spawn_position.is_finite())
@@ -80,26 +133,37 @@ func is_defeated() -> bool:
 func _reset_motion_at(position: Vector3):
 	global_position = position
 	velocity = Vector3.ZERO
-	ground_y = VoxelBodySolver.get_ground_y(voxel_world, global_position, player_width)
+	ground_y = VoxelBodySolver.get_ground_y(voxel_space, global_position, player_width)
 	on_ground = false
 	_jump_windup_remaining = 0.0
 	_jump_ready = false
 	jump_anticipation = 0.0
 
 func _physics_process(delta):
-	if voxel_world == null or _defeated:
+	if voxel_space == null or _defeated:
 		return
 	_handle_movement(delta)
 
 func is_in_water() -> bool:
-	if voxel_world == null:
+	if voxel_space == null:
 		return false
-	var feet_cell := Vector3i(
+	return voxel_space.get_block_id_at(_get_feet_cell()) == BlockId.Type.WATER
+
+func get_footstep_surface_block_id() -> int:
+	if voxel_space == null:
+		return BlockId.Type.AIR
+	if is_in_water():
+		return BlockId.Type.WATER
+	if not on_ground:
+		return BlockId.Type.AIR
+	return VoxelBodySolver.get_supporting_block_id(voxel_space, global_position, player_width, ground_y)
+
+func _get_feet_cell() -> Vector3i:
+	return Vector3i(
 		floori(global_position.x),
 		floori(global_position.y + 0.05),
 		floori(global_position.z)
 	)
-	return voxel_world.get_block_id_at(feet_cell) == BlockId.Type.WATER
 
 func _handle_movement(delta):
 	if not on_ground:
@@ -149,12 +213,12 @@ func _handle_movement(delta):
 	elif not launch_ready:
 		jump_anticipation = 0.0
 
-	var motion_result := VoxelBodySolver.sweep(voxel_world, global_position, velocity, velocity * delta, player_width, player_height)
+	var motion_result := VoxelBodySolver.sweep(voxel_space, global_position, velocity, velocity * delta, player_width, player_height)
 	global_position = motion_result.position
 	velocity = motion_result.velocity
 
-	ground_y = VoxelBodySolver.get_ground_y(voxel_world, global_position, player_width)
-	if velocity.y <= 0.0 and ground_y != VoxelWorld.NO_SURFACE_Y and abs(ground_y - global_position.y) < 0.12:
+	ground_y = VoxelBodySolver.get_ground_y(voxel_space, global_position, player_width)
+	if velocity.y <= 0.0 and ground_y != VoxelSpace.NO_SURFACE_Y and abs(ground_y - global_position.y) < 0.12:
 		on_ground = true
 		velocity.y = 0.0
 	else:
@@ -166,4 +230,12 @@ func _handle_movement(delta):
 		jump_anticipation = 0.0
 
 	if global_position.y < -10:
-		_reset_motion_at(voxel_world.get_spawn_position())
+		_reset_motion_at(_respawn_position)
+
+func face_direction(world_direction: Vector3):
+	assert(world_direction.is_finite())
+	var planar_direction := Vector3(world_direction.x, 0.0, world_direction.z)
+	if planar_direction.is_zero_approx():
+		return
+	planar_direction = planar_direction.normalized()
+	model_root.rotation.y = atan2(planar_direction.x, planar_direction.z)

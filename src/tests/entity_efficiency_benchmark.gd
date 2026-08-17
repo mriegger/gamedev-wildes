@@ -58,36 +58,36 @@ func _percentile_ms(sorted_samples: Array[int], percentile: float) -> float:
 	var index := clampi(ceili(percentile * float(sorted_samples.size())) - 1, 0, sorted_samples.size() - 1)
 	return float(sorted_samples[index]) / 1000.0
 
-func _spawn_population(coordinator: EntityCoordinator, player_position: Vector3) -> Dictionary:
+func _spawn_population(coordinator: WorldEntityCoordinator, player_position: Vector3) -> Dictionary:
 	var spawn_samples: Array[int] = []
 	var preparation_samples: Array[int] = []
-	for cycle in range(EntityCoordinator.MAX_TOTAL_ACTIVE):
+	for cycle in range(WorldEntityCoordinator.MAX_TOTAL_ACTIVE):
 		var time_of_day := DAY_TIME if cycle % 2 == 0 else NIGHT_TIME
-		var before_count := coordinator.get_active_count()
-		coordinator._spawn_elapsed = EntityCoordinator.SPAWN_INTERVAL_SECONDS - FRAME_DELTA
+		var before_count := coordinator.get_runtime().get_active_count()
+		coordinator._spawn_elapsed = WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS - FRAME_DELTA
 		var spawn_started := Time.get_ticks_usec()
 		coordinator.tick(FRAME_DELTA, player_position, time_of_day)
 		spawn_samples.append(Time.get_ticks_usec() - spawn_started)
-		_expect(coordinator.get_active_count() == before_count + 1, "spawn cycle %d did not add one actor" % cycle)
-		var prepared_before := coordinator._prepared_actor_count()
+		_expect(coordinator.get_runtime().get_active_count() == before_count + 1, "spawn cycle %d did not add one actor" % cycle)
+		var prepared_before := coordinator.get_runtime()._prepared_actor_count()
 		var preparation_started := Time.get_ticks_usec()
 		coordinator.tick(FRAME_DELTA, player_position, time_of_day)
 		var preparation_usec := Time.get_ticks_usec() - preparation_started
-		if coordinator._prepared_actor_count() > prepared_before:
+		if coordinator.get_runtime()._prepared_actor_count() > prepared_before:
 			preparation_samples.append(preparation_usec)
-	_expect(spawn_samples.size() == EntityCoordinator.MAX_TOTAL_ACTIVE, "spawn benchmark did not collect twelve samples")
+	_expect(spawn_samples.size() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "spawn benchmark did not collect twelve samples")
 	_expect(not preparation_samples.is_empty(), "spawn benchmark did not observe actor preparation")
 	return {
 		"spawn_frame": _summarize(spawn_samples),
 		"preparation_frame": _summarize(preparation_samples),
 	}
 
-func _sorted_actors(coordinator: EntityCoordinator) -> Array[EntityActor]:
-	var actors := coordinator.get_active_actors()
+func _sorted_actors(coordinator: WorldEntityCoordinator) -> Array[EntityActor]:
+	var actors := coordinator.get_runtime().get_active_actors()
 	actors.sort_custom(func(left: EntityActor, right: EntityActor) -> bool: return left.runtime_id < right.runtime_id)
 	return actors
 
-func _arrange_population(coordinator: EntityCoordinator, actors: Array[EntityActor]) -> void:
+func _arrange_population(coordinator: WorldEntityCoordinator, actors: Array[EntityActor]) -> void:
 	var zombie_index := 0
 	var sheep_index := 0
 	for actor in actors:
@@ -106,7 +106,7 @@ func _arrange_population(coordinator: EntityCoordinator, actors: Array[EntityAct
 		actor.global_position = Vector3(0.5 + cos(angle) * radius, FEET_Y, 0.5 + sin(angle) * radius)
 		actor.velocity = Vector3.ZERO
 		actor.on_ground = true
-		coordinator._spatial_index.upsert(actor.runtime_id, actor.global_position, actor.get_world_bounds())
+		coordinator.get_runtime()._spatial_index.upsert(actor.runtime_id, actor.global_position, actor.get_world_bounds())
 	_expect(zombie_index == 6, "benchmark population had %d zombies" % zombie_index)
 	_expect(sheep_index == 6, "benchmark population had %d sheep" % sheep_index)
 
@@ -114,13 +114,13 @@ func _player_position(frame_index: int) -> Vector3:
 	var angle := float(frame_index) * 0.015
 	return Vector3(0.5 + cos(angle) * 3.0, FEET_Y, 0.5 + sin(angle) * 3.0)
 
-func _advance_entity_frame(coordinator: EntityCoordinator, actors: Array[EntityActor], frame_index: int) -> int:
+func _advance_entity_frame(coordinator: WorldEntityCoordinator, actors: Array[EntityActor], frame_index: int) -> int:
 	coordinator.tick(FRAME_DELTA, _player_position(frame_index), NIGHT_TIME)
 	for actor in actors:
 		actor.animation_driver.advance(FRAME_DELTA)
-	return EntityCoordinator.MAX_NAVIGATION_SEARCHES_PER_TICK - coordinator._navigation_search_budget._remaining_searches
+	return WorldEntityCoordinator.MAX_NAVIGATION_SEARCHES_PER_TICK - coordinator.get_runtime()._navigation_search_budget._remaining_searches
 
-func _benchmark_entity_frames(coordinator: EntityCoordinator, actors: Array[EntityActor]) -> Dictionary:
+func _benchmark_entity_frames(coordinator: WorldEntityCoordinator, actors: Array[EntityActor]) -> Dictionary:
 	var max_navigation_searches := 0
 	var frames_with_navigation_search := 0
 	for frame_index in range(WARMUP_FRAMES):
@@ -135,9 +135,9 @@ func _benchmark_entity_frames(coordinator: EntityCoordinator, actors: Array[Enti
 		max_navigation_searches = maxi(max_navigation_searches, search_count)
 		if search_count > 0:
 			frames_with_navigation_search += 1
-	_expect(max_navigation_searches <= EntityCoordinator.MAX_NAVIGATION_SEARCHES_PER_TICK, "entity frame exceeded its navigation search budget")
+	_expect(max_navigation_searches <= WorldEntityCoordinator.MAX_NAVIGATION_SEARCHES_PER_TICK, "entity frame exceeded its navigation search budget")
 	_expect(frames_with_navigation_search > 0, "timed entity frames performed no navigation searches")
-	_expect(coordinator.get_active_count() == EntityCoordinator.MAX_TOTAL_ACTIVE, "entity frame benchmark did not retain twelve actors")
+	_expect(coordinator.get_runtime().get_active_count() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "entity frame benchmark did not retain twelve actors")
 	var result := _summarize(samples)
 	result["max_navigation_searches_per_frame"] = max_navigation_searches
 	result["frames_with_navigation_search"] = frames_with_navigation_search
@@ -159,8 +159,8 @@ func _run_path_search(world: VoxelWorld) -> VoxelPathResult:
 		Vector3i(12, int(FEET_Y), 0),
 		0.6,
 		1.8,
-		VoxelPathFollower.MAX_SEARCH_RADIUS,
-		VoxelPathFollower.MAX_SEARCH_NODES
+		WorldEntityCoordinator.MAX_NAVIGATION_SEARCH_RADIUS,
+		WorldEntityCoordinator.MAX_NAVIGATION_SEARCH_NODES
 	)
 
 func _benchmark_bounded_pathfinding() -> Dictionary:
@@ -174,12 +174,12 @@ func _benchmark_bounded_pathfinding() -> Dictionary:
 		var started := Time.get_ticks_usec()
 		var result := _run_path_search(world)
 		samples.append(Time.get_ticks_usec() - started)
-		bounded = bounded and result.status == VoxelPathResult.Status.LIMIT_REACHED and result.visited_nodes <= VoxelPathFollower.MAX_SEARCH_NODES
-		exhausted_budget = exhausted_budget and result.visited_nodes == VoxelPathFollower.MAX_SEARCH_NODES
+		bounded = bounded and result.status == VoxelPathResult.Status.LIMIT_REACHED and result.visited_nodes <= WorldEntityCoordinator.MAX_NAVIGATION_SEARCH_NODES
+		exhausted_budget = exhausted_budget and result.visited_nodes == WorldEntityCoordinator.MAX_NAVIGATION_SEARCH_NODES
 	_expect(bounded, "bounded path benchmark exceeded its deterministic search contract")
 	_expect(exhausted_budget, "bounded path benchmark did not exercise the full node budget")
 	var summary := _summarize(samples)
-	summary["max_search_nodes"] = VoxelPathFollower.MAX_SEARCH_NODES
+	summary["max_search_nodes"] = WorldEntityCoordinator.MAX_NAVIGATION_SEARCH_NODES
 	return summary
 
 func _output_path() -> String:
@@ -202,20 +202,20 @@ func _run() -> void:
 	var catalog := load("res://entities/entity_catalog.tres") as EntityCatalog
 	_expect(catalog != null and catalog.validate(), "entity catalog failed validation")
 	var world := _make_flat_world()
-	var coordinator := EntityCoordinator.new()
+	var coordinator := WorldEntityCoordinator.new()
 	get_root().add_child(coordinator)
-	coordinator.entity_melee_contact_reached.connect(_consume_melee_contact)
 	coordinator.setup(catalog, world, WORLD_SEED, _position_ready)
+	coordinator.get_runtime().entity_melee_contact_reached.connect(_consume_melee_contact)
 	var origin := Vector3(0.5, FEET_Y, 0.5)
 	var spawn_metrics := _spawn_population(coordinator, origin)
 	var actors := _sorted_actors(coordinator)
-	_expect(actors.size() == EntityCoordinator.MAX_TOTAL_ACTIVE, "benchmark did not create twelve actors")
+	_expect(actors.size() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "benchmark did not create twelve actors")
 	_arrange_population(coordinator, actors)
 	var frame_metrics := _benchmark_entity_frames(coordinator, actors)
 	var path_metrics := _benchmark_bounded_pathfinding()
-	var spatial_index := coordinator._spatial_index as EntitySpatialIndex
-	_expect(spatial_index.get_entry_count() == EntityCoordinator.MAX_TOTAL_ACTIVE, "spatial index lost an active actor")
-	_expect(spatial_index.get_cell_count() <= EntityCoordinator.MAX_TOTAL_ACTIVE * 8, "spatial index exceeded its population bound")
+	var spatial_index := coordinator.get_runtime()._spatial_index as EntitySpatialIndex
+	_expect(spatial_index.get_entry_count() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "spatial index lost an active actor")
+	_expect(spatial_index.get_cell_count() <= WorldEntityCoordinator.MAX_TOTAL_ACTIVE * 8, "spatial index exceeded its population bound")
 	coordinator.shutdown()
 	coordinator.queue_free()
 	actors.clear()
@@ -233,7 +233,7 @@ func _run() -> void:
 		},
 		"workload": {
 			"seed": WORLD_SEED,
-			"active_entities": EntityCoordinator.MAX_TOTAL_ACTIVE,
+			"active_entities": WorldEntityCoordinator.MAX_TOTAL_ACTIVE,
 			"warmup_frames": WARMUP_FRAMES,
 			"sample_frames": SAMPLE_FRAMES,
 			"path_warmup_samples": PATH_WARMUP_SAMPLES,

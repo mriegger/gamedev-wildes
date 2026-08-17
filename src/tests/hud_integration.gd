@@ -137,7 +137,7 @@ func _process(_delta: float) -> bool:
 			_fail("side_panel null")
 			return false
 		var grass_item := _item_catalog.get_item_for_block(BlockId.Type.GRASS)
-		var hotbar_grass := _hud.hotbar.slot_nodes[1] as HotbarSlot
+		var hotbar_grass := _hud.hotbar.slot_nodes[1] as InventoryHotbarSlot
 		if hotbar_grass.icon.texture != grass_item.icon:
 			_fail("grass hotbar icon mismatch")
 			return false
@@ -507,12 +507,12 @@ func _push_drag_wheel(button_index: MouseButton, count: int) -> void:
 		root.push_input(wheel, true)
 
 func _check_full_stack_drag_source_hidden() -> void:
-	var source := _hud.hotbar.slot_nodes[6] as HotbarSlot
+	var source := _hud.hotbar.slot_nodes[6] as InventoryHotbarSlot
 	if source.icon.texture != null or not source.count_label.text.is_empty():
 		_fail("adjustable drag: full-stack source remained visible")
 
 func _adjust_and_check_split_drag() -> void:
-	var source := _hud.hotbar.slot_nodes[6] as HotbarSlot
+	var source := _hud.hotbar.slot_nodes[6] as InventoryHotbarSlot
 	var source_stack := _inv.get_slot(6)
 	if source_stack == null or source_stack.count != 16:
 		_fail("adjustable drag: model changed before drop")
@@ -634,7 +634,7 @@ func _check_left_drag_result() -> void:
 	if destination == null or destination.item_id != grass_id or destination.count != 12:
 		_fail("left drag: destination expected grass 12 got %s" % str(destination))
 		return
-	var n1: HotbarSlot = _hud.hotbar.slot_nodes[1] as HotbarSlot
+	var n1: InventoryHotbarSlot = _hud.hotbar.slot_nodes[1] as InventoryHotbarSlot
 	if n1.item_id != null:
 		_fail("left drag: hotbar node 1 should be null")
 		return
@@ -674,7 +674,7 @@ func _check_split_drag_result() -> void:
 	if destination == null or destination.count != 8 or destination.item_id != torch_id:
 		_fail("adjustable drag: destination expected torch 8 got %s" % str(destination))
 		return
-	var n6: HotbarSlot = _hud.hotbar.slot_nodes[6] as HotbarSlot
+	var n6: InventoryHotbarSlot = _hud.hotbar.slot_nodes[6] as InventoryHotbarSlot
 	if n6.item_count != 8 or n6.item_id != torch_id:
 		_fail("adjustable drag: hotbar node6 mismatch")
 		return
@@ -926,8 +926,8 @@ func _check_helmet_tooltip(slot: InventorySlot, context: String) -> void:
 		_fail("%s helmet tooltip stats are incorrect" % context)
 	tooltip.free()
 
-func _create_gear_tooltip(slot: InventorySlot, context: String) -> GearTooltip:
-	var tooltip := slot._make_custom_tooltip(slot.tooltip_text) as GearTooltip
+func _create_gear_tooltip(slot: InventorySlot, context: String) -> ItemTooltip:
+	var tooltip := slot._make_custom_tooltip(slot.tooltip_text) as ItemTooltip
 	if tooltip == null:
 		_fail("%s gear tooltip was not created" % context)
 		return null

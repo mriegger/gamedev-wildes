@@ -122,7 +122,7 @@ func _check_open_state() -> void:
 	_expect(_camera_rig.camera.h_offset < 0.0, "camera framing did not account for the wider left panel")
 	var recipe_scroll := _hud.crafting_panel.get_node("Margin/Content/Body/Recipes/RecipeScroll") as ScrollContainer
 	var recipe_list := _hud.crafting_panel.get_node("Margin/Content/Body/Recipes/RecipeScroll/RecipeList") as VBoxContainer
-	_expect(recipe_scroll != null and recipe_list.get_child_count() == 8, "scrollable recipe list did not contain eight recipes")
+	_expect(recipe_scroll != null and recipe_list.get_child_count() == 10, "scrollable recipe list did not contain ten recipes")
 	var recipe_button := recipe_list.get_child(0) as Button
 	var recipe_icon_frame := recipe_button.get_node("Content/IconFrame") as CenterContainer
 	var recipe_icon := recipe_icon_frame.get_node("Icon") as TextureRect
@@ -188,9 +188,9 @@ func _check_open_state() -> void:
 	var crafting_rect := _hud.crafting_panel.get_global_rect()
 	var backpack_rect := _hud.side_panel.get_global_rect()
 	for slot in _hud.hotbar.slot_nodes:
-		var slot_rect := (slot as HotbarSlot).get_global_rect()
-		_expect(not crafting_rect.intersects(slot_rect), "crafting panel covered hotbar slot %d" % (slot as HotbarSlot).slot_index)
-		_expect(not backpack_rect.intersects(slot_rect), "backpack covered hotbar slot %d" % (slot as HotbarSlot).slot_index)
+		var slot_rect := (slot as InventoryHotbarSlot).get_global_rect()
+		_expect(not crafting_rect.intersects(slot_rect), "crafting panel covered hotbar slot %d" % (slot as InventoryHotbarSlot).slot_index)
+		_expect(not backpack_rect.intersects(slot_rect), "backpack covered hotbar slot %d" % (slot as InventoryHotbarSlot).slot_index)
 
 func _finish() -> void:
 	if _errors.is_empty():

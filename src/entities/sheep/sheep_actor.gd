@@ -10,18 +10,24 @@ var _path_follower: VoxelPathFollower
 func supports_behavior(behavior: EntityBehaviorDefinition) -> bool:
 	return behavior is SheepBehaviorDefinition
 
-func setup(p_runtime_id: int, p_definition: EntityDefinition, p_voxel_world: VoxelWorld, behavior_seed: int):
-	super.setup(p_runtime_id, p_definition, p_voxel_world, behavior_seed)
+func setup(
+	p_runtime_id: int,
+	p_definition: EntityDefinition,
+	p_voxel_space: VoxelSpace,
+	behavior_seed: int,
+	navigation_limits: EntityNavigationLimits,
+):
+	super.setup(p_runtime_id, p_definition, p_voxel_space, behavior_seed, navigation_limits)
 	_behavior = p_definition.behavior as SheepBehaviorDefinition
 	assert(_behavior != null)
 	brain = SheepBrain.new(_behavior, behavior_seed)
-	_path_follower = VoxelPathFollower.new(voxel_world, definition.body_width, definition.body_height, _behavior.repath_seconds)
+	_path_follower = VoxelPathFollower.new(voxel_space, definition.body_width, definition.body_height, _behavior.repath_seconds, navigation_limits)
 	max_speed = _behavior.wander_speed
 	_sheep_animation = animation_driver as SheepAnimationDriver
 	assert(_sheep_animation != null)
 
 func tick(delta: float, _player_position: Vector3, separation_velocity: Vector3, navigation_search_budget: NavigationSearchBudget):
-	assert(brain != null and voxel_world != null)
+	assert(brain != null and voxel_space != null)
 	var previous_state := brain.state
 	brain.advance(delta, global_position)
 	if brain.state != previous_state and brain.state == SheepBrain.State.WANDER:

@@ -11,6 +11,7 @@ signal back_requested
 @onready var sun_shadows: CheckButton = $VBox/SettingsGrid/SunShadows
 @onready var shadow_range: OptionButton = $VBox/SettingsGrid/ShadowRange
 @onready var torch_shadows: OptionButton = $VBox/SettingsGrid/TorchShadows
+@onready var dungeon_torch_shadows: OptionButton = $VBox/SettingsGrid/DungeonTorchShadows
 @onready var ambient_volume: HSlider = $VBox/SettingsGrid/AmbientVolume
 @onready var birds_enabled: CheckButton = $VBox/SettingsGrid/BirdsEnabled
 @onready var back_button: WildesButton = $VBox/BackButton
@@ -28,6 +29,7 @@ func _ready():
 	sun_shadows.toggled.connect(_on_sun_shadows_toggled)
 	shadow_range.item_selected.connect(_on_shadow_range_selected)
 	torch_shadows.item_selected.connect(_on_torch_shadows_selected)
+	dungeon_torch_shadows.item_selected.connect(_on_dungeon_torch_shadows_selected)
 	ambient_volume.value_changed.connect(_on_ambient_volume_changed)
 	birds_enabled.toggled.connect(_on_birds_enabled_toggled)
 	back_button.pressed.connect(back_requested.emit)
@@ -57,9 +59,13 @@ func _populate_options():
 	_add_option(torch_shadows, "Nearest 1", 1)
 	_add_option(torch_shadows, "Nearest 2", 2)
 	_add_option(torch_shadows, "Nearest 4", 4)
+	_add_option(dungeon_torch_shadows, "Off", 0)
+	_add_option(dungeon_torch_shadows, "Nearest 2", 2)
+	_add_option(dungeon_torch_shadows, "Nearest 4", 4)
+	_add_option(dungeon_torch_shadows, "Nearest 6", 6)
 
 func _style_options():
-	for option in [frame_rate, render_scale, anti_aliasing, shadow_range, torch_shadows]:
+	for option in [frame_rate, render_scale, anti_aliasing, shadow_range, torch_shadows, dungeon_torch_shadows]:
 		option.add_theme_stylebox_override("normal", WildesStyle.make_panel(Color(0.20, 0.22, 0.24, 0.52), 8, Color(1, 1, 1, 0.18), 1))
 		option.add_theme_stylebox_override("hover", WildesStyle.make_panel(Color(1, 1, 1, 0.10), 8, Color(1, 1, 1, 0.24), 1))
 
@@ -78,6 +84,7 @@ func _sync_controls():
 	sun_shadows.set_pressed_no_signal(_settings.sun_shadows_enabled)
 	_select_value(shadow_range, _settings.shadow_range)
 	_select_value(torch_shadows, _settings.torch_shadow_count)
+	_select_value(dungeon_torch_shadows, _settings.dungeon_torch_shadow_count)
 	ambient_volume.set_value_no_signal(_settings.ambient_volume)
 	birds_enabled.set_pressed_no_signal(_settings.birds_enabled)
 	_syncing = false
@@ -118,6 +125,10 @@ func _on_shadow_range_selected(index: int):
 
 func _on_torch_shadows_selected(index: int):
 	_settings.torch_shadow_count = int(torch_shadows.get_item_metadata(index))
+	_emit_change()
+
+func _on_dungeon_torch_shadows_selected(index: int):
+	_settings.dungeon_torch_shadow_count = int(dungeon_torch_shadows.get_item_metadata(index))
 	_emit_change()
 
 func _on_ambient_volume_changed(value: float):

@@ -67,6 +67,17 @@ func _init():
 	_expect(replacement_hp_stats.set_current_hp(150.0), "modified current HP setup failed")
 	_expect(replacement_hp_stats.replace_source_modifiers(&"health_armor", &"equipment_slot_0", maximum_hp_modifiers), "maximum HP modifier refresh failed")
 	_expect(is_equal_approx(replacement_hp_stats.current_hp, 150.0), "equivalent modifier replacement clamped current HP")
+	var ratio_hp_stats := ActorStats.new(player_definition)
+	var additive_hp_modifier := _modifier(&"ratio_hp", &"health_rune", &"hp", StatModifier.Operation.ADD, 100.0)
+	var additive_hp_modifiers: Array[StatModifier] = [additive_hp_modifier]
+	var no_hp_modifiers: Array[StatModifier] = []
+	_expect(ratio_hp_stats.set_current_hp(37.0), "health-ratio current HP setup failed")
+	_expect(ratio_hp_stats.replace_source_modifiers_preserving_health_ratio(&"health_rune", &"socketed_runes", additive_hp_modifiers), "health-ratio modifier failed replacement")
+	_expect(is_equal_approx(ratio_hp_stats.get_value(&"hp"), 200.0), "health-ratio maximum HP did not increase")
+	_expect(is_equal_approx(ratio_hp_stats.current_hp, 74.0), "health percentage was not preserved when maximum HP increased")
+	_expect(ratio_hp_stats.replace_source_modifiers_preserving_health_ratio(&"health_rune", &"socketed_runes", no_hp_modifiers), "health-ratio modifier failed removal")
+	_expect(is_equal_approx(ratio_hp_stats.get_value(&"hp"), 100.0), "health-ratio maximum HP did not restore")
+	_expect(is_equal_approx(ratio_hp_stats.current_hp, 37.0), "health percentage was not preserved when maximum HP decreased")
 	var leveled_definition := _definition({&"strength": 10.0}, 1, 100, 2.0, 4)
 	_expect(leveled_definition.validate(), "leveled definition is invalid")
 	var leveled_stats := ActorStats.new(leveled_definition)

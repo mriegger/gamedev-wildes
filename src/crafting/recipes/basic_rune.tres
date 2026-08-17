@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="CraftingRecipeDefinition" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://crafting/crafting_recipe_definition.gd" id="1_recipe"]
+[ext_resource type="Script" path="res://crafting/crafting_ingredient.gd" id="2_ingredient"]
+[ext_resource type="Resource" path="res://items/runes/definitions/basic_rune.tres" id="3_output"]
+[ext_resource type="Resource" path="res://items/definitions/sand_block.tres" id="4_sand"]
+
+[sub_resource type="Resource" id="sand"]
+script = ExtResource("2_ingredient")
+item = ExtResource("4_sand")
+count = 32
+
+[resource]
+script = ExtResource("1_recipe")
+id = &"basic_rune"
+output_item = ExtResource("3_output")
+ingredients = Array[ExtResource("2_ingredient")]([SubResource("sand")])

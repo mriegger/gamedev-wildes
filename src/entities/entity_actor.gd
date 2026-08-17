@@ -6,39 +6,50 @@ signal melee_contact_reached(source_runtime_id: int, profile: MeleeAttackProfile
 @export_node_path("Node") var animation_driver_path: NodePath
 @export_node_path("Node") var visual_fader_path: NodePath
 @export_node_path("CPUParticles3D") var death_poof_path: NodePath
+@export_node_path("AudioStreamPlayer3D") var vocalizations_path: NodePath
 
 @onready var model_root: Node3D = $ModelRoot as Node3D
 
 var runtime_id: int = -1
 var definition: EntityDefinition
-var voxel_world: VoxelWorld
+var voxel_space: VoxelSpace
 var velocity: Vector3 = Vector3.ZERO
 var on_ground: bool = true
 var max_speed: float = 1.0
 var animation_driver: EntityAnimationDriver
 var visual_fader: EntityVisualFader
 var death_poof: EntityDeathPoof
+var vocalizations: EntityVocalizations
 var _death_retirement: bool = false
 var _death_fade_started: bool = false
 
 func _ready():
 	set_process(false)
 
-func setup(p_runtime_id: int, p_definition: EntityDefinition, p_voxel_world: VoxelWorld, _behavior_seed: int):
+func setup(
+	p_runtime_id: int,
+	p_definition: EntityDefinition,
+	p_voxel_space: VoxelSpace,
+	behavior_seed: int,
+	_navigation_limits: EntityNavigationLimits,
+):
 	assert(p_runtime_id >= 0)
 	assert(p_definition != null)
-	assert(p_voxel_world != null)
+	assert(p_voxel_space != null)
 	runtime_id = p_runtime_id
 	definition = p_definition
-	voxel_world = p_voxel_world
+	voxel_space = p_voxel_space
 	animation_driver = get_node(animation_driver_path) as EntityAnimationDriver
 	visual_fader = get_node(visual_fader_path) as EntityVisualFader
 	death_poof = get_node(death_poof_path) as EntityDeathPoof
+	vocalizations = get_node(vocalizations_path) as EntityVocalizations
 	assert(animation_driver != null)
 	assert(visual_fader != null)
 	assert(death_poof != null)
+	assert(vocalizations != null)
 	animation_driver.setup(self)
 	visual_fader.setup(model_root)
+	vocalizations.setup(behavior_seed)
 	set_process(true)
 
 func tick(_delta: float, _player_position: Vector3, _separation_velocity: Vector3, _navigation_search_budget: NavigationSearchBudget):
@@ -48,17 +59,19 @@ func supports_behavior(_behavior: EntityBehaviorDefinition) -> bool:
 	return false
 
 func has_valid_presentation() -> bool:
-	if animation_driver_path.is_empty() or visual_fader_path.is_empty() or death_poof_path.is_empty():
+	if animation_driver_path.is_empty() or visual_fader_path.is_empty() or death_poof_path.is_empty() or vocalizations_path.is_empty():
 		return false
 	var visual_root := get_node_or_null(^"ModelRoot") as Node3D
 	var candidate_animation_driver := get_node_or_null(animation_driver_path) as EntityAnimationDriver
 	var candidate_visual_fader := get_node_or_null(visual_fader_path) as EntityVisualFader
 	var candidate_death_poof := get_node_or_null(death_poof_path) as EntityDeathPoof
+	var candidate_vocalizations := get_node_or_null(vocalizations_path) as EntityVocalizations
 	return (
 		visual_root != null
 		and candidate_animation_driver != null
 		and candidate_visual_fader != null
 		and candidate_death_poof != null
+		and candidate_vocalizations != null
 		and candidate_visual_fader.can_fade(visual_root)
 	)
 
@@ -71,6 +84,7 @@ func advance_visual_fade(delta: float) -> bool:
 
 func begin_despawn_fade():
 	assert(visual_fader != null)
+	vocalizations.stop_vocalizations()
 	_death_retirement = false
 	_death_fade_started = true
 	set_process(false)
@@ -78,6 +92,7 @@ func begin_despawn_fade():
 
 func begin_death_retirement():
 	assert(animation_driver != null and visual_fader != null and death_poof != null)
+	vocalizations.stop_vocalizations()
 	velocity = Vector3.ZERO
 	_death_retirement = true
 	_death_fade_started = false
@@ -143,11 +158,11 @@ func advance_voxel_motion(delta: float, desired_velocity: Vector3, gravity: floa
 	velocity.z = desired_velocity.z
 	if not on_ground:
 		velocity.y -= gravity * delta
-	var result := VoxelBodySolver.sweep(voxel_world, global_position, velocity, velocity * delta, definition.body_width, definition.body_height)
+	var result := VoxelBodySolver.sweep(voxel_space, global_position, velocity, velocity * delta, definition.body_width, definition.body_height)
 	global_position = result.position
 	velocity = result.velocity
-	var ground_y := VoxelBodySolver.get_ground_y(voxel_world, global_position, definition.body_width)
-	on_ground = velocity.y <= 0.0 and ground_y != VoxelWorld.NO_SURFACE_Y and absf(ground_y - global_position.y) < 0.12
+	var ground_y := VoxelBodySolver.get_ground_y(voxel_space, global_position, definition.body_width)
+	on_ground = velocity.y <= 0.0 and ground_y != VoxelSpace.NO_SURFACE_Y and absf(ground_y - global_position.y) < 0.12
 	if on_ground:
 		velocity.y = 0.0
 

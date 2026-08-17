@@ -1,26 +1,19 @@
-extends Panel
+extends ItemSlotView
 class_name InventorySlot
 
-var slot_index: int = 0
 var item_id = null
-var item_count: int = 0
 var inventory_model: InventoryModel = null
 var inventory_stat_coordinator: InventoryStatCoordinator = null
 var item_proficiency: ItemProficiency = null
 var empty_label: String = ""
 
-@export var gear_tooltip_scene: PackedScene
+@export var item_tooltip_scene: PackedScene
 
-var _normal_style: StyleBoxFlat
-var _empty_style: StyleBoxFlat
-
-@onready var icon: TextureRect = $Icon
-@onready var count_label: Label = $Count
+var _inventory_normal_style: StyleBoxFlat
+var _inventory_empty_style: StyleBoxFlat
 
 func _ready():
-	mouse_filter = Control.MOUSE_FILTER_STOP
-	focus_mode = Control.FOCUS_NONE
-	set_process_input(false)
+	super._ready()
 	if not empty_label.is_empty():
 		count_label.add_theme_font_size_override("font_size", 10)
 	refresh_visuals()
@@ -37,11 +30,8 @@ func set_item_proficiency(proficiency: ItemProficiency):
 	_update_tooltip_text()
 
 func set_inventory_styles(normal_style: StyleBoxFlat, empty_style: StyleBoxFlat):
-	_normal_style = normal_style
-	_empty_style = empty_style
-
-func set_slot_index(idx: int):
-	slot_index = idx
+	_inventory_normal_style = normal_style
+	_inventory_empty_style = empty_style
 
 func set_empty_label(label: String):
 	empty_label = label
@@ -64,36 +54,46 @@ func _update_tooltip_text() -> void:
 	if inventory_model == null or item_proficiency == null:
 		tooltip_text = ""
 		return
-	var definition := _get_gear_tooltip_definition()
+	var definition := _get_tooltip_definition()
 	tooltip_text = definition.display_name if definition != null else ""
 
 func _make_custom_tooltip(_for_text: String) -> Object:
-	var definition := _get_gear_tooltip_definition()
+	var definition := _get_tooltip_definition()
 	if tooltip_text.is_empty() or definition == null:
 		return null
-	assert(gear_tooltip_scene != null)
-	var tooltip := gear_tooltip_scene.instantiate() as GearTooltip
+	assert(item_tooltip_scene != null)
+	var tooltip := item_tooltip_scene.instantiate() as ItemTooltip
 	assert(tooltip != null)
-	tooltip.setup(definition, item_proficiency)
+	tooltip.setup(
+		definition,
+		item_proficiency,
+		inventory_model.item_catalog,
+		inventory_model.get_socketed_rune_ids(slot_index),
+	)
 	return tooltip
 
-func _get_gear_tooltip_definition() -> ItemDefinition:
+func _get_tooltip_definition() -> ItemDefinition:
 	if item_id == null or item_count <= 0 or inventory_model == null or item_proficiency == null:
 		return null
 	var catalog := inventory_model.item_catalog
+	var definition := catalog.get_definition(item_id)
+	if definition is RuneDefinition:
+		return definition
 	if not catalog.is_combat_item(item_id):
 		return null
-	var definition := catalog.get_definition(item_id)
 	if definition.rarity == null or definition.proficiency == null or not item_proficiency.has_proficiency(item_id):
 		return null
 	return definition
 
 func refresh_visuals():
 	var visual_count := _get_visual_count()
-	if item_id == null or visual_count <= 0:
-		add_theme_stylebox_override("panel", _empty_style)
-	else:
-		add_theme_stylebox_override("panel", _normal_style)
+	var style: StyleBox = _selected_style if is_selected else _inventory_normal_style
+	if not is_selected and (item_id == null or visual_count <= 0):
+		style = _inventory_empty_style
+	if style == null:
+		style = _normal_style
+	if style != null:
+		add_theme_stylebox_override("panel", style)
 	_refresh_item_visuals()
 
 func _refresh_item_visuals():
@@ -104,7 +104,7 @@ func _refresh_item_visuals():
 		count_label.text = empty_label
 	else:
 		icon.texture = inventory_model.item_catalog.get_definition(visual_item_id).icon
-		if visual_count > 1:
+		if _count_visible and visual_count > 1:
 			count_label.text = str(visual_count)
 		else:
 			count_label.text = ""

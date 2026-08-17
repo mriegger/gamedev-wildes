@@ -1,16 +1,13 @@
-extends RefCounted
+extends VoxelSpace
 class_name VoxelWorld
 
 signal block_edit_committed(edit: BlockEdit)
 signal terrain_chunk_evicted(coord: Vector2i)
 
-const NO_SURFACE_Y: float = -9999.0
-
 var chunk_size: int
 var max_build_y: int
 var water_level: int
 var spawn_search_radius: float
-var block_catalog: BlockCatalog
 
 var type_map_dict: Dictionary = {}
 var height_map_dict: Dictionary = {}
@@ -36,6 +33,7 @@ var _removed_edits_by_chunk: Dictionary = {}
 var cell_revisions: Dictionary = {}
 var _highest_cache: Dictionary = {}
 var torch_attachments: Dictionary = {}
+var _protected_edit_cells: Dictionary = {}
 
 func _init(p_chunk_size: int, p_max_build_y: int, p_water_level: int, p_spawn_search_radius: float, p_block_catalog: BlockCatalog):
 	chunk_size = p_chunk_size
@@ -61,6 +59,16 @@ func snapshot_block_edits() -> Dictionary:
 
 func get_block_edit_count() -> int:
 	return _placed_blocks.size() + _removed_blocks.size()
+
+func has_persisted_edit(position: Vector3i) -> bool:
+	return _placed_blocks.has(position) or _removed_blocks.has(position) or torch_attachments.has(position)
+
+func protect_edit_cells(cells: Array[Vector3i]) -> void:
+	for cell in cells:
+		_protected_edit_cells[cell] = true
+
+func is_edit_protected(position: Vector3i) -> bool:
+	return _protected_edit_cells.has(position)
 
 func _rebuild_edit_index(edits: Dictionary, index: Dictionary) -> void:
 	index.clear()
@@ -284,6 +292,9 @@ func is_raycast_solid(p: Vector3i) -> bool:
 		return false
 	return block_catalog.is_raycast_solid(bt)
 
+func is_face_targetable(block_position: Vector3i, _face_normal: Vector3i) -> bool:
+	return is_raycast_solid(block_position)
+
 func get_revision(p: Vector3i) -> int:
 	return cell_revisions.get(p, 0)
 
@@ -321,10 +332,20 @@ func get_highest_top(x: int, z: int) -> float:
 	if y == -1:
 		return NO_SURFACE_Y
 	return float(y) + 1.0
-
 func get_terrain_surface_y(x: int, z: int) -> float:
 	var height: Variant = height_map_dict.get(Vector2i(x, z), null)
 	return float(height) if height is int else NO_SURFACE_Y
+
+func get_terrain_surface_top(x: int, z: int) -> float:
+	ensure_column_generated(x, z)
+	var height: Variant = height_map_dict.get(Vector2i(x, z), null)
+	if height == null:
+		return NO_SURFACE_Y
+	return float(height as int) + 1.0
+
+func get_terrain_surface_block_id(x: int, z: int) -> int:
+	ensure_column_generated(x, z)
+	return int(type_map_dict.get(Vector2i(x, z), BlockId.Type.AIR))
 
 func is_occupied(p: Vector3i) -> bool:
 	var bt = get_block_at(p)
@@ -339,6 +360,11 @@ func get_attached_torches(support_pos: Vector3i) -> Array[Vector3i]:
 	return attached
 
 func try_mine_block(p: Vector3i) -> Array:
+	if is_edit_protected(p):
+		return [BlockEdit.fail(p, BlockEdit.Operation.MINE, BlockEdit.Result.FAIL_PROTECTED)]
+	for torch_position in get_attached_torches(p):
+		if is_edit_protected(torch_position):
+			return [BlockEdit.fail(p, BlockEdit.Operation.MINE, BlockEdit.Result.FAIL_PROTECTED)]
 	if not is_breakable(p):
 		return [BlockEdit.fail(p, BlockEdit.Operation.MINE, BlockEdit.Result.FAIL_NOT_BREAKABLE)]
 	var old_id = get_block_id_at(p)
@@ -386,6 +412,8 @@ func try_mine_block(p: Vector3i) -> Array:
 	return batch
 
 func try_place_block(p: Vector3i, block_type: int, attach_dir: Vector3i = Vector3i.ZERO) -> BlockEdit:
+	if is_edit_protected(p):
+		return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_PROTECTED)
 	if block_type == BlockId.Type.AIR:
 		return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_INVALID_POS, "AIR not placeable")
 	if not BlockId.is_valid(block_type):
@@ -415,6 +443,23 @@ func try_place_block(p: Vector3i, block_type: int, attach_dir: Vector3i = Vector
 	_invalidate_highest_cache(p.x, p.z)
 	var rev = _increment_revision(p)
 	var edit = BlockEdit.success_place(p, block_type, rev, attach_dir)
+	block_edit_committed.emit(edit)
+	return edit
+
+func try_replace_block(p: Vector3i, expected_old_id: int, new_id: int) -> BlockEdit:
+	if not BlockId.is_valid(expected_old_id) or expected_old_id == BlockId.Type.AIR:
+		return BlockEdit.fail(p, BlockEdit.Operation.REPLACE, BlockEdit.Result.FAIL_INVALID_POS, "Invalid expected block id")
+	if not BlockId.is_valid(new_id) or new_id == BlockId.Type.AIR:
+		return BlockEdit.fail(p, BlockEdit.Operation.REPLACE, BlockEdit.Result.FAIL_INVALID_POS, "Invalid replacement block id")
+	if p.y < 0 or p.y >= max_build_y:
+		return BlockEdit.fail(p, BlockEdit.Operation.REPLACE, BlockEdit.Result.FAIL_Y_OUT_OF_RANGE)
+	if get_block_id_at(p) != expected_old_id:
+		return BlockEdit.fail(p, BlockEdit.Operation.REPLACE, BlockEdit.Result.FAIL_BLOCK_CHANGED)
+	_put_indexed_edit(_placed_blocks, _placed_edits_by_chunk, p, new_id)
+	_erase_indexed_edit(_removed_blocks, _removed_edits_by_chunk, p)
+	_invalidate_highest_cache(p.x, p.z)
+	var rev := _increment_revision(p)
+	var edit := BlockEdit.success_replace(p, expected_old_id, new_id, rev)
 	block_edit_committed.emit(edit)
 	return edit
 
