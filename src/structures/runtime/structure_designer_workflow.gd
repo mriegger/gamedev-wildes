@@ -58,9 +58,11 @@ func complete_exit() -> void:
 	assert(_draft != null)
 	_draft = null
 
-func _on_new_draft_requested(size: Vector3i) -> void:
-	var next_draft := StructureDraft.create_generic(size)
-	assert(next_draft != null)
+func _on_new_draft_requested(format: StructureDraft.Format, size: Vector3i) -> void:
+	var next_draft := StructureDraft.create_generic(size) if format == StructureDraft.Format.GENERIC_STRUCTURE else StructureDraft.create_level_module(size)
+	if next_draft == null:
+		_dialogs.show_message("Invalid Plot", "The selected dimensions are not valid for this document type.")
+		return
 	_begin_draft(next_draft)
 
 func _on_import_requested(entry: StructureFileEntry) -> void:

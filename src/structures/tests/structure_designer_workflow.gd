@@ -3,6 +3,7 @@ extends SceneTree
 var _failures: Array[String] = []
 var _draft_entries: Array[StructureDraft] = []
 var _exit_request_count: int
+var _new_formats: Array[int] = []
 var _new_requests: Array[Vector3i] = []
 var _import_requests: Array[StructureFileEntry] = []
 var _export_requests: Array[StringName] = []
@@ -36,22 +37,40 @@ func _test_dialog_contracts() -> void:
 	var length := dialogs.get_node("NewDialog/Fields/LengthRow/Length") as SpinBox
 	var width := dialogs.get_node("NewDialog/Fields/WidthRow/Width") as SpinBox
 	var height := dialogs.get_node("NewDialog/Fields/HeightRow/Height") as SpinBox
-	_expect(dialogs.get_node_or_null("NewDialog/Fields/Format") == null, "generic new dialog included a module format selector")
+	var format := dialogs.get_node("NewDialog/Fields/Format") as OptionButton
+	_expect(format.item_count == 2, "new dialog did not offer exactly two document formats")
+	_expect(format.get_item_text(0) == "Generic Structure" and format.get_item_id(0) == StructureDraft.Format.GENERIC_STRUCTURE, "new dialog omitted the generic structure choice")
+	_expect(format.get_item_text(1) == "Level Module" and format.get_item_id(1) == StructureDraft.Format.LEVEL_MODULE, "new dialog omitted the Level Module choice")
 	_expect(dialogs.show_new_dialog(), "new dialog did not open")
 	_expect((dialogs.get_node("NewDialog") as ConfirmationDialog).title == "Buildable Plot Size", "new dialog title changed")
-	_expect(Vector3i(int(length.value), int(height.value), int(width.value)) == StructureDefinition.DEFAULT_SIZE, "dialog defaults changed")
-	_expect(Vector3i(int(length.max_value), int(height.max_value), int(width.max_value)) == StructureDefinition.MAX_EXTENT, "dialog limits changed")
+	_expect(format.get_selected_id() == StructureDraft.Format.GENERIC_STRUCTURE, "new dialog did not default to Generic Structure")
+	_expect(Vector3i(int(length.value), int(height.value), int(width.value)) == StructureDefinition.DEFAULT_SIZE, "generic dialog defaults changed")
+	_expect(Vector3i(int(length.max_value), int(height.max_value), int(width.max_value)) == StructureDefinition.MAX_EXTENT, "generic dialog limits changed")
 	length.value = 11
 	width.value = 13
 	height.value = 7
 	dialogs._on_new_confirmed()
+	_expect(_new_formats == [StructureDraft.Format.GENERIC_STRUCTURE], "dialog did not emit the generic document format")
 	_expect(_new_requests == [Vector3i(11, 7, 13)], "dialog did not map length, height, and width to x, y, and z")
 	_expect(_open_states == [true, false] and not dialogs.is_open(), "new confirmation did not close its dialog")
+	_expect(dialogs.show_new_dialog(), "new dialog did not reopen for Level Module selection")
+	format.select(1)
+	dialogs._on_format_selected(1)
+	_expect(Vector3i(int(length.value), int(height.value), int(width.value)) == Vector3i(7, 4, 7), "Level Module dialog defaults did not map Length, Width, and Height")
+	_expect(Vector3i(int(length.max_value), int(height.max_value), int(width.max_value)) == Vector3i(96, 16, 96), "Level Module dialog limits did not map Length, Width, and Height")
+	length.value = 19
+	width.value = 23
+	height.value = 9
+	dialogs._on_new_confirmed()
+	_expect(_new_formats == [StructureDraft.Format.GENERIC_STRUCTURE, StructureDraft.Format.LEVEL_MODULE], "dialog did not emit the Level Module document format")
+	_expect(_new_requests == [Vector3i(11, 7, 13), Vector3i(19, 9, 23)], "Level Module dialog did not map length, height, and width to x, y, and z")
 	var first_entry := StructureFileEntry.new(&"first_structure", StructureDraft.Format.GENERIC_STRUCTURE, "/first_structure.tres")
-	var second_entry := StructureFileEntry.new(&"second_structure", StructureDraft.Format.GENERIC_STRUCTURE, "/second_structure.tres")
+	var second_entry := StructureFileEntry.new(&"second_module", StructureDraft.Format.LEVEL_MODULE, "/second_module.tres")
 	_expect(dialogs.show_import_dialog([first_entry, second_entry]), "import dialog did not open")
 	var import_list := dialogs.get_node("ImportDialog/ImportList") as ItemList
-	_expect(import_list.item_count == 2 and import_list.get_item_text(0) == "first_structure" and not import_list.get_item_text(0).contains("Module"), "import dialog did not present generic IDs only")
+	_expect(import_list.item_count == 2, "import dialog did not present both document formats")
+	_expect(import_list.get_item_text(0) == "first_structure — Generic Structure", "import dialog did not label its generic structure")
+	_expect(import_list.get_item_text(1) == "second_module — Level Module", "import dialog did not label its Level Module")
 	import_list.select(1)
 	dialogs._on_import_confirmed()
 	_expect(_import_requests == [second_entry], "import dialog did not emit the selected entry")
@@ -117,7 +136,7 @@ func _test_workflow_state() -> void:
 	workflow.complete_exit()
 	_expect(workflow.request_import(), "import command did not open its dialog")
 	var import_list := dialogs.get_node("ImportDialog/ImportList") as ItemList
-	_expect(import_list.item_count == 1 and import_list.get_item_text(0) == "workflow_structure", "import command did not list the exported generic resource")
+	_expect(import_list.item_count == 1 and import_list.get_item_text(0) == "workflow_structure — Generic Structure", "import command did not list the typed generic resource")
 	dialogs._on_import_confirmed()
 	_expect(_draft_entries.size() == 2 and workflow._draft == _draft_entries[1], "import command did not publish its restored draft")
 	_expect(workflow._draft.is_bound() and not workflow._draft.is_dirty() and workflow._draft.get_cell(Vector3i(1, 0, 0)) == BlockId.Type.DIRT, "imported workflow draft changed binding, cleanliness, or cells")
@@ -130,6 +149,27 @@ func _test_workflow_state() -> void:
 	_expect(workflow.request_exit(), "dirty draft did not reopen discard confirmation")
 	dialogs._on_discard_confirmed()
 	_expect(_exit_request_count == 2 and workflow.has_active_draft(), "discard confirmation changed ownership before exit completion")
+	workflow.complete_exit()
+	_expect(workflow.request_new(), "Level Module command did not open the new dialog")
+	var format := dialogs.get_node("NewDialog/Fields/Format") as OptionButton
+	format.select(1)
+	dialogs._on_format_selected(1)
+	dialogs._on_new_confirmed()
+	_expect(_draft_entries.size() == 3 and workflow._draft == _draft_entries[2], "Level Module command did not publish its draft")
+	_expect(workflow._draft.get_format() == StructureDraft.Format.LEVEL_MODULE and workflow._draft.get_size() == Vector3i(7, 4, 7), "workflow changed the selected Level Module format or default dimensions")
+	_expect(workflow._draft.try_place_block(Vector3i.ZERO, BlockId.Type.STONE).succeeded, "Level Module export fixture edit failed")
+	_expect(workflow.request_export(), "Level Module export did not request an ID")
+	(dialogs.get_node("ExportDialog/Fields/Identifier") as LineEdit).text = "workflow_module"
+	dialogs._on_export_confirmed()
+	var module_path := repository_root.path_join("workflow_module.tres")
+	var module_resource := ResourceLoader.load(module_path, "", ResourceLoader.CACHE_MODE_IGNORE)
+	_expect(module_resource is LevelModuleDefinition, "Level Module workflow export did not create a LevelModuleDefinition")
+	if module_resource is LevelModuleDefinition:
+		var module := module_resource as LevelModuleDefinition
+		_expect(module.module_id == &"workflow_module" and module.size == Vector3i(7, 4, 7), "Level Module workflow export changed its ID or dimensions")
+	_expect(workflow._draft.is_bound() and not workflow._draft.is_dirty(), "Level Module workflow export did not bind and clean its draft")
+	dialogs.close_active()
+	_expect(workflow.request_exit() and _exit_request_count == 3, "clean Level Module draft did not exit exactly once")
 	workflow.complete_exit()
 	workflow.queue_free()
 	dialogs.queue_free()
@@ -158,6 +198,7 @@ func _cleanup_directory(path: String) -> void:
 func _reset_records() -> void:
 	_draft_entries.clear()
 	_exit_request_count = 0
+	_new_formats.clear()
 	_new_requests.clear()
 	_import_requests.clear()
 	_export_requests.clear()
@@ -171,7 +212,8 @@ func _on_designer_entry_requested(draft: StructureDraft) -> void:
 func _on_designer_exit_requested() -> void:
 	_exit_request_count += 1
 
-func _on_new_draft_requested(size: Vector3i) -> void:
+func _on_new_draft_requested(format: StructureDraft.Format, size: Vector3i) -> void:
+	_new_formats.append(format)
 	_new_requests.append(size)
 
 func _on_import_requested(entry: StructureFileEntry) -> void:

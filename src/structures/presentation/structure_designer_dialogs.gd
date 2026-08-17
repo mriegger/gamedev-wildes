@@ -2,13 +2,14 @@ extends CanvasLayer
 class_name StructureDesignerDialogs
 
 signal open_state_changed(open: bool)
-signal new_draft_requested(size: Vector3i)
+signal new_draft_requested(format: StructureDraft.Format, size: Vector3i)
 signal import_requested(entry: StructureFileEntry)
 signal export_id_requested(identifier: StringName)
 signal overwrite_confirmed
 signal discard_confirmed
 
 @onready var _new_dialog: ConfirmationDialog = $NewDialog
+@onready var _format: OptionButton = $NewDialog/Fields/Format
 @onready var _length: SpinBox = $NewDialog/Fields/LengthRow/Length
 @onready var _width: SpinBox = $NewDialog/Fields/WidthRow/Width
 @onready var _height: SpinBox = $NewDialog/Fields/HeightRow/Height
@@ -24,6 +25,9 @@ var _active: Window
 var _entries: Array[StructureFileEntry] = []
 
 func _ready() -> void:
+	_format.add_item("Generic Structure", StructureDraft.Format.GENERIC_STRUCTURE)
+	_format.add_item("Level Module", StructureDraft.Format.LEVEL_MODULE)
+	_format.item_selected.connect(_on_format_selected)
 	_new_dialog.confirmed.connect(_on_new_confirmed)
 	_import_dialog.confirmed.connect(_on_import_confirmed)
 	_export_dialog.confirmed.connect(_on_export_confirmed)
@@ -33,12 +37,13 @@ func _ready() -> void:
 	for dialog in [_new_dialog, _import_dialog, _export_dialog, _overwrite_dialog, _discard_dialog, _message_dialog]:
 		dialog.canceled.connect(_on_dialog_closed)
 		dialog.close_requested.connect(_on_dialog_closed)
-	_set_dimensions(StructureDefinition.DEFAULT_SIZE, StructureDefinition.MAX_EXTENT)
+	_on_format_selected(0)
 
 func show_new_dialog() -> bool:
 	if is_open():
 		return false
-	_set_dimensions(StructureDefinition.DEFAULT_SIZE, StructureDefinition.MAX_EXTENT)
+	_format.select(0)
+	_on_format_selected(0)
 	_show(_new_dialog)
 	return true
 
@@ -48,7 +53,8 @@ func show_import_dialog(entries: Array[StructureFileEntry]) -> bool:
 	_entries.assign(entries)
 	_import_list.clear()
 	for entry in _entries:
-		_import_list.add_item(String(entry.identifier))
+		var type_label := "Generic Structure" if entry.format == StructureDraft.Format.GENERIC_STRUCTURE else "Level Module"
+		_import_list.add_item("%s — %s" % [entry.identifier, type_label])
 	if not _entries.is_empty():
 		_import_list.select(0)
 	_show(_import_dialog)
@@ -101,15 +107,23 @@ func _set_dimensions(size: Vector3i, maximum: Vector3i) -> void:
 	_width.value = size.z
 	_height.value = size.y
 
+func _on_format_selected(index: int) -> void:
+	var format := _format.get_item_id(index) as StructureDraft.Format
+	if format == StructureDraft.Format.GENERIC_STRUCTURE:
+		_set_dimensions(StructureDefinition.DEFAULT_SIZE, StructureDefinition.MAX_EXTENT)
+	else:
+		_set_dimensions(StructureDraft.DEFAULT_LEVEL_MODULE_SIZE, LevelDefinition.HARD_MAX_EXTENT)
+
 func _show(dialog: Window) -> void:
 	_active = dialog
 	dialog.popup_centered()
 	open_state_changed.emit(true)
 
 func _on_new_confirmed() -> void:
+	var format := _format.get_selected_id() as StructureDraft.Format
 	var size := Vector3i(int(_length.value), int(_height.value), int(_width.value))
 	_finish_dialog()
-	new_draft_requested.emit(size)
+	new_draft_requested.emit(format, size)
 
 func _on_import_confirmed() -> void:
 	var selected := _import_list.get_selected_items()

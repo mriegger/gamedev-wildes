@@ -10,15 +10,22 @@ script = ExtResource("1_dialogs")
 [node name="NewDialog" type="ConfirmationDialog" parent="."]
 title = "Buildable Plot Size"
 initial_position = 2
-size = Vector2i(420, 270)
+size = Vector2i(420, 330)
 ok_button_text = "Create"
 
 [node name="Fields" type="VBoxContainer" parent="NewDialog"]
 offset_left = 16.0
 offset_top = 16.0
 offset_right = 404.0
-offset_bottom = 190.0
+offset_bottom = 250.0
 theme_override_constants/separation = 12
+
+[node name="FormatLabel" type="Label" parent="NewDialog/Fields"]
+layout_mode = 2
+text = "Document Type"
+
+[node name="Format" type="OptionButton" parent="NewDialog/Fields"]
+layout_mode = 2
 
 [node name="LengthRow" type="HBoxContainer" parent="NewDialog/Fields"]
 layout_mode = 2
