@@ -32,8 +32,8 @@ func _test_dialog_contracts() -> void:
 	var height := dialogs.get_node("NewDialog/Fields/HeightRow/Height") as SpinBox
 	_expect(dialogs.show_new_dialog(), "new dialog did not open")
 	_expect((dialogs.get_node("NewDialog") as ConfirmationDialog).title == "Buildable Plot Size", "new dialog title changed")
-	_expect(Vector3i(int(length.value), int(height.value), int(width.value)) == StructureDraft.DEFAULT_SIZE, "dialog defaults changed")
-	_expect(Vector3i(int(length.max_value), int(height.max_value), int(width.max_value)) == StructureDraft.MAX_EXTENT, "dialog limits changed")
+	_expect(Vector3i(int(length.value), int(height.value), int(width.value)) == StructureDefinition.DEFAULT_SIZE, "dialog defaults changed")
+	_expect(Vector3i(int(length.max_value), int(height.max_value), int(width.max_value)) == StructureDefinition.MAX_EXTENT, "dialog limits changed")
 	length.value = 11
 	width.value = 13
 	height.value = 7

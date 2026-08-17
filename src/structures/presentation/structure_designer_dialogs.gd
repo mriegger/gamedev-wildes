@@ -19,12 +19,12 @@ func _ready() -> void:
 	for dialog in [_new_dialog, _discard_dialog]:
 		dialog.canceled.connect(_on_dialog_closed)
 		dialog.close_requested.connect(_on_dialog_closed)
-	_set_dimensions(StructureDraft.DEFAULT_SIZE, StructureDraft.MAX_EXTENT)
+	_set_dimensions(StructureDefinition.DEFAULT_SIZE, StructureDefinition.MAX_EXTENT)
 
 func show_new_dialog() -> bool:
 	if is_open():
 		return false
-	_set_dimensions(StructureDraft.DEFAULT_SIZE, StructureDraft.MAX_EXTENT)
+	_set_dimensions(StructureDefinition.DEFAULT_SIZE, StructureDefinition.MAX_EXTENT)
 	_show(_new_dialog)
 	return true
 

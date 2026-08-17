@@ -7,6 +7,7 @@ func _init() -> void:
 	_test_block_and_torch_transactions()
 	_test_indexed_torch_transactions()
 	_test_copied_queries()
+	_test_restore_and_binding()
 	_test_bounded_chunk_queries()
 	if _failures.is_empty():
 		print("STRUCTURE_DRAFT PASS")
@@ -18,10 +19,10 @@ func _init() -> void:
 
 func _test_size_contract() -> void:
 	_expect(StructureDraft.create() != null, "default draft creation failed")
-	_expect(StructureDraft.create().get_size() == StructureDraft.DEFAULT_SIZE, "default draft size changed")
-	_expect(StructureDraft.is_valid_size(Vector3i(64, 64, 64)), "maximum draft size was rejected")
-	_expect(not StructureDraft.is_valid_size(Vector3i(65, 1, 1)), "oversized draft axis was accepted")
-	_expect(not StructureDraft.is_valid_size(Vector3i.ZERO), "zero draft size was accepted")
+	_expect(StructureDraft.create().get_size() == StructureDefinition.DEFAULT_SIZE, "default draft size changed")
+	_expect(StructureDefinition.is_valid_size(Vector3i(64, 64, 64)), "maximum draft size was rejected")
+	_expect(not StructureDefinition.is_valid_size(Vector3i(65, 1, 1)), "oversized draft axis was accepted")
+	_expect(not StructureDefinition.is_valid_size(Vector3i.ZERO), "zero draft size was accepted")
 	_expect(StructureDraft.create(Vector3i(65, 1, 1)) == null, "invalid draft size was created")
 
 func _test_block_and_torch_transactions() -> void:
@@ -85,12 +86,38 @@ func _test_copied_queries() -> void:
 	placement.added_torches[0].cell = Vector3i.ZERO
 	_expect(draft.has_torch(torch_cell), "change result exposed mutable draft torch state")
 
+func _test_restore_and_binding() -> void:
+	var definition := StructureDefinition.new()
+	definition.format_version = StructureDefinition.CURRENT_FORMAT_VERSION
+	definition.structure_id = &"restored_structure"
+	definition.size = Vector3i(2, 2, 2)
+	definition.cells.resize(8)
+	definition.cells.fill(StructureCell.AIR)
+	definition.cells[StructureCell.index_of(Vector3i.ZERO, definition.size)] = BlockId.Type.STONE
+	var torch := StructureTorchDefinition.new()
+	torch.cell = Vector3i(1, 0, 0)
+	torch.support_direction = Vector3i.LEFT
+	definition.torches.append(torch)
+	var source_path := ProjectSettings.globalize_path("res://../restored_structure.tres").simplify_path()
+	var draft := StructureDraft.restore(definition, source_path)
+	_expect(draft != null and draft.is_bound() and not draft.is_dirty(), "valid definition did not restore as a clean bound draft")
+	if draft == null:
+		return
+	_expect(draft.get_identifier() == definition.structure_id and draft.get_source_path() == source_path, "restored binding changed its ID or source path")
+	definition.cells[0] = BlockId.Type.DIRT
+	definition.torches[0].cell = Vector3i.ZERO
+	_expect(draft.get_cell(Vector3i.ZERO) == BlockId.Type.STONE and draft.has_torch(Vector3i(1, 0, 0)), "restored draft retained mutable definition state")
+	_expect(draft.try_remove_torch(Vector3i(1, 0, 0)).succeeded and draft.is_dirty(), "restored draft edit did not become dirty")
+	_expect(not draft.accept_export(&"renamed_structure", source_path), "bound draft accepted a renamed ID")
+	_expect(not draft.accept_export(&"restored_structure", source_path.get_base_dir().path_join("other.tres")), "bound draft accepted another source path")
+	_expect(draft.accept_export(&"restored_structure", source_path) and not draft.is_dirty(), "bound draft did not accept its own export")
+
 func _test_bounded_chunk_queries() -> void:
 	var draft := StructureDraft.create(Vector3i(64, 64, 64))
 	var interior_chunk := Vector3i.ONE
 	var copied := draft.copy_cells_for_chunk(interior_chunk, 16)
 	_expect(copied.size() == 18 * 18 * 18, "interior chunk query did not copy its exact one-cell halo")
-	_expect(copied.size() < StructureDraft.MAX_CELL_COUNT, "chunk query copied the full maximum plot")
+	_expect(copied.size() < StructureDefinition.MAX_CELL_COUNT, "chunk query copied the full maximum plot")
 	var inside := Vector3i(16, 16, 16)
 	var halo := Vector3i(15, 15, 15)
 	_expect(copied.has(inside) and copied.has(halo), "chunk query omitted owner or halo cells")

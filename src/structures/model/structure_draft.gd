@@ -1,35 +1,36 @@
 extends RefCounted
 class_name StructureDraft
 
-const DEFAULT_SIZE: Vector3i = Vector3i(16, 16, 16)
-const MAX_EXTENT: Vector3i = Vector3i(64, 64, 64)
-const MAX_CELL_COUNT: int = 262144
-
 var _size: Vector3i
 var _cells: PackedInt32Array
 var _torches_by_cell: Dictionary = {}
 var _torch_cells_by_support: Dictionary = {}
+var _identifier: StringName
+var _source_path: String
 var _dirty: bool
 
 func _init(p_size: Vector3i, p_cells: PackedInt32Array) -> void:
-	assert(is_valid_size(p_size))
+	assert(StructureDefinition.is_valid_size(p_size))
 	assert(p_cells.size() == p_size.x * p_size.y * p_size.z)
 	for value in p_cells:
 		assert(StructureCell.is_generic_valid(value))
 	_size = p_size
 	_cells = p_cells.duplicate()
 
-static func create(size: Vector3i = DEFAULT_SIZE) -> StructureDraft:
-	if not is_valid_size(size):
+static func create(size: Vector3i = StructureDefinition.DEFAULT_SIZE) -> StructureDraft:
+	if not StructureDefinition.is_valid_size(size):
 		return null
 	return StructureDraft.new(size, _air_cells(size))
 
-static func is_valid_size(value: Vector3i) -> bool:
-	if value.x <= 0 or value.y <= 0 or value.z <= 0:
-		return false
-	if value.x > MAX_EXTENT.x or value.y > MAX_EXTENT.y or value.z > MAX_EXTENT.z:
-		return false
-	return value.x * value.y * value.z <= MAX_CELL_COUNT
+static func restore(definition: StructureDefinition, source_path: String) -> StructureDraft:
+	if definition == null or not definition.validate() or not source_path.is_absolute_path():
+		return null
+	var draft := StructureDraft.new(definition.size, definition.cells)
+	draft._identifier = definition.structure_id
+	draft._source_path = source_path.simplify_path()
+	for torch in definition.torches:
+		draft._add_torch(_copy_torch(torch))
+	return draft
 
 func get_size() -> Vector3i:
 	return _size
@@ -80,8 +81,23 @@ func get_torches() -> Array[StructureTorchDefinition]:
 func has_torch(cell: Vector3i) -> bool:
 	return _torches_by_cell.has(cell)
 
+func get_identifier() -> StringName:
+	return _identifier
+
+func get_source_path() -> String:
+	return _source_path
+
+func is_bound() -> bool:
+	return not _identifier.is_empty() and not _source_path.is_empty()
+
 func is_dirty() -> bool:
 	return _dirty
+
+func is_empty() -> bool:
+	for value in _cells:
+		if StructureCell.is_structure_solid(value):
+			return false
+	return true
 
 func can_place_block(cell: Vector3i, block_id: int) -> bool:
 	if not is_in_bounds(cell) or not StructureCell.is_structure_solid(block_id):
@@ -125,6 +141,17 @@ func try_remove_torch(cell: Vector3i) -> StructureDraftChange:
 		return StructureDraftChange.reject()
 	_remove_torch(cell)
 	return _commit_change([], [], [cell])
+
+func accept_export(identifier: StringName, source_path: String) -> bool:
+	var simplified_path := source_path.simplify_path()
+	if not StructureDefinition.is_valid_id(identifier) or not simplified_path.is_absolute_path():
+		return false
+	if is_bound() and (_identifier != identifier or _source_path != simplified_path):
+		return false
+	_identifier = identifier
+	_source_path = simplified_path
+	_dirty = false
+	return true
 
 func _commit_change(
 	changed_cells: Array[Vector3i],
