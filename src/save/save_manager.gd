@@ -3,7 +3,7 @@ class_name SaveManager
 
 const SAVE_DIR: String = "user://saves"
 const SLOT_COUNT: int = 3
-const CURRENT_SAVE_VERSION: int = 6
+const CURRENT_SAVE_VERSION: int = 7
 const MINIMUM_MIGRATABLE_SAVE_VERSION: int = 4
 
 static func ensure_save_dir() -> void:
@@ -81,6 +81,7 @@ static func create_new_world(slot_id: int, seed_value: int, world_name: String) 
 		"inventory": null,
 		"playtime_seconds": 0,
 		"time_of_day": 6.0,
+		"pumpkin_patch": null,
 	}
 
 	_save_dict_to_file(slot_id, data)
@@ -188,6 +189,8 @@ static func load_slot(slot_id: int) -> Dictionary:
 		info["player_stats"] = null
 	if not info.has("item_proficiency"):
 		info["item_proficiency"] = {}
+	if not info.has("pumpkin_patch"):
+		info["pumpkin_patch"] = {"present": false}
 	return info
 
 static func _migrate_save_data(data: Dictionary) -> bool:
@@ -204,6 +207,9 @@ static func _migrate_save_data(data: Dictionary) -> bool:
 				if not _migrate_inventory_socket_data(migrated):
 					return false
 				version = 6
+			6:
+				migrated["pumpkin_patch"] = {"present": false}
+				version = 7
 			_:
 				return false
 		migrated["version"] = version
@@ -239,7 +245,7 @@ static func _migrate_inventory_socket_data(data: Dictionary) -> bool:
 			encoded_stack["socketed_rune_ids"] = []
 	return true
 
-static func save_world_state(slot_id: int, current_data: Dictionary, voxel_model: VoxelWorld, persisted_player_position: Vector3, player_stats: ActorStats, inventory: InventoryModel, item_proficiency: ItemProficiency, extra_seconds: float, time_of_day: float) -> bool:
+static func save_world_state(slot_id: int, current_data: Dictionary, voxel_model: VoxelWorld, persisted_player_position: Vector3, player_stats: ActorStats, inventory: InventoryModel, item_proficiency: ItemProficiency, pumpkin_patch: Dictionary, extra_seconds: float, time_of_day: float) -> bool:
 	assert(item_proficiency != null)
 	var updated = current_data.duplicate()
 	updated["last_played"] = _now_str()
@@ -257,6 +263,7 @@ static func save_world_state(slot_id: int, current_data: Dictionary, voxel_model
 	updated["player_stats"] = player_stats.snapshot_progression()
 	updated["inventory"] = inventory.to_dict()
 	updated["item_proficiency"] = item_proficiency.snapshot()
+	updated["pumpkin_patch"] = pumpkin_patch.duplicate(true)
 	updated["time_of_day"] = fmod(time_of_day, GameClock.HOURS_PER_DAY)
 
 	if not _save_dict_to_file(slot_id, updated):

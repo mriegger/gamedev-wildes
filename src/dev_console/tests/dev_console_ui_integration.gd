@@ -7,18 +7,22 @@ var _console: DevConsole
 var _inventory: InventoryModel
 var _structure_calls: Array[StringName] = []
 var _structure_commands_accepted: bool = false
+var _pumpkin_patch: PumpkinPatchCoordinator
 
 func _init() -> void:
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
 	_inventory = InventoryModel.new(item_catalog)
+	_pumpkin_patch = PumpkinPatchCoordinator.new()
 	_console = (load("res://dev_console/presentation/dev_console.tscn") as PackedScene).instantiate() as DevConsole
 	root.add_child(_console)
+	root.add_child(_pumpkin_patch)
 
 func _process(_delta: float) -> bool:
 	_frame += 1
 	if _phase == 0 and _frame == 2:
 		_console.setup(
 			_inventory,
+			_pumpkin_patch,
 			Callable(self, "_handle_structure_command").bind(&"new"),
 			Callable(self, "_handle_structure_command").bind(&"import"),
 			Callable(self, "_handle_structure_command").bind(&"export"),

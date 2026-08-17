@@ -150,7 +150,10 @@ IDs and display names are accepted; equipment IDs remain material-qualified, suc
 `copper_pickaxe` and `copper_sword`. Structure construction uses `dev structure new`,
 `dev structure import`, `dev structure export`, and `dev structure exit`. Press `/` again or
 `Esc` to close the console without opening the pause menu. Copper can be mined from deposits or
-added directly with `spawn copper <count>`.
+added directly with `spawn copper <count>`. New worlds contain one seeded 5×4 pumpkin patch 35–45
+blocks from the initial player spawn. Its location, growth states, and rotations persist in the
+save. The
+`spawn pumpkin_patch` command relocates and randomizes that persistent patch near the player.
 
 **UI & saves.** Backpack and hotbar stacks can be split by scrolling while left-dragging. The side
 panel includes a trash drop target that accepts backpack, hotbar, and equipped items. A
@@ -226,6 +229,7 @@ from Godot primitive meshes. Visual effects use project-authored shaders.
 | `src/assets/audio/sfx/tools/impactGeneric_light_*.ogg` (4 files) | [Impact Sounds](https://kenney.nl/assets/impact-sounds) – Kenney (https://kenney.nl) – generic light impacts for tool and crafting clunks | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `src/assets/audio/sfx/farming/tilling/bookFlip*.ogg` (3 files) | [RPG Audio](https://kenney.nl/assets/rpg-audio) – Kenney | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `src/assets/models/tools/hoe/copper_hoe.glb`, `Textures/colormap.png`, and derived inventory icon | [Survival Kit](https://kenney.nl/assets/survival-kit) – Kenney | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
+| `src/assets/models/farming/pumpkin/*.fbx` (6 files) | [Ultimate Crops](https://quaternius.com/packs/ultimatecrops.html) – Quaternius | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `src/assets/textures/blocks/farmland_dry.png` | Codex, prompted by Michael Riegger | Project-authored |
 | `src/assets/textures/effects/mining/dirt_*.png` (3 files) | [Particle Pack](https://kenney.nl/assets/particle-pack) – Kenney | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
 
