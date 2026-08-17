@@ -24,3 +24,7 @@ volume_db = -6.0
 [node name="TillPlayer" type="AudioStreamPlayer" parent="."]
 bus = &"SFX"
 volume_db = -8.0
+
+[node name="HarvestPlayer" type="AudioStreamPlayer" parent="."]
+bus = &"SFX"
+volume_db = -8.0

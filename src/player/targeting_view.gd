@@ -171,6 +171,21 @@ func _update_selection_visuals():
 		if breaking_block:
 			breaking_block.visible = false
 		return
+	if interactor.has_harvest_target():
+		if selection_box == null or not selection_box.is_inside_tree():
+			return
+		var target_bounds := interactor.get_harvest_target_bounds()
+		selection_box.visible = true
+		selection_box.global_position = target_bounds.get_center()
+		selection_box.scale = target_bounds.size / 1.025
+		var pulse := 0.85 + 0.15 * sin(Time.get_ticks_msec() / 1000.0 * 1.8 * TAU)
+		if interactor.can_harvest_target():
+			_selection_edge_mat.albedo_color = Color(1.0, 0.92, 0.08, 0.95 * pulse)
+		else:
+			_selection_edge_mat.albedo_color = Color(1.0, 0.32, 0.22, 0.55 * pulse)
+		ghost_block.visible = false
+		breaking_block.visible = false
+		return
 	var selected_block_id = interactor.get_selected_block_id()
 	var has_block = selected_block_id != null
 	var primary_holding = Input.is_action_pressed("primary_use")

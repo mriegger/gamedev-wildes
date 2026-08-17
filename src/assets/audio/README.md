@@ -13,6 +13,7 @@
 - `footsteps/water/Footstep_Water_*.wav` provides eight water footstep variations.
 - `sfx/tools/impactGeneric_light_*.ogg` provides four terrain-impact variations.
 - `sfx/farming/tilling/bookFlip*.ogg` provides three soil-tilling variations.
+- `sfx/farming/harvesting/pop_generic_*_CC0.wav` provides three crop-harvesting variations.
 
 ## Attribution
 
@@ -29,3 +30,4 @@
 | `footsteps/water/Footstep_Water_00.wav` to `Footstep_Water_07.wav` (8 files) | Water footsteps – by Morten Barfod Søegaard, Little Robot Sound Factory – https://littlerobotsoundfactory.com/ | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | Original source: Little Robot Sound Factory. No changes beyond file placement. |
 | `sfx/tools/impactGeneric_light_001.ogg` to `impactGeneric_light_004.ogg` (4 files) | [Impact Sounds](https://kenney.nl/assets/impact-sounds) – Kenney (https://kenney.nl) – generic light impacts | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) | No attribution required per CC0, but documented here. Used for mining/melee terrain clunks and crafting impacts. Original source: Kenney.nl |
 | `sfx/farming/tilling/bookFlip1.ogg` to `bookFlip3.ogg` (3 files) | [RPG Audio](https://kenney.nl/assets/rpg-audio) – Kenney | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) | Attribution, license notice, and source credit are not required under CC0; documented here for provenance. Verified 2026-07-30 against the canonical Game Dev Assets list. |
+| `sfx/farming/harvesting/pop_generic_01_CC0.wav` to `pop_generic_03_CC0.wav` (3 files) | Generic pop by Muse Spark | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) | Procedurally generated harvest feedback. Attribution is not legally required; documented here for provenance. |

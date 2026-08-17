@@ -51,6 +51,8 @@ var crafting_coordinator: CraftingCoordinator
 var combat_progression_coordinator: CombatProgressionCoordinator
 var rune_socketing_coordinator: RuneSocketingCoordinator
 var rune_effect_coordinator: RuneEffectCoordinator
+var interaction_prompt_coordinator: InteractionPromptCoordinator
+var pumpkin_harvest_coordinator: PumpkinHarvestCoordinator
 var input_buffer: InputBuffer = InputBuffer.new()
 var settings: GameSettings
 
@@ -140,9 +142,11 @@ func _ready():
 	world.generation_progress.connect(_on_generation_progress)
 	await world.initialize_world_async()
 	world.generation_progress.disconnect(_on_generation_progress)
+	interaction_prompt_coordinator = InteractionPromptCoordinator.new()
+	interaction_prompt_coordinator.setup(hud, Callable(self, "_is_gameplay_ui_blocked"))
 	if not _setup_gameplay():
 		return
-	level_interaction.setup(player, hud, Callable(self, "_is_gameplay_ui_blocked"))
+	level_interaction.setup(player, interaction_prompt_coordinator)
 	level_interaction.interaction_requested.connect(_on_level_interaction_requested)
 	_setup_level_entrance()
 	game_session.save_status_changed.connect(_show_save_status)
@@ -216,6 +220,11 @@ func _setup_gameplay() -> bool:
 	if not pumpkin_patch.setup(world.voxel_model, player, world.config.seed_value, _save_data.get("pumpkin_patch", null)):
 		push_error("[Game] Pumpkin patch state is invalid or no suitable new-world placement exists")
 		return false
+	pumpkin_harvest_coordinator = PumpkinHarvestCoordinator.new()
+	if not pumpkin_harvest_coordinator.setup(pumpkin_patch, inventory_model, interaction_prompt_coordinator):
+		push_error("[Game] Pumpkin harvest content is invalid")
+		return false
+	player.setup_harvesting(pumpkin_harvest_coordinator)
 	camera_rig.reset_panel_obstruction()
 	game_environment.sky_color_changed.connect(world.update_water_tint)
 	game_environment.start_clock()

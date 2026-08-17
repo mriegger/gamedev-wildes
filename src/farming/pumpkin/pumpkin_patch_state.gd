@@ -2,6 +2,10 @@ extends RefCounted
 class_name PumpkinPatchState
 
 const TILE_COUNT: int = 20
+const SNAPSHOT_VERSION: int = 2
+const LEGACY_SNAPSHOT_VERSION: int = 1
+const LEGACY_HARVESTED_STATE_ID: StringName = &"harvested"
+const EMPTY_STATE_ID: StringName = &"empty"
 
 var _present: bool = false
 var _origin: Vector3i
@@ -22,6 +26,16 @@ func get_quarter_turns(tile_index: int) -> int:
 	assert(tile_index >= 0 and tile_index < _quarter_turns.size())
 	return _quarter_turns[tile_index]
 
+func transition_growth_state(tile_index: int, expected_state_id: StringName, result_state_id: StringName, valid_state_ids: Array[StringName]) -> bool:
+	if not _present or tile_index < 0 or tile_index >= _growth_state_ids.size():
+		return false
+	if expected_state_id.is_empty() or result_state_id not in valid_state_ids:
+		return false
+	if _growth_state_ids[tile_index] != expected_state_id:
+		return false
+	_growth_state_ids[tile_index] = result_state_id
+	return true
+
 func replace(origin: Vector3i, growth_state_ids: Array[StringName], quarter_turns: PackedInt32Array, valid_state_ids: Array[StringName]) -> bool:
 	if not _values_are_valid(origin, growth_state_ids, quarter_turns, valid_state_ids):
 		return false
@@ -32,17 +46,25 @@ func replace(origin: Vector3i, growth_state_ids: Array[StringName], quarter_turn
 	return true
 
 func restore(encoded: Dictionary, valid_state_ids: Array[StringName]) -> bool:
+	var raw_version = encoded.get("version", LEGACY_SNAPSHOT_VERSION)
+	if not raw_version is int and not raw_version is float:
+		return false
+	var version := int(raw_version)
+	if raw_version != version or version not in [LEGACY_SNAPSHOT_VERSION, SNAPSHOT_VERSION]:
+		return false
 	if encoded.get("present", null) is not bool:
 		return false
 	if not bool(encoded["present"]):
-		if encoded.size() != 1:
+		var absent_size := 1 if version == LEGACY_SNAPSHOT_VERSION else 2
+		if encoded.size() != absent_size:
 			return false
 		_present = false
 		_origin = Vector3i.ZERO
 		_growth_state_ids.clear()
 		_quarter_turns.clear()
 		return true
-	if encoded.size() != 4:
+	var present_size := 4 if version == LEGACY_SNAPSHOT_VERSION else 5
+	if encoded.size() != present_size:
 		return false
 	var raw_origin = encoded.get("origin", null)
 	var raw_state_ids = encoded.get("growth_state_ids", null)
@@ -58,7 +80,10 @@ func restore(encoded: Dictionary, valid_state_ids: Array[StringName]) -> bool:
 	for raw_state_id in raw_state_ids:
 		if not raw_state_id is String:
 			return false
-		state_ids.append(StringName(raw_state_id))
+		var state_id := StringName(raw_state_id)
+		if version == LEGACY_SNAPSHOT_VERSION and state_id == LEGACY_HARVESTED_STATE_ID:
+			state_id = EMPTY_STATE_ID
+		state_ids.append(state_id)
 	var rotations := PackedInt32Array()
 	for raw_quarter_turns_value in raw_quarter_turns:
 		if not raw_quarter_turns_value is float and not raw_quarter_turns_value is int:
@@ -71,7 +96,7 @@ func restore(encoded: Dictionary, valid_state_ids: Array[StringName]) -> bool:
 
 func snapshot() -> Dictionary:
 	if not _present:
-		return {"present": false}
+		return {"version": SNAPSHOT_VERSION, "present": false}
 	var encoded_state_ids: Array[String] = []
 	for state_id in _growth_state_ids:
 		encoded_state_ids.append(String(state_id))
@@ -79,6 +104,7 @@ func snapshot() -> Dictionary:
 	for quarter_turns in _quarter_turns:
 		encoded_quarter_turns.append(quarter_turns)
 	return {
+		"version": SNAPSHOT_VERSION,
 		"present": true,
 		"origin": [_origin.x, _origin.y, _origin.z],
 		"growth_state_ids": encoded_state_ids,
@@ -88,10 +114,8 @@ func snapshot() -> Dictionary:
 func _values_are_valid(origin: Vector3i, growth_state_ids: Array[StringName], quarter_turns: PackedInt32Array, valid_state_ids: Array[StringName]) -> bool:
 	if origin.y < 0 or growth_state_ids.size() != TILE_COUNT or quarter_turns.size() != TILE_COUNT:
 		return false
-	var represented_state_ids: Dictionary[StringName, bool] = {}
 	for index in range(TILE_COUNT):
 		var state_id := growth_state_ids[index]
 		if state_id not in valid_state_ids or quarter_turns[index] < 0 or quarter_turns[index] > 3:
 			return false
-		represented_state_ids[state_id] = true
-	return represented_state_ids.size() == valid_state_ids.size()
+	return true

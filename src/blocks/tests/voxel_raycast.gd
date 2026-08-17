@@ -123,6 +123,7 @@ func _test_exact_reach() -> void:
 	space.add_solid(Vector3i(6, 0, 0))
 	var exact_hit := VoxelRaycast.cast(space, Vector3(0.5, 0.5, 0.5), Vector3.RIGHT, 5.5)
 	_expect_hit(exact_hit, Vector3i(6, 0, 0), Vector3i(5, 0, 0), Vector3i.LEFT, "exact reach")
+	_expect(is_equal_approx(exact_hit.ray_distance, 5.5), "exact reach reported the wrong ray distance")
 	var short_hit := VoxelRaycast.cast(space, Vector3(0.5, 0.5, 0.5), Vector3.RIGHT, 5.4999)
 	_expect(short_hit == null, "ray shorter than the exact boundary reached its target")
 	var copied_hit := VoxelRaycast.cast(space, Vector3(0.5, 0.5, 0.5), Vector3.RIGHT, 5.5)

@@ -17,6 +17,7 @@ var motor: PlayerMotor = null
 var inventory_model: InventoryModel = null
 var combat: MeleeCombatCoordinator = null
 var entity_runtime: EntityRuntime = null
+var pumpkin_harvest: PumpkinHarvestCoordinator = null
 var _input_buffer: InputBuffer = null
 var _is_setup: bool = false
 
@@ -46,6 +47,7 @@ var _melee_contact_pending: bool = false
 var _melee_ray_origin: Vector3
 var _melee_ray_direction: Vector3
 var _melee_source_item_id: StringName = &""
+var _primary_harvest_latched: bool = false
 
 func setup(p_camera: Camera3D, p_motor: PlayerMotor, p_inventory: InventoryModel, p_input_buffer: InputBuffer, p_combat: MeleeCombatCoordinator, p_entity_runtime: EntityRuntime):
 	assert(p_camera != null)
@@ -76,6 +78,12 @@ func bind_entity_runtime(p_entity_runtime: EntityRuntime) -> void:
 	_clear_active_state()
 	entity_runtime = p_entity_runtime
 
+func setup_harvesting(pumpkin_harvest_coordinator: PumpkinHarvestCoordinator) -> void:
+	assert(_is_setup)
+	assert(pumpkin_harvest_coordinator != null)
+	assert(pumpkin_harvest == null)
+	pumpkin_harvest = pumpkin_harvest_coordinator
+
 func bind_space(p_space: VoxelSpace, p_editable_voxel_world: VoxelWorld = null):
 	assert(_is_setup)
 	assert(p_space != null)
@@ -97,6 +105,9 @@ func _clear_active_state():
 	placement_has = false
 	can_primary_target = false
 	can_place_target = false
+	_primary_harvest_latched = false
+	if pumpkin_harvest != null:
+		pumpkin_harvest.clear_target()
 	_reset_mining()
 	_reset_melee_chain()
 	secondary_use_timer = 0.0
@@ -109,6 +120,9 @@ func cancel_actions():
 	placement_has = false
 	can_primary_target = false
 	can_place_target = false
+	_primary_harvest_latched = false
+	if pumpkin_harvest != null:
+		pumpkin_harvest.clear_target()
 
 func _physics_process(delta):
 	if voxel_space == null or motor == null or camera == null or inventory_model == null or _input_buffer == null:
@@ -121,6 +135,8 @@ func _physics_process(delta):
 		placement_has = false
 		can_primary_target = false
 		can_place_target = false
+		if pumpkin_harvest != null:
+			pumpkin_harvest.clear_target()
 		if is_mining:
 			_reset_mining()
 		_reset_melee_chain()
@@ -142,6 +158,13 @@ func _handle_raycast():
 
 	var max_dist = ray_origin.distance_to(motor.global_position) + reach + 1.0
 	var hit := VoxelRaycast.cast(voxel_space, ray_origin, ray_dir, max_dist)
+	if pumpkin_harvest != null and is_editing_enabled():
+		pumpkin_harvest.update_target(ray_origin, ray_dir, max_dist, motor.global_position, reach)
+		if pumpkin_harvest.has_target() and (hit == null or pumpkin_harvest.get_target_ray_distance() < hit.ray_distance):
+			return
+		pumpkin_harvest.clear_target()
+	elif pumpkin_harvest != null:
+		pumpkin_harvest.clear_target()
 	if hit == null:
 		return
 
@@ -169,7 +192,6 @@ func _handle_raycast():
 	else:
 		placement_has = false
 		can_place_target = false
-
 func _placement_collides_player(p: Vector3i) -> bool:
 	if motor == null:
 		return false
@@ -195,12 +217,26 @@ func _handle_item_actions(delta):
 	melee_chain_input_timer = max(0.0, melee_chain_input_timer - delta)
 	secondary_use_timer -= delta
 	var primary_use_just := _input_buffer.primary_use_just
+	var primary_use_pressed := _input_buffer.primary_use_pressed
 	_input_buffer.primary_use_just = false
+	if _primary_harvest_latched:
+		if primary_use_pressed:
+			primary_use_just = false
+			primary_use_pressed = false
+		else:
+			_primary_harvest_latched = false
+	if primary_use_just and pumpkin_harvest != null and pumpkin_harvest.has_target():
+		pumpkin_harvest.try_harvest_target()
+		_primary_harvest_latched = primary_use_pressed
+		primary_use_just = false
+		primary_use_pressed = false
+		_reset_mining()
+		_reset_melee_chain()
 	var selected_primary := get_selected_primary_action()
 	var selected_mining := selected_primary as MiningActionDefinition
 	var selected_melee := selected_primary as MeleeAttackActionDefinition
 	var selected_tilling := selected_primary as TillingActionDefinition
-	if _input_buffer.primary_use_pressed and target_has and can_primary_target and selected_mining != null:
+	if primary_use_pressed and target_has and can_primary_target and selected_mining != null:
 		if not is_mining:
 			mine_target = target_block
 			mine_target_rev = editable_voxel_world.get_revision(mine_target)
@@ -448,6 +484,16 @@ func get_selected_block_id():
 	if action == null:
 		return null
 	return int(action.block.id)
+
+func has_harvest_target() -> bool:
+	return pumpkin_harvest != null and pumpkin_harvest.has_target()
+
+func can_harvest_target() -> bool:
+	return has_harvest_target() and pumpkin_harvest.can_harvest_target()
+
+func get_harvest_target_bounds() -> AABB:
+	assert(has_harvest_target())
+	return pumpkin_harvest.get_target_bounds()
 
 func get_selected_primary_action() -> ItemActionDefinition:
 	if inventory_model == null:

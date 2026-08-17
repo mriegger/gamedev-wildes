@@ -342,7 +342,9 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	player.bind_space(voxel_world, world, world_spawn, voxel_world)
 	game._location_state = GameplayLocationState.new(doorway_anchor)
 	structure_workflow.setup(structure_dialogs, StructureFileStore.new(ProjectSettings.globalize_path("res://../").simplify_path()))
-	coordinator.setup(player, hud, Callable(game, "_is_gameplay_ui_blocked"))
+	var prompt_coordinator := InteractionPromptCoordinator.new()
+	prompt_coordinator.setup(hud, Callable(game, "_is_gameplay_ui_blocked"))
+	coordinator.setup(player, prompt_coordinator)
 	coordinator.interaction_requested.connect(game._on_level_interaction_requested)
 	var entrance := LevelEntrance.new()
 	entrance.name = "TestLevelEntrance"

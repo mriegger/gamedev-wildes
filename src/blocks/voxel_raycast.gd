@@ -63,7 +63,7 @@ static func cast(voxel_space: VoxelSpace, origin: Vector3, direction: Vector3, m
 				var placement_cell := last_position
 				if voxel_space.is_raycast_solid(placement_cell):
 					placement_cell = current + face_normal
-				return VoxelRaycastHit.new(current, placement_cell, face_normal)
+				return VoxelRaycastHit.new(current, placement_cell, face_normal, traveled)
 		elif not current_is_solid:
 			can_hit = true
 
