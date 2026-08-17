@@ -7,6 +7,7 @@ script = ExtResource("1_behavior")
 roam_speed = 2.4
 gravity = 30.0
 jump_velocity = 7.0
+detection_range = 30.0
 roam_radius = 30.0
 roam_goal_seconds = 4.0
 repath_seconds = 0.5

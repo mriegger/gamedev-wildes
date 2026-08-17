@@ -81,20 +81,20 @@ func _assert_catalog(catalog: EntityCatalog) -> void:
 
 func _spawn_day_population(coordinator: WorldEntityCoordinator, player_position: Vector3) -> Dictionary:
 	for _spawn in range(10):
-		coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, player_position, DAY_TIME)
+		coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), DAY_TIME)
 	var counts := _species_counts(coordinator)
 	_expect(coordinator.get_runtime().get_active_count() == 10, "day population did not reach ten")
 	_expect(counts[&"sheep"] == 6 and counts[&"bird"] == 4 and counts[&"zombie"] == 0 and counts[&"skeleton"] == 0, "day population did not contain six sheep and four birds")
 	var sheep_ids := _species_id_set(coordinator, &"sheep")
 	var day_ids := _runtime_id_set(coordinator)
-	coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, player_position, DAY_TIME)
+	coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), DAY_TIME)
 	_expect(coordinator.get_runtime().get_active_count() == 10, "day population exceeded its species caps")
 	_expect(_runtime_id_set(coordinator) == day_ids, "capped day tick replaced an existing entity")
 	return sheep_ids
 
 func _spawn_night_population(coordinator: WorldEntityCoordinator, player_position: Vector3, sheep_ids: Dictionary) -> Dictionary:
 	for _spawn in range(6):
-		coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, player_position, NIGHT_TIME)
+		coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), NIGHT_TIME)
 	var counts := _species_counts(coordinator)
 	_expect(coordinator.get_runtime().get_active_count() == 12, "night population did not reach twelve")
 	_expect(counts[&"sheep"] == 6 and counts[&"zombie"] == 3 and counts[&"skeleton"] == 3 and counts[&"bird"] == 0, "night population retained birds or did not balance hostile species")
@@ -105,7 +105,7 @@ func _spawn_night_population(coordinator: WorldEntityCoordinator, player_positio
 
 func _respawn_day_birds(coordinator: WorldEntityCoordinator, player_position: Vector3) -> Dictionary:
 	for _spawn in range(4):
-		coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, player_position, DAY_TIME)
+		coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), DAY_TIME)
 	var counts := _species_counts(coordinator)
 	_expect(coordinator.get_runtime().get_active_count() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "returning day did not reach the total population cap")
 	_expect(counts[&"sheep"] == 6 and counts[&"zombie"] == 3 and counts[&"skeleton"] == 3 and counts[&"bird"] == 4, "returning day did not restore four birds")
@@ -145,7 +145,7 @@ func _route_sheep_contact(coordinator: WorldEntityCoordinator, world: VoxelWorld
 	var animation := sheep.animation_driver as SheepAnimationDriver
 	animation.advance(0.01)
 	_expect(animation.get_current_state() == SheepAnimationDriver.HIT, "routed contact did not play sheep hit animation")
-	sheep.tick(0.05, player.global_position, Vector3.ZERO, NavigationSearchBudget.new(1))
+	sheep.tick(0.05, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT), Vector3.ZERO, NavigationSearchBudget.new(1))
 	animation.advance(SheepAnimationDriver.HIT_SECONDS)
 	_expect(animation.get_current_state() == SheepAnimationDriver.FLEE, "sheep animation did not transition from hit to flee")
 	return [combat, player]
@@ -155,12 +155,12 @@ func _assert_cleanup(coordinator: WorldEntityCoordinator, player_position: Vecto
 	_expect(distant_zombie != null, "no zombie was available for distance cleanup")
 	var distant_runtime_id := distant_zombie.runtime_id
 	distant_zombie.global_position = player_position + Vector3(WorldEntityCoordinator.DESPAWN_DISTANCE + 5.0, 0.0, 0.0)
-	coordinator.tick(0.0, player_position, NIGHT_TIME)
+	coordinator.tick(0.0, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), NIGHT_TIME)
 	_expect(coordinator.get_runtime().get_actor(distant_runtime_id) == null, "distant entity was not removed")
 	_expect(coordinator.get_runtime().get_active_count() == 11, "distance cleanup removed the wrong number of entities")
 	_assert_spatial_bound(coordinator, 11)
 	_streaming_enabled = false
-	coordinator.tick(0.0, player_position, NIGHT_TIME)
+	coordinator.tick(0.0, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), NIGHT_TIME)
 	_expect(coordinator.get_runtime().get_active_count() == 0, "unstreamed entities were not removed")
 	_expect(coordinator.get_runtime()._spatial_index.get_entry_count() == 0, "spatial entries survived streaming cleanup")
 	_expect(coordinator.get_runtime()._spatial_index.get_cell_count() == 0, "spatial cells survived streaming cleanup")

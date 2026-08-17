@@ -148,14 +148,14 @@ func _run() -> void:
 	for region_index in range(STREAM_REGIONS.size()):
 		_ready_region = STREAM_REGIONS[region_index]
 		var player_position := _player_position(_ready_region)
-		coordinator.tick(0.0, player_position, DAY_TIME)
+		coordinator.tick(0.0, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), DAY_TIME)
 		_assert_population(coordinator, catalog, player_position, DAY_TIME, "region %d entry" % region_index)
 		_expect(coordinator.get_runtime().get_active_count() == 0, "region %d entry did not clear the previous population" % region_index)
 		await process_frame
 		for cycle in range(CYCLES_PER_REGION):
 			var time_of_day := DAY_TIME if cycle < 10 or cycle >= 16 else NIGHT_TIME
 			coordinator._spawn_elapsed = WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS
-			coordinator.tick(0.0, player_position, time_of_day)
+			coordinator.tick(0.0, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), time_of_day)
 			var context := "region %d cycle %d" % [region_index, cycle]
 			_assert_population(coordinator, catalog, player_position, time_of_day, context)
 			_assert_path_budget(world, catalog, _ready_region, time_of_day, cycle, context)
@@ -165,20 +165,20 @@ func _run() -> void:
 			var cycle := CYCLES_PER_REGION + refill_cycle
 			var time_of_day := DAY_TIME if cycle % 2 == 0 else NIGHT_TIME
 			coordinator._spawn_elapsed = WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS
-			coordinator.tick(0.0, player_position, time_of_day)
+			coordinator.tick(0.0, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), time_of_day)
 			var context := "region %d refill cycle %d" % [region_index, refill_cycle]
 			_assert_population(coordinator, catalog, player_position, time_of_day, context)
 			_assert_path_budget(world, catalog, _ready_region, time_of_day, cycle, context)
 		_expect(coordinator.get_runtime().get_active_count() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "region %d did not reach the total population cap" % region_index)
 		_assert_mixed_night_population(coordinator, catalog, "region %d mixed night" % region_index)
 		for step in range(MIXED_NIGHT_STEPS):
-			coordinator.tick(MIXED_NIGHT_DELTA, player_position, NIGHT_TIME)
+			coordinator.tick(MIXED_NIGHT_DELTA, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), NIGHT_TIME)
 			var context := "region %d mixed night step %d" % [region_index, step]
 			_assert_population(coordinator, catalog, player_position, NIGHT_TIME, context)
 			_assert_mixed_night_population(coordinator, catalog, context)
 		if region_index % 2 == 1:
 			_streaming_enabled = false
-			coordinator.tick(0.0, player_position, NIGHT_TIME)
+			coordinator.tick(0.0, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), NIGHT_TIME)
 			_assert_population(coordinator, catalog, player_position, NIGHT_TIME, "region %d streaming loss" % region_index)
 			_expect(coordinator.get_runtime().get_active_count() == 0, "region %d streaming loss retained actors" % region_index)
 			_streaming_enabled = true
@@ -186,7 +186,7 @@ func _run() -> void:
 
 	_streaming_enabled = false
 	var final_position := _player_position(_ready_region)
-	coordinator.tick(0.0, final_position, NIGHT_TIME)
+	coordinator.tick(0.0, EntityTargetObservation.create(final_position, final_position, Vector3.FORWARD, Vector3.RIGHT), NIGHT_TIME)
 	_assert_population(coordinator, catalog, final_position, NIGHT_TIME, "final streaming loss")
 	_expect(_instance_by_runtime_id.size() == STREAM_REGIONS.size() * CYCLES_PER_REGION, "soak observed %d unique runtime IDs instead of %d" % [_instance_by_runtime_id.size(), STREAM_REGIONS.size() * CYCLES_PER_REGION])
 	coordinator.shutdown()

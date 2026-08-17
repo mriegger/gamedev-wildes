@@ -383,6 +383,11 @@ jobs:
       - uses: ./.github/actions/setup_godot
         with:
           version: "4.7"
+      - name: Run entity target observation tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "ENTITY_TARGET_OBSERVATION PASS" /tmp/entity_target_observation.log -- \
+            godot --headless --path src --script res://tests/entity_target_observation.gd
       - name: Run entity runtime tests
         run: |
           bash .github/scripts/run_godot_check.sh \
@@ -416,6 +421,11 @@ jobs:
           bash .github/scripts/run_godot_check.sh \
             30 "SKELETON_BRAIN PASS" /tmp/skeleton_brain.log -- \
             godot --headless --path src --script res://entities/skeleton/tests/skeleton_brain.gd
+      - name: Run voxel camera occlusion tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "VOXEL_CAMERA_OCCLUSION PASS" /tmp/voxel_camera_occlusion.log -- \
+            godot --headless --path src --script res://entities/skeleton/tests/voxel_camera_occlusion.gd
       - name: Run Skeleton roaming integration
         run: |
           bash .github/scripts/run_godot_check.sh \

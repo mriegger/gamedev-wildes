@@ -69,10 +69,10 @@ func _run() -> void:
 	var prepared_zombie := (coordinator.get_runtime()._prepared_actors[&"zombie"] as Array).back() as ZombieActor
 
 	_ready_calls = 0
-	coordinator.tick(1.0, player_position, 20.0)
+	coordinator.tick(1.0, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
 	_expect(coordinator.get_runtime().get_active_count() == 0, "spawn occurred before the two-second interval")
 	_expect(_ready_calls == 0, "spawn candidates were checked before the interval")
-	coordinator.tick(1.0, player_position, 20.0)
+	coordinator.tick(1.0, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
 	_expect(coordinator.get_runtime().get_active_count() == 0, "rejected spawn cycle created an actor")
 	_expect(_ready_calls == WorldEntityCoordinator.SPAWN_ATTEMPTS, "rejected cycle did not stop after four attempts")
 	_expect_index_bounded(coordinator, "rejected cycle")
@@ -80,12 +80,12 @@ func _run() -> void:
 	_streaming_ready = true
 	var spawned_ids: Array[int] = []
 	var spawn_positions: Array[Vector3] = []
-	coordinator.tick(1.0, player_position, 20.0)
+	coordinator.tick(1.0, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
 	_expect(coordinator.get_runtime().get_active_count() == 0, "spawn interval carried time across a completed cycle")
 	for cycle in range(6):
 		var delta := 1.0 if cycle == 0 else WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS
 		var before_count := coordinator.get_runtime().get_active_count()
-		coordinator.tick(delta, player_position, 20.0)
+		coordinator.tick(delta, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
 		var after_count := coordinator.get_runtime().get_active_count()
 		_expect(after_count == before_count + 1, "cycle %d did not add exactly one zombie" % cycle)
 		for actor in _sorted_actors(coordinator):
@@ -94,7 +94,7 @@ func _run() -> void:
 				spawn_positions.append(actor.global_position)
 		_expect_index_bounded(coordinator, "spawn cycle %d" % cycle)
 
-	coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, player_position, 20.0)
+	coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
 	_expect(coordinator.get_runtime().get_active_count() == 6, "seventh spawn cycle exceeded the six-zombie cap")
 	_expect(is_same(prepared_zombie, coordinator.get_runtime().get_actor(1)), "first zombie was constructed on its spawn frame")
 	var actors_with_paths := 0
@@ -125,19 +125,19 @@ func _run() -> void:
 		var second_separation := coordinator.get_runtime()._get_separation_velocity(actors[1])
 		_expect(first_separation.length() > 0.0 and second_separation.length() > 0.0, "overlapping zombies received no separation")
 		_expect(first_separation.is_equal_approx(-second_separation), "overlapping zombies did not receive opposite separation")
-		coordinator.tick(0.1, overlap_position, 20.0)
+		coordinator.tick(0.1, EntityTargetObservation.create(overlap_position, overlap_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
 		_expect(actors[0].global_position.distance_to(actors[1].global_position) > 0.0, "overlapping zombies did not move apart")
 		_expect_index_bounded(coordinator, "separation update")
 
 		var distance_id := actors[5].runtime_id
 		actors[5].global_position = player_position + Vector3(WorldEntityCoordinator.DESPAWN_DISTANCE + 1.0, 0.0, 0.0)
-		coordinator.tick(0.0, player_position, 20.0)
+		coordinator.tick(0.0, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
 		_expect(coordinator.get_runtime().get_actor(distance_id) == null, "distance despawn retained the actor")
 		_expect(coordinator.get_runtime().get_active_count() == 5, "distance despawn changed the wrong population count")
 		_expect_index_bounded(coordinator, "distance despawn")
 
 		_streaming_ready = false
-		coordinator.tick(0.0, player_position, 20.0)
+		coordinator.tick(0.0, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
 		_expect(coordinator.get_runtime().get_active_count() == 0, "streaming despawn retained active actors")
 		_expect_index_bounded(coordinator, "streaming despawn")
 

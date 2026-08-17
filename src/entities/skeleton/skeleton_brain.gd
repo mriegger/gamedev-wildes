@@ -3,6 +3,8 @@ class_name SkeletonBrain
 
 enum State {
 	ROAM,
+	SEARCH_COVER,
+	HIDE,
 }
 
 var state: State = State.ROAM
@@ -17,7 +19,11 @@ func _init(definition: SkeletonBehaviorDefinition, seed_value: int):
 	_definition = definition
 	_rng.seed = seed_value
 
-func advance(delta: float, self_position: Vector3):
+func advance(delta: float, self_position: Vector3, player_position: Vector3, current_position_hidden: bool):
+	if is_player_in_detection_range(self_position, player_position):
+		state = State.HIDE if current_position_hidden else State.SEARCH_COVER
+		return
+	state = State.ROAM
 	_roam_goal_remaining = maxf(_roam_goal_remaining - delta, 0.0)
 	if _roam_goal_remaining <= 0.0:
 		_select_roam_goal(self_position)
@@ -25,8 +31,13 @@ func advance(delta: float, self_position: Vector3):
 func get_movement_goal() -> Vector3:
 	return _movement_goal
 
+func is_player_in_detection_range(self_position: Vector3, player_position: Vector3) -> bool:
+	var horizontal_offset := Vector2(player_position.x - self_position.x, player_position.z - self_position.z)
+	return horizontal_offset.length_squared() <= _definition.detection_range * _definition.detection_range
+
 func reject_movement_goal(self_position: Vector3):
-	_select_roam_goal(self_position)
+	if state == State.ROAM:
+		_select_roam_goal(self_position)
 
 func _select_roam_goal(self_position: Vector3):
 	var angle := _rng.randf_range(0.0, TAU)

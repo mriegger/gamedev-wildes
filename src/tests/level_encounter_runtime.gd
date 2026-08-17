@@ -344,7 +344,7 @@ func _run() -> void:
 		_expect(roaming_actor != null, "second wave had no actor to test cross-room ownership")
 		if roaming_actor != null:
 			roaming_actor.global_position = unblocked_player_position as Vector3
-			runtime.tick(0.0, player.global_position)
+			runtime.tick(0.0, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT))
 			var roaming_defeat := runtime.try_apply_damage(roaming_runtime_id, 10000.0)
 			_expect(roaming_defeat != null and roaming_defeat.defeated, "roaming encounter enemy defeat failed")
 			_expect(progress.active_entity_ids.size() == first_wave_active_before, "roaming enemy defeat was charged to its physical room")

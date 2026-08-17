@@ -383,7 +383,7 @@ func _test_zombie_actor_movement_and_animation() -> void:
 	var search_budget := NavigationSearchBudget.new(1)
 	for _step in range(5):
 		search_budget.reset()
-		actor.tick(0.1, target, Vector3.ZERO, search_budget)
+		actor.tick(0.1, EntityTargetObservation.create(target, target, Vector3.FORWARD, Vector3.RIGHT), Vector3.ZERO, search_budget)
 	actor.animation_driver.advance(0.1)
 	_expect(actor.brain.state == GroundMeleeEnemyBrain.State.CHASE, "zombie actor did not enter chase")
 	_expect(actor.global_position.distance_to(target) < initial_distance, "zombie actor did not move toward its target")
@@ -395,7 +395,7 @@ func _test_zombie_actor_movement_and_animation() -> void:
 	actor.global_position = target - Vector3(1.0, 0.0, 0.0)
 	actor.velocity = Vector3.ZERO
 	search_budget.reset()
-	actor.tick(0.01, target, Vector3.ZERO, search_budget)
+	actor.tick(0.01, EntityTargetObservation.create(target, target, Vector3.FORWARD, Vector3.RIGHT), Vector3.ZERO, search_budget)
 	actor.animation_driver.advance(0.0)
 	_expect(actor.brain.state == GroundMeleeEnemyBrain.State.ATTACK, "zombie actor did not enter attack at melee range")
 	var animation := actor.animation_driver as ZombieAnimationDriver

@@ -3,6 +3,7 @@ class_name SkeletonAnimationDriver
 
 const IDLE: StringName = &"Idle"
 const WALK: StringName = &"Walk"
+const HIDE: StringName = &"Hide"
 const HIT: StringName = &"Hit"
 const DEATH: StringName = &"Death"
 const HIT_SECONDS: float = 0.18
@@ -13,6 +14,7 @@ var _animation_state: ActorAnimationState = ActorAnimationState.new()
 var _current_state: StringName = IDLE
 var _hit_elapsed: float = HIT_SECONDS
 var _hit_direction: Vector3 = Vector3.BACK
+var _hiding: bool = false
 var _dying: bool = false
 var _death_elapsed: float = 0.0
 var _previous_yaw: float = 0.0
@@ -36,6 +38,9 @@ func setup(p_actor: Node3D):
 
 func play_attack(duration: float):
 	assert(duration > 0.0)
+
+func set_hiding(hiding: bool):
+	_hiding = hiding
 
 func play_hit(local_hit_direction: Vector3 = Vector3.BACK):
 	if _dying:
@@ -80,6 +85,7 @@ func advance(delta: float):
 	animator.advance_animation(delta)
 	_advance_hit_timer(delta)
 	_apply_hit_pose()
+	_apply_hide_pose()
 	_select_state(planar_speed)
 
 func get_current_state() -> StringName:
@@ -102,6 +108,13 @@ func _apply_hit_pose():
 	)
 	animator.scale = _visual_origin_scale * Vector3(1.0 + 0.04 * weight, 1.0 - 0.07 * weight, 1.0 + 0.04 * weight)
 
+func _apply_hide_pose():
+	if not _hiding:
+		return
+	animator.position += Vector3(0.0, -0.16, -0.04)
+	animator.rotation += Vector3(deg_to_rad(9.0), 0.0, 0.0)
+	animator.scale *= Vector3(1.06, 0.86, 1.06)
+
 func _apply_death_pose():
 	var progress := smoothstep(0.0, 1.0, _death_elapsed / DEATH_SECONDS)
 	var fold := smoothstep(0.0, 1.0, minf(progress / 0.45, 1.0))
@@ -113,6 +126,8 @@ func _apply_death_pose():
 func _select_state(planar_speed: float):
 	if _hit_elapsed < HIT_SECONDS:
 		_current_state = HIT
+	elif _hiding:
+		_current_state = HIDE
 	elif planar_speed > 0.1:
 		_current_state = WALK
 	else:

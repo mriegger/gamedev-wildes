@@ -228,7 +228,7 @@ func _test_coordinator_retirement(catalog: EntityCatalog, world: VoxelWorld) -> 
 	get_root().add_child(coordinator)
 	coordinator.setup(catalog, world, 7021, _position_ready)
 	var player_position := Vector3(0.5, FEET_Y, 0.5)
-	coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, player_position, 20.0)
+	coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
 	var actors := coordinator.get_runtime().get_active_actors()
 	_expect(actors.size() == 1, "coordinator did not spawn the fade test zombie")
 	if actors.is_empty():
@@ -238,12 +238,12 @@ func _test_coordinator_retirement(catalog: EntityCatalog, world: VoxelWorld) -> 
 	var actor := actors[0]
 	var runtime_id := actor.runtime_id
 	var fade_in_step := actor.visual_fader.fade_in_seconds * 0.25
-	coordinator.tick(fade_in_step, player_position, 20.0)
+	coordinator.tick(fade_in_step, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
 	var interrupted_opacity := actor.get_visual_opacity()
 	_expect(interrupted_opacity > 0.0 and interrupted_opacity < 1.0, "interrupted fade setup was not partially visible")
 	var former_bounds := actor.get_world_bounds()
 	actor.global_position = player_position + Vector3(WorldEntityCoordinator.DESPAWN_DISTANCE + 1.0, 0.0, 0.0)
-	coordinator.tick(0.0, player_position, 20.0)
+	coordinator.tick(0.0, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
 	_expect(coordinator.get_runtime().get_actor(runtime_id) == null and coordinator.get_runtime().get_active_count() == 0, "retiring actor remained active")
 	_expect(coordinator.get_runtime()._spatial_index.get_entry_count() == 0, "retiring actor remained spatially indexed")
 	_expect(not coordinator.get_runtime().has_entity_overlap(former_bounds), "retiring actor still blocked placement")
@@ -251,9 +251,9 @@ func _test_coordinator_retirement(catalog: EntityCatalog, world: VoxelWorld) -> 
 	_expect(is_equal_approx(actor.get_visual_opacity(), interrupted_opacity), "interrupted fade-out changed opacity at transition")
 	_expect(not actor.death_poof.has_played(), "ordinary coordinator despawn emitted a death poof")
 	var fade_out_seconds := actor.visual_fader.fade_out_seconds
-	coordinator.tick(fade_out_seconds * 0.5, player_position, 20.0)
+	coordinator.tick(fade_out_seconds * 0.5, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
 	_expect(actor.get_visual_opacity() < interrupted_opacity and actor.get_visual_opacity() > 0.0, "retiring visual did not fade gradually")
-	coordinator.tick(fade_out_seconds * 0.5, player_position, 20.0)
+	coordinator.tick(fade_out_seconds * 0.5, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
 	_expect(coordinator.get_runtime()._retiring.is_empty(), "completed retiring visual remained owned")
 	await process_frame
 	_expect(not is_instance_valid(actor), "completed retiring visual was not freed")
@@ -269,10 +269,10 @@ func _test_retiring_bound_and_population_independence(catalog: EntityCatalog, wo
 	var player_position := Vector3(0.5, FEET_Y, 0.5)
 	for _spawn in range(6):
 		coordinator._spawn_elapsed = WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS
-		coordinator.tick(0.0, player_position, 20.0)
+		coordinator.tick(0.0, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
 	for _spawn in range(10):
 		coordinator._spawn_elapsed = WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS
-		coordinator.tick(0.0, player_position, 12.0)
+		coordinator.tick(0.0, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), 12.0)
 	_expect(coordinator.get_runtime().get_active_count() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "retiring-cap setup did not reach the active entity limit")
 	var actors := coordinator.get_runtime().get_active_actors()
 	actors.sort_custom(func(left: EntityActor, right: EntityActor) -> bool: return left.runtime_id < right.runtime_id)
@@ -285,11 +285,11 @@ func _test_retiring_bound_and_population_independence(catalog: EntityCatalog, wo
 	_expect(coordinator.get_runtime().get_active_count() == 0, "mass retirement retained active entities")
 	_expect(coordinator.get_runtime()._retiring.size() == WorldEntityCoordinator.MAX_RETIRING_VISUALS, "mass retirement did not fill the visual bound")
 	coordinator._spawn_elapsed = WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS - 0.1
-	coordinator.tick(0.1, player_position, 20.0)
+	coordinator.tick(0.1, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
 	_expect(coordinator.get_runtime().get_active_count() == 1, "retiring visuals suppressed an available population slot")
 	var replacement := coordinator.get_runtime().get_active_actors()[0]
 	replacement.global_position = player_position + Vector3(WorldEntityCoordinator.DESPAWN_DISTANCE + 1.0, 0.0, 0.0)
-	coordinator.tick(0.0, player_position, 20.0)
+	coordinator.tick(0.0, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
 	_expect(coordinator.get_runtime()._retiring.size() == WorldEntityCoordinator.MAX_RETIRING_VISUALS, "thirteenth retirement exceeded the visual bound")
 	_expect(not coordinator.get_runtime()._retiring.has(first_retired_runtime_id), "retiring bound did not evict the earliest retained visual")
 	_expect(coordinator.get_runtime()._retiring.has(newest_at_capacity.runtime_id), "retiring bound evicted by runtime ID instead of retirement age")

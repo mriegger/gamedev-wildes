@@ -20,6 +20,7 @@ var _encounter_state: LevelEncounterState
 var _entity_runtime: EntityRuntime
 var _encounter_coordinator: LevelEncounterCoordinator
 var _player: PlayerMotor
+var _camera: Camera3D
 var _level_environment: Environment
 
 func _ready() -> void:
@@ -101,7 +102,14 @@ func _physics_process(delta: float) -> void:
 	if _player == null:
 		return
 	_encounter_coordinator.tick()
-	_entity_runtime.tick(delta, _player.global_position)
+	var observation := EntityTargetObservation.from_camera_values(
+		_player.global_position,
+		_camera.global_transform,
+		_camera.h_offset,
+		_camera.v_offset,
+	)
+	assert(observation != null)
+	_entity_runtime.tick(delta, observation)
 
 func activate() -> void:
 	assert(_state != null)
@@ -146,11 +154,12 @@ func get_return_door_position() -> Vector3:
 func get_entity_runtime() -> EntityRuntime:
 	return _entity_runtime
 
-func set_player_ref(player: Node3D) -> void:
+func set_player_context(player: PlayerMotor, camera: Camera3D) -> void:
+	assert(player != null and camera != null)
 	_torch_renderer.set_player_ref(player)
-	if player is PlayerMotor:
-		_player = player as PlayerMotor
-		_encounter_coordinator.set_player(_player)
+	_player = player
+	_camera = camera
+	_encounter_coordinator.set_player(_player)
 
 func apply_settings(settings: GameSettings) -> void:
 	_torch_renderer.set_max_shadow_torches(settings.dungeon_torch_shadow_count)

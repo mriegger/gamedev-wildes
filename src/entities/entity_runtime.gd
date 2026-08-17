@@ -64,11 +64,11 @@ func setup(
 	_suspended = false
 	visible = true
 
-func tick(delta: float, player_position: Vector3) -> void:
+func tick(delta: float, observation: EntityTargetObservation) -> void:
 	assert(_catalog != null and _voxel_space != null)
 	assert(not _suspended)
 	assert(is_finite(delta) and delta >= 0.0)
-	assert(player_position.is_finite())
+	assert(observation != null and observation.validate())
 	_prepare_one_actor()
 	_advance_retiring(delta)
 	_navigation_search_budget.reset()
@@ -89,7 +89,7 @@ func tick(delta: float, player_position: Vector3) -> void:
 		if actor == null:
 			continue
 		actor.advance_visual_fade(delta)
-		actor.tick(delta, player_position, separation_velocities[runtime_id] as Vector3, _navigation_search_budget)
+		actor.tick(delta, observation, separation_velocities[runtime_id] as Vector3, _navigation_search_budget)
 		if get_actor(runtime_id) == actor:
 			_spatial_index.upsert(actor.runtime_id, actor.global_position, actor.get_world_bounds())
 

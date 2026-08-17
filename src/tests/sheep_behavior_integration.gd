@@ -93,10 +93,10 @@ func _test_actor_movement_and_animation() -> SheepActor:
 	_expect(animation.get_current_state() == SheepAnimationDriver.IDLE, "sheep animation did not start idle")
 
 	var initial_position := actor.global_position
-	actor.tick(behavior.idle_seconds, Vector3.ZERO, Vector3.ZERO, search_budget)
+	actor.tick(behavior.idle_seconds, EntityTargetObservation.create(Vector3.ZERO, Vector3.ZERO, Vector3.FORWARD, Vector3.RIGHT), Vector3.ZERO, search_budget)
 	for _step in range(4):
 		search_budget.reset()
-		actor.tick(0.1, Vector3.ZERO, Vector3.ZERO, search_budget)
+		actor.tick(0.1, EntityTargetObservation.create(Vector3.ZERO, Vector3.ZERO, Vector3.FORWARD, Vector3.RIGHT), Vector3.ZERO, search_budget)
 	animation.advance(0.1)
 	_expect(actor.brain.state == SheepBrain.State.WANDER, "sheep actor did not enter wander")
 	_expect(actor.global_position.distance_squared_to(initial_position) > 0.01, "sheep did not move across flat terrain")
@@ -111,7 +111,7 @@ func _test_actor_movement_and_animation() -> SheepActor:
 	_expect(animation.get_current_state() == SheepAnimationDriver.HIT, "sheep animation did not enter hit reaction")
 	_expect((animation._rig_root.position - animation._rig_origin_position).dot(Vector3.RIGHT) > 0.0, "sheep recoil moved toward the attacker")
 	search_budget.reset()
-	actor.tick(0.1, Vector3.ZERO, Vector3.ZERO, search_budget)
+	actor.tick(0.1, EntityTargetObservation.create(Vector3.ZERO, Vector3.ZERO, Vector3.FORWARD, Vector3.RIGHT), Vector3.ZERO, search_budget)
 	animation.advance(SheepAnimationDriver.HIT_SECONDS)
 	_expect(actor.global_position.x > pre_flee_position.x, "sheep did not move along its flee direction")
 	_expect(is_equal_approx(Vector2(actor.velocity.x, actor.velocity.z).length(), behavior.flee_speed), "sheep did not use flee speed")

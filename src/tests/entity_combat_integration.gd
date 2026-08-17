@@ -102,9 +102,9 @@ func _make_combat_fixture(world: VoxelWorld, zombie_count: int, sheep_count: int
 	combat.melee_outcome_committed.connect(coordinator.get_runtime().record_melee_outcome)
 	combat.melee_outcome_committed.connect(_on_melee_contact)
 	for _index in range(sheep_count):
-		coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, player.global_position, 12.0)
+		coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT), 12.0)
 	for _index in range(zombie_count):
-		coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, player.global_position, 20.0)
+		coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
 	return {
 		"camera": camera,
 		"combat": combat,
@@ -213,8 +213,8 @@ func _run() -> void:
 	enemy_feedback.setup(combat, camera)
 	enemy_feedback.bind_runtime(coordinator.get_runtime())
 	player_stats.health_depleted.connect(_on_player_defeated)
-	coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, player.global_position, 20.0)
-	coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, player.global_position, 20.0)
+	coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
+	coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
 	var actors := coordinator.get_runtime().get_active_actors()
 	actors.sort_custom(func(a: EntityActor, b: EntityActor): return a.runtime_id < b.runtime_id)
 	_expect(actors.size() == 2, "coordinator did not spawn two test zombies")
@@ -250,7 +250,7 @@ func _run() -> void:
 
 	near_actor.global_position = Vector3(0.5, FEET_Y, -1.0)
 	far_actor.global_position = Vector3(0.5, FEET_Y, -1.8)
-	coordinator.tick(0.0, player.global_position, 20.0)
+	coordinator.tick(0.0, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
 	var sweep_target_ids := combat.acquire_player_targets(ray_origin, ray_direction, sword_profile)
 	_expect(sweep_target_ids == [near_actor.runtime_id, far_actor.runtime_id], "sword sweep did not lock both aligned actors")
 	var contact_count_before := _contacts.size()
@@ -282,14 +282,14 @@ func _run() -> void:
 
 	near_actor.global_position = Vector3(0.5, FEET_Y, -4.0)
 	far_actor.global_position = Vector3(0.5, FEET_Y, -5.0)
-	coordinator.tick(0.0, player.global_position, 20.0)
+	coordinator.tick(0.0, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
 	_expect(combat.acquire_player_targets(ray_origin, ray_direction, sword_profile).is_empty(), "cursor targeting accepted an out-of-range actor")
 	_expect(is_equal_approx(coordinator.get_runtime().get_current_hp(near_actor.runtime_id), 63.0), "out-of-range targeting changed entity HP")
 	_expect(is_equal_approx(coordinator.get_runtime().get_current_hp(far_actor.runtime_id), 64.0), "out-of-range targeting changed another entity's HP")
 
 	near_actor.global_position = Vector3(0.5, FEET_Y, -1.0)
 	far_actor.global_position = Vector3(4.5, FEET_Y, -1.8)
-	coordinator.tick(0.0, player.global_position, 20.0)
+	coordinator.tick(0.0, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
 	world.restore_block_edits({Vector3i(0, int(FEET_Y), 0): BlockId.Type.STONE}, {})
 	_expect(combat.acquire_player_targets(ray_origin, ray_direction, sword_profile).is_empty(), "cursor targeting ignored terrain occlusion")
 	_expect(is_equal_approx(coordinator.get_runtime().get_current_hp(near_actor.runtime_id), 63.0), "occluded targeting changed entity HP")
@@ -304,10 +304,10 @@ func _run() -> void:
 	_expect(is_equal_approx(coordinator.get_runtime().get_current_hp(near_actor.runtime_id), 63.0), "moved target took damage from a rejected contact")
 
 	near_actor.global_position = Vector3(0.5, FEET_Y, -1.0)
-	coordinator.tick(0.0, player.global_position, 20.0)
+	coordinator.tick(0.0, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
 	var despawned_target_ids := combat.acquire_player_targets(ray_origin, ray_direction, sword_profile)
 	near_actor.global_position = Vector3(WorldEntityCoordinator.DESPAWN_DISTANCE + 1.0, FEET_Y, 0.5)
-	coordinator.tick(0.0, player.global_position, 20.0)
+	coordinator.tick(0.0, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
 	_expect(not combat.try_commit_player_contacts(despawned_target_ids, ray_origin, ray_direction, sword_profile, &"copper_sword"), "contact committed after the locked target despawned")
 	_expect(_contacts.size() == contact_count_before, "despawned target emitted a contact")
 	_expect(is_equal_approx(coordinator.get_runtime().get_current_hp(far_actor.runtime_id), 64.0), "stale contact changed another entity's HP")
@@ -467,7 +467,7 @@ func _run() -> void:
 	_expect(not zombie_actor._melee_contact_pending, "lethal damage did not cancel the zombie's pending attack")
 	_expect(zombie_actor._zombie_animation.get_current_state() == ZombieAnimationDriver.DEATH, "lethal damage did not start the zombie death pose")
 	coordinator._spawn_elapsed = WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS
-	coordinator.tick(0.0, player.global_position, 20.0)
+	coordinator.tick(0.0, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
 	_expect(coordinator.get_runtime().get_active_count() == 1, "death presentation suppressed immediate replacement spawning")
 	_expect(coordinator.get_runtime()._retiring.has(target_id), "replacement spawning discarded the zombie death presentation")
 	contact_count_before = _contacts.size()
@@ -475,9 +475,9 @@ func _run() -> void:
 	_expect(_contacts.size() == contact_count_before, "retiring zombie completed a pending attack")
 	_expect(is_equal_approx(player_stats.current_hp, player_hp_before), "retiring zombie dealt pending attack damage")
 	var fade_out_seconds := zombie_actor.visual_fader.fade_out_seconds
-	coordinator.tick(ZombieAnimationDriver.DEATH_SECONDS, player.global_position, 20.0)
+	coordinator.tick(ZombieAnimationDriver.DEATH_SECONDS, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
 	_expect(coordinator.get_runtime()._retiring.has(target_id), "zombie retirement ended before fade-out")
-	coordinator.tick(fade_out_seconds + 0.01, player.global_position, 20.0)
+	coordinator.tick(fade_out_seconds + 0.01, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
 	await process_frame
 	_expect(not coordinator.get_runtime()._retiring.has(target_id), "completed zombie fade remained coordinator-owned")
 	_expect(retiring_actor.get_ref() == null, "completed zombie fade did not free its actor")
@@ -558,7 +558,7 @@ func _test_sheep_damage(world: VoxelWorld, sword_profile: MeleeAttackProfile) ->
 	var progression := CombatProgressionCoordinator.new()
 	progression.setup(player_stats, inventory, load("res://entities/entity_catalog.tres") as EntityCatalog, item_proficiency)
 	combat.melee_outcome_committed.connect(progression.record_melee_outcome)
-	coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, player.global_position, 12.0)
+	coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT), 12.0)
 	var actors := coordinator.get_runtime().get_active_actors()
 	_expect(actors.size() == 1 and actors[0] is SheepActor, "sheep damage test did not spawn one sheep")
 	if actors.size() != 1:
@@ -594,9 +594,9 @@ func _test_sheep_damage(world: VoxelWorld, sword_profile: MeleeAttackProfile) ->
 	_expect(coordinator.get_runtime()._spatial_index.get_entry_count() == 0, "dead sheep remained in the spatial index")
 	_expect(coordinator.get_runtime()._retiring.has(target_id), "dead sheep did not enter death retirement")
 	_expect(sheep._sheep_animation.get_current_state() == SheepAnimationDriver.DEATH, "lethal damage did not start the sheep death pose")
-	coordinator.tick(SheepAnimationDriver.DEATH_SECONDS, player.global_position, 12.0)
+	coordinator.tick(SheepAnimationDriver.DEATH_SECONDS, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT), 12.0)
 	_expect(coordinator.get_runtime()._retiring.has(target_id), "sheep retirement ended before fade-out")
-	coordinator.tick(sheep.visual_fader.fade_out_seconds + 0.01, player.global_position, 12.0)
+	coordinator.tick(sheep.visual_fader.fade_out_seconds + 0.01, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT), 12.0)
 	await process_frame
 	_expect(not coordinator.get_runtime()._retiring.has(target_id), "completed sheep fade remained coordinator-owned")
 	_expect(retiring_actor.get_ref() == null, "completed sheep fade did not free its actor")
@@ -621,7 +621,7 @@ func _test_zero_degree_compatibility(world: VoxelWorld, sword_profile: MeleeAtta
 	var ray_direction := Vector3.FORWARD
 	actors[0].global_position = Vector3(player.global_position.x, FEET_Y, player.global_position.z - 1.0)
 	actors[1].global_position = Vector3(player.global_position.x, FEET_Y, player.global_position.z - 2.0)
-	coordinator.tick(0.0, player.global_position, 20.0)
+	coordinator.tick(0.0, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
 	var locked_ids := combat.acquire_player_targets(ray_origin, ray_direction, profile)
 	_expect(locked_ids == [actors[0].runtime_id], "zero-degree ray did not lock only the nearest aligned actor")
 	var contact_count_before := _contacts.size()
@@ -631,10 +631,10 @@ func _test_zero_degree_compatibility(world: VoxelWorld, sword_profile: MeleeAtta
 	_expect(is_equal_approx(coordinator.get_runtime().get_current_hp(actors[1].runtime_id), 80.0), "zero-degree contact damaged the farther actor")
 	actors[0].global_position = Vector3(player.global_position.x, FEET_Y, player.global_position.z - 4.0)
 	actors[1].global_position = Vector3(player.global_position.x + 1.0, FEET_Y, player.global_position.z - 1.0)
-	coordinator.tick(0.0, player.global_position, 20.0)
+	coordinator.tick(0.0, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
 	_expect(combat.acquire_player_targets(ray_origin, ray_direction, profile).is_empty(), "zero-degree ray locked an off-ray actor inside the would-be arc")
 	actors[0].global_position = Vector3(player.global_position.x, FEET_Y, player.global_position.z - 1.0)
-	coordinator.tick(0.0, player.global_position, 20.0)
+	coordinator.tick(0.0, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
 	locked_ids = combat.acquire_player_targets(ray_origin, ray_direction, profile)
 	actors[0].global_position = Vector3(player.global_position.x + 1.0, FEET_Y, player.global_position.z - 1.0)
 	contact_count_before = _contacts.size()
@@ -686,7 +686,7 @@ func _test_sweep_geometry(world: VoxelWorld, sword_profile: MeleeAttackProfile) 
 	var angles: Array[float] = [0.0, 60.0, -60.0, 61.0, -61.0, 180.0]
 	for index in range(actors.size()):
 		_place_at_angle(actors[index], player.global_position, angles[index], 1.7)
-	coordinator.tick(0.0, player.global_position, 20.0)
+	coordinator.tick(0.0, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
 	var forward_ray := _orthographic_ray(player, Vector2(0.0, -1.0))
 	var forward_ids := combat.acquire_player_targets(forward_ray[0], forward_ray[1], sword_profile)
 	var expected_forward: Array[int] = [actors[0].runtime_id, actors[1].runtime_id, actors[2].runtime_id]
@@ -724,7 +724,7 @@ func _test_full_circle_directionless(world: VoxelWorld, sword_profile: MeleeAtta
 	var angles: Array[float] = [0.0, 90.0, 180.0, -90.0]
 	for index in range(actors.size()):
 		_place_at_angle(actors[index], player.global_position, angles[index], 1.5)
-	coordinator.tick(0.0, player.global_position, 20.0)
+	coordinator.tick(0.0, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
 	var player_center := player.global_position + Vector3.UP * (player.player_height * 0.5)
 	var ray_origin := player_center + Vector3.UP * 5.0
 	var ray_direction := Vector3.DOWN
@@ -751,7 +751,7 @@ func _test_overlapping_and_vertical_geometry(world: VoxelWorld, sword_profile: M
 	var player_center := player.global_position + Vector3.UP * (player.player_height * 0.5)
 	actors[0].global_position = player.global_position + Vector3(0.2, 0.0, 0.0)
 	actors[1].global_position = player.global_position + Vector3.UP * 1.2
-	coordinator.tick(0.0, player.global_position, 20.0)
+	coordinator.tick(0.0, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
 	_expect(actors[0].get_world_bounds().has_point(player_center), "overlap target bounds did not contain the player center")
 	var overlap_offset := actors[0].get_world_bounds().get_center() - player_center
 	var vertical_offset := actors[1].get_world_bounds().get_center() - player_center
@@ -780,7 +780,7 @@ func _test_sweep_reach_and_locking(world: VoxelWorld, sword_profile: MeleeAttack
 	var exact_center_distance := sword_profile.reach + half_width
 	actors[0].global_position = Vector3(player.global_position.x, FEET_Y, player.global_position.z - exact_center_distance)
 	actors[1].global_position = Vector3(player.global_position.x, FEET_Y, player.global_position.z - exact_center_distance - 0.01)
-	coordinator.tick(0.0, player.global_position, 20.0)
+	coordinator.tick(0.0, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
 	var ray := _orthographic_ray(player, Vector2(0.0, -1.0))
 	var locked_ids := combat.acquire_player_targets(ray[0], ray[1], sword_profile)
 	_expect(locked_ids == [actors[0].runtime_id], "sweep did not distinguish exact reach from beyond reach")
@@ -797,7 +797,7 @@ func _test_sweep_reach_and_locking(world: VoxelWorld, sword_profile: MeleeAttack
 	_expect(is_equal_approx(coordinator.get_runtime().get_current_hp(actors[1].runtime_id), 80.0), "post-start entrant was hit without being locked")
 	actors[0].global_position = Vector3(player.global_position.x, FEET_Y, player.global_position.z - exact_center_distance)
 	actors[1].global_position = Vector3(player.global_position.x, FEET_Y, player.global_position.z + 1.0)
-	coordinator.tick(0.0, player.global_position, 20.0)
+	coordinator.tick(0.0, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
 	locked_ids = combat.acquire_player_targets(ray[0], ray[1], sword_profile)
 	player.global_position += Vector3.RIGHT * 4.0
 	contact_count_before = _contacts.size()
@@ -820,14 +820,14 @@ func _test_independent_contact_revalidation(world: VoxelWorld, sword_profile: Me
 	_place_at_angle(actors[2], player.global_position, 30.0, 2.0)
 	_place_at_angle(actors[3], player.global_position, -30.0, 2.0)
 	_place_at_angle(actors[4], player.global_position, 180.0, 1.5)
-	coordinator.tick(0.0, player.global_position, 20.0)
+	coordinator.tick(0.0, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
 	var ray := _orthographic_ray(player, Vector2(0.0, -1.0))
 	var locked_ids := combat.acquire_player_targets(ray[0], ray[1], sword_profile)
 	var expected_locked: Array[int] = [actors[0].runtime_id, actors[1].runtime_id, actors[2].runtime_id, actors[3].runtime_id]
 	_expect(locked_ids == expected_locked, "revalidation setup did not lock its four initial targets")
 	var stale_runtime_id := actors[0].runtime_id
 	actors[0].global_position = player.global_position + Vector3(WorldEntityCoordinator.DESPAWN_DISTANCE + 1.0, 0.0, 0.0)
-	coordinator.tick(0.0, player.global_position, 20.0)
+	coordinator.tick(0.0, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
 	actors[1].global_position = Vector3(player.global_position.x, FEET_Y, player.global_position.z + 1.5)
 	actors[4].global_position = Vector3(player.global_position.x, FEET_Y, player.global_position.z - 1.0)
 	world.restore_block_edits({Vector3i(1, int(FEET_Y), -1): BlockId.Type.STONE}, {})
@@ -873,7 +873,7 @@ func _test_uncapped_mixed_damage(world: VoxelWorld, sword_profile: MeleeAttackPr
 	var distances: Array[float] = [1.2, 1.6, 2.0, 1.2, 1.6, 2.0]
 	for index in range(actors.size()):
 		_place_at_angle(actors[index], player.global_position, angles[index], distances[index])
-	coordinator.tick(0.0, player.global_position, 20.0)
+	coordinator.tick(0.0, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
 	var ray := _orthographic_ray(player, Vector2(0.0, -1.0))
 	var locked_ids := combat.acquire_player_targets(ray[0], ray[1], sword_profile)
 	_expect(locked_ids == _active_ids(actors), "uncapped sweep did not lock all six mixed targets")
@@ -937,7 +937,7 @@ func _test_multi_target_interactor_timing(world: VoxelWorld, sword_profile: Mele
 		return
 	_place_at_angle(actors[0], player.global_position, -25.0, 1.5)
 	_place_at_angle(actors[1], player.global_position, 25.0, 1.5)
-	coordinator.tick(0.0, player.global_position, 20.0)
+	coordinator.tick(0.0, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
 	var ray := _orthographic_ray(player, Vector2(0.0, -1.0))
 	var locked_ids := combat.acquire_player_targets(ray[0], ray[1], sword_profile)
 	_expect(locked_ids == _active_ids(actors), "interactor timing did not lock both targets")

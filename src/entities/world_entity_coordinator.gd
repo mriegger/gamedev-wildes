@@ -48,13 +48,15 @@ func setup(p_catalog: EntityCatalog, p_voxel_world: VoxelWorld, world_seed: int,
 		),
 	)
 
-func tick(delta: float, player_position: Vector3, time_of_day: float) -> void:
+func tick(delta: float, observation: EntityTargetObservation, time_of_day: float) -> void:
 	assert(_catalog != null and _voxel_world != null and _runtime != null)
 	assert(not _suspended)
+	assert(observation != null and observation.validate())
+	var player_position := observation.player_position
 	var is_day := DayNightProfile.is_day_time(time_of_day)
 	_despawn_distant(player_position)
 	_despawn_outside_phase(is_day)
-	_runtime.tick(delta, player_position)
+	_runtime.tick(delta, observation)
 	_spawn_elapsed += delta
 	if _spawn_elapsed < SPAWN_INTERVAL_SECONDS:
 		return

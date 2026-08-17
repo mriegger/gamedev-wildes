@@ -38,8 +38,10 @@ func setup(
 	_vision_sample_remaining = VISION_SAMPLE_INTERVAL_SECONDS * float(runtime_id % VISION_PHASE_COUNT) / float(VISION_PHASE_COUNT)
 
 
-func tick(delta: float, player_position: Vector3, separation_velocity: Vector3, navigation_search_budget: NavigationSearchBudget):
+func tick(delta: float, observation: EntityTargetObservation, separation_velocity: Vector3, navigation_search_budget: NavigationSearchBudget):
 	assert(brain != null and voxel_space != null)
+	assert(observation != null and observation.validate())
+	var player_position := observation.player_position
 	_advance_melee_contact(delta)
 	var visible := _sample_player_visibility(delta, player_position)
 	var previous_state := brain.state

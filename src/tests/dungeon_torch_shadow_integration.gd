@@ -203,10 +203,12 @@ func _test_level_runtime_setting(block_catalog: BlockCatalog) -> void:
 		settings,
 		load("res://entities/entity_catalog.tres") as EntityCatalog,
 	)
-	var player := Node3D.new()
+	var player := (load("res://player/player.tscn") as PackedScene).instantiate() as PlayerMotor
+	var camera := Camera3D.new()
 	root.add_child(player)
+	root.add_child(camera)
 	player.global_position = runtime.get_spawn_position()
-	runtime.set_player_ref(player)
+	runtime.set_player_context(player, camera)
 	var renderer := runtime.get_node("Torches") as TorchRenderer
 	_advance(renderer, 2.0)
 	_expect(_enabled_count(renderer) == SHADOW_LIMIT, "LevelRuntime used the overworld torch shadow setting")
@@ -216,6 +218,7 @@ func _test_level_runtime_setting(block_catalog: BlockCatalog) -> void:
 	_advance(renderer, 1.0)
 	_expect(_enabled_count(renderer) == 0, "LevelRuntime live settings used the overworld torch shadow setting")
 	player.queue_free()
+	camera.queue_free()
 	runtime.queue_free()
 	await process_frame
 	await process_frame

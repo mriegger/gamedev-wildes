@@ -122,7 +122,7 @@ func _run() -> void:
 	_interactor.bind_space(_world, _world)
 	_interactor.block_placed.connect(_on_block_placed)
 	_world.block_edit_committed.connect(_on_block_edit)
-	_coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, _player.global_position, 20.0)
+	_coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, EntityTargetObservation.create(_player.global_position, _player.global_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
 	var actors := _coordinator.get_runtime().get_active_actors()
 	_expect(actors.size() == 1, "coordinator did not spawn exactly one zombie")
 	if actors.size() != 1:
@@ -175,7 +175,7 @@ func _run() -> void:
 	_expect_unchanged(target_b, moved_after_preview, "entity movement after preview")
 
 	zombie.global_position = Vector3(WorldEntityCoordinator.DESPAWN_DISTANCE + 1.0, FEET_Y, 0.5)
-	_coordinator.tick(0.0, _player.global_position, 20.0)
+	_coordinator.tick(0.0, EntityTargetObservation.create(_player.global_position, _player.global_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
 	_expect(_coordinator.get_runtime().get_active_count() == 0, "despawn retained the zombie")
 	_expect(_coordinator.get_runtime()._spatial_index.get_entry_count() == 0, "despawn retained a spatial entry")
 	_expect(_coordinator.get_runtime()._spatial_index.get_cell_count() == 0, "despawn retained spatial cells")

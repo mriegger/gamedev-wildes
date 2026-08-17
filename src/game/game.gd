@@ -404,7 +404,14 @@ func _physics_process(delta):
 	if _location_state != null:
 		_location_state.update_world_position(player.global_position)
 	if _location_state == null or not _location_state.is_in_level():
-		world_entity_coordinator.tick(delta, player.global_position, game_environment.get_time_of_day())
+		var observation := EntityTargetObservation.from_camera_values(
+			player.global_position,
+			camera_rig.camera.global_transform,
+			camera_rig.camera.h_offset,
+			camera_rig.camera.v_offset,
+		)
+		assert(observation != null)
+		world_entity_coordinator.tick(delta, observation, game_environment.get_time_of_day())
 
 func _on_level_interaction_requested():
 	if _level_transitioning or _structure_transitioning or _structure_designer_runtime != null or _location_state == null:
@@ -430,7 +437,7 @@ func _enter_level():
 	add_child(next_runtime)
 	var definition := level_catalog.get_level(level_entrance_definition.level_id)
 	next_runtime.setup(result.layout, definition, block_catalog, world.block_texture_set, settings, entity_catalog)
-	next_runtime.set_player_ref(player)
+	next_runtime.set_player_context(player, camera_rig.camera)
 	var return_position := player.global_position
 	player.set_physics_process(false)
 	input_buffer.clear_gameplay()
