@@ -18,7 +18,7 @@ const STREAM_RETIRE_SECONDS: float = 0.4
 const EXPECTED_STONE_GOLEM_COUNT: int = 2
 const ZOMBIE_OFFSETS: Array[Vector2i] = [Vector2i(0, -10)]
 const SKELETON_OFFSETS: Array[Vector2i] = [Vector2i(-10, -8), Vector2i(0, -12), Vector2i(10, -8)]
-const STONE_GOLEM_OFFSETS: Array[Vector2i] = [Vector2i(-8, 0), Vector2i(8, 0)]
+const STONE_GOLEM_OFFSETS: Array[Vector2i] = [Vector2i(-16, 0), Vector2i(16, 0)]
 const SHEEP_OFFSETS: Array[Vector2i] = [Vector2i(-14, 8), Vector2i(-7, 14), Vector2i(7, 14), Vector2i(14, 8), Vector2i(-14, -14), Vector2i(14, -14)]
 const STREAM_REGIONS: Array[Vector2i] = [
 	Vector2i(-3, -2),
@@ -333,11 +333,12 @@ func _active_slam_count(coordinator: WorldEntityCoordinator) -> int:
 
 func _assert_stone_golem_activity(activity: Dictionary, require_completed_slam: bool, context: String) -> void:
 	_expect(activity.size() == EXPECTED_STONE_GOLEM_COUNT, "%s did not track two Stone Golems" % context)
+	var minimum_displacement := 3.0 if require_completed_slam else 0.5
 	for runtime_id in activity:
 		var record := activity[runtime_id] as Dictionary
 		_expect(bool(record["chase_seen"]), "%s Stone Golem %d never chased" % [context, runtime_id])
 		_expect(bool(record["path_seen"]), "%s Stone Golem %d never acquired a path" % [context, runtime_id])
-		_expect(float(record["max_displacement"]) >= 3.0, "%s Stone Golem %d moved less than three blocks" % [context, runtime_id])
+		_expect(float(record["max_displacement"]) >= minimum_displacement, "%s Stone Golem %d did not move before its slam" % [context, runtime_id])
 		if require_completed_slam:
 			_expect(bool(record["airborne_seen"]), "%s Stone Golem %d never became airborne" % [context, runtime_id])
 			_expect(bool(record["recovery_seen"]), "%s Stone Golem %d never entered recovery" % [context, runtime_id])

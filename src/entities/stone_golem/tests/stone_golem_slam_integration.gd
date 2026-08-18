@@ -3,7 +3,6 @@ extends SceneTree
 const StoneGolemActorType := preload("res://entities/stone_golem/stone_golem_actor.gd")
 const StoneGolemAnimationDriverType := preload("res://entities/stone_golem/stone_golem_animation_driver.gd")
 const StoneGolemBrainType := preload("res://entities/stone_golem/stone_golem_brain.gd")
-const StoneGolemLandingMarkerType := preload("res://entities/stone_golem/stone_golem_landing_marker.gd")
 const StoneGolemLandingDustType := preload("res://entities/stone_golem/stone_golem_landing_dust.gd")
 
 const FLAT_HEIGHT: int = 6
@@ -90,7 +89,7 @@ func _run() -> void:
 	get_root().add_child(runtime)
 	get_root().add_child(combat)
 	get_root().add_child(player)
-	player.global_position = Vector3(1.5, FEET_Y, 0.5)
+	player.global_position = Vector3(15.5, FEET_Y, 0.5)
 	player.set_physics_process(false)
 	player.interactor.set_physics_process(false)
 	player.animation_driver.set_process(false)
@@ -118,18 +117,17 @@ func _run() -> void:
 	var actor := runtime.get_actor(runtime_id) as StoneGolemActorType
 	actor.set_process(false)
 	actor.on_ground = true
+	_expect(actor.get_node_or_null(^"LandingMarker") == null, "production Stone Golem retained its landing circle")
 	for _sample_tick in range(16):
 		_tick(runtime, player)
 		if actor.brain.state == StoneGolemBrainType.State.SLAM_WINDUP:
 			break
 	_expect(actor.brain.state == StoneGolemBrainType.State.SLAM_WINDUP, "fresh visible in-range player did not prioritize slam")
 	_expect(not actor._timed_melee_contact.is_pending(), "slam priority incorrectly armed the fallback punch")
-	var marker := actor.get_node(^"LandingMarker") as StoneGolemLandingMarkerType
 	var landing_dust := actor.get_node(^"LandingDust") as StoneGolemLandingDustType
 	_expect(landing_dust.get_play_count() == 0 and not landing_dust.emitting, "slam dust played before actual landing")
 	var locked_target := player.global_position
 	var takeoff_position := actor.global_position
-	_expect(marker.visible and marker.global_position.is_equal_approx(locked_target), "slam marker did not appear at the locked target")
 	_expect(actor.brain.get_locked_slam_target().is_equal_approx(locked_target), "slam brain did not retain the takeoff target")
 	actor.animation_driver.advance(0.0)
 	_expect(
@@ -141,7 +139,6 @@ func _run() -> void:
 	_tick(runtime, player, WINDUP_TICKS - 1)
 	_expect(actor.brain.state == StoneGolemBrainType.State.SLAM_WINDUP, "slam launched before its 0.6-second windup")
 	_expect(actor.global_position.is_equal_approx(takeoff_position), "Stone Golem moved during slam windup")
-	_expect(marker.visible and marker.global_position.is_equal_approx(locked_target), "moving player changed the takeoff-locked marker")
 	_expect(actor.brain.get_locked_slam_target().is_equal_approx(locked_target), "moving player changed the locked slam target")
 	_tick(runtime, player)
 	_expect(actor.brain.state == StoneGolemBrainType.State.SLAM_AIRBORNE, "slam did not launch at the 0.6-second boundary")
@@ -156,7 +153,6 @@ func _run() -> void:
 		rose_during_flight = rose_during_flight or actor.global_position.y > takeoff_position.y
 		if actor.brain.state == StoneGolemBrainType.State.SLAM_AIRBORNE:
 			_expect(_radial_source_ids.is_empty() and _outcomes.is_empty(), "slam contacted before actual landing")
-			_expect(marker.visible and marker.global_position.is_equal_approx(locked_target), "airborne slam changed its landing marker")
 			_expect(landing_dust.get_play_count() == 0, "slam dust played while the Stone Golem was airborne")
 	_expect(rose_during_flight, "solver-backed slam did not rise after launch")
 	_expect(
@@ -168,7 +164,6 @@ func _run() -> void:
 	var landing_planar_offset := actor.global_position - locked_target
 	landing_planar_offset.y = 0.0
 	_expect(landing_planar_offset.length() < 0.02, "nominal slam did not land at the takeoff-locked target")
-	_expect(not marker.visible, "landing marker remained visible after actual landing")
 	_expect(landing_dust.get_play_count() == 1 and landing_dust.emitting, "actual landing did not play exactly one dust burst")
 	_expect(landing_dust.global_position.is_equal_approx(actor.global_position), "landing dust did not use the actual landing position")
 	_expect(_radial_source_ids.size() == 1 and _radial_source_ids[0] == runtime_id, "runtime did not forward exactly one radial contact")

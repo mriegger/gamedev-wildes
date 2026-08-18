@@ -121,7 +121,7 @@ func _arrange_population(coordinator: WorldEntityCoordinator, actors: Array[Enti
 					skeleton._path_follower.request_repath()
 			&"stone_golem":
 				angle = TAU * float(stone_golem_index) / float(EXPECTED_STONE_GOLEM_COUNT) + PI / 2.0
-				radius = 8.0
+				radius = 16.0
 				stone_golem_index += 1
 				var stone_golem := actor as StoneGolemActor
 				_expect(stone_golem != null, "stone_golem definition did not instantiate a StoneGolemActor")

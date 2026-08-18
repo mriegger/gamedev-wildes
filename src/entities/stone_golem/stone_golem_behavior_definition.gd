@@ -12,7 +12,7 @@ const DEFAULT_SLAM_PROFILE: MeleeAttackProfile = preload("res://combat/profiles/
 @export_range(0.1, 10.0, 0.1) var target_memory_seconds: float = 3.0
 @export_range(0.1, 4.0, 0.05) var repath_seconds: float = 0.5
 @export var punch_profile: MeleeAttackProfile = DEFAULT_PUNCH_PROFILE
-@export_range(0.1, 16.0, 0.1) var slam_trigger_range: float = 4.0
+@export_range(0.1, 16.0, 0.1) var slam_trigger_range: float = 15.0
 @export_range(0.1, 5.0, 0.05) var slam_windup_seconds: float = 0.6
 @export var slam_profile: MeleeAttackProfile = DEFAULT_SLAM_PROFILE
 

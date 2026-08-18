@@ -135,16 +135,16 @@ only when that instant is reached; retirement cancels pending contact. `EntityRu
 completed signal, and `MeleeCombatCoordinator` revalidates the live source, player range, voxel line
 of sight, and player bounds before committing damage. Skeleton contact produces ten damage against
 an unarmored player through the shared defense calculation while its brain owns the post-swing cover
-retreat. A Stone Golem prioritizes a ready slam for a freshly visible target within four horizontal
+retreat. A Stone Golem prioritizes a ready slam for a freshly visible target within fifteen horizontal
 blocks. While the four-second slam cooldown is active, a freshly visible target within 1.5 blocks can
 instead start the 0.8-second fallback punch. It contacts at 0.46 seconds, has a 1.4-second cooldown,
 and produces fifteen unarmored damage.
 
-The Stone Golem brain owns slam selection, phase timing, and the locked takeoff target; its actor owns
-the one-block-radius landing marker, clearance validation, physical trajectory, and cancellation. A
-0.6-second windup precedes a 0.8-second ballistic leap and a 0.75-second recovery. Invalid clearance,
-despawn, or death cancels pending contact. The marker is a presentation-only telegraph: the actor
-emits one radial contact only after reaching its actual grounded landing position. `EntityRuntime`
+The Stone Golem brain owns slam selection, phase timing, and the locked takeoff target; its actor
+owns clearance validation, physical trajectory, cancellation, and landing dust. A 0.6-second windup
+precedes a 0.8-second ballistic leap and a 0.75-second recovery. Invalid clearance, despawn, or death
+cancels pending contact. The actor emits one radial contact only after reaching its actual grounded
+landing position. `EntityRuntime`
 forwards that signal and `Game` explicitly binds it to `MeleeCombatCoordinator`, which validates the
 live source, one-block horizontal radius, vertical bounds overlap, voxel line of sight, and living
 player before applying thirty unarmored damage through normal defense. Radial contact has no mob or
@@ -154,7 +154,7 @@ terrain target path.
 stable source and target definition IDs. Player hits produce bone particles for Skeletons and stone
 particles for Stone Golems; successful attacks from either species produce player blood. The Stone
 Golem's world-space landing dust is a bounded actor-owned one-shot at the actual landing position.
-The dust and landing marker present action state without deciding whether radial damage commits.
+The dust presents impact state without deciding whether radial damage commits.
 
 `ActorStats` owns the player's level and current-level experience. `CombatProgressionCoordinator`
 awards the reward authored on an `EntityDefinition` exactly once for a player-caused defeat.

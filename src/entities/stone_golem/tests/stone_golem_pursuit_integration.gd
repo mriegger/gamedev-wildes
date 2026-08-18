@@ -52,6 +52,7 @@ func _spawn_actor(
 	actor.setup(runtime_id, definition, world, 7000 + runtime_id, limits)
 	actor.set_process(false)
 	actor.on_ground = true
+	actor.brain._slam_cooldown_remaining = INF
 	return actor
 
 func _planar_length(value: Vector3) -> float:
@@ -129,7 +130,6 @@ func _test_bounded_navigation_recovery(definition: EntityDefinition, world: Voxe
 		Vector3(20.5, FEET_Y, 0.5),
 		EntityNavigationLimits.new(2, 32, 2),
 	)
-	actor.brain._slam_cooldown_remaining = behavior.slam_profile.cooldown
 	var budget := NavigationSearchBudget.new(2)
 	var initial_position := actor.global_position
 	var unreachable_goal := initial_position + Vector3(8.0, 0.0, 8.0)
@@ -203,6 +203,7 @@ func _test_rotated_budget_and_crowd_separation(definition: EntityDefinition, wor
 		actor.set_process(false)
 		actor.global_position = crowded_positions[index]
 		actor.on_ground = true
+		actor.brain._slam_cooldown_remaining = INF
 		runtime._spatial_index.upsert(runtime_id, actor.global_position, actor.get_world_bounds())
 		search_turns[runtime_id] = 0
 	var observation := _observation(Vector3(8.5, FEET_Y, 8.5))

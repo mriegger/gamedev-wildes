@@ -35,7 +35,7 @@ func _test_definition_defaults_and_resource() -> void:
 	_expect(is_equal_approx(behavior.forget_range, 24.0), "forget range changed")
 	_expect(is_equal_approx(behavior.target_memory_seconds, 3.0), "target memory changed")
 	_expect(is_equal_approx(behavior.repath_seconds, 0.5), "repath duration changed")
-	_expect(is_equal_approx(behavior.slam_trigger_range, 4.0), "slam trigger range changed")
+	_expect(is_equal_approx(behavior.slam_trigger_range, 15.0), "slam trigger range changed")
 	_expect(is_equal_approx(behavior.slam_windup_seconds, 0.6), "slam windup changed")
 	_expect(is_equal_approx(behavior.get_slam_airborne_seconds(), 0.8), "slam airborne duration changed")
 	_expect(is_equal_approx(behavior.get_slam_recovery_seconds(), 0.75), "slam recovery duration changed")
@@ -50,7 +50,7 @@ func _test_definition_defaults_and_resource() -> void:
 		_expect(is_equal_approx(configured_behavior.forget_range, 24.0), "configured forget range changed")
 		_expect(is_equal_approx(configured_behavior.target_memory_seconds, 3.0), "configured target memory changed")
 		_expect(is_equal_approx(configured_behavior.repath_seconds, 0.5), "configured repath duration changed")
-		_expect(is_equal_approx(configured_behavior.slam_trigger_range, 4.0), "configured slam trigger range changed")
+		_expect(is_equal_approx(configured_behavior.slam_trigger_range, 15.0), "configured slam trigger range changed")
 		_expect(is_equal_approx(configured_behavior.slam_windup_seconds, 0.6), "configured slam windup changed")
 		_expect(is_equal_approx(configured_behavior.get_slam_airborne_seconds(), 0.8), "configured slam airborne duration changed")
 		_expect(is_equal_approx(configured_behavior.get_slam_recovery_seconds(), 0.75), "configured slam recovery duration changed")
@@ -74,12 +74,12 @@ func _test_invalid_behavior_values() -> void:
 	_expect(not StoneGolemBehaviorDefinitionType.is_valid_awareness(16.0, 24.0, 0.0), "zero target memory was accepted")
 	_expect(not StoneGolemBehaviorDefinitionType.is_valid_awareness(16.0, 24.0, NAN), "NaN target memory was accepted")
 	var slam_profile := StoneGolemBehaviorDefinitionType.DEFAULT_SLAM_PROFILE
-	_expect(StoneGolemBehaviorDefinitionType.is_valid_slam(4.0, 0.6, slam_profile), "valid slam timing was rejected")
+	_expect(StoneGolemBehaviorDefinitionType.is_valid_slam(15.0, 0.6, slam_profile), "valid slam timing was rejected")
 	_expect(not StoneGolemBehaviorDefinitionType.is_valid_slam(0.0, 0.6, slam_profile), "zero slam trigger range was accepted")
 	_expect(not StoneGolemBehaviorDefinitionType.is_valid_slam(0.5, 0.6, slam_profile), "slam trigger range below radius was accepted")
-	_expect(not StoneGolemBehaviorDefinitionType.is_valid_slam(4.0, 0.0, slam_profile), "zero slam windup was accepted")
-	_expect(not StoneGolemBehaviorDefinitionType.is_valid_slam(4.0, slam_profile.contact_time, slam_profile), "slam windup at contact time was accepted")
-	_expect(not StoneGolemBehaviorDefinitionType.is_valid_slam(4.0, 0.6, null), "null slam profile was accepted")
+	_expect(not StoneGolemBehaviorDefinitionType.is_valid_slam(15.0, 0.0, slam_profile), "zero slam windup was accepted")
+	_expect(not StoneGolemBehaviorDefinitionType.is_valid_slam(15.0, slam_profile.contact_time, slam_profile), "slam windup at contact time was accepted")
+	_expect(not StoneGolemBehaviorDefinitionType.is_valid_slam(15.0, 0.6, null), "null slam profile was accepted")
 
 func _test_dormant_stability() -> void:
 	var behavior := StoneGolemBehaviorDefinitionType.new()
@@ -100,6 +100,7 @@ func _test_dormant_stability() -> void:
 func _test_awareness_transitions() -> void:
 	var behavior := StoneGolemBehaviorDefinitionType.new()
 	var brain := StoneGolemBrainType.new(behavior)
+	brain._slam_cooldown_remaining = INF
 	var self_position := Vector3(0.5, 2.0, 0.5)
 	var outside_detection := self_position + Vector3(behavior.detection_range + 0.001, 0.0, 0.0)
 	brain.advance(0.0, self_position, _make_observation(outside_detection), true, true)

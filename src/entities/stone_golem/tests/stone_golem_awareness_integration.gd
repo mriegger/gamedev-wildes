@@ -69,6 +69,7 @@ func _spawn_actor(definition: EntityDefinition, world: VoxelWorld, runtime_id: i
 	actor.setup(runtime_id, definition, world, 1000 + runtime_id, EntityNavigationLimits.new(32, 512, 2))
 	actor.set_process(false)
 	actor.on_ground = true
+	actor.brain._slam_cooldown_remaining = INF
 	return actor
 
 func _run() -> void:

@@ -2,7 +2,6 @@ extends SceneTree
 const StoneGolemActorType := preload("res://entities/stone_golem/stone_golem_actor.gd")
 const StoneGolemAnimationDriverType := preload("res://entities/stone_golem/stone_golem_animation_driver.gd")
 const StoneGolemBrainType := preload("res://entities/stone_golem/stone_golem_brain.gd")
-const StoneGolemLandingMarkerType := preload("res://entities/stone_golem/stone_golem_landing_marker.gd")
 const StoneGolemLandingDustType := preload("res://entities/stone_golem/stone_golem_landing_dust.gd")
 
 const FEET_Y: float = 2.0
@@ -48,6 +47,7 @@ func _run() -> void:
 	actor.setup(81, definition, world, 8101, EntityNavigationLimits.new(32, 512, 2))
 	actor.set_process(false)
 	actor.on_ground = true
+	actor.brain._slam_cooldown_remaining = INF
 	actor.advance_visual_fade(actor.visual_fader.fade_in_seconds)
 	var landing_dust := actor.get_node(^"LandingDust") as StoneGolemLandingDustType
 	_expect(landing_dust != null, "production Stone Golem landing dust was missing")
@@ -145,21 +145,6 @@ func _run() -> void:
 	_expect(animation.get_current_state() == StoneGolemAnimationDriverType.PUNCH, "punch presentation did not resume after hit reaction")
 	_expect(actor._timed_melee_contact.is_pending(), "resumed punch lost pending gameplay contact")
 	actor._timed_melee_contact.cancel()
-
-	var marker_scene := load("res://entities/stone_golem/stone_golem_landing_marker.tscn") as PackedScene
-	var marker := marker_scene.instantiate() as StoneGolemLandingMarkerType
-	actor.add_child(marker)
-	_expect(not marker.visible, "landing marker was visible by default")
-	var disc := marker.get_node(^"Disc") as MeshInstance3D
-	var marker_mesh := disc.mesh as CylinderMesh
-	_expect(is_equal_approx(marker_mesh.top_radius, 1.0) and is_equal_approx(marker_mesh.bottom_radius, 1.0), "landing marker radius changed")
-	var marker_target := actor.global_position + Vector3(3.0, 0.0, 2.0)
-	marker.show_at(marker_target)
-	_expect(marker.visible and marker.global_position.is_equal_approx(marker_target), "landing marker did not show at the locked world position")
-	actor.global_position += Vector3(4.0, 1.0, -2.0)
-	_expect(marker.global_position.is_equal_approx(marker_target), "landing marker inherited actor motion")
-	marker.hide_marker()
-	_expect(not marker.visible, "landing marker did not hide explicitly")
 
 	animation.set_alerted(true)
 	animation.play_slam_windup(0.6)

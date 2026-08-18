@@ -14,6 +14,6 @@ forget_range = 24.0
 target_memory_seconds = 3.0
 repath_seconds = 0.5
 punch_profile = ExtResource("2_punch")
-slam_trigger_range = 4.0
+slam_trigger_range = 15.0
 slam_windup_seconds = 0.6
 slam_profile = ExtResource("3_slam")
