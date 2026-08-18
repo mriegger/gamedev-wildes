@@ -1,6 +1,7 @@
-[gd_scene load_steps=15 format=3]
+[gd_scene load_steps=16 format=3]
 
 [ext_resource type="Script" path="res://entities/bird/bird_animation_driver.gd" id="1_driver"]
+[ext_resource type="AudioStream" path="res://assets/audio/entities/bird/wing_flaps/duck_sampled_wing_flap_04_CC0.ogg" id="2_wing_flap"]
 
 [sub_resource type="StandardMaterial3D" id="Material_body"]
 albedo_color = Color(0.46, 0.34, 0.22, 1)
@@ -128,3 +129,10 @@ mesh = SubResource("Box_foot")
 
 [node name="AnimationDriver" type="Node" parent="."]
 script = ExtResource("1_driver")
+
+[node name="WingFlapAudio" type="AudioStreamPlayer3D" parent="."]
+stream = ExtResource("2_wing_flap")
+unit_size = 3.5
+max_distance = 20.0
+volume_db = -10.0
+bus = &"SFX"

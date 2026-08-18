@@ -55,9 +55,12 @@ func _run() -> void:
 	_expect(bird != null and bird._has_landing_target, "bird did not acquire an initial landing target")
 	var bird_animation := bird.animation_driver as BirdAnimationDriver
 	_expect(bird_animation._body_mesh.material_override is StandardMaterial3D, "bird color variant did not create an instance material")
+	_expect(bird_animation._wing_flap_audio.stream != null and bird_animation._wing_flap_audio.bus == &"SFX", "bird wing audio was not configured")
 	_expect(runtime.try_apply_damage(1, 1.0) == null, "direct damage affected an untargetable bird")
 	var visited: Dictionary = {}
 	var observed_folded_wings := false
+	var observed_flight_audio := false
+	var observed_grounded_silence := false
 	for _frame in SIMULATION_FRAMES:
 		if bird == null:
 			break
@@ -69,12 +72,17 @@ func _run() -> void:
 			var left_fold := absf(wrapf(animation._left_wing_pivot.rotation.y - animation._left_wing_origin.basis.get_euler().y, -PI, PI))
 			var right_fold := absf(wrapf(animation._right_wing_pivot.rotation.y - animation._right_wing_origin.basis.get_euler().y, -PI, PI))
 			observed_folded_wings = observed_folded_wings or left_fold >= deg_to_rad(70.0) and right_fold >= deg_to_rad(70.0)
+			observed_grounded_silence = observed_grounded_silence or not animation._wing_flap_audio.playing
+		else:
+			observed_flight_audio = observed_flight_audio or bird_animation._wing_flap_audio.playing
 	_expect(visited.has(BirdBrain.State.CRUISE), "bird never cruised")
 	_expect(visited.has(BirdBrain.State.DESCEND), "bird never descended")
 	_expect(visited.has(BirdBrain.State.GROUNDED_IDLE), "bird never idled on the ground")
 	_expect(visited.has(BirdBrain.State.GROUNDED_WALK), "bird never walked on the ground")
 	_expect(visited.has(BirdBrain.State.TAKEOFF), "bird never took off")
 	_expect(observed_folded_wings, "grounded bird did not fold both wings")
+	_expect(observed_flight_audio, "flying bird did not play wing audio")
+	_expect(observed_grounded_silence, "grounded bird did not stop wing audio")
 	_expect(not VoxelBodySolver.collides_at(world, bird.global_position, definition.body_width, definition.body_height, false), "bird ended inside solid terrain")
 
 	var blocked_world := _make_world(BlockId.Type.STONE)

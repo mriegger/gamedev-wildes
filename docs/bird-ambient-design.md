@@ -2,7 +2,7 @@
 
 ## Status
 
-Implementation proposal for a first-pass ambient bird species. The design is scoped to procedural visuals and deterministic movement; it does not require an external model or audio asset.
+Implementation proposal for a first-pass ambient bird species. The design uses procedural visuals, deterministic movement, and one CC0 positional wing-flap recording; it does not require an external model.
 
 ## Player Experience
 
@@ -227,7 +227,7 @@ Each actor duplicates its presentation materials before applying its seeded crow
 
 The bird has no hit or death animation in the first pass because combat cannot target it. Nightfall and distance retirement use the shared visual fade.
 
-## Silent Entity Presentation
+## Non-Vocal Entity Presentation
 
 `EntityActor` currently requires a valid `EntityVocalizations` node and profile, so the draft concept of a silent placeholder would fail setup. Make vocalizations an optional presentation dependency:
 
@@ -237,7 +237,7 @@ The bird has no hit or death animation in the first pass because combat cannot t
 - Existing sheep and zombie scenes remain configured and unchanged.
 - `bird.tscn` omits the vocalization node and path.
 
-This is a real second presentation mode required by the bird and avoids a fake silent audio asset. The existing daytime bird ambience remains the only bird audio and its scheduling is unchanged: it fades in from 06:00–08:00, stays full through 17:00, fades out through 19:00, and is silent at night.
+This is a real second vocalization mode required by the bird and avoids a fake silent vocalization asset. The existing daytime bird ambience retains its schedule: it fades in from 06:00–08:00, stays full through 17:00, fades out through 19:00, and is silent at night. Each bird also presents a positional CC0 wing-flap one-shot while airborne and stops it immediately when grounded.
 
 ## Tests
 
@@ -249,6 +249,7 @@ This is a real second presentation mode required by the bird and avoids a fake s
 - A blocked landing candidate is rejected and search attempts remain capped at eight.
 - Flight collision retargets without entering solid voxels.
 - A bird can land, walk through the shared navigation budget, and take off again.
+- Airborne birds play positional wing audio and grounded birds stop it.
 - Nightfall retires every bird through the ordinary fade and prevents replacement spawns.
 - Melee target acquisition and direct damage both reject birds.
 - Bird teardown returns the orphan-node count to its baseline.

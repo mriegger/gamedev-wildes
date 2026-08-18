@@ -29,6 +29,7 @@ var _beak_mesh: MeshInstance3D
 var _tail_mesh: MeshInstance3D
 var _wing_meshes: Array[MeshInstance3D] = []
 var _leg_meshes: Array[MeshInstance3D] = []
+var _wing_flap_audio: AudioStreamPlayer3D
 var _elapsed: float = 0.0
 var _wing_phase: float = 0.0
 var _walk_phase: float = 0.0
@@ -67,6 +68,8 @@ func setup(p_actor: Node3D):
 		_right_leg_pivot.get_node(^"RightLeg") as MeshInstance3D,
 		_right_leg_pivot.get_node(^"RightFoot") as MeshInstance3D,
 	])
+	_wing_flap_audio = visual.get_node(^"WingFlapAudio") as AudioStreamPlayer3D
+	assert(_wing_flap_audio != null and _wing_flap_audio.stream != null)
 	_rig_origin = _rig_root.transform
 	_body_origin = _body_pivot.transform
 	_head_origin = _head_pivot.transform
@@ -93,17 +96,21 @@ func advance(delta: float):
 	_elapsed += delta
 	_reset_pose()
 	var bird := actor as BirdActor
+	var wings_flapping := true
 	match bird.brain.state:
 		BirdBrain.State.CRUISE:
 			_apply_flight(delta, 0.18, 55.0, -5.0)
 		BirdBrain.State.DESCEND:
 			_apply_flight(delta, 0.32, 68.0, 12.0)
 		BirdBrain.State.GROUNDED_IDLE:
+			wings_flapping = false
 			_apply_idle()
 		BirdBrain.State.GROUNDED_WALK:
+			wings_flapping = false
 			_apply_walk(delta)
 		BirdBrain.State.TAKEOFF:
 			_apply_flight(delta, 0.14, 70.0, -14.0)
+	_update_wing_flap_audio(wings_flapping)
 
 func _apply_flight(delta: float, cycle_seconds: float, amplitude_degrees: float, body_pitch_degrees: float) -> void:
 	_wing_phase = fmod(_wing_phase + delta * TAU / cycle_seconds, TAU)
@@ -134,6 +141,13 @@ func _apply_walk(delta: float) -> void:
 func _apply_folded_wings() -> void:
 	_left_wing_pivot.rotation.y = _left_wing_origin.basis.get_euler().y - deg_to_rad(72.0)
 	_right_wing_pivot.rotation.y = _right_wing_origin.basis.get_euler().y + deg_to_rad(72.0)
+
+func _update_wing_flap_audio(wings_flapping: bool) -> void:
+	if wings_flapping:
+		if not _wing_flap_audio.playing:
+			_wing_flap_audio.play()
+	elif _wing_flap_audio.playing:
+		_wing_flap_audio.stop()
 
 func _apply_color(mesh_instance: MeshInstance3D, color: Color) -> void:
 	assert(mesh_instance != null and mesh_instance.mesh != null and mesh_instance.mesh.get_surface_count() > 0)
