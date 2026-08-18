@@ -27,6 +27,11 @@ const DECORATIVE_OFFSETS: Array[Vector3] = [
 	Vector3(1.50, 0.78, 0.72),
 	Vector3(-1.50, 0.88, -0.70),
 	Vector3(0.72, 0.72, -1.50),
+	Vector3(1.50, 0.20, -0.95),
+	Vector3(-1.50, 0.40, 0.98),
+	Vector3(-0.96, 0.12, 1.50),
+	Vector3(0.94, 0.56, -1.50),
+	Vector3(1.50, 0.66, 1.05),
 ]
 
 @export var definition: AppleTreeDefinition
@@ -36,6 +41,7 @@ var _chunk_manager: ChunkManager
 var _world_seed: int
 var _state := AppleTreeState.new()
 var _model_bounds: AABB
+var _foliage_mesh: BoxMesh
 var _chunk_roots: Dictionary = {}
 var _targets: Dictionary = {}
 var _next_target_id: int = 1
@@ -46,7 +52,7 @@ func setup(voxel_world: VoxelWorld, chunk_manager: ChunkManager, world_seed: int
 	_voxel_world = voxel_world
 	_chunk_manager = chunk_manager
 	_world_seed = world_seed
-	if definition == null or not definition.validate(item_catalog) or not _state.restore(saved_state) or not _prepare_model_bounds():
+	if definition == null or not definition.validate(item_catalog) or not _state.restore(saved_state) or not _prepare_model_bounds() or not _prepare_foliage_mesh():
 		return false
 	_chunk_manager.chunk_loaded.connect(_on_chunk_loaded)
 	_chunk_manager.chunk_unloaded.connect(_on_chunk_unloaded)
@@ -132,6 +138,20 @@ func _collect_mesh_bounds(node: Node, parent_transform: Transform3D, output: Arr
 			output.append(child_transform * (child as MeshInstance3D).get_aabb())
 		_collect_mesh_bounds(child, child_transform, output)
 
+func _prepare_foliage_mesh() -> bool:
+	var leaves := _voxel_world.block_catalog.get_definition(BlockId.Type.LEAVES)
+	if leaves == null or leaves.side_texture == null:
+		return false
+	var material := StandardMaterial3D.new()
+	material.albedo_texture = leaves.side_texture
+	material.albedo_color = definition.foliage_tint
+	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	material.roughness = 1.0
+	_foliage_mesh = BoxMesh.new()
+	_foliage_mesh.size = Vector3.ONE * 1.004
+	_foliage_mesh.material = material
+	return true
+
 func _on_chunk_loaded(coord: Vector2i) -> void:
 	_render_chunk(coord)
 
@@ -186,6 +206,7 @@ func _render_apple_tree(root: Node3D, coord: Vector2i, tree_position: Vector3i, 
 		var position := raw_position as Vector3i
 		if position.x == tree_position.x and position.z == tree_position.z and int(tree_blocks[position]) == BlockId.Type.LOG:
 			top_log_y = maxi(top_log_y, position.y)
+	_spawn_foliage(root, tree_position, top_log_y, tree_blocks)
 	var decorative_offsets := DECORATIVE_OFFSETS.duplicate()
 	_shuffle(decorative_offsets, random)
 	for index in range(definition.decorative_apple_count):
@@ -193,6 +214,22 @@ func _render_apple_tree(root: Node3D, coord: Vector2i, tree_position: Vector3i, 
 		var position := Vector3(tree_position.x + 0.5, top_log_y + 1.45, tree_position.z + 0.5) + offset
 		var apple := _spawn_apple_model(root, position, definition.decorative_apple_size, false)
 		apple.name = "DecorativeApple_%d" % index
+
+func _spawn_foliage(root: Node3D, tree_position: Vector3i, top_log_y: int, tree_blocks: Dictionary) -> void:
+	for raw_position in tree_blocks:
+		var position := raw_position as Vector3i
+		if int(tree_blocks[position]) != BlockId.Type.LEAVES:
+			continue
+		if absi(position.x - tree_position.x) > 1 or absi(position.z - tree_position.z) > 1:
+			continue
+		if position.y < top_log_y + 1 or position.y > top_log_y + 3:
+			continue
+		var foliage := MeshInstance3D.new()
+		foliage.name = "AppleFoliage_%d_%d_%d" % [position.x, position.y, position.z]
+		foliage.mesh = _foliage_mesh
+		foliage.position = Vector3(position) + Vector3.ONE * 0.5
+		foliage.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		root.add_child(foliage)
 
 func _spawn_ground_apple(root: Node3D, coord: Vector2i, tree_position: Vector3i, slot_index: int, position: Vector3) -> void:
 	var holder := _spawn_apple_model(root, position, definition.ground_apple_size, true)

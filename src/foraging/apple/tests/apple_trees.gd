@@ -23,6 +23,7 @@ func _init() -> void:
 		var ground_count := 0
 		var decorative_count := 0
 		var lower_canopy_count := 0
+		var foliage_count := 0
 		for child in chunk_root.get_children():
 			if child.name.begins_with("GroundApple_"):
 				ground_count += 1
@@ -33,9 +34,15 @@ func _init() -> void:
 				var offset := (child as Node3D).position - Vector3(apple_position.x + 0.5, (child as Node3D).position.y, apple_position.z + 0.5)
 				var surface_offset := maxf(absf(offset.x), absf(offset.z))
 				_expect(surface_offset >= 1.49 and surface_offset <= 1.51, "decorative apple was not attached to an outer leaf face")
+			elif child.name.begins_with("AppleFoliage_"):
+				foliage_count += 1
+				var foliage := child as MeshInstance3D
+				var material := (foliage.mesh as BoxMesh).material as StandardMaterial3D
+				_expect(material != null and material.albedo_color == apple_trees.definition.foliage_tint, "apple foliage did not use its distinguishing tint")
 		_expect(ground_count >= 2 and ground_count <= 6, "apple tree did not have two to six ground apples")
-		_expect(decorative_count == 15, "apple tree did not have exactly fifteen decorative apples")
-		_expect(lower_canopy_count >= 10, "decorative apples were not biased toward the lower canopy")
+		_expect(decorative_count == 20, "apple tree did not have exactly twenty decorative apples")
+		_expect(lower_canopy_count >= 15, "decorative apples were not biased toward the lower canopy")
+		_expect(foliage_count == 9, "apple tree foliage tint did not cover every generated leaf block")
 		_expect(apple_trees._targets.size() == ground_count, "decorative apples became harvest targets")
 		if not apple_trees._targets.is_empty():
 			var first_bounds := apple_trees.get_harvest_target_bounds(int(apple_trees._targets.keys()[0]))
