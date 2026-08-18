@@ -17,8 +17,8 @@ position, and world time. Copper deposits regenerate deterministically from the 
 | `Space` | Hop — needed to get up any ledge |
 | `Q` / `E` | Rotate the camera 45° |
 | Mouse wheel / pinch | Zoom |
-| Left-click / hold | Open a targeted chest or crafting station, or use the selected item's primary action; hold to mine, click to attack or till soil |
-| Right-click | Use the selected item's secondary action; place blocks or consume food |
+| Left-click / hold | Open a targeted chest or crafting station, or use the selected item; hold to mine, or click to attack, till soil, or consume food and potions |
+| Right-click | Use the selected item's secondary action, such as placing blocks |
 | `F` | Enter or leave a nearby dungeon |
 | `1`–`9` | Select hotbar slot; while the backpack is open, assign the hovered item to that slot |
 | `Tab` | Toggle backpack and crafting |
@@ -170,7 +170,7 @@ blocks from the initial player spawn. Its location, growth states, and rotations
 save. The
 `spawn pumpkin_patch` command relocates and randomizes that persistent patch near the player.
 Harvested pumpkins stack in the inventory and restore 10% of maximum health when right-clicked in
-the backpack or hotbar, or when selected and used with right-click in the world.
+the backpack or hotbar, or when selected and used with left-click in the world.
 About five percent of procedural trees carry apples: two to six collectible apples spawn beneath
 the tree and twenty decorate its subtly tinted lower outer leaves. Collected apples persist in saves
 and restore 10% of maximum health through the same inventory consumption controls.

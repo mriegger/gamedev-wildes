@@ -54,6 +54,7 @@ var _melee_contact_pending: bool = false
 var _melee_ray_origin: Vector3
 var _melee_ray_direction: Vector3
 var _melee_source_item_id: StringName = &""
+var _primary_consumption_latched: bool = false
 var _primary_harvest_latched: bool = false
 
 func setup(p_camera: Camera3D, p_motor: PlayerMotor, p_inventory: InventoryModel, p_input_buffer: InputBuffer, p_combat: MeleeCombatCoordinator, p_entity_runtime: EntityRuntime):
@@ -125,6 +126,7 @@ func _clear_active_state():
 	target_crafting_station = null
 	target_container = null
 	can_interact_target = false
+	_primary_consumption_latched = false
 	_primary_harvest_latched = false
 	if harvest != null:
 		harvest.clear_target()
@@ -143,6 +145,7 @@ func cancel_actions():
 	target_crafting_station = null
 	target_container = null
 	can_interact_target = false
+	_primary_consumption_latched = false
 	_primary_harvest_latched = false
 	if harvest != null:
 		harvest.clear_target()
@@ -251,6 +254,19 @@ func _handle_item_actions(delta):
 	var primary_use_just := _input_buffer.primary_use_just
 	var primary_use_pressed := _input_buffer.primary_use_pressed
 	_input_buffer.primary_use_just = false
+	if _primary_consumption_latched:
+		if primary_use_pressed:
+			primary_use_just = false
+			primary_use_pressed = false
+		else:
+			_primary_consumption_latched = false
+	if primary_use_just and item_consumption != null and item_consumption.has_consumable_at(inventory_model.selected_slot):
+		item_consumption.try_consume_selected()
+		_primary_consumption_latched = primary_use_pressed
+		primary_use_just = false
+		primary_use_pressed = false
+		_reset_mining()
+		_reset_melee_chain()
 	if _primary_harvest_latched:
 		if primary_use_pressed:
 			primary_use_just = false
