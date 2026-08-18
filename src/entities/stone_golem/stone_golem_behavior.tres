@@ -5,3 +5,6 @@
 [resource]
 script = ExtResource("1_behavior")
 gravity = 30.0
+detection_range = 16.0
+forget_range = 24.0
+target_memory_seconds = 3.0

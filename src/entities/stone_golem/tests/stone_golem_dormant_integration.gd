@@ -49,10 +49,29 @@ func _run() -> void:
 	actor.advance_visual_fade(actor.visual_fader.fade_in_seconds)
 	_expect(actor.brain.state == StoneGolemBrainType.State.DORMANT, "Stone Golem did not start dormant")
 	var initial_position := actor.global_position
-	for player_position in [Vector3(1.5, FEET_Y, 0.5), Vector3(16.5, FEET_Y, 0.5)]:
-		actor.tick(0.5, _observation(player_position), Vector3(4.0, 0.0, 0.0), NavigationSearchBudget.new(2))
-		_expect(actor.brain.state == StoneGolemBrainType.State.DORMANT, "player observation woke the dormant Stone Golem")
-		_expect(actor.global_position.is_equal_approx(initial_position), "dormant Stone Golem moved")
+	var far_player := actor.global_position + Vector3(17.0, 0.0, 0.0)
+	actor.tick(0.5, _observation(far_player), Vector3(4.0, 0.0, 0.0), NavigationSearchBudget.new(2))
+	_expect(actor.brain.state == StoneGolemBrainType.State.DORMANT and not actor.brain.is_alerted(), "target beyond detection woke the Stone Golem")
+	_expect(actor.global_position.is_equal_approx(initial_position), "dormant Stone Golem moved")
+	var visible_player := actor.global_position + Vector3(8.0, 0.0, 0.0)
+	actor.tick(0.5, _observation(visible_player), Vector3(4.0, 0.0, 0.0), NavigationSearchBudget.new(2))
+	_expect(actor.brain.state == StoneGolemBrainType.State.CHASE and actor.brain.is_alerted(), "clear nearby target did not alert the Stone Golem")
+	_expect(actor.global_position.is_equal_approx(initial_position), "alerted Stone Golem moved before pursuit was enabled")
+	world.restore_block_edits({Vector3i(4, 3, 0): BlockId.Type.STONE}, {})
+	actor.tick(0.5, _observation(visible_player), Vector3(4.0, 0.0, 0.0), NavigationSearchBudget.new(2))
+	_expect(actor.brain.is_alerted(), "occluded target cleared awareness before memory elapsed")
+	_expect(actor.global_position.is_equal_approx(initial_position), "remembering Stone Golem moved before pursuit was enabled")
+	var behavior := definition.behavior as StoneGolemBehaviorDefinition
+	actor.tick(behavior.target_memory_seconds, _observation(visible_player), Vector3(4.0, 0.0, 0.0), NavigationSearchBudget.new(2))
+	_expect(actor.brain.state == StoneGolemBrainType.State.DORMANT and not actor.brain.is_alerted(), "occluded target remained alerted after memory elapsed")
+	_expect(actor.global_position.is_equal_approx(initial_position), "forgetting Stone Golem moved before pursuit was enabled")
+	world.restore_block_edits({}, {})
+	actor.tick(0.5, _observation(visible_player), Vector3(4.0, 0.0, 0.0), NavigationSearchBudget.new(2))
+	_expect(actor.brain.is_alerted(), "restored line of sight did not alert the Stone Golem")
+	var beyond_forget := actor.global_position + Vector3(behavior.forget_range + 0.001, 0.0, 0.0)
+	actor.tick(0.0, _observation(beyond_forget), Vector3(4.0, 0.0, 0.0), NavigationSearchBudget.new(2))
+	_expect(actor.brain.state == StoneGolemBrainType.State.DORMANT and not actor.brain.is_alerted(), "target beyond forget range did not clear awareness immediately")
+	_expect(actor.global_position.is_equal_approx(initial_position), "awareness transitions changed Stone Golem position")
 	var animation := actor.animation_driver as StoneGolemAnimationDriverType
 	animation.advance(0.1)
 	_expect(animation.get_current_state() == StoneGolemAnimationDriverType.IDLE, "dormant Stone Golem did not present idle")
@@ -71,7 +90,7 @@ func _run() -> void:
 	var saw_fall := false
 	var saw_land := false
 	for _frame_index in range(120):
-		actor.tick(1.0 / 60.0, _observation(Vector3(8.5, FEET_Y, 0.5)), Vector3.ZERO, NavigationSearchBudget.new(2))
+		actor.tick(1.0 / 60.0, _observation(Vector3(32.5, FEET_Y, 0.5)), Vector3.ZERO, NavigationSearchBudget.new(2))
 		animation.advance(1.0 / 60.0)
 		var animation_state := animation.animator.get_current_state()
 		saw_fall = saw_fall or animation_state == BlockyHumanoidAnimator.FALL

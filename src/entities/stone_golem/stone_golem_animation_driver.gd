@@ -6,13 +6,24 @@ const HIT: StringName = &"Hit"
 const DEATH: StringName = &"Death"
 const HIT_SECONDS: float = 0.28
 const DEATH_SECONDS: float = 1.0
+const DORMANT_EYE_COLOR: Color = Color(0.035, 0.03, 0.025, 1.0)
+const ALERT_EYE_COLOR: Color = Color(0.95, 0.035, 0.02, 1.0)
+const ALERT_EYE_ENERGY: float = 3.5
+
+@export_node_path("MeshInstance3D") var left_eye_path: NodePath
+@export_node_path("MeshInstance3D") var right_eye_path: NodePath
 
 var animator: BlockyHumanoidAnimator
+var left_eye: MeshInstance3D
+var right_eye: MeshInstance3D
+var left_eye_material: StandardMaterial3D
+var right_eye_material: StandardMaterial3D
 var _animation_state: ActorAnimationState = ActorAnimationState.new()
 var _current_state: StringName = IDLE
 var _hit_elapsed: float = HIT_SECONDS
 var _hit_direction: Vector3 = Vector3.BACK
 var _dying: bool = false
+var _alerted: bool = false
 var _death_elapsed: float = 0.0
 var _visual_origin_position: Vector3
 var _visual_origin_rotation: Vector3
@@ -22,11 +33,22 @@ func setup(p_actor: Node3D):
 	super.setup(p_actor)
 	animator = get_parent() as BlockyHumanoidAnimator
 	assert(animator != null)
+	left_eye = get_node(left_eye_path) as MeshInstance3D
+	right_eye = get_node(right_eye_path) as MeshInstance3D
+	assert(left_eye != null and right_eye != null)
+	left_eye_material = _duplicate_eye_material(left_eye)
+	right_eye_material = _duplicate_eye_material(right_eye)
+	assert(left_eye_material != right_eye_material)
 	_visual_origin_position = animator.position
 	_visual_origin_rotation = animator.rotation
 	_visual_origin_scale = animator.scale
 	_animation_state.grounded = actor.get(&"on_ground") as bool
 	animator.setup(_animation_state)
+	_apply_eye_state()
+
+func set_alerted(alerted: bool) -> void:
+	_alerted = alerted and not _dying
+	_apply_eye_state()
 
 func play_hit(local_hit_direction: Vector3 = Vector3.BACK):
 	if _dying:
@@ -38,6 +60,7 @@ func play_death():
 	if _dying:
 		return
 	_dying = true
+	set_alerted(false)
 	_death_elapsed = 0.0
 	_hit_elapsed = HIT_SECONDS
 	_current_state = DEATH
@@ -97,3 +120,21 @@ func _reset_visual_transform():
 	animator.position = _visual_origin_position
 	animator.rotation = _visual_origin_rotation
 	animator.scale = _visual_origin_scale
+
+func _duplicate_eye_material(eye: MeshInstance3D) -> StandardMaterial3D:
+	var source := eye.get_active_material(0) as StandardMaterial3D
+	assert(source != null)
+	var material := source.duplicate() as StandardMaterial3D
+	eye.set_surface_override_material(0, material)
+	return material
+
+func _apply_eye_state() -> void:
+	_apply_eye_material(left_eye_material)
+	_apply_eye_material(right_eye_material)
+
+func _apply_eye_material(material: StandardMaterial3D) -> void:
+	assert(material != null)
+	material.albedo_color = ALERT_EYE_COLOR if _alerted else DORMANT_EYE_COLOR
+	material.emission_enabled = _alerted
+	material.emission = ALERT_EYE_COLOR if _alerted else Color.BLACK
+	material.emission_energy_multiplier = ALERT_EYE_ENERGY if _alerted else 0.0

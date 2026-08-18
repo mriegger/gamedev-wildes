@@ -156,3 +156,5 @@ position = Vector3(0, -0.4, 0)
 
 [node name="AnimationDriver" type="Node" parent="."]
 script = ExtResource("3_driver")
+left_eye_path = NodePath("../RigRoot/BodySecondary/BodyAction/TorsoBase/HeadAnchor/HeadBase/HeadSecondary/LeftEye")
+right_eye_path = NodePath("../RigRoot/BodySecondary/BodyAction/TorsoBase/HeadAnchor/HeadBase/HeadSecondary/RightEye")

@@ -29,16 +29,29 @@ func _test_definition_defaults_and_resource() -> void:
 	var behavior := StoneGolemBehaviorDefinitionType.new()
 	_expect(behavior.validate("test"), "default behavior definition was rejected")
 	_expect(is_equal_approx(behavior.gravity, 30.0), "gravity changed")
+	_expect(is_equal_approx(behavior.detection_range, 16.0), "detection range changed")
+	_expect(is_equal_approx(behavior.forget_range, 24.0), "forget range changed")
+	_expect(is_equal_approx(behavior.target_memory_seconds, 3.0), "target memory changed")
 	var configured_behavior := load("res://entities/stone_golem/stone_golem_behavior.tres") as StoneGolemBehaviorDefinitionType
 	_expect(configured_behavior != null, "configured behavior resource did not load")
 	if configured_behavior != null:
 		_expect(configured_behavior.validate(configured_behavior.resource_path), "configured behavior definition was rejected")
 		_expect(is_equal_approx(configured_behavior.gravity, 30.0), "configured gravity changed")
+		_expect(is_equal_approx(configured_behavior.detection_range, 16.0), "configured detection range changed")
+		_expect(is_equal_approx(configured_behavior.forget_range, 24.0), "configured forget range changed")
+		_expect(is_equal_approx(configured_behavior.target_memory_seconds, 3.0), "configured target memory changed")
 
 func _test_invalid_behavior_values() -> void:
 	for value in [0.0, -0.1, INF, NAN]:
 		_expect(not StoneGolemBehaviorDefinitionType.is_valid_gravity(value), "invalid gravity was accepted")
 	_expect(StoneGolemBehaviorDefinitionType.is_valid_gravity(30.0), "valid gravity was rejected")
+	_expect(StoneGolemBehaviorDefinitionType.is_valid_awareness(16.0, 24.0, 3.0), "valid awareness was rejected")
+	_expect(not StoneGolemBehaviorDefinitionType.is_valid_awareness(0.0, 24.0, 3.0), "zero detection range was accepted")
+	_expect(not StoneGolemBehaviorDefinitionType.is_valid_awareness(INF, 24.0, 3.0), "infinite detection range was accepted")
+	_expect(not StoneGolemBehaviorDefinitionType.is_valid_awareness(16.0, NAN, 3.0), "NaN forget range was accepted")
+	_expect(not StoneGolemBehaviorDefinitionType.is_valid_awareness(16.0, 15.999, 3.0), "forget range below detection was accepted")
+	_expect(not StoneGolemBehaviorDefinitionType.is_valid_awareness(16.0, 24.0, 0.0), "zero target memory was accepted")
+	_expect(not StoneGolemBehaviorDefinitionType.is_valid_awareness(16.0, 24.0, NAN), "NaN target memory was accepted")
 
 func _test_dormant_stability() -> void:
 	var behavior := StoneGolemBehaviorDefinitionType.new()
@@ -52,13 +65,45 @@ func _test_dormant_stability() -> void:
 	var deltas := [0.0, 1.0 / 120.0, 0.5, 3.0]
 	for position in positions:
 		for delta in deltas:
-			brain.advance(delta, position, _make_observation(position + Vector3(2.0, 0.0, -3.0)))
+			brain.advance(delta, position, _make_observation(position + Vector3(2.0, 0.0, -3.0)), false)
 			_expect(brain.state == StoneGolemBrainType.State.DORMANT, "valid advance changed the dormant state")
+			_expect(not brain.is_alerted(), "dormant stability reported an alert")
+
+func _test_awareness_transitions() -> void:
+	var behavior := StoneGolemBehaviorDefinitionType.new()
+	var brain := StoneGolemBrainType.new(behavior)
+	var self_position := Vector3(0.5, 2.0, 0.5)
+	var outside_detection := self_position + Vector3(behavior.detection_range + 0.001, 0.0, 0.0)
+	brain.advance(0.0, self_position, _make_observation(outside_detection), true)
+	_expect(brain.state == StoneGolemBrainType.State.DORMANT and not brain.is_alerted(), "visible target beyond detection range caused an alert")
+	var detection_boundary := self_position + Vector3(behavior.detection_range, 0.0, 0.0)
+	brain.advance(0.0, self_position, _make_observation(detection_boundary), true)
+	_expect(brain.state == StoneGolemBrainType.State.CHASE and brain.is_alerted(), "clear target at the detection boundary did not alert")
+	var hidden_position := self_position + Vector3(20.0, 0.0, 0.0)
+	brain.advance(behavior.target_memory_seconds - 0.001, self_position, _make_observation(hidden_position), false)
+	_expect(brain.is_alerted(), "hidden target exhausted memory before three seconds")
+	brain.advance(0.0, self_position, _make_observation(detection_boundary), true)
+	brain.advance(behavior.target_memory_seconds, self_position, _make_observation(hidden_position), false)
+	_expect(brain.state == StoneGolemBrainType.State.DORMANT and not brain.is_alerted(), "hidden target remained alerted at three seconds")
+	brain.advance(0.0, self_position, _make_observation(detection_boundary), true)
+	brain.advance(2.75, self_position, _make_observation(hidden_position), false)
+	_expect(brain.is_alerted(), "target memory expired before refresh")
+	var refreshed_position := self_position + Vector3(8.0, 0.0, 0.0)
+	brain.advance(0.0, self_position, _make_observation(refreshed_position), true)
+	brain.advance(2.75, self_position, _make_observation(hidden_position), false)
+	_expect(brain.is_alerted(), "clear target did not refresh memory")
+	var forget_boundary := self_position + Vector3(behavior.forget_range, 0.0, 0.0)
+	brain.advance(0.0, self_position, _make_observation(forget_boundary), false)
+	_expect(brain.is_alerted(), "target at the forget boundary was forgotten")
+	var beyond_forget := self_position + Vector3(behavior.forget_range + 0.001, 0.0, 0.0)
+	brain.advance(0.0, self_position, _make_observation(beyond_forget), false)
+	_expect(brain.state == StoneGolemBrainType.State.DORMANT and not brain.is_alerted(), "target beyond the forget range was not forgotten immediately")
 
 func _run() -> void:
 	_test_definition_defaults_and_resource()
 	_test_invalid_behavior_values()
 	_test_dormant_stability()
+	_test_awareness_transitions()
 	if _failures == 0:
 		print("STONE_GOLEM_BRAIN PASS")
 		quit(0)
