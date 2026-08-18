@@ -1,0 +1,41 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://entities/stone_golem/stone_golem_landing_dust.gd" id="1_dust"]
+
+[sub_resource type="Gradient" id="Gradient_dust"]
+offsets = PackedFloat32Array(0, 0.58, 1)
+colors = PackedColorArray(0.44, 0.4, 0.32, 0.9, 0.31, 0.3, 0.27, 0.72, 0.22, 0.23, 0.23, 0)
+
+[sub_resource type="StandardMaterial3D" id="Material_dust"]
+transparency = 1
+shading_mode = 0
+vertex_color_use_as_albedo = true
+billboard_mode = 1
+billboard_keep_scale = true
+
+[sub_resource type="QuadMesh" id="Mesh_dust"]
+material = SubResource("Material_dust")
+size = Vector2(0.18, 0.18)
+
+[node name="StoneGolemLandingDust" type="CPUParticles3D"]
+top_level = true
+script = ExtResource("1_dust")
+emitting = false
+amount = 26
+lifetime = 0.55
+one_shot = true
+explosiveness = 1.0
+visibility_aabb = AABB(-4, -1, -4, 8, 5, 8)
+local_coords = false
+direction = Vector3(0, 1, 0)
+spread = 78.0
+gravity = Vector3(0, -3.8, 0)
+initial_velocity_min = 1.1
+initial_velocity_max = 2.6
+angular_velocity_min = -280.0
+angular_velocity_max = 280.0
+scale_amount_min = 0.7
+scale_amount_max = 1.6
+color = Color(0.42, 0.4, 0.34, 1)
+color_ramp = SubResource("Gradient_dust")
+mesh = SubResource("Mesh_dust")

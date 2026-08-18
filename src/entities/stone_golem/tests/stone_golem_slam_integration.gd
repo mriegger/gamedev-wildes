@@ -4,6 +4,7 @@ const StoneGolemActorType := preload("res://entities/stone_golem/stone_golem_act
 const StoneGolemAnimationDriverType := preload("res://entities/stone_golem/stone_golem_animation_driver.gd")
 const StoneGolemBrainType := preload("res://entities/stone_golem/stone_golem_brain.gd")
 const StoneGolemLandingMarkerType := preload("res://entities/stone_golem/stone_golem_landing_marker.gd")
+const StoneGolemLandingDustType := preload("res://entities/stone_golem/stone_golem_landing_dust.gd")
 
 const FLAT_HEIGHT: int = 6
 const FEET_Y: float = FLAT_HEIGHT + 1.0
@@ -124,6 +125,8 @@ func _run() -> void:
 	_expect(actor.brain.state == StoneGolemBrainType.State.SLAM_WINDUP, "fresh visible in-range player did not prioritize slam")
 	_expect(not actor._timed_melee_contact.is_pending(), "slam priority incorrectly armed the fallback punch")
 	var marker := actor.get_node(^"LandingMarker") as StoneGolemLandingMarkerType
+	var landing_dust := actor.get_node(^"LandingDust") as StoneGolemLandingDustType
+	_expect(landing_dust.get_play_count() == 0 and not landing_dust.emitting, "slam dust played before actual landing")
 	var locked_target := player.global_position
 	var takeoff_position := actor.global_position
 	_expect(marker.visible and marker.global_position.is_equal_approx(locked_target), "slam marker did not appear at the locked target")
@@ -154,6 +157,7 @@ func _run() -> void:
 		if actor.brain.state == StoneGolemBrainType.State.SLAM_AIRBORNE:
 			_expect(_radial_source_ids.is_empty() and _outcomes.is_empty(), "slam contacted before actual landing")
 			_expect(marker.visible and marker.global_position.is_equal_approx(locked_target), "airborne slam changed its landing marker")
+			_expect(landing_dust.get_play_count() == 0, "slam dust played while the Stone Golem was airborne")
 	_expect(rose_during_flight, "solver-backed slam did not rise after launch")
 	_expect(
 		absf(float(flight_ticks) * FIXED_DELTA - NOMINAL_FLIGHT_SECONDS) <= FIXED_DELTA + 0.0001,
@@ -165,6 +169,8 @@ func _run() -> void:
 	landing_planar_offset.y = 0.0
 	_expect(landing_planar_offset.length() < 0.02, "nominal slam did not land at the takeoff-locked target")
 	_expect(not marker.visible, "landing marker remained visible after actual landing")
+	_expect(landing_dust.get_play_count() == 1 and landing_dust.emitting, "actual landing did not play exactly one dust burst")
+	_expect(landing_dust.global_position.is_equal_approx(actor.global_position), "landing dust did not use the actual landing position")
 	_expect(_radial_source_ids.size() == 1 and _radial_source_ids[0] == runtime_id, "runtime did not forward exactly one radial contact")
 	_expect(_radial_profile_ids.size() == 1 and _radial_profile_ids[0] == slam_profile.id, "runtime forwarded the wrong radial profile")
 	_expect(_outcomes.size() == 1, "actual slam landing did not commit exactly one combat outcome")
@@ -178,6 +184,7 @@ func _run() -> void:
 		_tick(runtime, player)
 		recovery_ticks += 1
 	_expect(recovery_ticks == 76, "slam recovery did not retain its 0.75-second completion tick")
+	_expect(landing_dust.get_play_count() == 1, "slam recovery replayed landing dust")
 	var punch_wait_ticks := 0
 	while actor.brain.state != StoneGolemBrainType.State.PUNCH and punch_wait_ticks < 14:
 		_expect(actor.brain.state != StoneGolemBrainType.State.SLAM_WINDUP, "Stone Golem restarted slam before its four-second cooldown")

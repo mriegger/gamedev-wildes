@@ -4,8 +4,10 @@ class_name StoneGolemActor
 const VoxelPlayerVisibilitySensorType := preload("res://entities/awareness/voxel_player_visibility_sensor.gd")
 const TimedMeleeContactType := preload("res://combat/timed_melee_contact.gd")
 const StoneGolemLandingMarkerType := preload("res://entities/stone_golem/stone_golem_landing_marker.gd")
+const StoneGolemLandingDustType := preload("res://entities/stone_golem/stone_golem_landing_dust.gd")
 
 @export_node_path("Node3D") var landing_marker_path: NodePath
+@export_node_path("CPUParticles3D") var landing_dust_path: NodePath
 
 var brain: StoneGolemBrain
 
@@ -15,6 +17,7 @@ var _visibility_sensor: VoxelPlayerVisibilitySensorType
 var _path_follower: VoxelPathFollower
 var _timed_melee_contact := TimedMeleeContactType.new()
 var _landing_marker: StoneGolemLandingMarkerType
+var _landing_dust: StoneGolemLandingDustType
 var _slam_airborne_elapsed: float = 0.0
 var _slam_contact_pending: bool = false
 
@@ -22,10 +25,15 @@ func supports_behavior(behavior: EntityBehaviorDefinition) -> bool:
 	return behavior is StoneGolemBehaviorDefinition
 
 func has_valid_presentation() -> bool:
-	if landing_marker_path.is_empty():
+	if landing_marker_path.is_empty() or landing_dust_path.is_empty():
 		return false
-	var candidate := get_node_or_null(landing_marker_path)
-	return super.has_valid_presentation() and candidate is StoneGolemLandingMarkerType
+	var marker_candidate := get_node_or_null(landing_marker_path)
+	var dust_candidate := get_node_or_null(landing_dust_path)
+	return (
+		super.has_valid_presentation()
+		and marker_candidate is StoneGolemLandingMarkerType
+		and dust_candidate is StoneGolemLandingDustType
+	)
 
 func setup(
 	p_runtime_id: int,
@@ -40,6 +48,8 @@ func setup(
 	_timed_melee_contact.cancel()
 	_landing_marker = get_node(landing_marker_path) as StoneGolemLandingMarkerType
 	assert(_landing_marker != null)
+	_landing_dust = get_node(landing_dust_path) as StoneGolemLandingDustType
+	assert(_landing_dust != null)
 	_landing_marker.hide_marker()
 	_slam_airborne_elapsed = 0.0
 	_slam_contact_pending = false
@@ -192,6 +202,7 @@ func _finish_slam_if_landed() -> bool:
 	_stone_golem_animation.play_slam_recovery(_behavior.get_slam_recovery_seconds())
 	if _slam_contact_pending:
 		_slam_contact_pending = false
+		_landing_dust.play_at(global_position)
 		radial_contact_reached.emit(runtime_id, _behavior.slam_profile)
 	return true
 

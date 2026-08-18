@@ -183,7 +183,12 @@ func _apply_punch_pose():
 	animator.left_arm_action.rotation.x -= deg_to_rad(18.0) * weight
 	animator.left_arm_action.rotation.z += deg_to_rad(12.0 * _punch_direction) * weight
 	animator.right_arm_action.rotation.x -= deg_to_rad(38.0) * weight
-	animator.rig_root.position.z += 0.12 * weight
+	animator.rig_root.position.z += 0.16 * weight
+	animator.rig_root.position.y -= 0.08 * weight
+	animator.rig_root.scale *= Vector3(1.05, 0.92, 1.05).lerp(Vector3.ONE, 1.0 - weight)
+	animator.head_secondary.rotation.x += deg_to_rad(6.0) * weight
+	animator.left_leg_base.rotation.x -= deg_to_rad(8.0) * weight
+	animator.right_leg_base.rotation.x += deg_to_rad(8.0) * weight
 
 func _apply_slam_pose() -> void:
 	if _slam_phase.is_empty():
@@ -202,6 +207,9 @@ func _apply_slam_windup_pose(weight: float) -> void:
 	animator.body_action.rotation.x += deg_to_rad(16.0) * weight
 	animator.left_arm_action.rotation += Vector3(deg_to_rad(42.0), 0.0, deg_to_rad(-20.0)) * weight
 	animator.right_arm_action.rotation += Vector3(deg_to_rad(42.0), 0.0, deg_to_rad(20.0)) * weight
+	animator.head_secondary.rotation.x += deg_to_rad(9.0) * weight
+	animator.left_leg_base.rotation.x -= deg_to_rad(12.0) * weight
+	animator.right_leg_base.rotation.x += deg_to_rad(12.0) * weight
 
 func _apply_slam_airborne_pose(weight: float) -> void:
 	animator.rig_root.scale *= Vector3(0.96, 1.08, 0.96).lerp(Vector3.ONE, 1.0 - weight)
@@ -210,6 +218,7 @@ func _apply_slam_airborne_pose(weight: float) -> void:
 	animator.right_arm_action.rotation += Vector3(deg_to_rad(-108.0), 0.0, deg_to_rad(22.0)) * weight
 	animator.left_leg_base.rotation.x += deg_to_rad(30.0) * weight
 	animator.right_leg_base.rotation.x += deg_to_rad(30.0) * weight
+	animator.head_secondary.rotation.x -= deg_to_rad(10.0) * weight
 
 func _apply_slam_recovery_pose(weight: float) -> void:
 	animator.rig_root.position.y -= 0.2 * weight
@@ -217,6 +226,9 @@ func _apply_slam_recovery_pose(weight: float) -> void:
 	animator.body_action.rotation.x += deg_to_rad(22.0) * weight
 	animator.left_arm_action.rotation += Vector3(deg_to_rad(-34.0), 0.0, deg_to_rad(-28.0)) * weight
 	animator.right_arm_action.rotation += Vector3(deg_to_rad(-34.0), 0.0, deg_to_rad(28.0)) * weight
+	animator.head_secondary.rotation.x += deg_to_rad(14.0) * weight
+	animator.left_leg_base.rotation.x -= deg_to_rad(18.0) * weight
+	animator.right_leg_base.rotation.x -= deg_to_rad(18.0) * weight
 
 func _begin_slam_phase(phase: StringName, duration: float) -> void:
 	assert(duration > 0.0)
@@ -241,6 +253,11 @@ func _apply_hit_pose():
 		0.0,
 		-deg_to_rad(4.0) * _hit_direction.x * weight
 	)
+	animator.rig_root.scale *= Vector3(1.04, 0.93, 1.04).lerp(Vector3.ONE, 1.0 - weight)
+	animator.body_action.rotation.y += deg_to_rad(10.0) * _hit_direction.x * weight
+	animator.head_secondary.rotation.z -= deg_to_rad(13.0) * _hit_direction.x * weight
+	animator.left_arm_action.rotation.z += deg_to_rad(14.0) * weight
+	animator.right_arm_action.rotation.z -= deg_to_rad(14.0) * weight
 
 func _apply_death_pose():
 	var progress := smoothstep(0.0, 1.0, _death_elapsed / DEATH_SECONDS)
@@ -249,6 +266,13 @@ func _apply_death_pose():
 	animator.position = _visual_origin_position + Vector3(0.0, -0.2 * settle + 0.38 * fall, 0.28 * fall)
 	animator.rotation = _visual_origin_rotation + Vector3(deg_to_rad(86.0) * fall, 0.0, deg_to_rad(4.0) * settle * (1.0 - fall))
 	animator.scale = _visual_origin_scale * Vector3(1.0 + 0.04 * settle, 1.0 - 0.08 * settle, 1.0 + 0.04 * settle)
+	animator.body_action.rotation.x += deg_to_rad(12.0) * settle
+	animator.head_secondary.rotation.x += deg_to_rad(22.0) * settle
+	animator.head_secondary.rotation.z += deg_to_rad(10.0) * fall
+	animator.left_arm_action.rotation.z += deg_to_rad(68.0) * settle
+	animator.right_arm_action.rotation.z -= deg_to_rad(68.0) * settle
+	animator.left_leg_base.rotation.x -= deg_to_rad(22.0) * settle
+	animator.right_leg_base.rotation.x -= deg_to_rad(22.0) * settle
 
 func _reset_visual_transform():
 	animator.position = _visual_origin_position

@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="CombatHitParticleCatalog" load_steps=8 format=3]
+[gd_resource type="Resource" script_class="CombatHitParticleCatalog" load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://combat/particles/combat_hit_particle_catalog.gd" id="1_catalog"]
 [ext_resource type="Script" path="res://combat/particles/combat_hit_particle_profile.gd" id="2_profile"]
@@ -7,7 +7,17 @@
 [ext_resource type="Resource" path="res://combat/particles/profiles/player_sheep_wool.tres" id="4_wool"]
 [ext_resource type="Resource" path="res://combat/particles/profiles/player_skeleton_bone.tres" id="5_bone"]
 [ext_resource type="Resource" path="res://combat/particles/profiles/skeleton_player_blood.tres" id="6_skeleton_blood"]
+[ext_resource type="Resource" path="res://combat/particles/profiles/player_stone_golem_stone.tres" id="7_stone"]
+[ext_resource type="Resource" path="res://combat/particles/profiles/stone_golem_player_blood.tres" id="8_golem_blood"]
 
 [resource]
 script = ExtResource("1_catalog")
-profiles = Array[ExtResource("2_profile")]([ExtResource("2_guts"), ExtResource("3_blood"), ExtResource("4_wool"), ExtResource("5_bone"), ExtResource("6_skeleton_blood")])
+profiles = Array[ExtResource("2_profile")]([
+	ExtResource("2_guts"),
+	ExtResource("3_blood"),
+	ExtResource("4_wool"),
+	ExtResource("5_bone"),
+	ExtResource("6_skeleton_blood"),
+	ExtResource("7_stone"),
+	ExtResource("8_golem_blood"),
+])

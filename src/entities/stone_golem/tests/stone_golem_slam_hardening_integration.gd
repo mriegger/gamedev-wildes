@@ -2,6 +2,7 @@ extends SceneTree
 
 const StoneGolemActorType := preload("res://entities/stone_golem/stone_golem_actor.gd")
 const StoneGolemBrainType := preload("res://entities/stone_golem/stone_golem_brain.gd")
+const StoneGolemLandingDustType := preload("res://entities/stone_golem/stone_golem_landing_dust.gd")
 
 const FLAT_HEIGHT: int = 6
 const FEET_Y: float = FLAT_HEIGHT + 1.0
@@ -21,6 +22,7 @@ class Fixture:
 	var player_inventory: InventoryModel
 	var runtime_id: int = -1
 	var actor: StoneGolemActor
+	var dust: StoneGolemLandingDustType
 	var marker: StoneGolemLandingMarker
 
 var _failures: int = 0
@@ -110,6 +112,7 @@ func _create_fixture(player_position: Vector3) -> Fixture:
 	fixture.actor.set_process(false)
 	fixture.actor.on_ground = true
 	fixture.marker = fixture.actor._landing_marker
+	fixture.dust = fixture.actor._landing_dust
 	return fixture
 
 func _tick(fixture: Fixture, count: int = 1) -> void:
@@ -190,6 +193,7 @@ func _test_ceiling_abort() -> void:
 	_tick(fixture, 250)
 	_expect(_radial_source_ids.is_empty() and _outcomes.is_empty(), "ceiling-aborted slam emitted delayed contact")
 	_expect(is_equal_approx(fixture.player_stats.current_hp, hp_before), "ceiling-aborted slam dealt delayed damage")
+	_expect(fixture.dust.get_play_count() == 0, "ceiling-aborted slam played landing dust")
 	await _cleanup_fixture(fixture)
 
 func _test_obstructed_landing() -> void:
@@ -219,11 +223,14 @@ func _test_obstructed_landing() -> void:
 	_expect(not fixture.marker.visible, "obstructed landing left its marker visible")
 	_expect(_radial_source_ids.size() == 1 and _radial_source_ids[0] == fixture.runtime_id, "obstructed landing did not emit exactly one radial contact")
 	_expect(_outcomes.is_empty() and is_equal_approx(fixture.player_stats.current_hp, hp_before), "obstructed landing damaged through the wall")
+	_expect(fixture.dust.get_play_count() == 1, "obstructed actual landing did not play exactly one dust burst")
+	_expect(fixture.dust.global_position.is_equal_approx(fixture.actor.global_position), "obstructed dust did not use the actual landing position")
 	var recovery_ticks := _advance_through_recovery(fixture)
 	_expect(recovery_ticks == 76, "obstructed landing did not preserve 0.75-second recovery")
 	_tick(fixture, 20)
 	_expect(_radial_source_ids.size() == 1 and _outcomes.is_empty(), "obstructed recovery emitted duplicate contact")
 	_expect(not fixture.marker.visible, "obstructed recovery restored the landing marker")
+	_expect(fixture.dust.get_play_count() == 1, "obstructed recovery replayed landing dust")
 	await _cleanup_fixture(fixture)
 
 func _test_dodge_recovery_and_cooldown() -> void:
@@ -247,6 +254,8 @@ func _test_dodge_recovery_and_cooldown() -> void:
 	_expect(_radial_source_ids.size() == 1 and _radial_source_ids[0] == fixture.runtime_id, "dodged slam did not emit exactly one landing contact")
 	_expect(_outcomes.is_empty() and is_equal_approx(fixture.player_stats.current_hp, hp_before), "takeoff-locked slam damaged the player after a dodge")
 	_expect(not fixture.marker.visible, "dodged slam left its landing marker visible")
+	_expect(fixture.dust.get_play_count() == 1, "dodged actual landing did not play exactly one dust burst")
+	_expect(fixture.dust.global_position.is_equal_approx(fixture.actor.global_position), "dodged slam dust did not stay at its actual landing")
 	var recovery_ticks := _advance_through_recovery(fixture)
 	_expect(recovery_ticks == 76, "dodged slam did not preserve 0.75-second recovery")
 	var ticks_since_start := WINDUP_TICKS + flight_ticks + recovery_ticks
@@ -267,6 +276,7 @@ func _test_dodge_recovery_and_cooldown() -> void:
 	_expect(fixture.actor.brain.state == StoneGolemBrainType.State.SLAM_WINDUP, "slam did not become eligible after its four-second cooldown")
 	_expect(fixture.marker.visible and fixture.marker.global_position.is_equal_approx(restart_target), "post-cooldown slam did not lock its fresh target")
 	_expect(_radial_source_ids.size() == 1 and _outcomes.is_empty(), "cooldown tracking emitted an extra contact")
+	_expect(fixture.dust.get_play_count() == 1, "slam cooldown replayed landing dust")
 	await _cleanup_fixture(fixture)
 
 func _test_death_during_windup() -> void:
@@ -285,6 +295,7 @@ func _test_death_during_windup() -> void:
 	_tick(fixture, 250)
 	_expect(_radial_source_ids.is_empty() and _outcomes.is_empty(), "windup death emitted delayed slam contact")
 	_expect(is_equal_approx(fixture.player_stats.current_hp, hp_before), "windup death dealt delayed player damage")
+	_expect(fixture.dust.get_play_count() == 0, "windup death played landing dust")
 	await _cleanup_fixture(fixture)
 
 func _test_death_during_airborne() -> void:
@@ -305,6 +316,7 @@ func _test_death_during_airborne() -> void:
 	_tick(fixture, 250)
 	_expect(_radial_source_ids.is_empty() and _outcomes.is_empty(), "airborne death emitted delayed slam contact")
 	_expect(is_equal_approx(fixture.player_stats.current_hp, hp_before), "airborne death dealt delayed player damage")
+	_expect(fixture.dust.get_play_count() == 0, "airborne death played landing dust")
 	await _cleanup_fixture(fixture)
 
 func _test_despawn_during_airborne() -> void:
@@ -324,6 +336,7 @@ func _test_despawn_during_airborne() -> void:
 	_tick(fixture, 100)
 	_expect(_radial_source_ids.is_empty() and _outcomes.is_empty(), "airborne despawn emitted delayed slam contact")
 	_expect(is_equal_approx(fixture.player_stats.current_hp, hp_before), "airborne despawn dealt delayed player damage")
+	_expect(fixture.dust.get_play_count() == 0, "airborne despawn played landing dust")
 	await _cleanup_fixture(fixture)
 
 func _run() -> void:
