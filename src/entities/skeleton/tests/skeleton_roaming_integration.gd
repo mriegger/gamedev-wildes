@@ -39,9 +39,68 @@ func _make_observation(
 	assert(observation != null)
 	return observation
 
+func _test_rotated_crowd_navigation(definition: EntityDefinition) -> void:
+	var catalog := EntityCatalog.new()
+	var definitions: Array[EntityDefinition] = [definition]
+	catalog.definitions = definitions
+	_expect(catalog.validate(), "Skeleton-only crowd catalog was invalid")
+	var runtime := EntityRuntime.new()
+	get_root().add_child(runtime)
+	runtime.setup(catalog, _make_world(), 3, 3, EntityNavigationLimits.new(32, 512, 2))
+	var player_position := Vector3(0.5, float(FEET_Y), 0.5)
+	var spawn_positions: Array[Vector3] = [
+		Vector3(-3.5, float(FEET_Y), 0.5),
+		Vector3(0.5, float(FEET_Y), -3.5),
+		Vector3(4.5, float(FEET_Y), 0.5),
+	]
+	var requests: Array[EntitySpawnRequest] = []
+	for index in range(spawn_positions.size()):
+		requests.append(EntitySpawnRequest.new(definition.id, spawn_positions[index], 900 + index))
+	var runtime_ids := runtime.try_spawn_batch(requests)
+	_expect(runtime_ids.size() == 3, "Crowd fixture did not spawn three Skeletons")
+	if runtime_ids.size() != 3:
+		runtime.shutdown()
+		runtime.free()
+		return
+	var moved_ticks_by_id: Dictionary = {}
+	for runtime_id in runtime_ids:
+		var actor := runtime.get_actor(runtime_id) as SkeletonActor
+		_expect(actor != null, "Crowd fixture returned a non-Skeleton actor")
+		if actor != null:
+			actor.set_process(false)
+		moved_ticks_by_id[runtime_id] = 0
+	var observation := _make_observation(
+		player_position,
+		Vector3(0.5, float(FEET_Y) + 4.0, -8.5),
+	)
+	for tick_index in range(3):
+		var positions_before_tick: Dictionary = {}
+		for runtime_id in runtime_ids:
+			var actor := runtime.get_actor(runtime_id) as SkeletonActor
+			actor._path_follower.request_repath()
+			positions_before_tick[runtime_id] = actor.global_position
+		runtime.tick(0.05, observation)
+		var remaining_searches := int(runtime._navigation_search_budget._remaining_searches)
+		var consumed_searches := 2 - remaining_searches
+		_expect(remaining_searches >= 0, "Crowd tick %d exceeded the shared navigation budget" % tick_index)
+		_expect(consumed_searches == 2, "Crowd tick %d consumed %d searches instead of two" % [tick_index, consumed_searches])
+		var moved_count := 0
+		for runtime_id in runtime_ids:
+			var actor := runtime.get_actor(runtime_id) as SkeletonActor
+			var distance := actor.global_position.distance_to(positions_before_tick[runtime_id] as Vector3)
+			if distance > 0.001:
+				moved_count += 1
+				moved_ticks_by_id[runtime_id] = int(moved_ticks_by_id[runtime_id]) + 1
+		_expect(moved_count == 2, "Crowd tick %d moved %d Skeletons instead of the two budget recipients" % [tick_index, moved_count])
+	for runtime_id in runtime_ids:
+		_expect(int(moved_ticks_by_id[runtime_id]) == 2, "Rotated ticks did not give Skeleton %d two navigation turns" % runtime_id)
+	runtime.shutdown()
+	runtime.free()
+
 func _run() -> void:
 	var definition := load("res://entities/definitions/skeleton.tres") as EntityDefinition
 	_expect(definition != null and definition.validate(definition.resource_path), "Skeleton definition is invalid")
+	_test_rotated_crowd_navigation(definition)
 	var actor := definition.actor_scene.instantiate() as SkeletonActor
 	get_root().add_child(actor)
 	actor.global_position = Vector3(0.5, float(FEET_Y), 0.5)

@@ -55,14 +55,15 @@ func setup(
 	animation_driver = get_node(animation_driver_path) as EntityAnimationDriver
 	visual_fader = get_node(visual_fader_path) as EntityVisualFader
 	death_poof = get_node(death_poof_path) as EntityDeathPoof
-	vocalizations = get_node(vocalizations_path) as EntityVocalizations
+	if not vocalizations_path.is_empty():
+		vocalizations = get_node(vocalizations_path) as EntityVocalizations
 	assert(animation_driver != null)
 	assert(visual_fader != null)
 	assert(death_poof != null)
-	assert(vocalizations != null)
 	animation_driver.setup(self)
 	visual_fader.setup(model_root)
-	vocalizations.setup(behavior_seed)
+	if vocalizations != null:
+		vocalizations.setup(behavior_seed)
 	set_process(true)
 
 func tick(_delta: float, _observation: EntityTargetObservation, _separation_velocity: Vector3, _navigation_search_budget: NavigationSearchBudget):
@@ -72,19 +73,21 @@ func supports_behavior(_behavior: EntityBehaviorDefinition) -> bool:
 	return false
 
 func has_valid_presentation() -> bool:
-	if animation_driver_path.is_empty() or visual_fader_path.is_empty() or death_poof_path.is_empty() or vocalizations_path.is_empty():
+	if animation_driver_path.is_empty() or visual_fader_path.is_empty() or death_poof_path.is_empty():
 		return false
 	var visual_root := get_node_or_null(^"ModelRoot") as Node3D
 	var candidate_animation_driver := get_node_or_null(animation_driver_path) as EntityAnimationDriver
 	var candidate_visual_fader := get_node_or_null(visual_fader_path) as EntityVisualFader
 	var candidate_death_poof := get_node_or_null(death_poof_path) as EntityDeathPoof
-	var candidate_vocalizations := get_node_or_null(vocalizations_path) as EntityVocalizations
+	var candidate_vocalizations: EntityVocalizations = null
+	if not vocalizations_path.is_empty():
+		candidate_vocalizations = get_node_or_null(vocalizations_path) as EntityVocalizations
 	return (
 		visual_root != null
 		and candidate_animation_driver != null
 		and candidate_visual_fader != null
 		and candidate_death_poof != null
-		and candidate_vocalizations != null
+		and (vocalizations_path.is_empty() or candidate_vocalizations != null)
 		and candidate_visual_fader.can_fade(visual_root)
 	)
 
@@ -97,7 +100,8 @@ func advance_visual_fade(delta: float) -> bool:
 
 func begin_despawn_fade():
 	assert(visual_fader != null)
-	vocalizations.stop_vocalizations()
+	if vocalizations != null:
+		vocalizations.stop_vocalizations()
 	_death_retirement = false
 	_death_fade_started = true
 	set_process(false)
@@ -105,7 +109,8 @@ func begin_despawn_fade():
 
 func begin_death_retirement():
 	assert(animation_driver != null and visual_fader != null and death_poof != null)
-	vocalizations.stop_vocalizations()
+	if vocalizations != null:
+		vocalizations.stop_vocalizations()
 	velocity = Vector3.ZERO
 	knockback_velocity = Vector3.ZERO
 	_death_retirement = true

@@ -182,13 +182,21 @@ func _test_species_death_retirement(catalog: EntityCatalog, world: VoxelWorld) -
 		actor.advance_visual_fade(actor.visual_fader.fade_in_seconds)
 		actor.velocity = Vector3(1.0, 2.0, 3.0)
 		actor.play_hit(Vector3.RIGHT)
-		var death_seconds := SheepAnimationDriver.DEATH_SECONDS
+		var death_seconds := 0.0
 		if actor is ZombieActor:
 			var zombie := actor as ZombieActor
 			zombie._timed_melee_contact.arm((definition.behavior as GroundMeleeEnemyBehaviorDefinition).melee_profile)
 			death_seconds = ZombieAnimationDriver.DEATH_SECONDS
 		elif actor is SkeletonActor:
+			var skeleton := actor as SkeletonActor
+			skeleton._timed_melee_contact.arm((definition.behavior as SkeletonBehaviorDefinition).melee_profile)
 			death_seconds = SkeletonAnimationDriver.DEATH_SECONDS
+		elif actor is SheepActor:
+			death_seconds = SheepAnimationDriver.DEATH_SECONDS
+		else:
+			_expect(false, "unsupported retirement actor %s" % actor.get_class())
+			actor.free()
+			continue
 		actor.begin_death_retirement()
 		_expect(not actor.is_processing(), "%s kept normal animation processing after lethal retirement" % definition.id)
 		_expect(actor.velocity.is_zero_approx(), "%s retained movement velocity after lethal retirement" % definition.id)
@@ -197,7 +205,7 @@ func _test_species_death_retirement(catalog: EntityCatalog, world: VoxelWorld) -
 			death_state = (actor.animation_driver as ZombieAnimationDriver).get_current_state()
 		elif actor is SkeletonActor:
 			death_state = (actor.animation_driver as SkeletonAnimationDriver).get_current_state()
-		else:
+		elif actor is SheepActor:
 			death_state = (actor.animation_driver as SheepAnimationDriver).get_current_state()
 		_expect(death_state == &"Death", "%s did not enter its death state" % definition.id)
 		_expect(not actor.animation_driver.is_death_complete(), "%s death pose completed at retirement start" % definition.id)
@@ -205,6 +213,8 @@ func _test_species_death_retirement(catalog: EntityCatalog, world: VoxelWorld) -
 		_expect(not actor.death_poof.emitting and not actor.death_poof.has_played(), "%s death poof began before the pose completed" % definition.id)
 		if actor is ZombieActor:
 			_expect(not (actor as ZombieActor)._timed_melee_contact.is_pending(), "zombie retained a pending attack after lethal retirement")
+		elif actor is SkeletonActor:
+			_expect(not (actor as SkeletonActor)._timed_melee_contact.is_pending(), "Skeleton retained a pending attack after lethal retirement")
 		_expect(not actor.advance_retirement(death_seconds * 0.5), "%s retirement completed during its death pose" % definition.id)
 		_expect(not actor.animation_driver.is_death_complete(), "%s death pose completed before its configured duration" % definition.id)
 		_expect(is_equal_approx(actor.get_visual_opacity(), 1.0), "%s faded before its death pose completed" % definition.id)
@@ -215,7 +225,7 @@ func _test_species_death_retirement(catalog: EntityCatalog, world: VoxelWorld) -
 		elif actor is SkeletonActor:
 			var skeleton_animation := actor.animation_driver as SkeletonAnimationDriver
 			_expect(absf(skeleton_animation.animator.rotation.x - skeleton_animation._visual_origin_rotation.x) > deg_to_rad(1.0), "skeleton did not fold into its fall pose")
-		else:
+		elif actor is SheepActor:
 			var sheep_animation := actor.animation_driver as SheepAnimationDriver
 			_expect(absf(sheep_animation._rig_root.rotation.z - sheep_animation._rig_origin_rotation.z) > deg_to_rad(1.0), "sheep did not rotate into its side-collapse pose")
 		actor.play_hit(Vector3.LEFT)
@@ -227,7 +237,7 @@ func _test_species_death_retirement(catalog: EntityCatalog, world: VoxelWorld) -
 			death_state = (actor.animation_driver as ZombieAnimationDriver).get_current_state()
 		elif actor is SkeletonActor:
 			death_state = (actor.animation_driver as SkeletonAnimationDriver).get_current_state()
-		else:
+		elif actor is SheepActor:
 			death_state = (actor.animation_driver as SheepAnimationDriver).get_current_state()
 		_expect(death_state == &"Death", "%s hit reaction replaced its death pose" % definition.id)
 		var fade_out_seconds := actor.visual_fader.fade_out_seconds
