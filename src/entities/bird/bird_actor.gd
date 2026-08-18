@@ -49,8 +49,12 @@ static func color_variant_for_seed(seed_value: int) -> BirdAnimationDriver.Color
 func tick(delta: float, _player_position: Vector3, separation_velocity: Vector3, navigation_search_budget: NavigationSearchBudget):
 	assert(brain != null and voxel_space != null)
 	var previous_state := brain.state
-	var phase_goal_reached := _is_phase_goal_reached()
-	brain.advance(delta, global_position, on_ground, phase_goal_reached)
+	var rejected_ground_contact := on_ground and not _has_approved_ground_contact() and brain.state != BirdBrain.State.CRUISE
+	if rejected_ground_contact:
+		brain.reject_ground_contact()
+	else:
+		var phase_goal_reached := _is_phase_goal_reached()
+		brain.advance(delta, global_position, on_ground, phase_goal_reached)
 	_handle_state_transition(previous_state, brain.state)
 	if brain.state in [BirdBrain.State.GROUNDED_IDLE, BirdBrain.State.GROUNDED_WALK]:
 		_advance_grounded(delta, separation_velocity, navigation_search_budget)
@@ -62,6 +66,11 @@ func _update_vocalizations() -> void:
 	assert(vocalizations != null)
 	var can_call := vocalizations.profile != null and brain.state == BirdBrain.State.GROUNDED_IDLE and on_ground
 	vocalizations.set_vocalizations_enabled(can_call)
+
+func _has_approved_ground_contact() -> bool:
+	var ground_y := VoxelBodySolver.get_ground_y(voxel_space, global_position, definition.body_width)
+	var supporting_block_id := VoxelBodySolver.get_supporting_block_id(voxel_space, global_position, definition.body_width, ground_y)
+	return definition.can_spawn_ambiently_on(supporting_block_id)
 
 func _configure_vocalizations(behavior_seed: int) -> void:
 	assert(vocalization_profiles.size() == BirdAnimationDriver.ColorVariant.size())

@@ -126,6 +126,13 @@ func _run() -> void:
 		_expect(canopy_bird.brain.state == BirdBrain.State.GROUNDED_IDLE, "bird attempted takeoff through an overhead obstruction")
 		_expect(canopy_bird.on_ground, "blocked takeoff removed grounded state")
 		_expect(canopy_bird.global_position.is_equal_approx(Vector3(0.5, FEET_Y, 0.5)), "blocked takeoff moved the bird")
+		canopy_bird.global_position = Vector3(0.5, float(FLAT_HEIGHT + 3), 0.5)
+		canopy_bird.on_ground = true
+		canopy_bird.brain.state = BirdBrain.State.DESCEND
+		canopy_bird._update_vocalizations()
+		canopy_bird.tick(FRAME_DELTA, Vector3.ZERO, Vector3.ZERO, NavigationSearchBudget.new(1))
+		_expect(canopy_bird.brain.state == BirdBrain.State.CRUISE, "bird accepted leaves as a landing surface")
+		_expect(not canopy_bird.vocalizations.is_processing(), "bird vocalized after landing on leaves")
 
 	var blocked_world := _make_world(BlockId.Type.STONE)
 	var blocked_runtime := EntityRuntime.new()
