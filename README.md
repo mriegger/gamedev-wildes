@@ -145,7 +145,8 @@ data-driven recipes use materials from the backpack and hotbar and craft immedia
 enabled Craft button is pressed, playing one success sound.
 
 **Developer console.** Press `/` to open a command line at the bottom of the screen. The
-`spawn <item> <count>` command adds any catalog item directly to the backpack for testing. Item
+`spawn <item> [count]` command adds any catalog item directly to the backpack for testing, with the
+count defaulting to one when omitted. Item
 IDs and display names are accepted; equipment IDs remain material-qualified, such as
 `copper_pickaxe` and `copper_sword`. Structure construction uses `dev structure new`,
 `dev structure import`, `dev structure export`, and `dev structure exit`. Press `/` again or

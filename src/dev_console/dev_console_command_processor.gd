@@ -61,16 +61,18 @@ func execute(command_line: String) -> ExecutionResult:
 func _execute_spawn(tokens: PackedStringArray) -> ExecutionResult:
 	if tokens.size() == 2 and _normalize_item_name(tokens[1]) == &"pumpkin_patch":
 		return ExecutionResult.KEEP_OPEN if pumpkin_patch.spawn_patch() else ExecutionResult.REJECTED
-	if tokens.size() < 3:
+	if tokens.size() < 2:
 		return ExecutionResult.REJECTED
+	var count := 1
+	var item_name_end := tokens.size()
 	var count_token := tokens[tokens.size() - 1]
-	if not count_token.is_valid_int():
-		return ExecutionResult.REJECTED
-	var count := int(count_token)
+	if tokens.size() >= 3 and count_token.is_valid_int():
+		count = int(count_token)
+		item_name_end -= 1
 	if count < 1:
 		return ExecutionResult.REJECTED
 	var item_name_parts := PackedStringArray()
-	for index in range(1, tokens.size() - 1):
+	for index in range(1, item_name_end):
 		item_name_parts.append(tokens[index])
 	var item_id := _resolve_item_id(" ".join(item_name_parts))
 	if item_id.is_empty():
