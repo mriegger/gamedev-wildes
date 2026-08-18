@@ -15,6 +15,7 @@ var breaking_block: MeshInstance3D
 var contact_shadow: MeshInstance3D
 var anvil_renderer: AnvilRenderer
 var chest_renderer: ChestRenderer
+var cauldron_renderer: CauldronRenderer
 
 var _selection_edge_mat: StandardMaterial3D = null
 var _contact_shadow_color: Color = Color(-1, -1, -1, -1)
@@ -42,6 +43,7 @@ func bind_space(p_space: VoxelSpace, presentation_root: Node):
 	block_catalog = p_space.block_catalog
 	anvil_renderer = presentation_root.get_node_or_null("Anvils") as AnvilRenderer
 	chest_renderer = presentation_root.get_node_or_null("Chests") as ChestRenderer
+	cauldron_renderer = presentation_root.get_node_or_null("Cauldrons") as CauldronRenderer
 	_hide_targeting_visuals()
 	contact_shadow.visible = false
 	for visual in [selection_box, ghost_block, breaking_block]:
@@ -58,6 +60,7 @@ func unbind_space():
 	block_catalog = null
 	anvil_renderer = null
 	chest_renderer = null
+	cauldron_renderer = null
 
 func _hide_targeting_visuals():
 	if selection_box != null:
@@ -66,10 +69,7 @@ func _hide_targeting_visuals():
 		ghost_block.visible = false
 	if breaking_block != null:
 		breaking_block.visible = false
-	if anvil_renderer != null:
-		anvil_renderer.set_placement_preview(null, false)
-	if chest_renderer != null:
-		chest_renderer.set_placement_preview(null, false)
+	_clear_custom_placement_previews()
 	_hide_interaction_visuals()
 
 func _ensure_visuals():
@@ -277,25 +277,21 @@ func _update_selection_visuals(_delta: float = 0.0):
 		var block_id = selected_block_id
 		if block_id == null or block_id == BlockId.Type.AIR:
 			ghost_block.visible = false
-			if anvil_renderer != null:
-				anvil_renderer.set_placement_preview(null, false)
-			if chest_renderer != null:
-				chest_renderer.set_placement_preview(null, false)
+			_clear_custom_placement_previews()
 		elif block_id == BlockId.Type.ANVIL and anvil_renderer != null:
 			ghost_block.visible = false
+			_clear_custom_placement_previews()
 			anvil_renderer.set_placement_preview(interactor.placement_block, interactor.can_place_target)
-			if chest_renderer != null:
-				chest_renderer.set_placement_preview(null, false)
 		elif block_id == BlockId.Type.CHEST and chest_renderer != null:
 			ghost_block.visible = false
+			_clear_custom_placement_previews()
 			chest_renderer.set_placement_preview(interactor.placement_block, interactor.can_place_target)
-			if anvil_renderer != null:
-				anvil_renderer.set_placement_preview(null, false)
+		elif block_id == BlockId.Type.CAULDRON and cauldron_renderer != null:
+			ghost_block.visible = false
+			_clear_custom_placement_previews()
+			cauldron_renderer.set_placement_preview(interactor.placement_block, interactor.can_place_target)
 		else:
-			if anvil_renderer != null:
-				anvil_renderer.set_placement_preview(null, false)
-			if chest_renderer != null:
-				chest_renderer.set_placement_preview(null, false)
+			_clear_custom_placement_previews()
 			ghost_block.visible = true
 			var base_center: Vector3
 			var ghost_size: Vector3
@@ -325,10 +321,15 @@ func _update_selection_visuals(_delta: float = 0.0):
 	else:
 		if ghost_block and ghost_block.is_inside_tree():
 			ghost_block.visible = false
-		if anvil_renderer != null:
-			anvil_renderer.set_placement_preview(null, false)
-		if chest_renderer != null:
-			chest_renderer.set_placement_preview(null, false)
+		_clear_custom_placement_previews()
+
+func _clear_custom_placement_previews() -> void:
+	if anvil_renderer != null:
+		anvil_renderer.set_placement_preview(null, false)
+	if chest_renderer != null:
+		chest_renderer.set_placement_preview(null, false)
+	if cauldron_renderer != null:
+		cauldron_renderer.set_placement_preview(null, false)
 
 func _should_show_mining_outline(has_target_action: bool) -> bool:
 	if not has_target_action or not interactor.target_has:
@@ -338,26 +339,30 @@ func _should_show_mining_outline(has_target_action: bool) -> bool:
 	return not interactor.has_crafting_station_target() or interactor.is_attempting_crafting_station_mining()
 
 func _update_interaction_visuals(_delta: float = 0.0) -> void:
-	var anvil_interaction_available := _should_show_anvil_interaction()
+	var station_interaction_available := _should_show_station_interaction()
 	var chest_interaction_available := _should_show_chest_interaction()
 	if anvil_renderer != null:
-		anvil_renderer.set_hovered_anvil(interactor.target_block if anvil_interaction_available else null)
+		anvil_renderer.set_hovered_anvil(interactor.target_block if station_interaction_available else null)
+	if cauldron_renderer != null:
+		cauldron_renderer.set_hovered_cauldron(interactor.target_block if station_interaction_available else null)
 	if chest_renderer != null:
 		chest_renderer.set_hovered_chest(interactor.target_block if chest_interaction_available else null)
-	_set_interaction_cursor(anvil_interaction_available or chest_interaction_available)
+	_set_interaction_cursor(station_interaction_available or chest_interaction_available)
 
-func _should_show_anvil_interaction() -> bool:
+func _should_show_station_interaction() -> bool:
 	return interactor.has_crafting_station_target() and interactor.can_interact_target and not interactor.is_attempting_crafting_station_mining()
 
 func _should_show_chest_interaction() -> bool:
 	return interactor.has_container_target() and interactor.can_interact_target and not interactor.is_attempting_container_mining()
 
 func _should_show_interaction() -> bool:
-	return _should_show_anvil_interaction() or _should_show_chest_interaction()
+	return _should_show_station_interaction() or _should_show_chest_interaction()
 
 func _hide_interaction_visuals() -> void:
 	if anvil_renderer != null:
 		anvil_renderer.set_hovered_anvil(null)
+	if cauldron_renderer != null:
+		cauldron_renderer.set_hovered_cauldron(null)
 	if chest_renderer != null:
 		chest_renderer.set_hovered_chest(null)
 	_set_interaction_cursor(false)

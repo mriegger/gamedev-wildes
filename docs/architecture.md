@@ -354,6 +354,7 @@ instances present both catalogs without mutating inventory slots and play one so
 transaction succeeds. `CraftingStationBlockDefinition` marks interactable workstation blocks;
 `AnvilCoordinator` validates opening while normal pickaxe mining owns capacity-safe anvil and
 attached-torch drops. `AnvilRenderer` owns the procedural low-poly model, placement preview, and
-subtle hover presentation.
+subtle hover presentation. `CauldronRenderer` owns the placeable cauldron's suspended pot, tripod,
+fire, smoke, dim light, and placement preview.
 
 Forward+ is the primary renderer. Runtime rendering-device checks select reduced visual values for GL Compatibility fallback. Features unavailable on GL, including volumetric fog, remain disabled there.

@@ -20,7 +20,8 @@ enum Type {
 	FARMLAND_DRY = 15,
 	ANVIL = 16,
 	CHEST = 17,
-	COUNT = 18,
+	CAULDRON = 18,
+	COUNT = 19,
 }
 
 const DISPLAY_NAMES: Dictionary = {
@@ -42,6 +43,7 @@ const DISPLAY_NAMES: Dictionary = {
 	Type.FARMLAND_DRY: "Dry Farmland",
 	Type.ANVIL: "Anvil",
 	Type.CHEST: "Chest",
+	Type.CAULDRON: "Cauldron",
 }
 
 static func get_display_name(id: Type) -> String:
@@ -51,7 +53,7 @@ static func is_valid(id: int) -> bool:
 	return id >= Type.AIR and id < Type.COUNT
 
 static func is_chunk_cube(id: int) -> bool:
-	return is_valid(id) and id != Type.AIR and id != Type.TORCH and id != Type.WATER and id != Type.ANVIL and id != Type.CHEST
+	return is_valid(id) and id != Type.AIR and id != Type.TORCH and id != Type.WATER and id != Type.ANVIL and id != Type.CHEST and id != Type.CAULDRON
 
 static func occludes_chunk_face(id: int) -> bool:
 	return is_chunk_cube(id)

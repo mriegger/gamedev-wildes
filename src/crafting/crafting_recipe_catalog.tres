@@ -7,7 +7,8 @@
 [ext_resource type="Resource" path="res://crafting/recipes/basic_rune.tres" id="11_basic_rune"]
 [ext_resource type="Resource" path="res://crafting/recipes/anvil.tres" id="12_anvil"]
 [ext_resource type="Resource" path="res://crafting/recipes/chest.tres" id="13_chest"]
+[ext_resource type="Resource" path="res://crafting/recipes/cauldron.tres" id="14_cauldron"]
 
 [resource]
 script = ExtResource("1_catalog")
-definitions = Array[ExtResource("2_definition")]([ExtResource("7_torches"), ExtResource("13_chest"), ExtResource("12_anvil"), ExtResource("10_stone_pickaxe"), ExtResource("11_basic_rune")])
+definitions = Array[ExtResource("2_definition")]([ExtResource("7_torches"), ExtResource("13_chest"), ExtResource("12_anvil"), ExtResource("14_cauldron"), ExtResource("10_stone_pickaxe"), ExtResource("11_basic_rune")])

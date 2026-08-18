@@ -10,6 +10,7 @@
 [ext_resource type="Script" path="res://blocks/presentation/torch_renderer.gd" id="9_torch_renderer"]
 [ext_resource type="Script" path="res://crafting/stations/presentation/anvil_renderer.gd" id="10_anvil_renderer"]
 [ext_resource type="Script" path="res://chests/presentation/chest_renderer.gd" id="11_chest_renderer"]
+[ext_resource type="Script" path="res://crafting/stations/presentation/cauldron_renderer.gd" id="12_cauldron_renderer"]
 
 [node name="World" type="Node3D"]
 script = ExtResource("1_world")
@@ -32,3 +33,6 @@ script = ExtResource("10_anvil_renderer")
 
 [node name="Chests" type="Node3D" parent="."]
 script = ExtResource("11_chest_renderer")
+
+[node name="Cauldrons" type="Node3D" parent="."]
+script = ExtResource("12_cauldron_renderer")

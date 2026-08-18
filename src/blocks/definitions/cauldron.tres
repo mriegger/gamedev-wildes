@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="BlockDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://blocks/block_definition.gd" id="1_definition"]
+[ext_resource type="Texture2D" path="res://assets/textures/blocks/anvil_metal.png" id="2_texture"]
+
+[resource]
+script = ExtResource("1_definition")
+id = 18
+is_solid = true
+is_opaque = false
+is_raycast_solid = true
+is_breakable = true
+is_replaceable = false
+mine_duration = 0.75
+mining_tool_tag = &"pickaxe"
+minimum_mining_power = 1
+drop_item_id = &"cauldron"
+top_texture = ExtResource("2_texture")
+side_texture = ExtResource("2_texture")
+bottom_texture = ExtResource("2_texture")

@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="CraftingRecipeDefinition" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://crafting/crafting_recipe_definition.gd" id="1_recipe"]
+[ext_resource type="Script" path="res://crafting/crafting_ingredient.gd" id="2_ingredient"]
+[ext_resource type="Resource" path="res://items/definitions/cauldron.tres" id="3_output"]
+[ext_resource type="Resource" path="res://items/definitions/log_block.tres" id="4_wood"]
+[ext_resource type="Resource" path="res://items/definitions/stone_block.tres" id="5_stone"]
+
+[sub_resource type="Resource" id="wood"]
+script = ExtResource("2_ingredient")
+item = ExtResource("4_wood")
+count = 3
+
+[sub_resource type="Resource" id="stone"]
+script = ExtResource("2_ingredient")
+item = ExtResource("5_stone")
+count = 2
+
+[resource]
+script = ExtResource("1_recipe")
+id = &"cauldron"
+output_item = ExtResource("3_output")
+ingredients = Array[ExtResource("2_ingredient")]([SubResource("wood"), SubResource("stone")])

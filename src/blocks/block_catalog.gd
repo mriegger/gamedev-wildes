@@ -48,11 +48,11 @@ func _rebuild_lookup() -> void:
 				push_error("[BlockCatalog] Container must be targetable and non-breakable at %s" % source)
 				_is_valid = false
 	for id in range(BlockId.Type.COUNT):
-		if _definitions_by_id[id] == null:
+		var definition := _definitions_by_id[id]
+		if definition == null:
 			push_error("[BlockCatalog] Missing block for BlockId %d" % id)
 			_is_valid = false
-		elif BlockId.is_chunk_cube(id) or id == BlockId.Type.ANVIL or id == BlockId.Type.CHEST:
-			var definition := _definitions_by_id[id]
+		elif BlockId.is_chunk_cube(id) or id == BlockId.Type.ANVIL or id == BlockId.Type.CHEST or id == BlockId.Type.CAULDRON:
 			_validate_face_texture(definition.top_texture, "top", definition)
 			_validate_face_texture(definition.side_texture, "side", definition)
 			_validate_face_texture(definition.bottom_texture, "bottom", definition)

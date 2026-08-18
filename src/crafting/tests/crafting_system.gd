@@ -16,10 +16,11 @@ func _init() -> void:
 		&"torch_bundle",
 		&"chest",
 		&"anvil",
+		&"cauldron",
 		&"stone_pickaxe",
 		&"basic_rune",
 	]
-	_expect(recipe_catalog.definitions.size() == expected_recipe_ids.size(), "expected five general recipes")
+	_expect(recipe_catalog.definitions.size() == expected_recipe_ids.size(), "expected six general recipes")
 	for index in range(expected_recipe_ids.size()):
 		_expect(recipe_catalog.definitions[index].id == expected_recipe_ids[index], "recipe order differs at index %d" % index)
 	for recipe in recipe_catalog.definitions:
@@ -48,6 +49,7 @@ func _init() -> void:
 	_expect(recipe_catalog.get_definition(&"chest").get_ingredient_counts() == {&"log_block": 5}, "chest ingredients mismatch")
 	_expect(recipe_catalog.get_definition(&"basic_rune").get_ingredient_counts() == {&"sand_block": 32}, "basic rune ingredients mismatch")
 	_expect(recipe_catalog.get_definition(&"anvil").get_ingredient_counts() == {&"copper": 10}, "anvil ingredients mismatch")
+	_expect(recipe_catalog.get_definition(&"cauldron").get_ingredient_counts() == {&"log_block": 3, &"stone_block": 2}, "cauldron ingredients mismatch")
 	var progression_inventory := InventoryModel.new(item_catalog)
 	progression_inventory.slots[InventoryModel.HOTBAR_SIZE] = InventoryStack.new(&"stone_block", 10)
 	progression_inventory.slots[InventoryModel.HOTBAR_SIZE + 1] = InventoryStack.new(&"log_block", 5)

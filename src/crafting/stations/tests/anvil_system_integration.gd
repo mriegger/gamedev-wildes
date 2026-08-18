@@ -52,6 +52,7 @@ func _run() -> void:
 	for recipe_id in [&"copper_pickaxe", &"copper_hoe", &"copper_sword", &"copper_helmet", &"copper_chest_plate", &"copper_pants", &"copper_shoes"]:
 		_expect(not general_catalog.has_definition(recipe_id), "%s leaked into general crafting" % recipe_id)
 		_expect(anvil_catalog.has_definition(recipe_id), "%s is missing from anvil crafting" % recipe_id)
+	await _test_cauldron(block_catalog, item_catalog, general_catalog)
 
 	var renderer := AnvilRenderer.new()
 	root.add_child(renderer)
@@ -181,6 +182,124 @@ func _run() -> void:
 	targeting_view.free()
 	await process_frame
 	_finish()
+
+func _test_cauldron(block_catalog: BlockCatalog, item_catalog: ItemCatalog, general_catalog: CraftingRecipeCatalog) -> void:
+	var cauldron_block := block_catalog.get_definition(BlockId.Type.CAULDRON)
+	var cauldron_item := item_catalog.get_definition(&"cauldron")
+	var placement := cauldron_item.secondary_action as BlockPlacementActionDefinition
+	_expect(BlockId.get_display_name(BlockId.Type.CAULDRON) == "Cauldron", "cauldron display name is incorrect")
+	_expect(not BlockId.is_chunk_cube(BlockId.Type.CAULDRON), "cauldron is still baked into the cube mesh")
+	_expect(BlockId.is_ao_solid(BlockId.Type.CAULDRON), "cauldron does not occlude ambient light")
+	_expect(cauldron_block.is_solid and not cauldron_block.is_opaque and cauldron_block.is_raycast_solid, "cauldron physical properties are invalid")
+	_expect(cauldron_block.is_breakable and cauldron_block.mining_tool_tag == &"pickaxe" and cauldron_block.minimum_mining_power == 1, "cauldron does not use normal pickaxe mining")
+	_expect(cauldron_block.drop_item_id == &"cauldron", "mined cauldron does not use the normal block drop")
+	_expect(placement != null and placement.block == cauldron_block, "cauldron item does not place the canonical block")
+	_expect(item_catalog.get_item_for_block(BlockId.Type.CAULDRON) == cauldron_item, "cauldron reverse block mapping is invalid")
+	_expect(cauldron_item.max_stack == 1, "cauldron stack limit is not one")
+	var icon_image := cauldron_item.icon.get_image()
+	_expect(cauldron_item.icon.resource_path == "res://assets/textures/items/cauldron.png", "cauldron uses the wrong inventory icon")
+	_expect(icon_image != null and icon_image.get_size() == Vector2i(16, 16), "cauldron inventory icon is not 16x16 pixel art")
+	var icon_colors: Dictionary = {}
+	var partial_alpha_pixels := 0
+	if icon_image != null:
+		for y in range(icon_image.get_height()):
+			for x in range(icon_image.get_width()):
+				var pixel := icon_image.get_pixel(x, y)
+				if pixel.a > 0.0:
+					icon_colors[Color(pixel.r, pixel.g, pixel.b, 1.0)] = true
+				if pixel.a > 0.0 and pixel.a < 1.0:
+					partial_alpha_pixels += 1
+	_expect(icon_colors.size() <= 6, "cauldron inventory icon exceeds its pixel-art palette")
+	_expect(partial_alpha_pixels == 0, "cauldron inventory icon contains anti-aliased pixels")
+	_expect(general_catalog.has_definition(&"cauldron"), "cauldron is not craftable from general crafting")
+	_expect(general_catalog.get_definition(&"cauldron").get_ingredient_counts() == {&"log_block": 3, &"stone_block": 2}, "cauldron recipe ingredients are incorrect")
+
+	var renderer := CauldronRenderer.new()
+	root.add_child(renderer)
+	renderer.setup()
+	var position := Vector3i(3, 4, 5)
+	var rendered := renderer.spawn_cauldron(position)
+	_expect(rendered != null and rendered.position == Vector3(position), "cauldron renderer placed the model incorrectly")
+	_expect(rendered.get_child_count() == 15, "cauldron model does not contain the expected tripod, campfire, and smoke parts")
+	var body := rendered.get_node_or_null("Body") as MeshInstance3D
+	var liquid := rendered.get_node_or_null("Liquid") as MeshInstance3D
+	var support_left := rendered.get_node_or_null("SupportLeft") as MeshInstance3D
+	var firewood_left := rendered.get_node_or_null("FirewoodLeft") as MeshInstance3D
+	var firewood_right := rendered.get_node_or_null("FirewoodRight") as MeshInstance3D
+	var fire := rendered.get_node_or_null("Fire") as GPUParticles3D
+	var smoke := rendered.get_node_or_null("Smoke") as GPUParticles3D
+	var fire_light := rendered.get_node_or_null("FireLight") as OmniLight3D
+	_expect(body != null and body.mesh is CylinderMesh and (body.mesh as CylinderMesh).radial_segments == 8, "cauldron body is not low-poly")
+	_expect(liquid != null and liquid.mesh is CylinderMesh, "cauldron liquid surface is missing")
+	_expect(support_left != null and support_left.mesh is CylinderMesh and support_left.position.y > 0.4, "cauldron tripod support is missing")
+	_expect(firewood_left != null and firewood_right != null and firewood_left.mesh is CylinderMesh and firewood_right.mesh is CylinderMesh, "cauldron campfire logs are missing")
+	var model_bounds := AABB()
+	var found_model_mesh := false
+	for child in rendered.get_children():
+		if not child is MeshInstance3D:
+			continue
+		var model_mesh := child as MeshInstance3D
+		var child_bounds: AABB = model_mesh.transform * model_mesh.get_aabb()
+		model_bounds = model_bounds.merge(child_bounds) if found_model_mesh else child_bounds
+		found_model_mesh = true
+	_expect(found_model_mesh and model_bounds.position.x >= 0.0 and model_bounds.position.y >= 0.0 and model_bounds.position.z >= 0.0, "cauldron model extends below or beside its occupied voxel")
+	_expect(model_bounds.end.x <= 1.0 and model_bounds.end.y <= 1.0 and model_bounds.end.z <= 1.0, "cauldron model extends into a neighboring voxel")
+	_expect(fire != null and fire.emitting and fire.amount == 12, "cauldron fire effect is missing")
+	_expect(smoke != null and smoke.emitting and smoke.amount == 8, "cauldron smoke effect is missing")
+	var smoke_mesh := smoke.draw_pass_1 as SphereMesh if smoke != null else null
+	var smoke_material := smoke_mesh.material as StandardMaterial3D if smoke_mesh != null else null
+	_expect(smoke_material != null and smoke_material.vertex_color_use_as_albedo and smoke_material.transparency == BaseMaterial3D.TRANSPARENCY_ALPHA, "cauldron smoke does not use its fading particle colors")
+	_expect(fire_light != null and fire_light.light_energy > 0.0 and fire_light.light_energy < 1.2 and fire_light.omni_range < 9.0, "cauldron fire light is not dimmer than a torch")
+	renderer.set_hovered_cauldron(position)
+	_expect(body.material_overlay != null and liquid.material_overlay != null, "hover highlight did not cover the full cauldron")
+	renderer.set_hovered_cauldron(null)
+	_expect(body.material_overlay == null and liquid.material_overlay == null, "cauldron hover highlight did not clear")
+	renderer.set_placement_preview(Vector3i(6, 7, 8), true)
+	_expect(renderer._placement_preview != null and renderer._placement_preview.visible, "cauldron placement preview was not shown")
+	renderer.set_placement_preview(null, false)
+	_expect(not renderer._placement_preview.visible, "cauldron placement preview did not hide")
+
+	var texture_set := BlockTextureSet.new(block_catalog)
+	var mesher := ChunkMesher.new(1, 4, 1, false, texture_set)
+	var cache := PackedInt32Array()
+	cache.resize(3 * 4 * 3)
+	cache.fill(BlockId.Type.AIR)
+	cache[1 * 4 * 3 + 1 * 3 + 1] = BlockId.Type.STONE
+	cache[1 * 4 * 3 + 2 * 3 + 1] = BlockId.Type.CAULDRON
+	var mesh_data = mesher.build_mesh_data_from_cache({
+		"cache": cache,
+		"origin_x": 0,
+		"origin_z": 0,
+		"size_x": 1,
+		"size_z": 1,
+		"size_y": 4,
+		"cache_x": 3,
+		"cache_z": 3,
+	})
+	_expect(mesh_data != null and (mesh_data["vertices"] as PackedVector3Array).size() == 24, "cauldron hid a face of the supporting terrain block")
+
+	var world := VoxelWorld.new(20, 36, 5, 12.0, block_catalog)
+	var pickup_position := Vector3i(2, 20, 2)
+	_expect(world.try_place_block(pickup_position, BlockId.Type.CAULDRON).is_success(), "test cauldron could not be placed")
+	var unarmed_action := load("res://items/actions/definitions/unarmed_mining.tres") as MiningActionDefinition
+	var pickaxe_action := item_catalog.get_definition(&"stone_pickaxe").primary_action as MiningActionDefinition
+	_expect(not unarmed_action.can_mine(cauldron_block), "bare hands can mine a cauldron")
+	_expect(pickaxe_action.can_mine(cauldron_block), "stone pickaxe cannot mine a cauldron")
+	var mine_batch := world.try_mine_block(pickup_position)
+	_expect(mine_batch.size() == 1 and (mine_batch[0] as BlockEdit).is_success(), "cauldron could not be mined normally")
+	_expect(block_catalog.get_definition((mine_batch[0] as BlockEdit).old_id).drop_item_id == &"cauldron", "mined cauldron returned the wrong item")
+
+	var other_chunk_position := Vector3i(45, 20, 2)
+	_expect(world.try_place_block(pickup_position, BlockId.Type.CAULDRON).is_success(), "indexed-load cauldron could not be placed")
+	_expect(world.try_place_block(other_chunk_position, BlockId.Type.CAULDRON).is_success(), "other-chunk cauldron could not be placed")
+	var chunk_renderer := CauldronRenderer.new()
+	root.add_child(chunk_renderer)
+	chunk_renderer.setup()
+	_expect(chunk_renderer.load_cauldrons_for_chunk(0, 0, 20, world) == 1, "indexed chunk load did not load the local cauldron")
+	_expect(not chunk_renderer.cauldron_instances.has(other_chunk_position), "indexed chunk load scanned a cauldron from another chunk")
+	renderer.queue_free()
+	chunk_renderer.queue_free()
+	await process_frame
 
 func _expect(condition: bool, message: String) -> void:
 	if not condition:
