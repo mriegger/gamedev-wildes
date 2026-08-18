@@ -22,15 +22,19 @@ func _init() -> void:
 	if chunk_root != null:
 		var ground_count := 0
 		var decorative_count := 0
+		var lower_canopy_count := 0
 		for child in chunk_root.get_children():
 			if child.name.begins_with("GroundApple_"):
 				ground_count += 1
 			elif child.name.begins_with("DecorativeApple_"):
 				decorative_count += 1
+				if (child as Node3D).position.y <= apple_position.y + 5.1:
+					lower_canopy_count += 1
 				var offset := (child as Node3D).position - Vector3(apple_position.x + 0.5, (child as Node3D).position.y, apple_position.z + 0.5)
 				_expect(maxf(absf(offset.x), absf(offset.z)) >= 1.6, "decorative apple remained inside the leaf blocks")
 		_expect(ground_count >= 2 and ground_count <= 6, "apple tree did not have two to six ground apples")
-		_expect(decorative_count == 10, "apple tree did not have exactly ten decorative apples")
+		_expect(decorative_count == 15, "apple tree did not have exactly fifteen decorative apples")
+		_expect(lower_canopy_count >= 10, "decorative apples were not biased toward the lower canopy")
 		_expect(apple_trees._targets.size() == ground_count, "decorative apples became harvest targets")
 		if not apple_trees._targets.is_empty():
 			var first_bounds := apple_trees.get_harvest_target_bounds(int(apple_trees._targets.keys()[0]))

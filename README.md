@@ -160,7 +160,7 @@ save. The
 Harvested pumpkins stack in the inventory and restore the player's health to full when right-clicked
 in the backpack or hotbar, or when selected and used with right-click in the world.
 About five percent of procedural trees carry apples: two to six collectible apples spawn beneath
-the tree and ten decorate its outer leaves. Collected apples persist in saves and restore
+the tree and fifteen decorate the lower outer leaves. Collected apples persist in saves and restore
 75 percent of maximum health through the same inventory consumption controls.
 
 **UI & saves.** Backpack and hotbar stacks can be split by scrolling while left-dragging. The side

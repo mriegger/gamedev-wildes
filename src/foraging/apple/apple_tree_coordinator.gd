@@ -12,16 +12,21 @@ const GROUND_OFFSETS: Array[Vector2] = [
 	Vector2(-0.62, -0.55),
 ]
 const DECORATIVE_OFFSETS: Array[Vector3] = [
-	Vector3(1.64, 0.15, 0.18),
-	Vector3(-1.64, 0.42, -0.12),
-	Vector3(0.16, 0.28, 1.64),
+	Vector3(1.64, 0.10, 0.18),
+	Vector3(-1.64, 0.22, -0.12),
+	Vector3(0.16, 0.36, 1.64),
 	Vector3(-0.18, 0.05, -1.64),
-	Vector3(1.64, 0.58, -0.48),
-	Vector3(-1.64, 0.12, 0.52),
-	Vector3(0.52, 0.64, 1.64),
-	Vector3(-0.54, 0.34, -1.64),
-	Vector3(1.62, 0.36, 1.62),
-	Vector3(-1.62, 0.52, -1.62),
+	Vector3(1.64, 0.52, -0.48),
+	Vector3(-1.64, 0.08, 0.52),
+	Vector3(0.52, 0.62, 1.64),
+	Vector3(-0.54, 0.28, -1.64),
+	Vector3(1.62, 0.42, 1.62),
+	Vector3(-1.62, 0.58, -1.62),
+	Vector3(1.62, 0.16, -1.62),
+	Vector3(-1.62, 0.34, 1.62),
+	Vector3(1.64, 0.78, 0.72),
+	Vector3(-1.64, 0.88, -0.70),
+	Vector3(0.72, 0.72, -1.64),
 ]
 
 @export var definition: AppleTreeDefinition
@@ -185,7 +190,7 @@ func _render_apple_tree(root: Node3D, coord: Vector2i, tree_position: Vector3i, 
 	_shuffle(decorative_offsets, random)
 	for index in range(definition.decorative_apple_count):
 		var offset := decorative_offsets[index] as Vector3
-		var position := Vector3(tree_position.x + 0.5, top_log_y + 2.4, tree_position.z + 0.5) + offset
+		var position := Vector3(tree_position.x + 0.5, top_log_y + 1.45, tree_position.z + 0.5) + offset
 		var apple := _spawn_apple_model(root, position, definition.decorative_apple_size, false)
 		apple.name = "DecorativeApple_%d" % index
 
