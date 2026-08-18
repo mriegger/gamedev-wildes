@@ -39,10 +39,11 @@ func _run() -> void:
 	_expect(definition.id == &"stone_golem", "stable Stone Golem ID changed")
 	_expect(is_equal_approx(definition.body_width, 1.2) and is_equal_approx(definition.body_height, 2.4), "Stone Golem body dimensions changed")
 	_expect(definition.experience_reward == 30 and definition.ambient_max_active == 2, "Stone Golem reward or active cap changed")
+	var world := _make_world()
 	var actor := definition.actor_scene.instantiate() as StoneGolemActorType
 	get_root().add_child(actor)
 	actor.global_position = Vector3(0.5, FEET_Y, 0.5)
-	actor.setup(81, definition, _make_world(), 8101, EntityNavigationLimits.new(32, 512, 2))
+	actor.setup(81, definition, world, 8101, EntityNavigationLimits.new(32, 512, 2))
 	actor.set_process(false)
 	actor.on_ground = true
 	actor.advance_visual_fade(actor.visual_fader.fade_in_seconds)
@@ -55,6 +56,32 @@ func _run() -> void:
 	var animation := actor.animation_driver as StoneGolemAnimationDriverType
 	animation.advance(0.1)
 	_expect(animation.get_current_state() == StoneGolemAnimationDriverType.IDLE, "dormant Stone Golem did not present idle")
+	var profile := animation.animator.profile
+	_expect(
+		is_equal_approx(profile.landing_seconds, 0.38)
+		and is_equal_approx(profile.landing_hold_seconds, 0.09)
+		and is_equal_approx(profile.landing_squash, 0.11)
+		and is_equal_approx(profile.landing_widen, 0.045)
+		and is_equal_approx(profile.landing_rebound_stretch, 0.025),
+		"Stone Golem landing tuning changed",
+	)
+	actor.global_position = Vector3(0.5, FEET_Y + 2.0, 0.5)
+	actor.velocity = Vector3.ZERO
+	actor.on_ground = false
+	var saw_fall := false
+	var saw_land := false
+	for _frame_index in range(120):
+		actor.tick(1.0 / 60.0, _observation(Vector3(8.5, FEET_Y, 0.5)), Vector3.ZERO, NavigationSearchBudget.new(2))
+		animation.advance(1.0 / 60.0)
+		var animation_state := animation.animator.get_current_state()
+		saw_fall = saw_fall or animation_state == BlockyHumanoidAnimator.FALL
+		saw_land = saw_land or animation_state == BlockyHumanoidAnimator.LAND
+		if saw_land:
+			break
+	_expect(saw_fall, "falling Stone Golem did not present its fall state")
+	_expect(saw_land, "falling Stone Golem did not consume its landing tuning")
+	_expect(actor.on_ground and absf(actor.global_position.y - FEET_Y) < 0.12, "Stone Golem did not settle within the voxel floor contact tolerance")
+	_expect(actor.brain.state == StoneGolemBrainType.State.DORMANT, "falling and landing woke the dormant Stone Golem")
 	actor.queue_free()
 	for _frame_index in range(8):
 		await process_frame
