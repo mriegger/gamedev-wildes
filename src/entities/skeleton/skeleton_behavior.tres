@@ -11,6 +11,7 @@ gravity = 30.0
 jump_velocity = 7.0
 detection_range = 30.0
 roam_radius = 30.0
+ambush_range = 5.0
 melee_profile = ExtResource("2_melee")
 roam_goal_seconds = 4.0
 repath_seconds = 0.5

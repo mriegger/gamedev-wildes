@@ -24,6 +24,7 @@ var _cover_search_in_progress: bool = false
 var _attack_remaining: float = 0.0
 var _attack_cooldown_remaining: float = 0.0
 var _attack_started: bool = false
+var _post_attack_retreat_required: bool = false
 
 func _init(definition: SkeletonBehaviorDefinition, seed_value: int):
 	assert(definition != null and definition.melee_profile != null)
@@ -40,6 +41,7 @@ func advance(delta: float, self_position: Vector3, player_position: Vector3, cur
 		_attack_remaining = maxf(_attack_remaining - delta, 0.0)
 		if is_zero_approx(_attack_remaining):
 			_attack_remaining = 0.0
+			_post_attack_retreat_required = true
 		state = State.ATTACK
 		return
 	if not is_player_in_detection_range(self_position, player_position):
@@ -49,6 +51,12 @@ func advance(delta: float, self_position: Vector3, player_position: Vector3, cur
 			_advance_roam(delta, self_position)
 		return
 	if state == State.ATTACK:
+		if _post_attack_retreat_required:
+			_request_cover_search()
+		else:
+			_enter_sprint()
+	var within_ambush_range := _is_player_in_ambush_range(self_position, player_position)
+	if within_ambush_range and not _post_attack_retreat_required and state != State.SPRINT:
 		_enter_sprint()
 	match state:
 		State.ROAM:
@@ -60,7 +68,11 @@ func advance(delta: float, self_position: Vector3, player_position: Vector3, cur
 			_cover_revalidation_remaining = maxf(_cover_revalidation_remaining - delta, 0.0)
 		State.SPRINT:
 			_movement_goal = player_position
-			_advance_cover_retry(delta)
+			if within_ambush_range:
+				_cancel_cover_search()
+				_cover_retry_remaining = _definition.cover_retry_seconds
+			else:
+				_advance_cover_retry(delta)
 			var profile := _definition.melee_profile
 			if self_position.distance_squared_to(player_position) <= profile.reach * profile.reach and is_zero_approx(_attack_cooldown_remaining):
 				_start_attack()
@@ -72,8 +84,12 @@ func is_player_in_detection_range(self_position: Vector3, player_position: Vecto
 	var horizontal_offset := Vector2(player_position.x - self_position.x, player_position.z - self_position.z)
 	return horizontal_offset.length_squared() <= _definition.detection_range * _definition.detection_range
 
+func _is_player_in_ambush_range(self_position: Vector3, player_position: Vector3) -> bool:
+	var horizontal_offset := Vector2(player_position.x - self_position.x, player_position.z - self_position.z)
+	return horizontal_offset.length_squared() <= _definition.ambush_range * _definition.ambush_range
+
 func needs_detection_occlusion_check(self_position: Vector3, player_position: Vector3) -> bool:
-	return state == State.ROAM and is_player_in_detection_range(self_position, player_position)
+	return state == State.ROAM and is_player_in_detection_range(self_position, player_position) and not _is_player_in_ambush_range(self_position, player_position)
 
 func needs_cover_search() -> bool:
 	return _is_cover_search_state() and _cover_search_pending
@@ -100,11 +116,13 @@ func record_cover_exhausted():
 	assert(_is_cover_search_state() and _cover_search_in_progress)
 	_cover_search_pending = false
 	_cover_search_in_progress = false
+	_post_attack_retreat_required = false
 	_enter_sprint()
 
 func record_cover_arrival(current_position_hidden: bool):
 	assert(state == State.MOVE_TO_COVER)
 	if current_position_hidden:
+		_post_attack_retreat_required = false
 		_enter_hide()
 	else:
 		_request_cover_search()
@@ -153,6 +171,7 @@ func _request_cover_search():
 
 func _enter_sprint():
 	state = State.SPRINT
+	_cancel_cover_search()
 	_movement_goal = _last_player_position
 	_cover_retry_remaining = _definition.cover_retry_seconds
 	_cover_revalidation_remaining = 0.0
@@ -166,6 +185,7 @@ func _enter_hide():
 func _enter_roam(self_position: Vector3):
 	state = State.ROAM
 	_cancel_cover_search()
+	_post_attack_retreat_required = false
 	_cover_retry_remaining = 0.0
 	_cover_revalidation_remaining = 0.0
 	_select_roam_goal(self_position)

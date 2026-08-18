@@ -173,12 +173,25 @@ func _follow_movement_goal(
 			brain.reject_movement_goal(global_position)
 		return Vector3.ZERO
 	var desired_velocity := apply_path_follow_result(result, delta, _behavior.jump_velocity)
+	if is_cover_goal and desired_velocity.is_zero_approx() and _is_inside_movement_goal_cell():
+		var exact_offset := brain.get_movement_goal() - global_position
+		exact_offset.y = 0.0
+		if not exact_offset.is_zero_approx():
+			desired_velocity = exact_offset.normalized() * speed
 	return limit_planar_velocity(desired_velocity + separation_velocity, speed)
 
 func _has_reached_movement_goal() -> bool:
 	var goal := brain.get_movement_goal()
 	var horizontal_offset := Vector2(goal.x - global_position.x, goal.z - global_position.z)
 	return horizontal_offset.length_squared() < 0.09 and absf(goal.y - global_position.y) < 0.35
+
+func _is_inside_movement_goal_cell() -> bool:
+	var goal := brain.get_movement_goal()
+	return (
+		floori(global_position.x) == floori(goal.x)
+		and floori(global_position.z) == floori(goal.z)
+		and absf(goal.y - global_position.y) < 0.35
+	)
 
 func _is_hidden(position: Vector3, observation: EntityTargetObservation) -> bool:
 	return VoxelCameraOcclusion.is_hidden(

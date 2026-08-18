@@ -542,8 +542,8 @@ func _test_skeleton_timed_melee(world: VoxelWorld, profile: MeleeAttackProfile) 
 	combat.melee_outcome_committed.connect(_on_melee_contact)
 	var observation := EntityTargetObservation.create(
 		player.global_position,
-		player.global_position + Vector3(0.0, 8.0, 8.0),
-		Vector3(0.0, -1.0, -1.0).normalized(),
+		player.global_position + Vector3(0.0, 0.9, -8.0),
+		Vector3.BACK,
 		Vector3.RIGHT,
 	)
 	coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, observation, 20.0)
@@ -556,11 +556,21 @@ func _test_skeleton_timed_melee(world: VoxelWorld, profile: MeleeAttackProfile) 
 	skeleton.global_position = player.global_position + Vector3(0.0, 0.0, -1.0)
 	skeleton.velocity = Vector3.ZERO
 	skeleton.on_ground = true
+	var attack_origin := skeleton.global_position
+	for y in range(int(FEET_Y), int(FEET_Y) + 2):
+		var placement := world.try_place_block(Vector3i(0, y, 1), BlockId.Type.STONE)
+		_expect(placement.is_success(), "could not build Skeleton post-attack cover")
 	skeleton.brain.advance(0.0, skeleton.global_position, skeleton.global_position + Vector3(31.0, 0.0, 0.0), false)
-	skeleton.brain.advance(0.0, skeleton.global_position, player.global_position, false)
-	_expect(skeleton.brain.needs_cover_search(), "Skeleton melee fixture did not enter cover search")
-	skeleton.brain.record_cover_search_started()
-	skeleton.brain.record_cover_exhausted()
+	var boundary_observation := EntityTargetObservation.create(
+		skeleton.global_position + Vector3(5.0, 0.0, 0.0),
+		observation.camera_origin,
+		observation.camera_forward,
+		observation.camera_right,
+	)
+	coordinator.tick(0.0, boundary_observation, 20.0)
+	_expect(skeleton.brain.state == SkeletonBrain.State.SPRINT, "Skeleton melee fixture did not sprint at the five-block threshold")
+	_expect(is_equal_approx(skeleton.max_speed, 5.5), "five-block ambush did not select Skeleton sprint speed")
+	_expect(is_equal_approx(Vector2(skeleton.velocity.x, skeleton.velocity.z).length(), 5.5), "five-block ambush did not move at sprint speed")
 	var contact_count_before := _contacts.size()
 	var player_hp_before := player_stats.current_hp
 	coordinator.tick(0.0, observation, 20.0)
@@ -581,7 +591,22 @@ func _test_skeleton_timed_melee(world: VoxelWorld, profile: MeleeAttackProfile) 
 	coordinator.tick(profile.duration, observation, 20.0)
 	_expect(_contacts.size() == contact_count_before + 1, "one Skeleton swing contacted more than once")
 	_expect(is_equal_approx(player_stats.current_hp, player_hp_before - 10.0), "one Skeleton swing dealt damage more than once")
+	var reached_cover_state := false
+	for _step in range(80):
+		coordinator.tick(0.1, observation, 20.0)
+		if skeleton.brain.state == SkeletonBrain.State.MOVE_TO_COVER or skeleton.brain.state == SkeletonBrain.State.HIDE:
+			reached_cover_state = true
+		if skeleton.brain.state == SkeletonBrain.State.HIDE:
+			break
+	_expect(reached_cover_state, "Skeleton did not accept reachable cover after its attack")
+	_expect(skeleton.brain.state == SkeletonBrain.State.HIDE, "Skeleton did not finish its post-attack cover retreat: state=%d position=%s goal=%s" % [skeleton.brain.state, skeleton.global_position, skeleton.brain.get_movement_goal()])
+	_expect(skeleton.global_position.distance_to(attack_origin) > 1.0, "Skeleton accepted its attack position as post-attack cover")
+	coordinator.tick(0.0, observation, 20.0)
+	_expect(skeleton.brain.state == SkeletonBrain.State.SPRINT or skeleton.brain.state == SkeletonBrain.State.ATTACK, "hidden Skeleton did not resume its five-block ambush")
 	await _cleanup(combat, coordinator, player, camera)
+	for y in range(int(FEET_Y), int(FEET_Y) + 2):
+		var mined_edits := world.try_mine_block(Vector3i(0, y, 1))
+		_expect(not mined_edits.is_empty() and (mined_edits[0] as BlockEdit).is_success(), "could not remove Skeleton post-attack cover")
 
 func _test_player_death_screen() -> void:
 	var scene := load("res://ui/screens/death/player_death_screen.tscn") as PackedScene
