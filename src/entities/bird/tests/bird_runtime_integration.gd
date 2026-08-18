@@ -56,6 +56,8 @@ func _run() -> void:
 	var bird := runtime.get_actor(1) as BirdActor
 	_expect(bird != null and bird.vocalizations != null, "bird scene did not configure vocalizations")
 	_expect(bird.vocalizations.profile.streams.size() == 3, "duck vocalization profile did not contain all three calls")
+	_expect(bird.vocalizations.bus == &"SFX" and is_equal_approx(bird.vocalizations.volume_db, -4.0), "bird vocalization output was not configured")
+	_expect(is_equal_approx(bird.vocalizations.unit_size, 10.0) and is_equal_approx(bird.vocalizations.max_distance, 56.0), "bird vocalization attenuation did not cover its spawn range")
 	_expect(not bird.vocalizations.is_processing(), "aerial bird enabled grounded vocalizations")
 	_expect(bird != null and bird._has_landing_target, "bird did not acquire an initial landing target")
 	var bird_animation := bird.animation_driver as BirdAnimationDriver
