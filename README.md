@@ -160,10 +160,10 @@ health potions restore health completely.
 
 **Developer console.** Press `/` to open a command line at the bottom of the screen. The
 `spawn <item> [count]` command adds any catalog item directly to the backpack for testing, with the
-count defaulting to one when omitted. Item
-IDs and display names are accepted; equipment IDs remain material-qualified, such as
-`copper_pickaxe` and `copper_sword`. Structure construction uses `dev structure new`,
-`dev structure import`, `dev structure export`, and `dev structure exit`. Press `/` again or
+count defaulting to one when omitted. `sethealth <number>` sets current health to a non-negative
+value, clamping values above the player's current maximum. Item IDs and display names are accepted;
+equipment IDs remain material-qualified, such as `copper_pickaxe` and `copper_sword`. Structure construction uses
+`dev structure new`, `dev structure import`, `dev structure export`, and `dev structure exit`. Press `/` again or
 `Esc` to close the console without opening the pause menu. Copper can be mined from deposits or
 added directly with `spawn copper <count>`. New worlds contain one seeded 5×4 pumpkin patch 35–45
 blocks from the initial player spawn. Its location, growth states, and rotations persist in the

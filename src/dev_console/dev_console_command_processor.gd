@@ -54,6 +54,8 @@ func execute(command_line: String) -> ExecutionResult:
 		return _execute_spawn(tokens)
 	if command == "give_xp":
 		return _execute_give_xp(tokens)
+	if command == "sethealth":
+		return _execute_sethealth(tokens)
 	if command == "dev":
 		return _execute_dev(tokens)
 	return ExecutionResult.REJECTED
@@ -88,6 +90,15 @@ func _execute_give_xp(tokens: PackedStringArray) -> ExecutionResult:
 	if amount < 1 or actor_stats.is_at_maximum_level():
 		return ExecutionResult.REJECTED
 	actor_stats.add_experience(amount)
+	return ExecutionResult.KEEP_OPEN
+
+func _execute_sethealth(tokens: PackedStringArray) -> ExecutionResult:
+	if tokens.size() != 2 or not tokens[1].is_valid_float():
+		return ExecutionResult.REJECTED
+	var health := tokens[1].to_float()
+	if not is_finite(health) or health < 0.0:
+		return ExecutionResult.REJECTED
+	actor_stats.set_current_hp(minf(health, actor_stats.get_value(&"hp")))
 	return ExecutionResult.KEEP_OPEN
 
 func _execute_dev(tokens: PackedStringArray) -> ExecutionResult:

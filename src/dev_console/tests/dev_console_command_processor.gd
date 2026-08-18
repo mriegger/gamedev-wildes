@@ -99,6 +99,18 @@ func _init() -> void:
 	_expect(stats.level == 3 and stats.experience == 0, "give_xp did not apply multi-level progression")
 	_expect_result(processor.execute("give_xp +1"), DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN, "explicitly positive give_xp command failed")
 	_expect(stats.level == 3 and stats.experience == 1, "explicitly positive give_xp command changed progression incorrectly")
+	stats.damage(75.0)
+	_expect_result(processor.execute("sethealth 42"), DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN, "sethealth command failed")
+	_expect(is_equal_approx(stats.current_hp, 42.0), "sethealth did not set integer health")
+	_expect_result(processor.execute("SETHEALTH 12.5"), DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN, "case-insensitive decimal sethealth command failed")
+	_expect(is_equal_approx(stats.current_hp, 12.5), "sethealth did not set decimal health")
+	_expect_result(processor.execute("sethealth 0"), DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN, "zero-health sethealth command failed")
+	_expect(stats.is_dead(), "sethealth zero did not deplete health")
+	_expect_result(processor.execute("sethealth %s" % stats.get_value(&"hp")), DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN, "maximum-health sethealth command failed")
+	_expect(is_equal_approx(stats.current_hp, stats.get_value(&"hp")), "sethealth did not restore maximum health")
+	stats.damage(25.0)
+	_expect_result(processor.execute("sethealth %s" % (stats.get_value(&"hp") + 100.0)), DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN, "sethealth value above maximum health was rejected")
+	_expect(is_equal_approx(stats.current_hp, stats.get_value(&"hp")), "sethealth value above maximum health was not clamped")
 
 	var maximum_grant_stats := ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
 	var maximum_grant_processor := DevConsoleCommandProcessor.new()
@@ -123,6 +135,7 @@ func _init() -> void:
 	var before_invalid := inventory.to_dict()
 	var level_before_invalid := stats.level
 	var experience_before_invalid := stats.experience
+	var health_before_invalid := stats.current_hp
 	_expect_result(processor.execute("spawn unknown_item 1"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "unknown item command was accepted")
 	_expect_result(processor.execute("spawn pickaxe 1"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "ambiguous pickaxe alias was accepted")
 	_expect_result(processor.execute("spawn sword 1"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "ambiguous sword alias was accepted")
@@ -141,12 +154,18 @@ func _init() -> void:
 	_expect_result(processor.execute("give_xp 9223372036854775808"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "overflowing integer token was accepted")
 	_expect_result(processor.execute("give_xp 999999999999999999999999999999999999"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "unbounded integer token was accepted")
 	_expect_result(processor.execute("give_xp 1 extra"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "give_xp command with extra arguments was accepted")
+	_expect_result(processor.execute("sethealth"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "sethealth command without a value was accepted")
+	_expect_result(processor.execute("sethealth -1"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "negative sethealth value was accepted")
+	_expect_result(processor.execute("sethealth nope"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "non-numeric sethealth value was accepted")
+	_expect_result(processor.execute("sethealth nan"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "non-finite sethealth value was accepted")
+	_expect_result(processor.execute("sethealth 10 extra"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "sethealth command with extra arguments was accepted")
 	_expect_result(processor.execute("give stone 1"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "unknown command was accepted")
 	_expect_result(processor.execute("spawn"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "spawn command without an item was accepted")
 	_expect_result(processor.execute("spawn pumpkin_patch 1"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "pumpkin patch count argument was accepted")
 	_expect(pumpkin_patch.spawn_count == 1, "invalid pumpkin patch command invoked the coordinator")
 	_expect(inventory.to_dict() == before_invalid, "invalid commands changed the inventory")
 	_expect(stats.level == level_before_invalid and stats.experience == experience_before_invalid, "invalid commands changed player progression")
+	_expect(is_equal_approx(stats.current_hp, health_before_invalid), "invalid commands changed player health")
 
 	var full_inventory := InventoryModel.new(item_catalog)
 	for index in range(InventoryModel.HOTBAR_SIZE, InventoryModel.FILLABLE_SIZE):

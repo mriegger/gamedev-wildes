@@ -53,6 +53,11 @@ func _process(_delta: float) -> bool:
 		command_input.text_submitted.emit(command_input.text)
 		_expect(_stats.level == 1 and _stats.experience == 50, "submitted give_xp command did not update progression")
 		_expect(_console.is_open(), "give_xp command closed the developer console")
+		_stats.damage(75.0)
+		command_input.text = "sethealth 40"
+		command_input.text_submitted.emit(command_input.text)
+		_expect(is_equal_approx(_stats.current_hp, 40.0), "submitted sethealth command did not update health")
+		_expect(_console.is_open(), "sethealth command closed the developer console")
 		command_input.text = "dev structure new"
 		command_input.text_submitted.emit(command_input.text)
 		_phase = 3
