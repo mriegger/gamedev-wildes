@@ -5,6 +5,7 @@ const LANDING_SEARCH_ATTEMPTS: int = 8
 const FLIGHT_GOAL_DISTANCE: float = 0.8
 
 var brain: BirdBrain
+var color_variant: BirdAnimationDriver.ColorVariant
 
 var _behavior: BirdBehaviorDefinition
 var _path_follower: VoxelPathFollower
@@ -30,9 +31,16 @@ func setup(
 	brain = BirdBrain.new(_behavior, behavior_seed)
 	_path_follower = VoxelPathFollower.new(voxel_space, definition.body_width, definition.body_height, _behavior.repath_seconds, navigation_limits)
 	assert(animation_driver is BirdAnimationDriver)
+	color_variant = color_variant_for_seed(behavior_seed)
+	(animation_driver as BirdAnimationDriver).apply_color_variant(color_variant)
 	on_ground = false
 	max_speed = _behavior.flight_speed
 	_try_select_landing_target()
+
+static func color_variant_for_seed(seed_value: int) -> BirdAnimationDriver.ColorVariant:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value ^ 0x4b1d5eed
+	return rng.randi_range(BirdAnimationDriver.ColorVariant.CROW, BirdAnimationDriver.ColorVariant.BLUEBIRD) as BirdAnimationDriver.ColorVariant
 
 func tick(delta: float, _player_position: Vector3, separation_velocity: Vector3, navigation_search_budget: NavigationSearchBudget):
 	assert(brain != null and voxel_space != null)

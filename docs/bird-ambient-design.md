@@ -6,7 +6,7 @@ Implementation proposal for a first-pass ambient bird species. The design is sco
 
 ## Player Experience
 
-Birds make the daytime world feel inhabited without becoming a new progression system. A bird appears in flight, chooses a clear landing site, descends, idles and walks briefly, then takes off and repeats the cycle elsewhere. Birds fade away when night begins and return through normal ambient spawning the next day.
+Birds make the daytime world feel inhabited without becoming a new progression system. A bird appears in flight, chooses a clear landing site, descends, idles and walks briefly, then takes off and repeats the cycle elsewhere. Birds use deterministic crow, redbird, duck, or bluebird palettes. They fade away when night begins and return through normal ambient spawning the next day.
 
 The first version is successful when:
 
@@ -15,6 +15,7 @@ The first version is successful when:
 - At most four birds are active at once.
 - Birds cannot be acquired as melee targets, damaged, killed, or rewarded with XP.
 - Birds visibly alternate between flight, landing, grounded idle, walking, and takeoff.
+- Each bird deterministically selects one of four isolated color palettes from its behavior seed.
 - Birds never spawn inside terrain and land only on grass, dirt, or sand with enough body clearance.
 - Grounded birds use the shared bounded navigation budget; flying birds do not run voxel path searches.
 - The same world seed and behavior seed produce the same spawn and behavior sequence.
@@ -214,6 +215,8 @@ Initial proportions:
 - Wings: 0.35 × 0.05 × 0.25, darker brown
 - Tail: 0.18 × 0.06 × 0.18, darker brown
 - Legs and feet: narrow, muted orange-brown
+
+Each actor duplicates its presentation materials before applying its seeded crow, redbird, duck, or bluebird palette, so pooled actors and simultaneous birds cannot recolor one another.
 
 `BirdAnimationDriver` extends `EntityAnimationDriver` and derives presentation from actor state:
 

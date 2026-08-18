@@ -31,6 +31,12 @@ func _run() -> void:
 	_expect(definition != null and definition.validate(definition.resource_path), "bird definition is invalid")
 	_expect(definition.spawn_placement == EntityDefinition.SpawnPlacement.AERIAL, "bird is not aerially placed")
 	_expect(not definition.combat_targetable and definition.experience_reward == 0, "bird is not purely ambient")
+	var sampled_variants: Dictionary = {}
+	for seed_value in 64:
+		var sampled_variant := BirdActor.color_variant_for_seed(seed_value)
+		_expect(sampled_variant == BirdActor.color_variant_for_seed(seed_value), "bird color selection was not deterministic")
+		sampled_variants[sampled_variant] = true
+	_expect(sampled_variants.size() == BirdAnimationDriver.ColorVariant.size(), "seeded birds did not cover all four color variants")
 	var world := _make_world()
 	var aerial_position := Vector3(0.5, FEET_Y + 10.0, 0.5)
 	_expect(EntitySpawnGeometry.can_spawn(world, definition, aerial_position), "clear aerial position was rejected")
@@ -47,6 +53,8 @@ func _run() -> void:
 	var bird := runtime.get_actor(1) as BirdActor
 	_expect(bird != null and bird.vocalizations == null, "bird scene did not use silent presentation")
 	_expect(bird != null and bird._has_landing_target, "bird did not acquire an initial landing target")
+	var bird_animation := bird.animation_driver as BirdAnimationDriver
+	_expect(bird_animation._body_mesh.material_override is StandardMaterial3D, "bird color variant did not create an instance material")
 	_expect(runtime.try_apply_damage(1, 1.0) == null, "direct damage affected an untargetable bird")
 	var visited: Dictionary = {}
 	var observed_folded_wings := false
@@ -73,9 +81,18 @@ func _run() -> void:
 	var blocked_runtime := EntityRuntime.new()
 	root.add_child(blocked_runtime)
 	blocked_runtime.setup(catalog, blocked_world, 1, 1, EntityNavigationLimits.new(24, 256, 1))
-	var blocked_ids := blocked_runtime.try_spawn_batch([EntitySpawnRequest.new(&"bird", aerial_position, 7171)])
+	var alternate_seed := 7172
+	while BirdActor.color_variant_for_seed(alternate_seed) == bird.color_variant:
+		alternate_seed += 1
+	var blocked_ids := blocked_runtime.try_spawn_batch([EntitySpawnRequest.new(&"bird", aerial_position, alternate_seed)])
 	var blocked_bird := blocked_runtime.get_actor(blocked_ids[0]) as BirdActor if not blocked_ids.is_empty() else null
 	_expect(blocked_bird != null and not blocked_bird._has_landing_target, "bird selected a disallowed landing floor")
+	if blocked_bird != null:
+		var blocked_animation := blocked_bird.animation_driver as BirdAnimationDriver
+		var first_color := (bird_animation._body_mesh.material_override as StandardMaterial3D).albedo_color
+		var second_color := (blocked_animation._body_mesh.material_override as StandardMaterial3D).albedo_color
+		_expect(not first_color.is_equal_approx(second_color), "different bird variants shared the same body color")
+		_expect(not is_same(bird_animation._body_mesh.material_override, blocked_animation._body_mesh.material_override), "bird instances shared a mutable color material")
 	blocked_runtime.shutdown()
 	runtime.shutdown()
 	blocked_runtime.queue_free()
