@@ -41,7 +41,13 @@ func tick(delta: float, observation: EntityTargetObservation, separation_velocit
 	_emit_melee_contact(_timed_melee_contact.advance(delta))
 	var visible := _visibility_sensor.advance(delta, global_position, player_position)
 	var previous_state := brain.state
-	brain.advance(delta, global_position, player_position, visible)
+	brain.advance(
+		delta,
+		global_position,
+		player_position,
+		visible,
+		_visibility_sensor.did_sample_line_of_sight(),
+	)
 	if brain.state != previous_state and brain.state != GroundMeleeEnemyBrain.State.ATTACK:
 		_path_follower.request_repath()
 	var attacking := brain.state == GroundMeleeEnemyBrain.State.ATTACK

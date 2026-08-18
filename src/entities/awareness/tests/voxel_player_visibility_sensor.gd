@@ -35,8 +35,11 @@ func _test_phase_staggering() -> void:
 	var second := VoxelPlayerVisibilitySensorType.new(world, DETECTION_RANGE, BODY_HEIGHT, 2)
 	var phase_delta := VoxelPlayerVisibilitySensorType.SAMPLE_INTERVAL_SECONDS / float(VoxelPlayerVisibilitySensorType.PHASE_COUNT)
 	_expect(first.advance(phase_delta, observer, player), "first phase did not sample at its boundary")
+	_expect(first.did_sample_line_of_sight(), "first phase did not report its fresh sample")
 	_expect(not second.advance(phase_delta, observer, player), "second phase sampled at the first phase boundary")
+	_expect(not second.did_sample_line_of_sight(), "second phase reported a sample before its boundary")
 	_expect(second.advance(phase_delta, observer, player), "second phase did not sample at its boundary")
+	_expect(second.did_sample_line_of_sight(), "second phase did not report its fresh sample")
 
 func _test_cached_occlusion_cadence() -> void:
 	var world := _make_world()
@@ -44,10 +47,13 @@ func _test_cached_occlusion_cadence() -> void:
 	var player := Vector3(4.5, FEET_Y, 0.5)
 	var sensor := VoxelPlayerVisibilitySensorType.new(world, DETECTION_RANGE, BODY_HEIGHT, 0)
 	_expect(sensor.advance(0.0, observer, player), "clear target was not visible on the initial sample")
+	_expect(sensor.did_sample_line_of_sight(), "initial clear result was not marked fresh")
 	world.restore_block_edits({Vector3i(2, FLAT_HEIGHT + 2, 0): BlockId.Type.STONE}, {})
 	var half_interval := VoxelPlayerVisibilitySensorType.SAMPLE_INTERVAL_SECONDS * 0.5
 	_expect(sensor.advance(half_interval, observer, player), "cached visibility changed before the next sample")
+	_expect(not sensor.did_sample_line_of_sight(), "cached visible result was marked fresh")
 	_expect(not sensor.advance(half_interval, observer, player), "occlusion was not observed at the next sample")
+	_expect(sensor.did_sample_line_of_sight(), "fresh occluded result was not marked sampled")
 
 func _test_range_clears_cached_visibility() -> void:
 	var world := _make_world()
@@ -55,10 +61,14 @@ func _test_range_clears_cached_visibility() -> void:
 	var nearby_player := Vector3(4.5, FEET_Y, 0.5)
 	var sensor := VoxelPlayerVisibilitySensorType.new(world, DETECTION_RANGE, BODY_HEIGHT, 0)
 	_expect(sensor.advance(0.0, observer, nearby_player), "range fixture did not begin visible")
+	_expect(sensor.did_sample_line_of_sight(), "initial range result was not marked fresh")
 	var outside_player := observer + Vector3(DETECTION_RANGE + 0.001, 0.0, 0.0)
 	_expect(not sensor.advance(0.0, observer, outside_player), "outside target retained cached visibility")
+	_expect(not sensor.did_sample_line_of_sight(), "range rejection was reported as an LOS sample")
 	_expect(not sensor.advance(0.0, observer, nearby_player), "cleared visibility returned before the next sample")
+	_expect(not sensor.did_sample_line_of_sight(), "cached range-cleared result was marked fresh")
 	_expect(sensor.advance(VoxelPlayerVisibilitySensorType.SAMPLE_INTERVAL_SECONDS, observer, nearby_player), "visibility did not return on the next sample")
+	_expect(sensor.did_sample_line_of_sight(), "restored visibility sample was not marked fresh")
 
 func _run() -> void:
 	_test_phase_staggering()

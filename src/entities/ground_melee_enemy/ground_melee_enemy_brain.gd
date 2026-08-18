@@ -24,7 +24,13 @@ func _init(definition: GroundMeleeEnemyBehaviorDefinition, seed_value: int):
 	_definition = definition
 	_rng.seed = seed_value
 
-func advance(delta: float, self_position: Vector3, player_position: Vector3, player_visible: bool):
+func advance(
+	delta: float,
+	self_position: Vector3,
+	player_position: Vector3,
+	player_visible: bool,
+	visibility_sample_fresh: bool,
+):
 	_attack_started = false
 	_attack_cooldown_remaining = maxf(_attack_cooldown_remaining - delta, 0.0)
 	if _attack_remaining > 0.0:
@@ -35,7 +41,8 @@ func advance(delta: float, self_position: Vector3, player_position: Vector3, pla
 	var distance_squared := self_position.distance_squared_to(player_position)
 	var detected := player_visible and distance_squared <= _definition.detection_range * _definition.detection_range
 	if detected:
-		_last_seen_position = player_position
+		if visibility_sample_fresh:
+			_last_seen_position = player_position
 		_target_memory_remaining = _definition.target_memory_seconds
 	else:
 		_target_memory_remaining = maxf(_target_memory_remaining - delta, 0.0)

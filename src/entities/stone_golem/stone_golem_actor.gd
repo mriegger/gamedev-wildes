@@ -46,7 +46,13 @@ func tick(
 	assert(observation != null and observation.validate())
 	var player_visible := _visibility_sensor.advance(delta, global_position, observation.player_position)
 	var previous_state := brain.state
-	brain.advance(delta, global_position, observation, player_visible)
+	brain.advance(
+		delta,
+		global_position,
+		observation,
+		player_visible,
+		_visibility_sensor.did_sample_line_of_sight(),
+	)
 	if brain.state != previous_state:
 		_path_follower.request_repath()
 	_stone_golem_animation.set_alerted(brain.is_alerted())

@@ -10,6 +10,7 @@ var _voxel_space: VoxelSpace
 var _detection_range_squared: float
 var _observer_eye_height: float
 var _player_visible: bool = false
+var _line_of_sight_sampled: bool = false
 var _sample_remaining: float = 0.0
 
 func _init(voxel_space: VoxelSpace, detection_range: float, observer_body_height: float, phase_id: int) -> void:
@@ -25,6 +26,7 @@ func _init(voxel_space: VoxelSpace, detection_range: float, observer_body_height
 func advance(delta: float, observer_position: Vector3, player_position: Vector3) -> bool:
 	assert(is_finite(delta) and delta >= 0.0)
 	assert(observer_position.is_finite() and player_position.is_finite())
+	_line_of_sight_sampled = false
 	_sample_remaining -= delta
 	var sample_due := _sample_remaining <= 0.0
 	if sample_due:
@@ -38,5 +40,9 @@ func advance(delta: float, observer_position: Vector3, player_position: Vector3)
 		return _player_visible
 	var origin := observer_position + Vector3.UP * _observer_eye_height
 	var target := player_position + Vector3.UP * PLAYER_TARGET_HEIGHT
+	_line_of_sight_sampled = true
 	_player_visible = VoxelLineOfSight.has_clear_path(_voxel_space, origin, target)
 	return _player_visible
+
+func did_sample_line_of_sight() -> bool:
+	return _line_of_sight_sampled

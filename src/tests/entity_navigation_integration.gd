@@ -353,34 +353,38 @@ func _test_ground_melee_enemy_brain_transitions() -> void:
 	var self_position := Vector3.ZERO
 	var first := GroundMeleeEnemyBrain.new(behavior, 1337)
 	var second := GroundMeleeEnemyBrain.new(behavior, 1337)
-	first.advance(0.1, self_position, Vector3(20.0, 0.0, 0.0), false)
-	second.advance(0.1, self_position, Vector3(20.0, 0.0, 0.0), false)
+	first.advance(0.1, self_position, Vector3(20.0, 0.0, 0.0), false, true)
+	second.advance(0.1, self_position, Vector3(20.0, 0.0, 0.0), false, true)
 	_expect(first.state == GroundMeleeEnemyBrain.State.WANDER, "unaware ground melee enemy did not wander")
 	_expect(first.get_movement_goal() == second.get_movement_goal(), "wander goal was not deterministic for its seed")
 
 	var seen_position := Vector3(5.0, 0.0, 0.0)
-	first.advance(0.1, self_position, seen_position, true)
+	first.advance(0.1, self_position, seen_position, true, true)
 	_expect(first.state == GroundMeleeEnemyBrain.State.CHASE, "visible target inside detection range was not chased")
 	_expect(first.get_movement_goal() == seen_position, "chase goal did not use the last seen position")
-	first.advance(1.0, self_position, Vector3(6.0, 0.0, 0.0), false)
+	var cached_visible_position := Vector3(6.0, 0.0, 1.0)
+	first.advance(0.1, self_position, cached_visible_position, true, false)
+	_expect(first.state == GroundMeleeEnemyBrain.State.CHASE, "cached visibility stopped ground melee chase")
+	_expect(first.get_movement_goal() == seen_position, "cached visible position replaced the ground melee last-seen goal")
+	first.advance(1.0, self_position, Vector3(6.0, 0.0, 0.0), false, true)
 	_expect(first.state == GroundMeleeEnemyBrain.State.CHASE, "ground melee enemy forgot its target before memory elapsed")
 	_expect(first.get_movement_goal() == seen_position, "hidden target changed the remembered chase goal")
-	first.advance(1.1, self_position, Vector3(6.0, 0.0, 0.0), false)
+	first.advance(1.1, self_position, Vector3(6.0, 0.0, 0.0), false, true)
 	_expect(first.state == GroundMeleeEnemyBrain.State.WANDER, "ground melee enemy did not return to wander after memory elapsed")
 
 	var attacker := GroundMeleeEnemyBrain.new(behavior, 7)
 	var attack_target := Vector3(1.0, 0.0, 0.0)
-	attacker.advance(0.1, self_position, attack_target, true)
+	attacker.advance(0.1, self_position, attack_target, true, true)
 	_expect(attacker.state == GroundMeleeEnemyBrain.State.ATTACK, "target inside attack range did not start an attack")
 	_expect(attacker.consume_attack_started(), "attack start was not exposed once")
 	_expect(not attacker.consume_attack_started(), "attack start was exposed more than once")
-	attacker.advance(0.25, self_position, attack_target, true)
+	attacker.advance(0.25, self_position, attack_target, true, true)
 	_expect(attacker.state == GroundMeleeEnemyBrain.State.ATTACK, "attack ended before its duration")
-	attacker.advance(0.3, self_position, attack_target, true)
+	attacker.advance(0.3, self_position, attack_target, true, true)
 	_expect(attacker.state == GroundMeleeEnemyBrain.State.ATTACK, "attack state was not retained on its completion tick")
-	attacker.advance(0.01, self_position, attack_target, true)
+	attacker.advance(0.01, self_position, attack_target, true, true)
 	_expect(attacker.state == GroundMeleeEnemyBrain.State.CHASE, "attack cooldown did not suppress an immediate repeat")
-	attacker.advance(0.5, self_position, attack_target, true)
+	attacker.advance(0.5, self_position, attack_target, true, true)
 	_expect(attacker.state == GroundMeleeEnemyBrain.State.ATTACK and attacker.consume_attack_started(), "attack did not restart after cooldown")
 
 func _test_zombie_visibility_cadence() -> void:
@@ -406,6 +410,35 @@ func _test_zombie_visibility_cadence() -> void:
 	_expect(not first._visibility_sensor.advance(0.0, first.global_position, outside_detection), "target outside detection range retained cached visibility")
 	first.free()
 	second.free()
+
+func _test_zombie_cached_visibility_keeps_last_sampled_goal() -> void:
+	var world := _make_flat_world()
+	var definition := load("res://entities/definitions/zombie.tres") as EntityDefinition
+	var actor := definition.actor_scene.instantiate() as ZombieActor
+	get_root().add_child(actor)
+	actor.global_position = Vector3(0.5, float(FEET_Y), 0.5)
+	actor.setup(0, definition, world, 41, EntityNavigationLimits.new(24, 256, 1))
+	var sampled_target := Vector3(4.5, float(FEET_Y), 0.5)
+	var search_budget := NavigationSearchBudget.new(1)
+	actor.tick(0.0, EntityTargetObservation.create(sampled_target, sampled_target, Vector3.FORWARD, Vector3.RIGHT), Vector3.ZERO, search_budget)
+	_expect(actor._visibility_sensor.did_sample_line_of_sight(), "Zombie fixture did not begin with a fresh visibility sample")
+	_expect(actor.brain.get_movement_goal().is_equal_approx(sampled_target), "Zombie did not record its freshly sampled target")
+	var wall_blocks: Dictionary = {}
+	for z in range(3):
+		wall_blocks[Vector3i(2, FEET_Y + 1, z)] = BlockId.Type.STONE
+	world.restore_block_edits(wall_blocks, {})
+	var hidden_position := Vector3(4.5, float(FEET_Y), 2.5)
+	var half_interval := VoxelPlayerVisibilitySensorType.SAMPLE_INTERVAL_SECONDS * 0.5
+	search_budget.reset()
+	actor.tick(half_interval, EntityTargetObservation.create(hidden_position, hidden_position, Vector3.FORWARD, Vector3.RIGHT), Vector3.ZERO, search_budget)
+	_expect(not actor._visibility_sensor.did_sample_line_of_sight(), "Zombie cached interval unexpectedly sampled LOS")
+	_expect(actor.brain.state == GroundMeleeEnemyBrain.State.CHASE, "cached visibility stopped Zombie chase")
+	_expect(actor.brain.get_movement_goal().is_equal_approx(sampled_target), "cached visible result replaced the Zombie last-seen goal")
+	search_budget.reset()
+	actor.tick(half_interval, EntityTargetObservation.create(hidden_position, hidden_position, Vector3.FORWARD, Vector3.RIGHT), Vector3.ZERO, search_budget)
+	_expect(actor._visibility_sensor.did_sample_line_of_sight(), "Zombie did not sample occlusion at the next boundary")
+	_expect(actor.brain.get_movement_goal().is_equal_approx(sampled_target), "fresh occlusion replaced the Zombie last-seen goal")
+	actor.free()
 
 func _test_zombie_actor_movement_and_animation() -> void:
 	var world := _make_flat_world()
@@ -454,6 +487,7 @@ func _run() -> void:
 	_test_successful_path_repath_throttle()
 	_test_cached_path_adoption_revalidates_world()
 	_test_diagonal_path_follower_speed()
+	_test_zombie_cached_visibility_keeps_last_sampled_goal()
 	_test_blocked_motion_keeps_repath_cadence()
 	_test_shared_navigation_search_budget()
 	_test_shared_body_solver()

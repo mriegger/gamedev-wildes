@@ -22,7 +22,13 @@ func _init(definition: StoneGolemBehaviorDefinitionType) -> void:
 	assert(StoneGolemBehaviorDefinitionType.is_valid_awareness(definition.detection_range, definition.forget_range, definition.target_memory_seconds))
 	_definition = definition
 
-func advance(delta: float, self_position: Vector3, observation: EntityTargetObservationType, player_visible: bool) -> void:
+func advance(
+	delta: float,
+	self_position: Vector3,
+	observation: EntityTargetObservationType,
+	player_visible: bool,
+	visibility_sample_fresh: bool,
+) -> void:
 	assert(is_finite(delta) and delta >= 0.0)
 	assert(self_position.is_finite())
 	assert(observation != null and observation.validate())
@@ -33,7 +39,8 @@ func advance(delta: float, self_position: Vector3, observation: EntityTargetObse
 		state = State.DORMANT
 		return
 	if player_visible and distance_squared <= _definition.detection_range * _definition.detection_range:
-		_movement_goal = observation.player_position
+		if visibility_sample_fresh:
+			_movement_goal = observation.player_position
 		_target_memory_remaining = _definition.target_memory_seconds
 		state = State.CHASE
 		return
