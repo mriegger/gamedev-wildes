@@ -25,12 +25,12 @@ func _init() -> void:
 		for child in chunk_root.get_children():
 			if child.name.begins_with("GroundApple_"):
 				ground_count += 1
-			elif child.name == "DecorativeApple":
+			elif child.name.begins_with("DecorativeApple_"):
 				decorative_count += 1
 				var offset := (child as Node3D).position - Vector3(apple_position.x + 0.5, (child as Node3D).position.y, apple_position.z + 0.5)
 				_expect(maxf(absf(offset.x), absf(offset.z)) >= 1.6, "decorative apple remained inside the leaf blocks")
-		_expect(ground_count >= 1 and ground_count <= 3, "apple tree did not have one to three ground apples")
-		_expect(decorative_count >= 1 and decorative_count <= 4, "apple tree did not have one to four decorative apples")
+		_expect(ground_count >= 2 and ground_count <= 6, "apple tree did not have two to six ground apples")
+		_expect(decorative_count >= 2 and decorative_count <= 8, "apple tree did not have two to eight decorative apples")
 		_expect(apple_trees._targets.size() == ground_count, "decorative apples became harvest targets")
 		if not apple_trees._targets.is_empty():
 			var first_bounds := apple_trees.get_harvest_target_bounds(int(apple_trees._targets.keys()[0]))
@@ -56,7 +56,7 @@ func _init() -> void:
 			_expect(restored.restore(JSON.parse_string(JSON.stringify(snapshot))), "apple pickup state did not restore")
 			_expect(restored.snapshot() == snapshot, "apple pickup state changed during save round trip")
 			var before_invalid_restore := restored.snapshot()
-			_expect(not restored.restore({"version": 1, "collected_slots": [[0, 6, 0, 3]]}), "out-of-range apple slot restored")
+			_expect(not restored.restore({"version": 1, "collected_slots": [[0, 6, 0, 6]]}), "out-of-range apple slot restored")
 			_expect(restored.snapshot() == before_invalid_restore, "failed apple state restore changed collected slots")
 	var apple := item_catalog.get_definition(&"apple")
 	var consumption := apple.secondary_action as ConsumableActionDefinition

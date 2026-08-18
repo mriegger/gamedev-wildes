@@ -2,7 +2,7 @@ extends RefCounted
 class_name AppleTreeState
 
 const SNAPSHOT_VERSION: int = 1
-const MAXIMUM_GROUND_APPLES: int = 3
+const MAXIMUM_GROUND_APPLES: int = 6
 
 var _collected_slots: Dictionary = {}
 

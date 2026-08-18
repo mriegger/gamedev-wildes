@@ -16,6 +16,10 @@ const DECORATIVE_OFFSETS: Array[Vector3] = [
 	Vector3(-1.64, 0.42, -0.12),
 	Vector3(0.16, 0.28, 1.64),
 	Vector3(-0.18, 0.05, -1.64),
+	Vector3(1.64, 0.58, -0.48),
+	Vector3(-1.64, 0.12, 0.52),
+	Vector3(0.52, 0.64, 1.64),
+	Vector3(-0.54, 0.34, -1.64),
 ]
 
 @export var definition: AppleTreeDefinition
@@ -181,7 +185,8 @@ func _render_apple_tree(root: Node3D, coord: Vector2i, tree_position: Vector3i, 
 	for index in range(decorative_count):
 		var offset := decorative_offsets[index] as Vector3
 		var position := Vector3(tree_position.x + 0.5, top_log_y + 2.4, tree_position.z + 0.5) + offset
-		_spawn_apple_model(root, position, definition.decorative_apple_size, false)
+		var apple := _spawn_apple_model(root, position, definition.decorative_apple_size, false)
+		apple.name = "DecorativeApple_%d" % index
 
 func _spawn_ground_apple(root: Node3D, coord: Vector2i, tree_position: Vector3i, slot_index: int, position: Vector3) -> void:
 	var holder := _spawn_apple_model(root, position, definition.ground_apple_size, true)
@@ -200,7 +205,6 @@ func _spawn_ground_apple(root: Node3D, coord: Vector2i, tree_position: Vector3i,
 
 func _spawn_apple_model(root: Node3D, position: Vector3, target_size: float, rest_on_surface: bool) -> Node3D:
 	var holder := Node3D.new()
-	holder.name = "DecorativeApple"
 	holder.position = position
 	root.add_child(holder)
 	var model := definition.apple_scene.instantiate() as Node3D

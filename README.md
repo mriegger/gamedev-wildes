@@ -159,8 +159,8 @@ save. The
 `spawn pumpkin_patch` command relocates and randomizes that persistent patch near the player.
 Harvested pumpkins stack in the inventory and restore the player's health to full when right-clicked
 in the backpack or hotbar, or when selected and used with right-click in the world.
-About five percent of procedural trees carry apples: one to three collectible apples spawn beneath
-the tree and one to four decorate its outer leaves. Collected apples persist in saves and restore
+About five percent of procedural trees carry apples: two to six collectible apples spawn beneath
+the tree and two to eight decorate its outer leaves. Collected apples persist in saves and restore
 75 percent of maximum health through the same inventory consumption controls.
 
 **UI & saves.** Backpack and hotbar stacks can be split by scrolling while left-dragging. The side
