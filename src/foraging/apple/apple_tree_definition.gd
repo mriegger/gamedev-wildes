@@ -7,6 +7,7 @@ class_name AppleTreeDefinition
 @export_range(20, 20, 1) var decorative_apple_count: int = 20
 @export var apple_item_id: StringName = &"apple"
 @export var apple_scene: PackedScene
+@export var fall_impact_streams: Array[AudioStream] = []
 @export_range(0.01, 1.0, 0.01) var ground_apple_size: float = 0.28
 @export_range(0.01, 1.0, 0.01) var decorative_apple_size: float = 0.24
 @export var foliage_tint: Color = Color(0.92, 1.08, 0.72, 1.0)
@@ -23,6 +24,8 @@ func validate(item_catalog: ItemCatalog) -> bool:
 		and not apple_item_id.is_empty()
 		and item_catalog.has_definition(apple_item_id)
 		and apple_scene != null
+		and fall_impact_streams.size() == 4
+		and not fall_impact_streams.has(null)
 		and is_finite(ground_apple_size)
 		and ground_apple_size > 0.0
 		and is_finite(decorative_apple_size)

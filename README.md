@@ -176,7 +176,9 @@ Harvested pumpkins stack in the inventory and restore 10% of maximum health when
 the backpack or hotbar, or when selected and used with left-click in the world.
 About five percent of procedural trees carry apples: two to six collectible apples spawn beneath
 the tree and twenty decorate its subtly tinted lower outer leaves. Collected apples persist in saves
-and restore 10% of maximum health through the same inventory consumption controls.
+and restore 10% of maximum health through the same inventory consumption controls. Mining an
+apple-bearing leaf gives each attached apple a 20% chance to fall as a persistent pickup, capped at
+one fallen apple per mined leaf.
 
 **UI & saves.** Backpack and hotbar stacks can be split by scrolling while left-dragging. The side
 panel includes a trash drop target that accepts backpack, hotbar, and equipped items. A
