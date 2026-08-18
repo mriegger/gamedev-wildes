@@ -46,6 +46,13 @@ func _run() -> void:
 	_expect(not cycle.get_movement_goal().is_equal_approx(first_goal), "successive walks reused the same goal")
 	cycle.advance(behavior.grounded_walk_seconds, position, true, false)
 	_expect(cycle.state == BirdBrain.State.TAKEOFF, "second walk did not trigger takeoff")
+	cycle.reject_takeoff()
+	_expect(cycle.state == BirdBrain.State.GROUNDED_IDLE, "rejected takeoff did not return to idle")
+	cycle.advance(behavior.landed_idle_max_seconds, position, true, false)
+	cycle.advance(behavior.grounded_walk_seconds, position, true, false)
+	cycle.advance(behavior.landed_idle_max_seconds, position, true, false)
+	cycle.advance(behavior.grounded_walk_seconds, position, true, false)
+	_expect(cycle.state == BirdBrain.State.TAKEOFF, "rejected takeoff did not retry after grounded wandering")
 	cycle.advance(0.0, position, false, true)
 	_expect(cycle.state == BirdBrain.State.CRUISE, "takeoff completion did not return to cruise")
 

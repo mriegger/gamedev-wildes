@@ -85,6 +85,24 @@ func _run() -> void:
 	_expect(observed_grounded_silence, "grounded bird did not stop wing audio")
 	_expect(not VoxelBodySolver.collides_at(world, bird.global_position, definition.body_width, definition.body_height, false), "bird ended inside solid terrain")
 
+	var canopy_world := _make_world()
+	var canopy_edit := canopy_world.try_place_block(Vector3i(0, FLAT_HEIGHT + 2, 0), BlockId.Type.LEAVES)
+	_expect(canopy_edit.is_success(), "failed to construct the takeoff obstruction")
+	var canopy_runtime := EntityRuntime.new()
+	root.add_child(canopy_runtime)
+	canopy_runtime.setup(catalog, canopy_world, 1, 1, EntityNavigationLimits.new(24, 256, 1))
+	var canopy_ids := canopy_runtime.try_spawn_batch([EntitySpawnRequest.new(&"bird", aerial_position, 8181)])
+	var canopy_bird := canopy_runtime.get_actor(canopy_ids[0]) as BirdActor if not canopy_ids.is_empty() else null
+	_expect(canopy_bird != null, "canopy test bird did not spawn")
+	if canopy_bird != null:
+		canopy_bird.global_position = Vector3(0.5, FEET_Y, 0.5)
+		canopy_bird.on_ground = true
+		canopy_bird.brain.state = BirdBrain.State.TAKEOFF
+		canopy_bird._handle_state_transition(BirdBrain.State.GROUNDED_WALK, BirdBrain.State.TAKEOFF)
+		_expect(canopy_bird.brain.state == BirdBrain.State.GROUNDED_IDLE, "bird attempted takeoff through an overhead obstruction")
+		_expect(canopy_bird.on_ground, "blocked takeoff removed grounded state")
+		_expect(canopy_bird.global_position.is_equal_approx(Vector3(0.5, FEET_Y, 0.5)), "blocked takeoff moved the bird")
+
 	var blocked_world := _make_world(BlockId.Type.STONE)
 	var blocked_runtime := EntityRuntime.new()
 	root.add_child(blocked_runtime)
@@ -102,8 +120,10 @@ func _run() -> void:
 		_expect(not first_color.is_equal_approx(second_color), "different bird variants shared the same body color")
 		_expect(not is_same(bird_animation._body_mesh.material_override, blocked_animation._body_mesh.material_override), "bird instances shared a mutable color material")
 	blocked_runtime.shutdown()
+	canopy_runtime.shutdown()
 	runtime.shutdown()
 	blocked_runtime.queue_free()
+	canopy_runtime.queue_free()
 	runtime.queue_free()
 	await process_frame
 	await process_frame

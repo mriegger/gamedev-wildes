@@ -66,6 +66,11 @@ func reject_flight_goal() -> void:
 	if state in [State.CRUISE, State.DESCEND, State.TAKEOFF]:
 		state = State.CRUISE
 
+func reject_takeoff() -> void:
+	if state == State.TAKEOFF:
+		_walks_done = 0
+		_enter_idle()
+
 func _finish_walk() -> void:
 	_walks_done += 1
 	if _walks_done >= _definition.walks_before_takeoff:

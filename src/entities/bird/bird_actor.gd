@@ -93,7 +93,11 @@ func _advance_airborne(delta: float, separation_velocity: Vector3) -> void:
 		velocity.y = 0.0
 	var expected_position := start_position + requested_motion
 	var blocked := global_position.distance_squared_to(expected_position) > 0.04
-	if blocked and not on_ground:
+	if blocked and brain.state == BirdBrain.State.TAKEOFF:
+		brain.reject_takeoff()
+		_has_landing_target = false
+		velocity = Vector3.ZERO
+	elif blocked and not on_ground:
 		brain.reject_flight_goal()
 		_has_landing_target = false
 		_landing_retry_remaining = _behavior.landing_retry_seconds
@@ -134,11 +138,20 @@ func _handle_state_transition(previous_state: BirdBrain.State, current_state: Bi
 	elif current_state == BirdBrain.State.GROUNDED_WALK:
 		_path_follower.request_repath()
 	elif current_state == BirdBrain.State.TAKEOFF:
-		on_ground = false
 		_takeoff_target_y = global_position.y + float(brain.sample_cruise_altitude())
+		if not _has_takeoff_clearance():
+			brain.reject_takeoff()
+			velocity = Vector3.ZERO
+			return
+		on_ground = false
 	elif current_state == BirdBrain.State.CRUISE:
 		_has_landing_target = false
 		_try_select_landing_target()
+
+func _has_takeoff_clearance() -> bool:
+	var motion := Vector3.UP * (_takeoff_target_y - global_position.y)
+	var result := VoxelBodySolver.sweep(voxel_space, global_position, Vector3.UP, motion, definition.body_width, definition.body_height)
+	return result.position.y >= _takeoff_target_y - 0.01
 
 func _try_select_landing_target() -> bool:
 	for _attempt in LANDING_SEARCH_ATTEMPTS:
