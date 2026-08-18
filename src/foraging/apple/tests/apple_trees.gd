@@ -30,7 +30,7 @@ func _init() -> void:
 				var offset := (child as Node3D).position - Vector3(apple_position.x + 0.5, (child as Node3D).position.y, apple_position.z + 0.5)
 				_expect(maxf(absf(offset.x), absf(offset.z)) >= 1.6, "decorative apple remained inside the leaf blocks")
 		_expect(ground_count >= 2 and ground_count <= 6, "apple tree did not have two to six ground apples")
-		_expect(decorative_count >= 2 and decorative_count <= 8, "apple tree did not have two to eight decorative apples")
+		_expect(decorative_count == 10, "apple tree did not have exactly ten decorative apples")
 		_expect(apple_trees._targets.size() == ground_count, "decorative apples became harvest targets")
 		if not apple_trees._targets.is_empty():
 			var first_bounds := apple_trees.get_harvest_target_bounds(int(apple_trees._targets.keys()[0]))
