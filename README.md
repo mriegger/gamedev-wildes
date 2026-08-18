@@ -124,7 +124,8 @@ Stone and the other common blocks are hand-minable. Copper requires a stone or c
 while the masonry blocks require a copper pickaxe. Torches are placeable blocks that you can walk
 through — each is an omni light with a 9-block radius.
 Overworld torch shadows are configurable for the nearest 0, 1, 2, or 4 lights and default to the
-nearest one.
+nearest one. Chests are solid 1×1 placeable blocks with dedicated chest textures and can be mined
+by hand.
 
 **Tools.** New worlds start with an empty inventory, while the first pickaxe is crafted from stone
 and wood. Item actions are data-driven: the hoe tills exposed grass and dirt, stone and copper

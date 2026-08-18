@@ -26,6 +26,19 @@ Add the resource to `src/items/item_catalog.tres`. The item catalog derives the 
 
 Set `BlockDefinition.drop_item_id` to the stable item ID produced by mining. Leave it empty for an intentional no-drop block. Drop data is independent from placement, so future ores, transformed drops, and tool effects do not have to pretend their result places the original block.
 
+The chest block uses 16×16 top, front, and side PNGs, and its inventory icon reuses the exact front
+texture so the item matches the placed block. Their 1600×1600 source images were generated with
+Meta Muse (`muse-image-1.0-eval`) through the `meta-imagegen` skill, visually inspected, and
+downsampled with Lanczos filtering. The final 16×16 textures were simplified into broad, flat pixel
+shapes and a limited palette so they remain readable without noisy wood grain. No external source
+asset was incorporated. Its north-facing front texture contains the latch, while the other three
+vertical faces use the same generated face with only the four centered latch pixels replaced by
+neighboring wood and seam pixels, preserving the darker lid and the single lower plank line. Blocks
+without a dedicated front texture continue to use their ordinary side texture on all four vertical
+faces. The top texture arranges colors sampled from that same lid into three horizontal plank bands.
+The lid is color-graded to a medium warm brown that sits between the earlier dark and light
+treatments, and the same palette is shared by the front, sides, top planks, and inventory icon.
+
 ## Add a non-block item
 
 Create and register an `ItemDefinition` in the same way. Assign only the actions that the item supports. An item without a placement action can still be stored, stacked, saved, displayed, and dragged, but it does not produce a placement ghost or send an item ID into the voxel world.

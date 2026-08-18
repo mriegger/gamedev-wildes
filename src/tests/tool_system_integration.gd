@@ -54,6 +54,108 @@ func _run():
 	_expect(torch.icon.resource_path == "res://assets/textures/items/torch.png", "torch uses the wrong inventory texture")
 	_expect(torch.icon != log.icon, "torch still reuses the wood inventory texture")
 	_expect(torch.icon.get_image().get_size() == Vector2i(16, 16), "torch inventory texture is not 16x16")
+	var chest_item := item_catalog.get_definition(&"chest")
+	var chest_block := block_catalog.get_definition(BlockId.Type.CHEST)
+	var chest_placement := chest_item.secondary_action as BlockPlacementActionDefinition
+	_expect(BlockId.get_display_name(BlockId.Type.CHEST) == "Chest", "chest block display name is incorrect")
+	_expect(BlockId.is_chunk_cube(BlockId.Type.CHEST), "chest is not rendered as a chunk cube")
+	_expect(chest_block.is_solid and chest_block.is_opaque and chest_block.is_raycast_solid, "chest is not a solid targetable block")
+	_expect(chest_block.is_breakable and chest_block.drop_item_id == &"chest", "chest mining/drop configuration is invalid")
+	_expect(chest_placement != null and chest_placement.block == chest_block, "chest item does not place the canonical chest block")
+	_expect(item_catalog.get_item_for_block(BlockId.Type.CHEST) == chest_item, "chest reverse block mapping is incorrect")
+	_expect(chest_item.icon.resource_path == "res://assets/textures/blocks/chest_front.png", "chest inventory icon does not reuse the front texture")
+	_expect(chest_item.icon == chest_block.front_texture, "chest inventory and block front do not share the same texture")
+	var chest_icon_image := chest_item.icon.get_image()
+	_expect(chest_icon_image.get_size() == Vector2i(16, 16), "chest inventory icon is not 16x16")
+	_expect(chest_block.top_texture.resource_path == "res://assets/textures/blocks/chest_top.png", "chest uses the wrong top texture")
+	_expect(chest_block.side_texture.resource_path == "res://assets/textures/blocks/chest_side.png", "chest uses the wrong side texture")
+	_expect(chest_block.front_texture.resource_path == "res://assets/textures/blocks/chest_front.png", "chest uses the wrong front texture")
+	_expect(chest_block.front_texture != chest_block.side_texture, "chest front still shares the non-locking side texture")
+	_expect(chest_block.top_texture.get_image().get_size() == Vector2i(16, 16), "chest top texture is not 16x16")
+	_expect(chest_block.side_texture.get_image().get_size() == Vector2i(16, 16), "chest side texture is not 16x16")
+	_expect(chest_block.front_texture.get_image().get_size() == Vector2i(16, 16), "chest front texture is not 16x16")
+	var chest_top_image := chest_block.top_texture.get_image()
+	var chest_front_image := chest_block.front_texture.get_image()
+	var chest_side_image := chest_block.side_texture.get_image()
+	var chest_front_colors: Dictionary[Color, bool] = {}
+	var chest_side_colors: Dictionary[Color, bool] = {}
+	var chest_top_colors: Dictionary[Color, bool] = {}
+	for texture_y in range(16):
+		for texture_x in range(16):
+			chest_front_colors[chest_front_image.get_pixel(texture_x, texture_y)] = true
+			chest_side_colors[chest_side_image.get_pixel(texture_x, texture_y)] = true
+			chest_top_colors[chest_top_image.get_pixel(texture_x, texture_y)] = true
+	_expect(chest_front_colors.size() <= 11, "chest front texture has regressed to an overly detailed palette")
+	_expect(chest_side_colors.size() <= 9, "chest side texture has regressed to an overly detailed palette")
+	_expect(chest_top_colors.size() <= 6, "chest top texture has regressed to an overly detailed palette")
+	var chest_block_lid_sum := Color(0, 0, 0, 0)
+	var chest_block_lid_pixels := 0
+	for texture_y in range(1, 6):
+		for texture_x in range(1, 15):
+			chest_block_lid_sum += chest_side_image.get_pixel(texture_x, texture_y)
+			chest_block_lid_pixels += 1
+	var average_chest_block_lid := chest_block_lid_sum / chest_block_lid_pixels
+	_expect(average_chest_block_lid.get_luminance() >= 0.28 and average_chest_block_lid.get_luminance() <= 0.34, "chest lid is not midway between the previous dark and light treatments")
+	_expect(average_chest_block_lid.r >= average_chest_block_lid.g * 1.5, "chest lid is not warm brown")
+	var chest_top_plank_sum := Color(0, 0, 0, 0)
+	var chest_top_plank_pixels := 0
+	for texture_y in [1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14]:
+		for texture_x in range(1, 15):
+			chest_top_plank_sum += chest_top_image.get_pixel(texture_x, texture_y)
+			chest_top_plank_pixels += 1
+	var average_chest_top_plank := chest_top_plank_sum / chest_top_plank_pixels
+	_expect(absf(average_chest_top_plank.get_luminance() - average_chest_block_lid.get_luminance()) <= 0.01, "chest top planks do not match the vertical lid brightness")
+	var chest_lid_colors: Dictionary[Color, bool] = {}
+	for texture_y in range(7):
+		for texture_x in range(16):
+			chest_lid_colors[chest_side_image.get_pixel(texture_x, texture_y)] = true
+	for texture_y in range(16):
+		for texture_x in range(16):
+			_expect(chest_lid_colors.has(chest_top_image.get_pixel(texture_x, texture_y)), "chest top texture uses a color outside the side lid palette")
+	for texture_x in range(1, 15):
+		var lid_seam_pixel := chest_side_image.get_pixel(texture_x, 6)
+		_expect(chest_top_image.get_pixel(texture_x, 5) == lid_seam_pixel, "chest top first horizontal plank seam does not match the side lid")
+		_expect(chest_top_image.get_pixel(texture_x, 10) == lid_seam_pixel, "chest top second horizontal plank seam does not match the side lid")
+	var chest_face_differences: Array[Vector2i] = []
+	for texture_y in range(16):
+		for texture_x in range(16):
+			if chest_front_image.get_pixel(texture_x, texture_y) != chest_side_image.get_pixel(texture_x, texture_y):
+				chest_face_differences.append(Vector2i(texture_x, texture_y))
+	var expected_latch_pixels: Array[Vector2i] = [Vector2i(7, 6), Vector2i(8, 6), Vector2i(7, 7), Vector2i(8, 7)]
+	_expect(chest_face_differences == expected_latch_pixels, "chest side does not exactly match the front apart from its four centered latch pixels")
+	var chest_texture_set := BlockTextureSet.new(block_catalog)
+	var chest_side_layer := chest_texture_set.side_layers[BlockId.Type.CHEST]
+	var chest_front_layer := chest_texture_set.front_layers[BlockId.Type.CHEST]
+	_expect(chest_side_layer != chest_front_layer, "chest front and side resolved to the same texture layer")
+	_expect(chest_texture_set.front_layers[BlockId.Type.STONE] == chest_texture_set.side_layers[BlockId.Type.STONE], "ordinary blocks did not fall back to their side texture")
+	var chest_cache := PackedInt32Array()
+	chest_cache.resize(18)
+	chest_cache.fill(-1)
+	chest_cache[7] = BlockId.Type.CHEST
+	var chest_mesh_data = ChunkMesher.new(1, 2, 0, false, chest_texture_set).build_mesh_data_from_cache({
+		"cache": chest_cache,
+		"origin_x": 0,
+		"origin_z": 0,
+		"size_x": 1,
+		"size_z": 1,
+		"size_y": 2,
+		"cache_x": 3,
+		"cache_z": 3,
+	})
+	_expect(chest_mesh_data != null, "chest mesh data was not generated")
+	if chest_mesh_data != null:
+		var chest_normals := chest_mesh_data["normals"] as PackedVector3Array
+		var chest_layers := chest_mesh_data["texture_layers"] as PackedVector2Array
+		var front_vertex_count := 0
+		for vertex_index in range(chest_normals.size()):
+			var normal := chest_normals[vertex_index]
+			var layer := roundi(chest_layers[vertex_index].x)
+			if normal == Vector3(0, 0, -1):
+				front_vertex_count += 1
+				_expect(layer == chest_front_layer, "chest north/front face did not use the lock texture")
+			elif is_zero_approx(normal.y):
+				_expect(layer == chest_side_layer, "a non-front chest face used the lock texture")
+		_expect(front_vertex_count == 4, "chest mesh did not contain exactly one front face")
 	var sword := item_catalog.get_definition(&"copper_sword")
 	_expect(sword.max_stack == 1, "sword stack limit changed")
 	_expect(sword.primary_action is MeleeAttackActionDefinition, "sword primary action is not melee")
@@ -91,6 +193,7 @@ func _run():
 	_expect(stone.mining_tool_tag == &"pickaxe" and stone.minimum_mining_power == 0, "stone is not hand-mineable")
 	_expect(stone.drop_item_id == &"stone_block", "stone drop item changed")
 	_expect(unarmed_action.can_mine(stone), "unarmed action cannot mine stone")
+	_expect(unarmed_action.can_mine(chest_block), "unarmed action cannot mine a chest")
 	_expect(copper.mining_tool_tag == &"pickaxe" and copper.minimum_mining_power == 1, "copper mining requirement changed")
 	_expect(not unarmed_action.can_mine(copper), "unarmed action can mine copper")
 	_expect(pickaxe_action.can_mine(copper), "stone pickaxe cannot mine copper")
@@ -192,6 +295,14 @@ func _run():
 		_covered_dirt_pos + Vector3i.UP: BlockId.Type.DIRT,
 		_nonsoil_pos: BlockId.Type.SAND,
 	}, {})
+	var chest_position := Vector3i(4, 20, 0)
+	var chest_place_edit := _voxel_world.try_place_block(chest_position, BlockId.Type.CHEST)
+	_expect(chest_place_edit.is_success() and chest_place_edit.new_id == BlockId.Type.CHEST, "voxel world rejected chest placement")
+	_expect(_voxel_world.get_block_id_at(chest_position) == BlockId.Type.CHEST, "placed chest is missing from the voxel world")
+	_expect(_voxel_world.snapshot_block_edits()["placed"].get(chest_position, BlockId.Type.AIR) == BlockId.Type.CHEST, "placed chest was not persisted as a world edit")
+	var chest_mine_edits := _voxel_world.try_mine_block(chest_position)
+	_expect(chest_mine_edits.size() == 1 and chest_mine_edits[0].old_id == BlockId.Type.CHEST, "placed chest could not be mined")
+	_expect(_voxel_world.get_block_id_at(chest_position) == BlockId.Type.AIR, "mined chest remained in the voxel world")
 	_player = (load("res://player/player.tscn") as PackedScene).instantiate() as PlayerMotor
 	root.add_child(_player)
 	_player.global_position = Vector3.ZERO

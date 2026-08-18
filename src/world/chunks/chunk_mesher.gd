@@ -9,6 +9,7 @@ var ao_table: Array = [1.0, 0.90, 0.78, 0.62]
 
 var _top_layers := PackedInt32Array()
 var _side_layers := PackedInt32Array()
+var _front_layers := PackedInt32Array()
 var _bottom_layers := PackedInt32Array()
 
 const TOP_AO_SAMPLES := [
@@ -55,6 +56,7 @@ func _init(p_chunk_size: int, p_max_y: int, p_seed: int, p_ao: bool, texture_set
 	enable_ao = p_ao
 	_top_layers = texture_set.top_layers.duplicate()
 	_side_layers = texture_set.side_layers.duplicate()
+	_front_layers = texture_set.front_layers.duplicate()
 	_bottom_layers = texture_set.bottom_layers.duplicate()
 
 func _sample_face_ao(cache: PackedInt32Array, x: int, y: int, z: int, samples: Array, origin_x: int, origin_z: int, size_y: int, cache_x: int, cache_z: int, sy_cz: int) -> int:
@@ -109,6 +111,7 @@ func build_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 	var local_ao_table = ao_table
 	var local_top_layers: PackedInt32Array = _top_layers
 	var local_side_layers: PackedInt32Array = _side_layers
+	var local_front_layers: PackedInt32Array = _front_layers
 	var local_bottom_layers: PackedInt32Array = _bottom_layers
 
 	var size_y_local = size_y
@@ -168,6 +171,7 @@ func build_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 					top_shade = 1.0 + var_off
 					side_shade = 1.0 + var_off_side
 				var side_layer: int = local_side_layers[block_type]
+				var front_layer: int = local_front_layers[block_type]
 				var bottom_layer: int = local_bottom_layers[block_type]
 
 				var n_top = -1
@@ -337,7 +341,7 @@ func build_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 					vertices.append(Vector3(x, y, z)); vertices.append(Vector3(x+1, y, z)); vertices.append(Vector3(x+1, y+1, z)); vertices.append(Vector3(x, y+1, z))
 					normals.append(Vector3(0,0,-1)); normals.append(Vector3(0,0,-1)); normals.append(Vector3(0,0,-1)); normals.append(Vector3(0,0,-1))
 					uvs.append(Vector2(0, 1)); uvs.append(Vector2(1, 1)); uvs.append(Vector2(1, 0)); uvs.append(Vector2(0, 0))
-					var north_layer_uv := Vector2(float(side_layer), 0)
+					var north_layer_uv := Vector2(float(front_layer), 0)
 					texture_layers.append(north_layer_uv); texture_layers.append(north_layer_uv); texture_layers.append(north_layer_uv); texture_layers.append(north_layer_uv)
 					var north_ao = [0, 0, 0, 0]
 					for ci in range(4):
