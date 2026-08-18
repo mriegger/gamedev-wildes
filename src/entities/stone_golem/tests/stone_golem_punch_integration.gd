@@ -63,6 +63,11 @@ func _position_for_punch(actor: StoneGolemActorType, player: PlayerMotor) -> voi
 	actor.velocity = Vector3.ZERO
 	actor.on_ground = true
 
+func _hold_slam_cooldown(actor: StoneGolemActorType) -> void:
+	var behavior := actor.definition.behavior as StoneGolemBehaviorDefinition
+	assert(behavior != null)
+	actor.brain._slam_cooldown_remaining = behavior.slam_profile.cooldown * 10.0
+
 func _complete_cooldown_and_start_next(
 	runtime: EntityRuntime,
 	actor: StoneGolemActorType,
@@ -71,10 +76,10 @@ func _complete_cooldown_and_start_next(
 ) -> void:
 	_tick(runtime, profile.duration - profile.contact_time, player)
 	_expect(actor.brain.state == StoneGolemBrainType.State.PUNCH, "punch did not retain its duration completion tick")
-	_tick(runtime, profile.cooldown - profile.duration - CONTACT_EPSILON, player)
+	_tick(runtime, profile.cooldown - profile.duration - VoxelPlayerVisibilitySensor.SAMPLE_INTERVAL_SECONDS - CONTACT_EPSILON, player)
 	_expect(actor.brain.state != StoneGolemBrainType.State.PUNCH, "punch restarted before its 1.4-second cooldown")
 	_position_for_punch(actor, player)
-	_tick(runtime, CONTACT_EPSILON, player)
+	_tick(runtime, VoxelPlayerVisibilitySensor.SAMPLE_INTERVAL_SECONDS + CONTACT_EPSILON, player)
 	_expect(actor.brain.state == StoneGolemBrainType.State.PUNCH, "punch did not restart at its cooldown boundary")
 	_expect(actor._timed_melee_contact.is_pending(), "restarted punch did not arm timed contact")
 
@@ -122,6 +127,7 @@ func _run() -> void:
 	var actor := runtime.get_actor(runtime_id) as StoneGolemActorType
 	actor.set_process(false)
 	actor.on_ground = true
+	_hold_slam_cooldown(actor)
 	_tick(runtime, VoxelPlayerVisibilitySensor.SAMPLE_INTERVAL_SECONDS, player)
 	_expect(actor.brain.state == StoneGolemBrainType.State.PUNCH, "visible in-range player did not start a production punch")
 	_expect(actor._timed_melee_contact.is_pending(), "production punch did not arm timed contact")
@@ -156,10 +162,10 @@ func _run() -> void:
 	_expect(is_equal_approx(player_stats.current_hp, hp_before - 15.0), "one Stone Golem punch damaged the player more than once")
 
 	var cooldown_remaining := profile.cooldown - profile.contact_time - profile.duration
-	_tick(runtime, cooldown_remaining - CONTACT_EPSILON, player)
+	_tick(runtime, cooldown_remaining - VoxelPlayerVisibilitySensor.SAMPLE_INTERVAL_SECONDS - CONTACT_EPSILON, player)
 	_expect(actor.brain.state != StoneGolemBrainType.State.PUNCH, "Stone Golem punch restarted before cooldown elapsed")
 	_position_for_punch(actor, player)
-	_tick(runtime, CONTACT_EPSILON, player)
+	_tick(runtime, VoxelPlayerVisibilitySensor.SAMPLE_INTERVAL_SECONDS + CONTACT_EPSILON, player)
 	_expect(actor.brain.state == StoneGolemBrainType.State.PUNCH, "Stone Golem punch did not restart at 1.4 seconds")
 	_expect(actor._timed_melee_contact.is_pending(), "cooldown-boundary punch did not arm contact")
 
@@ -213,6 +219,7 @@ func _run() -> void:
 		var replacement := runtime.get_actor(replacement_ids[0]) as StoneGolemActorType
 		replacement.set_process(false)
 		replacement.on_ground = true
+		_hold_slam_cooldown(replacement)
 		_tick(runtime, VoxelPlayerVisibilitySensor.SAMPLE_INTERVAL_SECONDS, player)
 		_expect(replacement.brain.state == StoneGolemBrainType.State.PUNCH, "replacement Stone Golem did not begin punch")
 		_expect(replacement._timed_melee_contact.is_pending(), "replacement punch did not arm contact")

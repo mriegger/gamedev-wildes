@@ -1004,6 +1004,7 @@ func _bind_entity_context(space: VoxelSpace, runtime: EntityRuntime) -> void:
 	melee_combat.bind_context(space, runtime)
 	enemy_combat_feedback.bind_runtime(runtime)
 	runtime.entity_melee_contact_reached.connect(melee_combat.try_commit_entity_contact)
+	runtime.entity_radial_contact_reached.connect(melee_combat.try_commit_entity_radial_contact)
 	melee_combat.melee_outcome_committed.connect(runtime.record_melee_outcome)
 	_active_entity_runtime = runtime
 
@@ -1012,6 +1013,8 @@ func _unbind_entity_context() -> void:
 		return
 	if _active_entity_runtime.entity_melee_contact_reached.is_connected(melee_combat.try_commit_entity_contact):
 		_active_entity_runtime.entity_melee_contact_reached.disconnect(melee_combat.try_commit_entity_contact)
+	if _active_entity_runtime.entity_radial_contact_reached.is_connected(melee_combat.try_commit_entity_radial_contact):
+		_active_entity_runtime.entity_radial_contact_reached.disconnect(melee_combat.try_commit_entity_radial_contact)
 	if melee_combat.melee_outcome_committed.is_connected(_active_entity_runtime.record_melee_outcome):
 		melee_combat.melee_outcome_committed.disconnect(_active_entity_runtime.record_melee_outcome)
 	enemy_combat_feedback.unbind_runtime()

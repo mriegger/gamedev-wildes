@@ -555,6 +555,11 @@ jobs:
           bash .github/scripts/run_godot_check.sh \
             30 "STONE_GOLEM_PUNCH_INTEGRATION PASS" /tmp/stone_golem_punch.log -- \
             godot --headless --path src --script res://entities/stone_golem/tests/stone_golem_punch_integration.gd
+      - name: Run Stone Golem slam integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "STONE_GOLEM_SLAM_INTEGRATION PASS" /tmp/stone_golem_slam.log -- \
+            godot --headless --path src --script res://entities/stone_golem/tests/stone_golem_slam_integration.gd
 
 
 
@@ -572,6 +577,11 @@ jobs:
           bash .github/scripts/run_godot_check.sh \
             30 "TIMED_MELEE_CONTACT PASS" /tmp/timed_melee_contact.log -- \
             godot --headless --path src --script res://combat/tests/timed_melee_contact.gd
+      - name: Run entity radial contact integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "ENTITY_RADIAL_CONTACT_INTEGRATION PASS" /tmp/entity_radial_contact.log -- \
+            godot --headless --path src --script res://combat/tests/entity_radial_contact_integration.gd
       - name: Run entity combat integration
         run: |
           bash .github/scripts/run_godot_check.sh \

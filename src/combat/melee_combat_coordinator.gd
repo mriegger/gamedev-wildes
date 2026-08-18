@@ -258,6 +258,40 @@ func try_commit_entity_contact(source_runtime_id: int, profile: MeleeAttackProfi
 	)
 	return _commit_contact(contact, profile, &"")
 
+func try_commit_entity_radial_contact(source_runtime_id: int, profile: MeleeAttackProfileType) -> bool:
+	assert(_is_setup())
+	assert(profile != null)
+	if source_runtime_id <= PLAYER_RUNTIME_ID:
+		return false
+	var actor := _entity_runtime.get_actor(source_runtime_id)
+	if not is_instance_valid(actor) or actor.definition == null:
+		return false
+	var source_bounds := actor.get_world_bounds()
+	var player_bounds := _get_player_bounds()
+	var planar_offset := _player.global_position - actor.global_position
+	planar_offset.y = 0.0
+	if planar_offset.length_squared() > profile.reach * profile.reach:
+		return false
+	if not _bounds_overlap_vertically(source_bounds, player_bounds):
+		return false
+	var source_origin := _get_bounds_center(source_bounds)
+	var target_origin := _get_bounds_center(player_bounds)
+	if not VoxelLineOfSightType.has_clear_path(_voxel_space, source_origin, target_origin):
+		return false
+	var hit_direction := target_origin - source_origin
+	if hit_direction.is_zero_approx():
+		hit_direction = Vector3.UP
+	var contact := MeleeContactType.new(
+		actor.runtime_id,
+		actor.definition.id,
+		PLAYER_RUNTIME_ID,
+		PLAYER_DEFINITION_ID,
+		profile.id,
+		target_origin,
+		hit_direction,
+	)
+	return _commit_contact(contact, profile, &"")
+
 func shutdown() -> void:
 	_voxel_space = null
 	_player = null
@@ -379,6 +413,9 @@ func _get_player_center() -> Vector3:
 
 func _get_bounds_center(bounds: AABB) -> Vector3:
 	return bounds.position + bounds.size * 0.5
+
+func _bounds_overlap_vertically(first: AABB, second: AABB) -> bool:
+	return minf(first.end.y, second.end.y) - maxf(first.position.y, second.position.y) > GEOMETRY_EPSILON
 
 func _is_setup() -> bool:
 	return _voxel_space != null and _player != null and _player_stats != null and _player_inventory != null and _entity_runtime != null

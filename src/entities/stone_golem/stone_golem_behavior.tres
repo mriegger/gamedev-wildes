@@ -1,7 +1,8 @@
-[gd_resource type="Resource" script_class="StoneGolemBehaviorDefinition" load_steps=3 format=3]
+[gd_resource type="Resource" script_class="StoneGolemBehaviorDefinition" load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://entities/stone_golem/stone_golem_behavior_definition.gd" id="1_behavior"]
 [ext_resource type="Resource" path="res://combat/profiles/stone_golem_punch.tres" id="2_punch"]
+[ext_resource type="Resource" path="res://combat/profiles/stone_golem_slam.tres" id="3_slam"]
 
 [resource]
 script = ExtResource("1_behavior")
@@ -13,3 +14,6 @@ forget_range = 24.0
 target_memory_seconds = 3.0
 repath_seconds = 0.5
 punch_profile = ExtResource("2_punch")
+slam_trigger_range = 4.0
+slam_windup_seconds = 0.6
+slam_profile = ExtResource("3_slam")

@@ -5,6 +5,7 @@ const EnemyHealthBar3DType := preload("res://entities/presentation/enemy_health_
 
 signal melee_contact_reached(source_runtime_id: int, profile: MeleeAttackProfile)
 signal water_surface_motion_committed(position: Vector3, planar_velocity: Vector2)
+signal radial_contact_reached(source_runtime_id: int, profile: MeleeAttackProfile)
 
 @export_node_path("Node") var animation_driver_path: NodePath
 @export_node_path("Node") var visual_fader_path: NodePath

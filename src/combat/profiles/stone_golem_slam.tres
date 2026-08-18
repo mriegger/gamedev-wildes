@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="MeleeAttackProfile" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://combat/melee_attack_profile.gd" id="1_profile"]
+
+[resource]
+script = ExtResource("1_profile")
+id = &"stone_golem_slam"
+duration = 2.15
+contact_time = 1.4
+cooldown = 4.0
+reach = 1.0
+base_damage = 20.0

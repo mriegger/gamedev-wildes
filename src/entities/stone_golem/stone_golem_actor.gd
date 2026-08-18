@@ -3,6 +3,9 @@ class_name StoneGolemActor
 
 const VoxelPlayerVisibilitySensorType := preload("res://entities/awareness/voxel_player_visibility_sensor.gd")
 const TimedMeleeContactType := preload("res://combat/timed_melee_contact.gd")
+const StoneGolemLandingMarkerType := preload("res://entities/stone_golem/stone_golem_landing_marker.gd")
+
+@export_node_path("Node3D") var landing_marker_path: NodePath
 
 var brain: StoneGolemBrain
 
@@ -11,9 +14,18 @@ var _stone_golem_animation: StoneGolemAnimationDriver
 var _visibility_sensor: VoxelPlayerVisibilitySensorType
 var _path_follower: VoxelPathFollower
 var _timed_melee_contact := TimedMeleeContactType.new()
+var _landing_marker: StoneGolemLandingMarkerType
+var _slam_airborne_elapsed: float = 0.0
+var _slam_contact_pending: bool = false
 
 func supports_behavior(behavior: EntityBehaviorDefinition) -> bool:
 	return behavior is StoneGolemBehaviorDefinition
+
+func has_valid_presentation() -> bool:
+	if landing_marker_path.is_empty():
+		return false
+	var candidate := get_node_or_null(landing_marker_path)
+	return super.has_valid_presentation() and candidate is StoneGolemLandingMarkerType
 
 func setup(
 	p_runtime_id: int,
@@ -26,6 +38,11 @@ func setup(
 	_behavior = p_definition.behavior as StoneGolemBehaviorDefinition
 	assert(_behavior != null)
 	_timed_melee_contact.cancel()
+	_landing_marker = get_node(landing_marker_path) as StoneGolemLandingMarkerType
+	assert(_landing_marker != null)
+	_landing_marker.hide_marker()
+	_slam_airborne_elapsed = 0.0
+	_slam_contact_pending = false
 	brain = StoneGolemBrain.new(_behavior)
 	_path_follower = VoxelPathFollower.new(
 		voxel_space,
@@ -64,13 +81,134 @@ func tick(
 		var punch_profile := _behavior.punch_profile
 		play_attack(punch_profile.duration)
 		_emit_melee_contact(_timed_melee_contact.arm(punch_profile))
+	var launched_this_tick := false
+	if brain.consume_slam_started():
+		_begin_slam_windup()
+	if brain.consume_slam_launch_requested():
+		launched_this_tick = _try_launch_slam()
+	if brain.state == StoneGolemBrain.State.SLAM_AIRBORNE:
+		if not launched_this_tick:
+			_advance_slam_motion(delta)
+		return
 	var desired_velocity := Vector3.ZERO
 	if brain.state == StoneGolemBrain.State.CHASE:
+		var planar_offset := observation.player_position - global_position
+		planar_offset.y = 0.0
 		var reach_squared := _behavior.punch_profile.reach * _behavior.punch_profile.reach
-		if not player_visible or global_position.distance_squared_to(observation.player_position) > reach_squared:
+		if not player_visible or planar_offset.length_squared() > reach_squared:
 			desired_velocity = _get_path_velocity(delta, navigation_search_budget)
 		desired_velocity = limit_planar_velocity(desired_velocity + separation_velocity, _behavior.movement_speed)
 	advance_voxel_motion(delta, desired_velocity, _behavior.gravity)
+
+func _begin_slam_windup() -> void:
+	var target := brain.get_locked_slam_target()
+	_landing_marker.show_at(target)
+	_face_planar(target)
+	_stone_golem_animation.play_slam_windup(_behavior.slam_windup_seconds)
+	velocity.x = 0.0
+	velocity.z = 0.0
+
+func _try_launch_slam() -> bool:
+	var target := brain.get_locked_slam_target()
+	if not _has_slam_launch_clearance(target):
+		brain.abort_slam_launch()
+		_landing_marker.hide_marker()
+		_stone_golem_animation.cancel_slam()
+		velocity.x = 0.0
+		velocity.z = 0.0
+		return false
+	velocity = _get_slam_launch_velocity(target)
+	on_ground = false
+	_slam_airborne_elapsed = 0.0
+	_slam_contact_pending = true
+	brain.record_slam_launch_started()
+	_stone_golem_animation.play_slam_airborne(_behavior.get_slam_airborne_seconds())
+	return true
+
+func _get_slam_launch_velocity(target: Vector3) -> Vector3:
+	var duration := _behavior.get_slam_airborne_seconds()
+	var displacement := target - global_position
+	return Vector3(
+		displacement.x / duration,
+		(displacement.y + 0.5 * _behavior.gravity * duration * duration) / duration,
+		displacement.z / duration,
+	)
+
+func _has_slam_launch_clearance(target: Vector3) -> bool:
+	var launch_velocity := _get_slam_launch_velocity(target)
+	if launch_velocity.y <= 0.0:
+		return false
+	var apex_height := launch_velocity.y * launch_velocity.y / (2.0 * _behavior.gravity)
+	var result := VoxelBodySolver.sweep(
+		voxel_space,
+		global_position,
+		launch_velocity,
+		Vector3.UP * apex_height,
+		definition.body_width,
+		definition.body_height,
+	)
+	return result.velocity.y > 0.0 and result.position.y >= global_position.y + apex_height - 0.001
+
+func _advance_slam_motion(delta: float) -> void:
+	var airborne_duration := _behavior.get_slam_airborne_seconds()
+	var powered_remaining := maxf(airborne_duration - _slam_airborne_elapsed, 0.0)
+	var powered_delta := minf(delta, powered_remaining)
+	if powered_delta > 0.0:
+		_advance_slam_step(powered_delta)
+		_slam_airborne_elapsed += powered_delta
+		if _finish_slam_if_landed():
+			return
+	var fall_delta := delta - powered_delta
+	if fall_delta <= 0.0:
+		return
+	velocity.x = 0.0
+	velocity.z = 0.0
+	_advance_slam_step(fall_delta)
+	_finish_slam_if_landed()
+
+func _advance_slam_step(delta: float) -> void:
+	var next_velocity := velocity
+	next_velocity.y -= _behavior.gravity * delta
+	var motion := next_velocity * delta
+	motion.y = (velocity.y + next_velocity.y) * 0.5 * delta
+	var result := VoxelBodySolver.sweep(voxel_space, global_position, next_velocity, motion, definition.body_width, definition.body_height)
+	global_position = result.position
+	velocity = result.velocity
+	var ground_y := VoxelBodySolver.get_ground_y(voxel_space, global_position, definition.body_width)
+	on_ground = (
+		is_zero_approx(velocity.y)
+		and ground_y != VoxelSpace.NO_SURFACE_Y
+		and absf(ground_y - global_position.y) < 0.031
+	)
+	if on_ground:
+		global_position.y = ground_y
+		velocity.y = 0.0
+
+func _finish_slam_if_landed() -> bool:
+	if not on_ground:
+		return false
+	brain.record_slam_landed()
+	_landing_marker.hide_marker()
+	_stone_golem_animation.play_slam_recovery(_behavior.get_slam_recovery_seconds())
+	if _slam_contact_pending:
+		_slam_contact_pending = false
+		radial_contact_reached.emit(runtime_id, _behavior.slam_profile)
+	return true
+
+func _face_planar(target: Vector3) -> void:
+	var direction := target - global_position
+	direction.y = 0.0
+	if direction.is_zero_approx():
+		return
+	model_root.rotation.y = atan2(direction.x, direction.z)
+
+func _cancel_slam() -> void:
+	_slam_contact_pending = false
+	_slam_airborne_elapsed = 0.0
+	if is_instance_valid(_landing_marker):
+		_landing_marker.hide_marker()
+	if is_instance_valid(_stone_golem_animation):
+		_stone_golem_animation.cancel_slam()
 
 func _emit_melee_contact(profile: MeleeAttackProfile) -> void:
 	if profile != null:
@@ -78,10 +216,12 @@ func _emit_melee_contact(profile: MeleeAttackProfile) -> void:
 
 func begin_despawn_fade() -> void:
 	_timed_melee_contact.cancel()
+	_cancel_slam()
 	super.begin_despawn_fade()
 
 func begin_death_retirement() -> void:
 	_timed_melee_contact.cancel()
+	_cancel_slam()
 	super.begin_death_retirement()
 
 func _get_path_velocity(delta: float, navigation_search_budget: NavigationSearchBudget) -> Vector3:

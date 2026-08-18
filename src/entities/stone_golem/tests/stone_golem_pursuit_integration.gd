@@ -129,6 +129,7 @@ func _test_bounded_navigation_recovery(definition: EntityDefinition, world: Voxe
 		Vector3(20.5, FEET_Y, 0.5),
 		EntityNavigationLimits.new(2, 32, 2),
 	)
+	actor.brain._slam_cooldown_remaining = behavior.slam_profile.cooldown
 	var budget := NavigationSearchBudget.new(2)
 	var initial_position := actor.global_position
 	var unreachable_goal := initial_position + Vector3(8.0, 0.0, 8.0)

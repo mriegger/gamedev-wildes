@@ -2,6 +2,7 @@ extends SceneTree
 const StoneGolemActorType := preload("res://entities/stone_golem/stone_golem_actor.gd")
 const StoneGolemAnimationDriverType := preload("res://entities/stone_golem/stone_golem_animation_driver.gd")
 const StoneGolemBrainType := preload("res://entities/stone_golem/stone_golem_brain.gd")
+const StoneGolemLandingMarkerType := preload("res://entities/stone_golem/stone_golem_landing_marker.gd")
 
 const FEET_Y: float = 2.0
 
@@ -104,6 +105,53 @@ func _run() -> void:
 	_expect(saw_land, "falling Stone Golem did not consume its landing tuning")
 	_expect(actor.on_ground and absf(actor.global_position.y - FEET_Y) < 0.12, "Stone Golem did not settle within the voxel floor contact tolerance")
 	_expect(actor.brain.state == StoneGolemBrainType.State.DORMANT, "falling and landing woke the dormant Stone Golem")
+
+	var punch_profile := load("res://combat/profiles/stone_golem_punch.tres") as MeleeAttackProfile
+	animation.play_attack(punch_profile.duration)
+	actor._timed_melee_contact.arm(punch_profile)
+	animation.advance(0.1)
+	_expect(animation.get_current_state() == StoneGolemAnimationDriverType.PUNCH, "punch presentation fixture did not start")
+	actor.play_hit(Vector3.LEFT)
+	animation.advance(StoneGolemAnimationDriverType.HIT_SECONDS * 0.5)
+	_expect(animation.get_current_state() == StoneGolemAnimationDriverType.HIT, "received hit did not overlay the active punch")
+	_expect(actor._timed_melee_contact.is_pending(), "received hit cancelled pending punch contact")
+	animation.advance(StoneGolemAnimationDriverType.HIT_SECONDS * 0.5)
+	_expect(animation.get_current_state() == StoneGolemAnimationDriverType.PUNCH, "punch presentation did not resume after hit reaction")
+	_expect(actor._timed_melee_contact.is_pending(), "resumed punch lost pending gameplay contact")
+	actor._timed_melee_contact.cancel()
+
+	var marker_scene := load("res://entities/stone_golem/stone_golem_landing_marker.tscn") as PackedScene
+	var marker := marker_scene.instantiate() as StoneGolemLandingMarkerType
+	actor.add_child(marker)
+	_expect(not marker.visible, "landing marker was visible by default")
+	var disc := marker.get_node(^"Disc") as MeshInstance3D
+	var marker_mesh := disc.mesh as CylinderMesh
+	_expect(is_equal_approx(marker_mesh.top_radius, 1.0) and is_equal_approx(marker_mesh.bottom_radius, 1.0), "landing marker radius changed")
+	var marker_target := actor.global_position + Vector3(3.0, 0.0, 2.0)
+	marker.show_at(marker_target)
+	_expect(marker.visible and marker.global_position.is_equal_approx(marker_target), "landing marker did not show at the locked world position")
+	actor.global_position += Vector3(4.0, 1.0, -2.0)
+	_expect(marker.global_position.is_equal_approx(marker_target), "landing marker inherited actor motion")
+	marker.hide_marker()
+	_expect(not marker.visible, "landing marker did not hide explicitly")
+
+	animation.set_alerted(true)
+	animation.play_slam_windup(0.6)
+	animation.advance(0.3)
+	_expect(animation.get_current_state() == StoneGolemAnimationDriverType.SLAM_WINDUP, "slam windup presentation was not distinct")
+	_expect(animation.left_eye_material.emission_enabled and animation.right_eye_material.emission_enabled, "slam windup cleared alerted eyes")
+	animation.play_slam_airborne(0.8)
+	animation.advance(0.2)
+	_expect(animation.get_current_state() == StoneGolemAnimationDriverType.SLAM_AIRBORNE, "slam airborne presentation was not distinct")
+	animation.play_slam_recovery(0.75)
+	animation.advance(0.2)
+	_expect(animation.get_current_state() == StoneGolemAnimationDriverType.SLAM_RECOVERY, "slam recovery presentation was not distinct")
+	animation.cancel_slam()
+	animation.advance(0.0)
+	_expect(animation.get_current_state() == StoneGolemAnimationDriverType.IDLE, "cancelled slam presentation did not return to idle")
+	_expect(animation.left_eye_material.emission_enabled and animation.right_eye_material.emission_enabled, "slam presentation changed alerted eye state")
+	animation.set_alerted(false)
+
 	actor.queue_free()
 	for _frame_index in range(8):
 		await process_frame

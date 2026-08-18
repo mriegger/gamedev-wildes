@@ -4,6 +4,7 @@ class_name EntityRuntime
 const EntitySpawnGeometryType := preload("res://entities/entity_spawn_geometry.gd")
 
 signal entity_melee_contact_reached(source_runtime_id: int, profile: MeleeAttackProfile)
+signal entity_radial_contact_reached(source_runtime_id: int, profile: MeleeAttackProfile)
 signal entity_defeated(defeat: EntityDefeat)
 signal water_surface_motion_committed(position: Vector3, planar_velocity: Vector2)
 
@@ -139,6 +140,7 @@ func try_spawn_batch(requests: Array[EntitySpawnRequest]) -> Array[int]:
 		actor.setup(runtime_id, definition, _voxel_space, request.behavior_seed, _navigation_limits)
 		actor.melee_contact_reached.connect(_on_actor_melee_contact_reached)
 		actor.water_surface_motion_committed.connect(_on_actor_water_surface_motion_committed)
+		actor.radial_contact_reached.connect(_on_actor_radial_contact_reached)
 		_spatial_index.upsert(runtime_id, actor.global_position, actor.get_world_bounds())
 		runtime_ids.append(runtime_id)
 	return runtime_ids
@@ -245,6 +247,8 @@ func _remove_active_actor(runtime_id: int) -> EntityActor:
 			actor.melee_contact_reached.disconnect(_on_actor_melee_contact_reached)
 		if actor.water_surface_motion_committed.is_connected(_on_actor_water_surface_motion_committed):
 			actor.water_surface_motion_committed.disconnect(_on_actor_water_surface_motion_committed)
+		if actor.radial_contact_reached.is_connected(_on_actor_radial_contact_reached):
+			actor.radial_contact_reached.disconnect(_on_actor_radial_contact_reached)
 		return actor
 	return null
 
@@ -384,6 +388,9 @@ func _on_actor_melee_contact_reached(source_runtime_id: int, profile: MeleeAttac
 
 func _on_actor_water_surface_motion_committed(position: Vector3, planar_velocity: Vector2) -> void:
 	water_surface_motion_committed.emit(position, planar_velocity)
+
+func _on_actor_radial_contact_reached(source_runtime_id: int, profile: MeleeAttackProfile) -> void:
+	entity_radial_contact_reached.emit(source_runtime_id, profile)
 
 func suspend() -> void:
 	if _suspended:
