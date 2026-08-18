@@ -12,10 +12,10 @@ const GROUND_OFFSETS: Array[Vector2] = [
 	Vector2(-0.62, -0.55),
 ]
 const DECORATIVE_OFFSETS: Array[Vector3] = [
-	Vector3(1.34, 0.15, 0.18),
-	Vector3(-1.34, 0.42, -0.12),
-	Vector3(0.16, 0.28, 1.34),
-	Vector3(-0.18, 0.05, -1.34),
+	Vector3(1.64, 0.15, 0.18),
+	Vector3(-1.64, 0.42, -0.12),
+	Vector3(0.16, 0.28, 1.64),
+	Vector3(-0.18, 0.05, -1.64),
 ]
 
 @export var definition: AppleTreeDefinition

@@ -26,6 +26,8 @@ func _init() -> void:
 				ground_count += 1
 			elif child.name == "DecorativeApple":
 				decorative_count += 1
+				var offset := (child as Node3D).position - Vector3(apple_position.x + 0.5, (child as Node3D).position.y, apple_position.z + 0.5)
+				_expect(maxf(absf(offset.x), absf(offset.z)) >= 1.6, "decorative apple remained inside the leaf blocks")
 		_expect(ground_count >= 1 and ground_count <= 3, "apple tree did not have one to three ground apples")
 		_expect(decorative_count >= 1 and decorative_count <= 4, "apple tree did not have one to four decorative apples")
 		_expect(apple_trees._targets.size() == ground_count, "decorative apples became harvest targets")
