@@ -116,10 +116,10 @@ func _run() -> void:
 	var entity_catalog := load("res://entities/entity_catalog.tres") as EntityCatalog
 	var definition := entity_catalog.get_definition(&"skeleton")
 	var actor := definition.actor_scene.instantiate() as SkeletonActor
-	_expect(actor.vocalizations_path.is_empty(), "Skeleton scene unexpectedly wired audio")
+	_expect(not actor.vocalizations_path.is_empty(), "Skeleton scene did not wire vocalizations")
 	get_root().add_child(actor)
 	actor.setup(41, definition, world, 4101, EntityNavigationLimits.new(32, 512, 2))
-	_expect(actor.vocalizations == null, "Skeleton setup unexpectedly created audio")
+	_expect(actor.vocalizations != null, "Skeleton setup did not create vocalizations")
 	var driver := actor.animation_driver as SkeletonAnimationDriver
 	_expect(driver != null, "production Skeleton animation driver was missing")
 	_test_rig(driver.animator, driver)

@@ -66,10 +66,12 @@ and bounded path follower own reusable movement calculations. Voxel A* expands e
 with distance-weighted diagonal edges and refuses diagonals through blocked orthogonal corners.
 
 Custom animation drivers present actor state without deciding gameplay outcomes. `EntityActor`
-allows species to omit vocalization presentation; Skeleton currently has no audio wiring, while the
-existing Zombie and Sheep presentation remains unchanged. Each actor binds its runtime stats to a
-billboarded health bar before visual-fade setup, so the bar remains hidden at full health, updates from
-completed health changes, and shares the actor's fade lifecycle. Spawned actors fade in through
+allows species to omit vocalization presentation while Skeleton, Zombie, and Sheep wire species-owned
+profiles through the shared `EntityVocalizations` scheduler. Skeleton selects among three positional
+clips, avoids immediate repeats, and stops audio processing when presentation retires. Each actor binds
+its runtime stats to a billboarded health bar before visual-fade setup, so the bar remains hidden at
+full health, updates from completed health changes, and shares the actor's fade lifecycle. Spawned
+actors fade in through
 instance-local geometry transparency. Despawn or lethal damage removes stats, active state,
 targeting, and spatial entries together. Lethal retirement plays the species-owned death pose, then
 starts an actor-owned one-shot smoke poof and model fade together; the scene is freed only after both

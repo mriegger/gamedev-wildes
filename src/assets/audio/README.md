@@ -7,6 +7,7 @@
 - `combat/impacts/creature/*.wav` provides three creature-impact variations.
 - `combat/impacts/player/player_hit.wav` provides player-hit impact feedback.
 - `combat/weapons/hammer/impacts/low_thump_332670_CC0.ogg` provides the copper hammer's ground-impact thump.
+- `entities/skeleton/vocalizations/*.mp3` provides three positional Skeleton vocalizations.
 - `entities/sheep/vocalizations/real_sheep_*.wav` provides seven positional sheep vocalizations.
 - `entities/zombie/vocalizations/Zombie_*.mp3` provides six positional zombie vocalizations.
 - `entities/bird/wing_flaps/duck_sampled_wing_flap_04_CC0.ogg` provides positional wing-flapping audio while birds are airborne.
@@ -27,6 +28,7 @@
 | `combat/weapons/sword/draw/*.ogg`, `combat/weapons/pickaxe/draw/*.ogg`, and `combat/impacts/creature/*.wav` (9 files) | [Voiceover Pack](https://kenney.nl/assets/voiceover-pack) – Kenney | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) | Attribution, license notice, and source credit are not required under CC0; documented here for provenance. The pickaxe files are copies of the three knife-draw sounds. |
 | `combat/impacts/player/player_hit.wav` | Muse, prompted by Michael Riegger | Project-authored | Player-hit impact feedback. |
 | `combat/weapons/hammer/impacts/low_thump_332670_CC0.ogg` | [low thump.wav](https://freesound.org/people/Reitanna/sounds/332670/) – Reitanna, Freesound sound 332670 | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) | Unmodified Freesound high-quality Ogg preview transcode of the original WAV, used for the copper hammer's ground impact. Attribution is not legally required under CC0; documented here for provenance. |
+| `entities/skeleton/vocalizations/*.mp3` (3 files) | Supplied by the project owner | Project-provided | Positional Skeleton vocalizations; source filenames are unchanged. |
 | `entities/sheep/vocalizations/real_sheep_*.wav` (7 files) | [Sheep 1 and related sheep recordings](https://bigsoundbank.com/sheep-1-s2343.html) – Joseph SARDIN, BigSoundBank | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) | Free for any use, including commercial use; attribution is not required. Documented here for provenance. No changes beyond file placement. |
 | `entities/zombie/vocalizations/Zombie_*.mp3` (6 files) | [Little Robot Sound Factory](https://web.archive.org/web/20160314071020id_/http://www.littlerobotsoundfactory.com/) – Morten Barfod Søegaard, Little Robot Sound Factory | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | Positional zombie vocalizations. No changes beyond file selection and placement. |
 | `entities/bird/wing_flaps/duck_sampled_wing_flap_04_CC0.ogg` | DUCK SAMPLED PACK – real recordings sampled from BigSoundBank / LaSonotheque | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) | Edited for the game as dry 48 kHz mono audio. Attribution is not required; documented here for provenance. |

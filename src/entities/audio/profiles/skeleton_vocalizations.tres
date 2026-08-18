@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="EntityVocalizationProfile" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://entities/audio/entity_vocalization_profile.gd" id="1_profile"]
+[ext_resource type="AudioStream" path="res://assets/audio/entities/skeleton/vocalizations/audiomass-output.mp3" id="2_voice"]
+[ext_resource type="AudioStream" path="res://assets/audio/entities/skeleton/vocalizations/audiomass-output-2.mp3" id="3_voice"]
+[ext_resource type="AudioStream" path="res://assets/audio/entities/skeleton/vocalizations/audiomass-output-3.mp3" id="4_voice"]
+
+[resource]
+script = ExtResource("1_profile")
+streams = Array[AudioStream]([ExtResource("2_voice"), ExtResource("3_voice"), ExtResource("4_voice")])
+rng_salt = 182704493
