@@ -15,9 +15,10 @@ const PATH_SAMPLES: int = 200
 const DAY_TIME: float = 12.0
 const NIGHT_TIME: float = 20.0
 const EXPECTED_SHEEP_COUNT: int = 6
-const EXPECTED_ZOMBIE_COUNT: int = 3
-const EXPECTED_SKELETON_COUNT: int = 3
+const EXPECTED_ZOMBIE_COUNT: int = 2
+const EXPECTED_SKELETON_COUNT: int = 2
 const EXPECTED_BIRD_COUNT: int = 4
+const EXPECTED_STONE_GOLEM_COUNT: int = 2
 
 var _failures: int = 0
 
@@ -79,6 +80,7 @@ func _arrange_population(coordinator: WorldEntityCoordinator, actors: Array[Enti
 	var sheep_index := 0
 	var skeleton_index := 0
 	var bird_index := 0
+	var stone_golem_index := 0
 	for actor in actors:
 		var angle: float
 		var radius: float
@@ -100,9 +102,15 @@ func _arrange_population(coordinator: WorldEntityCoordinator, actors: Array[Enti
 				_expect(skeleton != null, "skeleton definition did not instantiate a SkeletonActor")
 				if skeleton != null:
 					skeleton._path_follower.request_repath()
+			&"stone_golem":
+				angle = TAU * float(stone_golem_index) / float(EXPECTED_STONE_GOLEM_COUNT) + PI / 2.0
+				radius = 14.0
+				stone_golem_index += 1
+				var stone_golem := actor as StoneGolemActor
+				_expect(stone_golem != null, "stone_golem definition did not instantiate a StoneGolemActor")
 			&"sheep":
 				angle = TAU * float(sheep_index) / float(EXPECTED_SHEEP_COUNT) + PI / 6.0
-				radius = 14.0
+				radius = 17.0
 				sheep_index += 1
 				var sheep := actor as SheepActor
 				_expect(sheep != null, "sheep definition did not instantiate a SheepActor")
@@ -125,12 +133,33 @@ func _arrange_population(coordinator: WorldEntityCoordinator, actors: Array[Enti
 	_expect(sheep_index == EXPECTED_SHEEP_COUNT, "benchmark population had %d sheep" % sheep_index)
 	_expect(skeleton_index == EXPECTED_SKELETON_COUNT, "benchmark population had %d skeletons" % skeleton_index)
 	_expect(bird_index == EXPECTED_BIRD_COUNT, "benchmark population had %d birds" % bird_index)
+	_expect(stone_golem_index == EXPECTED_STONE_GOLEM_COUNT, "benchmark population had %d Stone Golems" % stone_golem_index)
 	return {
 		"sheep": sheep_index,
 		"zombie": zombie_index,
 		"skeleton": skeleton_index,
 		"bird": bird_index,
+		"stone_golem": stone_golem_index,
 	}
+
+func _verify_dormant_golems_do_not_search(actors: Array[EntityActor], player_position: Vector3) -> void:
+	var observation := EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT)
+	var verified_count := 0
+	for actor in actors:
+		if actor.definition.id != &"stone_golem":
+			continue
+		var stone_golem := actor as StoneGolemActor
+		_expect(stone_golem != null, "Stone Golem workload actor had the wrong type")
+		if stone_golem == null:
+			continue
+		var origin := stone_golem.global_position
+		var budget := NavigationSearchBudget.new(WorldEntityCoordinator.MAX_NAVIGATION_SEARCHES_PER_TICK)
+		stone_golem.tick(FRAME_DELTA, observation, Vector3(4.0, 0.0, 0.0), budget)
+		_expect(budget._remaining_searches == WorldEntityCoordinator.MAX_NAVIGATION_SEARCHES_PER_TICK, "dormant Stone Golem requested a navigation search")
+		_expect(stone_golem.global_position.is_equal_approx(origin), "dormant Stone Golem moved during workload verification")
+		_expect(stone_golem.brain.state == StoneGolemBrain.State.DORMANT, "workload verification woke a dormant Stone Golem")
+		verified_count += 1
+	_expect(verified_count == EXPECTED_STONE_GOLEM_COUNT, "workload verified %d dormant Stone Golems" % verified_count)
 
 func _player_position(frame_index: int) -> Vector3:
 	var angle := float(frame_index) * 0.015
@@ -233,6 +262,7 @@ func _run() -> void:
 	var actors := _sorted_actors(coordinator)
 	_expect(actors.size() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "benchmark did not create the full population")
 	var species_counts := _arrange_population(coordinator, actors)
+	_verify_dormant_golems_do_not_search(actors, origin)
 	var frame_metrics := _benchmark_entity_frames(coordinator, actors)
 	var path_metrics := _benchmark_bounded_pathfinding()
 	var spatial_index := coordinator.get_runtime()._spatial_index as EntitySpatialIndex

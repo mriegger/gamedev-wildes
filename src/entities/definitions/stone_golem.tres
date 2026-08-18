@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="EntityDefinition" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://entities/entity_definition.gd" id="1_definition"]
+[ext_resource type="PackedScene" path="res://entities/stone_golem/stone_golem.tscn" id="2_scene"]
+[ext_resource type="Resource" path="res://entities/stone_golem/stone_golem_behavior.tres" id="3_behavior"]
+[ext_resource type="Resource" path="res://entities/stone_golem/stone_golem_stats.tres" id="4_stats"]
+
+[resource]
+script = ExtResource("1_definition")
+id = &"stone_golem"
+actor_scene = ExtResource("2_scene")
+behavior = ExtResource("3_behavior")
+stats_definition = ExtResource("4_stats")
+experience_reward = 30
+body_width = 1.2
+body_height = 2.4
+ambient_spawn_phase = 1
+ambient_max_active = 2
+ambient_spawn_floor_ids = Array[int]([1, 2, 3, 4])

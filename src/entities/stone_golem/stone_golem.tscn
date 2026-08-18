@@ -1,0 +1,22 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://entities/stone_golem/stone_golem_actor.gd" id="1_actor"]
+[ext_resource type="PackedScene" path="res://entities/stone_golem/stone_golem_visual.tscn" id="2_visual"]
+[ext_resource type="Script" path="res://entities/presentation/entity_visual_fader.gd" id="3_fader"]
+[ext_resource type="PackedScene" path="res://entities/presentation/entity_death_poof.tscn" id="4_poof"]
+
+[node name="StoneGolem" type="Node3D"]
+script = ExtResource("1_actor")
+animation_driver_path = NodePath("ModelRoot/StoneGolemVisual/AnimationDriver")
+visual_fader_path = NodePath("VisualFader")
+death_poof_path = NodePath("DeathPoof")
+
+[node name="ModelRoot" type="Node3D" parent="."]
+
+[node name="StoneGolemVisual" parent="ModelRoot" instance=ExtResource("2_visual")]
+
+[node name="VisualFader" type="Node" parent="."]
+script = ExtResource("3_fader")
+
+[node name="DeathPoof" parent="." instance=ExtResource("4_poof")]
+position = Vector3(0, 1.2, 0)

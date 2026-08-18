@@ -517,6 +517,25 @@ jobs:
             30 "SKELETON_PRESENTATION PASS" /tmp/skeleton_presentation.log -- \
             godot --headless --path src --script res://entities/skeleton/tests/skeleton_presentation_integration.gd
 
+  stone-golem-dormant:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run Stone Golem brain tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "STONE_GOLEM_BRAIN PASS" /tmp/stone_golem_brain.log -- \
+            godot --headless --path src --script res://entities/stone_golem/tests/stone_golem_brain.gd
+      - name: Run Stone Golem dormant integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "STONE_GOLEM_DORMANT PASS" /tmp/stone_golem_dormant.log -- \
+            godot --headless --path src --script res://entities/stone_golem/tests/stone_golem_dormant_integration.gd
+
   entity-combat-integration:
     runs-on: ubuntu-latest
     timeout-minutes: 10
