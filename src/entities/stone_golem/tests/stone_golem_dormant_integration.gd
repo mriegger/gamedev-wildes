@@ -47,7 +47,6 @@ func _run() -> void:
 	actor.on_ground = true
 	actor.advance_visual_fade(actor.visual_fader.fade_in_seconds)
 	_expect(actor.brain.state == StoneGolemBrainType.State.DORMANT, "Stone Golem did not start dormant")
-	_expect(is_equal_approx(actor.max_speed, 1.2), "Stone Golem movement speed changed")
 	var initial_position := actor.global_position
 	for player_position in [Vector3(1.5, FEET_Y, 0.5), Vector3(16.5, FEET_Y, 0.5)]:
 		actor.tick(0.5, _observation(player_position), Vector3(4.0, 0.0, 0.0), NavigationSearchBudget.new(2))

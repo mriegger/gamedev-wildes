@@ -12,7 +12,6 @@ var state: State = State.DORMANT
 
 func _init(definition: StoneGolemBehaviorDefinitionType) -> void:
 	assert(definition != null)
-	assert(StoneGolemBehaviorDefinitionType.is_valid_movement_speed(definition.movement_speed))
 	assert(StoneGolemBehaviorDefinitionType.is_valid_gravity(definition.gravity))
 
 func advance(delta: float, self_position: Vector3, observation: EntityTargetObservationType) -> void:

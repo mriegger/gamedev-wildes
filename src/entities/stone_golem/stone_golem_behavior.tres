@@ -4,5 +4,4 @@
 
 [resource]
 script = ExtResource("1_behavior")
-movement_speed = 1.2
 gravity = 30.0

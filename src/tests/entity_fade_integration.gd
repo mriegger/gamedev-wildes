@@ -77,7 +77,7 @@ func _expect_opacity(
 		_expect(is_equal_approx(geometries[index].transparency, expected), "%s geometry %d had transparency %.3f instead of %.3f" % [context, index, geometries[index].transparency, expected])
 
 func _test_species_visual_fades(catalog: EntityCatalog, world: VoxelWorld) -> void:
-	var definition_ids: Array[StringName] = [&"zombie", &"sheep", &"bird", &"skeleton"]
+	var definition_ids: Array[StringName] = [&"zombie", &"sheep", &"bird", &"skeleton", &"stone_golem"]
 	for index in range(definition_ids.size()):
 		var definition := catalog.get_definition(definition_ids[index])
 		var actor := definition.actor_scene.instantiate() as EntityActor
@@ -172,7 +172,7 @@ func _test_skeleton_attack_presentation(catalog: EntityCatalog, world: VoxelWorl
 	actor.free()
 
 func _test_species_death_retirement(catalog: EntityCatalog, world: VoxelWorld) -> void:
-	var definition_ids: Array[StringName] = [&"zombie", &"sheep", &"skeleton"]
+	var definition_ids: Array[StringName] = [&"zombie", &"sheep", &"skeleton", &"stone_golem"]
 	for index in range(definition_ids.size()):
 		var definition := catalog.get_definition(definition_ids[index])
 		var actor := definition.actor_scene.instantiate() as EntityActor
@@ -191,6 +191,12 @@ func _test_species_death_retirement(catalog: EntityCatalog, world: VoxelWorld) -
 			var skeleton := actor as SkeletonActor
 			skeleton._timed_melee_contact.arm((definition.behavior as SkeletonBehaviorDefinition).melee_profile)
 			death_seconds = SkeletonAnimationDriver.DEATH_SECONDS
+		elif actor is StoneGolemActor:
+			var stone_golem_animation := actor.animation_driver as StoneGolemAnimationDriver
+			stone_golem_animation.advance(StoneGolemAnimationDriver.HIT_SECONDS * 0.5)
+			_expect(stone_golem_animation.get_current_state() == StoneGolemAnimationDriver.HIT, "Stone Golem hit did not select its hit presentation")
+			_expect(stone_golem_animation.animator.position.x > stone_golem_animation._visual_origin_position.x + 0.06, "Stone Golem hit did not displace its body")
+			death_seconds = StoneGolemAnimationDriver.DEATH_SECONDS
 		elif actor is SheepActor:
 			death_seconds = SheepAnimationDriver.DEATH_SECONDS
 		else:
@@ -205,6 +211,8 @@ func _test_species_death_retirement(catalog: EntityCatalog, world: VoxelWorld) -
 			death_state = (actor.animation_driver as ZombieAnimationDriver).get_current_state()
 		elif actor is SkeletonActor:
 			death_state = (actor.animation_driver as SkeletonAnimationDriver).get_current_state()
+		elif actor is StoneGolemActor:
+			death_state = (actor.animation_driver as StoneGolemAnimationDriver).get_current_state()
 		elif actor is SheepActor:
 			death_state = (actor.animation_driver as SheepAnimationDriver).get_current_state()
 		_expect(death_state == &"Death", "%s did not enter its death state" % definition.id)
@@ -225,6 +233,14 @@ func _test_species_death_retirement(catalog: EntityCatalog, world: VoxelWorld) -
 		elif actor is SkeletonActor:
 			var skeleton_animation := actor.animation_driver as SkeletonAnimationDriver
 			_expect(absf(skeleton_animation.animator.rotation.x - skeleton_animation._visual_origin_rotation.x) > deg_to_rad(1.0), "skeleton did not fold into its fall pose")
+		elif actor is StoneGolemActor:
+			var stone_golem_animation := actor.animation_driver as StoneGolemAnimationDriver
+			_expect(absf(stone_golem_animation.animator.rotation.x - stone_golem_animation._visual_origin_rotation.x) > deg_to_rad(1.0), "Stone Golem did not settle into its fall pose")
+			var remaining_death_seconds := stone_golem_animation.get_death_time_remaining()
+			var death_rotation := stone_golem_animation.animator.rotation
+			actor.begin_death_retirement()
+			_expect(is_equal_approx(stone_golem_animation.get_death_time_remaining(), remaining_death_seconds), "Stone Golem repeated retirement restarted its death timer")
+			_expect(stone_golem_animation.animator.rotation.is_equal_approx(death_rotation), "Stone Golem repeated retirement reset its death pose")
 		elif actor is SheepActor:
 			var sheep_animation := actor.animation_driver as SheepAnimationDriver
 			_expect(absf(sheep_animation._rig_root.rotation.z - sheep_animation._rig_origin_rotation.z) > deg_to_rad(1.0), "sheep did not rotate into its side-collapse pose")
@@ -237,6 +253,8 @@ func _test_species_death_retirement(catalog: EntityCatalog, world: VoxelWorld) -
 			death_state = (actor.animation_driver as ZombieAnimationDriver).get_current_state()
 		elif actor is SkeletonActor:
 			death_state = (actor.animation_driver as SkeletonAnimationDriver).get_current_state()
+		elif actor is StoneGolemActor:
+			death_state = (actor.animation_driver as StoneGolemAnimationDriver).get_current_state()
 		elif actor is SheepActor:
 			death_state = (actor.animation_driver as SheepAnimationDriver).get_current_state()
 		_expect(death_state == &"Death", "%s hit reaction replaced its death pose" % definition.id)

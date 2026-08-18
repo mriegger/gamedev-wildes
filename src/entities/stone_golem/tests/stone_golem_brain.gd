@@ -28,20 +28,16 @@ func _make_observation(player_position: Vector3) -> EntityTargetObservationType:
 func _test_definition_defaults_and_resource() -> void:
 	var behavior := StoneGolemBehaviorDefinitionType.new()
 	_expect(behavior.validate("test"), "default behavior definition was rejected")
-	_expect(is_equal_approx(behavior.movement_speed, 1.2), "movement speed changed")
 	_expect(is_equal_approx(behavior.gravity, 30.0), "gravity changed")
 	var configured_behavior := load("res://entities/stone_golem/stone_golem_behavior.tres") as StoneGolemBehaviorDefinitionType
 	_expect(configured_behavior != null, "configured behavior resource did not load")
 	if configured_behavior != null:
 		_expect(configured_behavior.validate(configured_behavior.resource_path), "configured behavior definition was rejected")
-		_expect(is_equal_approx(configured_behavior.movement_speed, 1.2), "configured movement speed changed")
 		_expect(is_equal_approx(configured_behavior.gravity, 30.0), "configured gravity changed")
 
 func _test_invalid_behavior_values() -> void:
 	for value in [0.0, -0.1, INF, NAN]:
-		_expect(not StoneGolemBehaviorDefinitionType.is_valid_movement_speed(value), "invalid movement speed was accepted")
 		_expect(not StoneGolemBehaviorDefinitionType.is_valid_gravity(value), "invalid gravity was accepted")
-	_expect(StoneGolemBehaviorDefinitionType.is_valid_movement_speed(1.2), "valid movement speed was rejected")
 	_expect(StoneGolemBehaviorDefinitionType.is_valid_gravity(30.0), "valid gravity was rejected")
 
 func _test_dormant_stability() -> void:

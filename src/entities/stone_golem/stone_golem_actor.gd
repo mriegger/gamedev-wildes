@@ -19,7 +19,6 @@ func setup(
 	_behavior = p_definition.behavior as StoneGolemBehaviorDefinition
 	assert(_behavior != null)
 	brain = StoneGolemBrain.new(_behavior)
-	max_speed = _behavior.movement_speed
 	assert(animation_driver is StoneGolemAnimationDriver)
 
 func tick(
