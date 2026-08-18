@@ -36,6 +36,7 @@ var _status: Status = Status.EXHAUSTED
 var _elevation_offsets: Array[int] = []
 var _origin: Vector3
 var _origin_feet: Vector3i
+var _candidate_exclusion_origin: Vector2
 var _observation: EntityTargetObservation
 var _candidate_frontier: Array[CandidateEntry] = []
 var _queued_columns: Dictionary = {}
@@ -62,12 +63,14 @@ func _init(
 	_navigation_limits = p_navigation_limits
 	_elevation_offsets = _build_elevation_offsets()
 
-func begin(origin: Vector3, observation: EntityTargetObservation, minimum_candidate_distance: float) -> void:
+func begin(origin: Vector3, candidate_exclusion_origin: Vector3, observation: EntityTargetObservation, minimum_candidate_distance: float) -> void:
 	assert(origin.is_finite())
+	assert(candidate_exclusion_origin.is_finite())
 	assert(observation != null and observation.validate())
 	assert(is_finite(minimum_candidate_distance) and minimum_candidate_distance >= 0.0)
 	_origin = origin
 	_origin_feet = Vector3i(floori(origin.x), roundi(origin.y), floori(origin.z))
+	_candidate_exclusion_origin = Vector2(candidate_exclusion_origin.x, candidate_exclusion_origin.z)
 	_minimum_candidate_distance_squared = minimum_candidate_distance * minimum_candidate_distance
 	_observation = EntityTargetObservation.new(
 		observation.player_position,
@@ -95,7 +98,8 @@ func advance(search_budget: NavigationSearchBudget) -> Status:
 			if entry == null:
 				_status = Status.EXHAUSTED
 				return _status
-			if entry.distance_squared < _minimum_candidate_distance_squared:
+			var candidate_center := Vector2(float(entry.column.x) + 0.5, float(entry.column.y) + 0.5)
+			if candidate_center.distance_squared_to(_candidate_exclusion_origin) < _minimum_candidate_distance_squared:
 				processed_columns += 1
 				continue
 			_current_column = entry.column

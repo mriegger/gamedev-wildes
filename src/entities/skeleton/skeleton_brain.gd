@@ -22,6 +22,7 @@ var _roam_goal_remaining: float = 0.0
 var _cover_retry_remaining: float = 0.0
 var _cover_revalidation_remaining: float = 0.0
 var _cover_search_pending: bool = false
+var _post_attack_retreat_origin: Vector3 = Vector3.ZERO
 var _cover_search_in_progress: bool = false
 var _attack_remaining: float = 0.0
 var _attack_cooldown_remaining: float = 0.0
@@ -77,7 +78,7 @@ func advance(delta: float, self_position: Vector3, player_position: Vector3, cur
 				_advance_cover_retry(delta)
 			var profile := _definition.melee_profile
 			if self_position.distance_squared_to(player_position) <= profile.reach * profile.reach and is_zero_approx(_attack_cooldown_remaining):
-				_start_attack()
+				_start_attack(self_position)
 
 func get_movement_goal() -> Vector3:
 	return _movement_goal
@@ -104,6 +105,12 @@ func get_minimum_cover_search_distance() -> float:
 		return POST_ATTACK_MINIMUM_COVER_DISTANCE
 	return 0.0
 
+func get_cover_search_exclusion_origin(current_position: Vector3) -> Vector3:
+	assert(current_position.is_finite())
+	if _post_attack_retreat_required:
+		return _post_attack_retreat_origin
+	return current_position
+
 func record_cover_search_started():
 	assert(needs_cover_search())
 	_cover_search_pending = false
@@ -123,13 +130,13 @@ func record_cover_exhausted():
 	assert(_is_cover_search_state() and _cover_search_in_progress)
 	_cover_search_pending = false
 	_cover_search_in_progress = false
-	_post_attack_retreat_required = false
+	_clear_post_attack_retreat()
 	_enter_sprint()
 
 func record_cover_arrival(current_position_hidden: bool):
 	assert(state == State.MOVE_TO_COVER)
 	if current_position_hidden:
-		_post_attack_retreat_required = false
+		_clear_post_attack_retreat()
 		_enter_hide()
 	else:
 		_request_cover_search()
@@ -192,13 +199,14 @@ func _enter_hide():
 func _enter_roam(self_position: Vector3):
 	state = State.ROAM
 	_cancel_cover_search()
-	_post_attack_retreat_required = false
+	_clear_post_attack_retreat()
 	_cover_retry_remaining = 0.0
 	_cover_revalidation_remaining = 0.0
 	_select_roam_goal(self_position)
 
-func _start_attack():
+func _start_attack(self_position: Vector3):
 	var profile := _definition.melee_profile
+	_post_attack_retreat_origin = self_position
 	state = State.ATTACK
 	_attack_started = true
 	_attack_remaining = profile.duration
@@ -206,6 +214,10 @@ func _start_attack():
 	_cancel_cover_search()
 	_cover_retry_remaining = 0.0
 	_cover_revalidation_remaining = 0.0
+
+func _clear_post_attack_retreat():
+	_post_attack_retreat_required = false
+	_post_attack_retreat_origin = Vector3.ZERO
 
 func _cancel_cover_search():
 	_cover_search_pending = false

@@ -140,7 +140,13 @@ func _advance_cover_search(
 	navigation_search_budget: NavigationSearchBudget,
 ):
 	if brain.needs_cover_search():
-		_cover_search.begin(global_position, observation, brain.get_minimum_cover_search_distance())
+		var search_origin := global_position
+		_cover_search.begin(
+			search_origin,
+			brain.get_cover_search_exclusion_origin(search_origin),
+			observation,
+			brain.get_minimum_cover_search_distance(),
+		)
 		brain.record_cover_search_started()
 	if not brain.is_cover_search_in_progress():
 		return
