@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://entities/bird/bird_actor.gd" id="1_actor"]
 [ext_resource type="PackedScene" path="res://entities/bird/bird_visual.tscn" id="2_visual"]
@@ -6,6 +6,7 @@
 [ext_resource type="PackedScene" path="res://entities/presentation/entity_death_poof.tscn" id="4_poof"]
 [ext_resource type="Script" path="res://entities/audio/entity_vocalizations.gd" id="5_vocalizations"]
 [ext_resource type="Resource" path="res://entities/audio/profiles/duck_vocalizations.tres" id="6_vocalization_profile"]
+[ext_resource type="Resource" path="res://entities/audio/profiles/crow_vocalizations.tres" id="7_crow_vocalization_profile"]
 
 [node name="Bird" type="Node3D"]
 script = ExtResource("1_actor")
@@ -13,6 +14,7 @@ animation_driver_path = NodePath("ModelRoot/BirdVisual/AnimationDriver")
 visual_fader_path = NodePath("VisualFader")
 death_poof_path = NodePath("DeathPoof")
 vocalizations_path = NodePath("Vocalizations")
+vocalization_profiles = Array[ExtResource("6_vocalization_profile")]([ExtResource("7_crow_vocalization_profile"), null, ExtResource("6_vocalization_profile"), null])
 
 [node name="ModelRoot" type="Node3D" parent="."]
 

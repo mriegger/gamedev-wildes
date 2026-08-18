@@ -14,11 +14,16 @@ func _ready():
 
 
 func setup(seed_value: int):
-	assert(profile != null and profile.validate())
 	stop()
 	stream = null
-	_rng.seed = seed_value ^ profile.rng_salt
 	_last_stream_index = -1
+	_vocalizations_enabled = profile != null
+	if profile == null:
+		_remaining_seconds = 0.0
+		set_process(false)
+		return
+	assert(profile.validate())
+	_rng.seed = seed_value ^ profile.rng_salt
 	_remaining_seconds = _rng.randf_range(profile.initial_delay_min_seconds, profile.initial_delay_max_seconds)
 	set_process(_vocalizations_enabled)
 

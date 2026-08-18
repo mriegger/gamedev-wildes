@@ -125,18 +125,27 @@ func _run() -> void:
 	var blocked_runtime := EntityRuntime.new()
 	root.add_child(blocked_runtime)
 	blocked_runtime.setup(catalog, blocked_world, 1, 1, EntityNavigationLimits.new(24, 256, 1))
-	var alternate_seed := 7172
-	while BirdActor.color_variant_for_seed(alternate_seed) == bird.color_variant:
-		alternate_seed += 1
-	var blocked_ids := blocked_runtime.try_spawn_batch([EntitySpawnRequest.new(&"bird", aerial_position, alternate_seed)])
+	var crow_seed := variant_seeds[BirdAnimationDriver.ColorVariant.CROW] as int
+	var blocked_ids := blocked_runtime.try_spawn_batch([EntitySpawnRequest.new(&"bird", aerial_position, crow_seed)])
 	var blocked_bird := blocked_runtime.get_actor(blocked_ids[0]) as BirdActor if not blocked_ids.is_empty() else null
 	_expect(blocked_bird != null and not blocked_bird._has_landing_target, "bird selected a disallowed landing floor")
 	if blocked_bird != null:
 		var blocked_animation := blocked_bird.animation_driver as BirdAnimationDriver
-		var first_color := (bird_animation._body_mesh.material_override as StandardMaterial3D).albedo_color
-		var second_color := (blocked_animation._body_mesh.material_override as StandardMaterial3D).albedo_color
-		_expect(not first_color.is_equal_approx(second_color), "different bird variants shared the same body color")
-		_expect(not is_same(bird_animation._body_mesh.material_override, blocked_animation._body_mesh.material_override), "bird instances shared a mutable color material")
+		_expect(blocked_bird.vocalizations.profile.streams.size() == 5, "crow vocalization profile did not contain all five calls")
+		_expect(not blocked_bird.vocalizations.is_processing(), "aerial crow enabled grounded vocalizations")
+		blocked_bird.global_position = Vector3(0.5, FEET_Y, 0.5)
+		blocked_bird.on_ground = true
+		blocked_bird.brain.state = BirdBrain.State.GROUNDED_IDLE
+		blocked_bird._update_vocalizations()
+		blocked_bird.vocalizations._remaining_seconds = 0.0
+		blocked_bird.vocalizations._process(0.0)
+		_expect(blocked_bird.vocalizations.playing, "idle grounded crow did not start a call")
+		_expect(blocked_bird.vocalizations.profile.streams.has(blocked_bird.vocalizations.stream), "crow call selected a stream outside its profile")
+		if canopy_bird != null:
+			var canopy_material := ((canopy_bird.animation_driver as BirdAnimationDriver)._body_mesh.material_override as StandardMaterial3D)
+			var blocked_material := blocked_animation._body_mesh.material_override as StandardMaterial3D
+			_expect(not canopy_material.albedo_color.is_equal_approx(blocked_material.albedo_color), "different bird variants shared the same body color")
+			_expect(not is_same(canopy_material, blocked_material), "bird instances shared a mutable color material")
 	blocked_runtime.shutdown()
 	canopy_runtime.shutdown()
 	runtime.shutdown()
