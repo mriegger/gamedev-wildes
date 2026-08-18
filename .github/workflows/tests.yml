@@ -545,6 +545,12 @@ jobs:
           bash .github/scripts/run_godot_check.sh \
             30 "STONE_GOLEM_AWARENESS_INTEGRATION PASS" /tmp/stone_golem_awareness.log -- \
             godot --headless --path src --script res://entities/stone_golem/tests/stone_golem_awareness_integration.gd
+      - name: Run Stone Golem pursuit integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "STONE_GOLEM_PURSUIT_INTEGRATION PASS" /tmp/stone_golem_pursuit.log -- \
+            godot --headless --path src --script res://entities/stone_golem/tests/stone_golem_pursuit_integration.gd
+
 
 
   entity-combat-integration:

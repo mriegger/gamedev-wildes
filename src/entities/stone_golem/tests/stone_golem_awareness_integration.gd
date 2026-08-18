@@ -107,7 +107,10 @@ func _run() -> void:
 	_expect_dormant_eye(second_driver.left_eye_material, "isolated second left")
 	_expect_dormant_eye(second_driver.right_eye_material, "isolated second right")
 
-	world.restore_block_edits({Vector3i(4, FLAT_HEIGHT + 2, 0): BlockId.Type.STONE}, {})
+	var wall_blocks: Dictionary = {}
+	for z in range(-8, 9):
+		wall_blocks[Vector3i(4, FLAT_HEIGHT + 2, z)] = BlockId.Type.STONE
+	world.restore_block_edits(wall_blocks, {})
 	_tick(first, VoxelPlayerVisibilitySensorType.SAMPLE_INTERVAL_SECONDS, visible_player)
 	_expect(first.brain.is_alerted(), "occlusion cleared the alert before target memory elapsed")
 	_expect_alerted_eye(first_driver.left_eye_material, "remembering first left")

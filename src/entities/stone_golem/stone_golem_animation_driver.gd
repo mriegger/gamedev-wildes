@@ -2,6 +2,7 @@ extends EntityAnimationDriver
 class_name StoneGolemAnimationDriver
 
 const IDLE: StringName = &"Idle"
+const WALK: StringName = &"Walk"
 const HIT: StringName = &"Hit"
 const DEATH: StringName = &"Death"
 const HIT_SECONDS: float = 0.28
@@ -25,6 +26,7 @@ var _hit_direction: Vector3 = Vector3.BACK
 var _dying: bool = false
 var _alerted: bool = false
 var _death_elapsed: float = 0.0
+var _previous_yaw: float = 0.0
 var _visual_origin_position: Vector3
 var _visual_origin_rotation: Vector3
 var _visual_origin_scale: Vector3
@@ -33,6 +35,7 @@ func setup(p_actor: Node3D):
 	super.setup(p_actor)
 	animator = get_parent() as BlockyHumanoidAnimator
 	assert(animator != null)
+	_previous_yaw = model_root.rotation.y
 	left_eye = get_node(left_eye_path) as MeshInstance3D
 	right_eye = get_node(right_eye_path) as MeshInstance3D
 	assert(left_eye != null and right_eye != null)
@@ -82,12 +85,26 @@ func advance(delta: float):
 		_apply_death_pose()
 		_current_state = DEATH
 		return
+	var world_velocity: Vector3 = actor.get(&"velocity")
+	var model_basis := model_root.global_transform.basis.orthonormalized()
+	var local_velocity := model_basis.inverse() * world_velocity
+	var planar_speed := Vector2(world_velocity.x, world_velocity.z).length()
+	var max_speed: float = actor.get(&"max_speed")
+	var speed_ratio := clampf(planar_speed / maxf(max_speed, 0.001), 0.0, 1.0)
+	var current_yaw := model_root.rotation.y
+	var turn_rate := wrapf(current_yaw - _previous_yaw, -PI, PI) / maxf(delta, 0.0001)
+	_previous_yaw = current_yaw
 	var grounded: bool = actor.get(&"on_ground")
-	_animation_state.set_motion(Vector3.ZERO, 0.0, false, grounded, 0.0, 0.0, false, Vector3.ZERO)
+	_animation_state.set_motion(local_velocity, speed_ratio, false, grounded, 0.0, turn_rate, false, Vector3.ZERO)
 	animator.advance_animation(delta)
 	_advance_hit(delta)
 	_apply_hit_pose()
-	_current_state = HIT if _hit_elapsed < HIT_SECONDS else IDLE
+	if _hit_elapsed < HIT_SECONDS:
+		_current_state = HIT
+	elif planar_speed > 0.1:
+		_current_state = WALK
+	else:
+		_current_state = IDLE
 
 func get_current_state() -> StringName:
 	return _current_state
