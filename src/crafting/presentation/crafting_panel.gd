@@ -15,6 +15,7 @@ const PROGRESSION_WORKSPACE_ID: StringName = &"progression"
 @onready var _background: Panel = $Background as Panel
 @onready var _content: Control = $Margin/Content as Control
 @onready var _title_label: Label = $Margin/Content/Title as Label
+@onready var _workspace_tabs: HBoxContainer = $Margin/Content/WorkspaceTabs as HBoxContainer
 @onready var _crafting_tab: Button = $Margin/Content/WorkspaceTabs/Crafting as Button
 @onready var _runes_tab: Button = $Margin/Content/WorkspaceTabs/Runes as Button
 @onready var _progression_tab: Button = $Margin/Content/WorkspaceTabs/Progression as Button
@@ -40,6 +41,8 @@ var _progress: float = 0.0
 var _target_progress: float = 0.0
 var _is_open: bool = false
 var _current_workspace_id: StringName = CRAFTING_WORKSPACE_ID
+var _crafting_title: String = "CRAFTING"
+var _workspace_tabs_enabled: bool = true
 var _crafting_sound_stream: AudioStream = preload("res://assets/audio/sfx/tools/impactGeneric_light_004.ogg")
 
 func _ready() -> void:
@@ -58,16 +61,25 @@ func _ready() -> void:
 	_apply_state()
 	set_process(false)
 
-func setup(p_crafting_coordinator: CraftingCoordinator, p_recipe_catalog: CraftingRecipeCatalog, p_camera_rig: CameraRig = null) -> void:
+func setup(
+	p_crafting_coordinator: CraftingCoordinator,
+	p_recipe_catalog: CraftingRecipeCatalog,
+	p_camera_rig: CameraRig = null,
+	p_crafting_title: String = "CRAFTING",
+	p_workspace_tabs_enabled: bool = true,
+) -> void:
 	assert(p_crafting_coordinator != null)
 	assert(p_recipe_catalog != null)
 	crafting_coordinator = p_crafting_coordinator
 	recipe_catalog = p_recipe_catalog
 	camera_rig = p_camera_rig
+	_crafting_title = p_crafting_title
+	_workspace_tabs_enabled = p_workspace_tabs_enabled
 	crafting_coordinator.state_changed.connect(_on_crafting_state_changed)
 	_build_recipe_list()
 	if not recipe_catalog.definitions.is_empty():
 		_select_recipe(recipe_catalog.definitions[0].id)
+	_apply_workspace()
 	_update_camera()
 
 func setup_socketing(
@@ -131,6 +143,8 @@ func get_progression_panel() -> ProgressionPanel:
 	return _progression_panel
 
 func _switch_workspace(workspace_id: StringName) -> void:
+	if not _workspace_tabs_enabled and workspace_id != CRAFTING_WORKSPACE_ID:
+		return
 	if (
 		workspace_id != CRAFTING_WORKSPACE_ID
 		and workspace_id != RUNES_WORKSPACE_ID
@@ -145,15 +159,16 @@ func _switch_workspace(workspace_id: StringName) -> void:
 func _apply_workspace() -> void:
 	if not is_node_ready():
 		return
-	var crafting_visible := _current_workspace_id == CRAFTING_WORKSPACE_ID
-	var runes_visible := _current_workspace_id == RUNES_WORKSPACE_ID
-	var progression_visible := _current_workspace_id == PROGRESSION_WORKSPACE_ID
+	var crafting_visible := not _workspace_tabs_enabled or _current_workspace_id == CRAFTING_WORKSPACE_ID
+	var runes_visible := _workspace_tabs_enabled and _current_workspace_id == RUNES_WORKSPACE_ID
+	var progression_visible := _workspace_tabs_enabled and _current_workspace_id == PROGRESSION_WORKSPACE_ID
 	_crafting_body.visible = crafting_visible
 	_rune_socketing_panel.visible = runes_visible
 	_progression_panel.visible = progression_visible
 	_progression_panel.set_workspace_active(_is_open and progression_visible)
+	_workspace_tabs.visible = _workspace_tabs_enabled
 	if crafting_visible:
-		_title_label.text = "CRAFTING"
+		_title_label.text = _crafting_title
 	elif runes_visible:
 		_title_label.text = "RUNES"
 	else:

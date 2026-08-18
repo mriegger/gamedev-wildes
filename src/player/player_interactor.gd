@@ -2,6 +2,7 @@ extends Node3D
 class_name PlayerInteractor
 
 signal block_placed
+signal crafting_station_open_requested(position: Vector3i, definition: CraftingStationBlockDefinition)
 signal melee_attack_started(action: MeleeAttackActionDefinition, direction: int)
 signal melee_terrain_hit(position: Vector3i)
 signal soil_tilled
@@ -248,6 +249,8 @@ func _handle_item_actions(delta):
 	var selected_mining := selected_primary as MiningActionDefinition
 	var selected_melee := selected_primary as MeleeAttackActionDefinition
 	var selected_tilling := selected_primary as TillingActionDefinition
+	if primary_use_just and not is_attempting_crafting_station_mining() and _try_open_target_crafting_station():
+		primary_use_just = false
 	if primary_use_pressed and target_has and can_primary_target and selected_mining != null:
 		if not is_mining:
 			mine_target = target_block
@@ -536,3 +539,9 @@ func _get_target_crafting_station(position: Vector3i) -> CraftingStationBlockDef
 	if editable_voxel_world == null:
 		return null
 	return voxel_space.block_catalog.get_definition(voxel_space.get_block_id_at(position)).crafting_station
+
+func _try_open_target_crafting_station() -> bool:
+	if not has_crafting_station_target() or not can_interact_target:
+		return false
+	crafting_station_open_requested.emit(target_block, target_crafting_station)
+	return true
