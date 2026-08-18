@@ -42,6 +42,14 @@ var _max_navigation_searches: int = 0
 var _frames_with_navigation_search: int = 0
 var _full_combat_regions: int = 0
 var _mid_action_stream_loss_regions: int = 0
+var _path_acquisition_by_runtime_id: Dictionary = {}
+var _full_path_acquisition_count: int = 0
+var _full_path_acquisitions_by_species: Dictionary = {
+	&"zombie": 0,
+	&"skeleton": 0,
+	&"stone_golem": 0,
+	&"sheep": 0,
+}
 
 func _init() -> void:
 	call_deferred(&"_run")
@@ -211,6 +219,10 @@ func _arrange_active_population(coordinator: WorldEntityCoordinator, player_posi
 		actor.global_position = player_position + Vector3(float(offset.x), 0.0, float(offset.y))
 		actor.velocity = Vector3.ZERO
 		actor.on_ground = true
+		_path_acquisition_by_runtime_id[actor.runtime_id] = {
+			"definition_id": definition_id,
+			"path_seen": false,
+		}
 		match definition_id:
 			&"zombie":
 				var zombie := actor as ZombieActor
@@ -273,6 +285,41 @@ func _record_navigation_budget(coordinator: WorldEntityCoordinator, context: Str
 	_max_navigation_searches = maxi(_max_navigation_searches, search_count)
 	if search_count > 0:
 		_frames_with_navigation_search += 1
+
+func _actor_has_navigation_path(actor: EntityActor) -> bool:
+	match actor.definition.id:
+		&"zombie":
+			return not (actor as ZombieActor)._path_follower._path.is_empty()
+		&"skeleton":
+			return not (actor as SkeletonActor)._path_follower._path.is_empty()
+		&"stone_golem":
+			return not (actor as StoneGolemActorType)._path_follower._path.is_empty()
+		&"sheep":
+			return not (actor as SheepActor)._path_follower._path.is_empty()
+	return false
+
+func _record_path_acquisition(coordinator: WorldEntityCoordinator) -> void:
+	for actor in coordinator.get_runtime().get_active_actors():
+		if not _path_acquisition_by_runtime_id.has(actor.runtime_id):
+			continue
+		if _actor_has_navigation_path(actor):
+			var record := _path_acquisition_by_runtime_id[actor.runtime_id] as Dictionary
+			record["path_seen"] = true
+
+func _assert_full_region_path_acquisition(coordinator: WorldEntityCoordinator, context: String) -> void:
+	var actors := coordinator.get_runtime().get_active_actors()
+	_expect(actors.size() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "%s did not retain twelve actors for path evidence" % context)
+	for actor in actors:
+		var record := _path_acquisition_by_runtime_id.get(actor.runtime_id) as Dictionary
+		_expect(record != null, "%s runtime ID %d had no path record" % [context, actor.runtime_id])
+		if record == null:
+			continue
+		var acquired := bool(record["path_seen"])
+		_expect(acquired, "%s %s runtime ID %d never acquired a path" % [context, actor.definition.id, actor.runtime_id])
+		if acquired:
+			_full_path_acquisition_count += 1
+			var definition_id: StringName = record["definition_id"]
+			_full_path_acquisitions_by_species[definition_id] = int(_full_path_acquisitions_by_species[definition_id]) + 1
 
 func _active_slam_count(coordinator: WorldEntityCoordinator) -> int:
 	var count := 0
@@ -340,6 +387,7 @@ func _run() -> void:
 			coordinator.tick(MIXED_NIGHT_DELTA, _observation(player_position), NIGHT_TIME)
 			var context := "region %d mixed night step %d" % [region_index, step]
 			_record_navigation_budget(coordinator, context)
+			_record_path_acquisition(coordinator)
 			_record_stone_golem_activity(coordinator, stone_golem_activity)
 			_assert_population(coordinator, catalog, player_position, NIGHT_TIME, context)
 			_assert_mixed_night_population(coordinator, catalog, context)
@@ -366,6 +414,7 @@ func _run() -> void:
 			await process_frame
 		else:
 			_assert_stone_golem_activity(stone_golem_activity, true, activity_context)
+			_assert_full_region_path_acquisition(coordinator, activity_context)
 			_full_combat_regions += 1
 
 	_streaming_enabled = false
@@ -378,6 +427,13 @@ func _run() -> void:
 	_expect(_frames_with_navigation_search > 0, "active workload performed no navigation searches")
 	_expect(_full_combat_regions == STREAM_REGIONS.size() / 2, "soak completed %d full-combat regions instead of four" % _full_combat_regions)
 	_expect(_mid_action_stream_loss_regions == STREAM_REGIONS.size() / 2, "soak completed %d mid-action stream losses instead of four" % _mid_action_stream_loss_regions)
+	var expected_full_regions := STREAM_REGIONS.size() / 2
+	var expected_full_path_acquisitions := expected_full_regions * WorldEntityCoordinator.MAX_TOTAL_ACTIVE
+	_expect(_full_path_acquisition_count == expected_full_path_acquisitions, "full workloads recorded %d path acquisitions instead of %d" % [_full_path_acquisition_count, expected_full_path_acquisitions])
+	_expect(int(_full_path_acquisitions_by_species[&"zombie"]) == expected_full_regions * ZOMBIE_OFFSETS.size(), "full workloads did not record every Zombie path acquisition")
+	_expect(int(_full_path_acquisitions_by_species[&"skeleton"]) == expected_full_regions * SKELETON_OFFSETS.size(), "full workloads did not record every Skeleton path acquisition")
+	_expect(int(_full_path_acquisitions_by_species[&"stone_golem"]) == expected_full_regions * STONE_GOLEM_OFFSETS.size(), "full workloads did not record every Stone Golem path acquisition")
+	_expect(int(_full_path_acquisitions_by_species[&"sheep"]) == expected_full_regions * SHEEP_OFFSETS.size(), "full workloads did not record every Sheep path acquisition")
 	coordinator.shutdown()
 	_expect(coordinator.get_runtime().get_definition_count(&"stone_golem") == 0, "shutdown retained an active Stone Golem")
 	_expect(coordinator.get_runtime().get_active_count() == 0, "shutdown retained active actors")
@@ -391,7 +447,24 @@ func _run() -> void:
 	var orphan_count := int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
 	_expect(orphan_count == 0, "shutdown ended with %d orphan nodes" % orphan_count)
 	if _failures == 0:
-		print("SOAK_ENTITY_STREAMING PASS regions=%d cycles=%d runtime_ids=%d searches=%d full_combat=%d stream_loss=%d contacts=%d orphan=%d" % [STREAM_REGIONS.size(), STREAM_REGIONS.size() * CYCLES_PER_REGION, _instance_by_runtime_id.size(), _max_navigation_searches, _full_combat_regions, _mid_action_stream_loss_regions, _melee_contact_count + _radial_contact_count, orphan_count])
+		print(
+			"SOAK_ENTITY_STREAMING PASS regions=%d cycles=%d runtime_ids=%d searches=%d full_combat=%d stream_loss=%d path_actors=%d/%d path_species=zombie:%d,skeleton:%d,stone_golem:%d,sheep:%d contacts=%d orphan=%d" % [
+				STREAM_REGIONS.size(),
+				STREAM_REGIONS.size() * CYCLES_PER_REGION,
+				_instance_by_runtime_id.size(),
+				_max_navigation_searches,
+				_full_combat_regions,
+				_mid_action_stream_loss_regions,
+				_full_path_acquisition_count,
+				expected_full_path_acquisitions,
+				int(_full_path_acquisitions_by_species[&"zombie"]),
+				int(_full_path_acquisitions_by_species[&"skeleton"]),
+				int(_full_path_acquisitions_by_species[&"stone_golem"]),
+				int(_full_path_acquisitions_by_species[&"sheep"]),
+				_melee_contact_count + _radial_contact_count,
+				orphan_count,
+			]
+		)
 		quit(0)
 	else:
 		print("SOAK_ENTITY_STREAMING FAIL failures=%d" % _failures)

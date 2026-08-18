@@ -45,9 +45,12 @@ tests/                       headless verification
 references an actor scene, typed behavior, and validated combat stats. `EntityTargetObservation`
 is an immutable per-tick snapshot of player position and effective camera origin, forward, and right
 axes. `Game` and `LevelRuntime` construct that observation from their explicitly injected player and
-camera context before ticking entities. `EntityRuntime` owns a fresh `ActorStats` instance for every
-runtime ID alongside spawn/despawn lifecycle, the bounded spatial index, active actors, prepared
-actors, retiring presentation, and defeat notifications. It rotates the sorted actor order each tick
+camera context, including camera offsets. `Game` passes its snapshot through
+`WorldEntityCoordinator`, while `LevelRuntime` passes its snapshot directly to its `EntityRuntime`;
+each runtime forwards the same value to every actor. `EntityRuntime` owns a fresh `ActorStats` instance
+for every runtime ID alongside spawn/despawn lifecycle, the bounded spatial index, active actors,
+prepared actors, retiring presentation, and defeat notifications. It rotates the sorted actor order
+each tick
 before actors consume the shared navigation-search budget. `WorldEntityCoordinator` owns ambient
 time-of-day spawning, streamed-position rejection, distance despawning, and overworld population
 limits around that runtime.
@@ -59,22 +62,35 @@ cover search, cover movement, hiding, sprinting, and attack decisions. Skeleton 
 from the actor's current position within thirty horizontal blocks. When a detected player remains
 outside the five-block ambush radius, an already occluded Skeleton hides in place; an exposed one
 starts a deterministic nearest-cover search. Entering that radius or exhausting cover starts a
-sprint, and completing a swing requests new cover before another ambush.
-`VoxelCoverSearch` captures the observation at search start, advances at most thirty-two ordered
-columns per actor tick, checks walkable elevations, and spends the bounded A* budget only on hidden
-candidates. `VoxelCameraOcclusion` requires all nine body samples to be blocked. Hiding and cover
-movement revalidate against the current camera every 0.125 seconds, so camera motion or voxel edits
-restart the search. Sheep retain their distinct deterministic decision state. The shared voxel solver
-and bounded path follower own reusable movement calculations. Voxel A* expands eight planar directions
-with distance-weighted diagonal edges and refuses diagonals through blocked orthogonal corners.
+sprint. A sprinting Skeleton outside the ambush radius retries cover every second, and completing a
+swing requests cover at least one block from the attack position before another ambush.
+`VoxelCoverSearch` captures the orthographic camera observation at search start, examines columns
+within thirty horizontal blocks in distance-and-coordinate order, and advances at most thirty-two
+columns per actor tick. It checks walkable elevations and all nine `VoxelCameraOcclusion` body samples
+before spending the bounded A* budget, so the first result is the nearest reachable fully hidden
+candidate. Hiding and cover movement revalidate against the current camera every 0.125 seconds, so
+camera motion or voxel edits restart the search.
+
+`StoneGolemBrain` separately owns dormant, chase, punch, slam-windup, slam-airborne, and slam-recovery
+decisions. `VoxelPlayerVisibilitySensor` gives Zombies and Stone Golems a shared, phase-staggered
+0.125-second voxel line-of-sight cache. A fresh clear sample within sixteen blocks alerts a Stone
+Golem and records the pursuit goal; occlusion preserves that last-seen position for three seconds,
+while exceeding twenty-four blocks forgets it immediately. Dormant Golems do not wander, and alerted
+Golems pursue at 1.2 blocks per second through the shared path follower. Their eyes mirror alert state
+through duplicated instance-local emissive materials, become dark on dormancy or death, and do not
+create a gameplay light.
+
+Sheep retain their distinct deterministic decision state. The shared voxel solver and bounded path
+follower own reusable movement calculations. Voxel A* expands eight planar directions with
+distance-weighted diagonal edges and refuses diagonals through blocked orthogonal corners.
 
 Custom animation drivers present actor state without deciding gameplay outcomes. `EntityActor`
 allows species to omit vocalization presentation while Skeleton, Zombie, and Sheep wire species-owned
 profiles through the shared `EntityVocalizations` scheduler. Skeleton selects among three positional
-clips, avoids immediate repeats, and stops audio processing when presentation retires. Each actor binds
-its runtime stats to a billboarded health bar before visual-fade setup, so the bar remains hidden at
-full health, updates from completed health changes, and shares the actor's fade lifecycle. Spawned
-actors fade in through
+clips, avoids immediate repeats, and stops audio processing when presentation retires. Stone Golem
+intentionally has no audio scene wiring at this checkpoint. Each actor binds its runtime stats to a
+billboarded health bar before visual-fade setup, so the bar remains hidden at full health, updates
+from completed health changes, and shares the actor's fade lifecycle. Spawned actors fade in through
 instance-local geometry transparency. Despawn or lethal damage removes stats, active state,
 targeting, and spatial entries together. Lethal retirement plays the species-owned death pose, then
 starts an actor-owned one-shot smoke poof and model fade together; the scene is freed only after both
@@ -114,16 +130,36 @@ beyond its authored camera-size threshold. Rejected contacts change no health an
 without making combat own those policies.
 
 Enemy attacks use `TimedMeleeContact` to separate an actor-owned action duration from its one contact
-instant. Zombie and Skeleton actors emit the configured profile only when that instant is reached;
-retirement cancels pending contact. `EntityRuntime` forwards the completed signal, and
-`MeleeCombatCoordinator` revalidates the live source, player range, voxel line of sight, and player
-bounds before committing damage. Skeleton contact therefore uses the same authoritative defense
-calculation as every other melee result while its brain owns the post-swing cover retreat.
+instant. Zombie and Skeleton attacks and the Stone Golem fallback punch emit their configured profile
+only when that instant is reached; retirement cancels pending contact. `EntityRuntime` forwards the
+completed signal, and `MeleeCombatCoordinator` revalidates the live source, player range, voxel line
+of sight, and player bounds before committing damage. Skeleton contact produces ten damage against
+an unarmored player through the shared defense calculation while its brain owns the post-swing cover
+retreat. A Stone Golem prioritizes a ready slam for a freshly visible target within four horizontal
+blocks. While the four-second slam cooldown is active, a freshly visible target within 1.5 blocks can
+instead start the 0.8-second fallback punch. It contacts at 0.46 seconds, has a 1.4-second cooldown,
+and produces fifteen unarmored damage.
+
+The Stone Golem brain owns slam selection and phase timing; its actor owns the locked takeoff target,
+one-block-radius landing marker, clearance validation, physical trajectory, and cancellation. A
+0.6-second windup precedes a 0.8-second ballistic leap and a 0.75-second recovery. Invalid clearance,
+despawn, or death cancels pending contact. The marker is a presentation-only telegraph: the actor
+emits one radial contact only after reaching its actual grounded landing position. `EntityRuntime`
+forwards that signal and `Game` explicitly binds it to `MeleeCombatCoordinator`, which validates the
+live source, one-block horizontal radius, vertical bounds overlap, voxel line of sight, and living
+player before applying thirty unarmored damage through normal defense. Radial contact has no mob or
+terrain target path.
+
+`CombatHitParticles` subscribes only to committed `MeleeOutcome` values and selects profiles by
+stable source and target definition IDs. Player hits produce bone particles for Skeletons and stone
+particles for Stone Golems; successful attacks from either species produce player blood. The Stone
+Golem's world-space landing dust is a bounded actor-owned one-shot at the actual landing position.
+The dust and landing marker present action state without deciding whether radial damage commits.
 
 `ActorStats` owns the player's level and current-level experience. `CombatProgressionCoordinator`
 awards the reward authored on an `EntityDefinition` exactly once for a player-caused defeat.
-Zombie, Skeleton, and sheep rewards are currently ten experience and remain content values for later
-tuning.
+Zombie, Skeleton, and Sheep rewards are currently ten experience; Stone Golems award thirty. These
+remain authored content values.
 `ActorStatsDefinition` calculates the next-level requirement as an authored base plus a fixed
 per-level increase. Save version eight preserves completed levels while translating version-seven
 current-level experience proportionally from the previous exponential requirement.
@@ -309,14 +345,17 @@ selection, and leaves the caller-owned payload and save file unchanged. Loot cre
 expiration, and merge events queue the same debounced save path as world and chest changes.
 
 Ambient overworld populations are transient and bounded by each definition's authored cap and a
-twelve-entity total. The current caps are six Sheep, six Zombies, and three Skeletons. A deterministic
-round-robin cursor considers eligible species and permits one successful spawn per interval, preventing
-one night species from starving another. Spawning makes four attempts every two seconds in an 18–36
-block annulus. Overworld voxel A* is bounded to a radius of thirty-two, 512 visited nodes, and two
-shared searches per tick; actors rotate through that shared budget. The spatial index contains only
-active actors, and distance or chunk-streaming loss removes actors and index entries together. Block
-placement queries that index and revalidates world, inventory, reach, player overlap, and active-entity
-overlap immediately before committing.
+sixteen-entity total. The five stable species are capped at six Sheep, six Zombies, four Birds,
+three Skeletons, and two Stone Golems. Sheep and Birds spawn by day; Zombies, Skeletons, and Stone
+Golems spawn by night. Birds retire when night begins. Skeletons and Stone Golems use the
+Zombie-compatible overworld floor set, while authored stone-dungeon encounters remain Zombie-only.
+A deterministic round-robin cursor considers eligible species and permits one successful spawn per
+interval, preventing one species from starving another. Spawning makes four attempts every two
+seconds in an 18–36 block annulus. Overworld voxel A* is bounded to a radius of thirty-two, 512
+visited nodes, and two shared searches per tick; actors rotate through that shared budget. The
+spatial index contains only active actors, and distance or chunk-streaming loss removes actors and
+index entries together. Block placement queries that index and revalidates world, inventory, reach,
+player overlap, and active-entity overlap immediately before committing.
 
 ## Voxel spaces and levels
 

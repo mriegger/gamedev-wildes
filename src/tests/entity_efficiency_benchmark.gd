@@ -325,8 +325,18 @@ func _run() -> void:
 	var stone_golem_metrics := _assert_stone_golem_workload()
 	var path_metrics := _benchmark_bounded_pathfinding()
 	var spatial_index := coordinator.get_runtime()._spatial_index as EntitySpatialIndex
-	_expect(spatial_index.get_entry_count() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "spatial index lost an active actor")
-	_expect(spatial_index.get_cell_count() <= WorldEntityCoordinator.MAX_TOTAL_ACTIVE * 8, "spatial index exceeded its population bound")
+	var spatial_entry_count := spatial_index.get_entry_count()
+	var spatial_cell_count := spatial_index.get_cell_count()
+	var spatial_cell_bound := WorldEntityCoordinator.MAX_TOTAL_ACTIVE * 8
+	_expect(spatial_entry_count == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "spatial index lost an active actor")
+	_expect(spatial_cell_count <= spatial_cell_bound, "spatial index exceeded its population bound")
+	var spatial_metrics := {
+		"entry_count": spatial_entry_count,
+		"expected_entry_count": WorldEntityCoordinator.MAX_TOTAL_ACTIVE,
+		"cell_count": spatial_cell_count,
+		"max_cell_count": spatial_cell_bound,
+		"max_cells_per_actor": 8,
+	}
 	coordinator.shutdown()
 	coordinator.queue_free()
 	actors.clear()
@@ -356,6 +366,7 @@ func _run() -> void:
 		"metrics": {
 			"entity_frame": frame_metrics,
 			"stone_golem": stone_golem_metrics,
+			"spatial_index": spatial_metrics,
 			"bounded_path_search": path_metrics,
 			"spawn_frame": spawn_metrics["spawn_frame"],
 			"preparation_frame": spawn_metrics["preparation_frame"],
