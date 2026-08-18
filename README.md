@@ -18,7 +18,7 @@ world time. Copper deposits regenerate deterministically from the world seed.
 | `Q` / `E` | Rotate the camera 45° |
 | Mouse wheel / pinch | Zoom |
 | Left-click / hold | Use the selected item's primary action; hold to mine, click to attack, till soil, or interact with a crafting station |
-| Right-click | Place the selected block |
+| Right-click | Use the selected item's secondary action; place blocks or consume food |
 | `F` | Enter or leave a nearby dungeon |
 | `1`–`9` | Select hotbar slot; while the backpack is open, assign the hovered item to that slot |
 | `Tab` | Toggle backpack and crafting |
@@ -157,6 +157,8 @@ added directly with `spawn copper <count>`. New worlds contain one seeded 5×4 p
 blocks from the initial player spawn. Its location, growth states, and rotations persist in the
 save. The
 `spawn pumpkin_patch` command relocates and randomizes that persistent patch near the player.
+Harvested pumpkins stack in the inventory and restore the player's health to full when right-clicked
+in the backpack or hotbar, or when selected and used with right-click in the world.
 
 **UI & saves.** Backpack and hotbar stacks can be split by scrolling while left-dragging. The side
 panel includes a trash drop target that accepts backpack, hotbar, and equipped items. A
@@ -232,6 +234,7 @@ from Godot primitive meshes. Visual effects use project-authored shaders.
 | `src/assets/audio/sfx/tools/impactGeneric_light_*.ogg` (4 files) | [Impact Sounds](https://kenney.nl/assets/impact-sounds) – Kenney (https://kenney.nl) – generic light impacts for tool and crafting clunks | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `src/assets/audio/sfx/farming/tilling/bookFlip*.ogg` (3 files) | [RPG Audio](https://kenney.nl/assets/rpg-audio) – Kenney | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `src/assets/audio/sfx/farming/harvesting/pop_generic_*_CC0.wav` (3 files) | Generic pop by Muse Spark | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
+| `src/assets/audio/sfx/items/consume/munch_crunchy_fruit_sequence_3x_CC0.wav` | Source recordings by Joseph SARDIN, BigSoundBank; edited by Muse Spark | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `src/assets/models/tools/hoe/copper_hoe.glb`, `Textures/colormap.png`, and derived inventory icon | [Survival Kit](https://kenney.nl/assets/survival-kit) – Kenney | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `src/assets/models/farming/pumpkin/*.fbx` (6 files) and derived inventory icon | [Ultimate Crops](https://quaternius.com/packs/ultimatecrops.html) – Quaternius | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `src/assets/textures/items/anvil.png` | Muse, prompted by Codex for Michael Riegger | Project-authored |

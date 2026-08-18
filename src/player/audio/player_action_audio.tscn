@@ -28,3 +28,7 @@ volume_db = -8.0
 [node name="HarvestPlayer" type="AudioStreamPlayer" parent="."]
 bus = &"SFX"
 volume_db = -8.0
+
+[node name="ConsumePlayer" type="AudioStreamPlayer" parent="."]
+bus = &"SFX"
+volume_db = -7.0

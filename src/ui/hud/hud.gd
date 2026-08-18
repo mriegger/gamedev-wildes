@@ -43,6 +43,10 @@ func setup_socketing(
 func setup_progression(actor_stats: ActorStats, perk_coordinator: PlayerPerkCoordinator) -> void:
 	crafting_panel.setup_progression(actor_stats, perk_coordinator)
 
+func setup_consumption(consumption: ItemConsumptionCoordinator) -> void:
+	hotbar.setup_consumption(consumption)
+	side_panel.setup_consumption(consumption)
+
 func _on_side_panel_progress_changed(progress: float):
 	var right_inset := SidePanel.PANEL_WIDTH * progress
 	health_bar.set_right_inset(right_inset)

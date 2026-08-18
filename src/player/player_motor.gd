@@ -75,6 +75,11 @@ func setup_harvesting(harvest_coordinator: PumpkinHarvestCoordinator) -> void:
 	interactor.setup_harvesting(harvest_coordinator)
 	_action_audio.setup_harvesting(harvest_coordinator)
 
+func setup_consumption(consumption_coordinator: ItemConsumptionCoordinator) -> void:
+	assert(_is_setup and consumption_coordinator != null)
+	interactor.setup_consumption(consumption_coordinator)
+	_action_audio.setup_consumption(consumption_coordinator)
+
 func bind_space(p_space: VoxelSpace, presentation_root: Node, spawn_position: Vector3, editable_voxel_world: VoxelWorld = null):
 	assert(_is_setup)
 	assert(p_space != null)

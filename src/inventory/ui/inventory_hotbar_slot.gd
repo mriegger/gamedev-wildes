@@ -12,6 +12,8 @@ func set_backpack_open(open: bool) -> void:
 	_left_click_candidate = false
 
 func _gui_input(event: InputEvent) -> void:
+	if _try_handle_consumption_input(event):
+		return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if event.pressed:
 			_left_click_candidate = true

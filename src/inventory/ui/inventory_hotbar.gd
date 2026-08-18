@@ -19,6 +19,11 @@ func setup(inventory: InventoryModel, inventory_stat_coordinator: InventoryStatC
 		slot.set_item_proficiency(item_proficiency)
 	refresh()
 
+func setup_consumption(consumption: ItemConsumptionCoordinator) -> void:
+	assert(consumption != null)
+	for slot_view in slot_nodes:
+		(slot_view as InventoryHotbarSlot).set_item_consumption(consumption)
+
 func refresh() -> void:
 	if _inventory_model == null or slot_nodes.is_empty():
 		return

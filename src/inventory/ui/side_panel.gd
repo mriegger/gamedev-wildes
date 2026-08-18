@@ -81,6 +81,11 @@ func setup(inv: InventoryModel, inventory_stat_coordinator: InventoryStatCoordin
 	_update_hotbar_position(_progress)
 	_update_hotbar_backpack_state()
 
+func setup_consumption(consumption: ItemConsumptionCoordinator) -> void:
+	assert(consumption != null)
+	for slot in _slot_groups["inventory"] as Array[InventorySlot]:
+		slot.set_item_consumption(consumption)
+
 func _on_inventory_changed():
 	if _target_progress == 0.0 and _progress <= 0.01:
 		_inventory_dirty = true

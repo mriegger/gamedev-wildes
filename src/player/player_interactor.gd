@@ -19,6 +19,7 @@ var inventory_model: InventoryModel = null
 var combat: MeleeCombatCoordinator = null
 var entity_runtime: EntityRuntime = null
 var pumpkin_harvest: PumpkinHarvestCoordinator = null
+var item_consumption: ItemConsumptionCoordinator = null
 var _input_buffer: InputBuffer = null
 var _is_setup: bool = false
 
@@ -86,6 +87,12 @@ func setup_harvesting(pumpkin_harvest_coordinator: PumpkinHarvestCoordinator) ->
 	assert(pumpkin_harvest_coordinator != null)
 	assert(pumpkin_harvest == null)
 	pumpkin_harvest = pumpkin_harvest_coordinator
+
+func setup_consumption(consumption_coordinator: ItemConsumptionCoordinator) -> void:
+	assert(_is_setup)
+	assert(consumption_coordinator != null)
+	assert(item_consumption == null)
+	item_consumption = consumption_coordinator
 
 func bind_space(p_space: VoxelSpace, p_editable_voxel_world: VoxelWorld = null):
 	assert(_is_setup)
@@ -296,9 +303,12 @@ func _handle_item_actions(delta):
 	if primary_use_just and target_has and selected_tilling != null:
 		_commit_till(target_block, last_ray_normal, selected_tilling)
 
-	var selected_placement := get_selected_placement_action()
-	if (_input_buffer.secondary_use_just or _input_buffer.secondary_use_pressed) and secondary_use_timer <= 0.0:
+	if _input_buffer.secondary_use_just and item_consumption != null and item_consumption.has_consumable_at(inventory_model.selected_slot):
 		_input_buffer.secondary_use_just = false
+		item_consumption.try_consume_selected()
+	elif (_input_buffer.secondary_use_just or _input_buffer.secondary_use_pressed) and secondary_use_timer <= 0.0:
+		_input_buffer.secondary_use_just = false
+		var selected_placement := get_selected_placement_action()
 		if _can_place(selected_placement):
 			_commit_place(placement_block, selected_placement)
 			secondary_use_timer = place_cooldown

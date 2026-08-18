@@ -59,6 +59,7 @@ var rune_effect_coordinator: RuneEffectCoordinator
 var interaction_prompt_coordinator: InteractionPromptCoordinator
 var pumpkin_harvest_coordinator: PumpkinHarvestCoordinator
 var anvil_coordinator: AnvilCoordinator
+var item_consumption_coordinator: ItemConsumptionCoordinator
 var input_buffer: InputBuffer = InputBuffer.new()
 var settings: GameSettings
 
@@ -230,6 +231,9 @@ func _setup_gameplay() -> bool:
 	melee_combat.melee_outcome_committed.connect(_on_melee_outcome_committed)
 	combat_hit_particles.setup(melee_combat, combat_hit_particle_catalog)
 	player.setup(camera_rig, inventory_model, input_buffer, player_stats, melee_combat, world_entities)
+	item_consumption_coordinator = ItemConsumptionCoordinator.new()
+	item_consumption_coordinator.setup(inventory_model, player_stats)
+	player.setup_consumption(item_consumption_coordinator)
 	_bind_entity_context(world.voxel_model, world_entities)
 	anvil_coordinator = AnvilCoordinator.new()
 	anvil_coordinator.setup(world.voxel_model)
@@ -262,6 +266,7 @@ func _setup_gameplay() -> bool:
 	hud.setup_anvil(anvil_coordinator, anvil_station, anvil_crafting_coordinator, anvil_recipe_catalog, camera_rig)
 	hud.setup_socketing(inventory_model, rune_socketing_coordinator, item_proficiency)
 	hud.setup_progression(player_stats, player_perk_coordinator)
+	hud.setup_consumption(item_consumption_coordinator)
 	world.set_player_ref(player)
 	camera_rig.snap_to_follow_target()
 	camera_rig.current_yaw_deg = camera_rig.target_yaw_deg

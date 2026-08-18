@@ -58,6 +58,15 @@ func _rebuild_lookup() -> void:
 				_is_valid = false
 		if definition.equip_audio != null:
 			_is_valid = definition.equip_audio.validate(source) and _is_valid
+		var consumption := definition.secondary_action as ConsumableActionDefinition
+		if consumption != null and definition.consume_audio == null:
+			push_error("[ItemCatalog] Missing consume audio for %s at %s" % [definition.id, source])
+			_is_valid = false
+		elif consumption == null and definition.consume_audio != null:
+			push_error("[ItemCatalog] Consume audio requires a consumable action for %s at %s" % [definition.id, source])
+			_is_valid = false
+		elif definition.consume_audio != null:
+			_is_valid = definition.consume_audio.validate(source) and _is_valid
 		for action in [definition.primary_action, definition.secondary_action]:
 			if action == null:
 				continue
@@ -78,7 +87,7 @@ func _is_supported_primary_action(action: ItemActionDefinition) -> bool:
 	return action == null or action is MiningActionDefinition or action is MeleeAttackActionDefinition or action is TillingActionDefinition
 
 func _is_supported_secondary_action(action: ItemActionDefinition) -> bool:
-	return action == null or action is BlockPlacementActionDefinition
+	return action == null or action is BlockPlacementActionDefinition or action is ConsumableActionDefinition
 
 func _ensure_lookup() -> void:
 	if _definitions_by_block.size() != BlockId.Type.COUNT:

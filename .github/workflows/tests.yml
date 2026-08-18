@@ -614,6 +614,11 @@ jobs:
           bash .github/scripts/run_godot_check.sh \
             30 "ITEM_RARITY PASS" /tmp/item_rarity.log -- \
             godot --headless --path src --script res://items/rarity/tests/item_rarity.gd
+      - name: Run item consumption tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "ITEM_CONSUMPTION PASS" /tmp/item_consumption.log -- \
+            godot --headless --path src --script res://items/consumption/tests/item_consumption.gd
 
   audio-integration:
     runs-on: ubuntu-latest

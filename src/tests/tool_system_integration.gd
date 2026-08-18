@@ -77,6 +77,10 @@ func _run():
 	_expect(hoe.icon.get_image().get_size() == Vector2i(64, 64), "copper hoe inventory icon is not 64x64")
 	_expect(hoe.equip_audio != null and hoe.equip_audio.streams.size() == 3, "copper hoe equip audio is not configured")
 	_expect(hoe.held_scene != null, "copper hoe held scene is missing")
+	var pumpkin := item_catalog.get_definition(&"pumpkin")
+	_expect(pumpkin.primary_action == null and pumpkin.secondary_action is ConsumableActionDefinition, "pumpkin action configuration is incorrect")
+	_expect(is_equal_approx((pumpkin.secondary_action as ConsumableActionDefinition).health_restore_fraction, 1.0), "pumpkin does not restore full health")
+	_expect(pumpkin.consume_audio != null and pumpkin.consume_audio.streams.size() == 1, "pumpkin consume audio is not configured")
 	var hoe_held := hoe.held_scene.instantiate() as Node3D
 	var hoe_model := hoe_held.get_node_or_null("Model") as Node3D
 	_expect(hoe_model != null and hoe_model.scale.is_equal_approx(Vector3.ONE * 4.6875), "copper hoe held scale is incorrect")
@@ -95,6 +99,7 @@ func _run():
 	var grass_placement := item_catalog.get_definition(&"grass_block").secondary_action
 	_expect(not item_catalog._is_supported_primary_action(grass_placement), "placement action was accepted as a primary action")
 	_expect(not item_catalog._is_supported_secondary_action(pickaxe_action), "mining action was accepted as a secondary action")
+	_expect(item_catalog._is_supported_secondary_action(pumpkin.secondary_action), "consumable action was rejected as a secondary action")
 	for definition in item_catalog.definitions:
 		if definition.held_scene == null:
 			continue

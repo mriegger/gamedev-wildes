@@ -5,6 +5,7 @@ var item_id = null
 var inventory_model: InventoryModel = null
 var inventory_stat_coordinator: InventoryStatCoordinator = null
 var item_proficiency: ItemProficiency = null
+var item_consumption: ItemConsumptionCoordinator = null
 var empty_label: String = ""
 
 @export var item_tooltip_scene: PackedScene
@@ -28,6 +29,20 @@ func set_inventory_stat_coordinator(coordinator: InventoryStatCoordinator):
 func set_item_proficiency(proficiency: ItemProficiency):
 	item_proficiency = proficiency
 	_update_tooltip_text()
+
+func set_item_consumption(consumption: ItemConsumptionCoordinator) -> void:
+	assert(consumption != null)
+	item_consumption = consumption
+
+func _try_handle_consumption_input(event: InputEvent) -> bool:
+	if item_consumption == null or not event is InputEventMouseButton:
+		return false
+	var mouse_event := event as InputEventMouseButton
+	if not mouse_event.pressed or mouse_event.button_index != MOUSE_BUTTON_RIGHT or not item_consumption.has_consumable_at(slot_index):
+		return false
+	item_consumption.try_consume_at(slot_index)
+	get_viewport().set_input_as_handled()
+	return true
 
 func set_inventory_styles(normal_style: StyleBoxFlat, empty_style: StyleBoxFlat):
 	_inventory_normal_style = normal_style
@@ -139,6 +154,8 @@ func _process(_delta):
 		panel.position = vp.get_mouse_position() - panel.size * 0.5
 
 func _gui_input(event):
+	if _try_handle_consumption_input(event):
+		return
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_LEFT and event.double_click and inventory_stat_coordinator != null:
 			var changed := inventory_stat_coordinator.try_unequip_armor(slot_index) if InventoryModel.is_equipment_index(slot_index) else inventory_stat_coordinator.try_equip_armor(slot_index)
