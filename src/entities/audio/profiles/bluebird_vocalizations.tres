@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="EntityVocalizationProfile" load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://entities/audio/entity_vocalization_profile.gd" id="1_profile"]
+[ext_resource type="AudioStream" path="res://assets/audio/entities/bird/vocalizations/bluebird/bluebird_sampled_chirp_01_CC0.ogg" id="2_voice"]
+[ext_resource type="AudioStream" path="res://assets/audio/entities/bird/vocalizations/bluebird/bluebird_sampled_chirp_02_CC0.ogg" id="3_voice"]
+[ext_resource type="AudioStream" path="res://assets/audio/entities/bird/vocalizations/bluebird/bluebird_sampled_chirp_03_CC0.ogg" id="4_voice"]
+[ext_resource type="AudioStream" path="res://assets/audio/entities/bird/vocalizations/bluebird/bluebird_sampled_chirp_04_CC0.ogg" id="5_voice"]
+[ext_resource type="AudioStream" path="res://assets/audio/entities/bird/vocalizations/bluebird/bluebird_sampled_chirp_05_CC0.ogg" id="6_voice"]
+[ext_resource type="AudioStream" path="res://assets/audio/entities/bird/vocalizations/bluebird/bluebird_sampled_chirp_06_CC0.ogg" id="7_voice"]
+
+[resource]
+script = ExtResource("1_profile")
+streams = Array[AudioStream]([ExtResource("2_voice"), ExtResource("3_voice"), ExtResource("4_voice"), ExtResource("5_voice"), ExtResource("6_voice"), ExtResource("7_voice")])
+initial_delay_min_seconds = 0.4
+initial_delay_max_seconds = 1.0
+interval_min_seconds = 5.0
+interval_max_seconds = 10.0
+pitch_min = 0.97
+pitch_max = 1.05
+rng_salt = 346128975

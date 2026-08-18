@@ -55,7 +55,11 @@ func _run() -> void:
 	_expect(runtime_ids == [1], "bird did not spawn through EntityRuntime")
 	var bird := runtime.get_actor(1) as BirdActor
 	_expect(bird != null and bird.vocalizations != null, "bird scene did not configure vocalizations")
-	_expect(bird.vocalizations.profile.streams.size() == 3, "duck vocalization profile did not contain all three calls")
+	var expected_stream_counts: Array[int] = [5, 7, 3, 6]
+	for variant in BirdAnimationDriver.ColorVariant.size():
+		var profile := bird.vocalization_profiles[variant]
+		_expect(profile != null and profile.validate(), "bird variant %d did not have a valid vocalization profile" % variant)
+		_expect(profile.streams.size() == expected_stream_counts[variant], "bird variant %d had the wrong vocalization stream count" % variant)
 	_expect(bird.vocalizations.bus == &"SFX" and is_equal_approx(bird.vocalizations.volume_db, -4.0), "bird vocalization output was not configured")
 	_expect(is_equal_approx(bird.vocalizations.unit_size, 10.0) and is_equal_approx(bird.vocalizations.max_distance, 56.0), "bird vocalization attenuation did not cover its spawn range")
 	_expect(not bird.vocalizations.is_processing(), "aerial bird enabled grounded vocalizations")
