@@ -136,7 +136,7 @@ func _test_bounded_navigation_recovery(definition: EntityDefinition, world: Voxe
 	_expect(actor.brain.state == StoneGolemBrainType.State.CHASE, "bounded path failure cleared awareness")
 	_expect(actor.global_position.is_equal_approx(initial_position), "bounded path failure produced movement")
 	_expect(budget._remaining_searches == 1, "bounded path failure did not consume exactly one search")
-	var reachable_goal := initial_position + Vector3(1.0, 0.0, 1.0)
+	var reachable_goal := initial_position + Vector3(2.0, 0.0, 0.0)
 	budget.reset()
 	actor.tick(0.5, _observation(reachable_goal), Vector3.ZERO, budget)
 	_expect(actor.brain.get_movement_goal().is_equal_approx(reachable_goal), "visible reachable goal did not replace a failed path goal")

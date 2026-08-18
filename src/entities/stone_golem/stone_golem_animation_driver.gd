@@ -3,6 +3,7 @@ class_name StoneGolemAnimationDriver
 
 const IDLE: StringName = &"Idle"
 const WALK: StringName = &"Walk"
+const PUNCH: StringName = &"Punch"
 const HIT: StringName = &"Hit"
 const DEATH: StringName = &"Death"
 const HIT_SECONDS: float = 0.28
@@ -23,6 +24,10 @@ var _animation_state: ActorAnimationState = ActorAnimationState.new()
 var _current_state: StringName = IDLE
 var _hit_elapsed: float = HIT_SECONDS
 var _hit_direction: Vector3 = Vector3.BACK
+var _punching: bool = false
+var _punch_elapsed: float = 0.0
+var _punch_duration: float = 0.0
+var _punch_direction: int = 1
 var _dying: bool = false
 var _alerted: bool = false
 var _death_elapsed: float = 0.0
@@ -53,11 +58,26 @@ func set_alerted(alerted: bool) -> void:
 	_alerted = alerted and not _dying
 	_apply_eye_state()
 
+func play_attack(duration: float):
+	assert(duration > 0.0)
+	if _dying:
+		return
+	_punching = true
+	_punch_elapsed = 0.0
+	_punch_duration = duration
+	_punch_direction *= -1
+	_hit_elapsed = HIT_SECONDS
+	animator.play_attack(duration, _punch_direction)
+
 func play_hit(local_hit_direction: Vector3 = Vector3.BACK):
 	if _dying:
 		return
 	_hit_direction = local_hit_direction.normalized() if not local_hit_direction.is_zero_approx() else Vector3.BACK
 	_hit_elapsed = 0.0
+	_punching = false
+	_punch_elapsed = 0.0
+	_punch_duration = 0.0
+	animator.cancel_attack()
 
 func play_death():
 	if _dying:
@@ -66,6 +86,10 @@ func play_death():
 	set_alerted(false)
 	_death_elapsed = 0.0
 	_hit_elapsed = HIT_SECONDS
+	_punching = false
+	_punch_elapsed = 0.0
+	_punch_duration = 0.0
+	animator.cancel_attack()
 	_current_state = DEATH
 
 func is_death_complete() -> bool:
@@ -97,10 +121,14 @@ func advance(delta: float):
 	var grounded: bool = actor.get(&"on_ground")
 	_animation_state.set_motion(local_velocity, speed_ratio, false, grounded, 0.0, turn_rate, false, Vector3.ZERO)
 	animator.advance_animation(delta)
+	_advance_punch(delta)
 	_advance_hit(delta)
+	_apply_punch_pose()
 	_apply_hit_pose()
 	if _hit_elapsed < HIT_SECONDS:
 		_current_state = HIT
+	elif _punching:
+		_current_state = PUNCH
 	elif planar_speed > 0.1:
 		_current_state = WALK
 	else:
@@ -112,6 +140,21 @@ func get_current_state() -> StringName:
 func _advance_hit(delta: float):
 	if _hit_elapsed < HIT_SECONDS:
 		_hit_elapsed = minf(_hit_elapsed + delta, HIT_SECONDS)
+
+func _advance_punch(delta: float):
+	if _punching:
+		_punch_elapsed = minf(_punch_elapsed + delta, _punch_duration)
+		if _punch_elapsed >= _punch_duration:
+			_punching = false
+
+func _apply_punch_pose():
+	if not _punching:
+		return
+	var weight := animator.attack_pose_weight
+	animator.left_arm_action.rotation.x -= deg_to_rad(18.0) * weight
+	animator.left_arm_action.rotation.z += deg_to_rad(12.0 * _punch_direction) * weight
+	animator.right_arm_action.rotation.x -= deg_to_rad(38.0) * weight
+	animator.rig_root.position.z += 0.12 * weight
 
 func _apply_hit_pose():
 	if _hit_elapsed >= HIT_SECONDS:

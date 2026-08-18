@@ -122,11 +122,61 @@ func _test_awareness_transitions() -> void:
 	brain.advance(0.0, self_position, _make_observation(beyond_forget), false, true)
 	_expect(brain.state == StoneGolemBrainType.State.DORMANT and not brain.is_alerted(), "target beyond the forget range was not forgotten immediately")
 
+func _test_punch_profile_and_timing() -> void:
+	var behavior := StoneGolemBehaviorDefinitionType.new()
+	var profile := behavior.punch_profile
+	_expect(profile != null and profile.validate("test"), "default punch profile was rejected")
+	_expect(profile.id == &"stone_golem_punch", "punch profile ID changed")
+	_expect(
+		is_equal_approx(profile.duration, 0.8)
+		and is_equal_approx(profile.contact_time, 0.46)
+		and is_equal_approx(profile.cooldown, 1.4)
+		and is_equal_approx(profile.reach, 1.5)
+		and is_equal_approx(profile.base_damage, 5.0),
+		"punch profile timing, reach, or damage changed",
+	)
+	_expect(is_equal_approx(profile.base_damage + 10.0, 15.0), "punch no longer deals 15 unarmored damage")
+	_expect(is_equal_approx(profile.base_damage + 10.0 - 4.0, 11.0), "punch no longer applies defense")
+	var configured_behavior := load("res://entities/stone_golem/stone_golem_behavior.tres") as StoneGolemBehaviorDefinitionType
+	_expect(configured_behavior != null and configured_behavior.punch_profile == profile, "configured behavior did not use the canonical punch profile")
+
+	var self_position := Vector3(0.5, 2.0, 0.5)
+	var boundary := self_position + Vector3(profile.reach, 0.0, 0.0)
+	var hidden_brain := StoneGolemBrainType.new(behavior)
+	hidden_brain.advance(0.0, self_position, _make_observation(boundary), false, true)
+	_expect(hidden_brain.state == StoneGolemBrainType.State.DORMANT, "hidden in-reach target started a punch")
+	_expect(not hidden_brain.consume_punch_started(), "hidden target reported a punch start")
+	var outside_brain := StoneGolemBrainType.new(behavior)
+	var outside_reach := self_position + Vector3(profile.reach + 0.001, 0.0, 0.0)
+	outside_brain.advance(0.0, self_position, _make_observation(outside_reach), true, true)
+	_expect(outside_brain.state == StoneGolemBrainType.State.CHASE, "visible target beyond punch reach did not chase")
+	_expect(not outside_brain.consume_punch_started(), "target beyond reach reported a punch start")
+
+	var brain := StoneGolemBrainType.new(behavior)
+	brain.advance(0.0, self_position, _make_observation(boundary), true, true)
+	_expect(brain.state == StoneGolemBrainType.State.PUNCH, "target at reach boundary did not start a punch")
+	_expect(brain.consume_punch_started(), "punch start was not consumable")
+	_expect(not brain.consume_punch_started(), "punch start was consumable more than once")
+	brain.advance(profile.duration - 0.001, self_position, _make_observation(boundary), true, true)
+	_expect(brain.state == StoneGolemBrainType.State.PUNCH, "punch ended before its duration")
+	brain.advance(0.001, self_position, _make_observation(boundary), true, true)
+	_expect(brain.state == StoneGolemBrainType.State.PUNCH, "punch did not retain its duration completion tick")
+	brain.advance(0.0, self_position, _make_observation(boundary), true, true)
+	_expect(brain.state == StoneGolemBrainType.State.CHASE, "punch restarted while its cooldown was active")
+	_expect(not brain.consume_punch_started(), "cooldown reported a punch start")
+	brain.advance(profile.cooldown - profile.duration - 0.001, self_position, _make_observation(boundary), true, true)
+	_expect(brain.state == StoneGolemBrainType.State.CHASE, "punch restarted before its 1.4-second cooldown")
+	brain.advance(0.001, self_position, _make_observation(boundary), true, true)
+	_expect(brain.state == StoneGolemBrainType.State.PUNCH, "punch did not restart at its cooldown boundary")
+	_expect(brain.consume_punch_started(), "cooldown-boundary punch start was not consumable")
+	_expect(not brain.consume_punch_started(), "cooldown-boundary punch start was consumable more than once")
+
 func _run() -> void:
 	_test_definition_defaults_and_resource()
 	_test_invalid_behavior_values()
 	_test_dormant_stability()
 	_test_awareness_transitions()
+	_test_punch_profile_and_timing()
 	if _failures == 0:
 		print("STONE_GOLEM_BRAIN PASS")
 		quit(0)
