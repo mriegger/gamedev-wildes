@@ -88,7 +88,8 @@ Custom animation drivers present actor state without deciding gameplay outcomes.
 allows species to omit vocalization presentation while Skeleton, Zombie, and Sheep wire species-owned
 profiles through the shared `EntityVocalizations` scheduler. Skeleton selects among three positional
 clips, avoids immediate repeats, and stops audio processing when presentation retires. Stone Golem
-intentionally has no audio scene wiring at this checkpoint. Each actor binds its runtime stats to a
+wires a species-owned action-audio profile for gait contacts, received hits, and death. Each actor
+binds its runtime stats to a
 billboarded health bar before visual-fade setup, so the bar remains hidden at full health, updates
 from completed health changes, and shares the actor's fade lifecycle. Spawned actors fade in through
 instance-local geometry transparency. Despawn or lethal damage removes stats, active state,

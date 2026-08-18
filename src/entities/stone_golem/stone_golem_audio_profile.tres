@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="StoneGolemAudioProfile" load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://entities/stone_golem/stone_golem_audio_profile.gd" id="1_profile"]
+[ext_resource type="AudioStream" path="res://assets/audio/entities/golem/walk/lowFrequency_explosion_001.ogg" id="2_walk"]
+[ext_resource type="AudioStream" path="res://assets/audio/entities/golem/impact/footstep05.ogg" id="3_impact"]
+[ext_resource type="AudioStream" path="res://assets/audio/entities/golem/impact/footstep06.ogg" id="4_impact"]
+[ext_resource type="AudioStream" path="res://assets/audio/entities/golem/impact/footstep07.ogg" id="5_impact"]
+[ext_resource type="AudioStream" path="res://assets/audio/entities/golem/impact/footstep09.ogg" id="6_impact"]
+[ext_resource type="AudioStream" path="res://assets/audio/entities/golem/death/Laser_00.wav" id="7_death"]
+
+[resource]
+script = ExtResource("1_profile")
+walk_streams = Array[AudioStream]([ExtResource("2_walk")])
+impact_streams = Array[AudioStream]([ExtResource("3_impact"), ExtResource("4_impact"), ExtResource("5_impact"), ExtResource("6_impact")])
+death_streams = Array[AudioStream]([ExtResource("7_death")])
+rng_salt = 73184917

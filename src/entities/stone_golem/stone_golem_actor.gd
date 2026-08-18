@@ -4,8 +4,10 @@ class_name StoneGolemActor
 const VoxelPlayerVisibilitySensorType := preload("res://entities/awareness/voxel_player_visibility_sensor.gd")
 const TimedMeleeContactType := preload("res://combat/timed_melee_contact.gd")
 const StoneGolemLandingDustType := preload("res://entities/stone_golem/stone_golem_landing_dust.gd")
+const StoneGolemAudioType := preload("res://entities/stone_golem/stone_golem_audio.gd")
 
 @export_node_path("CPUParticles3D") var landing_dust_path: NodePath
+@export_node_path("Node3D") var action_audio_path: NodePath
 
 var brain: StoneGolemBrain
 
@@ -15,6 +17,7 @@ var _visibility_sensor: VoxelPlayerVisibilitySensorType
 var _path_follower: VoxelPathFollower
 var _timed_melee_contact := TimedMeleeContactType.new()
 var _landing_dust: StoneGolemLandingDustType
+var _action_audio: StoneGolemAudioType
 var _slam_airborne_elapsed: float = 0.0
 var _slam_contact_pending: bool = false
 
@@ -22,12 +25,15 @@ func supports_behavior(behavior: EntityBehaviorDefinition) -> bool:
 	return behavior is StoneGolemBehaviorDefinition
 
 func has_valid_presentation() -> bool:
-	if landing_dust_path.is_empty():
+	if landing_dust_path.is_empty() or action_audio_path.is_empty():
 		return false
 	var dust_candidate := get_node_or_null(landing_dust_path)
+	var audio_candidate := get_node_or_null(action_audio_path)
 	return (
 		super.has_valid_presentation()
 		and dust_candidate is StoneGolemLandingDustType
+		and audio_candidate is StoneGolemAudioType
+		and audio_candidate.has_valid_presentation()
 	)
 
 func setup(
@@ -43,6 +49,8 @@ func setup(
 	_timed_melee_contact.cancel()
 	_landing_dust = get_node(landing_dust_path) as StoneGolemLandingDustType
 	assert(_landing_dust != null)
+	_action_audio = get_node(action_audio_path) as StoneGolemAudioType
+	assert(_action_audio != null)
 	_slam_airborne_elapsed = 0.0
 	_slam_contact_pending = false
 	brain = StoneGolemBrain.new(_behavior)
@@ -56,6 +64,7 @@ func setup(
 	max_speed = _behavior.movement_speed
 	_stone_golem_animation = animation_driver as StoneGolemAnimationDriver
 	assert(_stone_golem_animation != null)
+	_action_audio.setup(behavior_seed, _stone_golem_animation.animator.profile.walk_cycle_seconds)
 	_visibility_sensor = VoxelPlayerVisibilitySensorType.new(voxel_space, _behavior.detection_range, definition.body_height, runtime_id)
 
 func tick(
@@ -91,6 +100,7 @@ func tick(
 	if brain.state == StoneGolemBrain.State.SLAM_AIRBORNE:
 		if not launched_this_tick:
 			_advance_slam_motion(delta)
+		_advance_walking_audio(delta)
 		return
 	var desired_velocity := Vector3.ZERO
 	if brain.state == StoneGolemBrain.State.CHASE:
@@ -101,6 +111,7 @@ func tick(
 			desired_velocity = _get_path_velocity(delta, navigation_search_budget)
 		desired_velocity = limit_planar_velocity(desired_velocity + separation_velocity, _behavior.movement_speed)
 	advance_voxel_motion(delta, desired_velocity, _behavior.gravity)
+	_advance_walking_audio(delta)
 
 func _begin_slam_windup() -> void:
 	var target := brain.get_locked_slam_target()
@@ -212,14 +223,25 @@ func _emit_melee_contact(profile: MeleeAttackProfile) -> void:
 	if profile != null:
 		melee_contact_reached.emit(runtime_id, profile)
 
+func _advance_walking_audio(delta: float) -> void:
+	var planar_speed := Vector2(velocity.x, velocity.z).length()
+	var speed_ratio := planar_speed / maxf(max_speed, 0.001)
+	_action_audio.advance(delta, speed_ratio, on_ground)
+
+func record_melee_contact(world_hit_direction: Vector3) -> void:
+	super.record_melee_contact(world_hit_direction)
+	_action_audio.play_impact()
+
 func begin_despawn_fade() -> void:
 	_timed_melee_contact.cancel()
 	_cancel_slam()
+	_action_audio.stop_audio()
 	super.begin_despawn_fade()
 
 func begin_death_retirement() -> void:
 	_timed_melee_contact.cancel()
 	_cancel_slam()
+	_action_audio.play_death()
 	super.begin_death_retirement()
 
 func _get_path_velocity(delta: float, navigation_search_budget: NavigationSearchBudget) -> Vector3:
