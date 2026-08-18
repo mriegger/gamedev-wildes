@@ -122,6 +122,7 @@ func _init() -> void:
 	_expect(version_four_save["version"] == SaveManager.CURRENT_SAVE_VERSION, "migration did not update the save version")
 	_expect(version_four_save["item_proficiency"] == {}, "migration did not initialize proficiency")
 	_expect(version_four_save["pumpkin_patch"] == {"present": false}, "migration did not preserve older worlds without pumpkin patches")
+	_expect(version_four_save["apple_trees"] == AppleTreeState.new().snapshot(), "migration did not preserve older worlds without picked apples")
 	_expect((version_four_save["player_stats"] as Dictionary)["level"] == 3, "migration changed existing progression")
 	_expect(is_equal_approx(float((version_four_save["player_stats"] as Dictionary)["current_hp"]), 37.5), "migration changed current HP")
 	_expect(version_four_save["player_perks"] == {"allocations": {}}, "migration did not initialize perk allocations")

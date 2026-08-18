@@ -70,7 +70,7 @@ func bind_entity_runtime(p_entity_runtime: EntityRuntime) -> void:
 	assert(_is_setup)
 	interactor.bind_entity_runtime(p_entity_runtime)
 
-func setup_harvesting(harvest_coordinator: PumpkinHarvestCoordinator) -> void:
+func setup_harvesting(harvest_coordinator: HarvestCoordinator) -> void:
 	assert(_is_setup and harvest_coordinator != null)
 	interactor.setup_harvesting(harvest_coordinator)
 	_action_audio.setup_harvesting(harvest_coordinator)

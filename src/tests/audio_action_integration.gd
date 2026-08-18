@@ -86,7 +86,7 @@ func _run():
 	animation_driver.setup(player, interactor)
 	animation_driver.set_process(false)
 	action_audio.setup(animation_driver, interactor, inventory, combat)
-	var harvest := PumpkinHarvestCoordinator.new()
+	var harvest := HarvestCoordinator.new()
 	action_audio.setup_harvesting(harvest)
 	var consumption := ItemConsumptionCoordinator.new()
 	consumption.setup(inventory, ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition))

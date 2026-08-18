@@ -7,7 +7,7 @@ func _init() -> void:
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
 	var player_stats_definition := load("res://player/player_stats.tres") as CombatStatsDefinition
 	var player_perk_rules := load("res://progression/player_perk_rules.tres") as PlayerPerkRules
-	_expect(SaveManager.CURRENT_SAVE_VERSION == 8, "save version changed")
+	_expect(SaveManager.CURRENT_SAVE_VERSION == 9, "save version changed")
 	_expect(block_catalog != null and block_catalog.validate(), "block catalog invalid")
 	_expect(item_catalog != null and item_catalog.validate(block_catalog), "item catalog invalid")
 	_expect(player_stats_definition != null and player_stats_definition.validate(), "player stats definition invalid")
@@ -42,7 +42,7 @@ func _init() -> void:
 		"time_of_day": 6.0,
 	}
 	var pumpkin_patch := {"present": false}
-	var saved := SaveManager.save_world_state(slot_id, current_data, voxel_world, location.get_persisted_position(), player_stats, inventory, player_perks, item_proficiency, pumpkin_patch, 2.5, 27.5)
+	var saved := SaveManager.save_world_state(slot_id, current_data, voxel_world, location.get_persisted_position(), player_stats, inventory, player_perks, item_proficiency, pumpkin_patch, AppleTreeState.new().snapshot(), 2.5, 27.5)
 	_expect(saved, "save_world_state failed")
 	if saved:
 		_expect(int(current_data.get("version", -1)) == SaveManager.CURRENT_SAVE_VERSION, "current_data version changed")
@@ -51,6 +51,7 @@ func _init() -> void:
 		_expect(current_data.get("player_perks", {}) == player_perks.snapshot(), "current_data player perks differ")
 		_expect(current_data.get("item_proficiency", {}) == item_proficiency.snapshot(), "current_data item proficiency differs")
 		_expect(current_data.get("pumpkin_patch", {}) == pumpkin_patch, "current_data pumpkin patch differs")
+		_expect(current_data.get("apple_trees", {}) == AppleTreeState.new().snapshot(), "current_data apple tree state differs")
 		_expect(is_equal_approx(float(current_data.get("playtime_seconds", -1.0)), 2.5), "playtime changed")
 		_expect(is_equal_approx(float(current_data.get("time_of_day", -1.0)), 3.5), "time wrapping changed")
 		var loaded := SaveManager.load_slot(slot_id)

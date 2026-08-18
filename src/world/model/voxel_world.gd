@@ -57,6 +57,14 @@ func snapshot_block_edits() -> Dictionary:
 		"removed": _removed_blocks.duplicate(),
 	}
 
+func get_tree_blocks_for_chunk(coord: Vector2i) -> Dictionary:
+	if not tree_chunks_fast.has(coord):
+		return {}
+	return (tree_chunks_fast[coord] as Dictionary).duplicate()
+
+func get_terrain_height(x: int, z: int) -> int:
+	return int(height_map_dict.get(Vector2i(x, z), -1))
+
 func get_block_edit_count() -> int:
 	return _placed_blocks.size() + _removed_blocks.size()
 

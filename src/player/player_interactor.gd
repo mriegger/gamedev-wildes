@@ -18,7 +18,7 @@ var motor: PlayerMotor = null
 var inventory_model: InventoryModel = null
 var combat: MeleeCombatCoordinator = null
 var entity_runtime: EntityRuntime = null
-var pumpkin_harvest: PumpkinHarvestCoordinator = null
+var harvest: HarvestCoordinator = null
 var item_consumption: ItemConsumptionCoordinator = null
 var _input_buffer: InputBuffer = null
 var _is_setup: bool = false
@@ -82,11 +82,11 @@ func bind_entity_runtime(p_entity_runtime: EntityRuntime) -> void:
 	_clear_active_state()
 	entity_runtime = p_entity_runtime
 
-func setup_harvesting(pumpkin_harvest_coordinator: PumpkinHarvestCoordinator) -> void:
+func setup_harvesting(harvest_coordinator: HarvestCoordinator) -> void:
 	assert(_is_setup)
-	assert(pumpkin_harvest_coordinator != null)
-	assert(pumpkin_harvest == null)
-	pumpkin_harvest = pumpkin_harvest_coordinator
+	assert(harvest_coordinator != null)
+	assert(harvest == null)
+	harvest = harvest_coordinator
 
 func setup_consumption(consumption_coordinator: ItemConsumptionCoordinator) -> void:
 	assert(_is_setup)
@@ -118,8 +118,8 @@ func _clear_active_state():
 	target_crafting_station = null
 	can_interact_target = false
 	_primary_harvest_latched = false
-	if pumpkin_harvest != null:
-		pumpkin_harvest.clear_target()
+	if harvest != null:
+		harvest.clear_target()
 	_reset_mining()
 	_reset_melee_chain()
 	secondary_use_timer = 0.0
@@ -135,8 +135,8 @@ func cancel_actions():
 	target_crafting_station = null
 	can_interact_target = false
 	_primary_harvest_latched = false
-	if pumpkin_harvest != null:
-		pumpkin_harvest.clear_target()
+	if harvest != null:
+		harvest.clear_target()
 
 func _physics_process(delta):
 	if voxel_space == null or motor == null or camera == null or inventory_model == null or _input_buffer == null:
@@ -151,8 +151,8 @@ func _physics_process(delta):
 		can_place_target = false
 		target_crafting_station = null
 		can_interact_target = false
-		if pumpkin_harvest != null:
-			pumpkin_harvest.clear_target()
+		if harvest != null:
+			harvest.clear_target()
 		if is_mining:
 			_reset_mining()
 		_reset_melee_chain()
@@ -176,13 +176,13 @@ func _handle_raycast():
 
 	var max_dist = ray_origin.distance_to(motor.global_position) + reach + 1.0
 	var hit := VoxelRaycast.cast(voxel_space, ray_origin, ray_dir, max_dist)
-	if pumpkin_harvest != null and is_editing_enabled():
-		pumpkin_harvest.update_target(ray_origin, ray_dir, max_dist, motor.global_position, reach)
-		if pumpkin_harvest.has_target() and (hit == null or pumpkin_harvest.get_target_ray_distance() < hit.ray_distance):
+	if harvest != null and is_editing_enabled():
+		harvest.update_target(ray_origin, ray_dir, max_dist, motor.global_position, reach)
+		if harvest.has_target() and (hit == null or harvest.get_target_ray_distance() < hit.ray_distance):
 			return
-		pumpkin_harvest.clear_target()
-	elif pumpkin_harvest != null:
-		pumpkin_harvest.clear_target()
+		harvest.clear_target()
+	elif harvest != null:
+		harvest.clear_target()
 	if hit == null:
 		return
 
@@ -245,8 +245,8 @@ func _handle_item_actions(delta):
 			primary_use_pressed = false
 		else:
 			_primary_harvest_latched = false
-	if primary_use_just and pumpkin_harvest != null and pumpkin_harvest.has_target():
-		pumpkin_harvest.try_harvest_target()
+	if primary_use_just and harvest != null and harvest.has_target():
+		harvest.try_harvest_target()
 		_primary_harvest_latched = primary_use_pressed
 		primary_use_just = false
 		primary_use_pressed = false
@@ -512,14 +512,14 @@ func get_selected_block_id():
 	return int(action.block.id)
 
 func has_harvest_target() -> bool:
-	return pumpkin_harvest != null and pumpkin_harvest.has_target()
+	return harvest != null and harvest.has_target()
 
 func can_harvest_target() -> bool:
-	return has_harvest_target() and pumpkin_harvest.can_harvest_target()
+	return has_harvest_target() and harvest.can_harvest_target()
 
 func get_harvest_target_bounds() -> AABB:
 	assert(has_harvest_target())
-	return pumpkin_harvest.get_target_bounds()
+	return harvest.get_target_bounds()
 
 func get_selected_primary_action() -> ItemActionDefinition:
 	if inventory_model == null:

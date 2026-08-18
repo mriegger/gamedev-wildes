@@ -13,7 +13,7 @@ var _interactor: PlayerInteractor
 var _animation_driver: PlayerAnimationDriver
 var _inventory: InventoryModel
 var _combat: MeleeCombatCoordinator
-var _harvest: PumpkinHarvestCoordinator
+var _harvest: HarvestCoordinator
 var _consumption: ItemConsumptionCoordinator
 var _selected_item_id: StringName
 var _clunk_streams: Array[AudioStream] = [
@@ -68,7 +68,7 @@ func setup(
 	if _clunk_player.stream == null and not _clunk_streams.is_empty():
 		_clunk_player.stream = _clunk_streams[0]
 
-func setup_harvesting(harvest: PumpkinHarvestCoordinator) -> void:
+func setup_harvesting(harvest: HarvestCoordinator) -> void:
 	assert(_interactor != null and harvest != null and _harvest == null)
 	_harvest = harvest
 	_harvest.harvest_completed.connect(_on_harvest_completed)

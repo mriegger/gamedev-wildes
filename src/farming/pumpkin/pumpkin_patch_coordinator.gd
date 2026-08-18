@@ -1,4 +1,4 @@
-extends Node3D
+extends HarvestSource
 class_name PumpkinPatchCoordinator
 
 signal state_changed
@@ -76,14 +76,6 @@ func can_harvest_tile(tile_index: int) -> bool:
 	var definition := _definitions_by_id.get(_state.get_growth_state_id(tile_index), null) as PumpkinGrowthStateDefinition
 	return definition != null and definition.is_harvestable()
 
-func get_harvest_item_ids(tile_index: int) -> Array[StringName]:
-	assert(can_harvest_tile(tile_index))
-	var definition := _definitions_by_id[_state.get_growth_state_id(tile_index)] as PumpkinGrowthStateDefinition
-	var item_ids: Array[StringName] = []
-	for _index in range(definition.harvest_count):
-		item_ids.append(definition.harvest_item_id)
-	return item_ids
-
 func try_harvest_tile(tile_index: int) -> bool:
 	if not can_harvest_tile(tile_index):
 		return false
@@ -116,11 +108,31 @@ func find_harvest_target(ray_origin: Vector3, ray_direction: Vector3, max_distan
 			nearest_distance = distance
 	if nearest_index < 0:
 		return {}
-	return {"tile_index": nearest_index, "distance": nearest_distance}
+	return {"target_id": nearest_index, "distance": nearest_distance}
 
 func get_tile_world_bounds(tile_index: int) -> AABB:
 	assert(_patch_root != null and tile_index >= 0 and tile_index < _tile_target_bounds.size())
 	return _patch_root.global_transform * _tile_target_bounds[tile_index]
+
+func get_harvest_target_bounds(target_id: int) -> AABB:
+	return get_tile_world_bounds(target_id)
+
+func can_harvest_target(target_id: int) -> bool:
+	return can_harvest_tile(target_id)
+
+func get_harvest_item_ids(target_id: int) -> Array[StringName]:
+	assert(can_harvest_tile(target_id))
+	var definition := _definitions_by_id[_state.get_growth_state_id(target_id)] as PumpkinGrowthStateDefinition
+	var item_ids: Array[StringName] = []
+	for _index in range(definition.harvest_count):
+		item_ids.append(definition.harvest_item_id)
+	return item_ids
+
+func try_harvest_target(target_id: int) -> bool:
+	return try_harvest_tile(target_id)
+
+func get_harvest_prompt() -> String:
+	return "Left Click  Harvest Pumpkin"
 
 func _index_definitions() -> bool:
 	if soil_texture == null or growth_states.is_empty():

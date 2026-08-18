@@ -3,7 +3,7 @@ class_name SaveManager
 
 const SAVE_DIR: String = "user://saves"
 const SLOT_COUNT: int = 3
-const CURRENT_SAVE_VERSION: int = 8
+const CURRENT_SAVE_VERSION: int = 9
 const MINIMUM_MIGRATABLE_SAVE_VERSION: int = 4
 const VERSION_SEVEN_BASE_EXPERIENCE_TO_LEVEL: int = 100
 const VERSION_SEVEN_EXPERIENCE_GROWTH: float = 1.25
@@ -87,6 +87,7 @@ static func create_new_world(slot_id: int, seed_value: int, world_name: String) 
 		"playtime_seconds": 0,
 		"time_of_day": 6.0,
 		"pumpkin_patch": null,
+		"apple_trees": null,
 	}
 
 	_save_dict_to_file(slot_id, data)
@@ -198,6 +199,8 @@ static func load_slot(slot_id: int) -> Dictionary:
 		info["item_proficiency"] = {}
 	if not info.has("pumpkin_patch"):
 		info["pumpkin_patch"] = {"present": false}
+	if not info.has("apple_trees"):
+		info["apple_trees"] = {"version": AppleTreeState.SNAPSHOT_VERSION, "collected_slots": []}
 	return info
 
 static func _migrate_save_data(data: Dictionary) -> bool:
@@ -221,6 +224,9 @@ static func _migrate_save_data(data: Dictionary) -> bool:
 				if not _migrate_player_progression_data(migrated):
 					return false
 				version = 8
+			8:
+				migrated["apple_trees"] = {"version": AppleTreeState.SNAPSHOT_VERSION, "collected_slots": []}
+				version = 9
 			_:
 				return false
 		migrated["version"] = version
@@ -310,7 +316,7 @@ static func _migrate_inventory_socket_data(data: Dictionary) -> bool:
 			encoded_stack["socketed_rune_ids"] = []
 	return true
 
-static func save_world_state(slot_id: int, current_data: Dictionary, voxel_model: VoxelWorld, persisted_player_position: Vector3, player_stats: ActorStats, inventory: InventoryModel, player_perks: PlayerPerks, item_proficiency: ItemProficiency, pumpkin_patch: Dictionary, extra_seconds: float, time_of_day: float) -> bool:
+static func save_world_state(slot_id: int, current_data: Dictionary, voxel_model: VoxelWorld, persisted_player_position: Vector3, player_stats: ActorStats, inventory: InventoryModel, player_perks: PlayerPerks, item_proficiency: ItemProficiency, pumpkin_patch: Dictionary, apple_trees: Dictionary, extra_seconds: float, time_of_day: float) -> bool:
 	assert(player_perks != null)
 	assert(item_proficiency != null)
 	var updated = current_data.duplicate()
@@ -331,6 +337,7 @@ static func save_world_state(slot_id: int, current_data: Dictionary, voxel_model
 	updated["inventory"] = inventory.to_dict()
 	updated["item_proficiency"] = item_proficiency.snapshot()
 	updated["pumpkin_patch"] = pumpkin_patch.duplicate(true)
+	updated["apple_trees"] = apple_trees.duplicate(true)
 	updated["time_of_day"] = fmod(time_of_day, GameClock.HOURS_PER_DAY)
 
 	if not _save_dict_to_file(slot_id, updated):

@@ -159,6 +159,9 @@ save. The
 `spawn pumpkin_patch` command relocates and randomizes that persistent patch near the player.
 Harvested pumpkins stack in the inventory and restore the player's health to full when right-clicked
 in the backpack or hotbar, or when selected and used with right-click in the world.
+About five percent of procedural trees carry apples: one to three collectible apples spawn beneath
+the tree and one to four decorate its outer leaves. Collected apples persist in saves and restore
+75 percent of maximum health through the same inventory consumption controls.
 
 **UI & saves.** Backpack and hotbar stacks can be split by scrolling while left-dragging. The side
 panel includes a trash drop target that accepts backpack, hotbar, and equipped items. A
@@ -238,6 +241,7 @@ from Godot primitive meshes. Visual effects use project-authored shaders.
 | `src/assets/models/tools/hoe/copper_hoe.glb`, `Textures/colormap.png`, and derived inventory icon | [Survival Kit](https://kenney.nl/assets/survival-kit) – Kenney | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `src/assets/models/farming/pumpkin/*.fbx` (6 files) and derived inventory icon | [Ultimate Crops](https://quaternius.com/packs/ultimatecrops.html) – Quaternius | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `src/assets/textures/items/anvil.png` | Muse, prompted by Codex for Michael Riegger | Project-authored |
+| `src/assets/models/foraging/apple/Apple Crop FBX.fbx` and derived inventory icon | [Ultimate Crops](https://quaternius.com/packs/ultimatecrops.html) – Quaternius | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `src/assets/textures/blocks/farmland_dry.png` | Codex, prompted by Michael Riegger | Project-authored |
 | `src/assets/textures/effects/mining/dirt_*.png` (3 files) | [Particle Pack](https://kenney.nl/assets/particle-pack) – Kenney | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
 

@@ -1,4 +1,4 @@
-[gd_scene load_steps=35 format=3 uid="uid://b22g4me0x1f3h"]
+[gd_scene load_steps=36 format=3 uid="uid://b22g4me0x1f3h"]
 
 [ext_resource type="Script" path="res://game/game.gd" id="1_game"]
 [ext_resource type="PackedScene" path="res://world/world.tscn" id="2_world"]
@@ -34,6 +34,7 @@
 [ext_resource type="PackedScene" path="res://farming/pumpkin/pumpkin_patch_coordinator.tscn" id="32_pumpkin_patch"]
 [ext_resource type="Resource" path="res://progression/player_perk_rules.tres" id="33_player_perks"]
 [ext_resource type="Resource" path="res://crafting/stations/anvil_recipe_catalog.tres" id="34_anvil_catalog"]
+[ext_resource type="PackedScene" path="res://foraging/apple/apple_tree_coordinator.tscn" id="35_apple_trees"]
 
 [node name="Game" type="Node3D"]
 script = ExtResource("1_game")
@@ -91,6 +92,8 @@ script = ExtResource("7_session")
 script = ExtResource("25_level_interaction")
 
 [node name="PumpkinPatch" parent="." instance=ExtResource("32_pumpkin_patch")]
+
+[node name="AppleTrees" parent="." instance=ExtResource("35_apple_trees")]
 
 [node name="SaveStatusLayer" type="CanvasLayer" parent="."]
 process_mode = 2

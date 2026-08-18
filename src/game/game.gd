@@ -41,6 +41,7 @@ signal main_menu_requested
 @onready var structure_designer_workflow: StructureDesignerWorkflow = $StructureDesignerWorkflow as StructureDesignerWorkflow
 @onready var structure_designer_dialogs: StructureDesignerDialogs = $StructureDesignerDialogs as StructureDesignerDialogs
 @onready var pumpkin_patch: PumpkinPatchCoordinator = $PumpkinPatch as PumpkinPatchCoordinator
+@onready var apple_trees: AppleTreeCoordinator = $AppleTrees as AppleTreeCoordinator
 @onready var _save_canvas: CanvasLayer = $SaveStatusLayer as CanvasLayer
 @onready var _save_label: Label = $SaveStatusLayer/SaveStatusLabel as Label
 @onready var _fade: ColorRect = $TransitionLayer/Fade as ColorRect
@@ -57,8 +58,8 @@ var combat_progression_coordinator: CombatProgressionCoordinator
 var rune_socketing_coordinator: RuneSocketingCoordinator
 var rune_effect_coordinator: RuneEffectCoordinator
 var interaction_prompt_coordinator: InteractionPromptCoordinator
-var pumpkin_harvest_coordinator: PumpkinHarvestCoordinator
 var anvil_coordinator: AnvilCoordinator
+var harvest_coordinator: HarvestCoordinator
 var item_consumption_coordinator: ItemConsumptionCoordinator
 var input_buffer: InputBuffer = InputBuffer.new()
 var settings: GameSettings
@@ -164,7 +165,7 @@ func _ready():
 	level_interaction.interaction_requested.connect(_on_level_interaction_requested)
 	_setup_level_entrance()
 	game_session.save_status_changed.connect(_show_save_status)
-	game_session.setup(_slot_id, _save_data, world, player_stats, inventory_model, player_perks, item_proficiency, game_environment, pumpkin_patch, _get_persisted_position)
+	game_session.setup(_slot_id, _save_data, world, player_stats, inventory_model, player_perks, item_proficiency, game_environment, pumpkin_patch, apple_trees, _get_persisted_position)
 	if _recovered_defeated_save and _slot_id != -1 and not game_session.save("defeated_save_recovery"):
 		push_error("[Game] Failed to persist recovered player state")
 	_recovered_defeated_save = false
@@ -253,11 +254,15 @@ func _setup_gameplay() -> bool:
 	if not pumpkin_patch.setup(world.voxel_model, player, world.config.seed_value, _save_data.get("pumpkin_patch", null)):
 		push_error("[Game] Pumpkin patch state is invalid or no suitable new-world placement exists")
 		return false
-	pumpkin_harvest_coordinator = PumpkinHarvestCoordinator.new()
-	if not pumpkin_harvest_coordinator.setup(pumpkin_patch, inventory_model, interaction_prompt_coordinator):
-		push_error("[Game] Pumpkin harvest content is invalid")
+	if not apple_trees.setup(world.voxel_model, world.chunk_manager, world.config.seed_value, _save_data.get("apple_trees", null), item_catalog):
+		push_error("[Game] Apple tree state or content is invalid")
 		return false
-	player.setup_harvesting(pumpkin_harvest_coordinator)
+	harvest_coordinator = HarvestCoordinator.new()
+	var harvest_sources: Array[HarvestSource] = [pumpkin_patch, apple_trees]
+	if not harvest_coordinator.setup(harvest_sources, inventory_model, interaction_prompt_coordinator):
+		push_error("[Game] Harvest content is invalid")
+		return false
+	player.setup_harvesting(harvest_coordinator)
 	camera_rig.reset_panel_obstruction()
 	game_environment.sky_color_changed.connect(world.update_water_tint)
 	game_environment.start_clock()
