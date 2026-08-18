@@ -142,7 +142,7 @@ fallback values keep GL Compatibility usable at reduced fidelity, without volume
 to play.
 
 **Crafting.** Opening crafting with `Tab` reveals the general recipe panel alongside the backpack.
-It contains the four recipes that do not require a workstation. A placed anvil opens its own panel
+It contains the five recipes that do not require a workstation. A placed anvil opens its own panel
 with the seven copper tool, weapon, and armor recipes. Both catalogs use materials from the
 backpack and hotbar and craft immediately when the enabled Craft button is pressed, playing one
 success sound.

@@ -13,15 +13,15 @@ func _init() -> void:
 	_expect(recipe_catalog.validate(item_catalog), "crafting catalog invalid")
 	_expect(anvil_recipe_catalog.validate(item_catalog), "anvil crafting catalog invalid")
 	var expected_recipe_ids: Array[StringName] = [
-		&"stone_pickaxe",
 		&"torch_bundle",
+		&"chest",
 		&"anvil",
+		&"stone_pickaxe",
 		&"basic_rune",
 	]
-	_expect(recipe_catalog.definitions.size() == expected_recipe_ids.size(), "expected four general recipes")
-	_expect(recipe_catalog.definitions[0].id == &"stone_pickaxe", "stone pickaxe is not the first recipe")
-	for recipe_id in expected_recipe_ids:
-		_expect(recipe_catalog.has_definition(recipe_id), "missing recipe %s" % recipe_id)
+	_expect(recipe_catalog.definitions.size() == expected_recipe_ids.size(), "expected five general recipes")
+	for index in range(expected_recipe_ids.size()):
+		_expect(recipe_catalog.definitions[index].id == expected_recipe_ids[index], "recipe order differs at index %d" % index)
 	for recipe in recipe_catalog.definitions:
 		for ingredient in recipe.ingredients:
 			_expect(ingredient.count >= 1, "ingredient count outside recipe range")
@@ -45,6 +45,7 @@ func _init() -> void:
 	_expect(anvil_recipe_catalog.definitions.size() == expected_copper_recipes.size(), "anvil catalog does not contain seven copper recipes")
 	_expect(not anvil_recipe_catalog.has_definition(&"stone_pickaxe") and not anvil_recipe_catalog.has_definition(&"torch_bundle"), "non-metal recipe leaked into anvil crafting")
 	_expect(recipe_catalog.get_definition(&"stone_pickaxe").get_ingredient_counts() == {&"stone_block": 10, &"log_block": 5}, "stone pickaxe ingredients mismatch")
+	_expect(recipe_catalog.get_definition(&"chest").get_ingredient_counts() == {&"log_block": 5}, "chest ingredients mismatch")
 	_expect(recipe_catalog.get_definition(&"basic_rune").get_ingredient_counts() == {&"sand_block": 32}, "basic rune ingredients mismatch")
 	_expect(recipe_catalog.get_definition(&"anvil").get_ingredient_counts() == {&"copper": 10}, "anvil ingredients mismatch")
 	var progression_inventory := InventoryModel.new(item_catalog)
@@ -84,6 +85,14 @@ func _init() -> void:
 	_expect(backpack_first_coordinator.craft(&"torch_bundle"), "backpack-first craft did not complete immediately")
 	_expect(backpack_first.get_slot(0).count == 1, "crafted output changed a hotbar stack despite backpack capacity")
 	_expect(backpack_first.get_backpack_item_count(&"torch") == 4, "crafted output did not prefer the backpack")
+
+	var chest_inventory := InventoryModel.new(item_catalog)
+	chest_inventory.slots[InventoryModel.HOTBAR_SIZE] = InventoryStack.new(&"log_block", 5)
+	var chest_coordinator := CraftingCoordinator.new()
+	chest_coordinator.setup(chest_inventory, recipe_catalog)
+	_expect(chest_coordinator.craft(&"chest"), "chest did not craft from five wood")
+	_expect(chest_inventory.get_inventory_item_count(&"log_block") == 0, "chest craft retained wood")
+	_expect(chest_inventory.get_backpack_item_count(&"chest") == 1, "chest craft did not add its output")
 
 	var inventory := InventoryModel.new(item_catalog)
 	inventory.slots[InventoryModel.HOTBAR_SIZE] = InventoryStack.new(&"copper", 10)

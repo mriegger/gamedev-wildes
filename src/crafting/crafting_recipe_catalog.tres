@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="CraftingRecipeCatalog" load_steps=7 format=3]
+[gd_resource type="Resource" script_class="CraftingRecipeCatalog" load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://crafting/crafting_recipe_catalog.gd" id="1_catalog"]
 [ext_resource type="Script" path="res://crafting/crafting_recipe_definition.gd" id="2_definition"]
@@ -6,7 +6,8 @@
 [ext_resource type="Resource" path="res://crafting/recipes/stone_pickaxe.tres" id="10_stone_pickaxe"]
 [ext_resource type="Resource" path="res://crafting/recipes/basic_rune.tres" id="11_basic_rune"]
 [ext_resource type="Resource" path="res://crafting/recipes/anvil.tres" id="12_anvil"]
+[ext_resource type="Resource" path="res://crafting/recipes/chest.tres" id="13_chest"]
 
 [resource]
 script = ExtResource("1_catalog")
-definitions = Array[ExtResource("2_definition")]([ExtResource("10_stone_pickaxe"), ExtResource("7_torches"), ExtResource("12_anvil"), ExtResource("11_basic_rune")])
+definitions = Array[ExtResource("2_definition")]([ExtResource("7_torches"), ExtResource("13_chest"), ExtResource("12_anvil"), ExtResource("10_stone_pickaxe"), ExtResource("11_basic_rune")])

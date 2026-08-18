@@ -80,6 +80,8 @@ func _process(_delta: float) -> bool:
 		_expect(_hud.crafting_panel.get_node_or_null("CraftingImpactTimer") == null, "crafting timer still exists")
 		var button := _hud.crafting_panel.get_craft_button()
 		_expect(button.get_node_or_null("Fill") == null, "crafting progress fill still exists")
+		_hud.crafting_panel.select_recipe(&"stone_pickaxe")
+		_expect(button.is_craft_enabled(), "available stone pickaxe recipe was disabled")
 		button.pressed.emit()
 		_expect(_inventory.get_inventory_item_count(&"stone_pickaxe") == 1, "button press did not craft stone pickaxe immediately")
 		_expect(_inventory.get_inventory_item_count(&"stone_block") == 0, "immediate craft retained stone")
@@ -117,12 +119,13 @@ func _check_open_state() -> void:
 	_expect(_hud.side_panel.is_open(), "backpack did not open")
 	_expect(_hud.crafting_panel.is_open(), "crafting panel did not open with backpack")
 	_expect(_hud.crafting_panel.get_progress() > 0.95, "crafting panel opening animation did not complete")
-	_expect(_hud.crafting_panel.get_selected_recipe_id() == &"stone_pickaxe", "stone pickaxe was not selected first")
-	_expect(_hud.crafting_panel.get_craft_button().is_craft_enabled(), "selected craft button was disabled")
+	_expect(_hud.crafting_panel.get_selected_recipe_id() == &"torch_bundle", "torches were not selected first")
+	_expect(not _hud.crafting_panel.get_craft_button().is_craft_enabled(), "unavailable torch recipe button was enabled")
 	_expect(_camera_rig.camera.h_offset < 0.0, "camera framing did not account for the wider left panel")
 	var recipe_scroll := _hud.crafting_panel.get_node("Margin/Content/Body/Recipes/RecipeScroll") as ScrollContainer
 	var recipe_list := _hud.crafting_panel.get_node("Margin/Content/Body/Recipes/RecipeScroll/RecipeList") as VBoxContainer
-	_expect(recipe_scroll != null and recipe_list.get_child_count() == 4, "scrollable recipe list did not contain four general recipes")
+	_expect(recipe_scroll != null and recipe_list.get_child_count() == 5, "scrollable recipe list did not contain five general recipes")
+	_expect(recipe_list.get_child(0).name == "TorchBundle" and recipe_list.get_child(1).name == "Chest" and recipe_list.get_child(2).name == "Anvil", "torches, chest, and anvil are not the first recipes")
 	var recipe_button := recipe_list.get_child(0) as Button
 	var recipe_icon_frame := recipe_button.get_node("Content/IconFrame") as CenterContainer
 	var recipe_icon := recipe_icon_frame.get_node("Icon") as TextureRect
@@ -183,8 +186,8 @@ func _check_open_state() -> void:
 	var ingredient_icon := ingredient_row.get_child(0) as TextureRect
 	_expect(ingredient_row.custom_minimum_size.y == 38.0 and ingredient_icon.custom_minimum_size == Vector2(32, 32), "ingredient icon spacing changed")
 	_expect(ingredient_icon.texture_filter == CanvasItem.TEXTURE_FILTER_NEAREST, "ingredient icon does not use nearest filtering")
-	var stone_count := (ingredient_list.get_child(0) as HBoxContainer).get_child(1) as Label
-	_expect(stone_count.text.contains("10 / 10"), "stone pickaxe ingredient display did not include hotbar materials")
+	var wood_count := (ingredient_list.get_child(0) as HBoxContainer).get_child(1) as Label
+	_expect(wood_count.text.contains("10 / 2"), "torch ingredient display did not include hotbar materials")
 	var crafting_rect := _hud.crafting_panel.get_global_rect()
 	var backpack_rect := _hud.side_panel.get_global_rect()
 	for slot in _hud.hotbar.slot_nodes:
