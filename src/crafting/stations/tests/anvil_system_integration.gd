@@ -8,8 +8,12 @@ func _init() -> void:
 func _run() -> void:
 	var block_catalog := load("res://blocks/block_catalog.tres") as BlockCatalog
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
+	var general_catalog := load("res://crafting/crafting_recipe_catalog.tres") as CraftingRecipeCatalog
+	var anvil_catalog := load("res://crafting/stations/anvil_recipe_catalog.tres") as CraftingRecipeCatalog
 	_expect(block_catalog != null and block_catalog.validate(), "block catalog invalid")
 	_expect(item_catalog != null and item_catalog.validate(block_catalog), "item catalog invalid")
+	_expect(general_catalog != null and general_catalog.validate(item_catalog), "general crafting catalog invalid")
+	_expect(anvil_catalog != null and anvil_catalog.validate(item_catalog), "anvil crafting catalog invalid")
 	if block_catalog == null or item_catalog == null:
 		_finish()
 		return
@@ -22,13 +26,32 @@ func _run() -> void:
 	_expect(BlockId.is_ao_solid(BlockId.Type.ANVIL), "anvil does not occlude ambient light")
 	_expect(anvil_block.crafting_station != null and anvil_block.crafting_station.id == &"anvil", "anvil crafting-station metadata is invalid")
 	_expect(anvil_block.is_solid and not anvil_block.is_opaque and anvil_block.is_raycast_solid, "anvil physical properties are invalid")
-	_expect(not anvil_block.is_breakable, "anvil is configured as an ordinary mineable block")
+	_expect(anvil_block.is_breakable and anvil_block.mining_tool_tag == &"pickaxe" and anvil_block.minimum_mining_power == 1, "anvil does not use normal pickaxe mining")
+	_expect(anvil_block.drop_item_id == &"anvil", "mined anvil does not use the normal block drop")
 	_expect(placement != null and placement.block == anvil_block, "anvil item does not place the canonical block")
 	_expect(item_catalog.get_item_for_block(BlockId.Type.ANVIL) == anvil_item, "anvil reverse block mapping is invalid")
+	_expect(anvil_item.max_stack == 1, "anvil stack limit is not one")
 	_expect(anvil_item.icon.resource_path == "res://assets/textures/items/anvil.png", "anvil uses the wrong inventory icon")
 	var icon_image := anvil_item.icon.get_image()
-	_expect(icon_image != null and icon_image.get_size() == Vector2i(64, 64), "anvil inventory icon is not 64x64")
+	_expect(icon_image != null and icon_image.get_size() == Vector2i(16, 16), "anvil inventory icon is not 16x16 pixel art")
 	_expect(icon_image != null and icon_image.detect_alpha() != Image.ALPHA_NONE, "anvil inventory icon has no transparency")
+	var icon_colors: Dictionary = {}
+	var partial_alpha_pixels := 0
+	if icon_image != null:
+		for y in range(icon_image.get_height()):
+			for x in range(icon_image.get_width()):
+				var pixel := icon_image.get_pixel(x, y)
+				if pixel.a > 0.0:
+					icon_colors[Color(pixel.r, pixel.g, pixel.b, 1.0)] = true
+				if pixel.a > 0.0 and pixel.a < 1.0:
+					partial_alpha_pixels += 1
+	_expect(icon_colors.size() <= 4, "anvil inventory icon exceeds its pixel-art palette")
+	_expect(partial_alpha_pixels == 0, "anvil inventory icon contains anti-aliased pixels")
+	_expect(general_catalog.has_definition(&"anvil"), "anvil is not craftable from general crafting")
+	_expect(general_catalog.get_definition(&"anvil").get_ingredient_counts() == {&"copper": 10}, "anvil recipe does not require ten copper")
+	for recipe_id in [&"copper_pickaxe", &"copper_hoe", &"copper_sword", &"copper_helmet", &"copper_chest_plate", &"copper_pants", &"copper_shoes"]:
+		_expect(not general_catalog.has_definition(recipe_id), "%s leaked into general crafting" % recipe_id)
+		_expect(anvil_catalog.has_definition(recipe_id), "%s is missing from anvil crafting" % recipe_id)
 
 	var renderer := AnvilRenderer.new()
 	root.add_child(renderer)
@@ -36,45 +59,126 @@ func _run() -> void:
 	var position := Vector3i(3, 4, 5)
 	var rendered := renderer.spawn_anvil(position)
 	_expect(rendered != null and rendered.position == Vector3(position), "anvil renderer placed the model incorrectly")
-	_expect(rendered.get_child_count() == 8, "anvil model does not contain the expected low-poly parts")
+	_expect(rendered.get_child_count() == 4, "anvil model does not contain the expected simplified parts")
 	var top := rendered.get_node_or_null("Top") as MeshInstance3D
 	var horn := rendered.get_node_or_null("Horn") as MeshInstance3D
 	_expect(top != null and top.mesh is BoxMesh, "anvil top is missing")
-	_expect(horn != null and horn.mesh is CylinderMesh and (horn.mesh as CylinderMesh).radial_segments == 6, "anvil horn is not low-poly")
+	_expect(horn != null and horn.mesh is ArrayMesh and (horn.mesh as ArrayMesh).get_faces().size() == 18, "anvil horn is not the simplified wedge")
+	if horn != null:
+		var horn_bounds := horn.get_aabb()
+		_expect(is_equal_approx(horn_bounds.end.y, 0.75), "anvil horn rises above the top surface")
+		_expect(horn_bounds.end.x > 0.95, "anvil horn does not extend far enough horizontally")
+	var anvil_material := top.material_override as StandardMaterial3D
+	_expect(top != null and anvil_material.albedo_color.get_luminance() > 0.3 and anvil_material.albedo_color.get_luminance() < 0.5, "anvil model is not medium gray")
+	_expect(anvil_material.metallic < 0.15 and anvil_material.roughness > 0.8, "anvil model is not matte")
 	renderer.set_hovered_anvil(position)
 	_expect(top != null and top.material_overlay != null and horn.material_overlay != null, "hover highlight did not cover the full anvil")
+	_expect((horn.material_overlay as StandardMaterial3D).cull_mode == BaseMaterial3D.CULL_BACK, "anvil highlight renders overlapping back faces")
 	renderer.set_hovered_anvil(null)
 	_expect(top != null and top.material_overlay == null, "anvil hover highlight did not clear")
+	var targeting_view := TargetingView.new()
+	targeting_view._set_interaction_cursor(true)
+	_expect(targeting_view._interaction_cursor_active, "anvil interaction did not enable the pointing-hand cursor state")
+	targeting_view._set_interaction_cursor(false)
+	_expect(not targeting_view._interaction_cursor_active, "anvil interaction cursor state did not reset")
+	var cursor_inventory := InventoryModel.new(item_catalog)
+	var cursor_interactor := PlayerInteractor.new()
+	cursor_interactor.inventory_model = cursor_inventory
+	cursor_interactor.target_has = true
+	cursor_interactor.can_interact_target = true
+	cursor_interactor.target_crafting_station = anvil_block.crafting_station
+	targeting_view.interactor = cursor_interactor
+	_expect(targeting_view._should_show_interaction(), "empty-hand anvil interaction did not enable the pointing cursor")
+	cursor_inventory.slots[0] = InventoryStack.new(&"stone_pickaxe", 1)
+	_expect(cursor_interactor.is_attempting_crafting_station_mining(), "pickaxe did not select anvil mining mode")
+	_expect(not targeting_view._should_show_interaction(), "pickaxe mining mode enabled the anvil interaction cursor")
 	renderer.set_placement_preview(Vector3i(6, 7, 8), true)
 	_expect(renderer._placement_preview != null and renderer._placement_preview.visible, "anvil placement preview was not shown")
 	_expect(renderer._placement_preview.global_position == Vector3(6, 7, 8), "anvil placement preview used the wrong position")
 	renderer.set_placement_preview(null, false)
 	_expect(not renderer._placement_preview.visible, "anvil placement preview did not hide")
 
+	var texture_set := BlockTextureSet.new(block_catalog)
+	var mesher := ChunkMesher.new(1, 4, 1, false, texture_set)
+	var cache := PackedInt32Array()
+	cache.resize(3 * 4 * 3)
+	cache.fill(BlockId.Type.AIR)
+	var stone_index := 1 * 4 * 3 + 1 * 3 + 1
+	var anvil_index := 1 * 4 * 3 + 2 * 3 + 1
+	cache[stone_index] = BlockId.Type.STONE
+	cache[anvil_index] = BlockId.Type.ANVIL
+	var mesh_data = mesher.build_mesh_data_from_cache({
+		"cache": cache,
+		"origin_x": 0,
+		"origin_z": 0,
+		"size_x": 1,
+		"size_z": 1,
+		"size_y": 4,
+		"cache_x": 3,
+		"cache_z": 3,
+	})
+	_expect(mesh_data != null and (mesh_data["vertices"] as PackedVector3Array).size() == 24, "anvil hid a face of the supporting terrain block")
+
 	var world := VoxelWorld.new(20, 36, 5, 12.0, block_catalog)
 	var inventory := InventoryModel.new(item_catalog)
 	var coordinator := AnvilCoordinator.new()
-	coordinator.setup(world, inventory)
+	coordinator.setup(world)
 	var pickup_position := Vector3i(2, 20, 2)
 	var placed := world.try_place_block(pickup_position, BlockId.Type.ANVIL)
 	_expect(placed.is_success(), "test anvil could not be placed")
+	var unarmed_action := load("res://items/actions/definitions/unarmed_mining.tres") as MiningActionDefinition
 	var pickaxe_action := item_catalog.get_definition(&"stone_pickaxe").primary_action as MiningActionDefinition
-	_expect(coordinator.can_pick_up_anvil(pickup_position, pickaxe_action), "pickaxe could not pick up an anvil")
-	_expect(coordinator.pick_up_anvil(pickup_position, pickaxe_action), "anvil pickup failed")
+	_expect(not unarmed_action.can_mine(anvil_block), "bare hands can mine an anvil")
+	_expect(pickaxe_action.can_mine(anvil_block), "stone pickaxe cannot mine an anvil")
+	var torch_position := pickup_position + Vector3i.RIGHT
+	_expect(world.try_place_block(torch_position, BlockId.Type.TORCH, Vector3i.LEFT).is_success(), "test torch could not attach to the anvil")
+	var mine_batch := world.try_mine_block(pickup_position)
+	_expect(mine_batch.size() == 2, "mining an anvil did not include its attached torch")
+	var collected_item_ids: Array[StringName] = []
+	for edit in mine_batch:
+		var block_edit := edit as BlockEdit
+		_expect(block_edit.is_success() and block_edit.is_mine(), "anvil mining emitted a non-mining edit")
+		var drop_item_id := block_catalog.get_definition(block_edit.old_id).drop_item_id
+		if not drop_item_id.is_empty():
+			collected_item_ids.append(drop_item_id)
+	_expect(collected_item_ids == [&"anvil", &"torch"], "anvil mining did not return both item drops")
+	_expect(inventory.add_batch(collected_item_ids), "anvil mining drops could not be added to inventory")
 	_expect(world.get_block_id_at(pickup_position) == BlockId.Type.AIR, "picked-up anvil remained in the world")
+	_expect(world.get_block_id_at(torch_position) == BlockId.Type.AIR, "attached torch remained after mining the anvil")
 	_expect(inventory.get_inventory_item_count(&"anvil") == 1, "picked-up anvil was not returned to inventory")
+	_expect(inventory.get_inventory_item_count(&"torch") == 1, "attached torch was not returned to inventory")
 
 	var full_inventory := InventoryModel.new(item_catalog)
 	for index in range(InventoryModel.FILLABLE_SIZE):
 		full_inventory.slots[index] = InventoryStack.new(&"dirt_block", 99)
-	var blocked_coordinator := AnvilCoordinator.new()
-	blocked_coordinator.setup(world, full_inventory)
 	_expect(world.try_place_block(pickup_position, BlockId.Type.ANVIL).is_success(), "capacity-test anvil could not be placed")
-	_expect(not blocked_coordinator.can_pick_up_anvil(pickup_position, pickaxe_action), "full inventory allowed anvil pickup")
-	_expect(not blocked_coordinator.pick_up_anvil(pickup_position, pickaxe_action), "full inventory removed the anvil")
+	_expect(world.try_place_block(torch_position, BlockId.Type.TORCH, Vector3i.LEFT).is_success(), "capacity-test torch could not attach to the anvil")
+	var full_inventory_motor := (load("res://player/player.tscn") as PackedScene).instantiate() as PlayerMotor
+	root.add_child(full_inventory_motor)
+	full_inventory_motor.global_position = Vector3(pickup_position) + Vector3(0.5, 0.0, 1.5)
+	var full_inventory_interactor := PlayerInteractor.new()
+	full_inventory_interactor.voxel_space = world
+	full_inventory_interactor.editable_voxel_world = world
+	full_inventory_interactor.motor = full_inventory_motor
+	full_inventory_interactor.inventory_model = full_inventory
+	full_inventory_interactor._commit_mine(pickup_position, pickaxe_action)
 	_expect(world.get_block_id_at(pickup_position) == BlockId.Type.ANVIL, "failed pickup changed the world")
+	_expect(world.get_block_id_at(torch_position) == BlockId.Type.TORCH, "failed pickup removed the attached torch")
+
+	var other_chunk_position := Vector3i(45, 20, 2)
+	_expect(world.try_place_block(other_chunk_position, BlockId.Type.ANVIL).is_success(), "indexed-load anvil could not be placed")
+	var chunk_renderer := AnvilRenderer.new()
+	root.add_child(chunk_renderer)
+	chunk_renderer.setup()
+	_expect(chunk_renderer.load_anvils_for_chunk(0, 0, 20, world) == 1, "indexed chunk load did not load the local anvil")
+	_expect(not chunk_renderer.anvil_instances.has(other_chunk_position), "indexed chunk load scanned an anvil from another chunk")
 
 	renderer.queue_free()
+	chunk_renderer.queue_free()
+	full_inventory_interactor.free()
+	full_inventory_motor.queue_free()
+	cursor_interactor.free()
+	targeting_view.free()
 	await process_frame
 	_finish()
 

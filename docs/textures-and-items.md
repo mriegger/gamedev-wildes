@@ -59,4 +59,4 @@ Melee definitions own their held-item attack position and rotation, so different
 
 ## Special blocks
 
-Water stays entirely outside the texture and item systems, retaining its dedicated mesh and animated shader unchanged. Torches keep their dedicated renderer and light; the stem uses the assigned wood side texture, the flame uses emissive settings, and the item definition references a dedicated torch inventory icon.
+Water stays entirely outside the texture and item systems, retaining its dedicated mesh and animated shader unchanged. Torches keep their dedicated renderer and light; the stem uses the assigned wood side texture, the flame uses emissive settings, and the item definition references a dedicated torch inventory icon. The anvil uses a procedural low-poly renderer rather than chunk cube geometry. Its item definition references the project-authored transparent inventory icon; the block definition retains a 16×16 metal texture for shared block validation and targeting presentation.

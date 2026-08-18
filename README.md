@@ -17,7 +17,7 @@ world time. Copper deposits regenerate deterministically from the world seed.
 | `Space` | Hop — needed to get up any ledge |
 | `Q` / `E` | Rotate the camera 45° |
 | Mouse wheel / pinch | Zoom |
-| Left-click / hold | Use the selected item's primary action; hold to mine, click to attack or till soil |
+| Left-click / hold | Use the selected item's primary action; hold to mine, click to attack, till soil, or interact with a crafting station |
 | Right-click | Place the selected block |
 | `F` | Enter or leave a nearby dungeon |
 | `1`–`9` | Select hotbar slot; while the backpack is open, assign the hovered item to that slot |
@@ -140,9 +140,11 @@ fallback values keep GL Compatibility usable at reduced fidelity, without volume
 06:00–19:00; sunrise and sundown get their own warm color keys, and nights stay bright enough
 to play.
 
-**Crafting.** Opening crafting with `Tab` reveals a recipe panel alongside the backpack. Ten
-data-driven recipes use materials from the backpack and hotbar and craft immediately when the
-enabled Craft button is pressed, playing one success sound.
+**Crafting.** Opening crafting with `Tab` reveals the general recipe panel alongside the backpack.
+It contains the four recipes that do not require a workstation. A placed anvil opens its own panel
+with the seven copper tool, weapon, and armor recipes. Both catalogs use materials from the
+backpack and hotbar and craft immediately when the enabled Craft button is pressed, playing one
+success sound.
 
 **Developer console.** Press `/` to open a command line at the bottom of the screen. The
 `spawn <item> [count]` command adds any catalog item directly to the backpack for testing, with the
@@ -232,6 +234,7 @@ from Godot primitive meshes. Visual effects use project-authored shaders.
 | `src/assets/audio/sfx/farming/harvesting/pop_generic_*_CC0.wav` (3 files) | Generic pop by Muse Spark | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `src/assets/models/tools/hoe/copper_hoe.glb`, `Textures/colormap.png`, and derived inventory icon | [Survival Kit](https://kenney.nl/assets/survival-kit) – Kenney | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `src/assets/models/farming/pumpkin/*.fbx` (6 files) and derived inventory icon | [Ultimate Crops](https://quaternius.com/packs/ultimatecrops.html) – Quaternius | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
+| `src/assets/textures/items/anvil.png` | Muse, prompted by Codex for Michael Riegger | Project-authored |
 | `src/assets/textures/blocks/farmland_dry.png` | Codex, prompted by Michael Riegger | Project-authored |
 | `src/assets/textures/effects/mining/dirt_*.png` (3 files) | [Particle Pack](https://kenney.nl/assets/particle-pack) – Kenney | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
 

@@ -86,13 +86,13 @@ func _process(_delta: float) -> bool:
 		_expect(_inventory.get_inventory_item_count(&"log_block") == 5, "immediate craft consumed wrong wood count")
 		_expect(sound_player.playing, "successful craft did not play its sound")
 		_expect(not button.is_craft_enabled(), "depleted recipe button remained enabled")
-		_hud.crafting_panel.select_recipe(&"copper_pickaxe")
-		_expect(_hud.crafting_panel.get_craft_button().is_craft_enabled(), "available copper pickaxe recipe was disabled")
+		_hud.crafting_panel.select_recipe(&"anvil")
+		_expect(_hud.crafting_panel.get_craft_button().is_craft_enabled(), "available anvil recipe was disabled")
 		_hud.crafting_panel.get_craft_button().pressed.emit()
-		_expect(_inventory.get_inventory_item_count(&"copper_pickaxe") == 1, "copper pickaxe did not craft immediately")
-		_expect(_inventory.get_inventory_item_count(&"copper") == 15, "copper pickaxe consumed wrong copper count")
-		_expect(_inventory.get_inventory_item_count(&"log_block") == 0, "copper pickaxe retained wood")
-		_hud.crafting_panel.select_recipe(&"copper_sword")
+		_expect(_inventory.get_inventory_item_count(&"anvil") == 1, "anvil did not craft immediately")
+		_expect(_inventory.get_inventory_item_count(&"copper") == 15, "anvil consumed wrong copper count")
+		_expect(not _recipe_catalog.has_definition(&"copper_pickaxe"), "copper pickaxe remained in general crafting")
+		_hud.crafting_panel.select_recipe(&"basic_rune")
 		_expect(not _hud.crafting_panel.get_craft_button().is_craft_enabled(), "unavailable recipe button remained enabled")
 		sound_player.stop()
 		_hud.crafting_panel.get_craft_button().pressed.emit()
@@ -101,9 +101,9 @@ func _process(_delta: float) -> bool:
 		_phase = 2
 	elif _phase == 2 and _frame == 70:
 		_expect(not _hud.side_panel.is_open() and not _hud.crafting_panel.is_open(), "HUD panels did not close together")
-		_expect(_inventory.get_inventory_item_count(&"copper_sword") == 0, "failed sword craft added output")
+		_expect(_inventory.get_inventory_item_count(&"basic_rune") == 0, "failed rune craft added output")
 		_expect(_inventory.get_inventory_item_count(&"copper") == 15, "closing backpack consumed copper")
-		_expect(_inventory.get_inventory_item_count(&"log_block") == 0, "closing backpack changed wood")
+		_expect(_inventory.get_inventory_item_count(&"log_block") == 5, "closing backpack changed wood")
 		_hud.free()
 		_camera_rig.free()
 		_camera_follow.free()
@@ -122,7 +122,7 @@ func _check_open_state() -> void:
 	_expect(_camera_rig.camera.h_offset < 0.0, "camera framing did not account for the wider left panel")
 	var recipe_scroll := _hud.crafting_panel.get_node("Margin/Content/Body/Recipes/RecipeScroll") as ScrollContainer
 	var recipe_list := _hud.crafting_panel.get_node("Margin/Content/Body/Recipes/RecipeScroll/RecipeList") as VBoxContainer
-	_expect(recipe_scroll != null and recipe_list.get_child_count() == 10, "scrollable recipe list did not contain ten recipes")
+	_expect(recipe_scroll != null and recipe_list.get_child_count() == 4, "scrollable recipe list did not contain four general recipes")
 	var recipe_button := recipe_list.get_child(0) as Button
 	var recipe_icon_frame := recipe_button.get_node("Content/IconFrame") as CenterContainer
 	var recipe_icon := recipe_icon_frame.get_node("Icon") as TextureRect

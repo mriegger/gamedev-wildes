@@ -327,9 +327,14 @@ resources, `EntityCatalog` lists entity definitions, `LevelCatalog` lists dungeo
 and `WorldConfig` references the biome library. Runtime code does not scan directories or
 manufacture fallback domain resources.
 
-Crafting recipes reference canonical item definitions. `CraftingCoordinator` asks `InventoryModel`
-to validate and commit ingredient removal and output insertion across the backpack and hotbar as one
-immediate transaction. `CraftingPanel` presents availability without mutating inventory slots and
-plays one sound only after that transaction succeeds.
+Crafting recipes reference canonical item definitions. The general catalog owns recipes available
+from the `Tab` menu, while the anvil catalog exclusively owns copper tools, weapons, and armor.
+`CraftingCoordinator` asks `InventoryModel` to validate and commit ingredient removal and output
+insertion across the backpack and hotbar as one immediate transaction. Reusable `CraftingPanel`
+instances present both catalogs without mutating inventory slots and play one sound only after a
+transaction succeeds. `CraftingStationBlockDefinition` marks interactable workstation blocks;
+`AnvilCoordinator` validates opening while normal pickaxe mining owns capacity-safe anvil and
+attached-torch drops. `AnvilRenderer` owns the procedural low-poly model, placement preview, and
+subtle hover presentation.
 
 Forward+ is the primary renderer. Runtime rendering-device checks select reduced visual values for GL Compatibility fallback. Features unavailable on GL, including volumetric fog, remain disabled there.
