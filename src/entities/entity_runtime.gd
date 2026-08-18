@@ -329,6 +329,9 @@ func get_stat_value(runtime_id: int, stat_id: StringName) -> float:
 
 func try_apply_damage(runtime_id: int, amount: float) -> EntityDamageResult:
 	assert(is_finite(amount) and amount > 0.0)
+	var actor := get_actor(runtime_id)
+	if actor == null or actor.definition == null or not actor.definition.combat_targetable:
+		return null
 	var stats := _stats_by_runtime_id.get(runtime_id) as ActorStats
 	if stats == null:
 		return null
