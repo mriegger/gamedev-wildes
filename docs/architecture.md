@@ -15,7 +15,7 @@ game/                        gameplay composition and session lifecycle
 blocks/                      block domain resources, voxel query contract, and shared presentation
 combat/                      melee profiles, contacts, targeting, and validation
 crafting/                    recipe definitions, inventory coordination, and presentation
-chests/                      container definitions, storage, and tests
+chests/                      container definitions, storage, presentation, and tests
 entities/                    content, AI, navigation, populations, and presentation
 environment/                 packaged environment and day/night feature
 inventory/                   inventory model and inventory-owned UI
@@ -118,7 +118,11 @@ source slot owns the adjustable drag count and consumes wheel input before gamep
 drag-preview visuals show the pending split without mutating inventory until a drop succeeds.
 
 `ChestInventoryStore` owns persistent inventory models keyed by placed chest position. Every chest
-position resolves to distinct stored contents, including after save restore.
+position resolves to distinct stored contents, including after save restore. `ChestRenderer`
+presents placed chests outside the chunk cube mesh. The body uses explicit face quads so each wooden
+face is rendered once, while the lid remains a separately hinged box. `TargetingView` forwards the
+reachable chest position so the renderer highlights both pieces, hinges the lid slightly, and uses
+the same split model for placement previews without changing world state.
 
 ## Runes and socketing
 

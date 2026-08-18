@@ -31,6 +31,7 @@ var last_ray_normal: Vector3i = Vector3i.UP
 var can_primary_target: bool = false
 var can_place_target: bool = false
 var target_crafting_station: CraftingStationBlockDefinition = null
+var target_container: ContainerBlockDefinition = null
 var can_interact_target: bool = false
 var pointer_over_ui: bool = false
 
@@ -116,6 +117,7 @@ func _clear_active_state():
 	can_primary_target = false
 	can_place_target = false
 	target_crafting_station = null
+	target_container = null
 	can_interact_target = false
 	_primary_harvest_latched = false
 	if harvest != null:
@@ -133,6 +135,7 @@ func cancel_actions():
 	can_primary_target = false
 	can_place_target = false
 	target_crafting_station = null
+	target_container = null
 	can_interact_target = false
 	_primary_harvest_latched = false
 	if harvest != null:
@@ -150,6 +153,7 @@ func _physics_process(delta):
 		can_primary_target = false
 		can_place_target = false
 		target_crafting_station = null
+		target_container = null
 		can_interact_target = false
 		if harvest != null:
 			harvest.clear_target()
@@ -168,6 +172,7 @@ func _handle_raycast():
 	can_primary_target = false
 	can_place_target = false
 	target_crafting_station = null
+	target_container = null
 	can_interact_target = false
 
 	var mouse_pos = get_viewport().get_mouse_position()
@@ -199,7 +204,8 @@ func _handle_raycast():
 	var reach_squared = reach * reach
 	var selected_primary := get_selected_primary_action()
 	target_crafting_station = _get_target_crafting_station(best_hit)
-	can_interact_target = target_crafting_station != null and motor_pos.distance_squared_to(Vector3(best_hit) + Vector3(0.5, 0.5, 0.5)) <= reach_squared
+	target_container = _get_target_container(best_hit)
+	can_interact_target = (target_crafting_station != null or target_container != null) and motor_pos.distance_squared_to(Vector3(best_hit) + Vector3(0.5, 0.5, 0.5)) <= reach_squared
 	if selected_primary is MiningActionDefinition:
 		can_primary_target = _can_mine_position(best_hit, selected_primary as MiningActionDefinition)
 	elif selected_primary is TillingActionDefinition:
@@ -555,3 +561,11 @@ func _try_open_target_crafting_station() -> bool:
 		return false
 	crafting_station_open_requested.emit(target_block, target_crafting_station)
 	return true
+
+func has_container_target() -> bool:
+	return target_has and target_container != null
+
+func _get_target_container(position: Vector3i) -> ContainerBlockDefinition:
+	if editable_voxel_world == null:
+		return null
+	return voxel_space.block_catalog.get_definition(voxel_space.get_block_id_at(position)).container

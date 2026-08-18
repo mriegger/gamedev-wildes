@@ -38,6 +38,11 @@ without a dedicated front texture continue to use their ordinary side texture on
 faces. The top texture arranges colors sampled from that same lid into three horizontal plank bands.
 The lid is color-graded to a medium warm brown that sits between the earlier dark and light
 treatments, and the same palette is shared by the front, sides, top planks, and inventory icon.
+The dedicated chest renderer uses four 16×16 presentation textures derived from those authored
+faces. The matching body front and sides use three lighter plank bands, with the lower latch half
+only at the front's top edge. Each body face is an independent quad so no face is layered over a
+second box surface. The lid remains a separate box using darker wood, with the upper latch half only
+at the front's bottom edge.
 
 ## Add a non-block item
 

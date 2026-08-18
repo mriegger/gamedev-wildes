@@ -14,6 +14,7 @@ var ghost_block: MeshInstance3D
 var breaking_block: MeshInstance3D
 var contact_shadow: MeshInstance3D
 var anvil_renderer: AnvilRenderer
+var chest_renderer: ChestRenderer
 
 var _selection_edge_mat: StandardMaterial3D = null
 var _contact_shadow_color: Color = Color(-1, -1, -1, -1)
@@ -40,6 +41,7 @@ func bind_space(p_space: VoxelSpace, presentation_root: Node):
 	voxel_space = p_space
 	block_catalog = p_space.block_catalog
 	anvil_renderer = presentation_root.get_node_or_null("Anvils") as AnvilRenderer
+	chest_renderer = presentation_root.get_node_or_null("Chests") as ChestRenderer
 	_hide_targeting_visuals()
 	contact_shadow.visible = false
 	for visual in [selection_box, ghost_block, breaking_block]:
@@ -55,6 +57,7 @@ func unbind_space():
 	voxel_space = null
 	block_catalog = null
 	anvil_renderer = null
+	chest_renderer = null
 
 func _hide_targeting_visuals():
 	if selection_box != null:
@@ -65,6 +68,8 @@ func _hide_targeting_visuals():
 		breaking_block.visible = false
 	if anvil_renderer != null:
 		anvil_renderer.set_placement_preview(null, false)
+	if chest_renderer != null:
+		chest_renderer.set_placement_preview(null, false)
 	_hide_interaction_visuals()
 
 func _ensure_visuals():
@@ -274,12 +279,23 @@ func _update_selection_visuals(_delta: float = 0.0):
 			ghost_block.visible = false
 			if anvil_renderer != null:
 				anvil_renderer.set_placement_preview(null, false)
+			if chest_renderer != null:
+				chest_renderer.set_placement_preview(null, false)
 		elif block_id == BlockId.Type.ANVIL and anvil_renderer != null:
 			ghost_block.visible = false
 			anvil_renderer.set_placement_preview(interactor.placement_block, interactor.can_place_target)
+			if chest_renderer != null:
+				chest_renderer.set_placement_preview(null, false)
+		elif block_id == BlockId.Type.CHEST and chest_renderer != null:
+			ghost_block.visible = false
+			chest_renderer.set_placement_preview(interactor.placement_block, interactor.can_place_target)
+			if anvil_renderer != null:
+				anvil_renderer.set_placement_preview(null, false)
 		else:
 			if anvil_renderer != null:
 				anvil_renderer.set_placement_preview(null, false)
+			if chest_renderer != null:
+				chest_renderer.set_placement_preview(null, false)
 			ghost_block.visible = true
 			var base_center: Vector3
 			var ghost_size: Vector3
@@ -311,22 +327,34 @@ func _update_selection_visuals(_delta: float = 0.0):
 			ghost_block.visible = false
 		if anvil_renderer != null:
 			anvil_renderer.set_placement_preview(null, false)
+		if chest_renderer != null:
+			chest_renderer.set_placement_preview(null, false)
 
 func _should_show_mining_outline(has_target_action: bool) -> bool:
-	return has_target_action and interactor.target_has and (not interactor.has_crafting_station_target() or interactor.is_attempting_crafting_station_mining())
+	if not has_target_action or not interactor.target_has or interactor.has_container_target():
+		return false
+	return not interactor.has_crafting_station_target() or interactor.is_attempting_crafting_station_mining()
 
 func _update_interaction_visuals() -> void:
-	var interaction_available := _should_show_interaction()
+	var anvil_interaction_available := _should_show_anvil_interaction()
+	var chest_interaction_available := _should_show_chest_interaction()
 	if anvil_renderer != null:
-		anvil_renderer.set_hovered_anvil(interactor.target_block if interaction_available else null)
-	_set_interaction_cursor(interaction_available)
+		anvil_renderer.set_hovered_anvil(interactor.target_block if anvil_interaction_available else null)
+	if chest_renderer != null:
+		chest_renderer.set_hovered_chest(interactor.target_block if chest_interaction_available else null)
+	_set_interaction_cursor(anvil_interaction_available or chest_interaction_available)
 
-func _should_show_interaction() -> bool:
+func _should_show_anvil_interaction() -> bool:
 	return interactor.has_crafting_station_target() and interactor.can_interact_target and not interactor.is_attempting_crafting_station_mining()
+
+func _should_show_chest_interaction() -> bool:
+	return interactor.has_container_target() and interactor.can_interact_target
 
 func _hide_interaction_visuals() -> void:
 	if anvil_renderer != null:
 		anvil_renderer.set_hovered_anvil(null)
+	if chest_renderer != null:
+		chest_renderer.set_hovered_chest(null)
 	_set_interaction_cursor(false)
 
 func _set_interaction_cursor(active: bool) -> void:

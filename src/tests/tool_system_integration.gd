@@ -58,9 +58,10 @@ func _run():
 	var chest_block := block_catalog.get_definition(BlockId.Type.CHEST)
 	var chest_placement := chest_item.secondary_action as BlockPlacementActionDefinition
 	_expect(BlockId.get_display_name(BlockId.Type.CHEST) == "Chest", "chest block display name is incorrect")
-	_expect(BlockId.is_chunk_cube(BlockId.Type.CHEST), "chest is not rendered as a chunk cube")
+	_expect(not BlockId.is_chunk_cube(BlockId.Type.CHEST), "chest is still baked into the chunk cube mesh")
 	_expect(chest_block.is_solid and chest_block.is_opaque and chest_block.is_raycast_solid, "chest is not a solid targetable block")
-	_expect(chest_block.is_breakable and chest_block.drop_item_id == &"chest", "chest mining/drop configuration is invalid")
+	_expect(not chest_block.is_breakable and chest_block.drop_item_id.is_empty(), "chest is still configured as mineable")
+	_expect(chest_block.container != null and chest_block.container.rows == 3 and chest_block.container.columns == 5, "chest container dimensions are invalid")
 	_expect(chest_placement != null and chest_placement.block == chest_block, "chest item does not place the canonical chest block")
 	_expect(item_catalog.get_item_for_block(BlockId.Type.CHEST) == chest_item, "chest reverse block mapping is incorrect")
 	_expect(chest_item.icon.resource_path == "res://assets/textures/blocks/chest_front.png", "chest inventory icon does not reuse the front texture")
@@ -124,38 +125,8 @@ func _run():
 	var expected_latch_pixels: Array[Vector2i] = [Vector2i(7, 6), Vector2i(8, 6), Vector2i(7, 7), Vector2i(8, 7)]
 	_expect(chest_face_differences == expected_latch_pixels, "chest side does not exactly match the front apart from its four centered latch pixels")
 	var chest_texture_set := BlockTextureSet.new(block_catalog)
-	var chest_side_layer := chest_texture_set.side_layers[BlockId.Type.CHEST]
-	var chest_front_layer := chest_texture_set.front_layers[BlockId.Type.CHEST]
-	_expect(chest_side_layer != chest_front_layer, "chest front and side resolved to the same texture layer")
+	_expect(chest_texture_set.side_layers[BlockId.Type.CHEST] == -1 and chest_texture_set.front_layers[BlockId.Type.CHEST] == -1, "special chest renderer textures leaked into the chunk texture set")
 	_expect(chest_texture_set.front_layers[BlockId.Type.STONE] == chest_texture_set.side_layers[BlockId.Type.STONE], "ordinary blocks did not fall back to their side texture")
-	var chest_cache := PackedInt32Array()
-	chest_cache.resize(18)
-	chest_cache.fill(-1)
-	chest_cache[7] = BlockId.Type.CHEST
-	var chest_mesh_data = ChunkMesher.new(1, 2, 0, false, chest_texture_set).build_mesh_data_from_cache({
-		"cache": chest_cache,
-		"origin_x": 0,
-		"origin_z": 0,
-		"size_x": 1,
-		"size_z": 1,
-		"size_y": 2,
-		"cache_x": 3,
-		"cache_z": 3,
-	})
-	_expect(chest_mesh_data != null, "chest mesh data was not generated")
-	if chest_mesh_data != null:
-		var chest_normals := chest_mesh_data["normals"] as PackedVector3Array
-		var chest_layers := chest_mesh_data["texture_layers"] as PackedVector2Array
-		var front_vertex_count := 0
-		for vertex_index in range(chest_normals.size()):
-			var normal := chest_normals[vertex_index]
-			var layer := roundi(chest_layers[vertex_index].x)
-			if normal == Vector3(0, 0, -1):
-				front_vertex_count += 1
-				_expect(layer == chest_front_layer, "chest north/front face did not use the lock texture")
-			elif is_zero_approx(normal.y):
-				_expect(layer == chest_side_layer, "a non-front chest face used the lock texture")
-		_expect(front_vertex_count == 4, "chest mesh did not contain exactly one front face")
 	var sword := item_catalog.get_definition(&"copper_sword")
 	_expect(sword.max_stack == 1, "sword stack limit changed")
 	_expect(sword.primary_action is MeleeAttackActionDefinition, "sword primary action is not melee")
@@ -193,7 +164,9 @@ func _run():
 	_expect(stone.mining_tool_tag == &"pickaxe" and stone.minimum_mining_power == 0, "stone is not hand-mineable")
 	_expect(stone.drop_item_id == &"stone_block", "stone drop item changed")
 	_expect(unarmed_action.can_mine(stone), "unarmed action cannot mine stone")
-	_expect(unarmed_action.can_mine(chest_block), "unarmed action cannot mine a chest")
+	_expect(not unarmed_action.can_mine(chest_block), "unarmed action can mine a chest")
+	_expect(not pickaxe_action.can_mine(chest_block), "stone pickaxe can mine a chest")
+	_expect(not copper_pickaxe_action.can_mine(chest_block), "copper pickaxe can mine a chest")
 	_expect(copper.mining_tool_tag == &"pickaxe" and copper.minimum_mining_power == 1, "copper mining requirement changed")
 	_expect(not unarmed_action.can_mine(copper), "unarmed action can mine copper")
 	_expect(pickaxe_action.can_mine(copper), "stone pickaxe cannot mine copper")
@@ -301,8 +274,8 @@ func _run():
 	_expect(_voxel_world.get_block_id_at(chest_position) == BlockId.Type.CHEST, "placed chest is missing from the voxel world")
 	_expect(_voxel_world.snapshot_block_edits()["placed"].get(chest_position, BlockId.Type.AIR) == BlockId.Type.CHEST, "placed chest was not persisted as a world edit")
 	var chest_mine_edits := _voxel_world.try_mine_block(chest_position)
-	_expect(chest_mine_edits.size() == 1 and chest_mine_edits[0].old_id == BlockId.Type.CHEST, "placed chest could not be mined")
-	_expect(_voxel_world.get_block_id_at(chest_position) == BlockId.Type.AIR, "mined chest remained in the voxel world")
+	_expect(chest_mine_edits.size() == 1 and chest_mine_edits[0].result == BlockEdit.Result.FAIL_NOT_BREAKABLE, "placed chest accepted a mine operation")
+	_expect(_voxel_world.get_block_id_at(chest_position) == BlockId.Type.CHEST, "failed chest mining removed the block")
 	_player = (load("res://player/player.tscn") as PackedScene).instantiate() as PlayerMotor
 	root.add_child(_player)
 	_player.global_position = Vector3.ZERO
