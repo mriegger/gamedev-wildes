@@ -1,5 +1,7 @@
 extends SceneTree
 
+const VoxelPlayerVisibilitySensorType := preload("res://entities/awareness/voxel_player_visibility_sensor.gd")
+
 const FLAT_HEIGHT: int = 6
 const FEET_Y: int = FLAT_HEIGHT + 1
 const TEST_RADIUS: int = 12
@@ -392,18 +394,16 @@ func _test_zombie_visibility_cadence() -> void:
 	second.global_position = Vector3(0.5, float(FEET_Y), 1.5)
 	first.setup(1, definition, world, 31, EntityNavigationLimits.new(24, 256, 1))
 	second.setup(2, definition, world, 32, EntityNavigationLimits.new(24, 256, 1))
-	_expect(not is_equal_approx(first._vision_sample_remaining, second._vision_sample_remaining), "zombie visibility samples were not phase-staggered")
 	var target := Vector3(4.5, float(FEET_Y), 0.5)
-	first._vision_sample_remaining = 0.0
-	_expect(first._sample_player_visibility(0.0, target), "clear target was not visible on the sample tick")
+	var phase_delta := VoxelPlayerVisibilitySensorType.SAMPLE_INTERVAL_SECONDS / float(VoxelPlayerVisibilitySensorType.PHASE_COUNT)
+	_expect(first._visibility_sensor.advance(phase_delta, first.global_position, target), "first Zombie phase did not sample at its boundary")
+	_expect(not second._visibility_sensor.advance(phase_delta, second.global_position, target), "second Zombie phase sampled at the first boundary")
 	world.restore_block_edits({Vector3i(2, FEET_Y + 1, 0): BlockId.Type.STONE}, {})
-	var half_interval := ZombieActor.VISION_SAMPLE_INTERVAL_SECONDS * 0.5
-	_expect(first._sample_player_visibility(half_interval, target), "visibility cache changed before the next sample")
-	_expect(not first._sample_player_visibility(half_interval, target), "occlusion was not observed on the next sample")
-	first._player_visible = true
-	first._vision_sample_remaining = ZombieActor.VISION_SAMPLE_INTERVAL_SECONDS
+	var half_interval := VoxelPlayerVisibilitySensorType.SAMPLE_INTERVAL_SECONDS * 0.5
+	_expect(first._visibility_sensor.advance(half_interval, first.global_position, target), "visibility cache changed before the next sample")
+	_expect(not first._visibility_sensor.advance(half_interval, first.global_position, target), "occlusion was not observed on the next sample")
 	var outside_detection := first.global_position + Vector3(first._behavior.detection_range + 1.0, 0.0, 0.0)
-	_expect(not first._sample_player_visibility(0.0, outside_detection), "target outside detection range retained cached visibility")
+	_expect(not first._visibility_sensor.advance(0.0, first.global_position, outside_detection), "target outside detection range retained cached visibility")
 	first.free()
 	second.free()
 
