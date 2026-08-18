@@ -153,7 +153,8 @@ func _resolve_candidate_elevations(column: Vector2i) -> Array[int]:
 
 func _append_walkable_elevation(elevations: Array[int], column: Vector2i, elevation: int) -> void:
 	var feet := Vector3i(column.x, elevation, column.y)
-	if not _voxel_space.is_solid(feet + Vector3i.DOWN):
+	var body_position := Vector3(float(column.x) + 0.5, float(elevation), float(column.y) + 0.5)
+	if not VoxelBodySolver.has_solid_support(_voxel_space, body_position, _body_width):
 		return
 	if VoxelPathfinder.is_walkable(_voxel_space, feet, _body_width, _body_height):
 		elevations.append(elevation)

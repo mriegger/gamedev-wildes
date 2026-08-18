@@ -92,6 +92,15 @@ static func get_ground_y(voxel_space: VoxelSpace, position: Vector3, body_width:
 					break
 	return best
 
+static func has_solid_support(voxel_space: VoxelSpace, position: Vector3, body_width: float) -> bool:
+	var footprint := _get_footprint(position, body_width)
+	var support_y := floori(position.y - 0.001)
+	for x in range(footprint.position.x, footprint.end.x):
+		for z in range(footprint.position.y, footprint.end.y):
+			if voxel_space.is_solid(Vector3i(x, support_y, z)):
+				return true
+	return false
+
 static func get_supporting_block_id(voxel_space: VoxelSpace, position: Vector3, body_width: float, ground_y: float) -> int:
 	if ground_y == VoxelSpace.NO_SURFACE_Y:
 		return BlockId.Type.AIR

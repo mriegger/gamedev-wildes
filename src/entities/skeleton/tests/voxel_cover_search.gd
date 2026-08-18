@@ -66,6 +66,7 @@ func _run() -> void:
 	_test_off_center_columns_use_exact_distance()
 	_test_exact_radius_boundary()
 	_test_elevation_offsets_are_bounded_and_ordered()
+	_test_wide_body_support_uses_full_footprint()
 	_test_candidate_columns_are_bounded_per_tick()
 	_test_resumed_column_counts_toward_tick_bound()
 	_test_failed_paths_are_limited_to_one_per_tick()
@@ -170,6 +171,16 @@ func _test_elevation_offsets_are_bounded_and_ordered() -> void:
 	var search := VoxelCoverSearchType.new(TestVoxelSpace.new(), BODY_WIDTH, BODY_HEIGHT, limits)
 	var expected: Array[int] = [0, -1, 1, -2, 2, -3, 3, -4, 4]
 	_expect(search._elevation_offsets == expected, "elevation scan exceeded its navigation radius or changed deterministic ordering")
+
+func _test_wide_body_support_uses_full_footprint() -> void:
+	var space := TestVoxelSpace.new()
+	space.default_ground_y = VoxelSpace.NO_SURFACE_Y
+	space.set_ground_height(-1, 0, FEET_Y)
+	var limits := EntityNavigationLimits.new(4, 64, 1)
+	var search := VoxelCoverSearchType.new(space, 1.4, BODY_HEIGHT, limits)
+	search.begin(ORIGIN, ORIGIN, _observation(), 0.0)
+	var elevations: Array[int] = search._resolve_candidate_elevations(Vector2i.ZERO)
+	_expect(elevations == [int(FEET_Y)], "wide-body cover rejected support at the edge of its footprint")
 
 func _test_candidate_columns_are_bounded_per_tick() -> void:
 	var space := TestVoxelSpace.new()
