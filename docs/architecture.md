@@ -140,8 +140,8 @@ blocks. While the four-second slam cooldown is active, a freshly visible target 
 instead start the 0.8-second fallback punch. It contacts at 0.46 seconds, has a 1.4-second cooldown,
 and produces fifteen unarmored damage.
 
-The Stone Golem brain owns slam selection and phase timing; its actor owns the locked takeoff target,
-one-block-radius landing marker, clearance validation, physical trajectory, and cancellation. A
+The Stone Golem brain owns slam selection, phase timing, and the locked takeoff target; its actor owns
+the one-block-radius landing marker, clearance validation, physical trajectory, and cancellation. A
 0.6-second windup precedes a 0.8-second ballistic leap and a 0.75-second recovery. Invalid clearance,
 despawn, or death cancels pending contact. The marker is a presentation-only telegraph: the actor
 emits one radial contact only after reaching its actual grounded landing position. `EntityRuntime`
