@@ -55,8 +55,6 @@ func _rebuild_lookup() -> void:
 			var definition := _definitions_by_id[id]
 			_validate_face_texture(definition.top_texture, "top", definition)
 			_validate_face_texture(definition.side_texture, "side", definition)
-			if id == BlockId.Type.CHEST or definition.front_texture != null:
-				_validate_face_texture(definition.front_texture, "front", definition)
 			_validate_face_texture(definition.bottom_texture, "bottom", definition)
 
 func _validate_face_texture(texture: Texture2D, face: String, definition: BlockDefinition) -> void:

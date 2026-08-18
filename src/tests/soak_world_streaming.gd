@@ -317,7 +317,7 @@ func _verify_texture_pipeline() -> bool:
 	for block_id in range(BlockId.Type.COUNT):
 		if not BlockId.is_chunk_cube(block_id):
 			continue
-		for layer in [texture_set.top_layers[block_id], texture_set.side_layers[block_id], texture_set.front_layers[block_id], texture_set.bottom_layers[block_id]]:
+		for layer in [texture_set.top_layers[block_id], texture_set.side_layers[block_id], texture_set.bottom_layers[block_id]]:
 			if layer < 0 or layer >= layer_count:
 				_fail("texture layer out of bounds for block %d" % block_id)
 				return false

@@ -65,18 +65,14 @@ func _run():
 	_expect(chest_placement != null and chest_placement.block == chest_block, "chest item does not place the canonical chest block")
 	_expect(item_catalog.get_item_for_block(BlockId.Type.CHEST) == chest_item, "chest reverse block mapping is incorrect")
 	_expect(chest_item.icon.resource_path == "res://assets/textures/blocks/chest_front.png", "chest inventory icon does not reuse the front texture")
-	_expect(chest_item.icon == chest_block.front_texture, "chest inventory and block front do not share the same texture")
 	var chest_icon_image := chest_item.icon.get_image()
 	_expect(chest_icon_image.get_size() == Vector2i(16, 16), "chest inventory icon is not 16x16")
 	_expect(chest_block.top_texture.resource_path == "res://assets/textures/blocks/chest_top.png", "chest uses the wrong top texture")
 	_expect(chest_block.side_texture.resource_path == "res://assets/textures/blocks/chest_side.png", "chest uses the wrong side texture")
-	_expect(chest_block.front_texture.resource_path == "res://assets/textures/blocks/chest_front.png", "chest uses the wrong front texture")
-	_expect(chest_block.front_texture != chest_block.side_texture, "chest front still shares the non-locking side texture")
 	_expect(chest_block.top_texture.get_image().get_size() == Vector2i(16, 16), "chest top texture is not 16x16")
 	_expect(chest_block.side_texture.get_image().get_size() == Vector2i(16, 16), "chest side texture is not 16x16")
-	_expect(chest_block.front_texture.get_image().get_size() == Vector2i(16, 16), "chest front texture is not 16x16")
 	var chest_top_image := chest_block.top_texture.get_image()
-	var chest_front_image := chest_block.front_texture.get_image()
+	var chest_front_image := chest_icon_image
 	var chest_side_image := chest_block.side_texture.get_image()
 	var chest_front_colors: Dictionary[Color, bool] = {}
 	var chest_side_colors: Dictionary[Color, bool] = {}
@@ -125,8 +121,7 @@ func _run():
 	var expected_latch_pixels: Array[Vector2i] = [Vector2i(7, 6), Vector2i(8, 6), Vector2i(7, 7), Vector2i(8, 7)]
 	_expect(chest_face_differences == expected_latch_pixels, "chest side does not exactly match the front apart from its four centered latch pixels")
 	var chest_texture_set := BlockTextureSet.new(block_catalog)
-	_expect(chest_texture_set.side_layers[BlockId.Type.CHEST] == -1 and chest_texture_set.front_layers[BlockId.Type.CHEST] == -1, "special chest renderer textures leaked into the chunk texture set")
-	_expect(chest_texture_set.front_layers[BlockId.Type.STONE] == chest_texture_set.side_layers[BlockId.Type.STONE], "ordinary blocks did not fall back to their side texture")
+	_expect(chest_texture_set.side_layers[BlockId.Type.CHEST] == -1, "special chest renderer textures leaked into the chunk texture set")
 	var sword := item_catalog.get_definition(&"copper_sword")
 	_expect(sword.max_stack == 1, "sword stack limit changed")
 	_expect(sword.primary_action is MeleeAttackActionDefinition, "sword primary action is not melee")

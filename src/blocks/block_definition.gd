@@ -17,7 +17,6 @@ class_name BlockDefinition
 @export_group("Appearance")
 @export var top_texture: Texture2D
 @export var side_texture: Texture2D
-@export var front_texture: Texture2D
 @export var bottom_texture: Texture2D
 @export var emissive_enabled: bool = false
 @export var emissive_color: Color = Color(0, 0, 0, 0)

@@ -4,7 +4,6 @@ class_name BlockTextureSet
 var texture_array: Texture2DArray
 var top_layers := PackedInt32Array()
 var side_layers := PackedInt32Array()
-var front_layers := PackedInt32Array()
 var bottom_layers := PackedInt32Array()
 
 var _sources: Array[Texture2D] = []
@@ -15,11 +14,9 @@ func _init(block_catalog: BlockCatalog) -> void:
 	assert(catalog_valid)
 	top_layers.resize(BlockId.Type.COUNT)
 	side_layers.resize(BlockId.Type.COUNT)
-	front_layers.resize(BlockId.Type.COUNT)
 	bottom_layers.resize(BlockId.Type.COUNT)
 	top_layers.fill(-1)
 	side_layers.fill(-1)
-	front_layers.fill(-1)
 	bottom_layers.fill(-1)
 	for block_id in range(BlockId.Type.COUNT):
 		if not BlockId.is_chunk_cube(block_id):
@@ -27,7 +24,6 @@ func _init(block_catalog: BlockCatalog) -> void:
 		var definition := block_catalog.get_definition(block_id)
 		top_layers[block_id] = _get_or_add_layer(definition.top_texture)
 		side_layers[block_id] = _get_or_add_layer(definition.side_texture)
-		front_layers[block_id] = _get_or_add_layer(definition.front_texture if definition.front_texture != null else definition.side_texture)
 		bottom_layers[block_id] = _get_or_add_layer(definition.bottom_texture)
 	var images: Array[Image] = []
 	for source in _sources:
