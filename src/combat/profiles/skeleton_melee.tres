@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="MeleeAttackProfile" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://combat/melee_attack_profile.gd" id="1_profile"]
+
+[resource]
+script = ExtResource("1_profile")
+id = &"skeleton_melee"
+duration = 0.55
+contact_time = 0.28
+cooldown = 1.1
+reach = 1.4
+base_damage = 5.0

@@ -1,6 +1,8 @@
 extends EntityActor
 class_name ZombieActor
 
+const TimedMeleeContactType := preload("res://combat/timed_melee_contact.gd")
+
 const VISION_SAMPLE_INTERVAL_SECONDS: float = 0.125
 const VISION_PHASE_COUNT: int = 8
 
@@ -9,9 +11,7 @@ var brain: GroundMeleeEnemyBrain
 var _behavior: GroundMeleeEnemyBehaviorDefinition
 var _zombie_animation: ZombieAnimationDriver
 var _path_follower: VoxelPathFollower
-var _melee_profile: MeleeAttackProfile
-var _melee_elapsed: float = 0.0
-var _melee_contact_pending: bool = false
+var _timed_melee_contact := TimedMeleeContactType.new()
 var _player_visible: bool = false
 var _vision_sample_remaining: float = 0.0
 
@@ -42,7 +42,7 @@ func tick(delta: float, observation: EntityTargetObservation, separation_velocit
 	assert(brain != null and voxel_space != null)
 	assert(observation != null and observation.validate())
 	var player_position := observation.player_position
-	_advance_melee_contact(delta)
+	_emit_melee_contact(_timed_melee_contact.advance(delta))
 	var visible := _sample_player_visibility(delta, player_position)
 	var previous_state := brain.state
 	brain.advance(delta, global_position, player_position, visible)
@@ -54,7 +54,7 @@ func tick(delta: float, observation: EntityTargetObservation, separation_velocit
 	if brain.consume_attack_started():
 		var melee_profile := _behavior.melee_profile
 		play_attack(melee_profile.duration)
-		_arm_melee_contact(melee_profile)
+		_emit_melee_contact(_timed_melee_contact.arm(melee_profile))
 	var desired_velocity := Vector3.ZERO
 	if not attacking:
 		var goal := brain.get_movement_goal()
@@ -65,32 +65,12 @@ func tick(delta: float, observation: EntityTargetObservation, separation_velocit
 	desired_velocity = limit_planar_velocity(desired_velocity + separation_velocity, max_speed)
 	advance_voxel_motion(delta, desired_velocity, _behavior.gravity)
 
-func _arm_melee_contact(profile: MeleeAttackProfile):
-	assert(profile != null)
-	_melee_profile = profile
-	_melee_elapsed = 0.0
-	_melee_contact_pending = true
-	if is_zero_approx(profile.contact_time):
-		_emit_melee_contact()
-
-func _advance_melee_contact(delta: float):
-	if not _melee_contact_pending:
-		return
-	var previous_elapsed := _melee_elapsed
-	_melee_elapsed = minf(_melee_elapsed + delta, _melee_profile.duration)
-	if previous_elapsed < _melee_profile.contact_time and _melee_elapsed >= _melee_profile.contact_time:
-		_emit_melee_contact()
-
-func _emit_melee_contact():
-	var profile := _melee_profile
-	_melee_contact_pending = false
-	_melee_profile = null
-	melee_contact_reached.emit(runtime_id, profile)
+func _emit_melee_contact(profile: MeleeAttackProfile) -> void:
+	if profile != null:
+		melee_contact_reached.emit(runtime_id, profile)
 
 func begin_death_retirement():
-	_melee_contact_pending = false
-	_melee_profile = null
-	_melee_elapsed = 0.0
+	_timed_melee_contact.cancel()
 	super.begin_death_retirement()
 
 func _get_path_velocity(delta: float, goal: Vector3, speed: float, navigation_search_budget: NavigationSearchBudget) -> Vector3:

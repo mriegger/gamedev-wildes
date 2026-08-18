@@ -7,6 +7,7 @@ enum State {
 	MOVE_TO_COVER,
 	HIDE,
 	SPRINT,
+	ATTACK,
 }
 
 var state: State = State.ROAM
@@ -20,22 +21,35 @@ var _cover_retry_remaining: float = 0.0
 var _cover_revalidation_remaining: float = 0.0
 var _cover_search_pending: bool = false
 var _cover_search_in_progress: bool = false
+var _attack_remaining: float = 0.0
+var _attack_cooldown_remaining: float = 0.0
+var _attack_started: bool = false
 
 func _init(definition: SkeletonBehaviorDefinition, seed_value: int):
-	assert(definition != null)
+	assert(definition != null and definition.melee_profile != null)
 	_definition = definition
 	_rng.seed = seed_value
 
 func advance(delta: float, self_position: Vector3, player_position: Vector3, current_position_hidden: bool):
 	assert(is_finite(delta) and delta >= 0.0)
 	assert(self_position.is_finite() and player_position.is_finite())
+	_attack_started = false
+	_attack_cooldown_remaining = maxf(_attack_cooldown_remaining - delta, 0.0)
 	_last_player_position = player_position
+	if _attack_remaining > 0.0:
+		_attack_remaining = maxf(_attack_remaining - delta, 0.0)
+		if is_zero_approx(_attack_remaining):
+			_attack_remaining = 0.0
+		state = State.ATTACK
+		return
 	if not is_player_in_detection_range(self_position, player_position):
 		if state != State.ROAM:
 			_enter_roam(self_position)
 		else:
 			_advance_roam(delta, self_position)
 		return
+	if state == State.ATTACK:
+		_enter_sprint()
 	match state:
 		State.ROAM:
 			if current_position_hidden:
@@ -47,6 +61,9 @@ func advance(delta: float, self_position: Vector3, player_position: Vector3, cur
 		State.SPRINT:
 			_movement_goal = player_position
 			_advance_cover_retry(delta)
+			var profile := _definition.melee_profile
+			if self_position.distance_squared_to(player_position) <= profile.reach * profile.reach and is_zero_approx(_attack_cooldown_remaining):
+				_start_attack()
 
 func get_movement_goal() -> Vector3:
 	return _movement_goal
@@ -106,6 +123,11 @@ func record_cover_revalidated(is_hidden: bool):
 	else:
 		_request_cover_search()
 
+func consume_attack_started() -> bool:
+	var started := _attack_started
+	_attack_started = false
+	return started
+
 func reject_movement_goal(self_position: Vector3):
 	if state == State.ROAM:
 		_select_roam_goal(self_position)
@@ -147,6 +169,16 @@ func _enter_roam(self_position: Vector3):
 	_cover_retry_remaining = 0.0
 	_cover_revalidation_remaining = 0.0
 	_select_roam_goal(self_position)
+
+func _start_attack():
+	var profile := _definition.melee_profile
+	state = State.ATTACK
+	_attack_started = true
+	_attack_remaining = profile.duration
+	_attack_cooldown_remaining = profile.cooldown
+	_cancel_cover_search()
+	_cover_retry_remaining = 0.0
+	_cover_revalidation_remaining = 0.0
 
 func _cancel_cover_search():
 	_cover_search_pending = false

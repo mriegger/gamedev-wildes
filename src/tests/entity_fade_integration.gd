@@ -77,7 +77,7 @@ func _expect_opacity(
 		_expect(is_equal_approx(geometries[index].transparency, expected), "%s geometry %d had transparency %.3f instead of %.3f" % [context, index, geometries[index].transparency, expected])
 
 func _test_species_visual_fades(catalog: EntityCatalog, world: VoxelWorld) -> void:
-	var definition_ids: Array[StringName] = [&"zombie", &"sheep", &"bird"]
+	var definition_ids: Array[StringName] = [&"zombie", &"sheep", &"bird", &"skeleton"]
 	for index in range(definition_ids.size()):
 		var definition := catalog.get_definition(definition_ids[index])
 		var actor := definition.actor_scene.instantiate() as EntityActor
@@ -141,8 +141,38 @@ func _test_instance_isolation(catalog: EntityCatalog, world: VoxelWorld) -> void
 	first.free()
 	second.free()
 
+func _test_skeleton_attack_presentation(catalog: EntityCatalog, world: VoxelWorld) -> void:
+	var definition := catalog.get_definition(&"skeleton")
+	var actor := definition.actor_scene.instantiate() as SkeletonActor
+	get_root().add_child(actor)
+	actor.global_position = Vector3(2.5, FEET_Y, 2.5)
+	actor.setup(19, definition, world, 199, EntityNavigationLimits.new(32, 512, 2))
+	var driver := actor.animation_driver as SkeletonAnimationDriver
+	var profile := (definition.behavior as SkeletonBehaviorDefinition).melee_profile
+	actor.play_attack(profile.duration)
+	driver.advance(profile.duration * 0.5)
+	_expect(driver.get_current_state() == SkeletonAnimationDriver.ATTACK, "skeleton attack did not select its attack presentation")
+	_expect(driver.animator.attack_pose_weight > 0.99, "skeleton attack did not reach its midpoint pose")
+	_expect(absf(driver.animator.left_arm_action.rotation.z) > deg_to_rad(20.0), "skeleton attack did not add its two-arm sweep")
+	_expect(driver.animator.rig_root.position.z > 0.17, "skeleton attack did not lunge forward")
+	actor.play_hit(Vector3.RIGHT)
+	driver.advance(0.0)
+	_expect(driver.get_current_state() == SkeletonAnimationDriver.HIT, "skeleton hit did not replace its attack presentation")
+	_expect(not driver._attacking and not driver.animator._attacking, "skeleton hit retained its active attack")
+	actor.play_attack(profile.duration)
+	driver.advance(profile.duration * 0.5)
+	_expect(driver.get_current_state() == SkeletonAnimationDriver.ATTACK, "skeleton did not restart its attack after a hit")
+	actor.begin_death_retirement()
+	_expect(driver.get_current_state() == SkeletonAnimationDriver.DEATH, "skeleton death did not replace its attack presentation")
+	_expect(not driver._attacking and not driver.animator._attacking, "skeleton death retained its active attack")
+	actor.play_attack(profile.duration)
+	driver.advance(0.0)
+	_expect(driver.get_current_state() == SkeletonAnimationDriver.DEATH, "dead skeleton accepted a new attack presentation")
+	_expect(not driver._attacking and not driver.animator._attacking, "dead skeleton restarted its attack")
+	actor.free()
+
 func _test_species_death_retirement(catalog: EntityCatalog, world: VoxelWorld) -> void:
-	var definition_ids: Array[StringName] = [&"zombie", &"sheep"]
+	var definition_ids: Array[StringName] = [&"zombie", &"sheep", &"skeleton"]
 	for index in range(definition_ids.size()):
 		var definition := catalog.get_definition(definition_ids[index])
 		var actor := definition.actor_scene.instantiate() as EntityActor
@@ -155,18 +185,26 @@ func _test_species_death_retirement(catalog: EntityCatalog, world: VoxelWorld) -
 		var death_seconds := SheepAnimationDriver.DEATH_SECONDS
 		if actor is ZombieActor:
 			var zombie := actor as ZombieActor
-			zombie._arm_melee_contact((definition.behavior as GroundMeleeEnemyBehaviorDefinition).melee_profile)
+			zombie._timed_melee_contact.arm((definition.behavior as GroundMeleeEnemyBehaviorDefinition).melee_profile)
 			death_seconds = ZombieAnimationDriver.DEATH_SECONDS
+		elif actor is SkeletonActor:
+			death_seconds = SkeletonAnimationDriver.DEATH_SECONDS
 		actor.begin_death_retirement()
 		_expect(not actor.is_processing(), "%s kept normal animation processing after lethal retirement" % definition.id)
 		_expect(actor.velocity.is_zero_approx(), "%s retained movement velocity after lethal retirement" % definition.id)
-		var death_state := (actor.animation_driver as ZombieAnimationDriver).get_current_state() if actor is ZombieActor else (actor.animation_driver as SheepAnimationDriver).get_current_state()
+		var death_state: StringName
+		if actor is ZombieActor:
+			death_state = (actor.animation_driver as ZombieAnimationDriver).get_current_state()
+		elif actor is SkeletonActor:
+			death_state = (actor.animation_driver as SkeletonAnimationDriver).get_current_state()
+		else:
+			death_state = (actor.animation_driver as SheepAnimationDriver).get_current_state()
 		_expect(death_state == &"Death", "%s did not enter its death state" % definition.id)
 		_expect(not actor.animation_driver.is_death_complete(), "%s death pose completed at retirement start" % definition.id)
 		_expect(is_equal_approx(actor.get_visual_opacity(), 1.0), "%s death pose began with an opacity change" % definition.id)
 		_expect(not actor.death_poof.emitting and not actor.death_poof.has_played(), "%s death poof began before the pose completed" % definition.id)
 		if actor is ZombieActor:
-			_expect(not (actor as ZombieActor)._melee_contact_pending, "zombie retained a pending attack after lethal retirement")
+			_expect(not (actor as ZombieActor)._timed_melee_contact.is_pending(), "zombie retained a pending attack after lethal retirement")
 		_expect(not actor.advance_retirement(death_seconds * 0.5), "%s retirement completed during its death pose" % definition.id)
 		_expect(not actor.animation_driver.is_death_complete(), "%s death pose completed before its configured duration" % definition.id)
 		_expect(is_equal_approx(actor.get_visual_opacity(), 1.0), "%s faded before its death pose completed" % definition.id)
@@ -174,6 +212,9 @@ func _test_species_death_retirement(catalog: EntityCatalog, world: VoxelWorld) -
 		if actor is ZombieActor:
 			var zombie_animation := actor.animation_driver as ZombieAnimationDriver
 			_expect(absf(zombie_animation.animator.rotation.x - zombie_animation._visual_origin_rotation.x) > deg_to_rad(1.0), "zombie did not buckle into its fall pose")
+		elif actor is SkeletonActor:
+			var skeleton_animation := actor.animation_driver as SkeletonAnimationDriver
+			_expect(absf(skeleton_animation.animator.rotation.x - skeleton_animation._visual_origin_rotation.x) > deg_to_rad(1.0), "skeleton did not fold into its fall pose")
 		else:
 			var sheep_animation := actor.animation_driver as SheepAnimationDriver
 			_expect(absf(sheep_animation._rig_root.rotation.z - sheep_animation._rig_origin_rotation.z) > deg_to_rad(1.0), "sheep did not rotate into its side-collapse pose")
@@ -182,7 +223,12 @@ func _test_species_death_retirement(catalog: EntityCatalog, world: VoxelWorld) -
 		_expect(actor.animation_driver.is_death_complete(), "%s death pose did not complete at its configured duration" % definition.id)
 		_expect(actor.death_poof.emitting and actor.death_poof.has_played(), "%s death pose completion did not emit its poof" % definition.id)
 		_expect(is_zero_approx(actor.death_poof._elapsed), "%s death poof did not begin with the fade" % definition.id)
-		death_state = (actor.animation_driver as ZombieAnimationDriver).get_current_state() if actor is ZombieActor else (actor.animation_driver as SheepAnimationDriver).get_current_state()
+		if actor is ZombieActor:
+			death_state = (actor.animation_driver as ZombieAnimationDriver).get_current_state()
+		elif actor is SkeletonActor:
+			death_state = (actor.animation_driver as SkeletonAnimationDriver).get_current_state()
+		else:
+			death_state = (actor.animation_driver as SheepAnimationDriver).get_current_state()
 		_expect(death_state == &"Death", "%s hit reaction replaced its death pose" % definition.id)
 		var fade_out_seconds := actor.visual_fader.fade_out_seconds
 		_expect(not actor.advance_retirement(fade_out_seconds * 0.5), "%s fade completed before its configured duration" % definition.id)
@@ -306,6 +352,7 @@ func _run() -> void:
 	var world := _make_world()
 	_test_species_visual_fades(catalog, world)
 	_test_instance_isolation(catalog, world)
+	_test_skeleton_attack_presentation(catalog, world)
 	_test_species_death_retirement(catalog, world)
 	_test_retirement_waits_for_poof(catalog, world)
 	_test_oversized_death_retirement_delta(catalog, world)

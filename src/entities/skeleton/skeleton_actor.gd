@@ -2,6 +2,7 @@ extends EntityActor
 class_name SkeletonActor
 
 const VoxelCoverSearchType := preload("res://entities/skeleton/voxel_cover_search.gd")
+const TimedMeleeContactType := preload("res://combat/timed_melee_contact.gd")
 
 var brain: SkeletonBrain
 
@@ -9,6 +10,7 @@ var _behavior: SkeletonBehaviorDefinition
 var _skeleton_animation: SkeletonAnimationDriver
 var _path_follower: VoxelPathFollower
 var _cover_search: VoxelCoverSearchType
+var _timed_melee_contact := TimedMeleeContactType.new()
 
 func supports_behavior(behavior: EntityBehaviorDefinition) -> bool:
 	return behavior is SkeletonBehaviorDefinition
@@ -23,6 +25,7 @@ func setup(
 	super.setup(p_runtime_id, p_definition, p_voxel_space, behavior_seed, navigation_limits)
 	_behavior = p_definition.behavior as SkeletonBehaviorDefinition
 	assert(_behavior != null)
+	_timed_melee_contact.cancel()
 	brain = SkeletonBrain.new(_behavior, behavior_seed)
 	_path_follower = VoxelPathFollower.new(
 		voxel_space,
@@ -48,12 +51,17 @@ func tick(
 	navigation_search_budget: NavigationSearchBudget,
 ):
 	assert(brain != null and voxel_space != null and observation != null)
+	_emit_melee_contact(_timed_melee_contact.advance(delta))
 	var current_position_hidden := false
 	if brain.needs_detection_occlusion_check(global_position, observation.player_position):
 		current_position_hidden = _is_hidden(global_position, observation)
 	var previous_state := brain.state
 	brain.advance(delta, global_position, observation.player_position, current_position_hidden)
 	_apply_state_change(previous_state)
+	if brain.consume_attack_started():
+		var melee_profile := _behavior.melee_profile
+		play_attack(melee_profile.duration)
+		_emit_melee_contact(_timed_melee_contact.arm(melee_profile))
 
 	if brain.is_cover_revalidation_due():
 		previous_state = brain.state
@@ -113,6 +121,15 @@ func tick(
 		previous_state = brain.state
 		brain.record_cover_arrival(_is_hidden(global_position, observation))
 		_apply_state_change(previous_state)
+
+
+func _emit_melee_contact(profile: MeleeAttackProfile) -> void:
+	if profile != null:
+		melee_contact_reached.emit(runtime_id, profile)
+
+func begin_death_retirement():
+	_timed_melee_contact.cancel()
+	super.begin_death_retirement()
 
 func _advance_cover_search(
 	observation: EntityTargetObservation,

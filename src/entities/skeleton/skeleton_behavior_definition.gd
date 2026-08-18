@@ -7,6 +7,7 @@ class_name SkeletonBehaviorDefinition
 @export_range(0.0, 20.0, 0.1) var jump_velocity: float = 7.0
 @export_range(1.0, 64.0, 0.5) var detection_range: float = 30.0
 @export_range(1.0, 64.0, 0.5) var roam_radius: float = 30.0
+@export var melee_profile: MeleeAttackProfile
 @export_range(0.5, 15.0, 0.1) var roam_goal_seconds: float = 4.0
 @export_range(0.1, 4.0, 0.05) var repath_seconds: float = 0.5
 @export_range(0.1, 4.0, 0.05) var cover_retry_seconds: float = 1.0
@@ -28,6 +29,9 @@ func validate(source: String) -> bool:
 		valid = false
 	if not is_finite(roam_radius) or roam_radius <= 0.0:
 		push_error("[SkeletonBehaviorDefinition] Invalid roam radius at %s" % source)
+		valid = false
+	if melee_profile == null or not melee_profile.validate(source):
+		push_error("[SkeletonBehaviorDefinition] Invalid melee profile at %s" % source)
 		valid = false
 	if not is_finite(roam_goal_seconds) or roam_goal_seconds <= 0.0 or not is_finite(repath_seconds) or repath_seconds <= 0.0:
 		push_error("[SkeletonBehaviorDefinition] Invalid navigation timing at %s" % source)

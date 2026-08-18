@@ -68,6 +68,15 @@ func _make_one_bird_catalog() -> EntityCatalog:
 	catalog.definitions = definitions
 	return catalog
 
+func _make_one_skeleton_catalog() -> EntityCatalog:
+	var source := load("res://entities/definitions/skeleton.tres") as EntityDefinition
+	var definition := source.duplicate(true) as EntityDefinition
+	definition.ambient_max_active = 1
+	var definitions: Array[EntityDefinition] = [definition]
+	var catalog := EntityCatalog.new()
+	catalog.definitions = definitions
+	return catalog
+
 func _make_combat_catalog(zombie_count: int, sheep_count: int) -> EntityCatalog:
 	var definitions: Array[EntityDefinition] = []
 	if sheep_count > 0:
@@ -150,18 +159,23 @@ func _run() -> void:
 	var sword_profile := load("res://combat/profiles/copper_sword_melee.tres") as MeleeAttackProfile
 	var hammer_profile := load("res://combat/profiles/copper_hammer_melee.tres") as MeleeAttackProfile
 	var zombie_profile := load("res://combat/profiles/zombie_melee.tres") as MeleeAttackProfile
+	var skeleton_profile := load("res://combat/profiles/skeleton_melee.tres") as MeleeAttackProfile
 	_expect(sword_profile != null and sword_profile.validate(sword_profile.resource_path), "copper sword profile is invalid")
 	_expect(hammer_profile != null and hammer_profile.validate(hammer_profile.resource_path), "copper hammer profile is invalid")
 	_expect(zombie_profile != null and zombie_profile.validate(zombie_profile.resource_path), "zombie profile is invalid")
+	_expect(skeleton_profile != null and skeleton_profile.validate(skeleton_profile.resource_path), "skeleton profile is invalid")
 	_expect(sword_profile.id == &"copper_sword_melee", "copper sword attack ID changed")
 	_expect(zombie_profile.id == &"zombie_melee", "zombie attack ID changed")
+	_expect(skeleton_profile.id == &"skeleton_melee", "skeleton attack ID changed")
 	_expect(is_equal_approx(sword_profile.base_damage, 10.0), "copper sword base damage changed")
 	_expect(is_equal_approx(hammer_profile.damage_multiplier, 1.0), "copper hammer base damage multiplier changed")
 	_expect(is_equal_approx(hammer_profile.reach, 4.0) and is_equal_approx(hammer_profile.sweep_degrees, 360.0), "copper hammer radius changed")
 	_expect(hammer_profile.acquire_targets_on_contact and hammer_profile.knockback_speed > 0.0, "copper hammer impact behavior changed")
 	_expect(is_equal_approx(zombie_profile.base_damage, 15.0), "zombie base damage changed")
+	_expect(is_equal_approx(skeleton_profile.base_damage, 5.0), "skeleton base damage changed")
 	_expect(is_equal_approx(sword_profile.sweep_degrees, 120.0), "copper sword sweep changed")
 	_expect(is_zero_approx(zombie_profile.sweep_degrees), "zombie attack became a sweep")
+	_expect(is_zero_approx(skeleton_profile.sweep_degrees), "skeleton attack became a sweep")
 	_expect(MeleeAttackProfile.is_valid_sweep_degrees(0.0), "zero-degree sweep validation was rejected")
 	_expect(MeleeAttackProfile.is_valid_sweep_degrees(360.0), "full-circle sweep validation was rejected")
 	_expect(not MeleeAttackProfile.is_valid_sweep_degrees(-0.1), "negative sweep validation was accepted")
@@ -177,9 +191,11 @@ func _run() -> void:
 	_expect(is_equal_approx(hammer_profile.calculate_damage_at_distance(10.0, 4.0, hammer_profile.reach * 0.5), configured_sword_damage), "hammer midpoint damage does not match sword damage")
 	_expect(is_equal_approx(hammer_profile.calculate_damage_at_distance(10.0, 4.0, hammer_profile.reach), configured_sword_damage * 0.5), "hammer edge damage is not half of sword damage")
 	_expect(is_equal_approx(zombie_profile.calculate_damage(5.0, 4.0), 16.0), "zombie damage formula is incorrect")
+	_expect(is_equal_approx(skeleton_profile.calculate_damage(5.0, 0.0), 10.0), "skeleton unarmored damage formula is incorrect")
 	_expect(is_equal_approx(sword_profile.calculate_damage(0.0, 100.0), 1.0), "damage did not clamp to its minimum")
 	_expect(sword_profile.cooldown >= sword_profile.duration, "sword cooldown is shorter than its attack")
 	_expect(zombie_profile.cooldown >= zombie_profile.duration, "zombie cooldown is shorter than its attack")
+	_expect(skeleton_profile.cooldown >= skeleton_profile.duration, "skeleton cooldown is shorter than its attack")
 	var zombie_definition := load("res://entities/definitions/zombie.tres") as EntityDefinition
 	var overkill_stats := ActorStats.new(zombie_definition.stats_definition)
 	_expect(is_equal_approx(overkill_stats.damage(1000.0), 80.0), "overkill damage did not clamp to remaining HP")
@@ -388,14 +404,14 @@ func _run() -> void:
 	var zombie_actor := far_actor as ZombieActor
 	contact_count_before = _contacts.size()
 	player_hp_before = player_stats.current_hp
-	zombie_actor._arm_melee_contact(zombie_profile)
-	zombie_actor._advance_melee_contact(zombie_profile.contact_time - 0.01)
+	zombie_actor._timed_melee_contact.arm(zombie_profile)
+	zombie_actor._emit_melee_contact(zombie_actor._timed_melee_contact.advance(zombie_profile.contact_time - 0.01))
 	_expect(_contacts.size() == contact_count_before, "zombie contact fired before its profile time")
 	_expect(is_equal_approx(player_stats.current_hp, player_hp_before), "zombie swing dealt damage before its profile time")
-	zombie_actor._advance_melee_contact(0.02)
+	zombie_actor._emit_melee_contact(zombie_actor._timed_melee_contact.advance(0.02))
 	_expect(_contacts.size() == contact_count_before + 1, "zombie contact did not fire when its profile time was crossed")
 	_expect(is_equal_approx(player_stats.current_hp, player_hp_before - zombie_damage), "zombie swing applied incorrect damage")
-	zombie_actor._advance_melee_contact(zombie_profile.duration)
+	zombie_actor._emit_melee_contact(zombie_actor._timed_melee_contact.advance(zombie_profile.duration))
 	_expect(_contacts.size() == contact_count_before + 1, "one zombie swing contacted more than once")
 	_expect(is_equal_approx(player_stats.current_hp, player_hp_before - zombie_damage), "one zombie swing dealt damage more than once")
 
@@ -451,7 +467,7 @@ func _run() -> void:
 		_expect(combat.try_commit_player_contacts(_single_target(target_id), ray_origin, ray_direction, sword_profile, &"copper_sword"), "nonlethal zombie hit did not commit")
 		_expect(is_equal_approx(coordinator.get_runtime().get_current_hp(target_id), expected_hp), "zombie did not retain the expected HP before its fifth hit")
 	var retiring_actor: WeakRef = weakref(far_actor)
-	zombie_actor._arm_melee_contact(zombie_profile)
+	zombie_actor._timed_melee_contact.arm(zombie_profile)
 	zombie_actor.velocity = Vector3(1.0, 2.0, 3.0)
 	contact_count_before = _contacts.size()
 	player_hp_before = player_stats.current_hp
@@ -464,14 +480,14 @@ func _run() -> void:
 	_expect(coordinator.get_runtime().get_presented_actor(target_id) == zombie_actor, "lethal damage hid the retiring actor from combat presentation")
 	_expect(not zombie_actor.health_bar.visible, "defeated enemy retained its health bar")
 	_expect(zombie_actor.velocity.is_zero_approx(), "lethal damage did not freeze zombie movement")
-	_expect(not zombie_actor._melee_contact_pending, "lethal damage did not cancel the zombie's pending attack")
+	_expect(not zombie_actor._timed_melee_contact.is_pending(), "lethal damage did not cancel the zombie's pending attack")
 	_expect(zombie_actor._zombie_animation.get_current_state() == ZombieAnimationDriver.DEATH, "lethal damage did not start the zombie death pose")
 	coordinator._spawn_elapsed = WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS
 	coordinator.tick(0.0, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
 	_expect(coordinator.get_runtime().get_active_count() == 1, "death presentation suppressed immediate replacement spawning")
 	_expect(coordinator.get_runtime()._retiring.has(target_id), "replacement spawning discarded the zombie death presentation")
 	contact_count_before = _contacts.size()
-	zombie_actor._advance_melee_contact(zombie_profile.contact_time + 0.01)
+	_expect(zombie_actor._timed_melee_contact.advance(zombie_profile.contact_time + 0.01) == null, "retiring zombie retained a timed contact")
 	_expect(_contacts.size() == contact_count_before, "retiring zombie completed a pending attack")
 	_expect(is_equal_approx(player_stats.current_hp, player_hp_before), "retiring zombie dealt pending attack damage")
 	var fade_out_seconds := zombie_actor.visual_fader.fade_out_seconds
@@ -487,6 +503,7 @@ func _run() -> void:
 	enemy_feedback.queue_free()
 	await process_frame
 	await _cleanup(combat, coordinator, player, camera)
+	await _test_skeleton_timed_melee(world, skeleton_profile)
 	await _test_sheep_damage(world, sword_profile)
 	await _test_untargetable_bird(world, sword_profile)
 	await _test_zero_degree_compatibility(world, sword_profile)
@@ -502,6 +519,69 @@ func _run() -> void:
 	var orphan_count := int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
 	_expect(orphan_count == 0, "orphan count ended at %d" % orphan_count)
 	_finish()
+
+func _test_skeleton_timed_melee(world: VoxelWorld, profile: MeleeAttackProfile) -> void:
+	var coordinator := WorldEntityCoordinator.new()
+	var combat := MeleeCombatCoordinator.new()
+	var player := (load("res://player/player.tscn") as PackedScene).instantiate() as PlayerMotor
+	var camera := Camera3D.new()
+	root.add_child(coordinator)
+	root.add_child(combat)
+	root.add_child(player)
+	root.add_child(camera)
+	player.global_position = Vector3(0.5, FEET_Y, 0.5)
+	player.set_physics_process(false)
+	player.interactor.set_physics_process(false)
+	player.animation_driver.set_process(false)
+	coordinator.setup(_make_one_skeleton_catalog(), world, 7791, _always_ready)
+	var player_stats := ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
+	_expect(player_stats.set_base_value(&"defense", 0.0), "skeleton fixture defense setup failed")
+	combat.setup(world, player, player_stats, coordinator.get_runtime())
+	coordinator.get_runtime().entity_melee_contact_reached.connect(combat.try_commit_entity_contact)
+	combat.melee_outcome_committed.connect(coordinator.get_runtime().record_melee_outcome)
+	combat.melee_outcome_committed.connect(_on_melee_contact)
+	var observation := EntityTargetObservation.create(
+		player.global_position,
+		player.global_position + Vector3(0.0, 8.0, 8.0),
+		Vector3(0.0, -1.0, -1.0).normalized(),
+		Vector3.RIGHT,
+	)
+	coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, observation, 20.0)
+	var actors := coordinator.get_runtime().get_active_actors()
+	_expect(actors.size() == 1 and actors[0] is SkeletonActor, "Skeleton combat fixture did not spawn one Skeleton")
+	if actors.size() != 1 or not actors[0] is SkeletonActor:
+		await _cleanup(combat, coordinator, player, camera)
+		return
+	var skeleton := actors[0] as SkeletonActor
+	skeleton.global_position = player.global_position + Vector3(0.0, 0.0, -1.0)
+	skeleton.velocity = Vector3.ZERO
+	skeleton.on_ground = true
+	skeleton.brain.advance(0.0, skeleton.global_position, skeleton.global_position + Vector3(31.0, 0.0, 0.0), false)
+	skeleton.brain.advance(0.0, skeleton.global_position, player.global_position, false)
+	_expect(skeleton.brain.needs_cover_search(), "Skeleton melee fixture did not enter cover search")
+	skeleton.brain.record_cover_search_started()
+	skeleton.brain.record_cover_exhausted()
+	var contact_count_before := _contacts.size()
+	var player_hp_before := player_stats.current_hp
+	coordinator.tick(0.0, observation, 20.0)
+	_expect(skeleton.brain.state == SkeletonBrain.State.ATTACK, "production Skeleton actor did not enter its attack state")
+	_expect(skeleton._timed_melee_contact.is_pending(), "production Skeleton attack did not arm timed contact")
+	skeleton.animation_driver.advance(0.0)
+	_expect(skeleton._skeleton_animation.get_current_state() == SkeletonAnimationDriver.ATTACK, "production Skeleton attack did not start attack presentation")
+	coordinator.tick(profile.contact_time - 0.01, observation, 20.0)
+	_expect(_contacts.size() == contact_count_before, "Skeleton contact fired before its profile time")
+	_expect(is_equal_approx(player_stats.current_hp, player_hp_before), "Skeleton dealt damage before contact time")
+	coordinator.tick(0.02, observation, 20.0)
+	_expect(_contacts.size() == contact_count_before + 1, "Skeleton contact did not fire when its profile time was crossed")
+	_expect(is_equal_approx(player_stats.current_hp, player_hp_before - 10.0), "Skeleton contact did not deal 10 unarmored damage")
+	var contact: MeleeContactType = _contacts.back()
+	_expect(contact.source_runtime_id == skeleton.runtime_id and contact.source_definition_id == &"skeleton", "Skeleton contact source IDs are wrong")
+	_expect(contact.attack_id == profile.id and contact.target_definition_id == &"player", "Skeleton contact payload is wrong")
+	_expect(is_equal_approx((_outcomes.back() as MeleeOutcome).applied_damage, 10.0), "Skeleton combat outcome recorded incorrect damage")
+	coordinator.tick(profile.duration, observation, 20.0)
+	_expect(_contacts.size() == contact_count_before + 1, "one Skeleton swing contacted more than once")
+	_expect(is_equal_approx(player_stats.current_hp, player_hp_before - 10.0), "one Skeleton swing dealt damage more than once")
+	await _cleanup(combat, coordinator, player, camera)
 
 func _test_player_death_screen() -> void:
 	var scene := load("res://ui/screens/death/player_death_screen.tscn") as PackedScene

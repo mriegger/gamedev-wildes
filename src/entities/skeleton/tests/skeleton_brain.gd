@@ -14,8 +14,14 @@ func _expect(condition: bool, message: String) -> void:
 	_failures += 1
 	push_error("[skeleton_brain] FAIL: %s" % message)
 
+func _make_behavior() -> SkeletonBehaviorDefinition:
+	var behavior := SkeletonBehaviorDefinitionType.new() as SkeletonBehaviorDefinition
+	behavior.melee_profile = load("res://combat/profiles/skeleton_melee.tres") as MeleeAttackProfile
+	assert(behavior.melee_profile != null)
+	return behavior
+
 func _test_definition_defaults() -> void:
-	var behavior := SkeletonBehaviorDefinitionType.new()
+	var behavior := _make_behavior()
 	_expect(behavior.validate("test"), "default behavior definition was rejected")
 	_expect(is_equal_approx(behavior.roam_speed, 2.4), "roam speed changed")
 	_expect(is_equal_approx(behavior.sprint_speed, 5.5), "sprint speed changed")
@@ -23,6 +29,12 @@ func _test_definition_defaults() -> void:
 	_expect(is_equal_approx(behavior.jump_velocity, 7.0), "jump velocity changed")
 	_expect(is_equal_approx(behavior.detection_range, 30.0), "detection range changed")
 	_expect(is_equal_approx(behavior.roam_radius, 30.0), "roam radius changed")
+	_expect(behavior.melee_profile.id == &"skeleton_melee", "melee profile ID changed")
+	_expect(is_equal_approx(behavior.melee_profile.duration, 0.55), "attack duration changed")
+	_expect(is_equal_approx(behavior.melee_profile.contact_time, 0.28), "attack contact time changed")
+	_expect(is_equal_approx(behavior.melee_profile.cooldown, 1.1), "attack cooldown changed")
+	_expect(is_equal_approx(behavior.melee_profile.reach, 1.4), "attack reach changed")
+	_expect(is_equal_approx(behavior.melee_profile.base_damage, 5.0), "attack base damage changed")
 	_expect(is_equal_approx(behavior.roam_goal_seconds, 4.0), "roam goal duration changed")
 	_expect(is_equal_approx(behavior.repath_seconds, 0.5), "repath duration changed")
 	_expect(is_equal_approx(behavior.cover_retry_seconds, 1.0), "cover retry duration changed")
@@ -30,11 +42,12 @@ func _test_definition_defaults() -> void:
 	var configured_behavior := load("res://entities/skeleton/skeleton_behavior.tres") as SkeletonBehaviorDefinition
 	_expect(configured_behavior != null and configured_behavior.validate(configured_behavior.resource_path), "configured behavior definition was rejected")
 	_expect(is_equal_approx(configured_behavior.sprint_speed, 5.5), "configured sprint speed changed")
+	_expect(configured_behavior.melee_profile == behavior.melee_profile, "configured behavior did not use the canonical melee profile")
 	_expect(is_equal_approx(configured_behavior.cover_retry_seconds, 1.0), "configured cover retry changed")
 	_expect(is_equal_approx(configured_behavior.cover_revalidation_seconds, 0.125), "configured cover revalidation changed")
 
 func _test_deterministic_drifting_roam() -> void:
-	var behavior := SkeletonBehaviorDefinitionType.new()
+	var behavior := _make_behavior()
 	var origin := Vector3(2.5, 7.0, 3.5)
 	var first := SkeletonBrainType.new(behavior, 451)
 	var second := SkeletonBrainType.new(behavior, 451)
@@ -63,7 +76,7 @@ func _test_deterministic_drifting_roam() -> void:
 	_expect(replacement_distance >= behavior.roam_radius * 0.35 and replacement_distance <= behavior.roam_radius, "replacement roam goal exceeded its configured radius")
 
 func _test_detection_and_initial_occlusion() -> void:
-	var behavior := SkeletonBehaviorDefinitionType.new()
+	var behavior := _make_behavior()
 	var brain := SkeletonBrainType.new(behavior, 810)
 	var self_position := Vector3(4.5, 7.0, -2.5)
 	var outside_player := self_position + Vector3(30.01, 100.0, 0.0)
@@ -90,7 +103,7 @@ func _test_detection_and_initial_occlusion() -> void:
 	_expect(not hidden_brain.is_cover_revalidation_due(), "new hide state requested immediate revalidation")
 
 func _test_search_sprint_and_retry_boundaries() -> void:
-	var behavior := SkeletonBehaviorDefinitionType.new()
+	var behavior := _make_behavior()
 	var brain := SkeletonBrainType.new(behavior, 928)
 	var self_position := Vector3(0.5, 1.0, 0.5)
 	var nearby_player := self_position + Vector3(10.0, 0.0, 0.0)
@@ -134,7 +147,7 @@ func _test_search_sprint_and_retry_boundaries() -> void:
 	_expect(not brain.needs_cover_search() and not brain.is_cover_search_in_progress(), "cancelled cover search retained executor state")
 
 func _test_cover_revalidation_boundaries() -> void:
-	var behavior := SkeletonBehaviorDefinitionType.new()
+	var behavior := _make_behavior()
 	var brain := SkeletonBrainType.new(behavior, 1264)
 	var self_position := Vector3(0.5, 1.0, 0.5)
 	var nearby_player := self_position + Vector3(10.0, 0.0, 0.0)
@@ -173,12 +186,40 @@ func _test_cover_revalidation_boundaries() -> void:
 	brain.record_cover_revalidated(false)
 	_expect(brain.state == SkeletonBrainType.State.SEARCH_COVER and brain.needs_cover_search(), "exposed hidden position did not request foreground search")
 
+func _test_attack_timing_and_cooldown() -> void:
+	var behavior := _make_behavior()
+	var profile := behavior.melee_profile
+	var brain := SkeletonBrainType.new(behavior, 1541)
+	var self_position := Vector3(0.5, 1.0, 0.5)
+	var player_position := self_position + Vector3(profile.reach, 0.0, 0.0)
+	brain.advance(0.0, self_position, player_position, false)
+	brain.record_cover_search_started()
+	brain.record_cover_exhausted()
+	brain.advance(0.0, self_position, player_position, false)
+	_expect(brain.state == SkeletonBrainType.State.ATTACK, "sprinting Skeleton did not attack at melee reach")
+	_expect(brain.consume_attack_started(), "new Skeleton attack did not report its start")
+	_expect(not brain.consume_attack_started(), "Skeleton attack start was consumed more than once")
+	_expect(not brain.needs_cover_search() and not brain.is_cover_search_in_progress(), "Skeleton attack retained cover work")
+
+	var moved_player := player_position + Vector3(8.0, 0.0, 3.0)
+	brain.advance(profile.duration - 0.01, self_position, moved_player, false)
+	_expect(brain.state == SkeletonBrainType.State.ATTACK, "Skeleton attack ended before its duration")
+	_expect(not brain.consume_attack_started(), "active Skeleton attack reported another start")
+	brain.advance(0.01, self_position, moved_player, false)
+	_expect(brain.state == SkeletonBrainType.State.ATTACK, "Skeleton attack state was not retained on its completion tick")
+	brain.advance(0.0, self_position, player_position, false)
+	_expect(brain.state == SkeletonBrainType.State.SPRINT, "Skeleton attack cooldown did not suppress an immediate repeat")
+	brain.advance(profile.cooldown - profile.duration, self_position, player_position, false)
+	_expect(brain.state == SkeletonBrainType.State.ATTACK, "Skeleton attack did not restart at its cooldown boundary")
+	_expect(brain.consume_attack_started(), "restarted Skeleton attack did not report its start")
+
 func _run() -> void:
 	_test_definition_defaults()
 	_test_deterministic_drifting_roam()
 	_test_detection_and_initial_occlusion()
 	_test_search_sprint_and_retry_boundaries()
 	_test_cover_revalidation_boundaries()
+	_test_attack_timing_and_cooldown()
 	if _failures == 0:
 		print("SKELETON_BRAIN PASS")
 		quit(0)

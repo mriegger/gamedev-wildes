@@ -5,6 +5,7 @@ const IDLE: StringName = &"Idle"
 const WALK: StringName = &"Walk"
 const SPRINT: StringName = &"Sprint"
 const HIDE: StringName = &"Hide"
+const ATTACK: StringName = &"Attack"
 const HIT: StringName = &"Hit"
 const DEATH: StringName = &"Death"
 const HIT_SECONDS: float = 0.18
@@ -15,6 +16,10 @@ var _animation_state: ActorAnimationState = ActorAnimationState.new()
 var _current_state: StringName = IDLE
 var _hit_elapsed: float = HIT_SECONDS
 var _hit_direction: Vector3 = Vector3.BACK
+var _attacking: bool = false
+var _attack_elapsed: float = 0.0
+var _attack_duration: float = 0.0
+var _attack_direction: int = 1
 var _hiding: bool = false
 var _sprinting: bool = false
 var _dying: bool = false
@@ -40,6 +45,14 @@ func setup(p_actor: Node3D):
 
 func play_attack(duration: float):
 	assert(duration > 0.0)
+	if _dying:
+		return
+	_attacking = true
+	_attack_elapsed = 0.0
+	_attack_duration = duration
+	_attack_direction *= -1
+	_hit_elapsed = HIT_SECONDS
+	animator.play_attack(duration, _attack_direction)
 
 func set_hiding(hiding: bool):
 	_hiding = hiding
@@ -52,14 +65,22 @@ func play_hit(local_hit_direction: Vector3 = Vector3.BACK):
 		return
 	_hit_direction = local_hit_direction.normalized() if not local_hit_direction.is_zero_approx() else Vector3.BACK
 	_hit_elapsed = 0.0
+	_attacking = false
+	_attack_elapsed = 0.0
+	_attack_duration = 0.0
+	animator.cancel_attack()
 
 func play_death():
 	_dying = true
 	_death_elapsed = 0.0
 	_hit_elapsed = HIT_SECONDS
 	_sprinting = false
+	_attacking = false
+	_attack_elapsed = 0.0
+	_attack_duration = 0.0
 	_hiding = false
 	_current_state = DEATH
+	animator.cancel_attack()
 
 func is_death_complete() -> bool:
 	return _dying and _death_elapsed >= DEATH_SECONDS
@@ -90,7 +111,8 @@ func advance(delta: float):
 	var grounded: bool = actor.get(&"on_ground")
 	_animation_state.set_motion(local_velocity, speed_ratio, _sprinting and planar_speed > 0.1, grounded, 0.0, turn_rate, false, Vector3.ZERO)
 	animator.advance_animation(delta)
-	_advance_hit_timer(delta)
+	_advance_action_timers(delta)
+	_apply_attack_pose()
 	_apply_hit_pose()
 	_apply_hide_pose()
 	_select_state(planar_speed)
@@ -98,9 +120,22 @@ func advance(delta: float):
 func get_current_state() -> StringName:
 	return _current_state
 
-func _advance_hit_timer(delta: float):
+func _advance_action_timers(delta: float):
+	if _attacking:
+		_attack_elapsed += delta
+		if _attack_elapsed >= _attack_duration:
+			_attacking = false
 	if _hit_elapsed < HIT_SECONDS:
 		_hit_elapsed = minf(_hit_elapsed + delta, HIT_SECONDS)
+
+func _apply_attack_pose():
+	if not _attacking:
+		return
+	var weight := animator.attack_pose_weight
+	animator.left_arm_action.rotation.x -= deg_to_rad(52.0) * weight
+	animator.left_arm_action.rotation.z += deg_to_rad(26.0 * _attack_direction) * weight
+	animator.right_arm_action.rotation.x -= deg_to_rad(10.0) * weight
+	animator.rig_root.position.z += 0.18 * weight
 
 func _apply_hit_pose():
 	if _hit_elapsed >= HIT_SECONDS:
@@ -133,6 +168,8 @@ func _apply_death_pose():
 func _select_state(planar_speed: float):
 	if _hit_elapsed < HIT_SECONDS:
 		_current_state = HIT
+	elif _attacking:
+		_current_state = ATTACK
 	elif _hiding:
 		_current_state = HIDE
 	elif _sprinting and planar_speed > 0.1:
