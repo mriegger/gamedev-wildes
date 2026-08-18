@@ -560,6 +560,11 @@ jobs:
           bash .github/scripts/run_godot_check.sh \
             30 "STONE_GOLEM_SLAM_INTEGRATION PASS" /tmp/stone_golem_slam.log -- \
             godot --headless --path src --script res://entities/stone_golem/tests/stone_golem_slam_integration.gd
+      - name: Run Stone Golem slam hardening integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "STONE_GOLEM_SLAM_HARDENING_INTEGRATION PASS" /tmp/stone_golem_slam_hardening.log -- \
+            godot --headless --path src --script res://entities/stone_golem/tests/stone_golem_slam_hardening_integration.gd
 
 
 
