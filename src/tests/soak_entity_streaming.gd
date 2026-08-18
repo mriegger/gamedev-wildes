@@ -12,8 +12,14 @@ const NIGHT_TIME: float = 20.0
 const MAX_CELLS_PER_ACTOR: int = 8
 const PATH_RADIUS: int = 12
 const PATH_NODE_BUDGET: int = 64
-const MIXED_NIGHT_STEPS: int = 8
+const MIXED_NIGHT_STEPS: int = 120
 const MIXED_NIGHT_DELTA: float = 0.05
+const STREAM_RETIRE_SECONDS: float = 0.4
+const EXPECTED_STONE_GOLEM_COUNT: int = 2
+const ZOMBIE_OFFSETS: Array[Vector2i] = [Vector2i(0, -10)]
+const SKELETON_OFFSETS: Array[Vector2i] = [Vector2i(-10, -8), Vector2i(0, -12), Vector2i(10, -8)]
+const STONE_GOLEM_OFFSETS: Array[Vector2i] = [Vector2i(-8, 0), Vector2i(8, 0)]
+const SHEEP_OFFSETS: Array[Vector2i] = [Vector2i(-14, 8), Vector2i(-7, 14), Vector2i(7, 14), Vector2i(14, 8), Vector2i(-14, -14), Vector2i(14, -14)]
 const STREAM_REGIONS: Array[Vector2i] = [
 	Vector2i(-3, -2),
 	Vector2i(-1, 1),
@@ -29,6 +35,13 @@ var _failures: int = 0
 var _streaming_enabled: bool = true
 var _ready_region: Vector2i = STREAM_REGIONS[0]
 var _instance_by_runtime_id: Dictionary = {}
+var _stone_golem_radial_contacts: Dictionary = {}
+var _melee_contact_count: int = 0
+var _radial_contact_count: int = 0
+var _max_navigation_searches: int = 0
+var _frames_with_navigation_search: int = 0
+var _full_combat_regions: int = 0
+var _mid_action_stream_loss_regions: int = 0
 
 func _init() -> void:
 	call_deferred(&"_run")
@@ -38,6 +51,25 @@ func _expect(condition: bool, message: String) -> void:
 		return
 	_failures += 1
 	push_error("[soak_entity_streaming] FAIL: %s" % message)
+
+func _consume_melee_contact(_source_runtime_id: int, _profile: MeleeAttackProfile) -> void:
+	_melee_contact_count += 1
+
+func _consume_radial_contact(source_runtime_id: int, profile: MeleeAttackProfile) -> void:
+	_radial_contact_count += 1
+	if profile.id != &"stone_golem_slam":
+		return
+	_stone_golem_radial_contacts[source_runtime_id] = int(_stone_golem_radial_contacts.get(source_runtime_id, 0)) + 1
+
+func _observation(player_position: Vector3) -> EntityTargetObservation:
+	var observation := EntityTargetObservation.create(
+		player_position,
+		player_position + Vector3(12.0, 16.0, 12.0),
+		Vector3(-0.5, -0.5, -0.5),
+		Vector3(1.0, 0.0, -1.0),
+	)
+	assert(observation != null)
+	return observation
 
 func _make_flat_world() -> VoxelWorld:
 	var block_catalog := load("res://blocks/block_catalog.tres") as BlockCatalog
@@ -144,29 +176,125 @@ func _assert_mixed_night_population(coordinator: WorldEntityCoordinator, catalog
 	_expect(night_ids.size() == 3 and night_ids.has(&"zombie") and night_ids.has(&"skeleton") and night_ids.has(&"stone_golem"), "%s night species IDs changed" % context)
 	_expect(coordinator.get_runtime().get_definition_count(&"stone_golem") == 2, "%s did not contain exactly two Stone Golems" % context)
 
-func _stone_golem_positions(coordinator: WorldEntityCoordinator, context: String) -> Dictionary:
-	var positions: Dictionary = {}
+func _workload_offsets(definition_id: StringName) -> Array[Vector2i]:
+	match definition_id:
+		&"zombie":
+			return ZOMBIE_OFFSETS
+		&"skeleton":
+			return SKELETON_OFFSETS
+		&"stone_golem":
+			return STONE_GOLEM_OFFSETS
+		&"sheep":
+			return SHEEP_OFFSETS
+	var empty: Array[Vector2i] = []
+	return empty
+
+func _arrange_active_population(coordinator: WorldEntityCoordinator, player_position: Vector3) -> Dictionary:
+	var actors := coordinator.get_runtime().get_active_actors()
+	actors.sort_custom(func(left: EntityActor, right: EntityActor) -> bool: return left.runtime_id < right.runtime_id)
+	var next_index: Dictionary = {
+		&"zombie": 0,
+		&"skeleton": 0,
+		&"stone_golem": 0,
+		&"sheep": 0,
+	}
+	var activity: Dictionary = {}
+	for actor in actors:
+		var definition_id := actor.definition.id
+		var offsets := _workload_offsets(definition_id)
+		var index := int(next_index.get(definition_id, 0))
+		_expect(index < offsets.size(), "active workload had an unexpected %s actor" % definition_id)
+		if index >= offsets.size():
+			continue
+		next_index[definition_id] = index + 1
+		var offset := offsets[index]
+		actor.global_position = player_position + Vector3(float(offset.x), 0.0, float(offset.y))
+		actor.velocity = Vector3.ZERO
+		actor.on_ground = true
+		match definition_id:
+			&"zombie":
+				var zombie := actor as ZombieActor
+				_expect(zombie != null, "active workload Zombie used the wrong actor type")
+				if zombie != null:
+					zombie._path_follower.request_repath()
+			&"skeleton":
+				var skeleton := actor as SkeletonActor
+				_expect(skeleton != null, "active workload Skeleton used the wrong actor type")
+				if skeleton != null:
+					skeleton._path_follower.request_repath()
+			&"stone_golem":
+				var stone_golem := actor as StoneGolemActorType
+				_expect(stone_golem != null, "active workload Stone Golem used the wrong actor type")
+				if stone_golem != null:
+					stone_golem._path_follower.request_repath()
+					_stone_golem_radial_contacts[actor.runtime_id] = 0
+					activity[actor.runtime_id] = {
+						"initial_position": actor.global_position,
+						"chase_seen": false,
+						"path_seen": false,
+						"airborne_seen": false,
+						"recovery_seen": false,
+						"max_displacement": 0.0,
+					}
+			&"sheep":
+				var sheep := actor as SheepActor
+				_expect(sheep != null, "active workload Sheep used the wrong actor type")
+				if sheep != null:
+					sheep._path_follower.request_repath()
+		coordinator.get_runtime()._spatial_index.upsert(actor.runtime_id, actor.global_position, actor.get_world_bounds())
+	_expect(int(next_index[&"zombie"]) == ZOMBIE_OFFSETS.size(), "active workload did not arrange its Zombie")
+	_expect(int(next_index[&"skeleton"]) == SKELETON_OFFSETS.size(), "active workload did not arrange three Skeletons")
+	_expect(int(next_index[&"stone_golem"]) == STONE_GOLEM_OFFSETS.size(), "active workload did not arrange two Stone Golems")
+	_expect(int(next_index[&"sheep"]) == SHEEP_OFFSETS.size(), "active workload did not arrange six Sheep")
+	return activity
+
+func _record_stone_golem_activity(coordinator: WorldEntityCoordinator, activity: Dictionary) -> void:
+	for actor in coordinator.get_runtime().get_active_actors():
+		if not activity.has(actor.runtime_id):
+			continue
+		var stone_golem := actor as StoneGolemActorType
+		var record := activity[actor.runtime_id] as Dictionary
+		if stone_golem.brain.state == StoneGolemBrainType.State.CHASE:
+			record["chase_seen"] = true
+			if not stone_golem._path_follower._path.is_empty():
+				record["path_seen"] = true
+		elif stone_golem.brain.state == StoneGolemBrainType.State.SLAM_AIRBORNE:
+			record["airborne_seen"] = true
+		elif stone_golem.brain.state == StoneGolemBrainType.State.SLAM_RECOVERY:
+			record["recovery_seen"] = true
+		var initial_position: Vector3 = record["initial_position"]
+		var offset := actor.global_position - initial_position
+		offset.y = 0.0
+		record["max_displacement"] = maxf(float(record["max_displacement"]), offset.length())
+
+func _record_navigation_budget(coordinator: WorldEntityCoordinator, context: String) -> void:
+	var search_count := WorldEntityCoordinator.MAX_NAVIGATION_SEARCHES_PER_TICK - coordinator.get_runtime()._navigation_search_budget._remaining_searches
+	_expect(search_count >= 0 and search_count <= WorldEntityCoordinator.MAX_NAVIGATION_SEARCHES_PER_TICK, "%s exceeded the navigation search budget" % context)
+	_max_navigation_searches = maxi(_max_navigation_searches, search_count)
+	if search_count > 0:
+		_frames_with_navigation_search += 1
+
+func _active_slam_count(coordinator: WorldEntityCoordinator) -> int:
+	var count := 0
 	for actor in coordinator.get_runtime().get_active_actors():
 		if actor.definition.id != &"stone_golem":
 			continue
-		_expect(actor is StoneGolemActorType, "%s Stone Golem used the wrong actor type" % context)
-		if not actor is StoneGolemActorType:
-			continue
 		var stone_golem := actor as StoneGolemActorType
-		_expect(stone_golem.brain != null and stone_golem.brain.state == StoneGolemBrainType.State.DORMANT, "%s Stone Golem %d was not dormant" % [context, actor.runtime_id])
-		positions[actor.runtime_id] = actor.global_position
-	_expect(positions.size() == 2, "%s observed %d Stone Golems instead of two" % [context, positions.size()])
-	return positions
+		if stone_golem.brain.state == StoneGolemBrainType.State.SLAM_WINDUP or stone_golem.brain.state == StoneGolemBrainType.State.SLAM_AIRBORNE:
+			count += 1
+	return count
 
-func _assert_stone_golems_stationary(coordinator: WorldEntityCoordinator, expected_positions: Dictionary, context: String) -> void:
-	var current_positions := _stone_golem_positions(coordinator, context)
-	_expect(current_positions.size() == expected_positions.size(), "%s changed the Stone Golem population" % context)
-	for runtime_id in expected_positions:
-		_expect(current_positions.has(runtime_id), "%s removed Stone Golem %d" % [context, runtime_id])
-		if current_positions.has(runtime_id):
-			var expected_position: Vector3 = expected_positions[runtime_id]
-			var current_position: Vector3 = current_positions[runtime_id]
-			_expect(current_position.is_equal_approx(expected_position), "%s moved dormant Stone Golem %d" % [context, runtime_id])
+func _assert_stone_golem_activity(activity: Dictionary, require_completed_slam: bool, context: String) -> void:
+	_expect(activity.size() == EXPECTED_STONE_GOLEM_COUNT, "%s did not track two Stone Golems" % context)
+	for runtime_id in activity:
+		var record := activity[runtime_id] as Dictionary
+		_expect(bool(record["chase_seen"]), "%s Stone Golem %d never chased" % [context, runtime_id])
+		_expect(bool(record["path_seen"]), "%s Stone Golem %d never acquired a path" % [context, runtime_id])
+		_expect(float(record["max_displacement"]) >= 3.0, "%s Stone Golem %d moved less than three blocks" % [context, runtime_id])
+		if require_completed_slam:
+			_expect(bool(record["airborne_seen"]), "%s Stone Golem %d never became airborne" % [context, runtime_id])
+			_expect(bool(record["recovery_seen"]), "%s Stone Golem %d never entered recovery" % [context, runtime_id])
+			_expect(int(_stone_golem_radial_contacts.get(runtime_id, 0)) > 0, "%s Stone Golem %d emitted no radial contact" % [context, runtime_id])
 
 func _run() -> void:
 	var catalog := load("res://entities/entity_catalog.tres") as EntityCatalog
@@ -175,11 +303,13 @@ func _run() -> void:
 	var coordinator := WorldEntityCoordinator.new()
 	get_root().add_child(coordinator)
 	coordinator.setup(catalog, world, 730241, _is_position_streamed)
+	coordinator.get_runtime().entity_melee_contact_reached.connect(_consume_melee_contact)
+	coordinator.get_runtime().entity_radial_contact_reached.connect(_consume_radial_contact)
 
 	for region_index in range(STREAM_REGIONS.size()):
 		_ready_region = STREAM_REGIONS[region_index]
 		var player_position := _player_position(_ready_region)
-		coordinator.tick(0.0, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), DAY_TIME)
+		coordinator.tick(0.0, _observation(player_position), DAY_TIME)
 		_assert_population(coordinator, catalog, player_position, DAY_TIME, "region %d entry" % region_index)
 		_expect(coordinator.get_runtime().get_active_count() == 0, "region %d entry did not clear the previous population" % region_index)
 		_expect(coordinator.get_runtime().get_definition_count(&"stone_golem") == 0, "region %d entry retained a Stone Golem" % region_index)
@@ -187,7 +317,7 @@ func _run() -> void:
 		for cycle in range(CYCLES_PER_REGION):
 			var time_of_day := DAY_TIME if cycle < 10 or cycle >= 16 else NIGHT_TIME
 			coordinator._spawn_elapsed = WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS
-			coordinator.tick(0.0, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), time_of_day)
+			coordinator.tick(0.0, _observation(player_position), time_of_day)
 			var context := "region %d cycle %d" % [region_index, cycle]
 			_assert_population(coordinator, catalog, player_position, time_of_day, context)
 			_assert_path_budget(world, catalog, _ready_region, time_of_day, cycle, context)
@@ -197,34 +327,57 @@ func _run() -> void:
 			var cycle := CYCLES_PER_REGION + refill_cycle
 			var time_of_day := DAY_TIME if cycle % 2 == 0 else NIGHT_TIME
 			coordinator._spawn_elapsed = WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS
-			coordinator.tick(0.0, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), time_of_day)
+			coordinator.tick(0.0, _observation(player_position), time_of_day)
 			var context := "region %d refill cycle %d" % [region_index, refill_cycle]
 			_assert_population(coordinator, catalog, player_position, time_of_day, context)
 			_assert_path_budget(world, catalog, _ready_region, time_of_day, cycle, context)
 		_expect(coordinator.get_runtime().get_active_count() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "region %d did not reach the total population cap" % region_index)
 		_assert_mixed_night_population(coordinator, catalog, "region %d mixed night" % region_index)
-		var stone_golem_positions := _stone_golem_positions(coordinator, "region %d filled" % region_index)
+		var stone_golem_activity := _arrange_active_population(coordinator, player_position)
+		var stream_mid_action := region_index % 2 == 1
+		var reached_mid_action := false
 		for step in range(MIXED_NIGHT_STEPS):
-			coordinator.tick(MIXED_NIGHT_DELTA, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), NIGHT_TIME)
+			coordinator.tick(MIXED_NIGHT_DELTA, _observation(player_position), NIGHT_TIME)
 			var context := "region %d mixed night step %d" % [region_index, step]
+			_record_navigation_budget(coordinator, context)
+			_record_stone_golem_activity(coordinator, stone_golem_activity)
 			_assert_population(coordinator, catalog, player_position, NIGHT_TIME, context)
 			_assert_mixed_night_population(coordinator, catalog, context)
-			_assert_stone_golems_stationary(coordinator, stone_golem_positions, context)
-		if region_index % 2 == 1:
+			if stream_mid_action and _active_slam_count(coordinator) == EXPECTED_STONE_GOLEM_COUNT:
+				reached_mid_action = true
+				break
+		var activity_context := "region %d active workload" % region_index
+		if stream_mid_action:
+			_expect(reached_mid_action, "%s never reached simultaneous active slams" % activity_context)
+			_assert_stone_golem_activity(stone_golem_activity, false, activity_context)
+			var contacts_before_stream_loss := _melee_contact_count + _radial_contact_count
 			_streaming_enabled = false
-			coordinator.tick(0.0, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), NIGHT_TIME)
+			coordinator.tick(0.0, _observation(player_position), NIGHT_TIME)
 			_assert_population(coordinator, catalog, player_position, NIGHT_TIME, "region %d streaming loss" % region_index)
 			_expect(coordinator.get_runtime().get_active_count() == 0, "region %d streaming loss retained actors" % region_index)
 			_expect(coordinator.get_runtime().get_definition_count(&"stone_golem") == 0, "region %d streaming loss retained a Stone Golem" % region_index)
+			coordinator.tick(STREAM_RETIRE_SECONDS, _observation(player_position), NIGHT_TIME)
+			_expect(_melee_contact_count + _radial_contact_count == contacts_before_stream_loss, "region %d streaming loss emitted a delayed contact" % region_index)
+			_expect(coordinator.get_runtime()._retiring.is_empty(), "region %d streaming loss retained fading actors" % region_index)
+			_expect(coordinator.get_runtime()._spatial_index.get_entry_count() == 0, "region %d streaming loss retained spatial entries" % region_index)
+			_expect(coordinator.get_runtime()._spatial_index.get_cell_count() == 0, "region %d streaming loss retained spatial cells" % region_index)
 			_streaming_enabled = true
+			_mid_action_stream_loss_regions += 1
 			await process_frame
+		else:
+			_assert_stone_golem_activity(stone_golem_activity, true, activity_context)
+			_full_combat_regions += 1
 
 	_streaming_enabled = false
 	var final_position := _player_position(_ready_region)
-	coordinator.tick(0.0, EntityTargetObservation.create(final_position, final_position, Vector3.FORWARD, Vector3.RIGHT), NIGHT_TIME)
+	coordinator.tick(0.0, _observation(final_position), NIGHT_TIME)
 	_assert_population(coordinator, catalog, final_position, NIGHT_TIME, "final streaming loss")
 	_expect(coordinator.get_runtime().get_definition_count(&"stone_golem") == 0, "final streaming loss retained a Stone Golem")
 	_expect(_instance_by_runtime_id.size() == STREAM_REGIONS.size() * CYCLES_PER_REGION, "soak observed %d unique runtime IDs instead of %d" % [_instance_by_runtime_id.size(), STREAM_REGIONS.size() * CYCLES_PER_REGION])
+	_expect(_max_navigation_searches == WorldEntityCoordinator.MAX_NAVIGATION_SEARCHES_PER_TICK, "active workload never consumed both navigation searches")
+	_expect(_frames_with_navigation_search > 0, "active workload performed no navigation searches")
+	_expect(_full_combat_regions == STREAM_REGIONS.size() / 2, "soak completed %d full-combat regions instead of four" % _full_combat_regions)
+	_expect(_mid_action_stream_loss_regions == STREAM_REGIONS.size() / 2, "soak completed %d mid-action stream losses instead of four" % _mid_action_stream_loss_regions)
 	coordinator.shutdown()
 	_expect(coordinator.get_runtime().get_definition_count(&"stone_golem") == 0, "shutdown retained an active Stone Golem")
 	_expect(coordinator.get_runtime().get_active_count() == 0, "shutdown retained active actors")
@@ -238,7 +391,7 @@ func _run() -> void:
 	var orphan_count := int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
 	_expect(orphan_count == 0, "shutdown ended with %d orphan nodes" % orphan_count)
 	if _failures == 0:
-		print("SOAK_ENTITY_STREAMING PASS regions=%d cycles=%d runtime_ids=%d orphan=%d" % [STREAM_REGIONS.size(), STREAM_REGIONS.size() * CYCLES_PER_REGION, _instance_by_runtime_id.size(), orphan_count])
+		print("SOAK_ENTITY_STREAMING PASS regions=%d cycles=%d runtime_ids=%d searches=%d full_combat=%d stream_loss=%d contacts=%d orphan=%d" % [STREAM_REGIONS.size(), STREAM_REGIONS.size() * CYCLES_PER_REGION, _instance_by_runtime_id.size(), _max_navigation_searches, _full_combat_regions, _mid_action_stream_loss_regions, _melee_contact_count + _radial_contact_count, orphan_count])
 		quit(0)
 	else:
 		print("SOAK_ENTITY_STREAMING FAIL failures=%d" % _failures)

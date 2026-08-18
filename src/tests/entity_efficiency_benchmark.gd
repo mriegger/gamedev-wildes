@@ -20,6 +20,18 @@ const EXPECTED_SKELETON_COUNT: int = 2
 const EXPECTED_BIRD_COUNT: int = 4
 const EXPECTED_STONE_GOLEM_COUNT: int = 2
 
+const FIXED_TARGET_FRAMES: int = 360
+const ENTITY_FRAME_P95_LIMIT_MS: float = 75.0
+const ENTITY_FRAME_P99_LIMIT_MS: float = 125.0
+
+var _stone_golem_runtime_ids: Array[int] = []
+var _stone_golem_initial_positions: Dictionary = {}
+var _stone_golem_chase_seen: Dictionary = {}
+var _stone_golem_path_seen: Dictionary = {}
+var _stone_golem_airborne_seen: Dictionary = {}
+var _stone_golem_recovery_seen: Dictionary = {}
+var _stone_golem_max_displacement: Dictionary = {}
+var _stone_golem_radial_contacts: Dictionary = {}
 var _failures: int = 0
 
 func _init() -> void:
@@ -45,6 +57,11 @@ func _position_ready(_position: Vector3) -> bool:
 
 func _consume_melee_contact(_source_runtime_id: int, _profile: MeleeAttackProfile) -> void:
 	pass
+
+func _consume_radial_contact(source_runtime_id: int, profile: MeleeAttackProfile) -> void:
+	if profile.id != &"stone_golem_slam" or not _stone_golem_radial_contacts.has(source_runtime_id):
+		return
+	_stone_golem_radial_contacts[source_runtime_id] = int(_stone_golem_radial_contacts[source_runtime_id]) + 1
 
 func _spawn_population(coordinator: WorldEntityCoordinator, player_position: Vector3) -> Dictionary:
 	var spawn_samples: Array[int] = []
@@ -104,10 +121,12 @@ func _arrange_population(coordinator: WorldEntityCoordinator, actors: Array[Enti
 					skeleton._path_follower.request_repath()
 			&"stone_golem":
 				angle = TAU * float(stone_golem_index) / float(EXPECTED_STONE_GOLEM_COUNT) + PI / 2.0
-				radius = 14.0
+				radius = 8.0
 				stone_golem_index += 1
 				var stone_golem := actor as StoneGolemActor
 				_expect(stone_golem != null, "stone_golem definition did not instantiate a StoneGolemActor")
+				if stone_golem != null:
+					stone_golem._path_follower.request_repath()
 			&"sheep":
 				angle = TAU * float(sheep_index) / float(EXPECTED_SHEEP_COUNT) + PI / 6.0
 				radius = 17.0
@@ -129,6 +148,8 @@ func _arrange_population(coordinator: WorldEntityCoordinator, actors: Array[Enti
 		actor.velocity = Vector3.ZERO
 		actor.on_ground = actor.definition.id != &"bird"
 		coordinator.get_runtime()._spatial_index.upsert(actor.runtime_id, actor.global_position, actor.get_world_bounds())
+		if actor is StoneGolemActor:
+			_register_stone_golem(actor as StoneGolemActor)
 	_expect(zombie_index == EXPECTED_ZOMBIE_COUNT, "benchmark population had %d zombies" % zombie_index)
 	_expect(sheep_index == EXPECTED_SHEEP_COUNT, "benchmark population had %d sheep" % sheep_index)
 	_expect(skeleton_index == EXPECTED_SKELETON_COUNT, "benchmark population had %d skeletons" % skeleton_index)
@@ -142,33 +163,68 @@ func _arrange_population(coordinator: WorldEntityCoordinator, actors: Array[Enti
 		"stone_golem": stone_golem_index,
 	}
 
-func _verify_dormant_golems_do_not_search(actors: Array[EntityActor], player_position: Vector3) -> void:
-	var observation := EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT)
-	var verified_count := 0
+func _register_stone_golem(actor: StoneGolemActor) -> void:
+	var runtime_id := actor.runtime_id
+	_stone_golem_runtime_ids.append(runtime_id)
+	_stone_golem_initial_positions[runtime_id] = actor.global_position
+	_stone_golem_chase_seen[runtime_id] = false
+	_stone_golem_path_seen[runtime_id] = false
+	_stone_golem_airborne_seen[runtime_id] = false
+	_stone_golem_recovery_seen[runtime_id] = false
+	_stone_golem_max_displacement[runtime_id] = 0.0
+	_stone_golem_radial_contacts[runtime_id] = 0
+
+func _record_stone_golem_activity(actors: Array[EntityActor]) -> void:
 	for actor in actors:
-		if actor.definition.id != &"stone_golem":
+		if not _stone_golem_initial_positions.has(actor.runtime_id):
 			continue
 		var stone_golem := actor as StoneGolemActor
-		_expect(stone_golem != null, "Stone Golem workload actor had the wrong type")
-		if stone_golem == null:
-			continue
-		var origin := stone_golem.global_position
-		var budget := NavigationSearchBudget.new(WorldEntityCoordinator.MAX_NAVIGATION_SEARCHES_PER_TICK)
-		stone_golem.tick(FRAME_DELTA, observation, Vector3(4.0, 0.0, 0.0), budget)
-		_expect(budget._remaining_searches == WorldEntityCoordinator.MAX_NAVIGATION_SEARCHES_PER_TICK, "dormant Stone Golem requested a navigation search")
-		_expect(stone_golem.global_position.is_equal_approx(origin), "dormant Stone Golem moved during workload verification")
-		_expect(stone_golem.brain.state == StoneGolemBrain.State.DORMANT, "workload verification woke a dormant Stone Golem")
-		verified_count += 1
-	_expect(verified_count == EXPECTED_STONE_GOLEM_COUNT, "workload verified %d dormant Stone Golems" % verified_count)
+		var runtime_id := actor.runtime_id
+		if stone_golem.brain.state == StoneGolemBrain.State.CHASE:
+			_stone_golem_chase_seen[runtime_id] = true
+			if not stone_golem._path_follower._path.is_empty():
+				_stone_golem_path_seen[runtime_id] = true
+		elif stone_golem.brain.state == StoneGolemBrain.State.SLAM_AIRBORNE:
+			_stone_golem_airborne_seen[runtime_id] = true
+		elif stone_golem.brain.state == StoneGolemBrain.State.SLAM_RECOVERY:
+			_stone_golem_recovery_seen[runtime_id] = true
+		var offset := actor.global_position - (_stone_golem_initial_positions[runtime_id] as Vector3)
+		offset.y = 0.0
+		var maximum := float(_stone_golem_max_displacement[runtime_id])
+		_stone_golem_max_displacement[runtime_id] = maxf(maximum, offset.length())
+
+func _assert_stone_golem_workload() -> Dictionary:
+	_expect(_stone_golem_runtime_ids.size() == EXPECTED_STONE_GOLEM_COUNT, "active workload did not register two Stone Golems")
+	var actors_with_paths := 0
+	var radial_contacts := 0
+	for runtime_id in _stone_golem_runtime_ids:
+		_expect(bool(_stone_golem_chase_seen[runtime_id]), "Stone Golem %d never entered pursuit" % runtime_id)
+		_expect(bool(_stone_golem_path_seen[runtime_id]), "Stone Golem %d never acquired a path" % runtime_id)
+		_expect(bool(_stone_golem_airborne_seen[runtime_id]), "Stone Golem %d never became airborne" % runtime_id)
+		_expect(bool(_stone_golem_recovery_seen[runtime_id]), "Stone Golem %d never entered slam recovery" % runtime_id)
+		_expect(float(_stone_golem_max_displacement[runtime_id]) >= 1.0, "Stone Golem %d moved less than one block" % runtime_id)
+		var contact_count := int(_stone_golem_radial_contacts[runtime_id])
+		_expect(contact_count > 0, "Stone Golem %d emitted no radial contact" % runtime_id)
+		actors_with_paths += int(bool(_stone_golem_path_seen[runtime_id]))
+		radial_contacts += contact_count
+	return {
+		"actor_count": _stone_golem_runtime_ids.size(),
+		"actors_with_paths": actors_with_paths,
+		"radial_contacts": radial_contacts,
+	}
 
 func _player_position(frame_index: int) -> Vector3:
-	var angle := float(frame_index) * 0.015
+	if frame_index < FIXED_TARGET_FRAMES:
+		return Vector3(0.5, FEET_Y, 0.5)
+	var angle := float(frame_index - FIXED_TARGET_FRAMES) * 0.015
 	return Vector3(0.5 + cos(angle) * 3.0, FEET_Y, 0.5 + sin(angle) * 3.0)
 
 func _advance_entity_frame(coordinator: WorldEntityCoordinator, actors: Array[EntityActor], frame_index: int) -> int:
-	coordinator.tick(FRAME_DELTA, PerformanceEntityTarget.create(_player_position(frame_index)), DAY_TIME)
+	var player_position := _player_position(frame_index)
+	coordinator.tick(FRAME_DELTA, PerformanceEntityTarget.create(player_position), DAY_TIME)
 	for actor in actors:
 		actor.animation_driver.advance(FRAME_DELTA)
+	_record_stone_golem_activity(actors)
 	return WorldEntityCoordinator.MAX_NAVIGATION_SEARCHES_PER_TICK - coordinator.get_runtime()._navigation_search_budget._remaining_searches
 
 func _benchmark_entity_frames(coordinator: WorldEntityCoordinator, actors: Array[EntityActor]) -> Dictionary:
@@ -192,6 +248,8 @@ func _benchmark_entity_frames(coordinator: WorldEntityCoordinator, actors: Array
 	var result := PerformanceSampleStats.summarize(samples)
 	result["max_navigation_searches_per_frame"] = max_navigation_searches
 	result["frames_with_navigation_search"] = frames_with_navigation_search
+	_expect(float(result["p95_ms"]) <= ENTITY_FRAME_P95_LIMIT_MS, "entity frame p95 %.3f ms exceeded %.1f ms" % [float(result["p95_ms"]), ENTITY_FRAME_P95_LIMIT_MS])
+	_expect(float(result["p99_ms"]) <= ENTITY_FRAME_P99_LIMIT_MS, "entity frame p99 %.3f ms exceeded %.1f ms" % [float(result["p99_ms"]), ENTITY_FRAME_P99_LIMIT_MS])
 	return result
 
 func _make_bounded_path_world() -> VoxelWorld:
@@ -257,13 +315,14 @@ func _run() -> void:
 	get_root().add_child(coordinator)
 	coordinator.setup(catalog, world, WORLD_SEED, _position_ready)
 	coordinator.get_runtime().entity_melee_contact_reached.connect(_consume_melee_contact)
+	coordinator.get_runtime().entity_radial_contact_reached.connect(_consume_radial_contact)
 	var origin := Vector3(0.5, FEET_Y, 0.5)
 	var spawn_metrics := _spawn_population(coordinator, origin)
 	var actors := _sorted_actors(coordinator)
 	_expect(actors.size() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "benchmark did not create the full population")
 	var species_counts := _arrange_population(coordinator, actors)
-	_verify_dormant_golems_do_not_search(actors, origin)
 	var frame_metrics := _benchmark_entity_frames(coordinator, actors)
+	var stone_golem_metrics := _assert_stone_golem_workload()
 	var path_metrics := _benchmark_bounded_pathfinding()
 	var spatial_index := coordinator.get_runtime()._spatial_index as EntitySpatialIndex
 	_expect(spatial_index.get_entry_count() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "spatial index lost an active actor")
@@ -290,11 +349,13 @@ func _run() -> void:
 			"species_counts": species_counts,
 			"warmup_frames": WARMUP_FRAMES,
 			"sample_frames": SAMPLE_FRAMES,
+			"fixed_target_frames": FIXED_TARGET_FRAMES,
 			"path_warmup_samples": PATH_WARMUP_SAMPLES,
 			"path_samples": PATH_SAMPLES,
 		},
 		"metrics": {
 			"entity_frame": frame_metrics,
+			"stone_golem": stone_golem_metrics,
 			"bounded_path_search": path_metrics,
 			"spawn_frame": spawn_metrics["spawn_frame"],
 			"preparation_frame": spawn_metrics["preparation_frame"],
