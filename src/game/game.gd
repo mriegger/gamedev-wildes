@@ -251,6 +251,7 @@ func _setup_gameplay() -> bool:
 	player.interactor.crafting_station_open_requested.connect(_on_crafting_station_open_requested)
 	chest_coordinator = ChestCoordinator.new()
 	chest_coordinator.setup(world.voxel_model, inventory_model, chest_storage)
+	player.interactor.set_chest_coordinator(chest_coordinator)
 	player.interactor.container_open_requested.connect(_on_container_open_requested)
 	player_stats.health_depleted.connect(_on_player_defeated)
 	var mining_particle_tints := MiningParticleTintPalette.new(block_catalog)

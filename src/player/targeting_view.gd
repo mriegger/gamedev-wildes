@@ -331,8 +331,10 @@ func _update_selection_visuals(_delta: float = 0.0):
 			chest_renderer.set_placement_preview(null, false)
 
 func _should_show_mining_outline(has_target_action: bool) -> bool:
-	if not has_target_action or not interactor.target_has or interactor.has_container_target():
+	if not has_target_action or not interactor.target_has:
 		return false
+	if interactor.has_container_target():
+		return interactor.is_attempting_container_mining()
 	return not interactor.has_crafting_station_target() or interactor.is_attempting_crafting_station_mining()
 
 func _update_interaction_visuals(_delta: float = 0.0) -> void:
@@ -348,7 +350,7 @@ func _should_show_anvil_interaction() -> bool:
 	return interactor.has_crafting_station_target() and interactor.can_interact_target and not interactor.is_attempting_crafting_station_mining()
 
 func _should_show_chest_interaction() -> bool:
-	return interactor.has_container_target() and interactor.can_interact_target
+	return interactor.has_container_target() and interactor.can_interact_target and not interactor.is_attempting_container_mining()
 
 func _should_show_interaction() -> bool:
 	return _should_show_anvil_interaction() or _should_show_chest_interaction()

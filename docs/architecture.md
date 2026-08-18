@@ -117,20 +117,22 @@ source slot owns the adjustable drag count and consumes wheel input before gamep
 `InventoryModel` remains the authority for partial moves and discards, while the source and
 drag-preview visuals show the pending split without mutating inventory until a drop succeeds.
 
-`ChestInventoryStore` owns persistent inventory models keyed by placed chest position. Every chest
-position resolves to distinct stored contents, including after save restore. `ChestRenderer`
-presents placed chests outside the chunk cube mesh. The body uses explicit face quads so each wooden
-face is rendered once, while the lid remains a separately hinged box. `TargetingView` forwards the
-reachable chest position so the renderer highlights both pieces, hinges the lid slightly, and uses
-the same split model for placement previews without changing world state.
-
+`ChestInventoryStore` owns the persistent inventory model keyed by each placed chest position, and
 `ChestCoordinator` validates the active block before exposing atomic transfers. While a chest is
-open, `ChestPanel` presents its centered 3×5 grid, while the existing right-side `SidePanel` and
-bottom `InventoryHotbar` present player storage through a temporary
-`InventoryTransferCoordinator` context.
-Closing the chest removes that context before ordinary inventory interactions resume. Click
-transfers and the move-all action fill compatible stacks before empty slots and reject a source
-stack when the destination cannot hold it in full.
+open, `ChestPanel` presents only its centered 3×5 grid, while the existing right-side `SidePanel`
+and bottom `InventoryHotbar` present player storage through a temporary
+`InventoryTransferCoordinator` context. Closing the chest removes that context before ordinary
+inventory interactions resume.
+Click transfers and the move-all action use the same transactional model path to fill compatible
+stacks before empty slots, and reject a source stack when the destination cannot hold it in full.
+Every chest position resolves to a distinct stored `InventoryModel`, including after save restore.
+`ChestRenderer` presents placed chests outside the chunk cube mesh. The body uses explicit face
+quads so each wooden face is rendered once, while the lid remains a separately hinged box.
+`TargetingView` forwards the reachable chest position so the renderer highlights both pieces and
+hinges the real lid slightly without changing block or inventory state. Chest placement delegates
+to that renderer for a translucent preview of the same split model. Pickaxe mining delegates empty
+chest validation and pickup to `ChestCoordinator`, which checks player inventory capacity before
+removing the placed block and its position-keyed storage.
 
 ## Runes and socketing
 

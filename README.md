@@ -125,14 +125,16 @@ Stone and the other common blocks are hand-minable. Copper requires a stone or c
 while the masonry blocks require a copper pickaxe. Torches are placeable blocks that you can walk
 through — each is an omni light with a 9-block radius.
 Overworld torch shadows are configurable for the nearest 0, 1, 2, or 4 lights and default to the
-nearest one. Chests are solid, non-mineable 1×1 placeable blocks rendered as separate body and lid
-meshes with dedicated chest textures. Hovering a reachable chest brightens it and hinges its lid
-open slightly.
-Left-clicking opens that chest's own persistent 3×5 storage in the center while the backpack opens
-from the right. Items can be dragged between the chest, backpack, and hotbar. Clicking a backpack
-or chest item transfers its stack to the other inventory, and the chest's Take all button transfers
-every stack that fits into the backpack. `P` or `Esc` closes both panels; `Tab` replaces the chest
-with the crafting menu while keeping the backpack open.
+nearest one. Chests are solid 1×1 placeable blocks rendered as separate body and lid meshes with
+dedicated chest textures. They cannot be mined by hand, and only empty chests can be mined with a
+pickaxe.
+Hovering a reachable chest brightens it and hinges its lid open slightly. Left-clicking opens
+that chest's own persistent 3×5 storage in the center while the backpack opens from the right.
+Items can be dragged between the chest, backpack, and hotbar. Clicking a backpack or chest item
+transfers its stack to the other inventory, and the chest's Take all button transfers every stack
+that fits into the backpack. An empty chest can be mined with a pickaxe to return it to the player
+inventory; a chest containing items cannot be mined. `P` or `Esc` closes both panels; `Tab` replaces
+the chest with the crafting menu while keeping the backpack open.
 
 **Tools.** New worlds start with an empty inventory, while the first pickaxe is crafted from stone
 and wood. Item actions are data-driven: the hoe tills exposed grass and dirt, stone and copper

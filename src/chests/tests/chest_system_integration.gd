@@ -17,6 +17,12 @@ func _run():
 	_expect(container != null and container.rows == 3 and container.columns == 5, "chest is not a 3x5 container")
 	_expect(BlockId.is_ao_solid(BlockId.Type.CHEST), "separately rendered chest does not occlude ambient light")
 	_expect(not chest_definition.is_breakable, "chest block is breakable")
+	var unarmed := load("res://items/actions/definitions/unarmed_mining.tres") as MiningActionDefinition
+	var stone_pickaxe := item_catalog.get_definition(&"stone_pickaxe").primary_action as MiningActionDefinition
+	var copper_pickaxe := item_catalog.get_definition(&"copper_pickaxe").primary_action as MiningActionDefinition
+	_expect(not unarmed.can_mine(chest_definition), "hands can mine the chest")
+	_expect(not stone_pickaxe.can_mine(chest_definition), "stone pickaxe can mine the chest")
+	_expect(not copper_pickaxe.can_mine(chest_definition), "copper pickaxe can mine the chest")
 
 	var world := VoxelWorld.new(16, 32, 5, 8.0, block_catalog)
 	var chest_position := Vector3i(2, 10, 3)
@@ -101,6 +107,27 @@ func _run():
 	_expect(not full_coordinator.quick_transfer(ChestCoordinator.CHEST_SCOPE, 0), "chest click moved an item into a full backpack")
 	_expect(not full_coordinator.move_all_to_backpack(), "move-all changed a full backpack")
 	_expect(full_coordinator.active_inventory.get_slot(0).count == 3, "full backpack transfer changed the chest stack")
+	var pickup_position := Vector3i(8, 10, 3)
+	var attached_torch_position := pickup_position + Vector3i(1, 0, 0)
+	_expect(world.try_place_block(pickup_position, BlockId.Type.CHEST).is_success(), "pickup chest placement failed")
+	_expect(world.try_place_block(attached_torch_position, BlockId.Type.TORCH, Vector3i(-1, 0, 0)).is_success(), "pickup chest torch placement failed")
+	var pickup_inventory := InventoryModel.new(item_catalog)
+	var pickup_storage := ChestInventoryStore.new(item_catalog)
+	var pickup_coordinator := ChestCoordinator.new()
+	var stone_pickaxe_action := item_catalog.get_definition(&"stone_pickaxe").primary_action as MiningActionDefinition
+	pickup_coordinator.setup(world, pickup_inventory, pickup_storage)
+	_expect(pickup_coordinator.try_open(pickup_position, container), "pickup chest did not open")
+	pickup_coordinator.active_inventory.slots[0] = InventoryStack.new(&"log_block", 1)
+	_expect(not pickup_coordinator.can_pick_up_chest(pickup_position, stone_pickaxe_action), "non-empty chest was mineable")
+	_expect(not pickup_coordinator.pick_up_chest(pickup_position, stone_pickaxe_action), "non-empty chest was picked up")
+	pickup_coordinator.active_inventory.slots[0] = null
+	_expect(not pickup_coordinator.can_pick_up_chest(pickup_position, unarmed), "empty chest was mineable without a pickaxe")
+	_expect(pickup_coordinator.can_pick_up_chest(pickup_position, stone_pickaxe_action), "empty chest could not be mined with a pickaxe")
+	_expect(pickup_coordinator.pick_up_chest(pickup_position, stone_pickaxe_action), "empty chest pickup failed")
+	_expect(not pickup_coordinator.is_open() and world.get_block_id_at(pickup_position) == BlockId.Type.AIR, "picked-up chest remained open or in the world")
+	_expect(pickup_inventory.get_inventory_item_count(&"chest") == 1, "picked-up chest was not added to player inventory")
+	_expect(world.get_block_id_at(attached_torch_position) == BlockId.Type.AIR and pickup_inventory.get_inventory_item_count(&"torch") == 1, "picked-up chest left its attached torch behind")
+	_expect(pickup_storage.get_inventory(pickup_position) == null, "picked-up chest retained stored inventory data")
 
 	var input := InputBuffer.new()
 	var interaction_inventory := InventoryModel.new(item_catalog)
@@ -112,6 +139,9 @@ func _run():
 	interactor.editable_voxel_world = null
 	_expect(interactor._get_target_container(chest_position) == null, "read-only voxel space exposed an overworld chest interaction")
 	interactor.editable_voxel_world = world
+	var interaction_chest_coordinator := ChestCoordinator.new()
+	interaction_chest_coordinator.setup(world, interaction_inventory, restored_storage)
+	interactor.set_chest_coordinator(interaction_chest_coordinator)
 	_expect(interactor._get_target_container(chest_position) == container, "editable overworld did not expose its chest interaction")
 	interactor.target_has = true
 	interactor.target_block = chest_position
@@ -122,6 +152,10 @@ func _run():
 	interactor._handle_item_actions(0.0)
 	_expect(_open_requests == 1, "left click did not request the chest UI")
 	_expect(interactor.melee_attack_queue == 0 and not interactor.is_mining, "chest click also started an item action")
+	interaction_inventory.slots[0] = InventoryStack.new(&"stone_pickaxe", 1)
+	input.primary_use_just = true
+	interactor._handle_item_actions(0.0)
+	_expect(_open_requests == 1, "pickaxe click opened a non-empty chest instead of attempting to mine it")
 	interactor.can_interact_target = false
 	_expect(not interactor._try_open_target_container(), "out-of-range chest opened")
 	_expect(_open_requests == 1, "out-of-range chest emitted an open request")
@@ -137,11 +171,28 @@ func _run():
 	get_root().add_child(targeting)
 	targeting.set_physics_process(false)
 	await process_frame
-	_expect(not targeting._should_show_mining_outline(true), "container target shows the mining wireframe")
+	_expect(targeting._should_show_mining_outline(true), "pickaxe chest target does not show the mining wireframe")
+	targeting.voxel_space = world
+	targeting.block_catalog = block_catalog
+	interactor.can_primary_target = false
+	targeting._update_selection_visuals()
+	_expect(targeting.selection_box.visible and targeting._selection_edge_mat.albedo_color.r > targeting._selection_edge_mat.albedo_color.g, "non-empty chest does not show the blocked mining outline")
+	interactor.can_primary_target = true
+	targeting._update_selection_visuals()
+	_expect(targeting._selection_edge_mat.albedo_color.g > targeting._selection_edge_mat.albedo_color.r * 0.8, "empty chest does not show the mineable outline")
 	interactor.can_interact_target = true
+	targeting._update_interaction_visuals(1.0)
+	chest_renderer._process(1.0)
+	_expect(not targeting._should_show_interaction(), "pickaxe chest target also shows its interaction hover")
+	_expect(not targeting._interaction_cursor_active, "pickaxe chest target enabled the interaction cursor")
+	interaction_inventory.slots[0] = InventoryStack.new(&"copper_sword", 1)
 	_expect(targeting._should_show_interaction(), "in-range chest does not expose its hover presentation without a pickaxe")
 	targeting._update_interaction_visuals(1.0)
 	chest_renderer._process(1.0)
+	_expect(targeting._interaction_cursor_active, "interactable chest did not enable the pointing-hand cursor")
+	targeting._hide_interaction_visuals()
+	_expect(not targeting._interaction_cursor_active, "chest interaction cursor did not reset")
+	targeting._update_interaction_visuals(1.0)
 	var rendered_chest := chest_renderer.chest_instances[chest_position] as Node3D
 	var rendered_lid := chest_renderer.get_lid(chest_position)
 	_expect(rendered_chest.get_node_or_null("Body") != null and rendered_lid != null, "chest is not rendered as separate body and lid meshes")

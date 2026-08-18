@@ -21,6 +21,9 @@ func get_or_create(position: Vector3i, slot_count: int) -> InventoryModel:
 func get_inventory(position: Vector3i) -> InventoryModel:
 	return _inventories.get(position, null)
 
+func remove(position: Vector3i) -> bool:
+	return _inventories.erase(position)
+
 func snapshot() -> Dictionary:
 	var keys: Array[String] = []
 	var inventories_by_key: Dictionary[String, InventoryModel] = {}

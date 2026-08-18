@@ -5,6 +5,7 @@ signal opened(position: Vector3i, definition: ContainerBlockDefinition)
 signal closed
 
 const CHEST_SCOPE: StringName = &"chest"
+const CHEST_ITEM_ID: StringName = &"chest"
 
 var voxel_world: VoxelWorld
 var player_inventory: InventoryModel
@@ -106,6 +107,40 @@ func can_move_all_to_backpack() -> bool:
 		if can_quick_transfer(CHEST_SCOPE, index):
 			return true
 	return false
+
+func can_pick_up_chest(position: Vector3i, action: MiningActionDefinition) -> bool:
+	if action == null or action.get_tool_stat(&"pickaxe") == null:
+		return false
+	if voxel_world.get_block_id_at(position) != BlockId.Type.CHEST:
+		return false
+	var inventory := storage.get_inventory(position)
+	if inventory != null and inventory.slots.any(func(stack): return stack != null):
+		return false
+	return player_inventory.can_exchange_inventory_items({}, _get_pickup_grants(position))
+
+func pick_up_chest(position: Vector3i, action: MiningActionDefinition) -> bool:
+	if not can_pick_up_chest(position, action):
+		return false
+	var grants := _get_pickup_grants(position)
+	var edits := voxel_world.try_pick_up_placed_block(position, BlockId.Type.CHEST)
+	if edits.is_empty() or not edits[0].is_success():
+		return false
+	storage.remove(position)
+	if active_inventory != null and active_position == position:
+		active_inventory = null
+		closed.emit()
+	var added := player_inventory.exchange_inventory_items({}, grants)
+	assert(added)
+	return true
+
+func _get_pickup_grants(position: Vector3i) -> Dictionary[StringName, int]:
+	var grants: Dictionary[StringName, int] = {CHEST_ITEM_ID: 1}
+	for torch_position in voxel_world.get_attached_torches(position):
+		var block_id := voxel_world.get_block_id_at(torch_position)
+		var item_id := voxel_world.block_catalog.get_definition(block_id).drop_item_id
+		if not item_id.is_empty():
+			grants[item_id] = grants.get(item_id, 0) + 1
+	return grants
 
 func _get_inventory(scope: StringName) -> InventoryModel:
 	if scope == PLAYER_SCOPE:

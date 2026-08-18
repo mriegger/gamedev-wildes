@@ -21,6 +21,7 @@ var combat: MeleeCombatCoordinator = null
 var entity_runtime: EntityRuntime = null
 var harvest: HarvestCoordinator = null
 var item_consumption: ItemConsumptionCoordinator = null
+var chest_coordinator: ChestCoordinator = null
 var _input_buffer: InputBuffer = null
 var _is_setup: bool = false
 
@@ -103,6 +104,10 @@ func bind_space(p_space: VoxelSpace, p_editable_voxel_world: VoxelWorld = null):
 	_clear_active_state()
 	voxel_space = p_space
 	editable_voxel_world = p_editable_voxel_world
+
+func set_chest_coordinator(p_chest_coordinator: ChestCoordinator):
+	assert(p_chest_coordinator != null)
+	chest_coordinator = p_chest_coordinator
 
 func unbind_space():
 	_clear_active_state()
@@ -263,7 +268,7 @@ func _handle_item_actions(delta):
 	var selected_mining := selected_primary as MiningActionDefinition
 	var selected_melee := selected_primary as MeleeAttackActionDefinition
 	var selected_tilling := selected_primary as TillingActionDefinition
-	if primary_use_just and _try_open_target_container():
+	if primary_use_just and not is_attempting_container_mining() and _try_open_target_container():
 		primary_use_just = false
 	elif primary_use_just and not is_attempting_crafting_station_mining() and _try_open_target_crafting_station():
 		primary_use_just = false
@@ -392,6 +397,8 @@ func _can_mine_position(pos: Vector3i, action: MiningActionDefinition) -> bool:
 	var block_id := voxel_space.get_block_id_at(pos)
 	if block_id == BlockId.Type.AIR:
 		return false
+	if voxel_space.block_catalog.get_definition(block_id).container != null:
+		return chest_coordinator != null and chest_coordinator.can_pick_up_chest(pos, action)
 	return action.can_mine(voxel_space.block_catalog.get_definition(block_id))
 
 func _can_till_position(pos: Vector3i, face_normal: Vector3i, action: TillingActionDefinition) -> bool:
@@ -424,6 +431,10 @@ func get_mine_duration() -> float:
 	assert(is_mining and mine_action != null)
 	var block_id := voxel_space.get_block_id_at(mine_target)
 	var block := voxel_space.block_catalog.get_definition(block_id)
+	if block.container != null:
+		var pickaxe_stat := mine_action.get_tool_stat(&"pickaxe")
+		assert(pickaxe_stat != null)
+		return block.mine_duration / pickaxe_stat.speed_multiplier
 	return mine_action.get_mine_duration(block)
 
 func has_mining_impact_target() -> bool:
@@ -471,6 +482,11 @@ func _commit_mine(pos: Vector3i, action: MiningActionDefinition):
 	var preview_id = voxel_space.get_block_id_at(pos)
 	if preview_id == BlockId.Type.AIR:
 		return
+	if voxel_space.block_catalog.get_definition(preview_id).container != null:
+		if chest_coordinator != null and chest_coordinator.pick_up_chest(pos, action):
+			_handle_raycast()
+		return
+
 	var item_ids_to_collect: Array[StringName] = []
 	_append_block_drop(item_ids_to_collect, preview_id)
 	for torch_pos in editable_voxel_world.get_attached_torches(pos):
@@ -566,6 +582,10 @@ func _try_open_target_crafting_station() -> bool:
 
 func has_container_target() -> bool:
 	return target_has and target_container != null
+
+func is_attempting_container_mining() -> bool:
+	var action := get_selected_primary_action() as MiningActionDefinition
+	return has_container_target() and action != null and action.get_tool_stat(&"pickaxe") != null
 
 func _get_target_container(position: Vector3i) -> ContainerBlockDefinition:
 	if editable_voxel_world == null:

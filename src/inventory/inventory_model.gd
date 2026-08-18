@@ -233,7 +233,7 @@ func exchange_inventory_items(consumed: Dictionary[StringName, int], granted: Di
 	return true
 
 func _simulate_inventory_exchange(consumed: Dictionary[StringName, int], granted: Dictionary[StringName, int]) -> Array[InventoryStack]:
-	if consumed.is_empty() or granted.is_empty():
+	if consumed.is_empty() and granted.is_empty():
 		return []
 	var simulated := _copy_slots()
 	var inventory_indices := _get_inventory_indices()
