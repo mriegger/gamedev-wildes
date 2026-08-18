@@ -155,7 +155,8 @@ It contains the six recipes that do not require a workstation. A placed anvil op
 with the seven copper tool, weapon, and armor recipes. A placed cauldron opens a food-and-potion
 panel; its initial recipe combines two pumpkins and two apples into one health potion. All catalogs
 use materials from the backpack and hotbar and craft immediately when the enabled Craft button is
-pressed, playing one success sound.
+pressed, playing one success sound. Apples and pumpkins each restore 10% of maximum health, while
+health potions restore health completely.
 
 **Developer console.** Press `/` to open a command line at the bottom of the screen. The
 `spawn <item> [count]` command adds any catalog item directly to the backpack for testing, with the
@@ -168,11 +169,11 @@ added directly with `spawn copper <count>`. New worlds contain one seeded 5×4 p
 blocks from the initial player spawn. Its location, growth states, and rotations persist in the
 save. The
 `spawn pumpkin_patch` command relocates and randomizes that persistent patch near the player.
-Harvested pumpkins stack in the inventory and restore the player's health to full when right-clicked
-in the backpack or hotbar, or when selected and used with right-click in the world.
+Harvested pumpkins stack in the inventory and restore 10% of maximum health when right-clicked in
+the backpack or hotbar, or when selected and used with right-click in the world.
 About five percent of procedural trees carry apples: two to six collectible apples spawn beneath
-the tree and twenty decorate its subtly tinted lower outer leaves. Collected apples persist in saves and restore
-75 percent of maximum health through the same inventory consumption controls.
+the tree and twenty decorate its subtly tinted lower outer leaves. Collected apples persist in saves
+and restore 10% of maximum health through the same inventory consumption controls.
 
 **UI & saves.** Backpack and hotbar stacks can be split by scrolling while left-dragging. The side
 panel includes a trash drop target that accepts backpack, hotbar, and equipped items. A

@@ -224,6 +224,8 @@ func _test_cauldron(block_catalog: BlockCatalog, item_catalog: ItemCatalog, gene
 	_expect(health_potion.max_stack == 20, "health potion stack limit is incorrect")
 	_expect(health_potion.icon.resource_path == "res://assets/textures/items/health_potion.png", "health potion uses the wrong inventory icon")
 	_expect(potion_icon != null and potion_icon.get_size() == Vector2i(16, 16), "health potion inventory icon is not 16x16 pixel art")
+	var potion_consumption := health_potion.secondary_action as ConsumableActionDefinition
+	_expect(potion_consumption != null and is_equal_approx(potion_consumption.health_restore_fraction, 1.0), "health potion does not restore full health")
 
 	var renderer := CauldronRenderer.new()
 	root.add_child(renderer)

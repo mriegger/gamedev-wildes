@@ -147,8 +147,11 @@ func _run():
 	_expect(hoe.held_scene != null, "copper hoe held scene is missing")
 	var pumpkin := item_catalog.get_definition(&"pumpkin")
 	_expect(pumpkin.primary_action == null and pumpkin.secondary_action is ConsumableActionDefinition, "pumpkin action configuration is incorrect")
-	_expect(is_equal_approx((pumpkin.secondary_action as ConsumableActionDefinition).health_restore_fraction, 1.0), "pumpkin does not restore full health")
+	_expect(is_equal_approx((pumpkin.secondary_action as ConsumableActionDefinition).health_restore_fraction, 0.1), "pumpkin does not restore ten percent health")
 	_expect(pumpkin.consume_audio != null and pumpkin.consume_audio.streams.size() == 1, "pumpkin consume audio is not configured")
+	var health_potion := item_catalog.get_definition(&"health_potion")
+	_expect(health_potion.primary_action == null and health_potion.secondary_action is ConsumableActionDefinition, "health potion action configuration is incorrect")
+	_expect(is_equal_approx((health_potion.secondary_action as ConsumableActionDefinition).health_restore_fraction, 1.0), "health potion does not restore full health")
 	var hoe_held := hoe.held_scene.instantiate() as Node3D
 	var hoe_model := hoe_held.get_node_or_null("Model") as Node3D
 	_expect(hoe_model != null and hoe_model.scale.is_equal_approx(Vector3.ONE * 4.6875), "copper hoe held scale is incorrect")

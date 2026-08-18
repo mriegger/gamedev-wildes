@@ -62,7 +62,7 @@ func _init() -> void:
 			consumption_coordinator.setup(inventory, stats)
 			var apple_slot := _find_item_slot(inventory, &"apple")
 			_expect(consumption_coordinator.try_consume_at(apple_slot), "apple could not be consumed")
-			_expect(is_equal_approx(stats.current_hp, maximum_hp * 0.85), "apple consumption did not heal 75 percent of maximum health")
+			_expect(is_equal_approx(stats.current_hp, maximum_hp * 0.2), "apple consumption did not heal ten percent of maximum health")
 			var snapshot := apple_trees.snapshot()
 			var restored := AppleTreeState.new()
 			_expect(restored.restore(JSON.parse_string(JSON.stringify(snapshot))), "apple pickup state did not restore")
@@ -72,7 +72,7 @@ func _init() -> void:
 			_expect(restored.snapshot() == before_invalid_restore, "failed apple state restore changed collected slots")
 	var apple := item_catalog.get_definition(&"apple")
 	var consumption := apple.secondary_action as ConsumableActionDefinition
-	_expect(consumption != null and is_equal_approx(consumption.health_restore_fraction, 0.75), "apple did not restore 75 percent of maximum health")
+	_expect(consumption != null and is_equal_approx(consumption.health_restore_fraction, 0.1), "apple did not restore ten percent of maximum health")
 	_expect(apple.consume_audio != null and apple.consume_audio.streams.size() == 1, "apple munch audio was not configured")
 	apple_trees.free()
 	if _failures == 0:

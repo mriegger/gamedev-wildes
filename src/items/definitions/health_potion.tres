@@ -1,7 +1,9 @@
-[gd_resource type="Resource" script_class="ItemDefinition" load_steps=3 format=3]
+[gd_resource type="Resource" script_class="ItemDefinition" load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://items/item_definition.gd" id="1_definition"]
 [ext_resource type="Texture2D" path="res://assets/textures/items/health_potion.png" id="2_icon"]
+[ext_resource type="Resource" path="res://items/consumption/definitions/health_potion_consumption.tres" id="3_consumption"]
+[ext_resource type="Resource" path="res://items/consumption/audio/apple_munch.tres" id="4_audio"]
 
 [resource]
 script = ExtResource("1_definition")
@@ -9,3 +11,5 @@ id = &"health_potion"
 display_name = "Health Potion"
 icon = ExtResource("2_icon")
 max_stack = 20
+secondary_action = ExtResource("3_consumption")
+consume_audio = ExtResource("4_audio")

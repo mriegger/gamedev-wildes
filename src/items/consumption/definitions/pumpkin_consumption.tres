@@ -4,4 +4,4 @@
 
 [resource]
 script = ExtResource("1_action")
-health_restore_fraction = 1.0
+health_restore_fraction = 0.1
