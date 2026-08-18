@@ -48,6 +48,11 @@ func set_gameplay_selection_enabled(enabled: bool) -> void:
 	_gameplay_selection_enabled = enabled
 	_sync_selection_input_enabled()
 
+func set_inventory_transfer_context(coordinator: InventoryTransferCoordinator) -> void:
+	for slot_view in slot_nodes:
+		var slot := slot_view as InventoryHotbarSlot
+		slot.set_inventory_transfer_context(coordinator, InventoryTransferCoordinator.PLAYER_SCOPE if coordinator != null else &"")
+
 func _on_inventory_slot_selection_requested(slot_index: int) -> void:
 	if _inventory_model != null:
 		_inventory_model.select_slot(slot_index)

@@ -7,6 +7,8 @@ var inventory_stat_coordinator: InventoryStatCoordinator = null
 var item_proficiency: ItemProficiency = null
 var item_consumption: ItemConsumptionCoordinator = null
 var empty_label: String = ""
+var inventory_transfer_coordinator: InventoryTransferCoordinator = null
+var inventory_scope: StringName = &""
 
 @export var item_tooltip_scene: PackedScene
 
@@ -43,6 +45,12 @@ func _try_handle_consumption_input(event: InputEvent) -> bool:
 	item_consumption.try_consume_at(slot_index)
 	get_viewport().set_input_as_handled()
 	return true
+
+func set_inventory_transfer_context(coordinator: InventoryTransferCoordinator, scope: StringName):
+	if inventory_transfer_coordinator != coordinator or inventory_scope != scope:
+		_quick_transfer_pending = false
+	inventory_transfer_coordinator = coordinator
+	inventory_scope = scope
 
 func set_inventory_styles(normal_style: StyleBoxFlat, empty_style: StyleBoxFlat):
 	_inventory_normal_style = normal_style
@@ -83,7 +91,7 @@ func _make_custom_tooltip(_for_text: String) -> Object:
 		definition,
 		item_proficiency,
 		inventory_model.item_catalog,
-		inventory_model.get_socketed_rune_ids(slot_index),
+		_get_socketed_rune_ids(),
 	)
 	return tooltip
 
@@ -128,6 +136,7 @@ var _drag_preview_layer: CanvasLayer = null
 var _active_drag_data: Dictionary = {}
 var _drag_source_item_id = null
 var _drag_source_count: int = 0
+var _quick_transfer_pending: bool = false
 
 func _get_visual_count() -> int:
 	if _active_drag_data.is_empty():
@@ -156,12 +165,21 @@ func _process(_delta):
 func _gui_input(event):
 	if _try_handle_consumption_input(event):
 		return
-	if event is InputEventMouseButton and event.pressed:
-		if event.button_index == MOUSE_BUTTON_LEFT and event.double_click and inventory_stat_coordinator != null:
+	if not event is InputEventMouseButton or event.button_index != MOUSE_BUTTON_LEFT:
+		return
+	if event.pressed:
+		if event.double_click and inventory_stat_coordinator != null:
+			_quick_transfer_pending = false
 			var changed := inventory_stat_coordinator.try_unequip_armor(slot_index) if InventoryModel.is_equipment_index(slot_index) else inventory_stat_coordinator.try_equip_armor(slot_index)
 			if changed:
 				get_viewport().set_input_as_handled()
 			return
+		_quick_transfer_pending = inventory_transfer_coordinator != null and item_id != null and item_count > 0
+		return
+	var should_transfer := _quick_transfer_pending
+	_quick_transfer_pending = false
+	if should_transfer and inventory_transfer_coordinator != null and inventory_transfer_coordinator.quick_transfer(inventory_scope, slot_index):
+		get_viewport().set_input_as_handled()
 
 func _input(event: InputEvent) -> void:
 	if _active_drag_data.is_empty() or not get_viewport().gui_is_dragging():
@@ -184,12 +202,15 @@ func _get_drag_data(_at_position):
 		return null
 	if inventory_model == null:
 		return null
-	var s: InventoryStack = inventory_model.get_slot(slot_index)
+	var s := _get_current_stack()
 	if s == null:
 		return null
+	_quick_transfer_pending = false
 	var count: int = s.count
 	var source_item_id: StringName = s.item_id
 	var data = {"source_index": slot_index, "drag_count": count}
+	if inventory_transfer_coordinator != null:
+		data["source_scope"] = inventory_scope
 	_active_drag_data = data
 	_drag_source_item_id = source_item_id
 	_drag_source_count = count
@@ -211,20 +232,44 @@ func _can_drop_data(_at_position, data) -> bool:
 		return false
 	if not data.has("source_index") or not data.has("drag_count"):
 		return false
-	if inventory_model == null or inventory_stat_coordinator == null:
+	if inventory_model == null:
 		return false
 	var src_idx = int(data.get("source_index", -1))
 	var drag_count = int(data.get("drag_count", 0))
+	if inventory_transfer_coordinator != null:
+		if not data.has("source_scope"):
+			return false
+		return inventory_transfer_coordinator.can_handle_drop(StringName(data["source_scope"]), src_idx, inventory_scope, slot_index, drag_count)
+	if data.has("source_scope"):
+		return false
+	if inventory_stat_coordinator == null:
+		return false
 	return inventory_stat_coordinator.can_handle_drop(src_idx, slot_index, drag_count)
 
 func _drop_data(_at_position, data):
 	if data == null or not data is Dictionary:
 		return
-	if inventory_model == null or inventory_stat_coordinator == null:
+	if inventory_model == null:
 		return
 	var src_idx = int(data.get("source_index", -1))
 	var drag_count = int(data.get("drag_count", 0))
+	if inventory_transfer_coordinator != null:
+		if data.has("source_scope"):
+			inventory_transfer_coordinator.handle_drop(StringName(data["source_scope"]), src_idx, inventory_scope, slot_index, drag_count)
+		return
+	if inventory_stat_coordinator == null:
+		return
 	inventory_stat_coordinator.handle_drop(src_idx, slot_index, drag_count)
+
+func _get_current_stack() -> InventoryStack:
+	if inventory_transfer_coordinator != null:
+		return inventory_transfer_coordinator.get_inventory_stack(inventory_scope, slot_index)
+	return inventory_model.get_slot(slot_index)
+
+func _get_socketed_rune_ids() -> Array[StringName]:
+	if inventory_transfer_coordinator != null:
+		return inventory_transfer_coordinator.get_socketed_rune_ids(inventory_scope, slot_index)
+	return inventory_model.get_socketed_rune_ids(slot_index)
 
 func _create_drag_preview(source_item_id: StringName, count: int) -> Control:
 	var preview = Panel.new()
@@ -295,6 +340,7 @@ func _hide_high_layer_preview():
 
 func _notification(what):
 	if what == NOTIFICATION_DRAG_END:
+		_quick_transfer_pending = false
 		_active_drag_data.clear()
 		_drag_source_item_id = null
 		_drag_source_count = 0
@@ -303,5 +349,6 @@ func _notification(what):
 		if is_node_ready():
 			refresh_visuals()
 	elif what == NOTIFICATION_EXIT_TREE or what == NOTIFICATION_PREDELETE:
+		_quick_transfer_pending = false
 		set_process_input(false)
 		_hide_high_layer_preview()

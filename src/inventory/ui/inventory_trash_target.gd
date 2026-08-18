@@ -33,6 +33,8 @@ func _drop_data(_at_position: Vector2, data: Variant) -> void:
 func _parse_drag_data(data: Variant) -> Vector2i:
 	if not data is Dictionary or not data.has("source_index") or not data.has("drag_count"):
 		return Vector2i(-1, 0)
+	if data.has("source_scope") and StringName(data["source_scope"]) != InventoryTransferCoordinator.PLAYER_SCOPE:
+		return Vector2i(-1, 0)
 	return Vector2i(int(data.get("source_index", -1)), int(data.get("drag_count", 0)))
 
 func _apply_drop_state(active: bool) -> void:

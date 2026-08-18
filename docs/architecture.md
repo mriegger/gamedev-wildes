@@ -15,7 +15,7 @@ game/                        gameplay composition and session lifecycle
 blocks/                      block domain resources, voxel query contract, and shared presentation
 combat/                      melee profiles, contacts, targeting, and validation
 crafting/                    recipe definitions, inventory coordination, and presentation
-chests/                      container definitions, storage, presentation, and tests
+chests/                      container definitions, storage, transfers, and presentation
 entities/                    content, AI, navigation, populations, and presentation
 environment/                 packaged environment and day/night feature
 inventory/                   inventory model and inventory-owned UI
@@ -123,6 +123,14 @@ presents placed chests outside the chunk cube mesh. The body uses explicit face 
 face is rendered once, while the lid remains a separately hinged box. `TargetingView` forwards the
 reachable chest position so the renderer highlights both pieces, hinges the lid slightly, and uses
 the same split model for placement previews without changing world state.
+
+`ChestCoordinator` validates the active block before exposing atomic transfers. While a chest is
+open, `ChestPanel` presents its centered 3×5 grid, while the existing right-side `SidePanel` and
+bottom `InventoryHotbar` present player storage through a temporary
+`InventoryTransferCoordinator` context.
+Closing the chest removes that context before ordinary inventory interactions resume. Click
+transfers and the move-all action fill compatible stacks before empty slots and reject a source
+stack when the destination cannot hold it in full.
 
 ## Runes and socketing
 

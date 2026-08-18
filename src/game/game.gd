@@ -62,6 +62,7 @@ var anvil_coordinator: AnvilCoordinator
 var harvest_coordinator: HarvestCoordinator
 var item_consumption_coordinator: ItemConsumptionCoordinator
 var chest_storage: ChestInventoryStore
+var chest_coordinator: ChestCoordinator
 var input_buffer: InputBuffer = InputBuffer.new()
 var settings: GameSettings
 
@@ -248,6 +249,9 @@ func _setup_gameplay() -> bool:
 	anvil_coordinator = AnvilCoordinator.new()
 	anvil_coordinator.setup(world.voxel_model)
 	player.interactor.crafting_station_open_requested.connect(_on_crafting_station_open_requested)
+	chest_coordinator = ChestCoordinator.new()
+	chest_coordinator.setup(world.voxel_model, inventory_model, chest_storage)
+	player.interactor.container_open_requested.connect(_on_container_open_requested)
 	player_stats.health_depleted.connect(_on_player_defeated)
 	var mining_particle_tints := MiningParticleTintPalette.new(block_catalog)
 	mining_break_particles.setup(world.voxel_model, mining_particle_tints)
@@ -275,7 +279,7 @@ func _setup_gameplay() -> bool:
 	camera_rig.reset_panel_obstruction()
 	game_environment.sky_color_changed.connect(world.update_water_tint)
 	game_environment.start_clock()
-	hud.setup_with_camera(inventory_model, inventory_stat_coordinator, crafting_coordinator, crafting_recipe_catalog, camera_rig, player_stats, item_proficiency)
+	hud.setup_with_camera(inventory_model, inventory_stat_coordinator, crafting_coordinator, crafting_recipe_catalog, camera_rig, player_stats, item_proficiency, chest_coordinator)
 	var anvil_station := block_catalog.get_definition(BlockId.Type.ANVIL).crafting_station
 	hud.setup_anvil(anvil_coordinator, anvil_station, anvil_crafting_coordinator, anvil_recipe_catalog, camera_rig)
 	hud.setup_socketing(inventory_model, rune_socketing_coordinator, item_proficiency)
@@ -379,7 +383,7 @@ func _physics_process(delta):
 		if OS.is_debug_build() and Input.is_action_just_pressed("toggle_animation_tuner"):
 			_toggle_animation_tuning_panel()
 		input_buffer.poll()
-		if dev_console.is_open() or structure_designer_workflow.is_dialog_open() or (animation_tuning_panel != null and animation_tuning_panel.is_open()):
+		if dev_console.is_open() or structure_designer_workflow.is_dialog_open() or hud.is_chest_open() or (animation_tuning_panel != null and animation_tuning_panel.is_open()):
 			input_buffer.clear_gameplay()
 	if _location_state != null:
 		_location_state.update_world_position(player.global_position)
@@ -557,6 +561,9 @@ func _handle_cancel():
 	if animation_tuning_panel != null and animation_tuning_panel.is_open():
 		animation_tuning_panel.hide_panel()
 		return
+	if hud.is_chest_open():
+		hud.close_chest()
+		return
 	if hud.is_side_panel_open():
 		hud.close_side_panel()
 		return
@@ -722,6 +729,9 @@ func _sync_structure_designer_ui_blocking() -> void:
 	if _structure_designer_runtime == null:
 		return
 	_structure_designer_runtime.set_external_ui_blocked(dev_console.is_open() or structure_designer_workflow.is_dialog_open())
+
+func _on_container_open_requested(position: Vector3i, definition: ContainerBlockDefinition):
+	hud.open_container(position, definition)
 
 func _show_pause_menu():
 	_pause_menu = pause_menu_scene.instantiate() as PauseMenu

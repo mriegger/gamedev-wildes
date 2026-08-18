@@ -581,7 +581,7 @@ jobs:
       - uses: ./.github/actions/setup_godot
         with:
           version: "4.7"
-      - name: Run chest storage and rendering integration
+      - name: Run chest interaction, storage, and UI integration
         run: |
           bash .github/scripts/run_godot_check.sh \
             30 "CHEST_SYSTEM PASS" /tmp/chest_system.log -- \

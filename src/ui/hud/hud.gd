@@ -7,17 +7,23 @@ class_name HUD
 @onready var side_panel: SidePanel = $SidePanel as SidePanel
 @onready var crafting_panel: CraftingPanel = $CraftingPanel as CraftingPanel
 @onready var anvil_panel: CraftingPanel = $AnvilPanel as CraftingPanel
+@onready var chest_panel: ChestPanel = $ChestPanel as ChestPanel
 @onready var player_hit_vignette: PlayerHitVignette = $PlayerHitVignette as PlayerHitVignette
 @onready var interaction_prompt: Label = $InteractionPrompt as Label
 
 var anvil_coordinator: AnvilCoordinator
+var chest_coordinator: ChestCoordinator
 
-func setup_with_camera(p_inventory: InventoryModel, p_inventory_stat_coordinator: InventoryStatCoordinator, p_crafting_coordinator: CraftingCoordinator, p_recipe_catalog: CraftingRecipeCatalog, cam_rig: CameraRig, stats: ActorStats, item_proficiency: ItemProficiency):
+func setup_with_camera(p_inventory: InventoryModel, p_inventory_stat_coordinator: InventoryStatCoordinator, p_crafting_coordinator: CraftingCoordinator, p_recipe_catalog: CraftingRecipeCatalog, cam_rig: CameraRig, stats: ActorStats, item_proficiency: ItemProficiency, p_chest_coordinator: ChestCoordinator = null):
+	chest_coordinator = p_chest_coordinator
 	hotbar.setup(p_inventory, p_inventory_stat_coordinator, item_proficiency)
 	health_bar.setup(stats)
 	experience_bar.setup(stats)
 	side_panel.setup(p_inventory, p_inventory_stat_coordinator, item_proficiency, cam_rig, hotbar, CraftingPanel.PANEL_WIDTH)
 	crafting_panel.setup(p_crafting_coordinator, p_recipe_catalog, cam_rig)
+	if p_chest_coordinator != null:
+		chest_panel.setup(p_chest_coordinator, p_inventory, item_proficiency)
+		p_chest_coordinator.closed.connect(_on_chest_closed)
 	side_panel.progress_changed.connect(_on_side_panel_progress_changed)
 	_on_side_panel_progress_changed(side_panel.get_progress())
 
@@ -53,11 +59,14 @@ func _on_side_panel_progress_changed(progress: float):
 	experience_bar.set_right_inset(right_inset)
 
 func is_side_panel_open() -> bool:
-	return side_panel.is_open() or side_panel.get_progress() > 0.01 or crafting_panel.get_progress() > 0.01 or anvil_panel.get_progress() > 0.01
+	return side_panel.is_open() or side_panel.get_progress() > 0.01 or crafting_panel.get_progress() > 0.01 or anvil_panel.get_progress() > 0.01 or chest_panel.is_open()
 
 func toggle_backpack():
 	if anvil_panel.is_open():
 		close_anvil()
+		return
+	if chest_panel.is_open():
+		close_chest()
 		return
 	if crafting_panel.is_open():
 		crafting_panel.close()
@@ -74,6 +83,11 @@ func toggle_crafting():
 		side_panel.open()
 		crafting_panel.open()
 		return
+	if chest_panel.is_open():
+		chest_panel.close()
+		side_panel.open_inventory()
+		crafting_panel.open()
+		return
 	if crafting_panel.is_open():
 		close_side_panel()
 	else:
@@ -86,6 +100,8 @@ func close_side_panel():
 	anvil_panel.close()
 	if anvil_coordinator != null:
 		anvil_coordinator.close()
+	chest_panel.close()
+	_set_chest_transfer_context(null)
 
 func close_side_panel_immediate():
 	side_panel.close_immediate()
@@ -93,10 +109,15 @@ func close_side_panel_immediate():
 	anvil_panel.close_immediate()
 	if anvil_coordinator != null:
 		anvil_coordinator.close()
+	chest_panel.close_immediate()
+	_set_chest_transfer_context(null)
 
 func open_crafting_station(position: Vector3i, definition: CraftingStationBlockDefinition) -> void:
 	if anvil_coordinator == null or definition == null or definition.id != &"anvil":
 		return
+	if chest_panel.is_open():
+		chest_panel.close()
+		_set_chest_transfer_context(null)
 	crafting_panel.close()
 	if not anvil_coordinator.try_open(position, definition):
 		return
@@ -111,6 +132,32 @@ func close_anvil() -> void:
 
 func _on_anvil_closed() -> void:
 	anvil_panel.close()
+
+func open_container(position: Vector3i, definition: ContainerBlockDefinition):
+	if anvil_panel.is_open():
+		anvil_coordinator.close()
+		anvil_panel.close()
+	crafting_panel.close()
+	side_panel.open_inventory()
+	_set_chest_transfer_context(chest_coordinator)
+	if not chest_coordinator.try_open(position, definition):
+		_set_chest_transfer_context(null)
+		side_panel.close()
+
+func is_chest_open() -> bool:
+	return chest_panel.is_open()
+
+func close_chest():
+	chest_panel.close()
+	_set_chest_transfer_context(null)
+	side_panel.close()
+
+func _on_chest_closed():
+	_set_chest_transfer_context(null)
+
+func _set_chest_transfer_context(coordinator: InventoryTransferCoordinator):
+	side_panel.set_inventory_transfer_context(coordinator)
+	hotbar.set_inventory_transfer_context(coordinator)
 
 func play_player_hit():
 	player_hit_vignette.play()

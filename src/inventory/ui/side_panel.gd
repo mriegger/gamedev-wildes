@@ -256,6 +256,15 @@ func get_inventory_slots() -> Array[InventorySlot]:
 func get_equipment_slots() -> Array[InventorySlot]:
 	return _slot_groups["equipment"] as Array[InventorySlot]
 
+func set_inventory_transfer_context(coordinator: InventoryTransferCoordinator):
+	for slot in _slot_groups["inventory"] as Array[InventorySlot]:
+		slot.set_inventory_transfer_context(coordinator, InventoryTransferCoordinator.PLAYER_SCOPE if coordinator != null else &"")
+	_equipment_button.set_disabled(coordinator != null)
+
+func open_inventory():
+	_switch_to_tab_id("inventory")
+	open()
+
 func toggle():
 	if _is_open:
 		close()

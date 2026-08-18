@@ -17,7 +17,7 @@ position, and world time. Copper deposits regenerate deterministically from the 
 | `Space` | Hop — needed to get up any ledge |
 | `Q` / `E` | Rotate the camera 45° |
 | Mouse wheel / pinch | Zoom |
-| Left-click / hold | Use the selected item's primary action; hold to mine, click to attack, till soil, or interact with a crafting station |
+| Left-click / hold | Open a targeted chest or crafting station, or use the selected item's primary action; hold to mine, click to attack or till soil |
 | Right-click | Use the selected item's secondary action; place blocks or consume food |
 | `F` | Enter or leave a nearby dungeon |
 | `1`–`9` | Select hotbar slot; while the backpack is open, assign the hovered item to that slot |
@@ -27,8 +27,8 @@ position, and world time. Copper deposits regenerate deterministically from the 
 | `F10` | Toggle player animation tuner |
 | `Esc` | Pause |
 
-Reach is 6 blocks. Mineable targets under the cursor are outlined, while reachable chests use a
-hover highlight. A translucent preview shows where a placement would land, using the chest's split
+Reach is 6 blocks. Mineable targets under the cursor are outlined, while chests open without a
+mining outline. A translucent preview shows where a placement would land, using the chest's split
 body-and-lid model when appropriate; placements that would overlap you are rejected.
 
 The Structure Designer uses first-person `WASD` movement, mouse look, `Space`/`Ctrl` to
@@ -128,6 +128,11 @@ Overworld torch shadows are configurable for the nearest 0, 1, 2, or 4 lights an
 nearest one. Chests are solid, non-mineable 1×1 placeable blocks rendered as separate body and lid
 meshes with dedicated chest textures. Hovering a reachable chest brightens it and hinges its lid
 open slightly.
+Left-clicking opens that chest's own persistent 3×5 storage in the center while the backpack opens
+from the right. Items can be dragged between the chest, backpack, and hotbar. Clicking a backpack
+or chest item transfers its stack to the other inventory, and the chest's Take all button transfers
+every stack that fits into the backpack. `P` or `Esc` closes both panels; `Tab` replaces the chest
+with the crafting menu while keeping the backpack open.
 
 **Tools.** New worlds start with an empty inventory, while the first pickaxe is crafted from stone
 and wood. Item actions are data-driven: the hoe tills exposed grass and dirt, stone and copper
@@ -188,7 +193,7 @@ src/                    Godot project. Entry scene: app/app.tscn
 ├── blocks/             Block domain, voxel query contract, and shared block presentation
 ├── combat/             Melee contacts, profiles, targeting, and validation
 ├── crafting/           Recipe resources, inventory coordination, presentation, and tests
-├── chests/             Container definitions, persistent storage, presentation, and tests
+├── chests/             Container definitions, persistent storage, transfers, presentation, and tests
 ├── dev_console/        Developer commands, bottom-screen console presentation, and tests
 ├── entities/           Entity catalog, AI, voxel navigation, populations, and custom presentation
 ├── levels/             Dungeon content, definitions, generation, runtime, entrance, and presentation
@@ -248,5 +253,6 @@ from Godot primitive meshes. Visual effects use project-authored shaders.
 | `src/assets/models/foraging/apple/apple.glb`, `Textures/colormap.png`, and derived inventory icon | [Food Kit](https://kenney.nl/assets/food-kit) – Kenney | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `src/assets/textures/blocks/farmland_dry.png` | Codex, prompted by Michael Riegger | Project-authored |
 | `src/assets/textures/effects/mining/dirt_*.png` (3 files) | [Particle Pack](https://kenney.nl/assets/particle-pack) – Kenney | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
+| `src/assets/images/icons/button/move_to_backpack.png` | Meta Muse (`muse-image-1.0-eval`) through the `meta-imagegen` skill; prompted and downsampled for Wildes | Project-authored |
 
 Godot itself is MIT licensed.

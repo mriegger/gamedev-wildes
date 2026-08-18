@@ -57,7 +57,7 @@ func _process(_delta: float) -> bool:
 	_frame += 1
 	if _phase == 0 and _frame == 2:
 		_camera_rig.setup(_camera_follow, _camera_input_buffer)
-		_hud.setup_with_camera(_inventory, _inventory_stats, _crafting, _recipe_catalog, _camera_rig, _stats, _item_proficiency)
+		_hud.setup_with_camera(_inventory, _inventory_stats, _crafting, _recipe_catalog, _camera_rig, _stats, _item_proficiency, ChestCoordinator.new())
 		_hud.toggle_backpack()
 		_phase = 1
 	elif _phase == 1 and _frame == 35:

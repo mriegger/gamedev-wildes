@@ -335,7 +335,7 @@ func _should_show_mining_outline(has_target_action: bool) -> bool:
 		return false
 	return not interactor.has_crafting_station_target() or interactor.is_attempting_crafting_station_mining()
 
-func _update_interaction_visuals() -> void:
+func _update_interaction_visuals(_delta: float = 0.0) -> void:
 	var anvil_interaction_available := _should_show_anvil_interaction()
 	var chest_interaction_available := _should_show_chest_interaction()
 	if anvil_renderer != null:
@@ -349,6 +349,9 @@ func _should_show_anvil_interaction() -> bool:
 
 func _should_show_chest_interaction() -> bool:
 	return interactor.has_container_target() and interactor.can_interact_target
+
+func _should_show_interaction() -> bool:
+	return _should_show_anvil_interaction() or _should_show_chest_interaction()
 
 func _hide_interaction_visuals() -> void:
 	if anvil_renderer != null:

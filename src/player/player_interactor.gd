@@ -3,6 +3,7 @@ class_name PlayerInteractor
 
 signal block_placed
 signal crafting_station_open_requested(position: Vector3i, definition: CraftingStationBlockDefinition)
+signal container_open_requested(position: Vector3i, definition: ContainerBlockDefinition)
 signal melee_attack_started(action: MeleeAttackActionDefinition, direction: int)
 signal melee_terrain_hit(position: Vector3i)
 signal soil_tilled
@@ -262,7 +263,9 @@ func _handle_item_actions(delta):
 	var selected_mining := selected_primary as MiningActionDefinition
 	var selected_melee := selected_primary as MeleeAttackActionDefinition
 	var selected_tilling := selected_primary as TillingActionDefinition
-	if primary_use_just and not is_attempting_crafting_station_mining() and _try_open_target_crafting_station():
+	if primary_use_just and _try_open_target_container():
+		primary_use_just = false
+	elif primary_use_just and not is_attempting_crafting_station_mining() and _try_open_target_crafting_station():
 		primary_use_just = false
 	if primary_use_pressed and target_has and can_primary_target and selected_mining != null:
 		if not is_mining:
@@ -468,7 +471,6 @@ func _commit_mine(pos: Vector3i, action: MiningActionDefinition):
 	var preview_id = voxel_space.get_block_id_at(pos)
 	if preview_id == BlockId.Type.AIR:
 		return
-
 	var item_ids_to_collect: Array[StringName] = []
 	_append_block_drop(item_ids_to_collect, preview_id)
 	for torch_pos in editable_voxel_world.get_attached_torches(pos):
@@ -569,3 +571,9 @@ func _get_target_container(position: Vector3i) -> ContainerBlockDefinition:
 	if editable_voxel_world == null:
 		return null
 	return voxel_space.block_catalog.get_definition(voxel_space.get_block_id_at(position)).container
+
+func _try_open_target_container() -> bool:
+	if not target_has or target_container == null or not can_interact_target:
+		return false
+	container_open_requested.emit(target_block, target_container)
+	return true
