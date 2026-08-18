@@ -33,10 +33,6 @@ func advance(
 ):
 	_attack_started = false
 	_attack_cooldown_remaining = maxf(_attack_cooldown_remaining - delta, 0.0)
-	if _attack_remaining > 0.0:
-		_attack_remaining = maxf(_attack_remaining - delta, 0.0)
-		state = State.ATTACK
-		return
 
 	var distance_squared := self_position.distance_squared_to(player_position)
 	var detected := player_visible and distance_squared <= _definition.detection_range * _definition.detection_range
@@ -49,6 +45,10 @@ func advance(
 	if distance_squared > _definition.forget_range * _definition.forget_range:
 		_target_memory_remaining = 0.0
 
+	if _attack_remaining > 0.0:
+		_attack_remaining = maxf(_attack_remaining - delta, 0.0)
+		state = State.ATTACK
+		return
 	var melee_profile := _definition.melee_profile
 	if detected and distance_squared <= melee_profile.reach * melee_profile.reach and _attack_cooldown_remaining <= 0.0:
 		state = State.ATTACK
