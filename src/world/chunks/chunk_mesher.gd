@@ -74,7 +74,7 @@ func _is_ao_solid(cache: PackedInt32Array, x: int, y: int, z: int, offset: Vecto
 	if sample_x < 0 or sample_x >= cache_x or sample_z < 0 or sample_z >= cache_z:
 		return false
 	var index := sample_x * sy_cz + sample_y * cache_z + sample_z
-	return index >= 0 and index < cache.size() and BlockId.is_chunk_cube(cache[index])
+	return index >= 0 and index < cache.size() and BlockId.is_ao_solid(cache[index])
 
 func _append_face_indices(indices: PackedInt32Array, base_index: int, ao_levels: Array):
 	if ao_levels[0] + ao_levels[2] < ao_levels[1] + ao_levels[3]:
@@ -176,7 +176,7 @@ func build_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 					var idx_top = lx_sycz + (ly + 1) * cache_z_local + lz
 					if idx_top >= 0 and idx_top < cache.size():
 						n_top = cache[idx_top]
-				var top_visible = (n_top == -1 or n_top == BlockId.Type.AIR or n_top == BlockId.Type.TORCH or n_top == BlockId.Type.WATER)
+				var top_visible = not BlockId.occludes_chunk_face(n_top)
 				if top_visible:
 					var v0 = Vector3(x, y + 1, z)
 					var v1 = Vector3(x + 1, y + 1, z)
@@ -253,7 +253,7 @@ func build_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 					var idx_bot = lx_sycz + (ly - 1) * cache_z_local + lz
 					if idx_bot >= 0 and idx_bot < cache.size():
 						n_bot = cache[idx_bot]
-				var bot_visible = (n_bot == -1 or n_bot == BlockId.Type.AIR or n_bot == BlockId.Type.TORCH or n_bot == BlockId.Type.WATER)
+				var bot_visible = not BlockId.occludes_chunk_face(n_bot)
 				if bot_visible and y > 0:
 					var ao2 = [0, 0, 0, 0]
 					for i in range(4):
@@ -275,7 +275,7 @@ func build_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 					var idx_e = lx_p1_sycz + ly * cache_z_local + lz
 					if idx_e >= 0 and idx_e < cache.size():
 						n_east = cache[idx_e]
-				if n_east == -1 or n_east == BlockId.Type.AIR or n_east == BlockId.Type.TORCH or n_east == BlockId.Type.WATER:
+				if not BlockId.occludes_chunk_face(n_east):
 					var base_idx3 = vertices.size()
 					vertices.append(Vector3(x+1, y, z+1)); vertices.append(Vector3(x+1, y+1, z+1)); vertices.append(Vector3(x+1, y+1, z)); vertices.append(Vector3(x+1, y, z))
 					normals.append(Vector3(1,0,0)); normals.append(Vector3(1,0,0)); normals.append(Vector3(1,0,0)); normals.append(Vector3(1,0,0))
@@ -294,7 +294,7 @@ func build_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 					var idx_w = lx_m1_sycz + ly * cache_z_local + lz
 					if idx_w >= 0 and idx_w < cache.size():
 						n_west = cache[idx_w]
-				if n_west == -1 or n_west == BlockId.Type.AIR or n_west == BlockId.Type.TORCH or n_west == BlockId.Type.WATER:
+				if not BlockId.occludes_chunk_face(n_west):
 					var base_idx4 = vertices.size()
 					vertices.append(Vector3(x, y, z)); vertices.append(Vector3(x, y+1, z)); vertices.append(Vector3(x, y+1, z+1)); vertices.append(Vector3(x, y, z+1))
 					normals.append(Vector3(-1,0,0)); normals.append(Vector3(-1,0,0)); normals.append(Vector3(-1,0,0)); normals.append(Vector3(-1,0,0))
@@ -313,7 +313,7 @@ func build_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 					var idx_s = lx_sycz + ly * cache_z_local + (lz + 1)
 					if idx_s >= 0 and idx_s < cache.size():
 						n_south = cache[idx_s]
-				if n_south == -1 or n_south == BlockId.Type.AIR or n_south == BlockId.Type.TORCH or n_south == BlockId.Type.WATER:
+				if not BlockId.occludes_chunk_face(n_south):
 					var base_idx5 = vertices.size()
 					vertices.append(Vector3(x, y+1, z+1)); vertices.append(Vector3(x+1, y+1, z+1)); vertices.append(Vector3(x+1, y, z+1)); vertices.append(Vector3(x, y, z+1))
 					normals.append(Vector3(0,0,1)); normals.append(Vector3(0,0,1)); normals.append(Vector3(0,0,1)); normals.append(Vector3(0,0,1))
@@ -332,7 +332,7 @@ func build_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 					var idx_n = lx_sycz + ly * cache_z_local + (lz - 1)
 					if idx_n >= 0 and idx_n < cache.size():
 						n_north = cache[idx_n]
-				if n_north == -1 or n_north == BlockId.Type.AIR or n_north == BlockId.Type.TORCH or n_north == BlockId.Type.WATER:
+				if not BlockId.occludes_chunk_face(n_north):
 					var base_idx6 = vertices.size()
 					vertices.append(Vector3(x, y, z)); vertices.append(Vector3(x+1, y, z)); vertices.append(Vector3(x+1, y+1, z)); vertices.append(Vector3(x, y+1, z))
 					normals.append(Vector3(0,0,-1)); normals.append(Vector3(0,0,-1)); normals.append(Vector3(0,0,-1)); normals.append(Vector3(0,0,-1))

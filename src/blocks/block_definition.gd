@@ -23,5 +23,6 @@ class_name BlockDefinition
 @export var emissive_energy: float = 0.0
 
 @export_group("Behavior")
+@export var crafting_station: CraftingStationBlockDefinition
 @export var light_range: float = 0.0
 @export var light_color: Color = Color(1, 1, 1)

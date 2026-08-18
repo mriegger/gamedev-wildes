@@ -56,6 +56,7 @@ var rune_socketing_coordinator: RuneSocketingCoordinator
 var rune_effect_coordinator: RuneEffectCoordinator
 var interaction_prompt_coordinator: InteractionPromptCoordinator
 var pumpkin_harvest_coordinator: PumpkinHarvestCoordinator
+var anvil_coordinator: AnvilCoordinator
 var input_buffer: InputBuffer = InputBuffer.new()
 var settings: GameSettings
 
@@ -225,6 +226,8 @@ func _setup_gameplay() -> bool:
 	combat_hit_particles.setup(melee_combat, combat_hit_particle_catalog)
 	player.setup(camera_rig, inventory_model, input_buffer, player_stats, melee_combat, world_entities)
 	_bind_entity_context(world.voxel_model, world_entities)
+	anvil_coordinator = AnvilCoordinator.new()
+	anvil_coordinator.setup(world.voxel_model)
 	player_stats.health_depleted.connect(_on_player_defeated)
 	var mining_particle_tints := MiningParticleTintPalette.new(block_catalog)
 	mining_break_particles.setup(world.voxel_model, mining_particle_tints)

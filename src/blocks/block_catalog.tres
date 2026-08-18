@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="BlockCatalog" load_steps=19 format=3]
+[gd_resource type="Resource" script_class="BlockCatalog" load_steps=20 format=3]
 
 [ext_resource type="Script" path="res://blocks/block_catalog.gd" id="1_catalog"]
 [ext_resource type="Script" path="res://blocks/block_definition.gd" id="2_definition"]
@@ -18,7 +18,8 @@
 [ext_resource type="Resource" path="res://blocks/definitions/terracotta_bricks.tres" id="15_terracotta_bricks"]
 [ext_resource type="Resource" path="res://blocks/definitions/wood_planks.tres" id="16_wood_planks"]
 [ext_resource type="Resource" path="res://blocks/definitions/farmland_dry.tres" id="17_farmland_dry"]
+[ext_resource type="Resource" path="res://blocks/definitions/anvil.tres" id="18_anvil"]
 
 [resource]
 script = ExtResource("1_catalog")
-definitions = Array[ExtResource("2_definition")]([ExtResource("2_air"), ExtResource("3_grass"), ExtResource("4_dirt"), ExtResource("5_sand"), ExtResource("6_stone"), ExtResource("7_log"), ExtResource("8_leaves"), ExtResource("9_torch"), ExtResource("10_water"), ExtResource("11_copper"), ExtResource("12_cobblestone"), ExtResource("13_mossy_stone_bricks"), ExtResource("14_stone_bricks"), ExtResource("15_terracotta_bricks"), ExtResource("16_wood_planks"), ExtResource("17_farmland_dry")])
+definitions = Array[ExtResource("2_definition")]([ExtResource("2_air"), ExtResource("3_grass"), ExtResource("4_dirt"), ExtResource("5_sand"), ExtResource("6_stone"), ExtResource("7_log"), ExtResource("8_leaves"), ExtResource("9_torch"), ExtResource("10_water"), ExtResource("11_copper"), ExtResource("12_cobblestone"), ExtResource("13_mossy_stone_bricks"), ExtResource("14_stone_bricks"), ExtResource("15_terracotta_bricks"), ExtResource("16_wood_planks"), ExtResource("17_farmland_dry"), ExtResource("18_anvil")])

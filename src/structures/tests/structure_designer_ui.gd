@@ -22,7 +22,7 @@ func _run() -> void:
 	for definition in item_catalog.definitions:
 		if definition.secondary_action is BlockPlacementActionDefinition:
 			expected_placeables.append(definition.id)
-	_expect(expected_placeables.size() == 12, "item catalog did not expose the expected 12 placeables")
+	_expect(expected_placeables.size() == 13, "item catalog did not expose the expected 13 placeables")
 	var toolbelt := CreativeToolbelt.new()
 	_expect(toolbelt.setup(item_catalog), "creative toolbelt setup failed")
 	_expect(toolbelt.get_placeable_item_ids() == expected_placeables, "toolbelt placeables did not follow catalog placement actions")
@@ -32,7 +32,7 @@ func _run() -> void:
 	_expect(toolbelt.get_assigned_item_ids()[0] == expected_placeables[0], "assignment query exposed mutable state")
 	var placeable_copy := toolbelt.get_placeable_item_ids()
 	placeable_copy.clear()
-	_expect(toolbelt.get_placeable_item_ids().size() == 12, "placeable query exposed mutable state")
+	_expect(toolbelt.get_placeable_item_ids().size() == 13, "placeable query exposed mutable state")
 	_expect(not toolbelt.try_assign(-1, &"torch"), "negative assignment index was accepted")
 	_expect(not toolbelt.try_assign(9, &"torch"), "out-of-range assignment index was accepted")
 	_expect(not toolbelt.try_assign(0, &"copper_pickaxe"), "non-placeable assignment was accepted")
@@ -56,7 +56,7 @@ func _test_generic_ui(item_catalog: ItemCatalog, toolbelt: CreativeToolbelt) -> 
 	_expect(not module_panel.visible and not module_tools_hint.visible, "generic structure exposed Level Module tools")
 	ui.open_module_panel()
 	_expect(not ui.is_module_panel_open() and not ui.is_ui_blocking(), "generic structure opened Level Module tools")
-	_expect(palette_grid.get_child_count() == 12, "palette did not contain every placeable item")
+	_expect(palette_grid.get_child_count() == 13, "palette did not contain every placeable item")
 	_expect(crosshair.get_global_rect().get_center().is_equal_approx(root.get_visible_rect().get_center()), "crosshair was not centered")
 	_expect(hotbar.slot_nodes.size() == CreativeToolbelt.SLOT_COUNT, "designer hotbar did not contain nine slots")
 	for index in range(CreativeToolbelt.SLOT_COUNT):

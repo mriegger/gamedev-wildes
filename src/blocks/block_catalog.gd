@@ -37,11 +37,16 @@ func _rebuild_lookup() -> void:
 		if definition.minimum_mining_power > 0 and definition.mining_tool_tag.is_empty():
 			push_error("[BlockCatalog] Missing mining tool tag for %s" % BlockId.get_display_name(definition.id))
 			_is_valid = false
+		if definition.crafting_station != null:
+			_is_valid = definition.crafting_station.validate(source) and _is_valid
+			if not definition.is_raycast_solid:
+				push_error("[BlockCatalog] Crafting station must be targetable at %s" % source)
+				_is_valid = false
 	for id in range(BlockId.Type.COUNT):
 		if _definitions_by_id[id] == null:
 			push_error("[BlockCatalog] Missing block for BlockId %d" % id)
 			_is_valid = false
-		elif BlockId.is_chunk_cube(id):
+		elif BlockId.is_chunk_cube(id) or id == BlockId.Type.ANVIL:
 			var definition := _definitions_by_id[id]
 			_validate_face_texture(definition.top_texture, "top", definition)
 			_validate_face_texture(definition.side_texture, "side", definition)

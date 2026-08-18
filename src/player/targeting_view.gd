@@ -13,9 +13,11 @@ var selection_box: Node3D
 var ghost_block: MeshInstance3D
 var breaking_block: MeshInstance3D
 var contact_shadow: MeshInstance3D
+var anvil_renderer: AnvilRenderer
 
 var _selection_edge_mat: StandardMaterial3D = null
 var _contact_shadow_color: Color = Color(-1, -1, -1, -1)
+var _interaction_cursor_active: bool = false
 
 func setup(p_motor: PlayerMotor, p_interactor: PlayerInteractor):
 	assert(p_motor != null)
@@ -37,6 +39,7 @@ func bind_space(p_space: VoxelSpace, presentation_root: Node):
 	assert(presentation_root != null)
 	voxel_space = p_space
 	block_catalog = p_space.block_catalog
+	anvil_renderer = presentation_root.get_node_or_null("Anvils") as AnvilRenderer
 	_hide_targeting_visuals()
 	contact_shadow.visible = false
 	for visual in [selection_box, ghost_block, breaking_block]:
@@ -51,6 +54,7 @@ func unbind_space():
 			visual.reparent(self, false)
 	voxel_space = null
 	block_catalog = null
+	anvil_renderer = null
 
 func _hide_targeting_visuals():
 	if selection_box != null:
@@ -59,6 +63,9 @@ func _hide_targeting_visuals():
 		ghost_block.visible = false
 	if breaking_block != null:
 		breaking_block.visible = false
+	if anvil_renderer != null:
+		anvil_renderer.set_placement_preview(null, false)
+	_hide_interaction_visuals()
 
 func _ensure_visuals():
 	if selection_box == null:
@@ -71,8 +78,11 @@ func _ensure_visuals():
 func _ready():
 	_ensure_visuals()
 
-func _physics_process(_delta):
-	_update_selection_visuals()
+func _exit_tree() -> void:
+	_set_interaction_cursor(false)
+
+func _physics_process(delta):
+	_update_selection_visuals(delta)
 	_update_contact_shadow()
 
 func _create_selection():
@@ -160,7 +170,7 @@ func _create_contact_shadow():
 func _texture_for_block(block_id: int) -> Texture2D:
 	return block_catalog.get_definition(block_id).side_texture
 
-func _update_selection_visuals():
+func _update_selection_visuals(_delta: float = 0.0):
 	if interactor == null or voxel_space == null:
 		return
 	if interactor.pointer_over_ui:
@@ -170,8 +180,10 @@ func _update_selection_visuals():
 			ghost_block.visible = false
 		if breaking_block:
 			breaking_block.visible = false
+		_hide_interaction_visuals()
 		return
 	if interactor.has_harvest_target():
+		_hide_interaction_visuals()
 		if selection_box == null or not selection_box.is_inside_tree():
 			return
 		var target_bounds := interactor.get_harvest_target_bounds()
@@ -186,6 +198,7 @@ func _update_selection_visuals():
 		ghost_block.visible = false
 		breaking_block.visible = false
 		return
+	_update_interaction_visuals()
 	var selected_block_id = interactor.get_selected_block_id()
 	var has_block = selected_block_id != null
 	var primary_holding = Input.is_action_pressed("primary_use")
@@ -197,11 +210,11 @@ func _update_selection_visuals():
 
 	if has_block:
 		if primary_holding or interactor.is_mining:
-			show_mining_outline = has_target_action and interactor.target_has
+			show_mining_outline = _should_show_mining_outline(has_target_action)
 		else:
 			show_ghost = interactor.placement_has
 	else:
-		show_mining_outline = has_target_action and interactor.target_has
+		show_mining_outline = _should_show_mining_outline(has_target_action)
 
 	if show_mining_outline and interactor.target_has:
 		if selection_box == null or not selection_box.is_inside_tree():
@@ -259,7 +272,14 @@ func _update_selection_visuals():
 		var block_id = selected_block_id
 		if block_id == null or block_id == BlockId.Type.AIR:
 			ghost_block.visible = false
+			if anvil_renderer != null:
+				anvil_renderer.set_placement_preview(null, false)
+		elif block_id == BlockId.Type.ANVIL and anvil_renderer != null:
+			ghost_block.visible = false
+			anvil_renderer.set_placement_preview(interactor.placement_block, interactor.can_place_target)
 		else:
+			if anvil_renderer != null:
+				anvil_renderer.set_placement_preview(null, false)
 			ghost_block.visible = true
 			var base_center: Vector3
 			var ghost_size: Vector3
@@ -289,6 +309,31 @@ func _update_selection_visuals():
 	else:
 		if ghost_block and ghost_block.is_inside_tree():
 			ghost_block.visible = false
+		if anvil_renderer != null:
+			anvil_renderer.set_placement_preview(null, false)
+
+func _should_show_mining_outline(has_target_action: bool) -> bool:
+	return has_target_action and interactor.target_has and (not interactor.has_crafting_station_target() or interactor.is_attempting_crafting_station_mining())
+
+func _update_interaction_visuals() -> void:
+	var interaction_available := _should_show_interaction()
+	if anvil_renderer != null:
+		anvil_renderer.set_hovered_anvil(interactor.target_block if interaction_available else null)
+	_set_interaction_cursor(interaction_available)
+
+func _should_show_interaction() -> bool:
+	return interactor.has_crafting_station_target() and interactor.can_interact_target and not interactor.is_attempting_crafting_station_mining()
+
+func _hide_interaction_visuals() -> void:
+	if anvil_renderer != null:
+		anvil_renderer.set_hovered_anvil(null)
+	_set_interaction_cursor(false)
+
+func _set_interaction_cursor(active: bool) -> void:
+	if _interaction_cursor_active == active:
+		return
+	_interaction_cursor_active = active
+	Input.set_default_cursor_shape(Input.CURSOR_POINTING_HAND if active else Input.CURSOR_ARROW)
 
 func _update_contact_shadow():
 	if contact_shadow == null or motor == null:
