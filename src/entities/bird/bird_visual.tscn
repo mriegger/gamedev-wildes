@@ -1,0 +1,130 @@
+[gd_scene load_steps=15 format=3]
+
+[ext_resource type="Script" path="res://entities/bird/bird_animation_driver.gd" id="1_driver"]
+
+[sub_resource type="StandardMaterial3D" id="Material_body"]
+albedo_color = Color(0.46, 0.34, 0.22, 1)
+roughness = 0.95
+
+[sub_resource type="StandardMaterial3D" id="Material_dark"]
+albedo_color = Color(0.28, 0.19, 0.13, 1)
+roughness = 0.95
+
+[sub_resource type="StandardMaterial3D" id="Material_beak"]
+albedo_color = Color(0.78, 0.55, 0.18, 1)
+roughness = 0.9
+
+[sub_resource type="StandardMaterial3D" id="Material_eye"]
+albedo_color = Color(0.015, 0.012, 0.01, 1)
+
+[sub_resource type="StandardMaterial3D" id="Material_leg"]
+albedo_color = Color(0.48, 0.31, 0.16, 1)
+roughness = 0.95
+
+[sub_resource type="BoxMesh" id="Box_body"]
+material = SubResource("Material_body")
+size = Vector3(0.4, 0.25, 0.5)
+
+[sub_resource type="BoxMesh" id="Box_head"]
+material = SubResource("Material_body")
+size = Vector3(0.22, 0.22, 0.22)
+
+[sub_resource type="BoxMesh" id="Box_beak"]
+material = SubResource("Material_beak")
+size = Vector3(0.12, 0.08, 0.12)
+
+[sub_resource type="BoxMesh" id="Box_wing"]
+material = SubResource("Material_dark")
+size = Vector3(0.35, 0.05, 0.25)
+
+[sub_resource type="BoxMesh" id="Box_tail"]
+material = SubResource("Material_dark")
+size = Vector3(0.18, 0.06, 0.18)
+
+[sub_resource type="BoxMesh" id="Box_leg"]
+material = SubResource("Material_leg")
+size = Vector3(0.045, 0.2, 0.045)
+
+[sub_resource type="BoxMesh" id="Box_foot"]
+material = SubResource("Material_leg")
+size = Vector3(0.08, 0.045, 0.13)
+
+[sub_resource type="BoxMesh" id="Box_eye"]
+material = SubResource("Material_eye")
+size = Vector3(0.035, 0.04, 0.025)
+
+[node name="BirdVisual" type="Node3D"]
+
+[node name="RigRoot" type="Node3D" parent="."]
+
+[node name="BodyPivot" type="Node3D" parent="RigRoot"]
+
+[node name="Body" type="MeshInstance3D" parent="RigRoot/BodyPivot"]
+position = Vector3(0, 0.3, 0)
+mesh = SubResource("Box_body")
+
+[node name="HeadAnchor" type="Node3D" parent="RigRoot/BodyPivot"]
+position = Vector3(0, 0.39, 0.3)
+
+[node name="HeadPivot" type="Node3D" parent="RigRoot/BodyPivot/HeadAnchor"]
+
+[node name="Head" type="MeshInstance3D" parent="RigRoot/BodyPivot/HeadAnchor/HeadPivot"]
+mesh = SubResource("Box_head")
+
+[node name="Beak" type="MeshInstance3D" parent="RigRoot/BodyPivot/HeadAnchor/HeadPivot"]
+position = Vector3(0, -0.025, 0.15)
+mesh = SubResource("Box_beak")
+
+[node name="LeftEye" type="MeshInstance3D" parent="RigRoot/BodyPivot/HeadAnchor/HeadPivot"]
+position = Vector3(-0.065, 0.035, 0.112)
+mesh = SubResource("Box_eye")
+
+[node name="RightEye" type="MeshInstance3D" parent="RigRoot/BodyPivot/HeadAnchor/HeadPivot"]
+position = Vector3(0.065, 0.035, 0.112)
+mesh = SubResource("Box_eye")
+
+[node name="LeftWingPivot" type="Node3D" parent="RigRoot/BodyPivot"]
+position = Vector3(-0.22, 0.33, 0)
+
+[node name="LeftWing" type="MeshInstance3D" parent="RigRoot/BodyPivot/LeftWingPivot"]
+position = Vector3(-0.15, 0, 0)
+mesh = SubResource("Box_wing")
+
+[node name="RightWingPivot" type="Node3D" parent="RigRoot/BodyPivot"]
+position = Vector3(0.22, 0.33, 0)
+
+[node name="RightWing" type="MeshInstance3D" parent="RigRoot/BodyPivot/RightWingPivot"]
+position = Vector3(0.15, 0, 0)
+mesh = SubResource("Box_wing")
+
+[node name="TailPivot" type="Node3D" parent="RigRoot/BodyPivot"]
+position = Vector3(0, 0.31, -0.28)
+
+[node name="Tail" type="MeshInstance3D" parent="RigRoot/BodyPivot/TailPivot"]
+position = Vector3(0, 0, -0.08)
+mesh = SubResource("Box_tail")
+
+[node name="LeftLegPivot" type="Node3D" parent="RigRoot/BodyPivot"]
+position = Vector3(-0.08, 0.23, 0.06)
+
+[node name="LeftLeg" type="MeshInstance3D" parent="RigRoot/BodyPivot/LeftLegPivot"]
+position = Vector3(0, -0.1, 0)
+mesh = SubResource("Box_leg")
+
+[node name="LeftFoot" type="MeshInstance3D" parent="RigRoot/BodyPivot/LeftLegPivot"]
+position = Vector3(0, -0.215, 0.035)
+mesh = SubResource("Box_foot")
+
+[node name="RightLegPivot" type="Node3D" parent="RigRoot/BodyPivot"]
+position = Vector3(0.08, 0.23, 0.06)
+
+[node name="RightLeg" type="MeshInstance3D" parent="RigRoot/BodyPivot/RightLegPivot"]
+position = Vector3(0, -0.1, 0)
+mesh = SubResource("Box_leg")
+
+[node name="RightFoot" type="MeshInstance3D" parent="RigRoot/BodyPivot/RightLegPivot"]
+position = Vector3(0, -0.215, 0.035)
+mesh = SubResource("Box_foot")
+
+[node name="AnimationDriver" type="Node" parent="."]
+script = ExtResource("1_driver")
