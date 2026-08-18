@@ -13,6 +13,9 @@ const PATH_WARMUP_SAMPLES: int = 20
 const PATH_SAMPLES: int = 200
 const DAY_TIME: float = 12.0
 const NIGHT_TIME: float = 20.0
+const EXPECTED_SHEEP_COUNT: int = 6
+const EXPECTED_ZOMBIE_COUNT: int = 3
+const EXPECTED_SKELETON_COUNT: int = 3
 
 var _failures: int = 0
 
@@ -69,28 +72,53 @@ func _sorted_actors(coordinator: WorldEntityCoordinator) -> Array[EntityActor]:
 	actors.sort_custom(func(left: EntityActor, right: EntityActor) -> bool: return left.runtime_id < right.runtime_id)
 	return actors
 
-func _arrange_population(coordinator: WorldEntityCoordinator, actors: Array[EntityActor]) -> void:
+func _arrange_population(coordinator: WorldEntityCoordinator, actors: Array[EntityActor]) -> Dictionary:
 	var zombie_index := 0
 	var sheep_index := 0
+	var skeleton_index := 0
 	for actor in actors:
 		var angle: float
 		var radius: float
-		if actor.definition.id == &"zombie":
-			angle = TAU * float(zombie_index) / 6.0
-			radius = 8.0
-			zombie_index += 1
-			(actor as ZombieActor)._path_follower.request_repath()
-		else:
-			angle = TAU * float(sheep_index) / 6.0 + PI / 6.0
-			radius = 14.0
-			sheep_index += 1
-			(actor as SheepActor)._path_follower.request_repath()
+		match actor.definition.id:
+			&"zombie":
+				angle = TAU * float(zombie_index) / float(EXPECTED_ZOMBIE_COUNT)
+				radius = 8.0
+				zombie_index += 1
+				var zombie := actor as ZombieActor
+				_expect(zombie != null, "zombie definition did not instantiate a ZombieActor")
+				if zombie != null:
+					zombie._path_follower.request_repath()
+			&"skeleton":
+				angle = TAU * float(skeleton_index) / float(EXPECTED_SKELETON_COUNT) + PI / 3.0
+				radius = 11.0
+				skeleton_index += 1
+				var skeleton := actor as SkeletonActor
+				_expect(skeleton != null, "skeleton definition did not instantiate a SkeletonActor")
+				if skeleton != null:
+					skeleton._path_follower.request_repath()
+			&"sheep":
+				angle = TAU * float(sheep_index) / float(EXPECTED_SHEEP_COUNT) + PI / 6.0
+				radius = 14.0
+				sheep_index += 1
+				var sheep := actor as SheepActor
+				_expect(sheep != null, "sheep definition did not instantiate a SheepActor")
+				if sheep != null:
+					sheep._path_follower.request_repath()
+			_:
+				_expect(false, "benchmark population contained unsupported entity %s" % actor.definition.id)
+				continue
 		actor.global_position = Vector3(0.5 + cos(angle) * radius, FEET_Y, 0.5 + sin(angle) * radius)
 		actor.velocity = Vector3.ZERO
 		actor.on_ground = true
 		coordinator.get_runtime()._spatial_index.upsert(actor.runtime_id, actor.global_position, actor.get_world_bounds())
-	_expect(zombie_index == 6, "benchmark population had %d zombies" % zombie_index)
-	_expect(sheep_index == 6, "benchmark population had %d sheep" % sheep_index)
+	_expect(zombie_index == EXPECTED_ZOMBIE_COUNT, "benchmark population had %d zombies" % zombie_index)
+	_expect(sheep_index == EXPECTED_SHEEP_COUNT, "benchmark population had %d sheep" % sheep_index)
+	_expect(skeleton_index == EXPECTED_SKELETON_COUNT, "benchmark population had %d skeletons" % skeleton_index)
+	return {
+		"sheep": sheep_index,
+		"zombie": zombie_index,
+		"skeleton": skeleton_index,
+	}
 
 func _player_position(frame_index: int) -> Vector3:
 	var angle := float(frame_index) * 0.015
@@ -192,7 +220,7 @@ func _run() -> void:
 	var spawn_metrics := _spawn_population(coordinator, origin)
 	var actors := _sorted_actors(coordinator)
 	_expect(actors.size() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "benchmark did not create twelve actors")
-	_arrange_population(coordinator, actors)
+	var species_counts := _arrange_population(coordinator, actors)
 	var frame_metrics := _benchmark_entity_frames(coordinator, actors)
 	var path_metrics := _benchmark_bounded_pathfinding()
 	var spatial_index := coordinator.get_runtime()._spatial_index as EntitySpatialIndex
@@ -217,6 +245,7 @@ func _run() -> void:
 		"workload": {
 			"seed": WORLD_SEED,
 			"active_entities": WorldEntityCoordinator.MAX_TOTAL_ACTIVE,
+			"species_counts": species_counts,
 			"warmup_frames": WARMUP_FRAMES,
 			"sample_frames": SAMPLE_FRAMES,
 			"path_warmup_samples": PATH_WARMUP_SAMPLES,

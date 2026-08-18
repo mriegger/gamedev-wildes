@@ -9,6 +9,8 @@ const NIGHT_TIME: float = 20.0
 const MAX_CELLS_PER_ACTOR: int = 8
 const PATH_RADIUS: int = 12
 const PATH_NODE_BUDGET: int = 64
+const MIXED_NIGHT_STEPS: int = 8
+const MIXED_NIGHT_DELTA: float = 0.05
 const STREAM_REGIONS: Array[Vector2i] = [
 	Vector2i(-3, -2),
 	Vector2i(-1, 1),
@@ -59,18 +61,30 @@ func _player_position(region: Vector2i) -> Vector3:
 	var center := STREAM_REGION_SIZE / 2
 	return Vector3(float(origin.x + center) + 0.5, float(FEET_Y), float(origin.y + center) + 0.5)
 
+func _eligible_definitions(catalog: EntityCatalog, time_of_day: float) -> Array[EntityDefinition]:
+	var eligible: Array[EntityDefinition] = []
+	var is_day := DayNightProfile.is_day_time(time_of_day)
+	for definition in catalog.definitions:
+		if definition != null and is_day == (definition.ambient_spawn_phase == EntityDefinition.SpawnPhase.DAY):
+			eligible.append(definition)
+	return eligible
+
 func _assert_path_budget(world: VoxelWorld, catalog: EntityCatalog, region: Vector2i, time_of_day: float, cycle: int, context: String) -> void:
-	var definition_id: StringName = &"sheep" if DayNightProfile.is_day_time(time_of_day) else &"zombie"
-	var definition := catalog.get_definition(definition_id)
+	var definitions := _eligible_definitions(catalog, time_of_day)
+	_expect(not definitions.is_empty(), "%s had no eligible ambient definitions" % context)
+	if not DayNightProfile.is_day_time(time_of_day):
+		_expect(definitions.size() >= 2, "%s did not exercise both night species" % context)
 	var origin := region * STREAM_REGION_SIZE + Vector2i(STREAM_REGION_SIZE / 2, STREAM_REGION_SIZE / 2)
-	var z_offset := cycle % 3 - 1
-	var start := Vector3i(origin.x - 4, FEET_Y, origin.y + z_offset)
-	var goal := Vector3i(origin.x + 4, FEET_Y, origin.y - z_offset)
-	var result := VoxelPathfinder.find_path(world, start, goal, definition.body_width, definition.body_height, PATH_RADIUS, PATH_NODE_BUDGET)
-	_expect(result.is_success(), "%s representative %s path failed with status %d" % [context, definition_id, result.status])
-	_expect(result.visited_nodes > 0 and result.visited_nodes <= PATH_NODE_BUDGET, "%s path visited %d nodes with budget %d" % [context, result.visited_nodes, PATH_NODE_BUDGET])
-	if result.is_success():
-		_expect(result.path.front() == start and result.path.back() == goal, "%s path endpoints changed" % context)
+	for index in range(definitions.size()):
+		var definition := definitions[index]
+		var z_offset := (cycle + index) % 3 - 1
+		var start := Vector3i(origin.x - 4, FEET_Y, origin.y + z_offset)
+		var goal := Vector3i(origin.x + 4, FEET_Y, origin.y - z_offset)
+		var result := VoxelPathfinder.find_path(world, start, goal, definition.body_width, definition.body_height, PATH_RADIUS, PATH_NODE_BUDGET)
+		_expect(result.is_success(), "%s representative %s path failed with status %d" % [context, definition.id, result.status])
+		_expect(result.visited_nodes > 0 and result.visited_nodes <= PATH_NODE_BUDGET, "%s %s path visited %d nodes with budget %d" % [context, definition.id, result.visited_nodes, PATH_NODE_BUDGET])
+		if result.is_success():
+			_expect(result.path.front() == start and result.path.back() == goal, "%s %s path endpoints changed" % [context, definition.id])
 
 func _assert_runtime_ids(actors: Array[EntityActor], context: String) -> void:
 	var active_ids: Dictionary = {}
@@ -85,14 +99,17 @@ func _assert_runtime_ids(actors: Array[EntityActor], context: String) -> void:
 		else:
 			_instance_by_runtime_id[runtime_id] = instance_id
 
-func _assert_population(coordinator: WorldEntityCoordinator, player_position: Vector3, context: String) -> void:
+func _assert_population(coordinator: WorldEntityCoordinator, catalog: EntityCatalog, player_position: Vector3, context: String) -> void:
 	var actors := coordinator.get_runtime().get_active_actors()
 	var active_count := coordinator.get_runtime().get_active_count()
 	var retiring_count := coordinator.get_runtime()._retiring.size()
 	_expect(actors.size() == active_count, "%s active actor query returned %d of %d" % [context, actors.size(), active_count])
 	_expect(active_count <= WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "%s exceeded the twelve-entity cap" % context)
 	_expect(retiring_count <= WorldEntityCoordinator.MAX_RETIRING_VISUALS, "%s exceeded the retiring-visual cap" % context)
-	var species_counts: Dictionary = {&"sheep": 0, &"zombie": 0}
+	var species_counts: Dictionary = {}
+	for definition in catalog.definitions:
+		if definition != null:
+			species_counts[definition.id] = 0
 	for actor in actors:
 		if actor.definition == null or not species_counts.has(actor.definition.id):
 			_expect(false, "%s contained an unknown entity definition" % context)
@@ -100,8 +117,9 @@ func _assert_population(coordinator: WorldEntityCoordinator, player_position: Ve
 		species_counts[actor.definition.id] = int(species_counts[actor.definition.id]) + 1
 		_expect(actor.global_position.distance_squared_to(player_position) <= WorldEntityCoordinator.DESPAWN_DISTANCE * WorldEntityCoordinator.DESPAWN_DISTANCE, "%s retained runtime ID %d beyond despawn distance" % [context, actor.runtime_id])
 		_expect(_is_position_streamed(actor.global_position), "%s retained runtime ID %d outside the streamed region" % [context, actor.runtime_id])
-	_expect(int(species_counts[&"sheep"]) <= 6, "%s exceeded the six-sheep cap" % context)
-	_expect(int(species_counts[&"zombie"]) <= 6, "%s exceeded the six-zombie cap" % context)
+	for definition in catalog.definitions:
+		if definition != null:
+			_expect(int(species_counts[definition.id]) <= definition.ambient_max_active, "%s exceeded the %d-%s cap" % [context, definition.ambient_max_active, definition.id])
 	_assert_runtime_ids(actors, context)
 	var spatial_index := coordinator.get_runtime()._spatial_index as EntitySpatialIndex
 	var entry_count := spatial_index.get_entry_count()
@@ -110,6 +128,12 @@ func _assert_population(coordinator: WorldEntityCoordinator, player_position: Ve
 	_expect(cell_count <= active_count * MAX_CELLS_PER_ACTOR, "%s spatial cells %d exceeded the active bound" % [context, cell_count])
 	if active_count == 0:
 		_expect(cell_count == 0, "%s retained spatial cells without active actors" % context)
+
+func _assert_mixed_night_population(coordinator: WorldEntityCoordinator, catalog: EntityCatalog, context: String) -> void:
+	var night_definitions := _eligible_definitions(catalog, NIGHT_TIME)
+	_expect(night_definitions.size() >= 2, "%s catalog did not contain multiple night species" % context)
+	for definition in night_definitions:
+		_expect(coordinator.get_runtime().get_definition_count(definition.id) > 0, "%s did not retain night species %s" % [context, definition.id])
 
 func _run() -> void:
 	var catalog := load("res://entities/entity_catalog.tres") as EntityCatalog
@@ -123,14 +147,14 @@ func _run() -> void:
 		_ready_region = STREAM_REGIONS[region_index]
 		var player_position := _player_position(_ready_region)
 		coordinator.tick(0.0, player_position, DAY_TIME)
-		_assert_population(coordinator, player_position, "region %d entry" % region_index)
+		_assert_population(coordinator, catalog, player_position, "region %d entry" % region_index)
 		_expect(coordinator.get_runtime().get_active_count() == 0, "region %d entry did not clear the previous population" % region_index)
 		await process_frame
 		for cycle in range(CYCLES_PER_REGION):
 			var time_of_day := DAY_TIME if cycle % 2 == 0 else NIGHT_TIME
 			coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, player_position, time_of_day)
 			var context := "region %d cycle %d" % [region_index, cycle]
-			_assert_population(coordinator, player_position, context)
+			_assert_population(coordinator, catalog, player_position, context)
 			_assert_path_budget(world, catalog, _ready_region, time_of_day, cycle, context)
 		for refill_cycle in range(CYCLES_PER_REGION):
 			if coordinator.get_runtime().get_active_count() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE:
@@ -139,13 +163,19 @@ func _run() -> void:
 			var time_of_day := DAY_TIME if cycle % 2 == 0 else NIGHT_TIME
 			coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, player_position, time_of_day)
 			var context := "region %d refill cycle %d" % [region_index, refill_cycle]
-			_assert_population(coordinator, player_position, context)
+			_assert_population(coordinator, catalog, player_position, context)
 			_assert_path_budget(world, catalog, _ready_region, time_of_day, cycle, context)
 		_expect(coordinator.get_runtime().get_active_count() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "region %d did not reach the total population cap" % region_index)
+		_assert_mixed_night_population(coordinator, catalog, "region %d mixed night" % region_index)
+		for step in range(MIXED_NIGHT_STEPS):
+			coordinator.tick(MIXED_NIGHT_DELTA, player_position, NIGHT_TIME)
+			var context := "region %d mixed night step %d" % [region_index, step]
+			_assert_population(coordinator, catalog, player_position, context)
+			_assert_mixed_night_population(coordinator, catalog, context)
 		if region_index % 2 == 1:
 			_streaming_enabled = false
 			coordinator.tick(0.0, player_position, NIGHT_TIME)
-			_assert_population(coordinator, player_position, "region %d streaming loss" % region_index)
+			_assert_population(coordinator, catalog, player_position, "region %d streaming loss" % region_index)
 			_expect(coordinator.get_runtime().get_active_count() == 0, "region %d streaming loss retained actors" % region_index)
 			_streaming_enabled = true
 			await process_frame
@@ -153,8 +183,9 @@ func _run() -> void:
 	_streaming_enabled = false
 	var final_position := _player_position(_ready_region)
 	coordinator.tick(0.0, final_position, NIGHT_TIME)
-	_assert_population(coordinator, final_position, "final streaming loss")
-	_expect(_instance_by_runtime_id.size() == STREAM_REGIONS.size() * CYCLES_PER_REGION, "soak observed %d unique runtime IDs instead of %d" % [_instance_by_runtime_id.size(), STREAM_REGIONS.size() * CYCLES_PER_REGION])
+	_assert_population(coordinator, catalog, final_position, "final streaming loss")
+	var expected_runtime_ids := STREAM_REGIONS.size() * WorldEntityCoordinator.MAX_TOTAL_ACTIVE
+	_expect(_instance_by_runtime_id.size() == expected_runtime_ids, "soak observed %d unique runtime IDs instead of %d" % [_instance_by_runtime_id.size(), expected_runtime_ids])
 	coordinator.shutdown()
 	_expect(coordinator.get_runtime().get_active_count() == 0, "shutdown retained active actors")
 	_expect(coordinator.get_runtime()._retiring.is_empty(), "shutdown retained fading actors")
