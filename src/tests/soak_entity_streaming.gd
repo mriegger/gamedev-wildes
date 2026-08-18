@@ -1,5 +1,8 @@
 extends SceneTree
 
+const StoneGolemActorType := preload("res://entities/stone_golem/stone_golem_actor.gd")
+const StoneGolemBrainType := preload("res://entities/stone_golem/stone_golem_brain.gd")
+
 const FLAT_HEIGHT: int = 6
 const FEET_Y: int = FLAT_HEIGHT + 1
 const STREAM_REGION_SIZE: int = 128
@@ -73,7 +76,7 @@ func _assert_path_budget(world: VoxelWorld, catalog: EntityCatalog, region: Vect
 	var definitions := _eligible_definitions(catalog, time_of_day)
 	_expect(not definitions.is_empty(), "%s had no eligible ambient definitions" % context)
 	if not DayNightProfile.is_day_time(time_of_day):
-		_expect(definitions.size() >= 2, "%s did not exercise both night species" % context)
+		_expect(definitions.size() == 3, "%s did not exercise all three night species" % context)
 	var origin := region * STREAM_REGION_SIZE + Vector2i(STREAM_REGION_SIZE / 2, STREAM_REGION_SIZE / 2)
 	for index in range(definitions.size()):
 		var definition := definitions[index]
@@ -133,9 +136,37 @@ func _assert_population(coordinator: WorldEntityCoordinator, catalog: EntityCata
 
 func _assert_mixed_night_population(coordinator: WorldEntityCoordinator, catalog: EntityCatalog, context: String) -> void:
 	var night_definitions := _eligible_definitions(catalog, NIGHT_TIME)
-	_expect(night_definitions.size() >= 2, "%s catalog did not contain multiple night species" % context)
+	_expect(night_definitions.size() == 3, "%s catalog did not contain exactly three night species" % context)
+	var night_ids: Dictionary = {}
 	for definition in night_definitions:
+		night_ids[definition.id] = true
 		_expect(coordinator.get_runtime().get_definition_count(definition.id) > 0, "%s did not retain night species %s" % [context, definition.id])
+	_expect(night_ids.size() == 3 and night_ids.has(&"zombie") and night_ids.has(&"skeleton") and night_ids.has(&"stone_golem"), "%s night species IDs changed" % context)
+	_expect(coordinator.get_runtime().get_definition_count(&"stone_golem") == 2, "%s did not contain exactly two Stone Golems" % context)
+
+func _stone_golem_positions(coordinator: WorldEntityCoordinator, context: String) -> Dictionary:
+	var positions: Dictionary = {}
+	for actor in coordinator.get_runtime().get_active_actors():
+		if actor.definition.id != &"stone_golem":
+			continue
+		_expect(actor is StoneGolemActorType, "%s Stone Golem used the wrong actor type" % context)
+		if not actor is StoneGolemActorType:
+			continue
+		var stone_golem := actor as StoneGolemActorType
+		_expect(stone_golem.brain != null and stone_golem.brain.state == StoneGolemBrainType.State.DORMANT, "%s Stone Golem %d was not dormant" % [context, actor.runtime_id])
+		positions[actor.runtime_id] = actor.global_position
+	_expect(positions.size() == 2, "%s observed %d Stone Golems instead of two" % [context, positions.size()])
+	return positions
+
+func _assert_stone_golems_stationary(coordinator: WorldEntityCoordinator, expected_positions: Dictionary, context: String) -> void:
+	var current_positions := _stone_golem_positions(coordinator, context)
+	_expect(current_positions.size() == expected_positions.size(), "%s changed the Stone Golem population" % context)
+	for runtime_id in expected_positions:
+		_expect(current_positions.has(runtime_id), "%s removed Stone Golem %d" % [context, runtime_id])
+		if current_positions.has(runtime_id):
+			var expected_position: Vector3 = expected_positions[runtime_id]
+			var current_position: Vector3 = current_positions[runtime_id]
+			_expect(current_position.is_equal_approx(expected_position), "%s moved dormant Stone Golem %d" % [context, runtime_id])
 
 func _run() -> void:
 	var catalog := load("res://entities/entity_catalog.tres") as EntityCatalog
@@ -151,6 +182,7 @@ func _run() -> void:
 		coordinator.tick(0.0, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), DAY_TIME)
 		_assert_population(coordinator, catalog, player_position, DAY_TIME, "region %d entry" % region_index)
 		_expect(coordinator.get_runtime().get_active_count() == 0, "region %d entry did not clear the previous population" % region_index)
+		_expect(coordinator.get_runtime().get_definition_count(&"stone_golem") == 0, "region %d entry retained a Stone Golem" % region_index)
 		await process_frame
 		for cycle in range(CYCLES_PER_REGION):
 			var time_of_day := DAY_TIME if cycle < 10 or cycle >= 16 else NIGHT_TIME
@@ -171,16 +203,19 @@ func _run() -> void:
 			_assert_path_budget(world, catalog, _ready_region, time_of_day, cycle, context)
 		_expect(coordinator.get_runtime().get_active_count() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "region %d did not reach the total population cap" % region_index)
 		_assert_mixed_night_population(coordinator, catalog, "region %d mixed night" % region_index)
+		var stone_golem_positions := _stone_golem_positions(coordinator, "region %d filled" % region_index)
 		for step in range(MIXED_NIGHT_STEPS):
 			coordinator.tick(MIXED_NIGHT_DELTA, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), NIGHT_TIME)
 			var context := "region %d mixed night step %d" % [region_index, step]
 			_assert_population(coordinator, catalog, player_position, NIGHT_TIME, context)
 			_assert_mixed_night_population(coordinator, catalog, context)
+			_assert_stone_golems_stationary(coordinator, stone_golem_positions, context)
 		if region_index % 2 == 1:
 			_streaming_enabled = false
 			coordinator.tick(0.0, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), NIGHT_TIME)
 			_assert_population(coordinator, catalog, player_position, NIGHT_TIME, "region %d streaming loss" % region_index)
 			_expect(coordinator.get_runtime().get_active_count() == 0, "region %d streaming loss retained actors" % region_index)
+			_expect(coordinator.get_runtime().get_definition_count(&"stone_golem") == 0, "region %d streaming loss retained a Stone Golem" % region_index)
 			_streaming_enabled = true
 			await process_frame
 
@@ -188,8 +223,10 @@ func _run() -> void:
 	var final_position := _player_position(_ready_region)
 	coordinator.tick(0.0, EntityTargetObservation.create(final_position, final_position, Vector3.FORWARD, Vector3.RIGHT), NIGHT_TIME)
 	_assert_population(coordinator, catalog, final_position, NIGHT_TIME, "final streaming loss")
+	_expect(coordinator.get_runtime().get_definition_count(&"stone_golem") == 0, "final streaming loss retained a Stone Golem")
 	_expect(_instance_by_runtime_id.size() == STREAM_REGIONS.size() * CYCLES_PER_REGION, "soak observed %d unique runtime IDs instead of %d" % [_instance_by_runtime_id.size(), STREAM_REGIONS.size() * CYCLES_PER_REGION])
 	coordinator.shutdown()
+	_expect(coordinator.get_runtime().get_definition_count(&"stone_golem") == 0, "shutdown retained an active Stone Golem")
 	_expect(coordinator.get_runtime().get_active_count() == 0, "shutdown retained active actors")
 	_expect(coordinator.get_runtime()._retiring.is_empty(), "shutdown retained fading actors")
 	_expect(coordinator.get_runtime()._spatial_index.get_entry_count() == 0, "shutdown retained spatial entries")

@@ -26,6 +26,13 @@ func _init():
 	progression.record_melee_outcome(_outcome(0, &"player", 2, &"sheep", &"copper_sword", 30.0, true))
 	_expect(is_equal_approx(item_proficiency.get_experience(&"copper_sword"), 70.0), "separate target damage did not accumulate")
 	_expect(player_stats.get_total_experience() == 10, "configured kill reward was not awarded")
+	progression.record_melee_outcome(_outcome(0, &"player", 4, &"stone_golem", &"copper_sword", 5.0, false))
+	_expect(is_equal_approx(item_proficiency.get_experience(&"copper_sword"), 75.0), "Stone Golem damage did not award weapon proficiency")
+	_expect(player_stats.get_total_experience() == 10, "nonlethal Stone Golem damage awarded player experience")
+	var experience_before_stone_golem_defeat := player_stats.get_total_experience()
+	progression.record_melee_outcome(_outcome(0, &"player", 4, &"stone_golem", &"copper_sword", 20.0, true))
+	_expect(is_equal_approx(item_proficiency.get_experience(&"copper_sword"), 95.0), "Stone Golem defeat did not preserve applied-damage proficiency")
+	_expect(player_stats.get_total_experience() == experience_before_stone_golem_defeat + 30, "Stone Golem defeat did not award exactly 30 player experience")
 
 	progression.record_melee_outcome(_outcome(3, &"zombie", 0, &"player", &"", 25.0, false))
 	for armor_id in [&"copper_helmet", &"copper_chest_plate", &"copper_pants", &"copper_shoes"]:

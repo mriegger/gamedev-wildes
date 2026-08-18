@@ -263,6 +263,23 @@ func _test_species_death_retirement(catalog: EntityCatalog, world: VoxelWorld) -
 		_expect(is_equal_approx(actor.get_visual_opacity(), 0.5), "%s death fade midpoint was not smoothstep-balanced" % definition.id)
 		var poof_elapsed := actor.death_poof._elapsed
 		_expect(is_equal_approx(poof_elapsed, fade_out_seconds * 0.5), "%s death poof did not advance with the fade" % definition.id)
+		if actor is StoneGolemActor:
+			var stone_golem_retirement_animation := actor.animation_driver as StoneGolemAnimationDriver
+			var remaining_death_seconds := stone_golem_retirement_animation.get_death_time_remaining()
+			var death_transform := stone_golem_retirement_animation.animator.transform
+			var fade_elapsed := actor.visual_fader._elapsed
+			var fade_opacity := actor.get_visual_opacity()
+			actor.begin_death_retirement()
+			_expect(actor._death_fade_started, "Stone Golem repeated retirement returned to its death-pose phase")
+			_expect(is_equal_approx(stone_golem_retirement_animation.get_death_time_remaining(), remaining_death_seconds), "Stone Golem repeated retirement restarted its completed death timer")
+			_expect(stone_golem_retirement_animation.animator.transform.is_equal_approx(death_transform), "Stone Golem repeated retirement reset its completed death pose")
+			_expect(actor.visual_fader._phase == EntityVisualFader.Phase.FADING_OUT and is_equal_approx(actor.visual_fader._elapsed, fade_elapsed), "Stone Golem repeated retirement restarted its fade")
+			_expect(is_equal_approx(actor.get_visual_opacity(), fade_opacity), "Stone Golem repeated retirement changed its fade opacity")
+			_expect(actor.death_poof.has_played() and actor.death_poof.emitting and is_equal_approx(actor.death_poof._elapsed, poof_elapsed), "Stone Golem repeated retirement restarted its death poof")
+			_expect(not actor.advance_retirement(0.0), "Stone Golem zero-delta retirement completed after a retry")
+			_expect(is_equal_approx(stone_golem_retirement_animation.get_death_time_remaining(), remaining_death_seconds) and stone_golem_retirement_animation.animator.transform.is_equal_approx(death_transform), "Stone Golem retry changed its death timer or pose on the next retirement tick")
+			_expect(actor.visual_fader._phase == EntityVisualFader.Phase.FADING_OUT and is_equal_approx(actor.visual_fader._elapsed, fade_elapsed) and is_equal_approx(actor.get_visual_opacity(), fade_opacity), "Stone Golem retry changed its fade on the next retirement tick")
+			_expect(actor.death_poof.has_played() and actor.death_poof.emitting and is_equal_approx(actor.death_poof._elapsed, poof_elapsed), "Stone Golem retry changed its death poof on the next retirement tick")
 		_expect(not actor.advance_retirement(0.0) and is_equal_approx(actor.death_poof._elapsed, poof_elapsed), "%s death poof restarted during retirement" % definition.id)
 		_expect(actor.advance_retirement(fade_out_seconds * 0.5), "%s death retirement did not complete" % definition.id)
 		actor.free()

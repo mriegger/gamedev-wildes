@@ -123,6 +123,21 @@ func _respawn_day_birds(coordinator: WorldEntityCoordinator, player_position: Ve
 	_expect(counts[&"sheep"] == 6 and counts[&"zombie"] == 2 and counts[&"skeleton"] == 2 and counts[&"stone_golem"] == 2 and counts[&"bird"] == 4, "returning day did not restore four birds")
 	return _runtime_id_set(coordinator)
 
+func _assert_night_species_caps(catalog: EntityCatalog, world: VoxelWorld, player_position: Vector3) -> void:
+	var coordinator := WorldEntityCoordinator.new()
+	get_root().add_child(coordinator)
+	coordinator.setup(catalog, world, 11971, _is_position_streamed)
+	for _spawn in range(WorldEntityCoordinator.MAX_TOTAL_ACTIVE):
+		coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), NIGHT_TIME)
+	var counts := _species_counts(coordinator)
+	_expect(coordinator.get_runtime().get_active_count() == 11, "night-only population did not stop at the eligible species caps")
+	_expect(counts[&"zombie"] == 6 and counts[&"skeleton"] == 3 and counts[&"stone_golem"] == 2 and counts[&"sheep"] == 0, "night-only population did not fill every enemy cap fairly")
+	var ids := _runtime_id_set(coordinator)
+	coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), NIGHT_TIME)
+	_expect(_runtime_id_set(coordinator) == ids, "capped night tick replaced an existing enemy")
+	coordinator.shutdown()
+	coordinator.free()
+
 func _assert_spatial_bound(coordinator: WorldEntityCoordinator, expected_entries: int) -> void:
 	var entry_count := coordinator.get_runtime()._spatial_index.get_entry_count()
 	var cell_count := coordinator.get_runtime()._spatial_index.get_cell_count()
@@ -190,6 +205,7 @@ func _run() -> void:
 	var coordinator := WorldEntityCoordinator.new()
 	get_root().add_child(coordinator)
 	var player_position := Vector3(0.5, FEET_Y, 0.5)
+	_assert_night_species_caps(catalog, world, player_position)
 	coordinator.setup(catalog, world, 9167, _is_position_streamed)
 	var sheep_ids := _spawn_day_population(coordinator, player_position)
 	_spawn_night_population(coordinator, player_position, sheep_ids)

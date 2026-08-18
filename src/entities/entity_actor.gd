@@ -112,6 +112,8 @@ func begin_despawn_fade():
 
 func begin_death_retirement():
 	assert(animation_driver != null and visual_fader != null and death_poof != null)
+	if _death_retirement:
+		return
 	if vocalizations != null:
 		vocalizations.stop_vocalizations()
 	velocity = Vector3.ZERO
