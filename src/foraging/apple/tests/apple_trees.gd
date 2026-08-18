@@ -31,7 +31,8 @@ func _init() -> void:
 				if (child as Node3D).position.y <= apple_position.y + 5.1:
 					lower_canopy_count += 1
 				var offset := (child as Node3D).position - Vector3(apple_position.x + 0.5, (child as Node3D).position.y, apple_position.z + 0.5)
-				_expect(maxf(absf(offset.x), absf(offset.z)) >= 1.6, "decorative apple remained inside the leaf blocks")
+				var surface_offset := maxf(absf(offset.x), absf(offset.z))
+				_expect(surface_offset >= 1.49 and surface_offset <= 1.51, "decorative apple was not attached to an outer leaf face")
 		_expect(ground_count >= 2 and ground_count <= 6, "apple tree did not have two to six ground apples")
 		_expect(decorative_count == 15, "apple tree did not have exactly fifteen decorative apples")
 		_expect(lower_canopy_count >= 10, "decorative apples were not biased toward the lower canopy")
