@@ -44,6 +44,7 @@ var _has_current_column: bool = false
 var _current_elevations: Array[int] = []
 var _elevation_index: int = 0
 var _target: Vector3 = Vector3.ZERO
+var _minimum_candidate_distance_squared: float = 0.0
 
 func _init(
 	p_voxel_space: VoxelSpace,
@@ -61,11 +62,13 @@ func _init(
 	_navigation_limits = p_navigation_limits
 	_elevation_offsets = _build_elevation_offsets()
 
-func begin(origin: Vector3, observation: EntityTargetObservation) -> void:
+func begin(origin: Vector3, observation: EntityTargetObservation, minimum_candidate_distance: float) -> void:
 	assert(origin.is_finite())
 	assert(observation != null and observation.validate())
+	assert(is_finite(minimum_candidate_distance) and minimum_candidate_distance >= 0.0)
 	_origin = origin
 	_origin_feet = Vector3i(floori(origin.x), roundi(origin.y), floori(origin.z))
+	_minimum_candidate_distance_squared = minimum_candidate_distance * minimum_candidate_distance
 	_observation = EntityTargetObservation.new(
 		observation.player_position,
 		observation.camera_origin,
@@ -92,6 +95,9 @@ func advance(search_budget: NavigationSearchBudget) -> Status:
 			if entry == null:
 				_status = Status.EXHAUSTED
 				return _status
+			if entry.distance_squared < _minimum_candidate_distance_squared:
+				processed_columns += 1
+				continue
 			_current_column = entry.column
 			_has_current_column = true
 			_current_elevations = _resolve_candidate_elevations(_current_column)

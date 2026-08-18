@@ -127,6 +127,10 @@ func _emit_melee_contact(profile: MeleeAttackProfile) -> void:
 	if profile != null:
 		melee_contact_reached.emit(runtime_id, profile)
 
+func begin_despawn_fade():
+	_timed_melee_contact.cancel()
+	super.begin_despawn_fade()
+
 func begin_death_retirement():
 	_timed_melee_contact.cancel()
 	super.begin_death_retirement()
@@ -136,7 +140,7 @@ func _advance_cover_search(
 	navigation_search_budget: NavigationSearchBudget,
 ):
 	if brain.needs_cover_search():
-		_cover_search.begin(global_position, observation)
+		_cover_search.begin(global_position, observation, brain.get_minimum_cover_search_distance())
 		brain.record_cover_search_started()
 	if not brain.is_cover_search_in_progress():
 		return

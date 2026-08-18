@@ -14,6 +14,15 @@ class_name SkeletonBehaviorDefinition
 @export_range(0.1, 4.0, 0.05) var cover_retry_seconds: float = 1.0
 @export_range(0.025, 1.0, 0.025) var cover_revalidation_seconds: float = 0.125
 
+static func is_valid_ambush_range(value: float, detection: float, melee_reach: float) -> bool:
+	return (
+		is_finite(value)
+		and is_finite(detection)
+		and is_finite(melee_reach)
+		and value > melee_reach
+		and value <= detection
+	)
+
 func validate(source: String) -> bool:
 	var valid := true
 	if not is_finite(roam_speed) or roam_speed <= 0.0:
@@ -34,7 +43,7 @@ func validate(source: String) -> bool:
 	if melee_profile == null or not melee_profile.validate(source):
 		push_error("[SkeletonBehaviorDefinition] Invalid melee profile at %s" % source)
 		valid = false
-	if not is_finite(ambush_range) or ambush_range > detection_range or (melee_profile != null and ambush_range <= melee_profile.reach):
+	if melee_profile != null and not is_valid_ambush_range(ambush_range, detection_range, melee_profile.reach):
 		push_error("[SkeletonBehaviorDefinition] Invalid ambush range at %s" % source)
 		valid = false
 	if not is_finite(roam_goal_seconds) or roam_goal_seconds <= 0.0 or not is_finite(repath_seconds) or repath_seconds <= 0.0:

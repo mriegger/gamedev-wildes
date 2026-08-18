@@ -80,9 +80,30 @@ func _run():
 	_emit_outcome(combat, unsupported)
 	_expect(particles._next_burst == 3, "unsupported contact consumed a pooled burst")
 	_expect(not (particles._bursts[3].get_node("Primary") as CPUParticles3D).emitting, "unsupported contact emitted particles")
+	var player_skeleton := MeleeContact.new(0, &"player", 3, &"skeleton", &"copper_sword_melee", Vector3(4.0, 5.0, 6.0), Vector3.FORWARD)
+	_emit_outcome(combat, player_skeleton)
+	var bone := particles._bursts[3]
+	var bone_profile := particle_catalog.get_profile(&"player", &"skeleton")
+	_expect(bone_profile.primary_color.is_equal_approx(Color(0.78, 0.75, 0.65, 1.0)), "bone primary palette changed")
+	_expect(bone_profile.accent_color.is_equal_approx(Color(0.42, 0.36, 0.26, 1.0)), "bone accent palette changed")
+	_expect((bone.get_node("Primary") as CPUParticles3D).color.is_equal_approx(bone_profile.primary_color), "bone primary color did not reach the presenter")
+	_expect((bone.get_node("Accent") as CPUParticles3D).color.is_equal_approx(bone_profile.accent_color), "bone accent color did not reach the presenter")
+	var bone_position := player_skeleton.world_position - Vector3.FORWARD * CombatHitParticleBurst.SURFACE_OFFSET
+	_expect(bone.global_position.is_equal_approx(bone_position), "bone burst position changed")
+	_expect(particles._next_burst == 0, "fourth supported contact did not wrap the particle pool")
+
+	var skeleton_player := MeleeContact.new(3, &"skeleton", 0, &"player", &"skeleton_melee", Vector3(5.0, 6.0, 7.0), Vector3.LEFT)
+	_emit_outcome(combat, skeleton_player)
+	var skeleton_blood := particles._bursts[0]
+	var skeleton_blood_profile := particle_catalog.get_profile(&"skeleton", &"player")
+	_expect(skeleton_blood_profile.primary_color.is_equal_approx(blood_profile.primary_color), "Skeleton blood primary palette diverged from player blood")
+	_expect(skeleton_blood_profile.accent_color.is_equal_approx(blood_profile.accent_color), "Skeleton blood accent palette diverged from player blood")
+	_expect((skeleton_blood.get_node("Primary") as CPUParticles3D).color.is_equal_approx(skeleton_blood_profile.primary_color), "Skeleton blood primary color did not reach the presenter")
+	_expect((skeleton_blood.get_node("Accent") as CPUParticles3D).color.is_equal_approx(skeleton_blood_profile.accent_color), "Skeleton blood accent color did not reach the presenter")
+	_expect(particles._next_burst == 1, "fifth supported contact did not continue from the wrapped pool slot")
 	_emit_outcome(combat, player_zombie)
 	_emit_outcome(combat, player_sheep)
-	_expect(particles._next_burst == 1, "particle pool did not wrap")
+	_expect(particles._next_burst == 3, "particle pool sequence changed after wrapped reuse")
 	particles.queue_free()
 	combat.queue_free()
 	for _frame_index in range(10):

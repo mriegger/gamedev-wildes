@@ -10,6 +10,8 @@ enum State {
 	ATTACK,
 }
 
+const POST_ATTACK_MINIMUM_COVER_DISTANCE: float = 1.0
+
 var state: State = State.ROAM
 
 var _definition: SkeletonBehaviorDefinition
@@ -96,6 +98,11 @@ func needs_cover_search() -> bool:
 
 func is_cover_search_in_progress() -> bool:
 	return _is_cover_search_state() and _cover_search_in_progress
+
+func get_minimum_cover_search_distance() -> float:
+	if _post_attack_retreat_required:
+		return POST_ATTACK_MINIMUM_COVER_DISTANCE
+	return 0.0
 
 func record_cover_search_started():
 	assert(needs_cover_search())

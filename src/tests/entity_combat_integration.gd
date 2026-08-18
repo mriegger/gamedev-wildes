@@ -557,6 +557,20 @@ func _test_skeleton_timed_melee(world: VoxelWorld, profile: MeleeAttackProfile) 
 	skeleton.velocity = Vector3.ZERO
 	skeleton.on_ground = true
 	var attack_origin := skeleton.global_position
+	var contact_count_before := _contacts.size()
+	var player_hp_before := player_stats.current_hp
+	skeleton._timed_melee_contact.arm(profile)
+	player.global_position += Vector3(3.0, 0.0, 0.0)
+	skeleton._emit_melee_contact(skeleton._timed_melee_contact.advance(profile.contact_time + 0.01))
+	_expect(_contacts.size() == contact_count_before, "Skeleton contact committed after the player moved beyond reach")
+	_expect(is_equal_approx(player_stats.current_hp, player_hp_before), "moved-player rejection changed player HP")
+	player.global_position = Vector3(0.5, FEET_Y, 0.5)
+	skeleton._timed_melee_contact.arm(profile)
+	world.restore_block_edits({Vector3i(0, int(FEET_Y), 0): BlockId.Type.STONE}, {})
+	skeleton._emit_melee_contact(skeleton._timed_melee_contact.advance(profile.contact_time + 0.01))
+	_expect(_contacts.size() == contact_count_before, "voxel-occluded Skeleton contact committed")
+	_expect(is_equal_approx(player_stats.current_hp, player_hp_before), "voxel-occluded Skeleton contact changed player HP")
+	world.restore_block_edits({}, {})
 	for y in range(int(FEET_Y), int(FEET_Y) + 2):
 		var placement := world.try_place_block(Vector3i(0, y, 1), BlockId.Type.STONE)
 		_expect(placement.is_success(), "could not build Skeleton post-attack cover")
@@ -571,8 +585,8 @@ func _test_skeleton_timed_melee(world: VoxelWorld, profile: MeleeAttackProfile) 
 	_expect(skeleton.brain.state == SkeletonBrain.State.SPRINT, "Skeleton melee fixture did not sprint at the five-block threshold")
 	_expect(is_equal_approx(skeleton.max_speed, 5.5), "five-block ambush did not select Skeleton sprint speed")
 	_expect(is_equal_approx(Vector2(skeleton.velocity.x, skeleton.velocity.z).length(), 5.5), "five-block ambush did not move at sprint speed")
-	var contact_count_before := _contacts.size()
-	var player_hp_before := player_stats.current_hp
+	contact_count_before = _contacts.size()
+	player_hp_before = player_stats.current_hp
 	coordinator.tick(0.0, observation, 20.0)
 	_expect(skeleton.brain.state == SkeletonBrain.State.ATTACK, "production Skeleton actor did not enter its attack state")
 	_expect(skeleton._timed_melee_contact.is_pending(), "production Skeleton attack did not arm timed contact")
@@ -603,6 +617,26 @@ func _test_skeleton_timed_melee(world: VoxelWorld, profile: MeleeAttackProfile) 
 	_expect(skeleton.global_position.distance_to(attack_origin) > 1.0, "Skeleton accepted its attack position as post-attack cover")
 	coordinator.tick(0.0, observation, 20.0)
 	_expect(skeleton.brain.state == SkeletonBrain.State.SPRINT or skeleton.brain.state == SkeletonBrain.State.ATTACK, "hidden Skeleton did not resume its five-block ambush")
+	contact_count_before = _contacts.size()
+	player_hp_before = player_stats.current_hp
+	skeleton._timed_melee_contact.arm(profile)
+	var lethal_result := coordinator.get_runtime().try_apply_damage(skeleton.runtime_id, 1000.0)
+	_expect(lethal_result != null and lethal_result.defeated, "lethal Skeleton damage was not committed")
+	_expect(coordinator.get_runtime().get_actor(skeleton.runtime_id) == null, "defeated Skeleton remained active")
+	_expect(not skeleton._timed_melee_contact.is_pending(), "defeated Skeleton retained a pending contact")
+	skeleton._emit_melee_contact(skeleton._timed_melee_contact.advance(profile.contact_time + 0.01))
+	_expect(_contacts.size() == contact_count_before and is_equal_approx(player_stats.current_hp, player_hp_before), "defeated Skeleton completed its pending attack")
+	coordinator._spawn_elapsed = WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS
+	coordinator.tick(0.0, observation, 20.0)
+	var replacements := coordinator.get_runtime().get_active_actors()
+	_expect(replacements.size() == 1 and replacements[0] is SkeletonActor, "Skeleton cancellation fixture did not spawn a replacement")
+	if replacements.size() == 1 and replacements[0] is SkeletonActor:
+		var replacement := replacements[0] as SkeletonActor
+		replacement._timed_melee_contact.arm(profile)
+		_expect(coordinator.get_runtime().try_despawn(replacement.runtime_id), "active Skeleton could not begin ordinary despawn")
+		_expect(not replacement._timed_melee_contact.is_pending(), "despawning Skeleton retained a pending contact")
+		replacement._emit_melee_contact(replacement._timed_melee_contact.advance(profile.contact_time + 0.01))
+		_expect(_contacts.size() == contact_count_before and is_equal_approx(player_stats.current_hp, player_hp_before), "despawning Skeleton completed its pending attack")
 	await _cleanup(combat, coordinator, player, camera)
 	for y in range(int(FEET_Y), int(FEET_Y) + 2):
 		var mined_edits := world.try_mine_block(Vector3i(0, y, 1))
