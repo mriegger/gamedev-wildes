@@ -12,13 +12,9 @@ const HIT_SECONDS: float = 0.18
 const DEATH_SECONDS: float = 0.58
 
 @export_node_path("Node3D") var jaw_pivot_path: NodePath
-@export_node_path("Node3D") var left_forearm_pivot_path: NodePath
-@export_node_path("Node3D") var right_forearm_pivot_path: NodePath
 
 var animator: BlockyHumanoidAnimator
 var jaw_pivot: Node3D
-var left_forearm_pivot: Node3D
-var right_forearm_pivot: Node3D
 var _animation_state: ActorAnimationState = ActorAnimationState.new()
 var _current_state: StringName = IDLE
 var _hit_elapsed: float = HIT_SECONDS
@@ -36,24 +32,18 @@ var _visual_origin_position: Vector3
 var _visual_origin_rotation: Vector3
 var _visual_origin_scale: Vector3
 var _jaw_origin_rotation: Vector3
-var _left_forearm_origin_rotation: Vector3
-var _right_forearm_origin_rotation: Vector3
 
 func setup(p_actor: Node3D):
 	super.setup(p_actor)
 	animator = get_parent() as BlockyHumanoidAnimator
 	assert(animator != null)
 	jaw_pivot = get_node(jaw_pivot_path) as Node3D
-	left_forearm_pivot = get_node(left_forearm_pivot_path) as Node3D
-	right_forearm_pivot = get_node(right_forearm_pivot_path) as Node3D
-	assert(jaw_pivot != null and left_forearm_pivot != null and right_forearm_pivot != null)
+	assert(jaw_pivot != null)
 	_previous_yaw = model_root.rotation.y
 	_visual_origin_position = animator.position
 	_visual_origin_rotation = animator.rotation
 	_visual_origin_scale = animator.scale
 	_jaw_origin_rotation = jaw_pivot.rotation
-	_left_forearm_origin_rotation = left_forearm_pivot.rotation
-	_right_forearm_origin_rotation = right_forearm_pivot.rotation
 	_animation_state.grounded = actor.get(&"on_ground") as bool
 	animator.setup(_animation_state)
 	animator.set_tuning_transform(BlockyHumanoidAnimator.TUNING_BODY, Vector3.ZERO, Vector3(4.0, 0.0, 0.0), Vector3.ONE)
@@ -111,7 +101,7 @@ func get_death_time_remaining() -> float:
 func advance(delta: float):
 	assert(actor != null and animator != null)
 	_reset_visual_transform()
-	_reset_articulated_bones()
+	_reset_jaw()
 	if _dying:
 		_death_elapsed = minf(_death_elapsed + delta, DEATH_SECONDS)
 		_animation_state.set_motion(Vector3.ZERO, 0.0, false, true, 0.0, 0.0, false, Vector3.ZERO)
@@ -156,8 +146,6 @@ func _apply_attack_pose():
 	animator.left_arm_action.rotation.x -= deg_to_rad(52.0) * weight
 	animator.left_arm_action.rotation.z += deg_to_rad(26.0 * _attack_direction) * weight
 	animator.right_arm_action.rotation.x -= deg_to_rad(10.0) * weight
-	left_forearm_pivot.rotation.x += deg_to_rad(52.0) * weight
-	right_forearm_pivot.rotation.x += deg_to_rad(34.0) * weight
 	jaw_pivot.rotation.x += deg_to_rad(10.0) * weight
 	animator.rig_root.position.z += 0.18 * weight
 
@@ -185,15 +173,11 @@ func _apply_hide_pose():
 	animator.head_secondary.rotation.x += deg_to_rad(14.0)
 	animator.left_arm_action.rotation += Vector3(deg_to_rad(-22.0), 0.0, deg_to_rad(12.0))
 	animator.right_arm_action.rotation += Vector3(deg_to_rad(-22.0), 0.0, deg_to_rad(-12.0))
-	left_forearm_pivot.rotation.x += deg_to_rad(58.0)
-	right_forearm_pivot.rotation.x += deg_to_rad(58.0)
 
 func _apply_sprint_pose(planar_speed: float):
 	if not _sprinting or planar_speed <= 0.1:
 		return
 	animator.head_secondary.rotation.x += deg_to_rad(7.0)
-	left_forearm_pivot.rotation.x += deg_to_rad(24.0)
-	right_forearm_pivot.rotation.x += deg_to_rad(24.0)
 
 func _apply_death_pose():
 	var progress := smoothstep(0.0, 1.0, _death_elapsed / DEATH_SECONDS)
@@ -205,8 +189,6 @@ func _apply_death_pose():
 	animator.head_secondary.rotation += Vector3(deg_to_rad(28.0) * fold, 0.0, deg_to_rad(16.0) * fall)
 	animator.left_arm_action.rotation.z += deg_to_rad(72.0) * fold
 	animator.right_arm_action.rotation.z -= deg_to_rad(72.0) * fold
-	left_forearm_pivot.rotation.x += deg_to_rad(38.0) * fold
-	right_forearm_pivot.rotation.x += deg_to_rad(54.0) * fold
 	jaw_pivot.rotation.x += deg_to_rad(26.0) * fold
 
 func _select_state(planar_speed: float):
@@ -228,7 +210,5 @@ func _reset_visual_transform():
 	animator.rotation = _visual_origin_rotation
 	animator.scale = _visual_origin_scale
 
-func _reset_articulated_bones():
+func _reset_jaw():
 	jaw_pivot.rotation = _jaw_origin_rotation
-	left_forearm_pivot.rotation = _left_forearm_origin_rotation
-	right_forearm_pivot.rotation = _right_forearm_origin_rotation
