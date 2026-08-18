@@ -573,6 +573,20 @@ jobs:
             30 "HUD_INTEGRATION PASS" /tmp/hud_integration.log -- \
             godot --headless --path src --script res://tests/hud_integration.gd
 
+  chest-system-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run chest storage integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "CHEST_SYSTEM PASS" /tmp/chest_system.log -- \
+            godot --headless --path src --script res://chests/tests/chest_system_integration.gd
+
   player-animation-integration:
     runs-on: ubuntu-latest
     timeout-minutes: 10

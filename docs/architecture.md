@@ -15,6 +15,7 @@ game/                        gameplay composition and session lifecycle
 blocks/                      block domain resources, voxel query contract, and shared presentation
 combat/                      melee profiles, contacts, targeting, and validation
 crafting/                    recipe definitions, inventory coordination, and presentation
+chests/                      container definitions, storage, and tests
 entities/                    content, AI, navigation, populations, and presentation
 environment/                 packaged environment and day/night feature
 inventory/                   inventory model and inventory-owned UI
@@ -116,6 +117,9 @@ source slot owns the adjustable drag count and consumes wheel input before gamep
 `InventoryModel` remains the authority for partial moves and discards, while the source and
 drag-preview visuals show the pending split without mutating inventory until a drop succeeds.
 
+`ChestInventoryStore` owns persistent inventory models keyed by placed chest position. Every chest
+position resolves to distinct stored contents, including after save restore.
+
 ## Runes and socketing
 
 See [Progression, runes, and enchanting](progression-runes-enchanting.md) for the player-facing
@@ -167,12 +171,13 @@ accumulating. Respawn, Main Menu, and window close restore a living player at wo
 saving resumes; exit paths then use the normal final-save and shutdown flow so zero HP is never
 persisted. Loading a historical zero-HP snapshot restores full health at world spawn before gameplay
 begins and immediately replaces the stored snapshot with that living state.
-Save version eight stores perk allocations separately, while item proficiency and per-stack socket
-IDs retain their existing shapes. Version-four saves first gain empty item proficiency,
-version-five inventory stacks then gain empty socket arrays, version-six saves gain an absent
-pumpkin-patch snapshot, and version-seven saves gain empty perk allocations while their
-current-level XP is translated to the linear curve. The migration chain operates on a copy and
-commits only after every step is valid, preserving the original data on failure.
+Save version eight stores perk allocations separately and chest inventories keyed by stable block
+position, while item proficiency and per-stack socket IDs retain their existing shapes. Version-four
+saves first gain empty item proficiency, version-five inventory stacks then gain empty socket arrays,
+version-six saves gain an absent pumpkin-patch snapshot, and version-seven saves gain empty perk and
+chest allocations while their current-level XP is translated to the linear curve. The migration
+chain operates on a copy and commits only after every step is valid, preserving the original data on
+failure.
 
 Ambient overworld populations are transient and bounded to six per species and twelve total.
 Spawning makes four attempts every two seconds in an 18–36 block annulus. Voxel A* has fixed radius,

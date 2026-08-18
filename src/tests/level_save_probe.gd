@@ -18,6 +18,10 @@ func _init() -> void:
 	var voxel_world := VoxelWorld.new(20, 36, 5, 12.0, block_catalog)
 	var inventory := InventoryModel.new(item_catalog)
 	inventory.setup_starter()
+	var chest_storage := ChestInventoryStore.new(item_catalog)
+	var chest_position := Vector3i(4, 5, 6)
+	var chest_inventory := chest_storage.get_or_create(chest_position, 15)
+	chest_inventory.slots[0] = InventoryStack.new(&"log_block", 7)
 	var item_proficiency := ItemProficiency.new(item_catalog)
 	var player_stats := ActorStats.new(player_stats_definition)
 	var player_perks := PlayerPerks.new(player_perk_rules)
@@ -42,13 +46,14 @@ func _init() -> void:
 		"time_of_day": 6.0,
 	}
 	var pumpkin_patch := {"present": false}
-	var saved := SaveManager.save_world_state(slot_id, current_data, voxel_world, location.get_persisted_position(), player_stats, inventory, player_perks, item_proficiency, pumpkin_patch, AppleTreeState.new().snapshot(), 2.5, 27.5)
+	var saved := SaveManager.save_world_state(slot_id, current_data, voxel_world, location.get_persisted_position(), player_stats, inventory, player_perks, chest_storage, item_proficiency, pumpkin_patch, AppleTreeState.new().snapshot(), 2.5, 27.5)
 	_expect(saved, "save_world_state failed")
 	if saved:
 		_expect(int(current_data.get("version", -1)) == SaveManager.CURRENT_SAVE_VERSION, "current_data version changed")
 		_expect(current_data.get("player_position", []) == [doorway_anchor.x, doorway_anchor.y, doorway_anchor.z], "current_data position differs")
 		_expect(current_data.get("player_stats", {}) == player_stats.snapshot_progression(), "current_data player stats differ")
 		_expect(current_data.get("player_perks", {}) == player_perks.snapshot(), "current_data player perks differ")
+		_expect(current_data.get("chest_inventories", {}) == chest_storage.snapshot(), "current_data chest inventories differ")
 		_expect(current_data.get("item_proficiency", {}) == item_proficiency.snapshot(), "current_data item proficiency differs")
 		_expect(current_data.get("pumpkin_patch", {}) == pumpkin_patch, "current_data pumpkin patch differs")
 		_expect(current_data.get("apple_trees", {}) == AppleTreeState.new().snapshot(), "current_data apple tree state differs")
@@ -64,6 +69,11 @@ func _init() -> void:
 		var loaded_inventory: Variant = loaded.get("inventory", null)
 		_expect(loaded_inventory is Dictionary and restored_inventory.from_dict(loaded_inventory as Dictionary), "loaded inventory did not decode")
 		_expect(restored_inventory.to_dict() == inventory.to_dict(), "decoded inventory differs")
+		var restored_chest_storage := ChestInventoryStore.new(item_catalog)
+		var loaded_chests: Variant = loaded.get("chest_inventories", null)
+		_expect(loaded_chests is Dictionary and restored_chest_storage.restore(loaded_chests as Dictionary), "loaded chest inventories did not decode")
+		var restored_chest := restored_chest_storage.get_inventory(chest_position)
+		_expect(restored_chest != null and restored_chest.get_slot(0).item_id == &"log_block" and restored_chest.get_slot(0).count == 7, "decoded chest inventory differs")
 	var cleanup_error := OK
 	if FileAccess.file_exists(path):
 		cleanup_error = DirAccess.remove_absolute(path)

@@ -13,6 +13,7 @@ var _world: WorldController
 var _player_stats: ActorStats
 var _inventory: InventoryModel
 var _player_perks: PlayerPerks
+var _chest_storage: ChestInventoryStore
 var _item_proficiency: ItemProficiency
 var _environment: GameEnvironment
 var _persisted_position_query: Callable
@@ -27,11 +28,12 @@ var _saving_suspended: bool = false
 func _ready():
 	set_process(false)
 
-func setup(p_slot_id: int, p_save_data: Dictionary, p_world: WorldController, p_player_stats: ActorStats, p_inventory: InventoryModel, p_player_perks: PlayerPerks, p_item_proficiency: ItemProficiency, p_environment: GameEnvironment, p_pumpkin_patch: PumpkinPatchCoordinator, p_apple_trees: AppleTreeCoordinator, p_persisted_position_query: Callable):
+func setup(p_slot_id: int, p_save_data: Dictionary, p_world: WorldController, p_player_stats: ActorStats, p_inventory: InventoryModel, p_player_perks: PlayerPerks, p_chest_storage: ChestInventoryStore, p_item_proficiency: ItemProficiency, p_environment: GameEnvironment, p_pumpkin_patch: PumpkinPatchCoordinator, p_apple_trees: AppleTreeCoordinator, p_persisted_position_query: Callable):
 	assert(p_world != null)
 	assert(p_player_stats != null)
 	assert(p_inventory != null)
 	assert(p_player_perks != null)
+	assert(p_chest_storage != null)
 	assert(p_item_proficiency != null)
 	assert(p_environment != null)
 	assert(p_pumpkin_patch != null)
@@ -43,6 +45,7 @@ func setup(p_slot_id: int, p_save_data: Dictionary, p_world: WorldController, p_
 	_player_stats = p_player_stats
 	_inventory = p_inventory
 	_player_perks = p_player_perks
+	_chest_storage = p_chest_storage
 	_item_proficiency = p_item_proficiency
 	_environment = p_environment
 	_persisted_position_query = p_persisted_position_query
@@ -90,7 +93,7 @@ func save(reason: String) -> bool:
 		return false
 	var time_to_save = _environment.get_time_of_day()
 	var persisted_position := _persisted_position_query.call() as Vector3
-	var success = SaveManager.save_world_state(slot_id, save_data, _world.voxel_model, persisted_position, _player_stats, _inventory, _player_perks, _item_proficiency, _pumpkin_patch.snapshot(), _apple_trees.snapshot(), _playtime_accum, time_to_save)
+	var success = SaveManager.save_world_state(slot_id, save_data, _world.voxel_model, persisted_position, _player_stats, _inventory, _player_perks, _chest_storage, _item_proficiency, _pumpkin_patch.snapshot(), _apple_trees.snapshot(), _playtime_accum, time_to_save)
 	if success:
 		_auto_save_elapsed = 0.0
 		_edit_idle_elapsed = 0.0

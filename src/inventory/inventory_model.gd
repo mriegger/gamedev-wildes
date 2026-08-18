@@ -692,6 +692,38 @@ func to_dict() -> Dictionary:
 		"regions": regions_dict,
 	}
 
+func encode_slots() -> Array:
+	var encoded: Array = []
+	for stack in slots:
+		encoded.append(null if stack == null else stack.to_dict())
+	return encoded
+
+func restore_slots(encoded: Array) -> bool:
+	if encoded.size() != size:
+		return false
+	var restored: Array[InventoryStack] = []
+	restored.resize(size)
+	restored.fill(null)
+	for index in range(size):
+		var raw = encoded[index]
+		if raw == null:
+			continue
+		if not raw is Dictionary:
+			return false
+		var stack := InventoryStack.from_dict(raw)
+		if stack == null or not item_catalog.has_definition(stack.item_id):
+			return false
+		if not can_slot_accept_item_id(index, stack.item_id):
+			return false
+		if stack.count < 1 or stack.count > item_catalog.get_definition(stack.item_id).max_stack:
+			return false
+		if not _is_valid_socket_loadout(stack.item_id, stack.socketed_rune_ids):
+			return false
+		restored[index] = stack
+	slots = restored
+	inventory_changed.emit()
+	return true
+
 func from_dict(data: Dictionary) -> bool:
 	var regions_dict = data.get("regions", {}) as Dictionary
 	var restored_slots: Array[InventoryStack] = []

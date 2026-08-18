@@ -42,11 +42,16 @@ func _rebuild_lookup() -> void:
 			if not definition.is_raycast_solid:
 				push_error("[BlockCatalog] Crafting station must be targetable at %s" % source)
 				_is_valid = false
+		if definition.container != null:
+			_is_valid = definition.container.validate(source) and _is_valid
+			if not definition.is_raycast_solid or definition.is_breakable:
+				push_error("[BlockCatalog] Container must be targetable and non-breakable at %s" % source)
+				_is_valid = false
 	for id in range(BlockId.Type.COUNT):
 		if _definitions_by_id[id] == null:
 			push_error("[BlockCatalog] Missing block for BlockId %d" % id)
 			_is_valid = false
-		elif BlockId.is_chunk_cube(id) or id == BlockId.Type.ANVIL:
+		elif BlockId.is_chunk_cube(id) or id == BlockId.Type.ANVIL or id == BlockId.Type.CHEST:
 			var definition := _definitions_by_id[id]
 			_validate_face_texture(definition.top_texture, "top", definition)
 			_validate_face_texture(definition.side_texture, "side", definition)

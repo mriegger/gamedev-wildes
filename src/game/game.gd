@@ -61,6 +61,7 @@ var interaction_prompt_coordinator: InteractionPromptCoordinator
 var anvil_coordinator: AnvilCoordinator
 var harvest_coordinator: HarvestCoordinator
 var item_consumption_coordinator: ItemConsumptionCoordinator
+var chest_storage: ChestInventoryStore
 var input_buffer: InputBuffer = InputBuffer.new()
 var settings: GameSettings
 
@@ -130,8 +131,10 @@ func _ready():
 		Callable(self, "_request_exit_structure")
 	)
 	player_perks = PlayerPerks.new(player_perk_rules)
+	chest_storage = ChestInventoryStore.new(item_catalog)
 	item_proficiency = ItemProficiency.new(item_catalog)
 	_restore_inventory()
+	_restore_chest_inventories()
 	_restore_item_proficiency()
 	rune_socketing_coordinator = RuneSocketingCoordinator.new()
 	if not rune_socketing_coordinator.setup(inventory_model, item_proficiency):
@@ -165,7 +168,7 @@ func _ready():
 	level_interaction.interaction_requested.connect(_on_level_interaction_requested)
 	_setup_level_entrance()
 	game_session.save_status_changed.connect(_show_save_status)
-	game_session.setup(_slot_id, _save_data, world, player_stats, inventory_model, player_perks, item_proficiency, game_environment, pumpkin_patch, apple_trees, _get_persisted_position)
+	game_session.setup(_slot_id, _save_data, world, player_stats, inventory_model, player_perks, chest_storage, item_proficiency, game_environment, pumpkin_patch, apple_trees, _get_persisted_position)
 	if _recovered_defeated_save and _slot_id != -1 and not game_session.save("defeated_save_recovery"):
 		push_error("[Game] Failed to persist recovered player state")
 	_recovered_defeated_save = false
@@ -188,6 +191,12 @@ func _restore_inventory():
 			push_warning("[Game] Starter item migration deferred because inventory is full")
 	else:
 		inventory_model.setup_empty()
+
+func _restore_chest_inventories():
+	var saved_chests = _save_data.get("chest_inventories", {})
+	if not saved_chests is Dictionary or not chest_storage.restore(saved_chests):
+		push_error("[Game] Saved chest inventories are invalid; using empty chest storage")
+		chest_storage = ChestInventoryStore.new(item_catalog)
 
 func _restore_player_progression() -> bool:
 	var saved_stats = _save_data.get("player_stats", null)

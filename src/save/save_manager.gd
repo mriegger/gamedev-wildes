@@ -84,6 +84,7 @@ static func create_new_world(slot_id: int, seed_value: int, world_name: String) 
 		"player_perks": {"allocations": {}},
 		"item_proficiency": {},
 		"inventory": null,
+		"chest_inventories": {},
 		"playtime_seconds": 0,
 		"time_of_day": 6.0,
 		"pumpkin_patch": null,
@@ -199,6 +200,8 @@ static func load_slot(slot_id: int) -> Dictionary:
 		info["item_proficiency"] = {}
 	if not info.has("pumpkin_patch"):
 		info["pumpkin_patch"] = {"present": false}
+	if not info.has("chest_inventories"):
+		info["chest_inventories"] = {}
 	if not info.has("apple_trees"):
 		info["apple_trees"] = {"version": AppleTreeState.SNAPSHOT_VERSION, "collected_slots": []}
 	return info
@@ -223,6 +226,7 @@ static func _migrate_save_data(data: Dictionary) -> bool:
 			7:
 				if not _migrate_player_progression_data(migrated):
 					return false
+				migrated["chest_inventories"] = {}
 				version = 8
 			8:
 				migrated["apple_trees"] = {"version": AppleTreeState.SNAPSHOT_VERSION, "collected_slots": []}
@@ -316,9 +320,10 @@ static func _migrate_inventory_socket_data(data: Dictionary) -> bool:
 			encoded_stack["socketed_rune_ids"] = []
 	return true
 
-static func save_world_state(slot_id: int, current_data: Dictionary, voxel_model: VoxelWorld, persisted_player_position: Vector3, player_stats: ActorStats, inventory: InventoryModel, player_perks: PlayerPerks, item_proficiency: ItemProficiency, pumpkin_patch: Dictionary, apple_trees: Dictionary, extra_seconds: float, time_of_day: float) -> bool:
+static func save_world_state(slot_id: int, current_data: Dictionary, voxel_model: VoxelWorld, persisted_player_position: Vector3, player_stats: ActorStats, inventory: InventoryModel, player_perks: PlayerPerks, chest_storage: ChestInventoryStore, item_proficiency: ItemProficiency, pumpkin_patch: Dictionary, apple_trees: Dictionary, extra_seconds: float, time_of_day: float) -> bool:
 	assert(player_perks != null)
 	assert(item_proficiency != null)
+	assert(chest_storage != null)
 	var updated = current_data.duplicate()
 	updated["last_played"] = _now_str()
 	updated["version"] = CURRENT_SAVE_VERSION
@@ -335,6 +340,7 @@ static func save_world_state(slot_id: int, current_data: Dictionary, voxel_model
 	updated["player_stats"] = player_stats.snapshot_progression()
 	updated["player_perks"] = player_perks.snapshot()
 	updated["inventory"] = inventory.to_dict()
+	updated["chest_inventories"] = chest_storage.snapshot()
 	updated["item_proficiency"] = item_proficiency.snapshot()
 	updated["pumpkin_patch"] = pumpkin_patch.duplicate(true)
 	updated["apple_trees"] = apple_trees.duplicate(true)

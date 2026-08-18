@@ -47,6 +47,7 @@ func _test_save_omits_generated_copper(catalog: BlockCatalog) -> void:
 	var inventory := InventoryModel.new(item_catalog)
 	var player_perks := PlayerPerks.new(load("res://progression/player_perk_rules.tres") as PlayerPerkRules)
 	_expect(player_perks.restore({"allocations": {"health": 1}}, 2), "test perk allocation was rejected")
+	var chest_storage := ChestInventoryStore.new(item_catalog)
 	var item_proficiency := ItemProficiency.new(item_catalog)
 	var save_data := {
 		"seed": 1337,
@@ -65,7 +66,7 @@ func _test_save_omits_generated_copper(catalog: BlockCatalog) -> void:
 		"growth_state_ids": pumpkin_state_ids,
 		"quarter_turns": pumpkin_quarter_turns,
 	}
-	_expect(SaveManager.save_world_state(slot_id, save_data, world, player.global_position, player.stats, inventory, player_perks, item_proficiency, pumpkin_snapshot, AppleTreeState.new().snapshot(), 0.0, 6.0), "save manager could not write deterministic copper test save")
+	_expect(SaveManager.save_world_state(slot_id, save_data, world, player.global_position, player.stats, inventory, player_perks, chest_storage, item_proficiency, pumpkin_snapshot, AppleTreeState.new().snapshot(), 0.0, 6.0), "save manager could not write deterministic copper test save")
 	_expect(save_data["player_perks"] == {"allocations": {"health": 1}}, "in-memory save did not persist perk allocations")
 	_expect(not save_data.has("copper_blocks"), "in-memory save retained generated copper blocks")
 	_expect(not save_data.has("generated_copper_chunks"), "in-memory save retained generated copper chunk markers")

@@ -25,5 +25,6 @@ class_name BlockDefinition
 
 @export_group("Behavior")
 @export var crafting_station: CraftingStationBlockDefinition
+@export var container: ContainerBlockDefinition
 @export var light_range: float = 0.0
 @export var light_color: Color = Color(1, 1, 1)
