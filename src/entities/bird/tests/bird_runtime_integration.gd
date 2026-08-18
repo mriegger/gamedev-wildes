@@ -49,17 +49,24 @@ func _run() -> void:
 	_expect(bird != null and bird._has_landing_target, "bird did not acquire an initial landing target")
 	_expect(runtime.try_apply_damage(1, 1.0) == null, "direct damage affected an untargetable bird")
 	var visited: Dictionary = {}
+	var observed_folded_wings := false
 	for _frame in SIMULATION_FRAMES:
 		if bird == null:
 			break
 		visited[bird.brain.state] = true
 		runtime.tick(FRAME_DELTA, Vector3.ZERO)
 		bird.animation_driver.advance(FRAME_DELTA)
+		if bird.brain.state in [BirdBrain.State.GROUNDED_IDLE, BirdBrain.State.GROUNDED_WALK]:
+			var animation := bird.animation_driver as BirdAnimationDriver
+			var left_fold := absf(wrapf(animation._left_wing_pivot.rotation.y - animation._left_wing_origin.basis.get_euler().y, -PI, PI))
+			var right_fold := absf(wrapf(animation._right_wing_pivot.rotation.y - animation._right_wing_origin.basis.get_euler().y, -PI, PI))
+			observed_folded_wings = observed_folded_wings or left_fold >= deg_to_rad(70.0) and right_fold >= deg_to_rad(70.0)
 	_expect(visited.has(BirdBrain.State.CRUISE), "bird never cruised")
 	_expect(visited.has(BirdBrain.State.DESCEND), "bird never descended")
 	_expect(visited.has(BirdBrain.State.GROUNDED_IDLE), "bird never idled on the ground")
 	_expect(visited.has(BirdBrain.State.GROUNDED_WALK), "bird never walked on the ground")
 	_expect(visited.has(BirdBrain.State.TAKEOFF), "bird never took off")
+	_expect(observed_folded_wings, "grounded bird did not fold both wings")
 	_expect(not VoxelBodySolver.collides_at(world, bird.global_position, definition.body_width, definition.body_height, false), "bird ended inside solid terrain")
 
 	var blocked_world := _make_world(BlockId.Type.STONE)

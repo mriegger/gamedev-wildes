@@ -219,8 +219,8 @@ Initial proportions:
 
 - Cruise and takeoff: fast wing flap and subtle body pitch
 - Descent: slower, wider wing pose with legs lowered
-- Idle: breathing, head turns, and occasional tail movement
-- Walk: short alternating steps and body bob
+- Idle: folded wings, breathing, head turns, and occasional tail movement
+- Walk: folded wings, short alternating steps, and body bob
 
 The bird has no hit or death animation in the first pass because combat cannot target it. Nightfall and distance retirement use the shared visual fade.
 

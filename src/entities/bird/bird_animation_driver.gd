@@ -70,18 +70,24 @@ func _apply_flight(delta: float, cycle_seconds: float, amplitude_degrees: float,
 	_right_leg_pivot.rotation.x = _right_leg_origin.basis.get_euler().x - deg_to_rad(24.0)
 
 func _apply_idle() -> void:
+	_apply_folded_wings()
 	_body_pivot.position.y = _body_origin.origin.y + sin(_elapsed * 2.2) * 0.008
 	_head_pivot.rotation.y = _head_origin.basis.get_euler().y + sin(_elapsed * 0.8) * deg_to_rad(14.0)
 	_head_pivot.rotation.x = _head_origin.basis.get_euler().x + sin(_elapsed * 1.3) * deg_to_rad(5.0)
 	_tail_pivot.rotation.x = _tail_origin.basis.get_euler().x + sin(_elapsed * 3.7) * deg_to_rad(5.0)
 
 func _apply_walk(delta: float) -> void:
+	_apply_folded_wings()
 	_walk_phase = fmod(_walk_phase + delta * TAU / 0.42, TAU)
 	var stride := sin(_walk_phase)
 	_left_leg_pivot.rotation.x = _left_leg_origin.basis.get_euler().x + stride * deg_to_rad(28.0)
 	_right_leg_pivot.rotation.x = _right_leg_origin.basis.get_euler().x - stride * deg_to_rad(28.0)
 	_body_pivot.position.y = _body_origin.origin.y + absf(stride) * 0.025
 	_head_pivot.rotation.x = _head_origin.basis.get_euler().x - stride * deg_to_rad(4.0)
+
+func _apply_folded_wings() -> void:
+	_left_wing_pivot.rotation.y = _left_wing_origin.basis.get_euler().y - deg_to_rad(72.0)
+	_right_wing_pivot.rotation.y = _right_wing_origin.basis.get_euler().y + deg_to_rad(72.0)
 
 func _reset_pose() -> void:
 	_rig_root.transform = _rig_origin
