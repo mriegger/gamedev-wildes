@@ -39,25 +39,42 @@ tests/                       headless verification
 ## Entities and combat
 
 `EntityCatalog` is the authoritative list of stable entity content IDs. Each `EntityDefinition`
-references an actor scene, typed behavior, and validated combat stats. `EntityRuntime` owns a fresh
-`ActorStats` instance for every runtime ID alongside spawn/despawn lifecycle, the bounded spatial
-index, active actors, prepared actors, retiring presentation, and defeat notifications.
-`WorldEntityCoordinator` owns ambient time-of-day spawning, streamed-position rejection, distance
-despawning, and overworld population limits around that runtime. `GroundMeleeEnemyBrain` owns the
-reusable deterministic wander, perception-memory, chase, and melee-attack decisions configured by
-`GroundMeleeEnemyBehaviorDefinition`; zombie actors coordinate that brain with their species-owned
-combat and presentation. Sheep retain their distinct deterministic decision state. The shared voxel
-solver and bounded path follower own reusable movement calculations. Voxel A* expands eight planar
-directions with distance-weighted diagonal edges and refuses diagonals through blocked orthogonal
-corners. Custom animation drivers present actor state without deciding gameplay outcomes. Each actor
-binds its runtime stats to a billboarded health bar before visual-fade setup,
-so the bar remains hidden at full health, updates from completed health changes, and shares the
-actor's fade lifecycle. Spawned actors fade in through instance-local geometry transparency.
-Despawn or lethal damage removes stats, active state, targeting, and spatial entries together. Lethal retirement
-plays the species-owned death pose, then starts an actor-owned one-shot smoke poof and model fade
-together; the scene is freed only after both complete. Ordinary distance and streaming retirement
-uses only the fade. The overworld retiring-visual cap bounds actors, fades, and their child particle
-effects to twelve concurrent presentations and evicts the earliest retained presentation first.
+references an actor scene, typed behavior, and validated combat stats. `EntityTargetObservation`
+is an immutable per-tick snapshot of player position and effective camera origin, forward, and right
+axes. `Game` and `LevelRuntime` construct that observation from their explicitly injected player and
+camera context before ticking entities. `EntityRuntime` owns a fresh `ActorStats` instance for every
+runtime ID alongside spawn/despawn lifecycle, the bounded spatial index, active actors, prepared
+actors, retiring presentation, and defeat notifications. It rotates the sorted actor order each tick
+before actors consume the shared navigation-search budget. `WorldEntityCoordinator` owns ambient
+time-of-day spawning, streamed-position rejection, distance despawning, and overworld population
+limits around that runtime.
+
+`GroundMeleeEnemyBrain` owns the reusable deterministic wander, perception-memory, chase, and
+melee-attack decisions configured by `GroundMeleeEnemyBehaviorDefinition`; Zombie actors coordinate
+that brain with their species-owned combat and presentation. `SkeletonBrain` separately owns roaming,
+cover search, cover movement, hiding, sprinting, and attack decisions. Skeleton patrol goals drift
+from the actor's current position within thirty horizontal blocks. A detected player outside the
+five-block ambush radius triggers a deterministic nearest-cover search; entering that radius or
+exhausting cover starts a sprint, and completing a swing requests new cover before another ambush.
+`VoxelCoverSearch` captures the observation at search start, advances at most thirty-two ordered
+columns per actor tick, checks walkable elevations, and spends the bounded A* budget only on hidden
+candidates. `VoxelCameraOcclusion` requires all nine body samples to be blocked. Hiding and cover
+movement revalidate against the current camera every 0.125 seconds, so camera motion or voxel edits
+restart the search. Sheep retain their distinct deterministic decision state. The shared voxel solver
+and bounded path follower own reusable movement calculations. Voxel A* expands eight planar directions
+with distance-weighted diagonal edges and refuses diagonals through blocked orthogonal corners.
+
+Custom animation drivers present actor state without deciding gameplay outcomes. `EntityActor`
+allows species to omit vocalization presentation; Skeleton currently has no audio wiring, while the
+existing Zombie and Sheep presentation remains unchanged. Each actor binds its runtime stats to a
+billboarded health bar before visual-fade setup, so the bar remains hidden at full health, updates from
+completed health changes, and shares the actor's fade lifecycle. Spawned actors fade in through
+instance-local geometry transparency. Despawn or lethal damage removes stats, active state,
+targeting, and spatial entries together. Lethal retirement plays the species-owned death pose, then
+starts an actor-owned one-shot smoke poof and model fade together; the scene is freed only after both
+complete. Ordinary distance and streaming retirement uses only the fade. The overworld
+retiring-visual cap bounds actors, fades, and their child particle effects to twelve concurrent
+presentations and evicts the earliest retained presentation first.
 
 Stat definitions validate every declared base value as finite and nonnegative. `ActorStats` owns
 current HP, validates every removable subset of prospective modifiers before committing them, and
@@ -90,9 +107,17 @@ beyond its authored camera-size threshold. Rejected contacts change no health an
 `Game` explicitly connects completed outcomes to entity reactions, progression, and presentation
 without making combat own those policies.
 
+Enemy attacks use `TimedMeleeContact` to separate an actor-owned action duration from its one contact
+instant. Zombie and Skeleton actors emit the configured profile only when that instant is reached;
+retirement cancels pending contact. `EntityRuntime` forwards the completed signal, and
+`MeleeCombatCoordinator` revalidates the live source, player range, voxel line of sight, and player
+bounds before committing damage. Skeleton contact therefore uses the same authoritative defense
+calculation as every other melee result while its brain owns the post-swing cover retreat.
+
 `ActorStats` owns the player's level and current-level experience. `CombatProgressionCoordinator`
 awards the reward authored on an `EntityDefinition` exactly once for a player-caused defeat.
-Zombie and sheep rewards are currently ten experience and remain content values for later tuning.
+Zombie, Skeleton, and sheep rewards are currently ten experience and remain content values for later
+tuning.
 `ActorStatsDefinition` calculates the next-level requirement as an authored base plus a fixed
 per-level increase. Save version eight preserves completed levels while translating version-seven
 current-level experience proportionally from the previous exponential requirement.
@@ -209,12 +234,15 @@ chest allocations while their current-level XP is translated to the linear curve
 chain operates on a copy and commits only after every step is valid, preserving the original data on
 failure.
 
-Ambient overworld populations are transient and bounded to six per species and twelve total.
-Spawning makes four attempts every two seconds in an 18–36 block annulus. Voxel A* has fixed radius,
-node, and failed-search retry budgets. The spatial index contains only active actors, and distance or
-chunk-streaming loss removes actors and index entries together. Block placement queries that index
-and revalidates world, inventory, reach, player overlap, and active-entity overlap immediately
-before committing.
+Ambient overworld populations are transient and bounded by each definition's authored cap and a
+twelve-entity total. The current caps are six Sheep, six Zombies, and three Skeletons. A deterministic
+round-robin cursor considers eligible species and permits one successful spawn per interval, preventing
+one night species from starving another. Spawning makes four attempts every two seconds in an 18–36
+block annulus. Overworld voxel A* is bounded to a radius of thirty-two, 512 visited nodes, and two
+shared searches per tick; actors rotate through that shared budget. The spatial index contains only
+active actors, and distance or chunk-streaming loss removes actors and index entries together. Block
+placement queries that index and revalidates world, inventory, reach, player overlap, and active-entity
+overlap immediately before committing.
 
 ## Voxel spaces and levels
 
