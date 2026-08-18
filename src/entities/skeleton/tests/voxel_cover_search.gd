@@ -59,11 +59,13 @@ func _run() -> void:
 	_test_closer_unreachable_position_is_rejected()
 	_test_off_center_columns_use_exact_distance()
 	_test_exact_radius_boundary()
+	_test_elevation_offsets_are_bounded_and_ordered()
 	_test_candidate_columns_are_bounded_per_tick()
 	_test_resumed_column_counts_toward_tick_bound()
 	_test_reachable_one_block_up_position()
 	_test_reachable_one_block_down_position()
 	_test_reachable_multi_step_hill_endpoint()
+	_test_varied_height_ground_below_overhang()
 	_test_budget_starvation_retains_candidate_elevation()
 	_test_canopy_top_is_not_selected()
 	_test_no_cover_exhausts_search()
@@ -130,13 +132,20 @@ func _test_exact_radius_boundary() -> void:
 		_expect(entry.distance_squared <= float(VoxelCoverSearchType.SEARCH_RADIUS * VoxelCoverSearchType.SEARCH_RADIUS), "column beyond the exact search radius was returned")
 	_expect(found_negative_boundary and found_positive_boundary, "columns exactly 30 blocks away were excluded")
 
+func _test_elevation_offsets_are_bounded_and_ordered() -> void:
+	var limits := EntityNavigationLimits.new(4, 64, 1)
+	var search := VoxelCoverSearchType.new(TestVoxelSpace.new(), BODY_WIDTH, BODY_HEIGHT, limits)
+	var expected: Array[int] = [0, -1, 1, -2, 2, -3, 3, -4, 4]
+	_expect(search._elevation_offsets == expected, "elevation scan exceeded its navigation radius or changed deterministic ordering")
+
 func _test_candidate_columns_are_bounded_per_tick() -> void:
 	var space := TestVoxelSpace.new()
 	var search := _make_search(space)
 	search.begin(ORIGIN, _observation())
 	_expect(search.get("_queued_columns").size() == 1, "search eagerly enumerated candidate columns at begin")
 	search.advance(NavigationSearchBudget.new(2))
-	_expect(space.highest_top_queries == VoxelCoverSearchType.CANDIDATES_PER_TICK, "one advance examined more than 32 candidate columns")
+	var expected_queries := VoxelCoverSearchType.CANDIDATES_PER_TICK * search._elevation_offsets.size()
+	_expect(space.highest_top_queries == expected_queries, "one advance examined more than 32 bounded candidate columns")
 	_expect(search.status == VoxelCoverSearchType.Status.SEARCHING, "bounded search exhausted all candidates in one advance")
 
 func _test_resumed_column_counts_toward_tick_bound() -> void:
@@ -153,7 +162,8 @@ func _test_resumed_column_counts_toward_tick_bound() -> void:
 	budget.reset()
 	search.advance(budget)
 	var resumed_query_count := space.highest_top_queries - queries_before_resume
-	_expect(resumed_query_count == VoxelCoverSearchType.CANDIDATES_PER_TICK - 1, "resumed column did not count toward the 32-column bound")
+	var expected_queries := (VoxelCoverSearchType.CANDIDATES_PER_TICK - 1) * search._elevation_offsets.size()
+	_expect(resumed_query_count == expected_queries, "resumed column was rescanned or did not count toward the 32-column bound")
 	_expect(search.status == VoxelCoverSearchType.Status.SEARCHING, "resumed bounded search terminated unexpectedly")
 
 func _test_reachable_one_block_up_position() -> void:
@@ -191,6 +201,21 @@ func _test_reachable_multi_step_hill_endpoint() -> void:
 	if search.status == VoxelCoverSearchType.Status.FOUND:
 		_expect(search.get_target().is_equal_approx(Vector3(3.5, FEET_Y + 3.0, 0.5)), "multi-step hill cover resolved to the wrong elevation")
 
+func _test_varied_height_ground_below_overhang() -> void:
+	var space := TestVoxelSpace.new()
+	space.set_ground_height(1, 0, FEET_Y + 1.0)
+	space.set_ground_height(2, 0, FEET_Y + 2.0)
+	space.set_ground_height(3, 0, FEET_Y + 8.0)
+	space.add_supporting_block(3, 0, int(FEET_Y + 3.0))
+	space.add_wall_levels(3, 0, int(FEET_Y + 7.0), int(FEET_Y + 7.0), true)
+	space.add_wall_levels(2, 0, 1, 10)
+	var search := _make_search(space)
+	search.begin(ORIGIN, _side_observation())
+	_run_to_completion(search)
+	_expect(search.status == VoxelCoverSearchType.Status.FOUND, "reachable varied-height ground below an overhang was not found")
+	if search.status == VoxelCoverSearchType.Status.FOUND:
+		_expect(search.get_target().is_equal_approx(Vector3(3.5, FEET_Y + 3.0, 0.5)), "overhang search did not select the reachable lower terrain")
+
 func _test_budget_starvation_retains_candidate_elevation() -> void:
 	var space := TestVoxelSpace.new()
 	space.set_ground_height(0, 2, FEET_Y + 1.0)
@@ -198,6 +223,7 @@ func _test_budget_starvation_retains_candidate_elevation() -> void:
 	var search := _make_search(space)
 	search.begin(ORIGIN, _observation())
 	var budget := NavigationSearchBudget.new(1)
+	budget.try_acquire()
 	search.advance(budget)
 	_expect(search.status == VoxelCoverSearchType.Status.SEARCHING, "budget-starved search skipped its pending elevation")
 	budget.reset()

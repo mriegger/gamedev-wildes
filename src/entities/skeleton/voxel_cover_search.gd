@@ -9,7 +9,6 @@ enum Status {
 
 const SEARCH_RADIUS: int = 30
 const CANDIDATES_PER_TICK: int = 32
-const ELEVATION_OFFSETS: Array[int] = [0, 1, -1]
 const CARDINAL_DIRECTIONS: Array[Vector2i] = [
 	Vector2i(-1, 0),
 	Vector2i(0, -1),
@@ -34,6 +33,7 @@ var _body_width: float
 var _body_height: float
 var _navigation_limits: EntityNavigationLimits
 var _status: Status = Status.EXHAUSTED
+var _elevation_offsets: Array[int] = []
 var _origin: Vector3
 var _origin_feet: Vector3i
 var _observation: EntityTargetObservation
@@ -59,6 +59,7 @@ func _init(
 	_body_width = p_body_width
 	_body_height = p_body_height
 	_navigation_limits = p_navigation_limits
+	_elevation_offsets = _build_elevation_offsets()
 
 func begin(origin: Vector3, observation: EntityTargetObservation) -> void:
 	assert(origin.is_finite())
@@ -135,16 +136,21 @@ func get_target() -> Vector3:
 
 func _resolve_candidate_elevations(column: Vector2i) -> Array[int]:
 	var elevations: Array[int] = []
-	for offset in ELEVATION_OFFSETS:
-		var elevation := _origin_feet.y + offset
-		if not elevations.has(elevation):
-			elevations.append(elevation)
-	var surface_y := _voxel_space.get_highest_top(column.x, column.y)
-	if surface_y != VoxelSpace.NO_SURFACE_Y:
-		var surface_elevation := roundi(surface_y)
-		if not elevations.has(surface_elevation):
-			elevations.append(surface_elevation)
+	for offset in _elevation_offsets:
+		_append_walkable_elevation(elevations, column, _origin_feet.y + offset)
 	return elevations
+
+func _append_walkable_elevation(elevations: Array[int], column: Vector2i, elevation: int) -> void:
+	var feet := Vector3i(column.x, elevation, column.y)
+	if VoxelPathfinder.is_walkable(_voxel_space, feet, _body_width, _body_height):
+		elevations.append(elevation)
+
+func _build_elevation_offsets() -> Array[int]:
+	var offsets: Array[int] = [0]
+	for delta in range(1, _navigation_limits.get_max_search_radius() + 1):
+		offsets.append(-delta)
+		offsets.append(delta)
+	return offsets
 
 func _queue_nearest_columns() -> void:
 	var floor_x := floori(_origin.x)
