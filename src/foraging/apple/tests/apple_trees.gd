@@ -10,6 +10,7 @@ func _init() -> void:
 	chunk_manager.visible_chunks[Vector2i.ZERO] = true
 	var apple_trees := (load("res://foraging/apple/apple_tree_coordinator.tscn") as PackedScene).instantiate() as AppleTreeCoordinator
 	root.add_child(apple_trees)
+	_expect(apple_trees.definition.apple_scene.resource_path == "res://assets/models/foraging/apple/apple.glb", "apple trees did not use the Kenney Food Kit model")
 	var apple_position := _find_apple_tree_position(apple_trees.definition, 872341)
 	_populate_tree(world, apple_position)
 	_expect(apple_trees.setup(world, chunk_manager, 872341, null, item_catalog), "apple tree setup rejected valid content")
