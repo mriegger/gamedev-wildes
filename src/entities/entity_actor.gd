@@ -98,6 +98,9 @@ func has_valid_presentation() -> bool:
 func _process(delta: float):
 	animation_driver.advance(delta)
 
+func set_runtime_suspended(suspended: bool) -> void:
+	set_process(not suspended)
+
 func advance_visual_fade(delta: float) -> bool:
 	assert(visual_fader != null)
 	return visual_fader.advance(delta)

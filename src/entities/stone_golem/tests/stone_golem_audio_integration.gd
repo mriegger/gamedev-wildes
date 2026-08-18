@@ -106,6 +106,39 @@ func _run() -> void:
 		"ordinary despawn retained Stone Golem audio",
 	)
 
+	var runtime := EntityRuntime.new()
+	get_root().add_child(runtime)
+	var catalog := load("res://entities/entity_catalog.tres") as EntityCatalog
+	runtime.setup(catalog, world, 4, 4, EntityNavigationLimits.new(32, 512, 2))
+	var suspend_requests: Array[EntitySpawnRequest] = [
+		EntitySpawnRequest.new(&"stone_golem", Vector3(6.5, FEET_Y, 0.5), 9300),
+	]
+	var suspended_ids := runtime.try_spawn_batch(suspend_requests)
+	_expect(suspended_ids == [1], "suspension fixture did not spawn its Stone Golem")
+	var suspended_actor := runtime.get_actor(suspended_ids[0]) as StoneGolemActorType
+	var suspended_animation := suspended_actor._stone_golem_animation
+	var suspended_audio := suspended_actor.get_node(suspended_actor.action_audio_path) as StoneGolemAudioType
+	suspended_actor.velocity = Vector3(0.0, 0.0, suspended_actor.max_speed)
+	suspended_animation.advance(walk_cycle * 0.71)
+	suspended_audio.walk_player.stop()
+	suspended_audio.walk_player.stream = null
+	var suspended_gait_position := suspended_animation.animator.get_gait_cycle_position()
+	runtime.suspend()
+	_expect(runtime.is_suspended() and not suspended_actor.is_processing(), "runtime suspension left Stone Golem presentation active")
+	await process_frame
+	await process_frame
+	_expect(is_equal_approx(suspended_animation.animator.get_gait_cycle_position(), suspended_gait_position), "runtime suspension advanced the hidden Stone Golem gait")
+	_expect(suspended_audio.walk_player.stream == null, "runtime suspension emitted a hidden Stone Golem footstep")
+	runtime.resume()
+	_expect(not runtime.is_suspended() and suspended_actor.is_processing(), "runtime resume did not reactivate Stone Golem presentation")
+	suspended_actor.set_process(false)
+	suspended_animation.advance(walk_cycle * 0.28)
+	_expect(suspended_audio.walk_player.stream == null, "runtime resume emitted before the preserved foot contact")
+	suspended_animation.advance(walk_cycle * 0.02)
+	_expect(suspended_audio.profile.walk_streams.has(suspended_audio.walk_player.stream), "runtime resume did not preserve foot-contact timing")
+	runtime.shutdown()
+	runtime.queue_free()
+
 	actor.free()
 	despawning_actor.free()
 	await process_frame

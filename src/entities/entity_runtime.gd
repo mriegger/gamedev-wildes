@@ -397,12 +397,20 @@ func suspend() -> void:
 		return
 	_suspended = true
 	visible = false
+	_set_active_actors_suspended(true)
 
 func resume() -> void:
 	if not _suspended:
 		return
 	visible = true
 	_suspended = false
+	_set_active_actors_suspended(false)
+
+func _set_active_actors_suspended(suspended: bool) -> void:
+	for value in _active.values():
+		var actor := value as EntityActor
+		if is_instance_valid(actor):
+			actor.set_runtime_suspended(suspended)
 
 func is_suspended() -> bool:
 	return _suspended
