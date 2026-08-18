@@ -15,6 +15,7 @@ signal main_menu_requested
 @export var item_catalog: ItemCatalog
 @export var crafting_recipe_catalog: CraftingRecipeCatalog
 @export var anvil_recipe_catalog: CraftingRecipeCatalog
+@export var cauldron_recipe_catalog: CraftingRecipeCatalog
 @export var entity_catalog: EntityCatalog
 @export var combat_hit_particle_catalog: CombatHitParticleCatalog
 @export var player_stats_definition: CombatStatsDefinition
@@ -54,11 +55,13 @@ var item_proficiency: ItemProficiency
 var inventory_stat_coordinator: InventoryStatCoordinator
 var crafting_coordinator: CraftingCoordinator
 var anvil_crafting_coordinator: CraftingCoordinator
+var cauldron_crafting_coordinator: CraftingCoordinator
 var combat_progression_coordinator: CombatProgressionCoordinator
 var rune_socketing_coordinator: RuneSocketingCoordinator
 var rune_effect_coordinator: RuneEffectCoordinator
 var interaction_prompt_coordinator: InteractionPromptCoordinator
 var anvil_coordinator: AnvilCoordinator
+var cauldron_coordinator: CauldronCoordinator
 var harvest_coordinator: HarvestCoordinator
 var item_consumption_coordinator: ItemConsumptionCoordinator
 var chest_storage: ChestInventoryStore
@@ -99,6 +102,7 @@ func _ready():
 	var item_catalog_valid := item_catalog.validate(block_catalog)
 	var crafting_catalog_valid := crafting_recipe_catalog.validate(item_catalog)
 	var anvil_catalog_valid := anvil_recipe_catalog != null and anvil_recipe_catalog.validate(item_catalog)
+	var cauldron_catalog_valid := cauldron_recipe_catalog != null and cauldron_recipe_catalog.validate(item_catalog)
 	var entity_catalog_valid := entity_catalog.validate()
 	var combat_particle_catalog_valid := combat_hit_particle_catalog.validate(entity_catalog)
 	var player_stats_valid := player_stats_definition.validate()
@@ -106,7 +110,7 @@ func _ready():
 	var level_catalog_valid := level_catalog.validate()
 	var level_encounter_catalog_valid := level_catalog_valid and entity_catalog_valid and LevelEncounterCatalogValidator.validate(level_catalog, entity_catalog)
 	var level_entrance_valid := level_catalog_valid and level_entrance_definition != null and level_entrance_definition.validate(level_catalog)
-	if not block_catalog_valid or not item_catalog_valid or not crafting_catalog_valid or not anvil_catalog_valid or not entity_catalog_valid or not combat_particle_catalog_valid or not player_stats_valid or not player_perks_valid or not level_catalog_valid or not level_encounter_catalog_valid or not level_entrance_valid:
+	if not block_catalog_valid or not item_catalog_valid or not crafting_catalog_valid or not anvil_catalog_valid or not cauldron_catalog_valid or not entity_catalog_valid or not combat_particle_catalog_valid or not player_stats_valid or not player_perks_valid or not level_catalog_valid or not level_encounter_catalog_valid or not level_entrance_valid:
 		push_error("[Game] Catalog validation failed")
 		return
 	var structure_file_store := StructureFileStore.new(ProjectSettings.globalize_path("res://../").simplify_path())
@@ -153,6 +157,8 @@ func _ready():
 	crafting_coordinator.setup(inventory_model, crafting_recipe_catalog)
 	anvil_crafting_coordinator = CraftingCoordinator.new()
 	anvil_crafting_coordinator.setup(inventory_model, anvil_recipe_catalog)
+	cauldron_crafting_coordinator = CraftingCoordinator.new()
+	cauldron_crafting_coordinator.setup(inventory_model, cauldron_recipe_catalog)
 	if not _restore_player_progression():
 		return
 	combat_progression_coordinator = CombatProgressionCoordinator.new()
@@ -248,6 +254,8 @@ func _setup_gameplay() -> bool:
 	_bind_entity_context(world.voxel_model, world_entities)
 	anvil_coordinator = AnvilCoordinator.new()
 	anvil_coordinator.setup(world.voxel_model)
+	cauldron_coordinator = CauldronCoordinator.new()
+	cauldron_coordinator.setup(world.voxel_model)
 	player.interactor.crafting_station_open_requested.connect(_on_crafting_station_open_requested)
 	chest_coordinator = ChestCoordinator.new()
 	chest_coordinator.setup(world.voxel_model, inventory_model, chest_storage)
@@ -283,6 +291,8 @@ func _setup_gameplay() -> bool:
 	hud.setup_with_camera(inventory_model, inventory_stat_coordinator, crafting_coordinator, crafting_recipe_catalog, camera_rig, player_stats, item_proficiency, chest_coordinator)
 	var anvil_station := block_catalog.get_definition(BlockId.Type.ANVIL).crafting_station
 	hud.setup_anvil(anvil_coordinator, anvil_station, anvil_crafting_coordinator, anvil_recipe_catalog, camera_rig)
+	var cauldron_station := block_catalog.get_definition(BlockId.Type.CAULDRON).crafting_station
+	hud.setup_cauldron(cauldron_coordinator, cauldron_station, cauldron_crafting_coordinator, cauldron_recipe_catalog, camera_rig)
 	hud.setup_socketing(inventory_model, rune_socketing_coordinator, item_proficiency)
 	hud.setup_progression(player_stats, player_perk_coordinator)
 	hud.setup_consumption(item_consumption_coordinator)

@@ -8,19 +8,24 @@ class_name HUD
 @onready var crafting_panel: CraftingPanel = $CraftingPanel as CraftingPanel
 @onready var anvil_panel: CraftingPanel = $AnvilPanel as CraftingPanel
 @onready var chest_panel: ChestPanel = $ChestPanel as ChestPanel
+@onready var cauldron_panel: CraftingPanel = $CauldronPanel as CraftingPanel
 @onready var player_hit_vignette: PlayerHitVignette = $PlayerHitVignette as PlayerHitVignette
 @onready var interaction_prompt: Label = $InteractionPrompt as Label
 
 var anvil_coordinator: AnvilCoordinator
 var chest_coordinator: ChestCoordinator
+var cauldron_coordinator: CauldronCoordinator
+var _left_panel_camera_rig: CameraRig
 
 func setup_with_camera(p_inventory: InventoryModel, p_inventory_stat_coordinator: InventoryStatCoordinator, p_crafting_coordinator: CraftingCoordinator, p_recipe_catalog: CraftingRecipeCatalog, cam_rig: CameraRig, stats: ActorStats, item_proficiency: ItemProficiency, p_chest_coordinator: ChestCoordinator = null):
 	chest_coordinator = p_chest_coordinator
+	_left_panel_camera_rig = cam_rig
 	hotbar.setup(p_inventory, p_inventory_stat_coordinator, item_proficiency)
 	health_bar.setup(stats)
 	experience_bar.setup(stats)
 	side_panel.setup(p_inventory, p_inventory_stat_coordinator, item_proficiency, cam_rig, hotbar, CraftingPanel.PANEL_WIDTH)
-	crafting_panel.setup(p_crafting_coordinator, p_recipe_catalog, cam_rig)
+	crafting_panel.setup(p_crafting_coordinator, p_recipe_catalog)
+	crafting_panel.progress_changed.connect(_on_left_panel_progress_changed)
 	if p_chest_coordinator != null:
 		chest_panel.setup(p_chest_coordinator, p_inventory, item_proficiency)
 		p_chest_coordinator.closed.connect(_on_chest_closed)
@@ -36,8 +41,24 @@ func setup_anvil(
 ) -> void:
 	assert(p_anvil_coordinator != null and p_station_definition != null)
 	anvil_coordinator = p_anvil_coordinator
-	anvil_panel.setup(p_crafting_coordinator, p_recipe_catalog, cam_rig, p_station_definition.display_name.to_upper(), false)
+	assert(_left_panel_camera_rig == cam_rig)
+	anvil_panel.setup(p_crafting_coordinator, p_recipe_catalog, p_station_definition.display_name.to_upper(), false)
+	anvil_panel.progress_changed.connect(_on_left_panel_progress_changed)
 	anvil_coordinator.closed.connect(_on_anvil_closed)
+
+func setup_cauldron(
+	p_cauldron_coordinator: CauldronCoordinator,
+	p_station_definition: CraftingStationBlockDefinition,
+	p_crafting_coordinator: CraftingCoordinator,
+	p_recipe_catalog: CraftingRecipeCatalog,
+	cam_rig: CameraRig,
+) -> void:
+	assert(p_cauldron_coordinator != null and p_station_definition != null)
+	cauldron_coordinator = p_cauldron_coordinator
+	assert(_left_panel_camera_rig == cam_rig)
+	cauldron_panel.setup(p_crafting_coordinator, p_recipe_catalog, p_station_definition.display_name.to_upper(), false)
+	cauldron_panel.progress_changed.connect(_on_left_panel_progress_changed)
+	cauldron_coordinator.closed.connect(_on_cauldron_closed)
 
 func setup_socketing(
 	inventory: InventoryModel,
@@ -58,12 +79,21 @@ func _on_side_panel_progress_changed(progress: float):
 	health_bar.set_right_inset(right_inset)
 	experience_bar.set_right_inset(right_inset)
 
+func _on_left_panel_progress_changed(_progress: float) -> void:
+	if _left_panel_camera_rig == null:
+		return
+	var obstruction_progress := maxf(crafting_panel.get_progress(), maxf(anvil_panel.get_progress(), cauldron_panel.get_progress()))
+	_left_panel_camera_rig.set_left_panel_obstruction_progress(obstruction_progress)
+
 func is_side_panel_open() -> bool:
-	return side_panel.is_open() or side_panel.get_progress() > 0.01 or crafting_panel.get_progress() > 0.01 or anvil_panel.get_progress() > 0.01 or chest_panel.is_open()
+	return side_panel.is_open() or side_panel.get_progress() > 0.01 or crafting_panel.get_progress() > 0.01 or anvil_panel.get_progress() > 0.01 or cauldron_panel.get_progress() > 0.01 or chest_panel.is_open()
 
 func toggle_backpack():
 	if anvil_panel.is_open():
 		close_anvil()
+		return
+	if cauldron_panel.is_open():
+		close_cauldron()
 		return
 	if chest_panel.is_open():
 		close_chest()
@@ -83,6 +113,11 @@ func toggle_crafting():
 		side_panel.open()
 		crafting_panel.open()
 		return
+	if cauldron_panel.is_open():
+		close_cauldron()
+		side_panel.open()
+		crafting_panel.open()
+		return
 	if chest_panel.is_open():
 		chest_panel.close()
 		side_panel.open_inventory()
@@ -98,8 +133,11 @@ func close_side_panel():
 	side_panel.close()
 	crafting_panel.close()
 	anvil_panel.close()
+	cauldron_panel.close()
 	if anvil_coordinator != null:
 		anvil_coordinator.close()
+	if cauldron_coordinator != null:
+		cauldron_coordinator.close()
 	chest_panel.close()
 	_set_chest_transfer_context(null)
 
@@ -107,36 +145,64 @@ func close_side_panel_immediate():
 	side_panel.close_immediate()
 	crafting_panel.close_immediate()
 	anvil_panel.close_immediate()
+	cauldron_panel.close_immediate()
 	if anvil_coordinator != null:
 		anvil_coordinator.close()
+	if cauldron_coordinator != null:
+		cauldron_coordinator.close()
 	chest_panel.close_immediate()
 	_set_chest_transfer_context(null)
 
 func open_crafting_station(position: Vector3i, definition: CraftingStationBlockDefinition) -> void:
-	if anvil_coordinator == null or definition == null or definition.id != &"anvil":
+	if definition == null:
 		return
 	if chest_panel.is_open():
 		chest_panel.close()
 		_set_chest_transfer_context(null)
 	crafting_panel.close()
-	if not anvil_coordinator.try_open(position, definition):
-		return
-	side_panel.open()
-	anvil_panel.open()
+	match definition.id:
+		&"anvil":
+			if anvil_coordinator == null:
+				return
+			close_cauldron(false)
+			if not anvil_coordinator.try_open(position, definition):
+				return
+			side_panel.open()
+			anvil_panel.open()
+		&"cauldron":
+			if cauldron_coordinator == null:
+				return
+			close_anvil(false)
+			if not cauldron_coordinator.try_open(position, definition):
+				return
+			side_panel.open()
+			cauldron_panel.open()
 
-func close_anvil() -> void:
+func close_anvil(close_backpack: bool = true) -> void:
 	if anvil_coordinator != null:
 		anvil_coordinator.close()
 	anvil_panel.close()
-	side_panel.close()
+	if close_backpack:
+		side_panel.close()
+
+func close_cauldron(close_backpack: bool = true) -> void:
+	if cauldron_coordinator != null:
+		cauldron_coordinator.close()
+	cauldron_panel.close()
+	if close_backpack:
+		side_panel.close()
 
 func _on_anvil_closed() -> void:
 	anvil_panel.close()
 
+func _on_cauldron_closed() -> void:
+	cauldron_panel.close()
+
 func open_container(position: Vector3i, definition: ContainerBlockDefinition):
 	if anvil_panel.is_open():
-		anvil_coordinator.close()
-		anvil_panel.close()
+		close_anvil(false)
+	if cauldron_panel.is_open():
+		close_cauldron(false)
 	crafting_panel.close()
 	side_panel.open_inventory()
 	_set_chest_transfer_context(chest_coordinator)

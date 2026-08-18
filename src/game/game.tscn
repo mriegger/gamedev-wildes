@@ -1,4 +1,4 @@
-[gd_scene load_steps=36 format=3 uid="uid://b22g4me0x1f3h"]
+[gd_scene load_steps=37 format=3 uid="uid://b22g4me0x1f3h"]
 
 [ext_resource type="Script" path="res://game/game.gd" id="1_game"]
 [ext_resource type="PackedScene" path="res://world/world.tscn" id="2_world"]
@@ -35,6 +35,7 @@
 [ext_resource type="Resource" path="res://progression/player_perk_rules.tres" id="33_player_perks"]
 [ext_resource type="Resource" path="res://crafting/stations/anvil_recipe_catalog.tres" id="34_anvil_catalog"]
 [ext_resource type="PackedScene" path="res://foraging/apple/apple_tree_coordinator.tscn" id="35_apple_trees"]
+[ext_resource type="Resource" path="res://crafting/stations/cauldron_recipe_catalog.tres" id="36_cauldron_catalog"]
 
 [node name="Game" type="Node3D"]
 script = ExtResource("1_game")
@@ -46,6 +47,7 @@ block_catalog = ExtResource("9_block_catalog")
 item_catalog = ExtResource("10_item_catalog")
 crafting_recipe_catalog = ExtResource("19_crafting_catalog")
 anvil_recipe_catalog = ExtResource("34_anvil_catalog")
+cauldron_recipe_catalog = ExtResource("36_cauldron_catalog")
 entity_catalog = ExtResource("15_entity_catalog")
 combat_hit_particle_catalog = ExtResource("22_combat_particle_catalog")
 player_stats_definition = ExtResource("16_player_stats")

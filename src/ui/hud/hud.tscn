@@ -27,6 +27,8 @@ layer = 1
 
 [node name="ChestPanel" parent="." instance=ExtResource("9_chest_panel")]
 
+[node name="CauldronPanel" parent="." instance=ExtResource("5_crafting_panel")]
+
 [node name="PlayerHitVignette" parent="." instance=ExtResource("8_hit_vignette")]
 
 [node name="InteractionPrompt" type="Label" parent="."]

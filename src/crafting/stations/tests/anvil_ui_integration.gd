@@ -6,9 +6,12 @@ var _failures: Array[String] = []
 var _hud: HUD
 var _inventory: InventoryModel
 var _anvil_coordinator: AnvilCoordinator
+var _cauldron_coordinator: CauldronCoordinator
 var _anvil_crafting: CraftingCoordinator
+var _cauldron_crafting: CraftingCoordinator
 var _general_crafting: CraftingCoordinator
 var _anvil_catalog: CraftingRecipeCatalog
+var _cauldron_catalog: CraftingRecipeCatalog
 var _general_catalog: CraftingRecipeCatalog
 var _camera_rig: CameraRig
 var _camera_follow: Node3D
@@ -17,16 +20,21 @@ var _stats: ActorStats
 var _item_proficiency: ItemProficiency
 var _world: VoxelWorld
 var _position := Vector3i(3, 20, 4)
+var _cauldron_position := Vector3i(5, 20, 4)
 var _station: CraftingStationBlockDefinition
+var _cauldron_station: CraftingStationBlockDefinition
 
 func _init() -> void:
 	var block_catalog := load("res://blocks/block_catalog.tres") as BlockCatalog
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
 	_general_catalog = load("res://crafting/crafting_recipe_catalog.tres") as CraftingRecipeCatalog
 	_anvil_catalog = load("res://crafting/stations/anvil_recipe_catalog.tres") as CraftingRecipeCatalog
+	_cauldron_catalog = load("res://crafting/stations/cauldron_recipe_catalog.tres") as CraftingRecipeCatalog
 	_inventory = InventoryModel.new(item_catalog)
 	_inventory.slots[0] = InventoryStack.new(&"copper", 20)
 	_inventory.slots[1] = InventoryStack.new(&"log_block", 5)
+	_inventory.slots[2] = InventoryStack.new(&"pumpkin", 2)
+	_inventory.slots[3] = InventoryStack.new(&"apple", 2)
 	_stats = ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
 	_item_proficiency = ItemProficiency.new(item_catalog)
 	_inventory_stats = InventoryStatCoordinator.new()
@@ -35,11 +43,17 @@ func _init() -> void:
 	_general_crafting.setup(_inventory, _general_catalog)
 	_anvil_crafting = CraftingCoordinator.new()
 	_anvil_crafting.setup(_inventory, _anvil_catalog)
+	_cauldron_crafting = CraftingCoordinator.new()
+	_cauldron_crafting.setup(_inventory, _cauldron_catalog)
 	_world = VoxelWorld.new(20, 36, 5, 12.0, block_catalog)
 	_expect(_world.try_place_block(_position, BlockId.Type.ANVIL).is_success(), "test anvil could not be placed")
+	_expect(_world.try_place_block(_cauldron_position, BlockId.Type.CAULDRON).is_success(), "test cauldron could not be placed")
 	_anvil_coordinator = AnvilCoordinator.new()
 	_anvil_coordinator.setup(_world)
+	_cauldron_coordinator = CauldronCoordinator.new()
+	_cauldron_coordinator.setup(_world)
 	_station = (load("res://blocks/definitions/anvil.tres") as BlockDefinition).crafting_station
+	_cauldron_station = (load("res://blocks/definitions/cauldron.tres") as BlockDefinition).crafting_station
 	_hud = (load("res://ui/hud/hud.tscn") as PackedScene).instantiate() as HUD
 	root.add_child(_hud)
 	_camera_rig = (load("res://player/camera/camera_rig.tscn") as PackedScene).instantiate() as CameraRig
@@ -53,6 +67,7 @@ func _process(_delta: float) -> bool:
 		_camera_rig.setup(_camera_follow, InputBuffer.new())
 		_hud.setup_with_camera(_inventory, _inventory_stats, _general_crafting, _general_catalog, _camera_rig, _stats, _item_proficiency)
 		_hud.setup_anvil(_anvil_coordinator, _station, _anvil_crafting, _anvil_catalog, _camera_rig)
+		_hud.setup_cauldron(_cauldron_coordinator, _cauldron_station, _cauldron_crafting, _cauldron_catalog, _camera_rig)
 		_hud.open_crafting_station(_position, _station)
 		_phase = 1
 	elif _phase == 1 and _frame == 35:
@@ -85,11 +100,42 @@ func _process(_delta: float) -> bool:
 		_expect(_hud.crafting_panel.is_open() and _hud.side_panel.is_open(), "Tab did not open general crafting and the backpack")
 		var general_recipe_list := _hud.crafting_panel.get_node("Margin/Content/Body/Recipes/RecipeScroll/RecipeList") as VBoxContainer
 		_expect(general_recipe_list.get_child_count() == 6, "general crafting contains metal recipes or is missing a station recipe")
+		_hud.open_crafting_station(_cauldron_position, _cauldron_station)
+		_phase = 4
+	elif _phase == 4 and _frame == 134:
+		_expect(_hud.side_panel.is_open(), "opening the cauldron did not keep the backpack open")
+		_expect(_hud.cauldron_panel.is_open() and _hud.cauldron_panel.get_progress() > 0.95, "cauldron panel did not open")
+		_expect(not _hud.anvil_panel.is_open() and not _hud.crafting_panel.is_open(), "another crafting panel remained open with the cauldron")
+		_expect(_hud.cauldron_panel.get_node("Margin/Content/Title").text == _cauldron_station.display_name.to_upper(), "cauldron panel does not use the station display name")
+		var recipe_list := _hud.cauldron_panel.get_node("Margin/Content/Body/Recipes/RecipeScroll/RecipeList") as VBoxContainer
+		_expect(recipe_list.get_child_count() == 1, "cauldron panel did not show one potion recipe")
+		_expect(_hud.cauldron_panel.get_selected_recipe_id() == &"health_potion", "cauldron did not select the health potion recipe")
+		_expect(_hud.cauldron_panel.get_craft_button().is_craft_enabled(), "available health potion recipe was disabled")
+		_hud.cauldron_panel.get_craft_button().pressed.emit()
+		_expect(_inventory.get_inventory_item_count(&"health_potion") == 1, "cauldron did not craft a health potion")
+		_expect(_inventory.get_inventory_item_count(&"pumpkin") == 0 and _inventory.get_inventory_item_count(&"apple") == 0, "cauldron craft consumed the wrong ingredients")
+		var cauldron_mined := _world.try_mine_block(_cauldron_position)
+		_expect(not cauldron_mined.is_empty() and (cauldron_mined[0] as BlockEdit).is_success(), "open test cauldron could not be mined")
+		_expect(not _hud.cauldron_panel.is_open(), "mining the active cauldron left its crafting panel usable")
+		_expect(_hud.side_panel.is_open(), "mining the active cauldron unexpectedly closed the backpack")
+		_expect(_world.try_place_block(_cauldron_position, BlockId.Type.CAULDRON).is_success(), "test cauldron could not be restored")
+		_hud.open_crafting_station(_cauldron_position, _cauldron_station)
+		_hud.toggle_backpack()
+		_phase = 5
+	elif _phase == 5 and _frame == 167:
+		_expect(not _hud.cauldron_panel.is_open() and not _hud.side_panel.is_open(), "P did not close the cauldron and backpack")
+		_hud.open_crafting_station(_cauldron_position, _cauldron_station)
+		_hud.toggle_crafting()
+		_phase = 6
+	elif _phase == 6 and _frame == 200:
+		_expect(not _hud.cauldron_panel.is_open(), "Tab did not close the cauldron")
+		_expect(_hud.crafting_panel.is_open() and _hud.side_panel.is_open(), "Tab did not open general crafting after the cauldron")
+		_expect(_camera_rig._left_panel_progress > 0.95, "closing the cauldron cleared the open general panel camera offset")
 		_hud.free()
 		_camera_rig.free()
 		_camera_follow.free()
-		_phase = 4
-	elif _phase == 4 and _frame == 110:
+		_phase = 7
+	elif _phase == 7 and _frame == 210:
 		_finish()
 	return false
 

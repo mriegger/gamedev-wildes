@@ -347,14 +347,19 @@ and `WorldConfig` references the biome library. Runtime code does not scan direc
 manufacture fallback domain resources.
 
 Crafting recipes reference canonical item definitions. The general catalog owns recipes available
-from the `Tab` menu, while the anvil catalog exclusively owns copper tools, weapons, and armor.
-`CraftingCoordinator` asks `InventoryModel` to validate and commit ingredient removal and output
-insertion across the backpack and hotbar as one immediate transaction. Reusable `CraftingPanel`
-instances present both catalogs without mutating inventory slots and play one sound only after a
-transaction succeeds. `CraftingStationBlockDefinition` marks interactable workstation blocks;
-`AnvilCoordinator` validates opening while normal pickaxe mining owns capacity-safe anvil and
-attached-torch drops. `AnvilRenderer` owns the procedural low-poly model, placement preview, and
-subtle hover presentation. `CauldronRenderer` owns the placeable cauldron's suspended pot, tripod,
-fire, smoke, dim light, and placement preview.
+from the `Tab` menu, the anvil catalog exclusively owns copper equipment, and the cauldron catalog
+owns food and potion recipes. `CraftingCoordinator` asks `InventoryModel` to validate and commit
+ingredient removal and output insertion across the backpack and hotbar as one immediate
+transaction. Reusable `CraftingPanel` instances present all three catalogs without mutating
+inventory slots and play one sound only after a transaction succeeds. The HUD combines the open
+panels' animation progress so only one camera-obstruction value is written during transitions.
+
+`CraftingStationBlockDefinition` marks interactable workstation blocks. Shared
+`CraftingStationCoordinator` state validates station identity and position and closes an open panel
+when its block is removed; `AnvilCoordinator` and `CauldronCoordinator` provide the station-specific
+IDs. Normal pickaxe mining owns capacity-safe workstation and attached-torch drops. Indexed chunk
+edit snapshots drive the procedural station renderers: `AnvilRenderer` owns the low-poly anvil,
+while `CauldronRenderer` owns the suspended pot, tripod, fire, smoke, and dim light. Both renderers
+also provide placement previews and subtle hover presentation.
 
 Forward+ is the primary renderer. Runtime rendering-device checks select reduced visual values for GL Compatibility fallback. Features unavailable on GL, including volumetric fog, remain disabled there.

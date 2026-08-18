@@ -10,10 +10,12 @@ func _run() -> void:
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
 	var general_catalog := load("res://crafting/crafting_recipe_catalog.tres") as CraftingRecipeCatalog
 	var anvil_catalog := load("res://crafting/stations/anvil_recipe_catalog.tres") as CraftingRecipeCatalog
+	var cauldron_catalog := load("res://crafting/stations/cauldron_recipe_catalog.tres") as CraftingRecipeCatalog
 	_expect(block_catalog != null and block_catalog.validate(), "block catalog invalid")
 	_expect(item_catalog != null and item_catalog.validate(block_catalog), "item catalog invalid")
 	_expect(general_catalog != null and general_catalog.validate(item_catalog), "general crafting catalog invalid")
 	_expect(anvil_catalog != null and anvil_catalog.validate(item_catalog), "anvil crafting catalog invalid")
+	_expect(cauldron_catalog != null and cauldron_catalog.validate(item_catalog), "cauldron crafting catalog invalid")
 	if block_catalog == null or item_catalog == null:
 		_finish()
 		return
@@ -52,7 +54,7 @@ func _run() -> void:
 	for recipe_id in [&"copper_pickaxe", &"copper_hoe", &"copper_sword", &"copper_helmet", &"copper_chest_plate", &"copper_pants", &"copper_shoes"]:
 		_expect(not general_catalog.has_definition(recipe_id), "%s leaked into general crafting" % recipe_id)
 		_expect(anvil_catalog.has_definition(recipe_id), "%s is missing from anvil crafting" % recipe_id)
-	await _test_cauldron(block_catalog, item_catalog, general_catalog)
+	await _test_cauldron(block_catalog, item_catalog, general_catalog, cauldron_catalog)
 
 	var renderer := AnvilRenderer.new()
 	root.add_child(renderer)
@@ -183,13 +185,14 @@ func _run() -> void:
 	await process_frame
 	_finish()
 
-func _test_cauldron(block_catalog: BlockCatalog, item_catalog: ItemCatalog, general_catalog: CraftingRecipeCatalog) -> void:
+func _test_cauldron(block_catalog: BlockCatalog, item_catalog: ItemCatalog, general_catalog: CraftingRecipeCatalog, cauldron_catalog: CraftingRecipeCatalog) -> void:
 	var cauldron_block := block_catalog.get_definition(BlockId.Type.CAULDRON)
 	var cauldron_item := item_catalog.get_definition(&"cauldron")
 	var placement := cauldron_item.secondary_action as BlockPlacementActionDefinition
 	_expect(BlockId.get_display_name(BlockId.Type.CAULDRON) == "Cauldron", "cauldron display name is incorrect")
 	_expect(not BlockId.is_chunk_cube(BlockId.Type.CAULDRON), "cauldron is still baked into the cube mesh")
 	_expect(BlockId.is_ao_solid(BlockId.Type.CAULDRON), "cauldron does not occlude ambient light")
+	_expect(cauldron_block.crafting_station != null and cauldron_block.crafting_station.id == &"cauldron", "cauldron station metadata is invalid")
 	_expect(cauldron_block.is_solid and not cauldron_block.is_opaque and cauldron_block.is_raycast_solid, "cauldron physical properties are invalid")
 	_expect(cauldron_block.is_breakable and cauldron_block.mining_tool_tag == &"pickaxe" and cauldron_block.minimum_mining_power == 1, "cauldron does not use normal pickaxe mining")
 	_expect(cauldron_block.drop_item_id == &"cauldron", "mined cauldron does not use the normal block drop")
@@ -213,6 +216,14 @@ func _test_cauldron(block_catalog: BlockCatalog, item_catalog: ItemCatalog, gene
 	_expect(partial_alpha_pixels == 0, "cauldron inventory icon contains anti-aliased pixels")
 	_expect(general_catalog.has_definition(&"cauldron"), "cauldron is not craftable from general crafting")
 	_expect(general_catalog.get_definition(&"cauldron").get_ingredient_counts() == {&"log_block": 3, &"stone_block": 2}, "cauldron recipe ingredients are incorrect")
+	_expect(not general_catalog.has_definition(&"health_potion"), "health potion leaked into general crafting")
+	_expect(cauldron_catalog.has_definition(&"health_potion"), "health potion is missing from cauldron crafting")
+	_expect(cauldron_catalog.get_definition(&"health_potion").get_ingredient_counts() == {&"pumpkin": 2, &"apple": 2}, "health potion recipe uses the wrong ingredients")
+	var health_potion := item_catalog.get_definition(&"health_potion")
+	var potion_icon := health_potion.icon.get_image()
+	_expect(health_potion.max_stack == 20, "health potion stack limit is incorrect")
+	_expect(health_potion.icon.resource_path == "res://assets/textures/items/health_potion.png", "health potion uses the wrong inventory icon")
+	_expect(potion_icon != null and potion_icon.get_size() == Vector2i(16, 16), "health potion inventory icon is not 16x16 pixel art")
 
 	var renderer := CauldronRenderer.new()
 	root.add_child(renderer)

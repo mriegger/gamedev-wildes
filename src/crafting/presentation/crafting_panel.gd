@@ -1,6 +1,8 @@
 extends Control
 class_name CraftingPanel
 
+signal progress_changed(progress: float)
+
 const PANEL_WIDTH: float = 520.0
 const ANIM_DURATION: float = 0.25
 const HOTBAR_CLEARANCE: float = 112.0
@@ -33,7 +35,6 @@ const PROGRESSION_WORKSPACE_ID: StringName = &"progression"
 
 var crafting_coordinator: CraftingCoordinator
 var recipe_catalog: CraftingRecipeCatalog
-var camera_rig: CameraRig
 
 var _recipe_buttons: Dictionary = {}
 var _selected_recipe_id: StringName = &""
@@ -64,7 +65,6 @@ func _ready() -> void:
 func setup(
 	p_crafting_coordinator: CraftingCoordinator,
 	p_recipe_catalog: CraftingRecipeCatalog,
-	p_camera_rig: CameraRig = null,
 	p_crafting_title: String = "CRAFTING",
 	p_workspace_tabs_enabled: bool = true,
 ) -> void:
@@ -72,7 +72,6 @@ func setup(
 	assert(p_recipe_catalog != null)
 	crafting_coordinator = p_crafting_coordinator
 	recipe_catalog = p_recipe_catalog
-	camera_rig = p_camera_rig
 	_crafting_title = p_crafting_title
 	_workspace_tabs_enabled = p_workspace_tabs_enabled
 	crafting_coordinator.state_changed.connect(_on_crafting_state_changed)
@@ -80,7 +79,6 @@ func setup(
 	if not recipe_catalog.definitions.is_empty():
 		_select_recipe(recipe_catalog.definitions[0].id)
 	_apply_workspace()
-	_update_camera()
 
 func setup_socketing(
 	inventory: InventoryModel,
@@ -337,11 +335,7 @@ func _apply_state() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP if _progress > 0.01 else Control.MOUSE_FILTER_IGNORE
 	_content.modulate = Color(1, 1, 1, _progress)
 	WildesStyle.set_frosted_fade(_background, _progress)
-	_update_camera()
-
-func _update_camera() -> void:
-	if camera_rig != null:
-		camera_rig.set_left_panel_obstruction_progress(_progress)
+	progress_changed.emit(_progress)
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_RESIZED and is_node_ready():

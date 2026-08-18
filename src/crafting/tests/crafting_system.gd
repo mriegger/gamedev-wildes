@@ -8,10 +8,12 @@ func _init() -> void:
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
 	var recipe_catalog := load("res://crafting/crafting_recipe_catalog.tres") as CraftingRecipeCatalog
 	var anvil_recipe_catalog := load("res://crafting/stations/anvil_recipe_catalog.tres") as CraftingRecipeCatalog
+	var cauldron_recipe_catalog := load("res://crafting/stations/cauldron_recipe_catalog.tres") as CraftingRecipeCatalog
 	_expect(block_catalog.validate(), "block catalog invalid")
 	_expect(item_catalog.validate(block_catalog), "item catalog invalid")
 	_expect(recipe_catalog.validate(item_catalog), "crafting catalog invalid")
 	_expect(anvil_recipe_catalog.validate(item_catalog), "anvil crafting catalog invalid")
+	_expect(cauldron_recipe_catalog.validate(item_catalog), "cauldron crafting catalog invalid")
 	var expected_recipe_ids: Array[StringName] = [
 		&"torch_bundle",
 		&"chest",
@@ -50,6 +52,8 @@ func _init() -> void:
 	_expect(recipe_catalog.get_definition(&"basic_rune").get_ingredient_counts() == {&"sand_block": 32}, "basic rune ingredients mismatch")
 	_expect(recipe_catalog.get_definition(&"anvil").get_ingredient_counts() == {&"copper": 10}, "anvil ingredients mismatch")
 	_expect(recipe_catalog.get_definition(&"cauldron").get_ingredient_counts() == {&"log_block": 3, &"stone_block": 2}, "cauldron ingredients mismatch")
+	_expect(cauldron_recipe_catalog.definitions.size() == 1 and cauldron_recipe_catalog.has_definition(&"health_potion"), "cauldron catalog does not contain only the health potion")
+	_expect(cauldron_recipe_catalog.get_definition(&"health_potion").get_ingredient_counts() == {&"pumpkin": 2, &"apple": 2}, "health potion ingredients mismatch")
 	var progression_inventory := InventoryModel.new(item_catalog)
 	progression_inventory.slots[InventoryModel.HOTBAR_SIZE] = InventoryStack.new(&"stone_block", 10)
 	progression_inventory.slots[InventoryModel.HOTBAR_SIZE + 1] = InventoryStack.new(&"log_block", 5)
@@ -66,6 +70,14 @@ func _init() -> void:
 	_expect(general_coordinator.craft(&"anvil"), "anvil was not craftable from the general menu")
 	_expect(anvil_inventory.get_inventory_item_count(&"copper") == 0, "anvil craft retained copper")
 	_expect(anvil_inventory.get_inventory_item_count(&"anvil") == 1, "anvil craft did not add its output")
+	var cauldron_inventory := InventoryModel.new(item_catalog)
+	cauldron_inventory.slots[InventoryModel.HOTBAR_SIZE] = InventoryStack.new(&"pumpkin", 2)
+	cauldron_inventory.slots[InventoryModel.HOTBAR_SIZE + 1] = InventoryStack.new(&"apple", 2)
+	var cauldron_coordinator := CraftingCoordinator.new()
+	cauldron_coordinator.setup(cauldron_inventory, cauldron_recipe_catalog)
+	_expect(cauldron_coordinator.craft(&"health_potion"), "health potion was not craftable at the cauldron")
+	_expect(cauldron_inventory.get_inventory_item_count(&"pumpkin") == 0 and cauldron_inventory.get_inventory_item_count(&"apple") == 0, "health potion craft retained ingredients")
+	_expect(cauldron_inventory.get_inventory_item_count(&"health_potion") == 1, "health potion craft did not add its output")
 
 	var hotbar_only := InventoryModel.new(item_catalog)
 	hotbar_only.slots[0] = InventoryStack.new(&"copper", 10)
