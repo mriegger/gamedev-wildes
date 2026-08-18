@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="PlayerPerkDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://progression/player_perk_definition.gd" id="1_definition"]
+
+[resource]
+script = ExtResource("1_definition")
+id = &"health"
+display_name = "Health"
+stat_id = &"hp"
+amount_per_rank = 10.0
+maximum_rank = 10

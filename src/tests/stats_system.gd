@@ -78,13 +78,24 @@ func _init():
 	_expect(ratio_hp_stats.replace_source_modifiers_preserving_health_ratio(&"health_rune", &"socketed_runes", no_hp_modifiers), "health-ratio modifier failed removal")
 	_expect(is_equal_approx(ratio_hp_stats.get_value(&"hp"), 100.0), "health-ratio maximum HP did not restore")
 	_expect(is_equal_approx(ratio_hp_stats.current_hp, 37.0), "health percentage was not preserved when maximum HP decreased")
-	var leveled_definition := _definition({&"strength": 10.0}, 1, 100, 2.0, 4)
+	_expect(player_definition.get_experience_requirement(1) == 100, "level-one experience requirement changed")
+	_expect(player_definition.get_experience_requirement(2) == 125, "level-two experience requirement is not linear")
+	_expect(player_definition.get_experience_requirement(3) == 150, "level-three experience requirement is not linear")
+	var invalid_experience_increase := _definition({&"strength": 10.0})
+	invalid_experience_increase.experience_increase_per_level = -1
+	_expect(not invalid_experience_increase.validate(), "negative experience increase passed definition validation")
+	var leveled_definition := _definition({&"strength": 10.0}, 1, 100, 100, 4)
 	_expect(leveled_definition.validate(), "leveled definition is invalid")
 	var leveled_stats := ActorStats.new(leveled_definition)
 	_expect(leveled_stats.add_experience(350) == 2, "experience did not support multiple level-ups")
 	_expect(leveled_stats.level == 3 and leveled_stats.experience == 50, "level or carried experience is incorrect")
 	_expect(leveled_stats.get_total_experience() == 350, "total experience did not include completed levels")
 	_expect(is_equal_approx(leveled_stats.get_value(&"strength"), 10.0), "level unexpectedly changed stats")
+	var overflow_safe_definition := _definition({&"strength": 10.0}, 1, 100, 0, 2)
+	_expect(overflow_safe_definition.validate(), "overflow-safe definition is invalid")
+	var overflow_safe_stats := ActorStats.new(overflow_safe_definition)
+	_expect(overflow_safe_stats.add_experience(9_223_372_036_854_775_807) == 1, "maximum integer experience overflowed")
+	_expect(overflow_safe_stats.level == 2 and overflow_safe_stats.experience == 0, "maximum integer experience corrupted progression")
 	var progression := leveled_stats.snapshot_progression()
 	var restored_stats := ActorStats.new(leveled_definition)
 	_expect(restored_stats.restore_progression(progression), "valid progression did not restore")
@@ -160,12 +171,12 @@ func _init():
 			push_error(error)
 		quit(1)
 
-func _definition(base_stats: Dictionary, starting_level: int = 1, base_experience: int = 100, growth: float = 1.25, maximum_level: int = 0) -> ActorStatsDefinition:
+func _definition(base_stats: Dictionary, starting_level: int = 1, base_experience: int = 100, experience_increase: int = 25, maximum_level: int = 0) -> ActorStatsDefinition:
 	var definition := TestStatsDefinition.new()
 	definition.base_stats = base_stats
 	definition.starting_level = starting_level
 	definition.base_experience_to_level = base_experience
-	definition.experience_growth = growth
+	definition.experience_increase_per_level = experience_increase
 	definition.maximum_level = maximum_level
 	return definition
 

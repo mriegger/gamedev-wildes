@@ -3,8 +3,12 @@ class_name SaveManager
 
 const SAVE_DIR: String = "user://saves"
 const SLOT_COUNT: int = 3
-const CURRENT_SAVE_VERSION: int = 7
+const CURRENT_SAVE_VERSION: int = 9
 const MINIMUM_MIGRATABLE_SAVE_VERSION: int = 4
+const VERSION_SEVEN_BASE_EXPERIENCE_TO_LEVEL: int = 100
+const VERSION_SEVEN_EXPERIENCE_GROWTH: float = 1.25
+const VERSION_EIGHT_BASE_EXPERIENCE_TO_LEVEL: int = 100
+const VERSION_EIGHT_EXPERIENCE_INCREASE_PER_LEVEL: int = 25
 
 static func ensure_save_dir() -> void:
 	if not DirAccess.dir_exists_absolute(SAVE_DIR):
@@ -77,11 +81,14 @@ static func create_new_world(slot_id: int, seed_value: int, world_name: String) 
 		"torch_attachments": {},
 		"player_position": null,
 		"player_stats": null,
+		"player_perks": {"allocations": {}},
 		"item_proficiency": {},
 		"inventory": null,
+		"chest_inventories": {},
 		"playtime_seconds": 0,
 		"time_of_day": 6.0,
 		"pumpkin_patch": null,
+		"apple_trees": null,
 	}
 
 	_save_dict_to_file(slot_id, data)
@@ -187,10 +194,16 @@ static func load_slot(slot_id: int) -> Dictionary:
 		info["playtime_seconds"] = 0
 	if not info.has("player_stats"):
 		info["player_stats"] = null
+	if not info.has("player_perks"):
+		info["player_perks"] = {"allocations": {}}
 	if not info.has("item_proficiency"):
 		info["item_proficiency"] = {}
 	if not info.has("pumpkin_patch"):
 		info["pumpkin_patch"] = {"present": false}
+	if not info.has("chest_inventories"):
+		info["chest_inventories"] = {}
+	if not info.has("apple_trees"):
+		info["apple_trees"] = {"version": AppleTreeState.SNAPSHOT_VERSION, "collected_slots": []}
 	return info
 
 static func _migrate_save_data(data: Dictionary) -> bool:
@@ -210,12 +223,74 @@ static func _migrate_save_data(data: Dictionary) -> bool:
 			6:
 				migrated["pumpkin_patch"] = {"present": false}
 				version = 7
+			7:
+				if not _migrate_player_progression_data(migrated):
+					return false
+				migrated["chest_inventories"] = {}
+				version = 8
+			8:
+				migrated["apple_trees"] = {"version": AppleTreeState.SNAPSHOT_VERSION, "collected_slots": []}
+				version = 9
 			_:
 				return false
 		migrated["version"] = version
 	data.clear()
 	data.merge(migrated, true)
 	return true
+
+static func _migrate_player_progression_data(data: Dictionary) -> bool:
+	if data.has("player_perks"):
+		return false
+	if not data.has("player_stats") or data["player_stats"] == null:
+		data["player_perks"] = {"allocations": {}}
+		return true
+	var raw_player_stats = data["player_stats"]
+	if not raw_player_stats is Dictionary:
+		return false
+	var player_stats := raw_player_stats as Dictionary
+	if not _is_valid_version_seven_player_stats(player_stats):
+		return false
+	var level := int(player_stats["level"])
+	var experience := int(player_stats["experience"])
+	var previous_requirement := _get_version_seven_experience_requirement(level)
+	if previous_requirement <= 0 or experience >= previous_requirement:
+		return false
+	var next_requirement := VERSION_EIGHT_BASE_EXPERIENCE_TO_LEVEL + VERSION_EIGHT_EXPERIENCE_INCREASE_PER_LEVEL * (level - 1)
+	player_stats["experience"] = mini(next_requirement - 1, int(floor(float(experience) * float(next_requirement) / float(previous_requirement))))
+	data["player_perks"] = {"allocations": {}}
+	return true
+
+static func _is_valid_version_seven_player_stats(player_stats: Dictionary) -> bool:
+	if not player_stats.has("level") or not player_stats.has("experience"):
+		return false
+	for key in player_stats:
+		if key != "level" and key != "experience" and key != "current_hp":
+			return false
+	if not _is_integer_number(player_stats["level"]) or not _is_integer_number(player_stats["experience"]):
+		return false
+	var level := int(player_stats["level"])
+	var experience := int(player_stats["experience"])
+	if level < 1 or experience < 0:
+		return false
+	if player_stats.has("current_hp"):
+		var raw_current_hp = player_stats["current_hp"]
+		if (typeof(raw_current_hp) != TYPE_INT and typeof(raw_current_hp) != TYPE_FLOAT) or not is_finite(float(raw_current_hp)) or float(raw_current_hp) < 0.0:
+			return false
+	return true
+
+static func _is_integer_number(value: Variant) -> bool:
+	if typeof(value) == TYPE_INT:
+		return true
+	if typeof(value) != TYPE_FLOAT:
+		return false
+	var number := float(value)
+	return is_finite(number) and number == floor(number)
+
+static func _get_version_seven_experience_requirement(level: int) -> int:
+	var requirement: float = round(float(VERSION_SEVEN_BASE_EXPERIENCE_TO_LEVEL) * pow(VERSION_SEVEN_EXPERIENCE_GROWTH, level - 1))
+	if not is_finite(requirement) or requirement < 1.0 or requirement > 9.0e18:
+		return 0
+	return int(requirement)
 
 static func _migrate_inventory_socket_data(data: Dictionary) -> bool:
 	var inventory = data.get("inventory", null)
@@ -245,8 +320,10 @@ static func _migrate_inventory_socket_data(data: Dictionary) -> bool:
 			encoded_stack["socketed_rune_ids"] = []
 	return true
 
-static func save_world_state(slot_id: int, current_data: Dictionary, voxel_model: VoxelWorld, persisted_player_position: Vector3, player_stats: ActorStats, inventory: InventoryModel, item_proficiency: ItemProficiency, pumpkin_patch: Dictionary, extra_seconds: float, time_of_day: float) -> bool:
+static func save_world_state(slot_id: int, current_data: Dictionary, voxel_model: VoxelWorld, persisted_player_position: Vector3, player_stats: ActorStats, inventory: InventoryModel, player_perks: PlayerPerks, chest_storage: ChestInventoryStore, item_proficiency: ItemProficiency, pumpkin_patch: Dictionary, apple_trees: Dictionary, extra_seconds: float, time_of_day: float) -> bool:
+	assert(player_perks != null)
 	assert(item_proficiency != null)
+	assert(chest_storage != null)
 	var updated = current_data.duplicate()
 	updated["last_played"] = _now_str()
 	updated["version"] = CURRENT_SAVE_VERSION
@@ -261,9 +338,12 @@ static func save_world_state(slot_id: int, current_data: Dictionary, voxel_model
 	var p = persisted_player_position
 	updated["player_position"] = [p.x, p.y, p.z]
 	updated["player_stats"] = player_stats.snapshot_progression()
+	updated["player_perks"] = player_perks.snapshot()
 	updated["inventory"] = inventory.to_dict()
+	updated["chest_inventories"] = chest_storage.snapshot()
 	updated["item_proficiency"] = item_proficiency.snapshot()
 	updated["pumpkin_patch"] = pumpkin_patch.duplicate(true)
+	updated["apple_trees"] = apple_trees.duplicate(true)
 	updated["time_of_day"] = fmod(time_of_day, GameClock.HOURS_PER_DAY)
 
 	if not _save_dict_to_file(slot_id, updated):

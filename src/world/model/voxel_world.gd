@@ -57,6 +57,14 @@ func snapshot_block_edits() -> Dictionary:
 		"removed": _removed_blocks.duplicate(),
 	}
 
+func get_tree_blocks_for_chunk(coord: Vector2i) -> Dictionary:
+	if not tree_chunks_fast.has(coord):
+		return {}
+	return (tree_chunks_fast[coord] as Dictionary).duplicate()
+
+func get_terrain_height(x: int, z: int) -> int:
+	return int(height_map_dict.get(Vector2i(x, z), -1))
+
 func get_block_edit_count() -> int:
 	return _placed_blocks.size() + _removed_blocks.size()
 
@@ -362,7 +370,8 @@ func get_attached_torches(support_pos: Vector3i) -> Array[Vector3i]:
 func try_mine_block(p: Vector3i) -> Array:
 	if is_edit_protected(p):
 		return [BlockEdit.fail(p, BlockEdit.Operation.MINE, BlockEdit.Result.FAIL_PROTECTED)]
-	for torch_position in get_attached_torches(p):
+	var attached_torches := get_attached_torches(p)
+	for torch_position in attached_torches:
 		if is_edit_protected(torch_position):
 			return [BlockEdit.fail(p, BlockEdit.Operation.MINE, BlockEdit.Result.FAIL_PROTECTED)]
 	if not is_breakable(p):
@@ -398,18 +407,41 @@ func try_mine_block(p: Vector3i) -> Array:
 	var edit = BlockEdit.success_mine(p, old_id, rev)
 	block_edit_committed.emit(edit)
 	var batch: Array[BlockEdit] = [edit]
-	for torch_pos in get_attached_torches(p):
-		var torch_old_id = _placed_blocks.get(torch_pos, BlockId.Type.TORCH)
-		var torch_prev = get_revision(torch_pos)
-		_erase_indexed_edit(_placed_blocks, _placed_edits_by_chunk, torch_pos)
-		torch_attachments.erase(torch_pos)
-		_invalidate_highest_cache(torch_pos.x, torch_pos.z)
-		cell_revisions.erase(torch_pos)
-		var torch_rev = torch_prev + 1
-		var torch_edit = BlockEdit.success_mine(torch_pos, torch_old_id, torch_rev)
-		block_edit_committed.emit(torch_edit)
-		batch.append(torch_edit)
+	batch.append_array(_remove_attached_torches(attached_torches))
 	return batch
+
+func try_pick_up_placed_block(p: Vector3i, expected_block_id: int) -> Array[BlockEdit]:
+	if is_edit_protected(p):
+		return [BlockEdit.fail(p, BlockEdit.Operation.PICK_UP, BlockEdit.Result.FAIL_PROTECTED)]
+	var attached_torches := get_attached_torches(p)
+	for torch_position in attached_torches:
+		if is_edit_protected(torch_position):
+			return [BlockEdit.fail(p, BlockEdit.Operation.PICK_UP, BlockEdit.Result.FAIL_PROTECTED)]
+	if not BlockId.is_valid(expected_block_id) or _placed_blocks.get(p, BlockId.Type.AIR) != expected_block_id:
+		return [BlockEdit.fail(p, BlockEdit.Operation.PICK_UP, BlockEdit.Result.FAIL_INVALID_POS)]
+	var previous_revision := get_revision(p)
+	_erase_indexed_edit(_placed_blocks, _placed_edits_by_chunk, p)
+	_invalidate_highest_cache(p.x, p.z)
+	cell_revisions.erase(p)
+	var edit := BlockEdit.success_pick_up(p, expected_block_id, previous_revision + 1)
+	block_edit_committed.emit(edit)
+	var batch: Array[BlockEdit] = [edit]
+	batch.append_array(_remove_attached_torches(attached_torches))
+	return batch
+
+func _remove_attached_torches(positions: Array[Vector3i]) -> Array[BlockEdit]:
+	var edits: Array[BlockEdit] = []
+	for position in positions:
+		var old_id: int = int(_placed_blocks.get(position, BlockId.Type.TORCH))
+		var previous_revision := get_revision(position)
+		_erase_indexed_edit(_placed_blocks, _placed_edits_by_chunk, position)
+		torch_attachments.erase(position)
+		_invalidate_highest_cache(position.x, position.z)
+		cell_revisions.erase(position)
+		var edit := BlockEdit.success_mine(position, old_id, previous_revision + 1)
+		block_edit_committed.emit(edit)
+		edits.append(edit)
+	return edits
 
 func try_place_block(p: Vector3i, block_type: int, attach_dir: Vector3i = Vector3i.ZERO) -> BlockEdit:
 	if is_edit_protected(p):

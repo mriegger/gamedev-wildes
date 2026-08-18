@@ -1,0 +1,130 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://chests/presentation/chest_panel.gd" id="1_script"]
+[ext_resource type="PackedScene" path="res://inventory/ui/inventory_slot.tscn" id="2_slot"]
+[ext_resource type="Material" path="res://ui/theme/frosted_panel_material.tres" id="3_frosted"]
+[ext_resource type="FontFile" path="res://assets/fonts/RobotoSlab-Bold.ttf" id="4_bold"]
+[ext_resource type="Texture2D" path="res://assets/images/icons/button/move_to_backpack.png" id="6_move_all"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
+bg_color = Color(0.14, 0.16, 0.18, 0.72)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 0.2)
+corner_radius_top_left = 18
+corner_radius_top_right = 18
+corner_radius_bottom_right = 18
+corner_radius_bottom_left = 18
+
+[node name="ChestPanel" type="Control"]
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_script")
+slot_scene = ExtResource("2_slot")
+
+[node name="Center" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Panel" type="Panel" parent="Center"]
+custom_minimum_size = Vector2(380, 350)
+layout_mode = 0
+offset_right = 380.0
+offset_bottom = 350.0
+mouse_filter = 0
+material = ExtResource("3_frosted")
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+
+[node name="Margin" type="MarginContainer" parent="Center/Panel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 20.0
+offset_top = 18.0
+offset_right = -20.0
+offset_bottom = -18.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Content" type="VBoxContainer" parent="Center/Panel/Margin"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="Title" type="Label" parent="Center/Panel/Margin/Content"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.96, 0.95, 0.9, 1)
+theme_override_fonts/font = ExtResource("4_bold")
+theme_override_font_sizes/font_size = 18
+text = "CHEST"
+horizontal_alignment = 1
+
+[node name="ActionRow" type="HBoxContainer" parent="Center/Panel/Margin/Content"]
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+mouse_filter = 2
+alignment = 2
+
+[node name="MoveAllButton" type="Button" parent="Center/Panel/Margin/Content/ActionRow"]
+custom_minimum_size = Vector2(96, 40)
+layout_mode = 2
+tooltip_text = "Move all to backpack"
+focus_mode = 0
+mouse_default_cursor_shape = 2
+text = ""
+
+[node name="Content" type="HBoxContainer" parent="Center/Panel/Margin/Content/ActionRow/MoveAllButton"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_constants/separation = 5
+alignment = 1
+
+[node name="Icon" type="TextureRect" parent="Center/Panel/Margin/Content/ActionRow/MoveAllButton/Content"]
+texture_filter = 1
+custom_minimum_size = Vector2(16, 16)
+layout_mode = 2
+mouse_filter = 2
+texture = ExtResource("6_move_all")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Text" type="Label" parent="Center/Panel/Margin/Content/ActionRow/MoveAllButton/Content"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_fonts/font = ExtResource("4_bold")
+theme_override_font_sizes/font_size = 12
+text = "Take all"
+vertical_alignment = 1
+
+[node name="Spacer" type="Control" parent="Center/Panel/Margin/Content"]
+custom_minimum_size = Vector2(0, 6)
+layout_mode = 2
+mouse_filter = 2
+
+[node name="ChestGrid" type="GridContainer" parent="Center/Panel/Margin/Content"]
+layout_mode = 2
+size_flags_horizontal = 4
+mouse_filter = 2
+theme_override_constants/h_separation = 6
+theme_override_constants/v_separation = 6
+columns = 5

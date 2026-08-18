@@ -15,13 +15,14 @@ game/                        gameplay composition and session lifecycle
 blocks/                      block domain resources, voxel query contract, and shared presentation
 combat/                      melee profiles, contacts, targeting, and validation
 crafting/                    recipe definitions, inventory coordination, and presentation
+chests/                      container definitions, storage, transfers, and presentation
 entities/                    content, AI, navigation, populations, and presentation
 environment/                 packaged environment and day/night feature
 inventory/                   inventory model and inventory-owned UI
 items/                       item resources, actions, catalogs, and held scenes
 levels/                      finite dungeon content, generation, runtime, entrance, and presentation
 player/                      player behavior, camera, and visuals
-progression/                 combat rewards and shared item proficiency
+progression/                 player leveling, perks, item proficiency, and presentation
 save/                        save encoding and storage
 settings/                    persistent display and rendering configuration
 structures/                  generic definitions, drafts, root-file storage, runtime, and presentation
@@ -76,6 +77,21 @@ progression, and presentation without making combat own those policies.
 `ActorStats` owns the player's level and current-level experience. `CombatProgressionCoordinator`
 awards the reward authored on an `EntityDefinition` exactly once for a player-caused defeat.
 Zombie and sheep rewards are currently ten experience and remain content values for later tuning.
+`ActorStatsDefinition` calculates the next-level requirement as an authored base plus a fixed
+per-level increase. Save version eight preserves completed levels while translating version-seven
+current-level experience proportionally from the previous exponential requirement.
+`PlayerPerkRules` is the canonical catalog and award policy for bounded player perks. `PlayerPerks`
+owns only stable-ID rank allocations, while `PlayerPerkCoordinator` derives available points from
+the current player level and applies all purchased ranks through one bounded `ActorStats` modifier
+source. Allocation preflights both the rank change and projected stat modifiers before committing,
+and maximum-HP changes preserve the current health percentage. `Game` creates, restores, and wires
+these owners explicitly. Unspent points remain derived rather than becoming a second mutable
+ledger.
+`ProgressionPanel` presents live level, XP, available points, authored perk effects, and bounded
+allocation commands without owning progression state. It polls only while its workspace is visible
+and sends allocation requests through `PlayerPerkCoordinator`. `CraftingPanel` is the shared shell
+for the Crafting, Runes, and Progression workspaces. Crafting commits immediately, so workspace
+switches only change presentation, and reopening always returns to Crafting.
 The same coordinator translates each target's applied player damage into weapon proficiency and
 each incoming damage result into full proficiency credit for every equipped armor piece. These
 policy methods are isolated from combat resolution so their earning rules can change independently.
@@ -101,7 +117,27 @@ source slot owns the adjustable drag count and consumes wheel input before gamep
 `InventoryModel` remains the authority for partial moves and discards, while the source and
 drag-preview visuals show the pending split without mutating inventory until a drop succeeds.
 
+`ChestInventoryStore` owns the persistent inventory model keyed by each placed chest position, and
+`ChestCoordinator` validates the active block before exposing atomic transfers. While a chest is
+open, `ChestPanel` presents only its centered 3×5 grid, while the existing right-side `SidePanel`
+and bottom `InventoryHotbar` present player storage through a temporary
+`InventoryTransferCoordinator` context. Closing the chest removes that context before ordinary
+inventory interactions resume.
+Click transfers and the move-all action use the same transactional model path to fill compatible
+stacks before empty slots, and reject a source stack when the destination cannot hold it in full.
+Every chest position resolves to a distinct stored `InventoryModel`, including after save restore.
+`ChestRenderer` presents placed chests outside the chunk cube mesh. The body uses explicit face
+quads so each wooden face is rendered once, while the lid remains a separately hinged box.
+`TargetingView` forwards the reachable chest position so the renderer highlights both pieces and
+hinges the real lid slightly without changing block or inventory state. Chest placement delegates
+to that renderer for a translucent preview of the same split model. Pickaxe mining delegates empty
+chest validation and pickup to `ChestCoordinator`, which checks player inventory capacity before
+removing the placed block and its position-keyed storage.
+
 ## Runes and socketing
+
+See [Progression, runes, and enchanting](progression-runes-enchanting.md) for the player-facing
+design, current implementation status, and planned enchantment rules.
 
 `RuneDefinition` is typed item content with rarity, weapon and armor compatibility, optional armor
 slot restrictions, and socket-only stat modifiers. The Basic Rune is Common, is compatible with
@@ -149,10 +185,13 @@ accumulating. Respawn, Main Menu, and window close restore a living player at wo
 saving resumes; exit paths then use the normal final-save and shutdown flow so zero HP is never
 persisted. Loading a historical zero-HP snapshot restores full health at world spawn before gameplay
 begins and immediately replaces the stored snapshot with that living state.
-Save version six stores item proficiency separately and includes per-stack socket IDs in inventory.
-Version-four saves first gain empty item proficiency, and version-five inventory stacks then gain
-empty socket arrays. The migration chain operates on a copy and commits only after every region is
-valid, preserving the original data on failure.
+Save version eight stores perk allocations separately and chest inventories keyed by stable block
+position, while item proficiency and per-stack socket IDs retain their existing shapes. Version-four
+saves first gain empty item proficiency, version-five inventory stacks then gain empty socket arrays,
+version-six saves gain an absent pumpkin-patch snapshot, and version-seven saves gain empty perk and
+chest allocations while their current-level XP is translated to the linear curve. The migration
+chain operates on a copy and commits only after every step is valid, preserving the original data on
+failure.
 
 Ambient overworld populations are transient and bounded to six per species and twelve total.
 Spawning makes four attempts every two seconds in an 18–36 block annulus. Voxel A* has fixed radius,
@@ -307,9 +346,14 @@ resources, `EntityCatalog` lists entity definitions, `LevelCatalog` lists dungeo
 and `WorldConfig` references the biome library. Runtime code does not scan directories or
 manufacture fallback domain resources.
 
-Crafting recipes reference canonical item definitions. `CraftingCoordinator` asks `InventoryModel`
-to validate and commit ingredient removal and output insertion across the backpack and hotbar as one
-immediate transaction. `CraftingPanel` presents availability without mutating inventory slots and
-plays one sound only after that transaction succeeds.
+Crafting recipes reference canonical item definitions. The general catalog owns recipes available
+from the `Tab` menu, while the anvil catalog exclusively owns copper tools, weapons, and armor.
+`CraftingCoordinator` asks `InventoryModel` to validate and commit ingredient removal and output
+insertion across the backpack and hotbar as one immediate transaction. Reusable `CraftingPanel`
+instances present both catalogs without mutating inventory slots and play one sound only after a
+transaction succeeds. `CraftingStationBlockDefinition` marks interactable workstation blocks;
+`AnvilCoordinator` validates opening while normal pickaxe mining owns capacity-safe anvil and
+attached-torch drops. `AnvilRenderer` owns the procedural low-poly model, placement preview, and
+subtle hover presentation.
 
 Forward+ is the primary renderer. Runtime rendering-device checks select reduced visual values for GL Compatibility fallback. Features unavailable on GL, including volumetric fog, remain disabled there.

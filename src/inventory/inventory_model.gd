@@ -233,7 +233,7 @@ func exchange_inventory_items(consumed: Dictionary[StringName, int], granted: Di
 	return true
 
 func _simulate_inventory_exchange(consumed: Dictionary[StringName, int], granted: Dictionary[StringName, int]) -> Array[InventoryStack]:
-	if consumed.is_empty() or granted.is_empty():
+	if consumed.is_empty() and granted.is_empty():
 		return []
 	var simulated := _copy_slots()
 	var inventory_indices := _get_inventory_indices()
@@ -466,6 +466,137 @@ func handle_drop(src_idx: int, dst_idx: int, drag_count: int) -> bool:
 	inventory_changed.emit()
 	return true
 
+func can_transfer_stack_to(destination: InventoryModel, src_idx: int, dst_idx: int, drag_count: int) -> bool:
+	if destination == self:
+		return can_handle_drop(src_idx, dst_idx, drag_count)
+	return not _simulate_transfer_to(destination, src_idx, dst_idx, drag_count).is_empty()
+
+func transfer_stack_to(destination: InventoryModel, src_idx: int, dst_idx: int, drag_count: int) -> bool:
+	if destination == self:
+		return handle_drop(src_idx, dst_idx, drag_count)
+	var simulated := _simulate_transfer_to(destination, src_idx, dst_idx, drag_count)
+	if simulated.is_empty():
+		return false
+	slots = simulated["source"]
+	destination.slots = simulated["destination"]
+	inventory_changed.emit()
+	destination.inventory_changed.emit()
+	return true
+
+func can_transfer_stack_to_indices(destination: InventoryModel, src_idx: int, destination_indices: Array[int]) -> bool:
+	return not _simulate_transfer_to_indices(destination, src_idx, destination_indices).is_empty()
+
+func transfer_stack_to_indices(destination: InventoryModel, src_idx: int, destination_indices: Array[int]) -> bool:
+	var simulated := _simulate_transfer_to_indices(destination, src_idx, destination_indices)
+	if simulated.is_empty():
+		return false
+	slots = simulated["source"]
+	destination.slots = simulated["destination"]
+	inventory_changed.emit()
+	destination.inventory_changed.emit()
+	return true
+
+func _simulate_transfer_to_indices(destination: InventoryModel, src_idx: int, destination_indices: Array[int]) -> Dictionary:
+	if destination == null or destination == self or item_catalog != destination.item_catalog:
+		return {}
+	if src_idx < 0 or src_idx >= size or destination_indices.is_empty():
+		return {}
+	var source_stack := slots[src_idx]
+	if source_stack == null:
+		return {}
+	var unique_indices: Array[int] = []
+	for index in destination_indices:
+		if index < 0 or index >= destination.size or unique_indices.has(index):
+			return {}
+		if not destination.can_slot_accept_item_id(index, source_stack.item_id):
+			return {}
+		unique_indices.append(index)
+	var source_slots := _copy_slots()
+	var destination_slots := destination._copy_slots()
+	var remaining := source_stack.count
+	var max_stack := item_catalog.get_definition(source_stack.item_id).max_stack
+	if source_stack.socketed_rune_ids.is_empty():
+		for index in unique_indices:
+			var destination_stack := destination_slots[index]
+			if destination_stack == null or destination_stack.item_id != source_stack.item_id:
+				continue
+			if not destination_stack.socketed_rune_ids.is_empty() or destination_stack.count >= max_stack:
+				continue
+			var moved := mini(remaining, max_stack - destination_stack.count)
+			destination_stack.count += moved
+			remaining -= moved
+			if remaining == 0:
+				break
+	if remaining > 0:
+		for index in unique_indices:
+			if destination_slots[index] != null:
+				continue
+			if not source_stack.socketed_rune_ids.is_empty():
+				if remaining != source_stack.count:
+					return {}
+				destination_slots[index] = source_stack.copy()
+				remaining = 0
+				break
+			var moved := mini(remaining, max_stack)
+			destination_slots[index] = InventoryStack.new(source_stack.item_id, moved)
+			remaining -= moved
+			if remaining == 0:
+				break
+	if remaining > 0:
+		return {}
+	source_slots[src_idx] = null
+	return {
+		"source": source_slots,
+		"destination": destination_slots,
+	}
+
+func _simulate_transfer_to(destination: InventoryModel, src_idx: int, dst_idx: int, drag_count: int) -> Dictionary:
+	if destination == null or item_catalog != destination.item_catalog:
+		return {}
+	if src_idx < 0 or src_idx >= size or dst_idx < 0 or dst_idx >= destination.size:
+		return {}
+	var source_stack := slots[src_idx]
+	if source_stack == null or drag_count <= 0 or drag_count > source_stack.count:
+		return {}
+	if not source_stack.socketed_rune_ids.is_empty() and drag_count != source_stack.count:
+		return {}
+	if not destination.can_slot_accept_item_id(dst_idx, source_stack.item_id):
+		return {}
+	var destination_stack := destination.slots[dst_idx]
+	if destination_stack != null:
+		if destination_stack.item_id == source_stack.item_id:
+			if not source_stack.socketed_rune_ids.is_empty() or not destination_stack.socketed_rune_ids.is_empty():
+				return {}
+			if destination_stack.count >= item_catalog.get_definition(source_stack.item_id).max_stack:
+				return {}
+		elif drag_count != source_stack.count or not can_slot_accept_item_id(src_idx, destination_stack.item_id):
+			return {}
+	var source_slots := _copy_slots()
+	var destination_slots := destination._copy_slots()
+	var simulated_source := source_slots[src_idx]
+	var simulated_destination := destination_slots[dst_idx]
+	if simulated_destination == null:
+		if drag_count == simulated_source.count:
+			destination_slots[dst_idx] = simulated_source
+			source_slots[src_idx] = null
+		else:
+			destination_slots[dst_idx] = InventoryStack.new(simulated_source.item_id, drag_count)
+			simulated_source.count -= drag_count
+	elif simulated_destination.item_id == simulated_source.item_id:
+		var max_stack := item_catalog.get_definition(simulated_source.item_id).max_stack
+		var moved := mini(drag_count, max_stack - simulated_destination.count)
+		simulated_destination.count += moved
+		simulated_source.count -= moved
+		if simulated_source.count == 0:
+			source_slots[src_idx] = null
+	else:
+		source_slots[src_idx] = simulated_destination
+		destination_slots[dst_idx] = simulated_source
+	return {
+		"source": source_slots,
+		"destination": destination_slots,
+	}
+
 func can_commit_socketed_rune(
 	gear_index: int,
 	expected_rune_ids: Array[StringName],
@@ -691,6 +822,38 @@ func to_dict() -> Dictionary:
 		"starter_item_migration_version": starter_item_migration_version,
 		"regions": regions_dict,
 	}
+
+func encode_slots() -> Array:
+	var encoded: Array = []
+	for stack in slots:
+		encoded.append(null if stack == null else stack.to_dict())
+	return encoded
+
+func restore_slots(encoded: Array) -> bool:
+	if encoded.size() != size:
+		return false
+	var restored: Array[InventoryStack] = []
+	restored.resize(size)
+	restored.fill(null)
+	for index in range(size):
+		var raw = encoded[index]
+		if raw == null:
+			continue
+		if not raw is Dictionary:
+			return false
+		var stack := InventoryStack.from_dict(raw)
+		if stack == null or not item_catalog.has_definition(stack.item_id):
+			return false
+		if not can_slot_accept_item_id(index, stack.item_id):
+			return false
+		if stack.count < 1 or stack.count > item_catalog.get_definition(stack.item_id).max_stack:
+			return false
+		if not _is_valid_socket_loadout(stack.item_id, stack.socketed_rune_ids):
+			return false
+		restored[index] = stack
+	slots = restored
+	inventory_changed.emit()
+	return true
 
 func from_dict(data: Dictionary) -> bool:
 	var regions_dict = data.get("regions", {}) as Dictionary

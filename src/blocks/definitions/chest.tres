@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="BlockDefinition" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://blocks/block_definition.gd" id="1_definition"]
+[ext_resource type="Texture2D" path="res://assets/textures/blocks/chest_top.png" id="2_top"]
+[ext_resource type="Texture2D" path="res://assets/textures/blocks/chest_side.png" id="3_side"]
+[ext_resource type="Script" path="res://chests/container_block_definition.gd" id="4_container"]
+
+[sub_resource type="Resource" id="Resource_container"]
+script = ExtResource("4_container")
+rows = 3
+columns = 5
+
+[resource]
+script = ExtResource("1_definition")
+id = 17
+is_solid = true
+is_opaque = true
+is_raycast_solid = true
+is_breakable = false
+is_replaceable = false
+top_texture = ExtResource("2_top")
+side_texture = ExtResource("3_side")
+bottom_texture = ExtResource("2_top")
+emissive_enabled = false
+emissive_color = Color(0, 0, 0, 0)
+emissive_energy = 0.0
+container = SubResource("Resource_container")
+light_range = 0.0
+light_color = Color(1, 1, 1, 1)

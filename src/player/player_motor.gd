@@ -70,10 +70,15 @@ func bind_entity_runtime(p_entity_runtime: EntityRuntime) -> void:
 	assert(_is_setup)
 	interactor.bind_entity_runtime(p_entity_runtime)
 
-func setup_harvesting(harvest_coordinator: PumpkinHarvestCoordinator) -> void:
+func setup_harvesting(harvest_coordinator: HarvestCoordinator) -> void:
 	assert(_is_setup and harvest_coordinator != null)
 	interactor.setup_harvesting(harvest_coordinator)
 	_action_audio.setup_harvesting(harvest_coordinator)
+
+func setup_consumption(consumption_coordinator: ItemConsumptionCoordinator) -> void:
+	assert(_is_setup and consumption_coordinator != null)
+	interactor.setup_consumption(consumption_coordinator)
+	_action_audio.setup_consumption(consumption_coordinator)
 
 func bind_space(p_space: VoxelSpace, presentation_root: Node, spawn_position: Vector3, editable_voxel_world: VoxelWorld = null):
 	assert(_is_setup)

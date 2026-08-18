@@ -8,11 +8,13 @@ var _inventory: InventoryModel
 var _structure_calls: Array[StringName] = []
 var _structure_commands_accepted: bool = false
 var _pumpkin_patch: PumpkinPatchCoordinator
+var _stats: ActorStats
 
 func _init() -> void:
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
 	_inventory = InventoryModel.new(item_catalog)
 	_pumpkin_patch = PumpkinPatchCoordinator.new()
+	_stats = ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
 	_console = (load("res://dev_console/presentation/dev_console.tscn") as PackedScene).instantiate() as DevConsole
 	root.add_child(_console)
 	root.add_child(_pumpkin_patch)
@@ -22,6 +24,7 @@ func _process(_delta: float) -> bool:
 	if _phase == 0 and _frame == 2:
 		_console.setup(
 			_inventory,
+			_stats,
 			_pumpkin_patch,
 			Callable(self, "_handle_structure_command").bind(&"new"),
 			Callable(self, "_handle_structure_command").bind(&"import"),
@@ -46,6 +49,10 @@ func _process(_delta: float) -> bool:
 		_expect(_console.get_command_input().has_focus(), "submitted command did not retain input focus")
 		_expect(_console.is_open(), "keep-open command closed the developer console")
 		var command_input := _console.get_command_input()
+		command_input.text = "give_xp 50"
+		command_input.text_submitted.emit(command_input.text)
+		_expect(_stats.level == 1 and _stats.experience == 50, "submitted give_xp command did not update progression")
+		_expect(_console.is_open(), "give_xp command closed the developer console")
 		command_input.text = "dev structure new"
 		command_input.text_submitted.emit(command_input.text)
 		_phase = 3

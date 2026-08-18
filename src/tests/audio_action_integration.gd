@@ -38,6 +38,7 @@ func _run():
 	var equip = action_audio.get_node_or_null("EquipPlayer") as AudioStreamPlayer
 	var till = action_audio.get_node_or_null("TillPlayer") as AudioStreamPlayer
 	var harvest_player = action_audio.get_node_or_null("HarvestPlayer") as AudioStreamPlayer
+	var consume_player = action_audio.get_node_or_null("ConsumePlayer") as AudioStreamPlayer
 	_expect(clunk != null, "ClunkPlayer missing")
 	_expect(action_audio.get_node_or_null("SwingPlayer") == null, "SwingPlayer still present")
 	_expect(creature_hit != null, "CreatureHitPlayer missing")
@@ -45,6 +46,7 @@ func _run():
 	_expect(equip != null, "EquipPlayer missing")
 	_expect(till != null, "TillPlayer missing")
 	_expect(harvest_player != null, "HarvestPlayer missing")
+	_expect(consume_player != null, "ConsumePlayer missing")
 	_expect(action_audio.get_node_or_null("DrawPlayer") == null, "legacy DrawPlayer still present")
 	_expect(clunk.bus == &"SFX", "clunk bus not SFX is %s" % clunk.bus)
 	_expect(creature_hit.bus == &"SFX", "creature hit bus not SFX is %s" % creature_hit.bus)
@@ -52,6 +54,7 @@ func _run():
 	_expect(equip.bus == &"SFX", "equip bus not SFX is %s" % equip.bus)
 	_expect(till.bus == &"SFX", "till bus not SFX is %s" % till.bus)
 	_expect(harvest_player.bus == &"SFX", "harvest bus not SFX is %s" % harvest_player.bus)
+	_expect(consume_player.bus == &"SFX", "consume bus not SFX is %s" % consume_player.bus)
 	_expect(action_audio._clunk_streams.size() == 4, "clunk streams expected 4 got %d" % action_audio._clunk_streams.size())
 	_expect(action_audio._creature_hit_streams.size() == 3, "creature hit streams expected 3 got %d" % action_audio._creature_hit_streams.size())
 	_expect(action_audio._player_hit_streams.size() == 1, "player hit streams expected 1 got %d" % action_audio._player_hit_streams.size())
@@ -64,9 +67,11 @@ func _run():
 	var sword_equip_profile := item_catalog.get_definition(&"copper_sword").equip_audio
 	var pickaxe_equip_profile := item_catalog.get_definition(&"copper_pickaxe").equip_audio
 	var hoe_equip_profile := item_catalog.get_definition(&"copper_hoe").equip_audio
+	var pumpkin_consume_profile := item_catalog.get_definition(&"pumpkin").consume_audio
 	_expect(sword_equip_profile != null and sword_equip_profile.streams.size() == 3, "sword equip profile lost its three draw sounds")
 	_expect(pickaxe_equip_profile != null and pickaxe_equip_profile.streams.size() == 3, "copper pickaxe equip profile lost its three draw sounds")
 	_expect(hoe_equip_profile != null and hoe_equip_profile.streams.size() == 3, "copper hoe equip profile lost its three draw sounds")
+	_expect(pumpkin_consume_profile != null and pumpkin_consume_profile.streams.size() == 1, "pumpkin consume profile lost its munch sound")
 	_expect(item_catalog.get_definition(&"stone_pickaxe").equip_audio == null, "stone pickaxe unexpectedly has equip audio")
 	for stream in sword_equip_profile.streams + pickaxe_equip_profile.streams + hoe_equip_profile.streams:
 		_expect(stream != null, "equip audio stream is null")
@@ -81,8 +86,11 @@ func _run():
 	animation_driver.setup(player, interactor)
 	animation_driver.set_process(false)
 	action_audio.setup(animation_driver, interactor, inventory, combat)
-	var harvest := PumpkinHarvestCoordinator.new()
+	var harvest := HarvestCoordinator.new()
 	action_audio.setup_harvesting(harvest)
+	var consumption := ItemConsumptionCoordinator.new()
+	consumption.setup(inventory, ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition))
+	action_audio.setup_consumption(consumption)
 	await process_frame
 
 	var has_mining = false
@@ -92,6 +100,7 @@ func _run():
 	var has_inventory = false
 	var has_till = false
 	var has_harvest = false
+	var has_consumption = false
 	for c in animation_driver.mining_impact.get_connections():
 		if c["callable"].get_object() == action_audio:
 			has_mining = true
@@ -113,6 +122,9 @@ func _run():
 	for c in harvest.harvest_completed.get_connections():
 		if c["callable"].get_object() == action_audio:
 			has_harvest = true
+	for c in consumption.item_consumed.get_connections():
+		if c["callable"].get_object() == action_audio:
+			has_consumption = true
 	_expect(has_mining, "mining impact not connected to action audio")
 	_expect(has_terrain_hit, "melee_terrain_hit not connected")
 	_expect(not has_swing, "melee_attack_started still connected to action audio")
@@ -120,6 +132,7 @@ func _run():
 	_expect(has_inventory, "inventory_changed not connected")
 	_expect(has_till, "soil_tilled not connected")
 	_expect(has_harvest, "harvest_completed not connected")
+	_expect(has_consumption, "item_consumed not connected")
 	_expect(equip.stream == null, "initial selected item played an equip sound")
 
 	animation_driver._update_mining_impact(0.0, true)
@@ -156,6 +169,12 @@ func _run():
 	var first_harvest_stream: AudioStream = harvest_player.stream
 	harvest.harvest_completed.emit()
 	_expect(harvest_player.stream != first_harvest_stream, "consecutive harvests repeated the same sound")
+
+	consumption.item_consumed.emit(&"pumpkin")
+	await process_frame
+	_expect(pumpkin_consume_profile.streams.has(consume_player.stream), "pumpkin consumption did not select its munch sound")
+	_expect(consume_player.pitch_scale >= pumpkin_consume_profile.pitch_min and consume_player.pitch_scale <= pumpkin_consume_profile.pitch_max, "consume pitch out of range %f" % consume_player.pitch_scale)
+	_expect(is_equal_approx(consume_player.volume_db, pumpkin_consume_profile.volume_db), "consume volume was %f" % consume_player.volume_db)
 
 	var sword_action := item_catalog.get_definition(&"copper_sword").primary_action as MeleeAttackActionDefinition
 	var player_contact := MeleeContact.new(MeleeCombatCoordinator.PLAYER_RUNTIME_ID, &"player", 1, &"zombie", sword_action.attack_profile.id, Vector3.ONE, Vector3.RIGHT)

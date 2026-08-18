@@ -17,6 +17,7 @@ enum Operation {
 	MINE = 0,
 	PLACE = 1,
 	REPLACE = 2,
+	PICK_UP = 3,
 }
 
 const RESULT_MESSAGES: Dictionary = {
@@ -56,6 +57,9 @@ func is_place() -> bool:
 func is_replace() -> bool:
 	return operation == Operation.REPLACE
 
+func is_pick_up() -> bool:
+	return operation == Operation.PICK_UP
+
 static func success_mine(p_pos: Vector3i, p_old_id: int, p_revision: int) -> BlockEdit:
 	var e = BlockEdit.new(Operation.MINE, p_pos)
 	e.old_id = p_old_id
@@ -81,6 +85,14 @@ static func success_replace(p_pos: Vector3i, p_old_id: int, p_new_id: int, p_rev
 	e.result = Result.SUCCESS
 	return e
 
+static func success_pick_up(p_pos: Vector3i, p_old_id: int, p_revision: int) -> BlockEdit:
+	var e = BlockEdit.new(Operation.PICK_UP, p_pos)
+	e.old_id = p_old_id
+	e.new_id = BlockId.Type.AIR
+	e.revision = p_revision
+	e.result = Result.SUCCESS
+	return e
+
 static func fail(p_pos: Vector3i, p_op: Operation, p_result: Result, p_reason: String = "") -> BlockEdit:
 	var e = BlockEdit.new(p_op, p_pos)
 	e.result = p_result
@@ -93,5 +105,7 @@ func _to_string() -> String:
 			return "[BlockEdit MINE %s %s->AIR rev %d]" % [pos, BlockId.get_display_name(old_id as BlockId.Type), revision]
 		if is_replace():
 			return "[BlockEdit REPLACE %s %s->%s rev %d]" % [pos, BlockId.get_display_name(old_id as BlockId.Type), BlockId.get_display_name(new_id as BlockId.Type), revision]
+		if is_pick_up():
+			return "[BlockEdit PICK_UP %s %s->AIR rev %d]" % [pos, BlockId.get_display_name(old_id as BlockId.Type), revision]
 		return "[BlockEdit PLACE %s AIR->%s rev %d attach %s]" % [pos, BlockId.get_display_name(new_id as BlockId.Type), revision, attach_dir]
 	return "[BlockEdit FAIL %s %s: %s]" % [pos, Result.find_key(result), reason]

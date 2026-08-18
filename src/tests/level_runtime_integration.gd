@@ -251,6 +251,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	var mining_break_particles := (load("res://mining/presentation/mining_break_particles.tscn") as PackedScene).instantiate()
 	var mining_hit_particles := (load("res://mining/presentation/mining_hit_particles.tscn") as PackedScene).instantiate()
 	var pumpkin_patch := (load("res://farming/pumpkin/pumpkin_patch_coordinator.tscn") as PackedScene).instantiate() as PumpkinPatchCoordinator
+	var apple_trees := (load("res://foraging/apple/apple_tree_coordinator.tscn") as PackedScene).instantiate() as AppleTreeCoordinator
 	world.name = "World"
 	player.name = "Player"
 	player.process_mode = Node.PROCESS_MODE_INHERIT
@@ -268,6 +269,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	mining_break_particles.name = "MiningBreakParticles"
 	mining_hit_particles.name = "MiningHitParticles"
 	pumpkin_patch.name = "PumpkinPatch"
+	apple_trees.name = "AppleTrees"
 	game.add_child(world)
 	game.add_child(player)
 	game.add_child(camera_rig)
@@ -284,6 +286,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	game.add_child(mining_break_particles)
 	game.add_child(mining_hit_particles)
 	game.add_child(pumpkin_patch)
+	game.add_child(apple_trees)
 	var save_layer := CanvasLayer.new()
 	save_layer.name = "SaveStatusLayer"
 	var save_label := Label.new()
@@ -303,7 +306,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	root.add_child(game)
 	await process_frame
 	_expect(game.world == world and game.player == player and game.camera_rig == camera_rig, "Game onready dependencies were not wired")
-	_expect(game.game_environment == environment and game.level_interaction == coordinator and game.dev_console == dev_console and game.pumpkin_patch == pumpkin_patch, "Game transition dependencies were not wired")
+	_expect(game.game_environment == environment and game.level_interaction == coordinator and game.dev_console == dev_console and game.pumpkin_patch == pumpkin_patch and game.apple_trees == apple_trees, "Game transition dependencies were not wired")
 	_expect(game.structure_designer_workflow == structure_workflow and game.structure_designer_dialogs == structure_dialogs, "Game structure designer dependencies were not wired")
 	_expect(game.structure_designer_runtime_scene != null and game.structure_terrain_shader != null, "Game structure designer resources were not wired")
 	var manager := ChunkManager.new()
@@ -319,8 +322,10 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	environment.start_clock()
 	game.inventory_model = InventoryModel.new(game.item_catalog)
 	game.inventory_model.setup_starter()
+	game.player_stats = ActorStats.new(game.player_stats_definition)
 	dev_console.setup(
 		game.inventory_model,
+		game.player_stats,
 		pumpkin_patch,
 		Callable(game, "_request_new_structure"),
 		Callable(game, "_request_import_structure"),
@@ -329,7 +334,6 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	)
 	dev_console.open_state_changed.connect(game._on_dev_console_open_state_changed)
 	structure_dialogs.open_state_changed.connect(game._on_structure_dialog_open_state_changed)
-	game.player_stats = ActorStats.new(game.player_stats_definition)
 	camera_rig.setup(player, game.input_buffer)
 	entities.setup(game.entity_catalog, voxel_world, 1337, _position_ready)
 	combat.setup(voxel_world, player, game.player_stats, entities.get_runtime())

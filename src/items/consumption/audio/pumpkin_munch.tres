@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="ItemConsumeAudioProfile" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://items/consumption/item_consume_audio_profile.gd" id="1_profile"]
+[ext_resource type="AudioStream" path="res://assets/audio/sfx/items/consume/munch_crunchy_fruit_sequence_3x_CC0.wav" id="2_munch"]
+
+[resource]
+script = ExtResource("1_profile")
+streams = Array[AudioStream]([ExtResource("2_munch")])
+volume_db = -7.0
+pitch_min = 0.98
+pitch_max = 1.02

@@ -85,13 +85,16 @@ func add_experience(amount: int) -> int:
 	assert(amount >= 0)
 	if is_at_maximum_level():
 		return 0
-	experience += amount
+	var remaining := amount
 	var levels_gained := 0
-	while not is_at_maximum_level():
+	while remaining > 0 and not is_at_maximum_level():
 		var required := get_experience_to_next_level()
-		if experience < required:
+		var needed := required - experience
+		if remaining < needed:
+			experience += remaining
 			break
-		experience -= required
+		remaining -= needed
+		experience = 0
 		level += 1
 		levels_gained += 1
 	if is_at_maximum_level():

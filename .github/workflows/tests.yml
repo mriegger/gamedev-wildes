@@ -96,6 +96,25 @@ jobs:
             30 "CRAFTING_UI PASS" /tmp/crafting_ui.log -- \
             godot --headless --path src --script res://crafting/tests/crafting_ui_integration.gd
 
+  anvil-crafting:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run anvil system tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "ANVIL_SYSTEM PASS" /tmp/anvil_system.log -- \
+            godot --headless --path src --script res://crafting/stations/tests/anvil_system_integration.gd
+      - name: Run anvil UI integration tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "ANVIL_UI PASS" /tmp/anvil_ui.log -- \
+            godot --headless --path src --script res://crafting/stations/tests/anvil_ui_integration.gd
+
   dev-console-command:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -114,6 +133,11 @@ jobs:
           bash .github/scripts/run_godot_check.sh \
             30 "PUMPKIN_PATCH_PERSISTENCE PASS" /tmp/pumpkin_patch_persistence.log -- \
             godot --headless --path src --script res://farming/tests/pumpkin_patch_persistence_integration.gd
+      - name: Run apple tree integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "APPLE_TREES PASS" /tmp/apple_trees.log -- \
+            godot --headless --path src --script res://foraging/apple/tests/apple_trees.gd
 
   dev-console-ui:
     runs-on: ubuntu-latest
@@ -161,6 +185,16 @@ jobs:
           bash .github/scripts/run_godot_check.sh \
             30 "COMBAT_PROGRESSION PASS" /tmp/combat_progression.log -- \
             godot --headless --path src --script res://progression/tests/combat_progression.gd
+      - name: Run player perk tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "PLAYER_PERKS PASS" /tmp/player_perks.log -- \
+            godot --headless --path src --script res://progression/tests/player_perks.gd
+      - name: Run progression UI integration tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "PROGRESSION_UI PASS" /tmp/progression_ui.log -- \
+            godot --headless --path src --script res://progression/tests/progression_ui_integration.gd
 
   rune-system:
     runs-on: ubuntu-latest
@@ -539,6 +573,20 @@ jobs:
             30 "HUD_INTEGRATION PASS" /tmp/hud_integration.log -- \
             godot --headless --path src --script res://tests/hud_integration.gd
 
+  chest-system-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run chest interaction, storage, and UI integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "CHEST_SYSTEM PASS" /tmp/chest_system.log -- \
+            godot --headless --path src --script res://chests/tests/chest_system_integration.gd
+
   player-animation-integration:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -585,6 +633,11 @@ jobs:
           bash .github/scripts/run_godot_check.sh \
             30 "ITEM_RARITY PASS" /tmp/item_rarity.log -- \
             godot --headless --path src --script res://items/rarity/tests/item_rarity.gd
+      - name: Run item consumption tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "ITEM_CONSUMPTION PASS" /tmp/item_consumption.log -- \
+            godot --headless --path src --script res://items/consumption/tests/item_consumption.gd
 
   audio-integration:
     runs-on: ubuntu-latest

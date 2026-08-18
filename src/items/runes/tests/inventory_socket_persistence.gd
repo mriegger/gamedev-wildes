@@ -63,6 +63,9 @@ func _init() -> void:
 	_expect(SaveManager._migrate_save_data(version_five_save), "version-five save did not migrate")
 	_expect(version_five_save["version"] == SaveManager.CURRENT_SAVE_VERSION, "version-five save has the wrong migrated version")
 	_expect(version_five_save["pumpkin_patch"] == {"present": false}, "version-five migration added a pumpkin patch")
+	_expect(version_five_save["player_perks"] == {"allocations": {}}, "version-five migration chain did not initialize perks")
+	_expect(version_five_save["chest_inventories"] == {}, "version-five migration did not initialize chest inventories")
+	_expect(version_five_save["apple_trees"] == AppleTreeState.new().snapshot(), "version-five migration added picked apples")
 	for region_name in ["hotbar", "backpack", "equipment"]:
 		for raw_stack in version_five_save["inventory"]["regions"][region_name]:
 			if raw_stack is Dictionary:
@@ -71,6 +74,12 @@ func _init() -> void:
 	_expect(SaveManager._migrate_save_data(version_four_save), "version-four migration chain failed")
 	_expect(version_four_save["version"] == SaveManager.CURRENT_SAVE_VERSION and version_four_save["item_proficiency"] == {}, "version-four migration chain lost progression shape")
 	_expect(version_four_save["pumpkin_patch"] == {"present": false}, "version-four migration added a pumpkin patch")
+	_expect(version_four_save["player_perks"] == {"allocations": {}}, "version-four migration chain did not initialize perks")
+	_expect(version_four_save["chest_inventories"] == {}, "version-four migration did not initialize chest inventories")
+	_expect(version_four_save["apple_trees"] == AppleTreeState.new().snapshot(), "version-four migration added picked apples")
+	var version_eight_save := {"version": 8, "player_perks": {"allocations": {}}, "pumpkin_patch": {"present": false}}
+	_expect(SaveManager._migrate_save_data(version_eight_save), "version-eight migration failed")
+	_expect(version_eight_save["apple_trees"] == AppleTreeState.new().snapshot(), "version-eight migration added picked apples")
 	var malformed_save := {"version": 5, "inventory": {"regions": {"hotbar": []}}}
 	var malformed_before := malformed_save.duplicate(true)
 	_expect(not SaveManager._migrate_save_data(malformed_save), "malformed version-five save migrated")

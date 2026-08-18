@@ -12,6 +12,8 @@ signal generation_progress(stage: String, percent: float, details: String)
 @onready var chunk_renderer: ChunkRenderer = $ChunkRenderer
 @onready var chunk_scheduler: ChunkBuildScheduler = $ChunkBuildScheduler
 @onready var torch_renderer: TorchRenderer = $Torches
+@onready var anvil_renderer: AnvilRenderer = $Anvils
+@onready var chest_renderer: ChestRenderer = $Chests
 
 var terrain_material: ShaderMaterial
 var water_block_material: ShaderMaterial
@@ -80,6 +82,8 @@ func _setup_systems():
 	chunk_scheduler.setup(chunk_mesher, terrain_generator, voxel_model, config.chunk_size, config.max_build_y)
 	chunk_renderer.setup(chunk_mesher, terrain_material, water_block_material, voxel_model, _settings.get_shadow_chunk_radius())
 	torch_renderer.setup(block_catalog, _settings.torch_shadow_count, 0.0)
+	anvil_renderer.setup()
+	chest_renderer.setup(block_catalog)
 	chunk_manager = ChunkManager.new()
 	chunk_manager.setup(config, voxel_model, chunk_scheduler, chunk_renderer)
 	chunk_manager.chunk_loaded.connect(_on_chunk_loaded)
@@ -133,9 +137,13 @@ func _process(delta: float):
 
 func _on_chunk_loaded(coord: Vector2i):
 	torch_renderer.load_torches_for_chunk(coord.x, coord.y, config.chunk_size, voxel_model.torch_attachments)
+	anvil_renderer.load_anvils_for_chunk(coord.x, coord.y, config.chunk_size, voxel_model)
+	chest_renderer.load_chests_for_chunk(coord.x, coord.y, config.chunk_size, voxel_model)
 
 func _on_chunk_unloaded(coord: Vector2i):
 	torch_renderer.unload_torches_in_chunk(coord.x, coord.y, config.chunk_size)
+	anvil_renderer.unload_anvils_in_chunk(coord.x, coord.y, config.chunk_size)
+	chest_renderer.unload_chests_in_chunk(coord.x, coord.y, config.chunk_size)
 
 func _on_block_edit_committed(edit: BlockEdit):
 	var edit_chunk := ChunkCoord.world_to_chunk_vec3i(edit.pos, config.chunk_size)
@@ -144,6 +152,19 @@ func _on_block_edit_committed(edit: BlockEdit):
 	elif edit.new_id == BlockId.Type.TORCH:
 		if chunk_manager.visible_chunks.has(edit_chunk):
 			torch_renderer.spawn_torch(edit.pos, edit.attach_dir)
+	elif edit.is_mine() and edit.old_id == BlockId.Type.ANVIL:
+		anvil_renderer.remove_anvil(edit.pos)
+		chunk_manager.queue_rebuild_for_world_pos(edit.pos)
+	elif edit.new_id == BlockId.Type.ANVIL:
+		if chunk_manager.visible_chunks.has(edit_chunk):
+			anvil_renderer.spawn_anvil(edit.pos)
+	elif (edit.is_mine() or edit.is_pick_up()) and edit.old_id == BlockId.Type.CHEST:
+		chest_renderer.remove_chest(edit.pos)
+		chunk_manager.queue_rebuild_for_world_pos(edit.pos)
+	elif edit.new_id == BlockId.Type.CHEST:
+		if chunk_manager.visible_chunks.has(edit_chunk):
+			chest_renderer.spawn_chest(edit.pos)
+		chunk_manager.queue_rebuild_for_world_pos(edit.pos)
 	else:
 		chunk_manager.queue_rebuild_for_world_pos(edit.pos)
 

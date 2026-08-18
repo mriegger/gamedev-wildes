@@ -5,8 +5,8 @@ endless procedurally generated world under an orthographic isometric camera, min
 a nine-slot hotbar, and build with them. The loop is explore → mine → build, on terrain that
 streams in around you as you walk, under a running day/night cycle.
 
-Worlds are saved to three local slots and persist your seed, edits, inventory, position, and
-world time. Copper deposits regenerate deterministically from the world seed.
+Worlds are saved to three local slots and persist your seed, edits, player and chest inventories,
+position, and world time. Copper deposits regenerate deterministically from the world seed.
 
 ## Controls
 
@@ -17,8 +17,8 @@ world time. Copper deposits regenerate deterministically from the world seed.
 | `Space` | Hop — needed to get up any ledge |
 | `Q` / `E` | Rotate the camera 45° |
 | Mouse wheel / pinch | Zoom |
-| Left-click / hold | Use the selected item's primary action; hold to mine, click to attack or till soil |
-| Right-click | Place the selected block |
+| Left-click / hold | Open a targeted chest or crafting station, or use the selected item's primary action; hold to mine, click to attack or till soil |
+| Right-click | Use the selected item's secondary action; place blocks or consume food |
 | `F` | Enter or leave a nearby dungeon |
 | `1`–`9` | Select hotbar slot; while the backpack is open, assign the hovered item to that slot |
 | `Tab` | Toggle backpack and crafting |
@@ -27,8 +27,9 @@ world time. Copper deposits regenerate deterministically from the world seed.
 | `F10` | Toggle player animation tuner |
 | `Esc` | Pause |
 
-Reach is 6 blocks. The block under the cursor is outlined, and a ghost block previews where a
-placement would land; placements that would overlap you are rejected.
+Reach is 6 blocks. Mineable targets under the cursor are outlined, while chests open without a
+mining outline. A translucent preview shows where a placement would land, using the chest's split
+body-and-lid model when appropriate; placements that would overlap you are rejected.
 
 The Structure Designer uses first-person `WASD` movement, mouse look, `Space`/`Ctrl` to
 ascend/descend, and `Shift` acceleration. Left-click removes, right-click places, `Tab` opens the
@@ -124,7 +125,16 @@ Stone and the other common blocks are hand-minable. Copper requires a stone or c
 while the masonry blocks require a copper pickaxe. Torches are placeable blocks that you can walk
 through — each is an omni light with a 9-block radius.
 Overworld torch shadows are configurable for the nearest 0, 1, 2, or 4 lights and default to the
-nearest one.
+nearest one. Chests are solid 1×1 placeable blocks rendered as separate body and lid meshes with
+dedicated chest textures. They cannot be mined by hand, and only empty chests can be mined with a
+pickaxe.
+Hovering a reachable chest brightens it and hinges its lid open slightly. Left-clicking opens
+that chest's own persistent 3×5 storage in the center while the backpack opens from the right.
+Items can be dragged between the chest, backpack, and hotbar. Clicking a backpack or chest item
+transfers its stack to the other inventory, and the chest's Take all button transfers every stack
+that fits into the backpack. An empty chest can be mined with a pickaxe to return it to the player
+inventory; a chest containing items cannot be mined. `P` or `Esc` closes both panels; `Tab` replaces
+the chest with the crafting menu while keeping the backpack open.
 
 **Tools.** New worlds start with an empty inventory, while the first pickaxe is crafted from stone
 and wood. Item actions are data-driven: the hoe tills exposed grass and dirt, stone and copper
@@ -140,12 +150,15 @@ fallback values keep GL Compatibility usable at reduced fidelity, without volume
 06:00–19:00; sunrise and sundown get their own warm color keys, and nights stay bright enough
 to play.
 
-**Crafting.** Opening crafting with `Tab` reveals a recipe panel alongside the backpack. Ten
-data-driven recipes use materials from the backpack and hotbar and craft immediately when the
-enabled Craft button is pressed, playing one success sound.
+**Crafting.** Opening crafting with `Tab` reveals the general recipe panel alongside the backpack.
+It contains the five recipes that do not require a workstation. A placed anvil opens its own panel
+with the seven copper tool, weapon, and armor recipes. Both catalogs use materials from the
+backpack and hotbar and craft immediately when the enabled Craft button is pressed, playing one
+success sound.
 
 **Developer console.** Press `/` to open a command line at the bottom of the screen. The
-`spawn <item> <count>` command adds any catalog item directly to the backpack for testing. Item
+`spawn <item> [count]` command adds any catalog item directly to the backpack for testing, with the
+count defaulting to one when omitted. Item
 IDs and display names are accepted; equipment IDs remain material-qualified, such as
 `copper_pickaxe` and `copper_sword`. Structure construction uses `dev structure new`,
 `dev structure import`, `dev structure export`, and `dev structure exit`. Press `/` again or
@@ -154,6 +167,11 @@ added directly with `spawn copper <count>`. New worlds contain one seeded 5×4 p
 blocks from the initial player spawn. Its location, growth states, and rotations persist in the
 save. The
 `spawn pumpkin_patch` command relocates and randomizes that persistent patch near the player.
+Harvested pumpkins stack in the inventory and restore the player's health to full when right-clicked
+in the backpack or hotbar, or when selected and used with right-click in the world.
+About five percent of procedural trees carry apples: two to six collectible apples spawn beneath
+the tree and twenty decorate its subtly tinted lower outer leaves. Collected apples persist in saves and restore
+75 percent of maximum health through the same inventory consumption controls.
 
 **UI & saves.** Backpack and hotbar stacks can be split by scrolling while left-dragging. The side
 panel includes a trash drop target that accepts backpack, hotbar, and equipped items. A
@@ -177,6 +195,7 @@ src/                    Godot project. Entry scene: app/app.tscn
 ├── blocks/             Block domain, voxel query contract, and shared block presentation
 ├── combat/             Melee contacts, profiles, targeting, and validation
 ├── crafting/           Recipe resources, inventory coordination, presentation, and tests
+├── chests/             Container definitions, persistent storage, transfers, presentation, and tests
 ├── dev_console/        Developer commands, bottom-screen console presentation, and tests
 ├── entities/           Entity catalog, AI, voxel navigation, populations, and custom presentation
 ├── levels/             Dungeon content, definitions, generation, runtime, entrance, and presentation
@@ -229,9 +248,13 @@ from Godot primitive meshes. Visual effects use project-authored shaders.
 | `src/assets/audio/sfx/tools/impactGeneric_light_*.ogg` (4 files) | [Impact Sounds](https://kenney.nl/assets/impact-sounds) – Kenney (https://kenney.nl) – generic light impacts for tool and crafting clunks | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `src/assets/audio/sfx/farming/tilling/bookFlip*.ogg` (3 files) | [RPG Audio](https://kenney.nl/assets/rpg-audio) – Kenney | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `src/assets/audio/sfx/farming/harvesting/pop_generic_*_CC0.wav` (3 files) | Generic pop by Muse Spark | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
+| `src/assets/audio/sfx/items/consume/munch_crunchy_fruit_sequence_3x_CC0.wav` | Source recordings by Joseph SARDIN, BigSoundBank; edited by Muse Spark | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `src/assets/models/tools/hoe/copper_hoe.glb`, `Textures/colormap.png`, and derived inventory icon | [Survival Kit](https://kenney.nl/assets/survival-kit) – Kenney | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `src/assets/models/farming/pumpkin/*.fbx` (6 files) and derived inventory icon | [Ultimate Crops](https://quaternius.com/packs/ultimatecrops.html) – Quaternius | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
+| `src/assets/textures/items/anvil.png` | Muse, prompted by Codex for Michael Riegger | Project-authored |
+| `src/assets/models/foraging/apple/apple.glb`, `Textures/colormap.png`, and derived inventory icon | [Food Kit](https://kenney.nl/assets/food-kit) – Kenney | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `src/assets/textures/blocks/farmland_dry.png` | Codex, prompted by Michael Riegger | Project-authored |
 | `src/assets/textures/effects/mining/dirt_*.png` (3 files) | [Particle Pack](https://kenney.nl/assets/particle-pack) – Kenney | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
+| `src/assets/images/icons/button/move_to_backpack.png` | Meta Muse (`muse-image-1.0-eval`) through the `meta-imagegen` skill; prompted and downsampled for Wildes | Project-authored |
 
 Godot itself is MIT licensed.

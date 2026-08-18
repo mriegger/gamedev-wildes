@@ -133,3 +133,9 @@ func _on_inner_button_up():
 
 func focus_button():
 	_button.grab_focus()
+
+func set_disabled(disabled: bool):
+	_button.disabled = disabled
+
+func is_disabled() -> bool:
+	return _button.disabled

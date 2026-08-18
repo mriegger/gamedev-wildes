@@ -14,9 +14,11 @@ signal main_menu_requested
 @export var block_catalog: BlockCatalog
 @export var item_catalog: ItemCatalog
 @export var crafting_recipe_catalog: CraftingRecipeCatalog
+@export var anvil_recipe_catalog: CraftingRecipeCatalog
 @export var entity_catalog: EntityCatalog
 @export var combat_hit_particle_catalog: CombatHitParticleCatalog
 @export var player_stats_definition: CombatStatsDefinition
+@export var player_perk_rules: PlayerPerkRules
 @export var level_catalog: LevelCatalog
 @export var level_entrance_definition: LevelEntranceDefinition
 @export var level_runtime_scene: PackedScene
@@ -39,20 +41,28 @@ signal main_menu_requested
 @onready var structure_designer_workflow: StructureDesignerWorkflow = $StructureDesignerWorkflow as StructureDesignerWorkflow
 @onready var structure_designer_dialogs: StructureDesignerDialogs = $StructureDesignerDialogs as StructureDesignerDialogs
 @onready var pumpkin_patch: PumpkinPatchCoordinator = $PumpkinPatch as PumpkinPatchCoordinator
+@onready var apple_trees: AppleTreeCoordinator = $AppleTrees as AppleTreeCoordinator
 @onready var _save_canvas: CanvasLayer = $SaveStatusLayer as CanvasLayer
 @onready var _save_label: Label = $SaveStatusLayer/SaveStatusLabel as Label
 @onready var _fade: ColorRect = $TransitionLayer/Fade as ColorRect
 
 var inventory_model: InventoryModel
 var player_stats: ActorStats
+var player_perks: PlayerPerks
+var player_perk_coordinator: PlayerPerkCoordinator
 var item_proficiency: ItemProficiency
 var inventory_stat_coordinator: InventoryStatCoordinator
 var crafting_coordinator: CraftingCoordinator
+var anvil_crafting_coordinator: CraftingCoordinator
 var combat_progression_coordinator: CombatProgressionCoordinator
 var rune_socketing_coordinator: RuneSocketingCoordinator
 var rune_effect_coordinator: RuneEffectCoordinator
 var interaction_prompt_coordinator: InteractionPromptCoordinator
-var pumpkin_harvest_coordinator: PumpkinHarvestCoordinator
+var anvil_coordinator: AnvilCoordinator
+var harvest_coordinator: HarvestCoordinator
+var item_consumption_coordinator: ItemConsumptionCoordinator
+var chest_storage: ChestInventoryStore
+var chest_coordinator: ChestCoordinator
 var input_buffer: InputBuffer = InputBuffer.new()
 var settings: GameSettings
 
@@ -88,13 +98,15 @@ func _ready():
 	var block_catalog_valid := block_catalog.validate()
 	var item_catalog_valid := item_catalog.validate(block_catalog)
 	var crafting_catalog_valid := crafting_recipe_catalog.validate(item_catalog)
+	var anvil_catalog_valid := anvil_recipe_catalog != null and anvil_recipe_catalog.validate(item_catalog)
 	var entity_catalog_valid := entity_catalog.validate()
 	var combat_particle_catalog_valid := combat_hit_particle_catalog.validate(entity_catalog)
 	var player_stats_valid := player_stats_definition.validate()
+	var player_perks_valid := player_perk_rules != null and player_perk_rules.validate(player_stats_definition)
 	var level_catalog_valid := level_catalog.validate()
 	var level_encounter_catalog_valid := level_catalog_valid and entity_catalog_valid and LevelEncounterCatalogValidator.validate(level_catalog, entity_catalog)
 	var level_entrance_valid := level_catalog_valid and level_entrance_definition != null and level_entrance_definition.validate(level_catalog)
-	if not block_catalog_valid or not item_catalog_valid or not crafting_catalog_valid or not entity_catalog_valid or not combat_particle_catalog_valid or not player_stats_valid or not level_catalog_valid or not level_encounter_catalog_valid or not level_entrance_valid:
+	if not block_catalog_valid or not item_catalog_valid or not crafting_catalog_valid or not anvil_catalog_valid or not entity_catalog_valid or not combat_particle_catalog_valid or not player_stats_valid or not player_perks_valid or not level_catalog_valid or not level_encounter_catalog_valid or not level_entrance_valid:
 		push_error("[Game] Catalog validation failed")
 		return
 	var structure_file_store := StructureFileStore.new(ProjectSettings.globalize_path("res://../").simplify_path())
@@ -109,17 +121,21 @@ func _ready():
 	world.block_catalog = block_catalog
 	world.configure_settings(settings)
 	inventory_model = InventoryModel.new(item_catalog)
+	player_stats = ActorStats.new(player_stats_definition)
 	dev_console.setup(
 		inventory_model,
+		player_stats,
 		pumpkin_patch,
 		Callable(self, "_request_new_structure"),
 		Callable(self, "_request_import_structure"),
 		Callable(self, "_request_export_structure"),
 		Callable(self, "_request_exit_structure")
 	)
-	player_stats = ActorStats.new(player_stats_definition)
+	player_perks = PlayerPerks.new(player_perk_rules)
+	chest_storage = ChestInventoryStore.new(item_catalog)
 	item_proficiency = ItemProficiency.new(item_catalog)
 	_restore_inventory()
+	_restore_chest_inventories()
 	_restore_item_proficiency()
 	rune_socketing_coordinator = RuneSocketingCoordinator.new()
 	if not rune_socketing_coordinator.setup(inventory_model, item_proficiency):
@@ -135,7 +151,10 @@ func _ready():
 		return
 	crafting_coordinator = CraftingCoordinator.new()
 	crafting_coordinator.setup(inventory_model, crafting_recipe_catalog)
-	_restore_player_stats()
+	anvil_crafting_coordinator = CraftingCoordinator.new()
+	anvil_crafting_coordinator.setup(inventory_model, anvil_recipe_catalog)
+	if not _restore_player_progression():
+		return
 	combat_progression_coordinator = CombatProgressionCoordinator.new()
 	combat_progression_coordinator.setup(player_stats, inventory_model, entity_catalog, item_proficiency)
 	world.configure_start_state(_world_state)
@@ -150,7 +169,7 @@ func _ready():
 	level_interaction.interaction_requested.connect(_on_level_interaction_requested)
 	_setup_level_entrance()
 	game_session.save_status_changed.connect(_show_save_status)
-	game_session.setup(_slot_id, _save_data, world, player_stats, inventory_model, item_proficiency, game_environment, pumpkin_patch, _get_persisted_position)
+	game_session.setup(_slot_id, _save_data, world, player_stats, inventory_model, player_perks, chest_storage, item_proficiency, game_environment, pumpkin_patch, apple_trees, _get_persisted_position)
 	if _recovered_defeated_save and _slot_id != -1 and not game_session.save("defeated_save_recovery"):
 		push_error("[Game] Failed to persist recovered player state")
 	_recovered_defeated_save = false
@@ -174,21 +193,40 @@ func _restore_inventory():
 	else:
 		inventory_model.setup_empty()
 
-func _restore_player_stats():
+func _restore_chest_inventories():
+	var saved_chests = _save_data.get("chest_inventories", {})
+	if not saved_chests is Dictionary or not chest_storage.restore(saved_chests):
+		push_error("[Game] Saved chest inventories are invalid; using empty chest storage")
+		chest_storage = ChestInventoryStore.new(item_catalog)
+
+func _restore_player_progression() -> bool:
 	var saved_stats = _save_data.get("player_stats", null)
-	if not saved_stats is Dictionary:
-		return
-	if not player_stats.restore_progression(saved_stats):
-		push_error("[Game] Saved player stats are invalid; using base progression")
-		return
+	var stats_restored := false
+	if saved_stats is Dictionary:
+		stats_restored = player_stats.restore_progression(saved_stats)
+		if not stats_restored:
+			push_error("[Game] Saved player stats are invalid; using base progression")
+	player_perk_coordinator = PlayerPerkCoordinator.new()
+	if not player_perk_coordinator.setup(player_perks, player_stats):
+		push_error("[Game] Player perk modifiers are invalid")
+		return false
+	var saved_perks = _save_data.get("player_perks", {"allocations": {}})
+	if not saved_perks is Dictionary or not player_perk_coordinator.restore(saved_perks):
+		push_error("[Game] Saved player perks are invalid; using empty allocations")
+		var empty_perks_restored := player_perk_coordinator.restore({"allocations": {}})
+		assert(empty_perks_restored)
+	if stats_restored:
+		var final_stats_restored := player_stats.restore_progression(saved_stats)
+		assert(final_stats_restored)
 	if not player_stats.is_dead():
-		return
+		return true
 	var health_restored := player_stats.set_current_hp(player_stats.get_value(&"hp"))
 	assert(health_restored)
 	_recovered_defeated_save = true
 	_world_state.player_position = Vector3.ZERO
 	_save_data["player_position"] = null
 	_save_data["player_stats"] = player_stats.snapshot_progression()
+	return true
 
 func _restore_item_proficiency():
 	var saved_proficiency = _save_data.get("item_proficiency", null)
@@ -204,7 +242,17 @@ func _setup_gameplay() -> bool:
 	melee_combat.melee_outcome_committed.connect(_on_melee_outcome_committed)
 	combat_hit_particles.setup(melee_combat, combat_hit_particle_catalog)
 	player.setup(camera_rig, inventory_model, input_buffer, player_stats, melee_combat, world_entities)
+	item_consumption_coordinator = ItemConsumptionCoordinator.new()
+	item_consumption_coordinator.setup(inventory_model, player_stats)
+	player.setup_consumption(item_consumption_coordinator)
 	_bind_entity_context(world.voxel_model, world_entities)
+	anvil_coordinator = AnvilCoordinator.new()
+	anvil_coordinator.setup(world.voxel_model)
+	player.interactor.crafting_station_open_requested.connect(_on_crafting_station_open_requested)
+	chest_coordinator = ChestCoordinator.new()
+	chest_coordinator.setup(world.voxel_model, inventory_model, chest_storage)
+	player.interactor.set_chest_coordinator(chest_coordinator)
+	player.interactor.container_open_requested.connect(_on_container_open_requested)
 	player_stats.health_depleted.connect(_on_player_defeated)
 	var mining_particle_tints := MiningParticleTintPalette.new(block_catalog)
 	mining_break_particles.setup(world.voxel_model, mining_particle_tints)
@@ -220,16 +268,24 @@ func _setup_gameplay() -> bool:
 	if not pumpkin_patch.setup(world.voxel_model, player, world.config.seed_value, _save_data.get("pumpkin_patch", null)):
 		push_error("[Game] Pumpkin patch state is invalid or no suitable new-world placement exists")
 		return false
-	pumpkin_harvest_coordinator = PumpkinHarvestCoordinator.new()
-	if not pumpkin_harvest_coordinator.setup(pumpkin_patch, inventory_model, interaction_prompt_coordinator):
-		push_error("[Game] Pumpkin harvest content is invalid")
+	if not apple_trees.setup(world.voxel_model, world.chunk_manager, world.config.seed_value, _save_data.get("apple_trees", null), item_catalog):
+		push_error("[Game] Apple tree state or content is invalid")
 		return false
-	player.setup_harvesting(pumpkin_harvest_coordinator)
+	harvest_coordinator = HarvestCoordinator.new()
+	var harvest_sources: Array[HarvestSource] = [pumpkin_patch, apple_trees]
+	if not harvest_coordinator.setup(harvest_sources, inventory_model, interaction_prompt_coordinator):
+		push_error("[Game] Harvest content is invalid")
+		return false
+	player.setup_harvesting(harvest_coordinator)
 	camera_rig.reset_panel_obstruction()
 	game_environment.sky_color_changed.connect(world.update_water_tint)
 	game_environment.start_clock()
-	hud.setup_with_camera(inventory_model, inventory_stat_coordinator, crafting_coordinator, crafting_recipe_catalog, camera_rig, player_stats, item_proficiency)
+	hud.setup_with_camera(inventory_model, inventory_stat_coordinator, crafting_coordinator, crafting_recipe_catalog, camera_rig, player_stats, item_proficiency, chest_coordinator)
+	var anvil_station := block_catalog.get_definition(BlockId.Type.ANVIL).crafting_station
+	hud.setup_anvil(anvil_coordinator, anvil_station, anvil_crafting_coordinator, anvil_recipe_catalog, camera_rig)
 	hud.setup_socketing(inventory_model, rune_socketing_coordinator, item_proficiency)
+	hud.setup_progression(player_stats, player_perk_coordinator)
+	hud.setup_consumption(item_consumption_coordinator)
 	world.set_player_ref(player)
 	camera_rig.snap_to_follow_target()
 	camera_rig.current_yaw_deg = camera_rig.target_yaw_deg
@@ -328,7 +384,7 @@ func _physics_process(delta):
 		if OS.is_debug_build() and Input.is_action_just_pressed("toggle_animation_tuner"):
 			_toggle_animation_tuning_panel()
 		input_buffer.poll()
-		if dev_console.is_open() or structure_designer_workflow.is_dialog_open() or (animation_tuning_panel != null and animation_tuning_panel.is_open()):
+		if dev_console.is_open() or structure_designer_workflow.is_dialog_open() or hud.is_chest_open() or (animation_tuning_panel != null and animation_tuning_panel.is_open()):
 			input_buffer.clear_gameplay()
 	if _location_state != null:
 		_location_state.update_world_position(player.global_position)
@@ -342,6 +398,9 @@ func _on_level_interaction_requested():
 		_exit_level()
 	else:
 		_enter_level()
+
+func _on_crafting_station_open_requested(position: Vector3i, definition: CraftingStationBlockDefinition) -> void:
+	hud.open_crafting_station(position, definition)
 
 func _enter_level():
 	_level_transitioning = true
@@ -502,6 +561,9 @@ func _handle_cancel():
 		return
 	if animation_tuning_panel != null and animation_tuning_panel.is_open():
 		animation_tuning_panel.hide_panel()
+		return
+	if hud.is_chest_open():
+		hud.close_chest()
 		return
 	if hud.is_side_panel_open():
 		hud.close_side_panel()
@@ -668,6 +730,9 @@ func _sync_structure_designer_ui_blocking() -> void:
 	if _structure_designer_runtime == null:
 		return
 	_structure_designer_runtime.set_external_ui_blocked(dev_console.is_open() or structure_designer_workflow.is_dialog_open())
+
+func _on_container_open_requested(position: Vector3i, definition: ContainerBlockDefinition):
+	hud.open_container(position, definition)
 
 func _show_pause_menu():
 	_pause_menu = pause_menu_scene.instantiate() as PauseMenu

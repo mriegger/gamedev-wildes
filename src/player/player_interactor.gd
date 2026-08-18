@@ -2,6 +2,8 @@ extends Node3D
 class_name PlayerInteractor
 
 signal block_placed
+signal crafting_station_open_requested(position: Vector3i, definition: CraftingStationBlockDefinition)
+signal container_open_requested(position: Vector3i, definition: ContainerBlockDefinition)
 signal melee_attack_started(action: MeleeAttackActionDefinition, direction: int)
 signal melee_terrain_hit(position: Vector3i)
 signal soil_tilled
@@ -17,7 +19,9 @@ var motor: PlayerMotor = null
 var inventory_model: InventoryModel = null
 var combat: MeleeCombatCoordinator = null
 var entity_runtime: EntityRuntime = null
-var pumpkin_harvest: PumpkinHarvestCoordinator = null
+var harvest: HarvestCoordinator = null
+var item_consumption: ItemConsumptionCoordinator = null
+var chest_coordinator: ChestCoordinator = null
 var _input_buffer: InputBuffer = null
 var _is_setup: bool = false
 
@@ -28,6 +32,9 @@ var placement_has: bool = false
 var last_ray_normal: Vector3i = Vector3i.UP
 var can_primary_target: bool = false
 var can_place_target: bool = false
+var target_crafting_station: CraftingStationBlockDefinition = null
+var target_container: ContainerBlockDefinition = null
+var can_interact_target: bool = false
 var pointer_over_ui: bool = false
 
 var is_mining: bool = false
@@ -78,11 +85,17 @@ func bind_entity_runtime(p_entity_runtime: EntityRuntime) -> void:
 	_clear_active_state()
 	entity_runtime = p_entity_runtime
 
-func setup_harvesting(pumpkin_harvest_coordinator: PumpkinHarvestCoordinator) -> void:
+func setup_harvesting(harvest_coordinator: HarvestCoordinator) -> void:
 	assert(_is_setup)
-	assert(pumpkin_harvest_coordinator != null)
-	assert(pumpkin_harvest == null)
-	pumpkin_harvest = pumpkin_harvest_coordinator
+	assert(harvest_coordinator != null)
+	assert(harvest == null)
+	harvest = harvest_coordinator
+
+func setup_consumption(consumption_coordinator: ItemConsumptionCoordinator) -> void:
+	assert(_is_setup)
+	assert(consumption_coordinator != null)
+	assert(item_consumption == null)
+	item_consumption = consumption_coordinator
 
 func bind_space(p_space: VoxelSpace, p_editable_voxel_world: VoxelWorld = null):
 	assert(_is_setup)
@@ -91,6 +104,10 @@ func bind_space(p_space: VoxelSpace, p_editable_voxel_world: VoxelWorld = null):
 	_clear_active_state()
 	voxel_space = p_space
 	editable_voxel_world = p_editable_voxel_world
+
+func set_chest_coordinator(p_chest_coordinator: ChestCoordinator):
+	assert(p_chest_coordinator != null)
+	chest_coordinator = p_chest_coordinator
 
 func unbind_space():
 	_clear_active_state()
@@ -105,9 +122,12 @@ func _clear_active_state():
 	placement_has = false
 	can_primary_target = false
 	can_place_target = false
+	target_crafting_station = null
+	target_container = null
+	can_interact_target = false
 	_primary_harvest_latched = false
-	if pumpkin_harvest != null:
-		pumpkin_harvest.clear_target()
+	if harvest != null:
+		harvest.clear_target()
 	_reset_mining()
 	_reset_melee_chain()
 	secondary_use_timer = 0.0
@@ -120,9 +140,12 @@ func cancel_actions():
 	placement_has = false
 	can_primary_target = false
 	can_place_target = false
+	target_crafting_station = null
+	target_container = null
+	can_interact_target = false
 	_primary_harvest_latched = false
-	if pumpkin_harvest != null:
-		pumpkin_harvest.clear_target()
+	if harvest != null:
+		harvest.clear_target()
 
 func _physics_process(delta):
 	if voxel_space == null or motor == null or camera == null or inventory_model == null or _input_buffer == null:
@@ -135,8 +158,11 @@ func _physics_process(delta):
 		placement_has = false
 		can_primary_target = false
 		can_place_target = false
-		if pumpkin_harvest != null:
-			pumpkin_harvest.clear_target()
+		target_crafting_station = null
+		target_container = null
+		can_interact_target = false
+		if harvest != null:
+			harvest.clear_target()
 		if is_mining:
 			_reset_mining()
 		_reset_melee_chain()
@@ -151,6 +177,9 @@ func _handle_raycast():
 	placement_has = false
 	can_primary_target = false
 	can_place_target = false
+	target_crafting_station = null
+	target_container = null
+	can_interact_target = false
 
 	var mouse_pos = get_viewport().get_mouse_position()
 	var ray_origin = camera.project_ray_origin(mouse_pos)
@@ -158,13 +187,13 @@ func _handle_raycast():
 
 	var max_dist = ray_origin.distance_to(motor.global_position) + reach + 1.0
 	var hit := VoxelRaycast.cast(voxel_space, ray_origin, ray_dir, max_dist)
-	if pumpkin_harvest != null and is_editing_enabled():
-		pumpkin_harvest.update_target(ray_origin, ray_dir, max_dist, motor.global_position, reach)
-		if pumpkin_harvest.has_target() and (hit == null or pumpkin_harvest.get_target_ray_distance() < hit.ray_distance):
+	if harvest != null and is_editing_enabled():
+		harvest.update_target(ray_origin, ray_dir, max_dist, motor.global_position, reach)
+		if harvest.has_target() and (hit == null or harvest.get_target_ray_distance() < hit.ray_distance):
 			return
-		pumpkin_harvest.clear_target()
-	elif pumpkin_harvest != null:
-		pumpkin_harvest.clear_target()
+		harvest.clear_target()
+	elif harvest != null:
+		harvest.clear_target()
 	if hit == null:
 		return
 
@@ -180,6 +209,9 @@ func _handle_raycast():
 	var motor_pos = motor.global_position
 	var reach_squared = reach * reach
 	var selected_primary := get_selected_primary_action()
+	target_crafting_station = _get_target_crafting_station(best_hit)
+	target_container = _get_target_container(best_hit)
+	can_interact_target = (target_crafting_station != null or target_container != null) and motor_pos.distance_squared_to(Vector3(best_hit) + Vector3(0.5, 0.5, 0.5)) <= reach_squared
 	if selected_primary is MiningActionDefinition:
 		can_primary_target = _can_mine_position(best_hit, selected_primary as MiningActionDefinition)
 	elif selected_primary is TillingActionDefinition:
@@ -225,8 +257,8 @@ func _handle_item_actions(delta):
 			primary_use_pressed = false
 		else:
 			_primary_harvest_latched = false
-	if primary_use_just and pumpkin_harvest != null and pumpkin_harvest.has_target():
-		pumpkin_harvest.try_harvest_target()
+	if primary_use_just and harvest != null and harvest.has_target():
+		harvest.try_harvest_target()
 		_primary_harvest_latched = primary_use_pressed
 		primary_use_just = false
 		primary_use_pressed = false
@@ -236,6 +268,10 @@ func _handle_item_actions(delta):
 	var selected_mining := selected_primary as MiningActionDefinition
 	var selected_melee := selected_primary as MeleeAttackActionDefinition
 	var selected_tilling := selected_primary as TillingActionDefinition
+	if primary_use_just and not is_attempting_container_mining() and _try_open_target_container():
+		primary_use_just = false
+	elif primary_use_just and not is_attempting_crafting_station_mining() and _try_open_target_crafting_station():
+		primary_use_just = false
 	if primary_use_pressed and target_has and can_primary_target and selected_mining != null:
 		if not is_mining:
 			mine_target = target_block
@@ -281,9 +317,12 @@ func _handle_item_actions(delta):
 	if primary_use_just and target_has and selected_tilling != null:
 		_commit_till(target_block, last_ray_normal, selected_tilling)
 
-	var selected_placement := get_selected_placement_action()
-	if (_input_buffer.secondary_use_just or _input_buffer.secondary_use_pressed) and secondary_use_timer <= 0.0:
+	if _input_buffer.secondary_use_just and item_consumption != null and item_consumption.has_consumable_at(inventory_model.selected_slot):
 		_input_buffer.secondary_use_just = false
+		item_consumption.try_consume_selected()
+	elif (_input_buffer.secondary_use_just or _input_buffer.secondary_use_pressed) and secondary_use_timer <= 0.0:
+		_input_buffer.secondary_use_just = false
+		var selected_placement := get_selected_placement_action()
 		if _can_place(selected_placement):
 			_commit_place(placement_block, selected_placement)
 			secondary_use_timer = place_cooldown
@@ -358,6 +397,8 @@ func _can_mine_position(pos: Vector3i, action: MiningActionDefinition) -> bool:
 	var block_id := voxel_space.get_block_id_at(pos)
 	if block_id == BlockId.Type.AIR:
 		return false
+	if voxel_space.block_catalog.get_definition(block_id).container != null:
+		return chest_coordinator != null and chest_coordinator.can_pick_up_chest(pos, action)
 	return action.can_mine(voxel_space.block_catalog.get_definition(block_id))
 
 func _can_till_position(pos: Vector3i, face_normal: Vector3i, action: TillingActionDefinition) -> bool:
@@ -389,7 +430,12 @@ func _commit_till(pos: Vector3i, face_normal: Vector3i, action: TillingActionDef
 func get_mine_duration() -> float:
 	assert(is_mining and mine_action != null)
 	var block_id := voxel_space.get_block_id_at(mine_target)
-	return mine_action.get_mine_duration(voxel_space.block_catalog.get_definition(block_id))
+	var block := voxel_space.block_catalog.get_definition(block_id)
+	if block.container != null:
+		var pickaxe_stat := mine_action.get_tool_stat(&"pickaxe")
+		assert(pickaxe_stat != null)
+		return block.mine_duration / pickaxe_stat.speed_multiplier
+	return mine_action.get_mine_duration(block)
 
 func has_mining_impact_target() -> bool:
 	return is_mining and target_has and can_primary_target and mine_target == target_block
@@ -435,6 +481,10 @@ func _commit_mine(pos: Vector3i, action: MiningActionDefinition):
 
 	var preview_id = voxel_space.get_block_id_at(pos)
 	if preview_id == BlockId.Type.AIR:
+		return
+	if voxel_space.block_catalog.get_definition(preview_id).container != null:
+		if chest_coordinator != null and chest_coordinator.pick_up_chest(pos, action):
+			_handle_raycast()
 		return
 
 	var item_ids_to_collect: Array[StringName] = []
@@ -486,14 +536,14 @@ func get_selected_block_id():
 	return int(action.block.id)
 
 func has_harvest_target() -> bool:
-	return pumpkin_harvest != null and pumpkin_harvest.has_target()
+	return harvest != null and harvest.has_target()
 
 func can_harvest_target() -> bool:
-	return has_harvest_target() and pumpkin_harvest.can_harvest_target()
+	return has_harvest_target() and harvest.can_harvest_target()
 
 func get_harvest_target_bounds() -> AABB:
 	assert(has_harvest_target())
-	return pumpkin_harvest.get_target_bounds()
+	return harvest.get_target_bounds()
 
 func get_selected_primary_action() -> ItemActionDefinition:
 	if inventory_model == null:
@@ -511,3 +561,39 @@ func get_selected_placement_action() -> BlockPlacementActionDefinition:
 		return null
 	var action := inventory_model.item_catalog.get_definition(item_id).secondary_action
 	return action as BlockPlacementActionDefinition
+
+func has_crafting_station_target() -> bool:
+	return target_has and target_crafting_station != null
+
+func is_attempting_crafting_station_mining() -> bool:
+	var action := get_selected_primary_action() as MiningActionDefinition
+	return has_crafting_station_target() and action != null and action.get_tool_stat(&"pickaxe") != null
+
+func _get_target_crafting_station(position: Vector3i) -> CraftingStationBlockDefinition:
+	if editable_voxel_world == null:
+		return null
+	return voxel_space.block_catalog.get_definition(voxel_space.get_block_id_at(position)).crafting_station
+
+func _try_open_target_crafting_station() -> bool:
+	if not has_crafting_station_target() or not can_interact_target:
+		return false
+	crafting_station_open_requested.emit(target_block, target_crafting_station)
+	return true
+
+func has_container_target() -> bool:
+	return target_has and target_container != null
+
+func is_attempting_container_mining() -> bool:
+	var action := get_selected_primary_action() as MiningActionDefinition
+	return has_container_target() and action != null and action.get_tool_stat(&"pickaxe") != null
+
+func _get_target_container(position: Vector3i) -> ContainerBlockDefinition:
+	if editable_voxel_world == null:
+		return null
+	return voxel_space.block_catalog.get_definition(voxel_space.get_block_id_at(position)).container
+
+func _try_open_target_container() -> bool:
+	if not target_has or target_container == null or not can_interact_target:
+		return false
+	container_open_requested.emit(target_block, target_container)
+	return true

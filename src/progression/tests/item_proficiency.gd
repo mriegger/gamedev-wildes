@@ -117,12 +117,33 @@ func _init() -> void:
 		"epic_sword": {"level": 1, "experience": 16.0},
 	}, "partially valid snapshot")
 
-	var version_four_save := {"version": 4, "player_stats": {"level": 3, "experience": 5}}
+	var version_four_save := {"version": 4, "player_stats": {"level": 3, "experience": 5, "current_hp": 37.5}}
 	_expect(SaveManager._migrate_save_data(version_four_save), "version-four save did not migrate")
 	_expect(version_four_save["version"] == SaveManager.CURRENT_SAVE_VERSION, "migration did not update the save version")
 	_expect(version_four_save["item_proficiency"] == {}, "migration did not initialize proficiency")
 	_expect(version_four_save["pumpkin_patch"] == {"present": false}, "migration did not preserve older worlds without pumpkin patches")
+	_expect(version_four_save["apple_trees"] == AppleTreeState.new().snapshot(), "migration did not preserve older worlds without picked apples")
 	_expect((version_four_save["player_stats"] as Dictionary)["level"] == 3, "migration changed existing progression")
+	_expect(is_equal_approx(float((version_four_save["player_stats"] as Dictionary)["current_hp"]), 37.5), "migration changed current HP")
+	_expect(version_four_save["player_perks"] == {"allocations": {}}, "migration did not initialize perk allocations")
+	var version_seven_save := {"version": 7, "player_stats": {"level": 4, "experience": 194, "current_hp": 42.5}, "pumpkin_patch": {"present": false}}
+	_expect(SaveManager._migrate_save_data(version_seven_save), "version-seven save did not migrate")
+	_expect((version_seven_save["player_stats"] as Dictionary)["level"] == 4, "version-seven migration changed the player level")
+	_expect((version_seven_save["player_stats"] as Dictionary)["experience"] == 174, "maximum old experience did not map to maximum new experience")
+	_expect(is_equal_approx(float((version_seven_save["player_stats"] as Dictionary)["current_hp"]), 42.5), "version-seven migration changed current HP")
+	_expect(version_seven_save["player_perks"] == {"allocations": {}}, "version-seven migration did not initialize perk allocations")
+	var partial_experience_save := {"version": 7, "player_stats": {"level": 3, "experience": 80}, "pumpkin_patch": {"present": false}}
+	_expect(SaveManager._migrate_save_data(partial_experience_save), "partial current-level experience did not migrate")
+	_expect((partial_experience_save["player_stats"] as Dictionary)["experience"] == 76, "migration did not round proportional experience down")
+	var null_stats_save := {"version": 7, "player_stats": null, "pumpkin_patch": {"present": false}}
+	_expect(SaveManager._migrate_save_data(null_stats_save), "null player stats did not migrate")
+	_expect(null_stats_save["player_stats"] == null and null_stats_save["player_perks"] == {"allocations": {}}, "null player stats migration changed the save shape")
+	var missing_stats_save := {"version": 7, "pumpkin_patch": {"present": false}}
+	_expect(SaveManager._migrate_save_data(missing_stats_save), "missing player stats did not migrate")
+	_expect(not missing_stats_save.has("player_stats") and missing_stats_save["player_perks"] == {"allocations": {}}, "missing player stats migration changed the save shape")
+	_expect_failed_migration_unchanged({"version": 7, "player_stats": {"level": 3, "experience": 156}, "pumpkin_patch": {"present": false}}, "experience at the old threshold")
+	_expect_failed_migration_unchanged({"version": 7, "player_stats": {"level": 3.5, "experience": 1}, "pumpkin_patch": {"present": false}}, "fractional player level")
+	_expect_failed_migration_unchanged({"version": 7, "player_stats": {"level": 3, "experience": 1}, "player_perks": {"allocations": {}}, "pumpkin_patch": {"present": false}}, "preexisting perk data")
 	var version_three_save := {"version": 3}
 	_expect(not SaveManager._migrate_save_data(version_three_save), "unsupported save version migrated")
 	_expect(version_three_save == {"version": 3}, "failed migration changed an unsupported save")
@@ -153,6 +174,11 @@ func _expect_rejected_unchanged(proficiency: ItemProficiency, saved_progress: Di
 	var before := proficiency.snapshot()
 	_expect(not proficiency.restore(saved_progress), "%s passed restore validation" % context)
 	_expect(proficiency.snapshot() == before, "%s changed state after failed restore" % context)
+
+func _expect_failed_migration_unchanged(save_data: Dictionary, context: String) -> void:
+	var before := save_data.duplicate(true)
+	_expect(not SaveManager._migrate_save_data(save_data), "%s passed save migration" % context)
+	_expect(save_data == before, "%s changed save data after failed migration" % context)
 
 func _expect(condition: bool, message: String) -> void:
 	if not condition:

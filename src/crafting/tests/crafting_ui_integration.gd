@@ -57,7 +57,7 @@ func _process(_delta: float) -> bool:
 	_frame += 1
 	if _phase == 0 and _frame == 2:
 		_camera_rig.setup(_camera_follow, _camera_input_buffer)
-		_hud.setup_with_camera(_inventory, _inventory_stats, _crafting, _recipe_catalog, _camera_rig, _stats, _item_proficiency)
+		_hud.setup_with_camera(_inventory, _inventory_stats, _crafting, _recipe_catalog, _camera_rig, _stats, _item_proficiency, ChestCoordinator.new())
 		_hud.toggle_backpack()
 		_phase = 1
 	elif _phase == 1 and _frame == 35:
@@ -80,19 +80,21 @@ func _process(_delta: float) -> bool:
 		_expect(_hud.crafting_panel.get_node_or_null("CraftingImpactTimer") == null, "crafting timer still exists")
 		var button := _hud.crafting_panel.get_craft_button()
 		_expect(button.get_node_or_null("Fill") == null, "crafting progress fill still exists")
+		_hud.crafting_panel.select_recipe(&"stone_pickaxe")
+		_expect(button.is_craft_enabled(), "available stone pickaxe recipe was disabled")
 		button.pressed.emit()
 		_expect(_inventory.get_inventory_item_count(&"stone_pickaxe") == 1, "button press did not craft stone pickaxe immediately")
 		_expect(_inventory.get_inventory_item_count(&"stone_block") == 0, "immediate craft retained stone")
 		_expect(_inventory.get_inventory_item_count(&"log_block") == 5, "immediate craft consumed wrong wood count")
 		_expect(sound_player.playing, "successful craft did not play its sound")
 		_expect(not button.is_craft_enabled(), "depleted recipe button remained enabled")
-		_hud.crafting_panel.select_recipe(&"copper_pickaxe")
-		_expect(_hud.crafting_panel.get_craft_button().is_craft_enabled(), "available copper pickaxe recipe was disabled")
+		_hud.crafting_panel.select_recipe(&"anvil")
+		_expect(_hud.crafting_panel.get_craft_button().is_craft_enabled(), "available anvil recipe was disabled")
 		_hud.crafting_panel.get_craft_button().pressed.emit()
-		_expect(_inventory.get_inventory_item_count(&"copper_pickaxe") == 1, "copper pickaxe did not craft immediately")
-		_expect(_inventory.get_inventory_item_count(&"copper") == 15, "copper pickaxe consumed wrong copper count")
-		_expect(_inventory.get_inventory_item_count(&"log_block") == 0, "copper pickaxe retained wood")
-		_hud.crafting_panel.select_recipe(&"copper_sword")
+		_expect(_inventory.get_inventory_item_count(&"anvil") == 1, "anvil did not craft immediately")
+		_expect(_inventory.get_inventory_item_count(&"copper") == 15, "anvil consumed wrong copper count")
+		_expect(not _recipe_catalog.has_definition(&"copper_pickaxe"), "copper pickaxe remained in general crafting")
+		_hud.crafting_panel.select_recipe(&"basic_rune")
 		_expect(not _hud.crafting_panel.get_craft_button().is_craft_enabled(), "unavailable recipe button remained enabled")
 		sound_player.stop()
 		_hud.crafting_panel.get_craft_button().pressed.emit()
@@ -101,9 +103,9 @@ func _process(_delta: float) -> bool:
 		_phase = 2
 	elif _phase == 2 and _frame == 70:
 		_expect(not _hud.side_panel.is_open() and not _hud.crafting_panel.is_open(), "HUD panels did not close together")
-		_expect(_inventory.get_inventory_item_count(&"copper_sword") == 0, "failed sword craft added output")
+		_expect(_inventory.get_inventory_item_count(&"basic_rune") == 0, "failed rune craft added output")
 		_expect(_inventory.get_inventory_item_count(&"copper") == 15, "closing backpack consumed copper")
-		_expect(_inventory.get_inventory_item_count(&"log_block") == 0, "closing backpack changed wood")
+		_expect(_inventory.get_inventory_item_count(&"log_block") == 5, "closing backpack changed wood")
 		_hud.free()
 		_camera_rig.free()
 		_camera_follow.free()
@@ -117,12 +119,13 @@ func _check_open_state() -> void:
 	_expect(_hud.side_panel.is_open(), "backpack did not open")
 	_expect(_hud.crafting_panel.is_open(), "crafting panel did not open with backpack")
 	_expect(_hud.crafting_panel.get_progress() > 0.95, "crafting panel opening animation did not complete")
-	_expect(_hud.crafting_panel.get_selected_recipe_id() == &"stone_pickaxe", "stone pickaxe was not selected first")
-	_expect(_hud.crafting_panel.get_craft_button().is_craft_enabled(), "selected craft button was disabled")
+	_expect(_hud.crafting_panel.get_selected_recipe_id() == &"torch_bundle", "torches were not selected first")
+	_expect(not _hud.crafting_panel.get_craft_button().is_craft_enabled(), "unavailable torch recipe button was enabled")
 	_expect(_camera_rig.camera.h_offset < 0.0, "camera framing did not account for the wider left panel")
 	var recipe_scroll := _hud.crafting_panel.get_node("Margin/Content/Body/Recipes/RecipeScroll") as ScrollContainer
 	var recipe_list := _hud.crafting_panel.get_node("Margin/Content/Body/Recipes/RecipeScroll/RecipeList") as VBoxContainer
-	_expect(recipe_scroll != null and recipe_list.get_child_count() == 10, "scrollable recipe list did not contain ten recipes")
+	_expect(recipe_scroll != null and recipe_list.get_child_count() == 5, "scrollable recipe list did not contain five general recipes")
+	_expect(recipe_list.get_child(0).name == "TorchBundle" and recipe_list.get_child(1).name == "Chest" and recipe_list.get_child(2).name == "Anvil", "torches, chest, and anvil are not the first recipes")
 	var recipe_button := recipe_list.get_child(0) as Button
 	var recipe_icon_frame := recipe_button.get_node("Content/IconFrame") as CenterContainer
 	var recipe_icon := recipe_icon_frame.get_node("Icon") as TextureRect
@@ -183,8 +186,8 @@ func _check_open_state() -> void:
 	var ingredient_icon := ingredient_row.get_child(0) as TextureRect
 	_expect(ingredient_row.custom_minimum_size.y == 38.0 and ingredient_icon.custom_minimum_size == Vector2(32, 32), "ingredient icon spacing changed")
 	_expect(ingredient_icon.texture_filter == CanvasItem.TEXTURE_FILTER_NEAREST, "ingredient icon does not use nearest filtering")
-	var stone_count := (ingredient_list.get_child(0) as HBoxContainer).get_child(1) as Label
-	_expect(stone_count.text.contains("10 / 10"), "stone pickaxe ingredient display did not include hotbar materials")
+	var wood_count := (ingredient_list.get_child(0) as HBoxContainer).get_child(1) as Label
+	_expect(wood_count.text.contains("10 / 2"), "torch ingredient display did not include hotbar materials")
 	var crafting_rect := _hud.crafting_panel.get_global_rect()
 	var backpack_rect := _hud.side_panel.get_global_rect()
 	for slot in _hud.hotbar.slot_nodes:

@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3 uid="uid://c9w0rld0x2m4p"]
+[gd_scene load_steps=11 format=3 uid="uid://c9w0rld0x2m4p"]
 
 [ext_resource type="Script" path="res://world/world.gd" id="1_world"]
 [ext_resource type="Resource" path="res://world/settings/world_config.tres" id="2_config"]
@@ -8,6 +8,8 @@
 [ext_resource type="Script" path="res://world/chunks/chunk_renderer.gd" id="7_chunk_renderer"]
 [ext_resource type="Script" path="res://world/chunks/chunk_build_scheduler.gd" id="8_chunk_scheduler"]
 [ext_resource type="Script" path="res://blocks/presentation/torch_renderer.gd" id="9_torch_renderer"]
+[ext_resource type="Script" path="res://crafting/stations/presentation/anvil_renderer.gd" id="10_anvil_renderer"]
+[ext_resource type="Script" path="res://chests/presentation/chest_renderer.gd" id="11_chest_renderer"]
 
 [node name="World" type="Node3D"]
 script = ExtResource("1_world")
@@ -24,3 +26,9 @@ script = ExtResource("8_chunk_scheduler")
 
 [node name="Torches" type="Node3D" parent="."]
 script = ExtResource("9_torch_renderer")
+
+[node name="Anvils" type="Node3D" parent="."]
+script = ExtResource("10_anvil_renderer")
+
+[node name="Chests" type="Node3D" parent="."]
+script = ExtResource("11_chest_renderer")

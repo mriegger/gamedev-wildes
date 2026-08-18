@@ -47,8 +47,9 @@ func _run() -> void:
 	prompt_coordinator.setup(hud, Callable(self, "_is_interaction_blocked"))
 	prompt_coordinator.set_level_prompt("F  Enter Dungeon")
 	var inventory := InventoryModel.new(item_catalog)
-	var harvest := PumpkinHarvestCoordinator.new()
-	_expect(harvest.setup(pumpkin_patch, inventory, prompt_coordinator), "pumpkin harvest setup rejected valid content")
+	var harvest := HarvestCoordinator.new()
+	var harvest_sources: Array[HarvestSource] = [pumpkin_patch]
+	_expect(harvest.setup(harvest_sources, inventory, prompt_coordinator), "pumpkin harvest setup rejected valid content")
 	harvest.harvest_completed.connect(_on_harvest_completed)
 	var crop_index := _find_state_index(generated_snapshot, &"crop")
 	_expect(crop_index >= 0, "generated patch omitted a mature crop")
@@ -56,13 +57,13 @@ func _run() -> void:
 		_target_tile(harvest, pumpkin_patch, crop_index)
 		_expect(harvest.has_target(), "mature pumpkin ray did not produce a harvest target")
 		_expect(harvest.can_harvest_target(), "mature pumpkin was not harvestable with inventory capacity")
-		_expect(hud.interaction_prompt.visible and hud.interaction_prompt.text == PumpkinHarvestCoordinator.HARVEST_PROMPT, "harvest prompt did not override the level prompt")
+		_expect(hud.interaction_prompt.visible and hud.interaction_prompt.text == pumpkin_patch.get_harvest_prompt(), "harvest prompt did not override the level prompt")
 		pumpkin_patch.state_changed.connect(_on_state_changed)
 		var harvest_input := InputBuffer.new()
 		var harvest_interactor := PlayerInteractor.new()
 		harvest_interactor.inventory_model = inventory
 		harvest_interactor._input_buffer = harvest_input
-		harvest_interactor.pumpkin_harvest = harvest
+		harvest_interactor.harvest = harvest
 		harvest_input.primary_use_just = true
 		harvest_input.primary_use_pressed = true
 		harvest_interactor._handle_item_actions(0.0)
@@ -94,8 +95,9 @@ func _run() -> void:
 	var full_inventory := InventoryModel.new(item_catalog)
 	for index in range(InventoryModel.FILLABLE_SIZE):
 		full_inventory.slots[index] = InventoryStack.new(&"dirt_block", 99)
-	var full_harvest := PumpkinHarvestCoordinator.new()
-	_expect(full_harvest.setup(full_patch, full_inventory, prompt_coordinator), "full-inventory harvest setup failed")
+	var full_harvest := HarvestCoordinator.new()
+	var full_harvest_sources: Array[HarvestSource] = [full_patch]
+	_expect(full_harvest.setup(full_harvest_sources, full_inventory, prompt_coordinator), "full-inventory harvest setup failed")
 	full_harvest.harvest_completed.connect(_on_harvest_completed)
 	if crop_index >= 0:
 		var full_snapshot_before := full_patch.snapshot()
@@ -103,7 +105,7 @@ func _run() -> void:
 		_target_tile(full_harvest, full_patch, crop_index)
 		_expect(full_harvest.has_target(), "full inventory hid the mature pumpkin target")
 		_expect(not full_harvest.can_harvest_target(), "full inventory reported harvest capacity")
-		_expect(hud.interaction_prompt.text == PumpkinHarvestCoordinator.INVENTORY_FULL_PROMPT, "full inventory did not show its harvest prompt")
+		_expect(hud.interaction_prompt.text == HarvestCoordinator.INVENTORY_FULL_PROMPT, "full inventory did not show its harvest prompt")
 		_expect(not full_harvest.try_harvest_target(), "pumpkin harvest succeeded with a full inventory")
 		_expect(_harvest_completed_count == 1, "failed harvest announced a completed transaction")
 		_expect(full_patch.snapshot() == full_snapshot_before, "failed harvest changed persistent crop state")
@@ -128,8 +130,9 @@ func _run() -> void:
 
 	_state_changed_count = 0
 	var processor := DevConsoleCommandProcessor.new()
+	var actor_stats := ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
 	var structure_command := Callable(self, "_accept_structure_command")
-	processor.setup(InventoryModel.new(load("res://items/item_catalog.tres") as ItemCatalog), pumpkin_patch, structure_command, structure_command, structure_command, structure_command)
+	processor.setup(InventoryModel.new(load("res://items/item_catalog.tres") as ItemCatalog), actor_stats, pumpkin_patch, structure_command, structure_command, structure_command, structure_command)
 	_expect(processor.execute("spawn pumpkin_patch") == DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN, "pumpkin patch console command failed")
 	_expect(_state_changed_count == 1, "persistent pumpkin patch change was not announced")
 	_expect(_count_state(pumpkin_patch.snapshot(), &"crop") >= 3, "spawned patch generated fewer than three harvestable pumpkins")
@@ -193,7 +196,7 @@ func _find_state_index(snapshot: Dictionary, state_id: StringName) -> int:
 func _count_state(snapshot: Dictionary, state_id: StringName) -> int:
 	return (snapshot.get("growth_state_ids", []) as Array).count(String(state_id))
 
-func _target_tile(harvest: PumpkinHarvestCoordinator, pumpkin_patch: PumpkinPatchCoordinator, tile_index: int) -> void:
+func _target_tile(harvest: HarvestCoordinator, pumpkin_patch: PumpkinPatchCoordinator, tile_index: int) -> void:
 	var bounds := pumpkin_patch.get_tile_world_bounds(tile_index)
 	var target_center := bounds.get_center()
 	harvest.update_target(target_center + Vector3.UP * 5.0, Vector3.DOWN, 10.0, target_center, 6.0)

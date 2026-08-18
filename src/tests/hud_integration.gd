@@ -70,7 +70,7 @@ func _process(_delta: float) -> bool:
 			_fail("hud instantiate null")
 			return false
 		root.add_child(_hud)
-		_hud.setup_with_camera(_inv, _inventory_stat_coordinator, _crafting_coordinator, _crafting_recipe_catalog, null, _stats, _item_proficiency)
+		_hud.setup_with_camera(_inv, _inventory_stat_coordinator, _crafting_coordinator, _crafting_recipe_catalog, null, _stats, _item_proficiency, ChestCoordinator.new())
 		print("[hud_integration] hud added orphan=%d" % int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT)))
 		_phase = 1
 	elif _phase == 1 and _frame == 4:
