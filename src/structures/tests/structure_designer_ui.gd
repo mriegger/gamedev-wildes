@@ -22,7 +22,7 @@ func _run() -> void:
 	for definition in item_catalog.definitions:
 		if definition.secondary_action is BlockPlacementActionDefinition:
 			expected_placeables.append(definition.id)
-	_expect(expected_placeables.size() == 15, "item catalog did not expose the expected 15 placeables")
+	_expect(expected_placeables.size() == 20, "item catalog did not expose the expected 20 placeables")
 	var toolbelt := CreativeToolbelt.new()
 	_expect(toolbelt.setup(item_catalog), "creative toolbelt setup failed")
 	_expect(toolbelt.get_placeable_item_ids() == expected_placeables, "toolbelt placeables did not follow catalog placement actions")
@@ -170,7 +170,7 @@ func _test_module_ui(item_catalog: ItemCatalog) -> void:
 	_expect(connection_summary.text.contains("eligible as an expansion module"), "two connections were not presented as expansion-eligible")
 	_expect((socket_list.get_child(0).get_child(0).get_child(0) as Label).text.contains("3×6"), "connection list omitted the opening size")
 	var north_fill := socket_list.get_child(0).get_child(1).get_child(1) as OptionButton
-	_expect(north_fill.get_item_count() == 12, "unused-fill selector did not contain Must connect plus every placeable cube")
+	_expect(north_fill.get_item_count() == 17, "unused-fill selector did not contain Must connect plus every placeable cube")
 	_expect(north_fill.get_item_index(BlockId.Type.COPPER) == -1, "unused-fill selector included Copper material")
 	_expect(north_fill.get_item_index(BlockId.Type.TORCH) == -1 and north_fill.get_item_index(BlockId.Type.WATER) == -1, "unused-fill selector included a non-cube block")
 	_expect(north_fill.get_selected_id() == BlockId.Type.STONE, "unused-fill selector did not present the socket's current block")
