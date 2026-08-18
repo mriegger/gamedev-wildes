@@ -333,6 +333,34 @@ jobs:
             30 "ENTITY_DOMAIN PASS" /tmp/entity_domain.log -- \
             godot --headless --path src --script res://tests/entity_domain.gd
 
+  bird-behavior:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run deterministic bird behavior tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "BIRD_BEHAVIOR PASS" /tmp/bird_behavior.log -- \
+            godot --headless --path src --script res://entities/bird/tests/bird_behavior.gd
+
+  bird-runtime-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run bird flight and landing integration tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            45 "BIRD_RUNTIME_INTEGRATION PASS" /tmp/bird_runtime.log -- \
+            godot --headless --path src --script res://entities/bird/tests/bird_runtime_integration.gd
+
   entity-runtime:
     runs-on: ubuntu-latest
     timeout-minutes: 10

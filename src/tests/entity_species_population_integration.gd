@@ -34,7 +34,7 @@ func _is_position_streamed(_position: Vector3) -> bool:
 	return _streaming_enabled
 
 func _species_counts(coordinator: WorldEntityCoordinator) -> Dictionary:
-	var counts: Dictionary = {&"sheep": 0, &"zombie": 0}
+	var counts: Dictionary = {&"sheep": 0, &"zombie": 0, &"bird": 0}
 	for actor in coordinator.get_runtime().get_active_actors():
 		counts[actor.definition.id] = int(counts.get(actor.definition.id, 0)) + 1
 	return counts
@@ -53,44 +53,64 @@ func _first_species(coordinator: WorldEntityCoordinator, definition_id: StringNa
 			return actor
 	return null
 
+func _species_id_set(coordinator: WorldEntityCoordinator, definition_id: StringName) -> Dictionary:
+	var ids: Dictionary = {}
+	for actor in coordinator.get_runtime().get_active_actors():
+		if actor.definition.id == definition_id:
+			ids[actor.runtime_id] = true
+	return ids
+
 func _assert_catalog(catalog: EntityCatalog) -> void:
 	_expect(catalog != null and catalog.validate(), "entity catalog failed validation")
-	_expect(catalog.definitions.size() == 2, "entity catalog did not contain exactly two stable species")
+	_expect(catalog.definitions.size() == 3, "entity catalog did not contain exactly three stable species")
 	_expect(catalog.has_definition(&"sheep"), "stable sheep ID was missing")
 	_expect(catalog.has_definition(&"zombie"), "stable zombie ID was missing")
+	_expect(catalog.has_definition(&"bird"), "stable bird ID was missing")
 	var sheep := catalog.get_definition(&"sheep")
 	var zombie := catalog.get_definition(&"zombie")
-	_expect(sheep.id == &"sheep" and zombie.id == &"zombie", "species IDs changed")
+	var bird := catalog.get_definition(&"bird")
+	_expect(sheep.id == &"sheep" and zombie.id == &"zombie" and bird.id == &"bird", "species IDs changed")
 	_expect(sheep.ambient_spawn_phase == EntityDefinition.SpawnPhase.DAY, "sheep were not day-spawned")
 	_expect(zombie.ambient_spawn_phase == EntityDefinition.SpawnPhase.NIGHT, "zombies were not night-spawned")
+	_expect(bird.ambient_spawn_phase == EntityDefinition.SpawnPhase.DAY and bird.ambient_despawn_outside_spawn_phase, "birds were not phase-bound to daytime")
 	_expect(sheep.ambient_max_active == 6 and zombie.ambient_max_active == 6, "per-species caps were not six")
+	_expect(bird.ambient_max_active == 4, "bird cap was not four")
 
 func _spawn_day_population(coordinator: WorldEntityCoordinator, player_position: Vector3) -> Dictionary:
-	for _spawn in range(6):
+	for _spawn in range(10):
 		coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, player_position, DAY_TIME)
 	var counts := _species_counts(coordinator)
-	_expect(coordinator.get_runtime().get_active_count() == 6, "day population did not reach six")
-	_expect(counts[&"sheep"] == 6 and counts[&"zombie"] == 0, "day spawned a non-sheep species")
-	var sheep_ids := _runtime_id_set(coordinator)
+	_expect(coordinator.get_runtime().get_active_count() == 10, "day population did not reach ten")
+	_expect(counts[&"sheep"] == 6 and counts[&"bird"] == 4 and counts[&"zombie"] == 0, "day population did not contain six sheep and four birds")
+	var sheep_ids := _species_id_set(coordinator, &"sheep")
+	var day_ids := _runtime_id_set(coordinator)
 	coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, player_position, DAY_TIME)
-	_expect(coordinator.get_runtime().get_active_count() == 6, "day population exceeded the sheep cap")
-	_expect(_runtime_id_set(coordinator) == sheep_ids, "capped day tick replaced an existing sheep")
+	_expect(coordinator.get_runtime().get_active_count() == 10, "day population exceeded its species caps")
+	_expect(_runtime_id_set(coordinator) == day_ids, "capped day tick replaced an existing entity")
 	return sheep_ids
 
 func _spawn_night_population(coordinator: WorldEntityCoordinator, player_position: Vector3, sheep_ids: Dictionary) -> Dictionary:
 	for _spawn in range(6):
 		coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, player_position, NIGHT_TIME)
 	var counts := _species_counts(coordinator)
-	_expect(coordinator.get_runtime().get_active_count() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "mixed population did not reach twelve")
-	_expect(counts[&"sheep"] == 6 and counts[&"zombie"] == 6, "night did not produce six zombies beside six sheep")
+	_expect(coordinator.get_runtime().get_active_count() == 12, "night population did not reach twelve")
+	_expect(counts[&"sheep"] == 6 and counts[&"zombie"] == 6 and counts[&"bird"] == 0, "night population retained birds or missed a stable species")
 	for runtime_id in sheep_ids:
 		var actor := coordinator.get_runtime().get_actor(runtime_id)
 		_expect(actor != null and actor.definition.id == &"sheep", "day sheep did not persist into night")
 	var ids := _runtime_id_set(coordinator)
 	coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, player_position, NIGHT_TIME)
-	_expect(coordinator.get_runtime().get_active_count() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "thirteenth entity bypassed the total cap")
-	_expect(_runtime_id_set(coordinator) == ids, "full-cap tick replaced an existing entity")
+	_expect(coordinator.get_runtime().get_active_count() == 12, "night population exceeded its species caps")
+	_expect(_runtime_id_set(coordinator) == ids, "capped night tick replaced an existing entity")
 	return ids
+
+func _respawn_day_birds(coordinator: WorldEntityCoordinator, player_position: Vector3) -> Dictionary:
+	for _spawn in range(4):
+		coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, player_position, DAY_TIME)
+	var counts := _species_counts(coordinator)
+	_expect(coordinator.get_runtime().get_active_count() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "returning day did not reach the total population cap")
+	_expect(counts[&"sheep"] == 6 and counts[&"zombie"] == 6 and counts[&"bird"] == 4, "returning day did not restore four birds")
+	return _runtime_id_set(coordinator)
 
 func _assert_spatial_bound(coordinator: WorldEntityCoordinator, expected_entries: int) -> void:
 	var entry_count := coordinator.get_runtime()._spatial_index.get_entry_count()
@@ -155,7 +175,8 @@ func _run() -> void:
 	var player_position := Vector3(0.5, FEET_Y, 0.5)
 	coordinator.setup(catalog, world, 9167, _is_position_streamed)
 	var sheep_ids := _spawn_day_population(coordinator, player_position)
-	var all_ids := _spawn_night_population(coordinator, player_position, sheep_ids)
+	_spawn_night_population(coordinator, player_position, sheep_ids)
+	var all_ids := _respawn_day_birds(coordinator, player_position)
 	_expect(all_ids.size() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "mixed population runtime IDs were not unique")
 	_assert_spatial_bound(coordinator, WorldEntityCoordinator.MAX_TOTAL_ACTIVE)
 	var combat_nodes := _route_sheep_contact(coordinator, world)

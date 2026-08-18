@@ -1,0 +1,85 @@
+extends SceneTree
+
+const FLAT_HEIGHT: int = 6
+const FEET_Y: float = FLAT_HEIGHT + 1.0
+const WORLD_RADIUS: int = 96
+const FRAME_DELTA: float = 1.0 / 30.0
+const SIMULATION_FRAMES: int = 1800
+
+var _failures: int = 0
+
+func _init() -> void:
+	call_deferred(&"_run")
+
+func _expect(condition: bool, message: String) -> void:
+	if condition:
+		return
+	_failures += 1
+	push_error("[bird_runtime_integration] FAIL: %s" % message)
+
+func _make_world(floor_id: int = BlockId.Type.GRASS) -> VoxelWorld:
+	var block_catalog := load("res://blocks/block_catalog.tres") as BlockCatalog
+	var world := VoxelWorld.new(16, 32, 5, 8.0, block_catalog)
+	for x in range(-WORLD_RADIUS, WORLD_RADIUS + 1):
+		for z in range(-WORLD_RADIUS, WORLD_RADIUS + 1):
+			world.height_map_dict[Vector2i(x, z)] = FLAT_HEIGHT
+			world.type_map_dict[Vector2i(x, z)] = floor_id
+	return world
+
+func _run() -> void:
+	var definition := load("res://entities/definitions/bird.tres") as EntityDefinition
+	_expect(definition != null and definition.validate(definition.resource_path), "bird definition is invalid")
+	_expect(definition.spawn_placement == EntityDefinition.SpawnPlacement.AERIAL, "bird is not aerially placed")
+	_expect(not definition.combat_targetable and definition.experience_reward == 0, "bird is not purely ambient")
+	var world := _make_world()
+	var aerial_position := Vector3(0.5, FEET_Y + 10.0, 0.5)
+	_expect(EntitySpawnGeometry.can_spawn(world, definition, aerial_position), "clear aerial position was rejected")
+	_expect(not EntitySpawnGeometry.can_spawn(world, definition, Vector3(0.5, FEET_Y, 0.5)), "supported aerial position was accepted")
+	_expect(EntitySpawnGeometry.can_spawn_grounded(world, definition, Vector3(0.5, FEET_Y, 0.5)), "valid landing position was rejected")
+
+	var runtime := EntityRuntime.new()
+	root.add_child(runtime)
+	var catalog := load("res://entities/entity_catalog.tres") as EntityCatalog
+	runtime.setup(catalog, world, WorldEntityCoordinator.MAX_TOTAL_ACTIVE, WorldEntityCoordinator.MAX_RETIRING_VISUALS, EntityNavigationLimits.new(24, 256, 1))
+	var requests: Array[EntitySpawnRequest] = [EntitySpawnRequest.new(&"bird", aerial_position, 7171)]
+	var runtime_ids := runtime.try_spawn_batch(requests)
+	_expect(runtime_ids == [1], "bird did not spawn through EntityRuntime")
+	var bird := runtime.get_actor(1) as BirdActor
+	_expect(bird != null and bird.vocalizations == null, "bird scene did not use silent presentation")
+	_expect(bird != null and bird._has_landing_target, "bird did not acquire an initial landing target")
+	_expect(runtime.try_apply_damage(1, 1.0) == null, "direct damage affected an untargetable bird")
+	var visited: Dictionary = {}
+	for _frame in SIMULATION_FRAMES:
+		if bird == null:
+			break
+		visited[bird.brain.state] = true
+		runtime.tick(FRAME_DELTA, Vector3.ZERO)
+		bird.animation_driver.advance(FRAME_DELTA)
+	_expect(visited.has(BirdBrain.State.CRUISE), "bird never cruised")
+	_expect(visited.has(BirdBrain.State.DESCEND), "bird never descended")
+	_expect(visited.has(BirdBrain.State.GROUNDED_IDLE), "bird never idled on the ground")
+	_expect(visited.has(BirdBrain.State.GROUNDED_WALK), "bird never walked on the ground")
+	_expect(visited.has(BirdBrain.State.TAKEOFF), "bird never took off")
+	_expect(not VoxelBodySolver.collides_at(world, bird.global_position, definition.body_width, definition.body_height, false), "bird ended inside solid terrain")
+
+	var blocked_world := _make_world(BlockId.Type.STONE)
+	var blocked_runtime := EntityRuntime.new()
+	root.add_child(blocked_runtime)
+	blocked_runtime.setup(catalog, blocked_world, 1, 1, EntityNavigationLimits.new(24, 256, 1))
+	var blocked_ids := blocked_runtime.try_spawn_batch([EntitySpawnRequest.new(&"bird", aerial_position, 7171)])
+	var blocked_bird := blocked_runtime.get_actor(blocked_ids[0]) as BirdActor if not blocked_ids.is_empty() else null
+	_expect(blocked_bird != null and not blocked_bird._has_landing_target, "bird selected a disallowed landing floor")
+	blocked_runtime.shutdown()
+	runtime.shutdown()
+	blocked_runtime.queue_free()
+	runtime.queue_free()
+	await process_frame
+	await process_frame
+	var orphan_count := int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
+	_expect(orphan_count == 0, "bird teardown ended with %d orphan nodes" % orphan_count)
+	if _failures == 0:
+		print("BIRD_RUNTIME_INTEGRATION PASS orphan=%d" % orphan_count)
+		quit(0)
+	else:
+		print("BIRD_RUNTIME_INTEGRATION FAIL failures=%d" % _failures)
+		quit(1)

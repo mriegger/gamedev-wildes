@@ -62,7 +62,7 @@ func _spawn_population(coordinator: WorldEntityCoordinator, player_position: Vec
 	var spawn_samples: Array[int] = []
 	var preparation_samples: Array[int] = []
 	for cycle in range(WorldEntityCoordinator.MAX_TOTAL_ACTIVE):
-		var time_of_day := DAY_TIME if cycle % 2 == 0 else NIGHT_TIME
+		var time_of_day := NIGHT_TIME if cycle < 6 else DAY_TIME
 		var before_count := coordinator.get_runtime().get_active_count()
 		coordinator._spawn_elapsed = WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS - FRAME_DELTA
 		var spawn_started := Time.get_ticks_usec()
@@ -75,7 +75,7 @@ func _spawn_population(coordinator: WorldEntityCoordinator, player_position: Vec
 		var preparation_usec := Time.get_ticks_usec() - preparation_started
 		if coordinator.get_runtime()._prepared_actor_count() > prepared_before:
 			preparation_samples.append(preparation_usec)
-	_expect(spawn_samples.size() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "spawn benchmark did not collect twelve samples")
+	_expect(spawn_samples.size() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "spawn benchmark did not collect one sample per active slot")
 	_expect(not preparation_samples.is_empty(), "spawn benchmark did not observe actor preparation")
 	return {
 		"spawn_frame": _summarize(spawn_samples),
@@ -90,6 +90,7 @@ func _sorted_actors(coordinator: WorldEntityCoordinator) -> Array[EntityActor]:
 func _arrange_population(coordinator: WorldEntityCoordinator, actors: Array[EntityActor]) -> void:
 	var zombie_index := 0
 	var sheep_index := 0
+	var bird_index := 0
 	for actor in actors:
 		var angle: float
 		var radius: float
@@ -98,24 +99,29 @@ func _arrange_population(coordinator: WorldEntityCoordinator, actors: Array[Enti
 			radius = 8.0
 			zombie_index += 1
 			(actor as ZombieActor)._path_follower.request_repath()
-		else:
+		elif actor.definition.id == &"sheep":
 			angle = TAU * float(sheep_index) / 6.0 + PI / 6.0
 			radius = 14.0
 			sheep_index += 1
 			(actor as SheepActor)._path_follower.request_repath()
-		actor.global_position = Vector3(0.5 + cos(angle) * radius, FEET_Y, 0.5 + sin(angle) * radius)
+		else:
+			angle = TAU * float(bird_index) / 4.0 + PI / 4.0
+			radius = 20.0
+			bird_index += 1
+		actor.global_position = Vector3(0.5 + cos(angle) * radius, FEET_Y + (10.0 if actor.definition.id == &"bird" else 0.0), 0.5 + sin(angle) * radius)
 		actor.velocity = Vector3.ZERO
-		actor.on_ground = true
+		actor.on_ground = actor.definition.id != &"bird"
 		coordinator.get_runtime()._spatial_index.upsert(actor.runtime_id, actor.global_position, actor.get_world_bounds())
 	_expect(zombie_index == 6, "benchmark population had %d zombies" % zombie_index)
 	_expect(sheep_index == 6, "benchmark population had %d sheep" % sheep_index)
+	_expect(bird_index == 4, "benchmark population had %d birds" % bird_index)
 
 func _player_position(frame_index: int) -> Vector3:
 	var angle := float(frame_index) * 0.015
 	return Vector3(0.5 + cos(angle) * 3.0, FEET_Y, 0.5 + sin(angle) * 3.0)
 
 func _advance_entity_frame(coordinator: WorldEntityCoordinator, actors: Array[EntityActor], frame_index: int) -> int:
-	coordinator.tick(FRAME_DELTA, _player_position(frame_index), NIGHT_TIME)
+	coordinator.tick(FRAME_DELTA, _player_position(frame_index), DAY_TIME)
 	for actor in actors:
 		actor.animation_driver.advance(FRAME_DELTA)
 	return WorldEntityCoordinator.MAX_NAVIGATION_SEARCHES_PER_TICK - coordinator.get_runtime()._navigation_search_budget._remaining_searches
@@ -137,7 +143,7 @@ func _benchmark_entity_frames(coordinator: WorldEntityCoordinator, actors: Array
 			frames_with_navigation_search += 1
 	_expect(max_navigation_searches <= WorldEntityCoordinator.MAX_NAVIGATION_SEARCHES_PER_TICK, "entity frame exceeded its navigation search budget")
 	_expect(frames_with_navigation_search > 0, "timed entity frames performed no navigation searches")
-	_expect(coordinator.get_runtime().get_active_count() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "entity frame benchmark did not retain twelve actors")
+	_expect(coordinator.get_runtime().get_active_count() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "entity frame benchmark did not retain sixteen actors")
 	var result := _summarize(samples)
 	result["max_navigation_searches_per_frame"] = max_navigation_searches
 	result["frames_with_navigation_search"] = frames_with_navigation_search
@@ -209,7 +215,7 @@ func _run() -> void:
 	var origin := Vector3(0.5, FEET_Y, 0.5)
 	var spawn_metrics := _spawn_population(coordinator, origin)
 	var actors := _sorted_actors(coordinator)
-	_expect(actors.size() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "benchmark did not create twelve actors")
+	_expect(actors.size() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "benchmark did not create sixteen actors")
 	_arrange_population(coordinator, actors)
 	var frame_metrics := _benchmark_entity_frames(coordinator, actors)
 	var path_metrics := _benchmark_bounded_pathfinding()

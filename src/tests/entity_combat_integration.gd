@@ -53,6 +53,15 @@ func _make_one_sheep_catalog() -> EntityCatalog:
 	catalog.definitions = definitions
 	return catalog
 
+func _make_one_bird_catalog() -> EntityCatalog:
+	var source := load("res://entities/definitions/bird.tres") as EntityDefinition
+	var definition := source.duplicate(true) as EntityDefinition
+	definition.ambient_max_active = 1
+	var definitions: Array[EntityDefinition] = [definition]
+	var catalog := EntityCatalog.new()
+	catalog.definitions = definitions
+	return catalog
+
 func _make_combat_catalog(zombie_count: int, sheep_count: int) -> EntityCatalog:
 	var definitions: Array[EntityDefinition] = []
 	if sheep_count > 0:
@@ -422,6 +431,7 @@ func _run() -> void:
 
 	await _cleanup(combat, coordinator, player, camera)
 	await _test_sheep_damage(world, sword_profile)
+	await _test_untargetable_bird(world, sword_profile)
 	await _test_zero_degree_compatibility(world, sword_profile)
 	await _test_sweep_geometry(world, sword_profile)
 	await _test_full_circle_directionless(world, sword_profile)
@@ -573,6 +583,37 @@ func _test_zero_degree_compatibility(world: VoxelWorld, sword_profile: MeleeAtta
 	_expect(not combat.try_commit_player_contacts(locked_ids, ray_origin, ray_direction, profile, &"copper_sword"), "zero-degree contact accepted a target that moved off its locked ray")
 	_expect(_contacts.size() == contact_count_before and is_equal_approx(coordinator.get_runtime().get_current_hp(actors[0].runtime_id), 64.0), "moved zero-degree target took damage")
 	await _cleanup(combat, coordinator, player, fixture["camera"] as Camera3D)
+
+func _test_untargetable_bird(world: VoxelWorld, sword_profile: MeleeAttackProfile) -> void:
+	var coordinator := WorldEntityCoordinator.new()
+	var combat := MeleeCombatCoordinator.new()
+	var player := (load("res://player/player.tscn") as PackedScene).instantiate() as PlayerMotor
+	var camera := Camera3D.new()
+	root.add_child(coordinator)
+	root.add_child(combat)
+	root.add_child(player)
+	root.add_child(camera)
+	player.global_position = Vector3(0.5, FEET_Y, 0.5)
+	player.set_physics_process(false)
+	player.interactor.set_physics_process(false)
+	player.animation_driver.set_process(false)
+	coordinator.setup(_make_one_bird_catalog(), world, 6201, _always_ready)
+	var player_stats := ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
+	combat.setup(world, player, player_stats, coordinator.get_runtime())
+	coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, player.global_position, 12.0)
+	var bird := coordinator.get_runtime().get_active_actors()[0] as BirdActor if coordinator.get_runtime().get_active_count() == 1 else null
+	_expect(bird != null, "untargetable bird fixture did not spawn")
+	if bird == null:
+		await _cleanup(combat, coordinator, player, camera)
+		return
+	_place_at_angle(bird, player.global_position, 0.0, 1.5)
+	coordinator.get_runtime()._spatial_index.upsert(bird.runtime_id, bird.global_position, bird.get_world_bounds())
+	var ray := _orthographic_ray(player, Vector2(0.0, -1.5))
+	_expect(combat.acquire_player_targets(ray[0], ray[1], sword_profile).is_empty(), "melee acquisition selected an ambient bird")
+	_expect(not combat.try_commit_player_contacts(_single_target(bird.runtime_id), ray[0], ray[1], sword_profile, &"copper_sword"), "forged target command damaged an ambient bird")
+	_expect(coordinator.get_runtime().try_apply_damage(bird.runtime_id, 1.0) == null, "direct runtime damage affected an ambient bird")
+	_expect(is_equal_approx(coordinator.get_runtime().get_current_hp(bird.runtime_id), 1.0), "ambient bird health changed")
+	await _cleanup(combat, coordinator, player, camera)
 
 func _test_sweep_geometry(world: VoxelWorld, sword_profile: MeleeAttackProfile) -> void:
 	var fixture := _make_combat_fixture(world, 6, 0, 8012)

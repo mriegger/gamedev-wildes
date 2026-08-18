@@ -85,6 +85,14 @@ func _aim_at_placement(position: Vector3i) -> void:
 
 func _run() -> void:
 	_world = _make_world()
+	var bird_definition := load("res://entities/definitions/bird.tres") as EntityDefinition
+	var bird_ground_position := Vector3(8.5, FEET_Y, 8.5)
+	var bird_air_position := bird_ground_position + Vector3.UP * 10.0
+	_expect(EntitySpawnGeometry.can_spawn_grounded(_world, bird_definition, bird_ground_position), "bird landing geometry rejected clear ground")
+	_expect(EntitySpawnGeometry.can_spawn_aerial(_world, bird_definition, bird_air_position), "bird aerial geometry rejected clear air")
+	_expect(not EntitySpawnGeometry.can_spawn_aerial(_world, bird_definition, bird_ground_position), "bird aerial geometry accepted immediate support")
+	_world.restore_block_edits({Vector3i(8, int(bird_air_position.y), 8): BlockId.Type.STONE}, {})
+	_expect(not EntitySpawnGeometry.can_spawn_aerial(_world, bird_definition, bird_air_position), "bird aerial geometry accepted a blocked body volume")
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
 	_inventory = InventoryModel.new(item_catalog)
 	_inventory.setup_starter()
