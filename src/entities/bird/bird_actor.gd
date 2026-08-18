@@ -36,6 +36,7 @@ func setup(
 	on_ground = false
 	max_speed = _behavior.flight_speed
 	_try_select_landing_target()
+	_update_vocalizations()
 
 static func color_variant_for_seed(seed_value: int) -> BirdAnimationDriver.ColorVariant:
 	var rng := RandomNumberGenerator.new()
@@ -52,6 +53,12 @@ func tick(delta: float, _player_position: Vector3, separation_velocity: Vector3,
 		_advance_grounded(delta, separation_velocity, navigation_search_budget)
 	else:
 		_advance_airborne(delta, separation_velocity)
+	_update_vocalizations()
+
+func _update_vocalizations() -> void:
+	assert(vocalizations != null)
+	var can_call := color_variant == BirdAnimationDriver.ColorVariant.DUCK and brain.state == BirdBrain.State.GROUNDED_IDLE and on_ground
+	vocalizations.set_vocalizations_enabled(can_call)
 
 func _advance_grounded(delta: float, separation_velocity: Vector3, navigation_search_budget: NavigationSearchBudget) -> void:
 	max_speed = _behavior.grounded_walk_speed

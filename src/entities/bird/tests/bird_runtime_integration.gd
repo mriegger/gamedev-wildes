@@ -32,10 +32,13 @@ func _run() -> void:
 	_expect(definition.spawn_placement == EntityDefinition.SpawnPlacement.AERIAL, "bird is not aerially placed")
 	_expect(not definition.combat_targetable and definition.experience_reward == 0, "bird is not purely ambient")
 	var sampled_variants: Dictionary = {}
+	var variant_seeds: Dictionary = {}
 	for seed_value in 64:
 		var sampled_variant := BirdActor.color_variant_for_seed(seed_value)
 		_expect(sampled_variant == BirdActor.color_variant_for_seed(seed_value), "bird color selection was not deterministic")
 		sampled_variants[sampled_variant] = true
+		if not variant_seeds.has(sampled_variant):
+			variant_seeds[sampled_variant] = seed_value
 	_expect(sampled_variants.size() == BirdAnimationDriver.ColorVariant.size(), "seeded birds did not cover all four color variants")
 	var world := _make_world()
 	var aerial_position := Vector3(0.5, FEET_Y + 10.0, 0.5)
@@ -51,7 +54,9 @@ func _run() -> void:
 	var runtime_ids := runtime.try_spawn_batch(requests)
 	_expect(runtime_ids == [1], "bird did not spawn through EntityRuntime")
 	var bird := runtime.get_actor(1) as BirdActor
-	_expect(bird != null and bird.vocalizations == null, "bird scene did not use silent presentation")
+	_expect(bird != null and bird.vocalizations != null, "bird scene did not configure vocalizations")
+	_expect(bird.vocalizations.profile.streams.size() == 3, "duck vocalization profile did not contain all three calls")
+	_expect(not bird.vocalizations.is_processing(), "aerial bird enabled grounded vocalizations")
 	_expect(bird != null and bird._has_landing_target, "bird did not acquire an initial landing target")
 	var bird_animation := bird.animation_driver as BirdAnimationDriver
 	_expect(bird_animation._body_mesh.material_override is StandardMaterial3D, "bird color variant did not create an instance material")
@@ -91,12 +96,25 @@ func _run() -> void:
 	var canopy_runtime := EntityRuntime.new()
 	root.add_child(canopy_runtime)
 	canopy_runtime.setup(catalog, canopy_world, 1, 1, EntityNavigationLimits.new(24, 256, 1))
-	var canopy_ids := canopy_runtime.try_spawn_batch([EntitySpawnRequest.new(&"bird", aerial_position, 8181)])
+	var duck_seed := variant_seeds[BirdAnimationDriver.ColorVariant.DUCK] as int
+	var canopy_ids := canopy_runtime.try_spawn_batch([EntitySpawnRequest.new(&"bird", aerial_position, duck_seed)])
 	var canopy_bird := canopy_runtime.get_actor(canopy_ids[0]) as BirdActor if not canopy_ids.is_empty() else null
 	_expect(canopy_bird != null, "canopy test bird did not spawn")
 	if canopy_bird != null:
 		canopy_bird.global_position = Vector3(0.5, FEET_Y, 0.5)
 		canopy_bird.on_ground = true
+		canopy_bird.brain.state = BirdBrain.State.GROUNDED_IDLE
+		canopy_bird._update_vocalizations()
+		_expect(canopy_bird.vocalizations.is_processing(), "idle grounded duck did not enable vocalizations")
+		canopy_bird.vocalizations._remaining_seconds = 0.0
+		canopy_bird.vocalizations._process(0.0)
+		_expect(canopy_bird.vocalizations.playing, "idle grounded duck did not start a call")
+		var canopy_animation := canopy_bird.animation_driver as BirdAnimationDriver
+		canopy_animation.advance(0.05)
+		_expect(canopy_animation._beak_mesh.scale.y > 1.0, "duck call did not animate the beak")
+		canopy_bird.brain.state = BirdBrain.State.GROUNDED_WALK
+		canopy_bird._update_vocalizations()
+		_expect(not canopy_bird.vocalizations.is_processing() and not canopy_bird.vocalizations.playing, "walking duck continued its idle call")
 		canopy_bird.brain.state = BirdBrain.State.TAKEOFF
 		canopy_bird._handle_state_transition(BirdBrain.State.GROUNDED_WALK, BirdBrain.State.TAKEOFF)
 		_expect(canopy_bird.brain.state == BirdBrain.State.GROUNDED_IDLE, "bird attempted takeoff through an overhead obstruction")

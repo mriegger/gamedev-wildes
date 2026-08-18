@@ -41,6 +41,8 @@ var _right_wing_origin: Transform3D
 var _tail_origin: Transform3D
 var _left_leg_origin: Transform3D
 var _right_leg_origin: Transform3D
+var _beak_origin: Transform3D
+var _call_elapsed: float = 0.0
 
 func setup(p_actor: Node3D):
 	super.setup(p_actor)
@@ -78,6 +80,7 @@ func setup(p_actor: Node3D):
 	_tail_origin = _tail_pivot.transform
 	_left_leg_origin = _left_leg_pivot.transform
 	_right_leg_origin = _right_leg_pivot.transform
+	_beak_origin = _beak_mesh.transform
 
 func apply_color_variant(variant: ColorVariant) -> void:
 	assert(variant >= ColorVariant.CROW and variant <= ColorVariant.BLUEBIRD)
@@ -105,12 +108,24 @@ func advance(delta: float):
 		BirdBrain.State.GROUNDED_IDLE:
 			wings_flapping = false
 			_apply_idle()
+			_apply_call(delta, bird.vocalizations.playing)
 		BirdBrain.State.GROUNDED_WALK:
 			wings_flapping = false
 			_apply_walk(delta)
 		BirdBrain.State.TAKEOFF:
 			_apply_flight(delta, 0.14, 70.0, -14.0)
 	_update_wing_flap_audio(wings_flapping)
+
+func _apply_call(delta: float, calling: bool) -> void:
+	if not calling:
+		_call_elapsed = 0.0
+		return
+	_call_elapsed += delta
+	var pulse := absf(sin(_call_elapsed * TAU / 0.22))
+	_head_pivot.position.z = _head_origin.origin.z + pulse * 0.045
+	_head_pivot.rotation.x += pulse * deg_to_rad(9.0)
+	_body_pivot.position.y += pulse * 0.012
+	_beak_mesh.scale.y = 1.0 + pulse * 0.35
 
 func _apply_flight(delta: float, cycle_seconds: float, amplitude_degrees: float, body_pitch_degrees: float) -> void:
 	_wing_phase = fmod(_wing_phase + delta * TAU / cycle_seconds, TAU)
@@ -166,3 +181,4 @@ func _reset_pose() -> void:
 	_tail_pivot.transform = _tail_origin
 	_left_leg_pivot.transform = _left_leg_origin
 	_right_leg_pivot.transform = _right_leg_origin
+	_beak_mesh.transform = _beak_origin
