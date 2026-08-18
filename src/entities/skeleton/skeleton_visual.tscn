@@ -1,4 +1,4 @@
-[gd_scene load_steps=20 format=3]
+[gd_scene load_steps=21 format=3]
 
 [ext_resource type="Script" path="res://actors/animation/blocky_humanoid_animator.gd" id="1_animator"]
 [ext_resource type="Resource" path="res://entities/skeleton/skeleton_animation_profile.tres" id="2_profile"]
@@ -60,9 +60,13 @@ size = Vector3(0.135, 0.135, 0.135)
 material = SubResource("Material_bone")
 size = Vector3(0.14, 0.17, 0.12)
 
-[sub_resource type="BoxMesh" id="Box_leg_bone"]
+[sub_resource type="BoxMesh" id="Box_upper_leg"]
 material = SubResource("Material_bone")
-size = Vector3(0.12, 0.68, 0.12)
+size = Vector3(0.12, 0.3, 0.12)
+
+[sub_resource type="BoxMesh" id="Box_lower_leg"]
+material = SubResource("Material_bone")
+size = Vector3(0.105, 0.3, 0.105)
 
 [sub_resource type="BoxMesh" id="Box_foot"]
 material = SubResource("Material_bone")
@@ -124,8 +128,10 @@ position = Vector3(0, 0.69, 0)
 position = Vector3(0, 0.2, 0)
 mesh = SubResource("Box_skull")
 
-[node name="Jaw" type="MeshInstance3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/HeadAnchor/HeadBase/HeadSecondary"]
+[node name="JawPivot" type="Node3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/HeadAnchor/HeadBase/HeadSecondary"]
 position = Vector3(0, -0.02, 0.025)
+
+[node name="Jaw" type="MeshInstance3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/HeadAnchor/HeadBase/HeadSecondary/JawPivot"]
 mesh = SubResource("Box_jaw")
 
 [node name="LeftEyeSocket" type="MeshInstance3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/HeadAnchor/HeadBase/HeadSecondary"]
@@ -161,12 +167,15 @@ mesh = SubResource("Box_arm_bone")
 position = Vector3(0, -0.37, 0)
 mesh = SubResource("Box_joint")
 
-[node name="Forearm" type="MeshInstance3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/LeftShoulder/LeftArmBase/LeftArmAction"]
-position = Vector3(0, -0.55, 0)
+[node name="LeftForearmPivot" type="Node3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/LeftShoulder/LeftArmBase/LeftArmAction"]
+position = Vector3(0, -0.37, 0)
+
+[node name="Forearm" type="MeshInstance3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/LeftShoulder/LeftArmBase/LeftArmAction/LeftForearmPivot"]
+position = Vector3(0, -0.18, 0)
 mesh = SubResource("Box_arm_bone")
 
-[node name="Hand" type="MeshInstance3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/LeftShoulder/LeftArmBase/LeftArmAction"]
-position = Vector3(0, -0.75, 0.025)
+[node name="Hand" type="MeshInstance3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/LeftShoulder/LeftArmBase/LeftArmAction/LeftForearmPivot"]
+position = Vector3(0, -0.38, 0.025)
 mesh = SubResource("Box_hand")
 
 [node name="RightShoulder" type="Node3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase"]
@@ -184,12 +193,15 @@ mesh = SubResource("Box_arm_bone")
 position = Vector3(0, -0.37, 0)
 mesh = SubResource("Box_joint")
 
-[node name="Forearm" type="MeshInstance3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/RightShoulder/RightArmBase/RightArmAction"]
-position = Vector3(0, -0.55, 0)
+[node name="RightForearmPivot" type="Node3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/RightShoulder/RightArmBase/RightArmAction"]
+position = Vector3(0, -0.37, 0)
+
+[node name="Forearm" type="MeshInstance3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/RightShoulder/RightArmBase/RightArmAction/RightForearmPivot"]
+position = Vector3(0, -0.18, 0)
 mesh = SubResource("Box_arm_bone")
 
-[node name="Hand" type="MeshInstance3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/RightShoulder/RightArmBase/RightArmAction"]
-position = Vector3(0, -0.75, 0.025)
+[node name="Hand" type="MeshInstance3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/RightShoulder/RightArmBase/RightArmAction/RightForearmPivot"]
+position = Vector3(0, -0.38, 0.025)
 mesh = SubResource("Box_hand")
 
 [node name="LeftHip" type="Node3D" parent="RigRoot"]
@@ -200,8 +212,16 @@ position = Vector3(0, -0.34, 0)
 
 [node name="LeftLegBase" type="Node3D" parent="RigRoot/LeftHip/LeftLegLocomotion"]
 
-[node name="LeftLeg" type="MeshInstance3D" parent="RigRoot/LeftHip/LeftLegLocomotion/LeftLegBase"]
-mesh = SubResource("Box_leg_bone")
+[node name="UpperLeg" type="MeshInstance3D" parent="RigRoot/LeftHip/LeftLegLocomotion/LeftLegBase"]
+position = Vector3(0, 0.17, 0)
+mesh = SubResource("Box_upper_leg")
+
+[node name="Knee" type="MeshInstance3D" parent="RigRoot/LeftHip/LeftLegLocomotion/LeftLegBase"]
+mesh = SubResource("Box_joint")
+
+[node name="LowerLeg" type="MeshInstance3D" parent="RigRoot/LeftHip/LeftLegLocomotion/LeftLegBase"]
+position = Vector3(0, -0.17, 0)
+mesh = SubResource("Box_lower_leg")
 
 [node name="LeftFoot" type="MeshInstance3D" parent="RigRoot/LeftHip/LeftLegLocomotion/LeftLegBase"]
 position = Vector3(0, -0.285, 0.075)
@@ -218,8 +238,16 @@ position = Vector3(0, -0.34, 0)
 
 [node name="RightLegBase" type="Node3D" parent="RigRoot/RightHip/RightLegLocomotion"]
 
-[node name="RightLeg" type="MeshInstance3D" parent="RigRoot/RightHip/RightLegLocomotion/RightLegBase"]
-mesh = SubResource("Box_leg_bone")
+[node name="UpperLeg" type="MeshInstance3D" parent="RigRoot/RightHip/RightLegLocomotion/RightLegBase"]
+position = Vector3(0, 0.17, 0)
+mesh = SubResource("Box_upper_leg")
+
+[node name="Knee" type="MeshInstance3D" parent="RigRoot/RightHip/RightLegLocomotion/RightLegBase"]
+mesh = SubResource("Box_joint")
+
+[node name="LowerLeg" type="MeshInstance3D" parent="RigRoot/RightHip/RightLegLocomotion/RightLegBase"]
+position = Vector3(0, -0.17, 0)
+mesh = SubResource("Box_lower_leg")
 
 [node name="RightFoot" type="MeshInstance3D" parent="RigRoot/RightHip/RightLegLocomotion/RightLegBase"]
 position = Vector3(0, -0.285, 0.075)
@@ -230,3 +258,6 @@ position = Vector3(0, -0.34, 0)
 
 [node name="AnimationDriver" type="Node" parent="."]
 script = ExtResource("3_driver")
+jaw_pivot_path = NodePath("../RigRoot/BodySecondary/BodyAction/TorsoBase/HeadAnchor/HeadBase/HeadSecondary/JawPivot")
+left_forearm_pivot_path = NodePath("../RigRoot/BodySecondary/BodyAction/TorsoBase/LeftShoulder/LeftArmBase/LeftArmAction/LeftForearmPivot")
+right_forearm_pivot_path = NodePath("../RigRoot/BodySecondary/BodyAction/TorsoBase/RightShoulder/RightArmBase/RightArmAction/RightForearmPivot")
