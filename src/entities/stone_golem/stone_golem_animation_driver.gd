@@ -41,6 +41,7 @@ var _previous_yaw: float = 0.0
 var _visual_origin_position: Vector3
 var _visual_origin_rotation: Vector3
 var _visual_origin_scale: Vector3
+var _action_audio: StoneGolemAudio
 
 func setup(p_actor: Node3D):
 	super.setup(p_actor)
@@ -59,6 +60,10 @@ func setup(p_actor: Node3D):
 	_animation_state.grounded = actor.get(&"on_ground") as bool
 	animator.setup(_animation_state)
 	_apply_eye_state()
+
+func bind_action_audio(action_audio: StoneGolemAudio) -> void:
+	assert(action_audio != null)
+	_action_audio = action_audio
 
 func set_alerted(alerted: bool) -> void:
 	_alerted = alerted and not _dying
@@ -118,7 +123,7 @@ func get_death_time_remaining() -> float:
 	return maxf(DEATH_SECONDS - _death_elapsed, 0.0)
 
 func advance(delta: float):
-	assert(actor != null and animator != null)
+	assert(actor != null and animator != null and _action_audio != null)
 	_reset_visual_transform()
 	if _dying:
 		_death_elapsed = minf(_death_elapsed + delta, DEATH_SECONDS)
@@ -139,6 +144,7 @@ func advance(delta: float):
 	var grounded: bool = actor.get(&"on_ground")
 	_animation_state.set_motion(local_velocity, speed_ratio, false, grounded, 0.0, turn_rate, false, Vector3.ZERO)
 	animator.advance_animation(delta)
+	_action_audio.advance_gait(animator.get_gait_cycle_position(), speed_ratio, grounded)
 	_advance_punch(delta)
 	_advance_slam(delta)
 	_advance_hit(delta)

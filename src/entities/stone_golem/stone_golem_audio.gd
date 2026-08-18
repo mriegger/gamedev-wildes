@@ -12,8 +12,7 @@ var walk_player: AudioStreamPlayer3D
 var impact_player: AudioStreamPlayer3D
 var death_player: AudioStreamPlayer3D
 var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
-var _walk_interval_seconds: float = 0.0
-var _walk_elapsed: float = 0.0
+var _gait_contact_index: int = 0
 var _last_walk_index: int = -1
 var _last_impact_index: int = -1
 var _last_death_index: int = -1
@@ -30,15 +29,14 @@ func has_valid_presentation() -> bool:
 		and get_node_or_null(death_player_path) is AudioStreamPlayer3D
 	)
 
-func setup(seed_value: int, walk_cycle_seconds: float) -> void:
+func setup(seed_value: int, gait_cycle_position: float) -> void:
 	assert(has_valid_presentation())
-	assert(is_finite(walk_cycle_seconds) and walk_cycle_seconds > 0.0)
+	assert(is_finite(gait_cycle_position) and gait_cycle_position >= 0.0 and gait_cycle_position < 1.0)
 	walk_player = get_node(walk_player_path) as AudioStreamPlayer3D
 	impact_player = get_node(impact_player_path) as AudioStreamPlayer3D
 	death_player = get_node(death_player_path) as AudioStreamPlayer3D
 	_rng.seed = seed_value ^ profile.rng_salt
-	_walk_interval_seconds = walk_cycle_seconds * 0.5
-	_walk_elapsed = 0.0
+	_gait_contact_index = _get_gait_contact_index(gait_cycle_position)
 	_last_walk_index = -1
 	_last_impact_index = -1
 	_last_death_index = -1
@@ -47,16 +45,18 @@ func setup(seed_value: int, walk_cycle_seconds: float) -> void:
 	_stop_player(impact_player)
 	_stop_player(death_player)
 
-func advance(delta: float, speed_ratio: float, grounded: bool) -> void:
-	assert(is_finite(delta) and delta >= 0.0)
+func advance_gait(gait_cycle_position: float, speed_ratio: float, grounded: bool) -> void:
+	assert(is_finite(gait_cycle_position) and gait_cycle_position >= 0.0 and gait_cycle_position < 1.0)
 	assert(is_finite(speed_ratio) and speed_ratio >= 0.0)
-	if _death_started or not grounded or speed_ratio <= MINIMUM_WALK_SPEED_RATIO:
-		_walk_elapsed = 0.0
+	if _death_started:
 		return
-	_walk_elapsed += delta * minf(speed_ratio, 1.0)
-	if _walk_elapsed < _walk_interval_seconds:
+	var gait_contact_index := _get_gait_contact_index(gait_cycle_position)
+	if not grounded or speed_ratio <= MINIMUM_WALK_SPEED_RATIO:
+		_gait_contact_index = gait_contact_index
 		return
-	_walk_elapsed = fmod(_walk_elapsed, _walk_interval_seconds)
+	if gait_contact_index == _gait_contact_index:
+		return
+	_gait_contact_index = gait_contact_index
 	_last_walk_index = _play_random(
 		walk_player,
 		profile.walk_streams,
@@ -80,7 +80,6 @@ func play_death() -> void:
 	if _death_started:
 		return
 	_death_started = true
-	_walk_elapsed = 0.0
 	_stop_player(walk_player)
 	_stop_player(impact_player)
 	_last_death_index = _play_random(
@@ -92,10 +91,12 @@ func play_death() -> void:
 	)
 
 func stop_audio() -> void:
-	_walk_elapsed = 0.0
 	_stop_player(walk_player)
 	_stop_player(impact_player)
 	_stop_player(death_player)
+
+func _get_gait_contact_index(gait_cycle_position: float) -> int:
+	return 0 if gait_cycle_position < 0.5 else 1
 
 func _play_random(
 	player: AudioStreamPlayer3D,

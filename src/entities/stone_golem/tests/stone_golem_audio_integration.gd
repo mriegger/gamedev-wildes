@@ -48,20 +48,33 @@ func _run() -> void:
 	_expect(audio.walk_player is AudioStreamPlayer3D and audio.impact_player is AudioStreamPlayer3D and audio.death_player is AudioStreamPlayer3D, "Stone Golem audio was not positional")
 	_expect(audio.walk_player.stream == null and audio.impact_player.stream == null and audio.death_player.stream == null, "Stone Golem audio began before an event")
 
-	var walk_interval := actor._stone_golem_animation.animator.profile.walk_cycle_seconds * 0.5
-	audio.advance(walk_interval - 0.01, 1.0, true)
-	_expect(audio.walk_player.stream == null, "walking sound played before the gait contact interval")
-	audio.advance(0.02, 1.0, true)
+	var animation := actor._stone_golem_animation
+	var animator := animation.animator
+	var walk_cycle := animator.profile.walk_cycle_seconds
+	actor.velocity = Vector3(0.0, 0.0, actor.max_speed)
+	animation.advance(walk_cycle * 0.49)
+	_expect(audio.walk_player.stream == null, "walking sound played before the animated foot contact")
+	animation.advance(walk_cycle * 0.02)
 	_expect(audio.profile.walk_streams.has(audio.walk_player.stream), "gait contact did not select the walking sound")
 	_expect(audio.walk_player.pitch_scale >= audio.profile.walk_pitch_min and audio.walk_player.pitch_scale <= audio.profile.walk_pitch_max, "walking pitch was outside its profile")
+	animation.advance(walk_cycle * 0.2)
 	audio.walk_player.stop()
 	audio.walk_player.stream = null
-	audio.advance(walk_interval, 0.0, true)
+	var paused_gait_position := animator.get_gait_cycle_position()
+	actor.velocity = Vector3.ZERO
+	animation.advance(walk_cycle * 2.0)
 	_expect(audio.walk_player.stream == null, "stationary Stone Golem played a walking sound")
-	audio.advance(walk_interval, 1.0, false)
+	_expect(is_equal_approx(animator.get_gait_cycle_position(), paused_gait_position), "stationary animation discarded its gait phase")
+	actor.velocity = Vector3(0.0, 0.0, actor.max_speed)
+	actor.on_ground = false
+	animation.advance(walk_cycle * 2.0)
 	_expect(audio.walk_player.stream == null, "airborne Stone Golem played a walking sound")
-	audio.advance(walk_interval, 1.0, true)
-	_expect(audio.profile.walk_streams.has(audio.walk_player.stream), "grounded movement did not resume walking audio")
+	_expect(is_equal_approx(animator.get_gait_cycle_position(), paused_gait_position), "airborne animation discarded its gait phase")
+	actor.on_ground = true
+	animation.advance(walk_cycle * 0.28)
+	_expect(audio.walk_player.stream == null, "resumed walking sound played before the preserved foot contact")
+	animation.advance(walk_cycle * 0.02)
+	_expect(audio.profile.walk_streams.has(audio.walk_player.stream), "preserved foot contact did not resume walking audio")
 
 	actor.record_melee_contact(Vector3.RIGHT)
 	_expect(audio.profile.impact_streams.has(audio.impact_player.stream), "confirmed hit did not select a Stone Golem impact")
@@ -82,7 +95,8 @@ func _run() -> void:
 
 	var despawning_actor := _spawn_actor(definition, world, 2)
 	var despawning_audio := despawning_actor.get_node(despawning_actor.action_audio_path) as StoneGolemAudioType
-	despawning_audio.advance(walk_interval, 1.0, true)
+	despawning_actor.velocity = Vector3(0.0, 0.0, despawning_actor.max_speed)
+	despawning_actor._stone_golem_animation.advance(walk_cycle * 0.51)
 	despawning_audio.play_impact()
 	despawning_actor.begin_despawn_fade()
 	_expect(

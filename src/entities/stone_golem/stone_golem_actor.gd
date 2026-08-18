@@ -64,7 +64,8 @@ func setup(
 	max_speed = _behavior.movement_speed
 	_stone_golem_animation = animation_driver as StoneGolemAnimationDriver
 	assert(_stone_golem_animation != null)
-	_action_audio.setup(behavior_seed, _stone_golem_animation.animator.profile.walk_cycle_seconds)
+	_action_audio.setup(behavior_seed, _stone_golem_animation.animator.get_gait_cycle_position())
+	_stone_golem_animation.bind_action_audio(_action_audio)
 	_visibility_sensor = VoxelPlayerVisibilitySensorType.new(voxel_space, _behavior.detection_range, definition.body_height, runtime_id)
 
 func tick(
@@ -100,7 +101,6 @@ func tick(
 	if brain.state == StoneGolemBrain.State.SLAM_AIRBORNE:
 		if not launched_this_tick:
 			_advance_slam_motion(delta)
-		_advance_walking_audio(delta)
 		return
 	var desired_velocity := Vector3.ZERO
 	if brain.state == StoneGolemBrain.State.CHASE:
@@ -111,7 +111,6 @@ func tick(
 			desired_velocity = _get_path_velocity(delta, navigation_search_budget)
 		desired_velocity = limit_planar_velocity(desired_velocity + separation_velocity, _behavior.movement_speed)
 	advance_voxel_motion(delta, desired_velocity, _behavior.gravity)
-	_advance_walking_audio(delta)
 
 func _begin_slam_windup() -> void:
 	var target := brain.get_locked_slam_target()
@@ -222,11 +221,6 @@ func _cancel_slam() -> void:
 func _emit_melee_contact(profile: MeleeAttackProfile) -> void:
 	if profile != null:
 		melee_contact_reached.emit(runtime_id, profile)
-
-func _advance_walking_audio(delta: float) -> void:
-	var planar_speed := Vector2(velocity.x, velocity.z).length()
-	var speed_ratio := planar_speed / maxf(max_speed, 0.001)
-	_action_audio.advance(delta, speed_ratio, on_ground)
 
 func record_melee_contact(world_hit_direction: Vector3) -> void:
 	super.record_melee_contact(world_hit_direction)

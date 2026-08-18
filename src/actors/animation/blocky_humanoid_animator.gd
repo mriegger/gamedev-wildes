@@ -130,6 +130,9 @@ func reset_tuning_transforms():
 func get_current_state() -> StringName:
 	return _current_state
 
+func get_gait_cycle_position() -> float:
+	return fposmod(_walk_phase, TAU) / TAU
+
 func _refresh_tuning_overrides():
 	_has_tuning_overrides = false
 	for part in get_tuning_parts():
