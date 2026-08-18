@@ -13,6 +13,7 @@ class TestVoxelSpace:
 	var default_ground_y: float = FEET_Y
 	var ground_heights: Dictionary = {}
 	var highest_top_queries: int = 0
+	var solid_queries: int = 0
 	var movement_solids: Dictionary = {}
 	var raycast_solids: Dictionary = {}
 
@@ -44,7 +45,11 @@ class TestVoxelSpace:
 		return float(ground_heights.get(Vector2i(x, z), default_ground_y))
 
 	func is_solid(position: Vector3i) -> bool:
-		return movement_solids.has(position)
+		solid_queries += 1
+		if movement_solids.has(position):
+			return true
+		var ground_y := float(ground_heights.get(Vector2i(position.x, position.z), default_ground_y))
+		return position.y == roundi(ground_y) - 1
 
 	func is_raycast_solid(position: Vector3i) -> bool:
 		return raycast_solids.has(position)
@@ -63,6 +68,7 @@ func _run() -> void:
 	_test_elevation_offsets_are_bounded_and_ordered()
 	_test_candidate_columns_are_bounded_per_tick()
 	_test_resumed_column_counts_toward_tick_bound()
+	_test_failed_paths_are_limited_to_one_per_tick()
 	_test_reachable_one_block_up_position()
 	_test_reachable_one_block_down_position()
 	_test_reachable_multi_step_hill_endpoint()
@@ -171,8 +177,8 @@ func _test_candidate_columns_are_bounded_per_tick() -> void:
 	search.begin(ORIGIN, ORIGIN, _observation(), 0.0)
 	_expect(search.get("_queued_columns").size() == 1, "search eagerly enumerated candidate columns at begin")
 	search.advance(NavigationSearchBudget.new(2))
-	var expected_queries := VoxelCoverSearchType.CANDIDATES_PER_TICK * search._elevation_offsets.size()
-	_expect(space.highest_top_queries == expected_queries, "one advance examined more than 32 bounded candidate columns")
+	_expect(space.highest_top_queries == VoxelCoverSearchType.CANDIDATES_PER_TICK, "one advance performed more than one ground resolution per candidate column")
+	_expect(space.solid_queries <= 4096, "one advance exceeded the bounded cheap voxel-probe workload")
 	_expect(search.status == VoxelCoverSearchType.Status.SEARCHING, "bounded search exhausted all candidates in one advance")
 
 func _test_resumed_column_counts_toward_tick_bound() -> void:
@@ -189,9 +195,24 @@ func _test_resumed_column_counts_toward_tick_bound() -> void:
 	budget.reset()
 	search.advance(budget)
 	var resumed_query_count := space.highest_top_queries - queries_before_resume
-	var expected_queries := (VoxelCoverSearchType.CANDIDATES_PER_TICK - 1) * search._elevation_offsets.size()
-	_expect(resumed_query_count == expected_queries, "resumed column was rescanned or did not count toward the 32-column bound")
+	_expect(resumed_query_count == VoxelCoverSearchType.CANDIDATES_PER_TICK - 1, "resumed column was rescanned or did not count toward the 32-column bound")
 	_expect(search.status == VoxelCoverSearchType.Status.SEARCHING, "resumed bounded search terminated unexpectedly")
+
+func _test_failed_paths_are_limited_to_one_per_tick() -> void:
+	var space := TestVoxelSpace.new()
+	space.add_wall(0, 1)
+	for x in range(-1, 2):
+		for z in range(1, 4):
+			if x != 0 or z != 2:
+				space.add_movement_column(x, z)
+	space.add_movement_column(0, 4)
+	var search := _make_search(space)
+	search.begin(ORIGIN, ORIGIN, _observation(), 0.0)
+	var budget := NavigationSearchBudget.new(2)
+	search.advance(budget)
+	_expect(search.status == VoxelCoverSearchType.Status.SEARCHING, "failed path attempt did not yield the cover search")
+	_expect(budget.try_acquire(), "one cover search consumed more than one path attempt in a tick")
+	_expect(not budget.try_acquire(), "cover search yielded before attempting a hidden candidate path")
 
 func _test_reachable_one_block_up_position() -> void:
 	var space := TestVoxelSpace.new()

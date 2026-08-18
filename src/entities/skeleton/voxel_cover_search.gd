@@ -137,6 +137,7 @@ func advance(search_budget: NavigationSearchBudget) -> Status:
 				_target = candidate
 				_status = Status.FOUND
 				return _status
+			return _status
 		_has_current_column = false
 	return _status
 
@@ -152,6 +153,8 @@ func _resolve_candidate_elevations(column: Vector2i) -> Array[int]:
 
 func _append_walkable_elevation(elevations: Array[int], column: Vector2i, elevation: int) -> void:
 	var feet := Vector3i(column.x, elevation, column.y)
+	if not _voxel_space.is_solid(feet + Vector3i.DOWN):
+		return
 	if VoxelPathfinder.is_walkable(_voxel_space, feet, _body_width, _body_height):
 		elevations.append(elevation)
 
