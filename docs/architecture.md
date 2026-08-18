@@ -53,9 +53,10 @@ limits around that runtime.
 melee-attack decisions configured by `GroundMeleeEnemyBehaviorDefinition`; Zombie actors coordinate
 that brain with their species-owned combat and presentation. `SkeletonBrain` separately owns roaming,
 cover search, cover movement, hiding, sprinting, and attack decisions. Skeleton patrol goals drift
-from the actor's current position within thirty horizontal blocks. A detected player outside the
-five-block ambush radius triggers a deterministic nearest-cover search; entering that radius or
-exhausting cover starts a sprint, and completing a swing requests new cover before another ambush.
+from the actor's current position within thirty horizontal blocks. When a detected player remains
+outside the five-block ambush radius, an already occluded Skeleton hides in place; an exposed one
+starts a deterministic nearest-cover search. Entering that radius or exhausting cover starts a
+sprint, and completing a swing requests new cover before another ambush.
 `VoxelCoverSearch` captures the observation at search start, advances at most thirty-two ordered
 columns per actor tick, checks walkable elevations, and spends the bounded A* budget only on hidden
 candidates. `VoxelCameraOcclusion` requires all nine body samples to be blocked. Hiding and cover
