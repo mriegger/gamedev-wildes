@@ -291,11 +291,16 @@ jobs:
           bash .github/scripts/run_godot_check.sh \
             45 "LOOT_SYSTEM PASS" /tmp/loot_system.log -- \
             godot --headless --path src --script res://loot/tests/loot_system.gd
-      - name: Validate the overworld defeat-to-drop path
+      - name: Validate variant effects and overworld drops
         run: |
           bash .github/scripts/run_godot_check.sh \
             30 "LOOT_INTEGRATION PASS" /tmp/loot_integration.log -- \
             godot --headless --path src --script res://loot/tests/loot_integration.gd
+      - name: Validate bounded world loot state
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "WORLD_LOOT_STATE PASS" /tmp/world_loot_state.log -- \
+            godot --headless --path src --script res://loot/world/tests/world_loot_state.gd
 
   armor-system:
     runs-on: ubuntu-latest

@@ -15,7 +15,6 @@ func _init() -> void:
 	_test_fixed_equipment_rolls()
 	_test_allocator_atomicity()
 	_test_parallel_allocator_preparations()
-	_test_world_admission_atomicity()
 	_test_malformed_definitions()
 	_test_zombie_distribution()
 	_finish()
@@ -232,49 +231,6 @@ func _test_parallel_allocator_preparations() -> void:
 	_expect(not LootResolver._commit(second, foreign_factory), "cross-owner loot preparation committed")
 	var next_instance := factory.create(&"copper_sword")
 	_expect(next_instance != null and next_instance.instance_id == 301, "stale loot preparation made a duplicate instance ID observable")
-
-func _test_world_admission_atomicity() -> void:
-	var sword_pool := _pool(&"world_sword", _independent_rolls([
-		_independent(&"sword", 1.0, _drop(_item_catalog.get_definition(&"copper_sword"))),
-	]), [])
-	var material_pool := _pool(&"world_copper", _independent_rolls([
-		_independent(&"copper", 1.0, _drop(_item_catalog.get_definition(&"copper"))),
-	]), [])
-	var factory := EquipmentInstanceFactory.new(_item_catalog, 500)
-	var world_state := WorldLootState.new(_item_catalog, factory)
-	var first := LootResolver.prepare(sword_pool, 1, factory)
-	_expect(first != null, "world equipment drop did not prepare")
-	_expect(factory.get_next_instance_id() == 500, "world preparation advanced the equipment allocator")
-	_expect(WorldLootDropTransaction.try_commit(first, world_state, Vector3.ZERO), "world equipment drop did not commit")
-	_expect(factory.get_next_instance_id() == 501, "world equipment drop did not advance the allocator")
-	_expect(world_state.get_entry_count() == 1, "world equipment drop was not stored")
-	var world_entries := world_state.get_entries()
-	var first_entry: WorldLootEntry = null if world_entries.is_empty() else world_entries[0]
-	_expect(
-		first_entry != null
-		and first_entry.stack.equipment_instance != null
-		and first_entry.stack.equipment_instance.instance_id == 500,
-		"world equipment identity changed during commit",
-	)
-	var rejected_position := LootResolver.prepare(sword_pool, 2, factory)
-	_expect(
-		not WorldLootDropTransaction.try_commit(rejected_position, world_state, Vector3.INF),
-		"unindexable world position accepted a drop",
-	)
-	_expect(factory.get_next_instance_id() == 501, "rejected world position consumed an equipment ID")
-	for entry_index in range(WorldLootState.MAXIMUM_ENTRY_COUNT - 1):
-		var material := LootResolver.prepare(material_pool, entry_index, factory)
-		if not WorldLootDropTransaction.try_commit(
-			material,
-			world_state,
-			Vector3(float(entry_index + 1) * 2.0, 0.0, 0.0),
-		):
-			_expect(false, "world loot capacity setup failed at %d" % entry_index)
-			break
-	_expect(world_state.get_entry_count() == WorldLootState.MAXIMUM_ENTRY_COUNT, "world loot capacity was not bounded")
-	var overflow := LootResolver.prepare(sword_pool, 3, factory)
-	_expect(not WorldLootDropTransaction.try_commit(overflow, world_state, Vector3.ONE), "world loot overflow was accepted")
-	_expect(factory.get_next_instance_id() == 501, "world loot overflow consumed an equipment ID")
 
 func _resolve(
 	pool: LootPoolDefinition,

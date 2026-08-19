@@ -272,14 +272,6 @@ func _setup_gameplay() -> bool:
 	camera_rig.setup(player, input_buffer)
 	world_entity_coordinator.setup(entity_catalog, world.voxel_model, world.config.seed_value, world.is_position_streamed)
 	var world_entities := world_entity_coordinator.get_runtime()
-	overworld_loot.setup(
-		entity_catalog,
-		item_catalog,
-		equipment_instance_factory,
-		world_loot_state,
-		world_entities,
-		loot_drop_scene,
-	)
 	melee_combat.setup(world.voxel_model, player, player_stats, inventory_model, world_entities)
 	melee_combat.melee_outcome_committed.connect(combat_progression_coordinator.record_melee_outcome)
 	melee_combat.melee_outcome_committed.connect(_on_melee_outcome_committed)
@@ -313,6 +305,18 @@ func _setup_gameplay() -> bool:
 		_can_break_block,
 	)
 	player.water_step_committed.connect(world.play_water_ripple)
+	overworld_loot.setup(
+		entity_catalog,
+		item_catalog,
+		equipment_instance_factory,
+		world_loot_state,
+		inventory_model,
+		inventory_loadout_coordinator,
+		player,
+		world_entities,
+		world.is_position_streamed,
+		loot_drop_scene,
+	)
 	item_consumption_coordinator = ItemConsumptionCoordinator.new()
 	item_consumption_coordinator.setup(inventory_model, inventory_loadout_coordinator, player_stats)
 	player.setup_consumption(item_consumption_coordinator)

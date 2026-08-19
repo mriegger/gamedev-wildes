@@ -374,7 +374,11 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 		game.item_catalog,
 		game.equipment_instance_factory,
 		game.world_loot_state,
+		game.inventory_model,
+		game.inventory_loadout_coordinator,
+		player,
 		entities.get_runtime(),
+		_position_ready,
 		game.loot_drop_scene,
 	)
 	for loot_seed in range(10):
@@ -442,7 +446,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 		_expect(game._get_persisted_position().is_equal_approx(doorway_anchor), "indoor persisted position differs from doorway anchor in cycle %d" % cycle)
 		_expect(world.is_suspended() and manager._suspended and world.chunk_scheduler._suspended, "Game did not suspend world streaming in cycle %d" % cycle)
 		_expect(entities.is_suspended() and not entities.visible, "Game did not suspend overworld entities in cycle %d" % cycle)
-		_expect(not loot.visible, "Game did not suspend overworld loot in cycle %d" % cycle)
+		_expect(not loot.is_physics_processing() and not loot.visible, "Game did not suspend overworld loot in cycle %d" % cycle)
 		_expect(not world.visible and not entrance.visible, "overworld presentation remained visible in cycle %d" % cycle)
 		_expect(environment._world_environment.environment == null and not environment._sun.visible and not environment._sun_fill.visible, "outdoor environment remained active in cycle %d" % cycle)
 		_expect(not environment._ambient_soundscape._running, "outdoor ambient audio remained active in cycle %d" % cycle)
@@ -475,7 +479,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 		_expect(player.targeting_view.voxel_space == voxel_world and player.targeting_view.selection_box.get_parent() == world, "world targeting presentation was not restored in cycle %d" % cycle)
 		_expect(not world.is_suspended() and not manager._suspended and not world.chunk_scheduler._suspended, "Game did not resume world streaming in cycle %d" % cycle)
 		_expect(not entities.is_suspended() and entities.visible, "Game did not resume overworld entities in cycle %d" % cycle)
-		_expect(loot.visible, "Game did not resume overworld loot in cycle %d" % cycle)
+		_expect(loot.is_physics_processing() and loot.visible, "Game did not resume overworld loot in cycle %d" % cycle)
 		_expect(game._active_entity_runtime == world_entity_runtime and player.interactor.entity_runtime == world_entity_runtime, "level exit did not restore player entity queries in cycle %d" % cycle)
 		_expect(combat._entity_runtime == world_entity_runtime and combat._voxel_space == voxel_world, "level exit did not restore overworld combat in cycle %d" % cycle)
 		_expect(world.visible and entrance.visible, "overworld presentation remained hidden after cycle %d" % cycle)
@@ -560,6 +564,7 @@ func _run_structure_designer_cycle(game: TransitionGame, in_level: bool, cycle: 
 	var world_visible := world.visible
 	var entities_suspended := entities.is_suspended()
 	var entities_visible := entities.visible
+	var loot_processing := game.overworld_loot.is_physics_processing()
 	var loot_visible := game.overworld_loot.visible
 	var entrance_visible := game._level_entrance.visible
 	var outdoor_environment := environment._world_environment.environment
@@ -619,13 +624,13 @@ func _run_structure_designer_cycle(game: TransitionGame, in_level: bool, cycle: 
 		_expect(designer_controller._input_enabled, "closing the export dialog did not restore designer input for %s" % label)
 	if in_level:
 		_expect(world.is_suspended() == world_suspended and entities.is_suspended() == entities_suspended, "designer entry changed suspended overworld systems for %s" % label)
-		_expect(game.overworld_loot.visible == loot_visible, "designer entry changed suspended overworld loot for %s" % label)
+		_expect(game.overworld_loot.is_physics_processing() == loot_processing and game.overworld_loot.visible == loot_visible, "designer entry changed suspended overworld loot for %s" % label)
 		_expect(level_runtime != null and not level_runtime.visible and not level_runtime.is_processing(), "designer entry did not suspend the level runtime for %s" % label)
 		_expect(level_runtime.get_entity_runtime().is_suspended(), "designer entry left dungeon entities active for %s" % label)
 		_expect((level_runtime.get_node("WorldEnvironment") as WorldEnvironment).environment == null, "designer entry retained the level environment for %s" % label)
 	else:
 		_expect(world.is_suspended() and entities.is_suspended() and not world.visible and not entities.visible, "designer entry did not suspend overworld systems for %s" % label)
-		_expect(not game.overworld_loot.visible, "designer entry did not suspend overworld loot for %s" % label)
+		_expect(not game.overworld_loot.is_physics_processing() and not game.overworld_loot.visible, "designer entry did not suspend overworld loot for %s" % label)
 		_expect(environment._world_environment.environment == null and not environment._sun.visible and not environment._sun_fill.visible, "designer entry retained the outdoor environment for %s" % label)
 	await game._exit_structure_designer()
 	await process_frame
@@ -646,7 +651,7 @@ func _run_structure_designer_cycle(game: TransitionGame, in_level: bool, cycle: 
 	_expect(level_interaction.process_mode == level_interaction_process_mode, "designer exit did not restore gameplay interaction for %s" % label)
 	_expect(world.is_suspended() == world_suspended and world.visible == world_visible, "designer exit did not restore the world for %s" % label)
 	_expect(entities.is_suspended() == entities_suspended and entities.visible == entities_visible, "designer exit did not restore entities for %s" % label)
-	_expect(game.overworld_loot.visible == loot_visible, "designer exit did not restore overworld loot for %s" % label)
+	_expect(game.overworld_loot.is_physics_processing() == loot_processing and game.overworld_loot.visible == loot_visible, "designer exit did not restore overworld loot for %s" % label)
 	_expect(game._level_entrance.visible == entrance_visible, "designer exit did not restore the entrance for %s" % label)
 	_expect(environment._world_environment.environment == outdoor_environment and environment._sun.visible == outdoor_sun_visible and environment._sun_fill.visible == outdoor_fill_visible and environment._ambient_soundscape._running == outdoor_audio_running, "designer exit did not restore the outdoor environment for %s" % label)
 	if in_level:

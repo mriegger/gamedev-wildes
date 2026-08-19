@@ -90,6 +90,13 @@ func prepare_add_stack(stack: InventoryStack) -> PreparedInventoryChange:
 		return null
 	return _prepare_simulated_change(simulated)
 
+func prepare_add_stack_up_to(stack: InventoryStack) -> PreparedInventoryChange:
+	var simulated := _create_simulation()
+	var accepted := simulated._apply_add_stack_up_to(stack)
+	if accepted == null:
+		return null
+	return _prepare_simulated_change(simulated, accepted)
+
 func prepare_remove_stack(source_index: int, count: int = -1) -> PreparedInventoryChange:
 	var simulated := _create_simulation()
 	var removed := simulated._apply_remove_stack(source_index, count)
@@ -269,6 +276,31 @@ func _apply_add_stack(stack: InventoryStack) -> bool:
 		return false
 	_slots = simulated
 	return true
+
+func _apply_add_stack_up_to(stack: InventoryStack) -> InventoryStack:
+	if not _is_valid_incoming_stack(stack):
+		return null
+	if stack.equipment_instance != null:
+		return stack.copy() if _apply_add_stack(stack) else null
+	var remaining := _grant_item_to_indices(
+		_slots,
+		stack.item_id,
+		stack.count,
+		item_catalog.get_definition(stack.item_id).max_stack,
+		_get_backpack_indices(),
+		equipment_instance_factory,
+	)
+	if remaining > 0:
+		remaining = _grant_item_to_indices(
+			_slots,
+			stack.item_id,
+			remaining,
+			item_catalog.get_definition(stack.item_id).max_stack,
+			_get_hotbar_indices(),
+			equipment_instance_factory,
+		)
+	var accepted_count := stack.count - remaining
+	return null if accepted_count == 0 else InventoryStack.new(stack.item_id, accepted_count)
 
 func _can_remove_stack(source_index: int, count: int = -1) -> bool:
 	if source_index < 0 or source_index >= mini(_size, FILLABLE_SIZE):
