@@ -98,7 +98,7 @@ func _run() -> void:
 	_expect(player_stats.set_base_value(&"defense", 0.0), "unarmored player defense setup failed")
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
 	var player_inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
-	combat.setup(world, player, player_stats, player_inventory, runtime)
+	combat.setup(world, player, player_stats, player_inventory, runtime, load("res://combat/damage/damage_type_catalog.tres") as DamageTypeCatalog)
 	runtime.entity_melee_contact_reached.connect(combat.try_commit_entity_contact)
 	runtime.entity_radial_contact_reached.connect(_record_radial_contact)
 	runtime.entity_radial_contact_reached.connect(combat.try_commit_entity_radial_contact)

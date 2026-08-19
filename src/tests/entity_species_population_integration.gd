@@ -163,7 +163,7 @@ func _route_sheep_contact(coordinator: WorldEntityCoordinator, world: VoxelWorld
 	_expect(inventory.setup_starter(), "combat inventory setup failed")
 	var inventory_loadout := InventoryTestFixture.create_loadout(inventory, player_stats)
 	_expect(inventory_loadout != null and inventory_loadout.select_slot(3), "combat sword selection failed")
-	combat.setup(world, player, player_stats, inventory, coordinator.get_runtime())
+	combat.setup(world, player, player_stats, inventory, coordinator.get_runtime(), load("res://combat/damage/damage_type_catalog.tres") as DamageTypeCatalog)
 	combat.melee_outcome_committed.connect(coordinator.get_runtime().record_melee_outcome)
 	var player_center := player.global_position + Vector3.UP * (player.player_height * 0.5)
 	var target_bounds := sheep.get_world_bounds()

@@ -1,4 +1,4 @@
-[gd_scene load_steps=40 format=3 uid="uid://b22g4me0x1f3h"]
+[gd_scene load_steps=41 format=3 uid="uid://b22g4me0x1f3h"]
 
 [ext_resource type="Script" path="res://game/game.gd" id="1_game"]
 [ext_resource type="PackedScene" path="res://world/world.tscn" id="2_world"]
@@ -39,6 +39,7 @@
 [ext_resource type="Script" path="res://combat/presentation/enemy_combat_feedback.gd" id="37_enemy_feedback"]
 [ext_resource type="Script" path="res://loot/runtime/overworld_loot_coordinator.gd" id="38_loot_coordinator"]
 [ext_resource type="PackedScene" path="res://loot/presentation/loot_drop_view.tscn" id="39_loot_drop"]
+[ext_resource type="Resource" path="res://combat/damage/damage_type_catalog.tres" id="40_damage_types"]
 
 [node name="Game" type="Node3D"]
 script = ExtResource("1_game")
@@ -52,6 +53,7 @@ crafting_recipe_catalog = ExtResource("19_crafting_catalog")
 anvil_recipe_catalog = ExtResource("34_anvil_catalog")
 cauldron_recipe_catalog = ExtResource("36_cauldron_catalog")
 entity_catalog = ExtResource("15_entity_catalog")
+damage_type_catalog = ExtResource("40_damage_types")
 combat_hit_particle_catalog = ExtResource("22_combat_particle_catalog")
 player_stats_definition = ExtResource("16_player_stats")
 player_perk_rules = ExtResource("33_player_perks")

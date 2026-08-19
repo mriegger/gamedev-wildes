@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="DamageTypeCatalog" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://combat/damage/damage_type_catalog.gd" id="1_catalog"]
+[ext_resource type="Script" path="res://combat/damage/damage_type_definition.gd" id="2_definition"]
+[ext_resource type="Resource" path="res://combat/damage/types/slash.tres" id="3_slash"]
+[ext_resource type="Resource" path="res://combat/damage/types/blunt.tres" id="4_blunt"]
+[ext_resource type="Resource" path="res://combat/damage/types/pierce.tres" id="5_pierce"]
+
+[resource]
+script = ExtResource("1_catalog")
+definitions = Array[ExtResource("2_definition")]([ExtResource("3_slash"), ExtResource("4_blunt"), ExtResource("5_pierce")])

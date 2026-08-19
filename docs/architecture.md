@@ -108,9 +108,11 @@ active state; despawn and shutdown do not emit defeat. `Game` consumes the playe
 validation, so support, body collision, and centered-feet requirements cannot diverge.
 
 `MeleeCombatCoordinator` validates cursor targeting, range, sweep arc, voxel visibility, target
-existence, and contact timing before changing health. `MeleeAttackProfile` owns base damage, a
-damage multiplier, an optional sweep angle, optional knockback, and whether targets lock at attack
-start or are acquired at contact. Selecting a melee weapon makes the player presentation smoothly
+existence, and contact timing before changing health. `Game` injects a validated `DamageTypeCatalog`
+that registers the canonical slash, blunt, and pierce definitions accepted by combat.
+`MeleeAttackProfile` owns base damage, a damage multiplier, a canonical damage type, an optional
+sweep angle, optional knockback, and whether targets lock at attack start or are acquired at contact.
+Selecting a melee weapon makes the player presentation smoothly
 track the cursor independently of camera-relative movement whenever the player is not sprinting;
 sprinting restores movement-owned facing. Directional player swings snap to the current cursor ray,
 lock that facing for the attack duration even while sprinting, lock sorted spatial-index candidates
@@ -119,7 +121,10 @@ instead queries its full-circle four-block area at the slam frame, so enemies ar
 to their positions at impact. A zero-degree sweep
 retains exact single-target ray selection, while a full-circle sweep is independent of planar cursor
 aim. The profile calculates
-`max(1, (base damage + attacker strength - target defense) × damage multiplier)`. Each successful
+`max(1, (base damage + attacker strength - target defense) × damage multiplier)`. Entity definitions
+optionally map canonical damage types to weak or resistant responses; missing entries remain neutral.
+Combat applies the response multiplier after the profile calculation: 1.5 for weak, 0.5 for resistant,
+and 1.0 for neutral. Each successful
 physical hit applies that damage through the target state owner, optionally adds a decaying planar
 knockback velocity, then produces an immutable `MeleeOutcome` containing the contact, exact applied
 damage, source item ID, and lethal result. The player interactor separately emits the AoE's ground

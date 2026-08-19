@@ -2,6 +2,7 @@ extends Resource
 class_name MeleeAttackProfile
 
 @export var id: StringName
+@export var damage_type: DamageTypeDefinition
 @export_range(0.01, 10.0, 0.01, "or_greater") var duration: float = 0.48
 @export_range(0.0, 10.0, 0.01, "or_greater") var contact_time: float = 0.24
 @export_range(0.0, 10.0, 0.01, "or_greater") var cooldown: float = 0.48
@@ -20,6 +21,9 @@ func validate(source: String) -> bool:
 	var valid := true
 	if id.is_empty():
 		push_error("[MeleeAttackProfile] Empty ID at %s" % source)
+		valid = false
+	if damage_type == null or not damage_type.validate(source):
+		push_error("[MeleeAttackProfile] Invalid damage type at %s" % source)
 		valid = false
 	if not is_finite(duration) or duration <= 0.0:
 		push_error("[MeleeAttackProfile] Invalid duration at %s" % source)

@@ -145,7 +145,10 @@ the chest with the crafting menu while keeping the backpack open.
 and wood. Item actions are data-driven: the hoe tills exposed grass and dirt, stone and copper
 pickaxes can mine copper, and the sword uses click-triggered, alternating melee swings with a fading
 radial scan tracing its 120-degree attack area in front of the player. Its base damage rolls from 8
-to 12 independently for each enemy hit. The copper hammer uses a slower
+to 12 independently for each enemy hit. Combat registers slash, blunt, and pierce damage types;
+enemies are neutral by default. Zombies take 1.5 times damage from slash, while Skeletons take half
+damage from slash and 1.5 times damage from blunt. Stone Golems take half damage from slash and
+pierce while remaining neutral to blunt. The copper hammer uses a slower
 two-handed overhead slam that damages and knocks back enemies within about
 four blocks of the hammer's ground contact while an expanding white ring marks that area. Its
 damage falls linearly from 1.5 times sword damage at the center to half sword damage at the edge.

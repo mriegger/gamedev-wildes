@@ -1,10 +1,17 @@
-[gd_resource type="Resource" script_class="EntityDefinition" load_steps=6 format=3]
+[gd_resource type="Resource" script_class="EntityDefinition" load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://entities/entity_definition.gd" id="1_definition"]
 [ext_resource type="PackedScene" path="res://entities/zombie/zombie.tscn" id="2_scene"]
 [ext_resource type="Resource" path="res://entities/zombie/zombie_behavior.tres" id="3_behavior"]
 [ext_resource type="Resource" path="res://entities/zombie/zombie_stats.tres" id="4_stats"]
 [ext_resource type="Resource" path="res://loot/pools/zombie.tres" id="5_loot"]
+[ext_resource type="Script" path="res://combat/damage/damage_affinity_definition.gd" id="6_affinity"]
+[ext_resource type="Resource" path="res://combat/damage/types/slash.tres" id="7_slash"]
+
+[sub_resource type="Resource" id="SlashWeakness"]
+script = ExtResource("6_affinity")
+damage_type = ExtResource("7_slash")
+response = 1
 
 [resource]
 script = ExtResource("1_definition")
@@ -12,6 +19,7 @@ id = &"zombie"
 actor_scene = ExtResource("2_scene")
 behavior = ExtResource("3_behavior")
 stats_definition = ExtResource("4_stats")
+damage_affinities = Array[ExtResource("6_affinity")]([SubResource("SlashWeakness")])
 experience_reward = 10
 loot_pool = ExtResource("5_loot")
 body_width = 0.6

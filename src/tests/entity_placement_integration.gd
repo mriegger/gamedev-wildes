@@ -119,7 +119,7 @@ func _run() -> void:
 	_interactor.set_physics_process(false)
 	_player.animation_driver.set_process(false)
 	_coordinator.setup(_make_one_zombie_catalog(), _world, 1337, _always_ready)
-	_combat.setup(_world, _player, player_stats, _inventory, _coordinator.get_runtime())
+	_combat.setup(_world, _player, player_stats, _inventory, _coordinator.get_runtime(), load("res://combat/damage/damage_type_catalog.tres") as DamageTypeCatalog)
 	_interactor.setup(
 		_camera,
 		_player,

@@ -80,12 +80,16 @@ func _make_one_skeleton_catalog() -> EntityCatalog:
 	catalog.definitions = definitions
 	return catalog
 
-func _make_combat_catalog(zombie_count: int, sheep_count: int) -> EntityCatalog:
+func _make_combat_catalog(zombie_count: int, sheep_count: int, skeleton_count: int = 0) -> EntityCatalog:
 	var definitions: Array[EntityDefinition] = []
 	if sheep_count > 0:
 		var sheep := (load("res://entities/definitions/sheep.tres") as EntityDefinition).duplicate(true) as EntityDefinition
 		sheep.ambient_max_active = sheep_count
 		definitions.append(sheep)
+	if skeleton_count > 0:
+		var skeleton := (load("res://entities/definitions/skeleton.tres") as EntityDefinition).duplicate(true) as EntityDefinition
+		skeleton.ambient_max_active = skeleton_count
+		definitions.append(skeleton)
 	if zombie_count > 0:
 		var zombie := (load("res://entities/definitions/zombie.tres") as EntityDefinition).duplicate(true) as EntityDefinition
 		zombie.ambient_max_active = zombie_count
@@ -94,7 +98,7 @@ func _make_combat_catalog(zombie_count: int, sheep_count: int) -> EntityCatalog:
 	catalog.definitions = definitions
 	return catalog
 
-func _make_combat_fixture(world: VoxelWorld, zombie_count: int, sheep_count: int, seed: int) -> Dictionary:
+func _make_combat_fixture(world: VoxelWorld, zombie_count: int, sheep_count: int, seed: int, skeleton_count: int = 0) -> Dictionary:
 	var coordinator := WorldEntityCoordinator.new()
 	var combat := MeleeCombatCoordinator.new()
 	var player := (load("res://player/player.tscn") as PackedScene).instantiate() as PlayerMotor
@@ -107,7 +111,7 @@ func _make_combat_fixture(world: VoxelWorld, zombie_count: int, sheep_count: int
 	player.set_physics_process(false)
 	player.interactor.set_physics_process(false)
 	player.animation_driver.set_process(false)
-	var entity_catalog := _make_combat_catalog(zombie_count, sheep_count)
+	var entity_catalog := _make_combat_catalog(zombie_count, sheep_count, skeleton_count)
 	coordinator.setup(entity_catalog, world, seed, _always_ready)
 	var player_stats := ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
@@ -116,12 +120,14 @@ func _make_combat_fixture(world: VoxelWorld, zombie_count: int, sheep_count: int
 	var item_proficiency := ItemProficiency.new(item_catalog)
 	var inventory_loadout := InventoryTestFixture.create_loadout(inventory, player_stats, item_proficiency)
 	_expect(inventory_loadout != null and inventory_loadout.select_slot(3), "combat fixture sword selection failed")
-	combat.setup(world, player, player_stats, inventory, coordinator.get_runtime())
+	combat.setup(world, player, player_stats, inventory, coordinator.get_runtime(), load("res://combat/damage/damage_type_catalog.tres") as DamageTypeCatalog)
 	combat.melee_outcome_committed.connect(coordinator.get_runtime().record_melee_outcome)
 	combat.melee_outcome_committed.connect(_on_melee_contact)
 	for _index in range(sheep_count):
 		coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT), 12.0)
 	for _index in range(zombie_count):
+		coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
+	for _index in range(skeleton_count):
 		coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
 	return {
 		"camera": camera,
@@ -226,6 +232,7 @@ func _run() -> void:
 	_expect(zombie_profile.cooldown >= zombie_profile.duration, "zombie cooldown is shorter than its attack")
 	_expect(skeleton_profile.cooldown >= skeleton_profile.duration, "skeleton cooldown is shorter than its attack")
 	var zombie_definition := load("res://entities/definitions/zombie.tres") as EntityDefinition
+	var skeleton_definition := load("res://entities/definitions/skeleton.tres") as EntityDefinition
 	var overkill_stats := ActorStats.new(zombie_definition.stats_definition)
 	_expect(is_equal_approx(overkill_stats.damage(1000.0), 80.0), "overkill damage did not clamp to remaining HP")
 	_expect(is_zero_approx(overkill_stats.current_hp) and overkill_stats.is_dead(), "overkill damage did not leave the actor dead at zero HP")
@@ -235,6 +242,8 @@ func _run() -> void:
 	var world := _make_flat_world()
 	await _test_randomized_sword_damage(world, configured_sword_profile)
 	sword_profile.base_damage_variance = 0
+	await _test_damage_affinities(world, sword_profile, hammer_profile, zombie_definition, skeleton_definition)
+	zombie_definition.damage_affinities.clear()
 	var coordinator := WorldEntityCoordinator.new()
 	var combat := MeleeCombatCoordinator.new()
 	var player := (load("res://player/player.tscn") as PackedScene).instantiate() as PlayerMotor
@@ -255,7 +264,7 @@ func _run() -> void:
 	_expect(inventory.setup_starter(), "player combat inventory setup failed")
 	var inventory_loadout := InventoryTestFixture.create_loadout(inventory, player_stats)
 	_expect(inventory_loadout != null and inventory_loadout.select_slot(3), "player combat sword selection failed")
-	combat.setup(world, player, player_stats, inventory, coordinator.get_runtime())
+	combat.setup(world, player, player_stats, inventory, coordinator.get_runtime(), load("res://combat/damage/damage_type_catalog.tres") as DamageTypeCatalog)
 	coordinator.get_runtime().entity_melee_contact_reached.connect(combat.try_commit_entity_contact)
 	combat.melee_outcome_committed.connect(coordinator.get_runtime().record_melee_outcome)
 	combat.melee_outcome_committed.connect(_on_melee_contact)
@@ -588,7 +597,7 @@ func _test_skeleton_timed_melee(world: VoxelWorld, profile: MeleeAttackProfile) 
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
 	var inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	_expect(inventory.setup_starter(), "skeleton combat inventory setup failed")
-	combat.setup(world, player, player_stats, inventory, coordinator.get_runtime())
+	combat.setup(world, player, player_stats, inventory, coordinator.get_runtime(), load("res://combat/damage/damage_type_catalog.tres") as DamageTypeCatalog)
 	coordinator.get_runtime().entity_melee_contact_reached.connect(combat.try_commit_entity_contact)
 	combat.melee_outcome_committed.connect(coordinator.get_runtime().record_melee_outcome)
 	combat.melee_outcome_committed.connect(_on_melee_contact)
@@ -744,7 +753,7 @@ func _test_sheep_damage(world: VoxelWorld, sword_profile: MeleeAttackProfile) ->
 	_expect(inventory.setup_starter(), "sheep combat inventory setup failed")
 	var inventory_loadout := InventoryTestFixture.create_loadout(inventory, player_stats)
 	_expect(inventory_loadout != null and inventory_loadout.select_slot(3), "sheep combat sword selection failed")
-	combat.setup(world, player, player_stats, inventory, coordinator.get_runtime())
+	combat.setup(world, player, player_stats, inventory, coordinator.get_runtime(), load("res://combat/damage/damage_type_catalog.tres") as DamageTypeCatalog)
 	combat.melee_outcome_committed.connect(coordinator.get_runtime().record_melee_outcome)
 	combat.melee_outcome_committed.connect(_on_melee_contact)
 	var item_proficiency := ItemProficiency.new(item_catalog)
@@ -817,15 +826,87 @@ func _test_randomized_sword_damage(world: VoxelWorld, sword_profile: MeleeAttack
 	expected_rng.seed = roll_seed
 	var expected_damage: Array[float] = []
 	for actor in actors:
-		expected_damage.append(sword_profile.roll_damage_at_distance(expected_rng, 10.0, coordinator.get_runtime().get_stat_value(actor.runtime_id, &"defense"), 0.0))
+		var rolled_damage := sword_profile.roll_damage_at_distance(expected_rng, 10.0, coordinator.get_runtime().get_stat_value(actor.runtime_id, &"defense"), 0.0)
+		expected_damage.append(rolled_damage * DamageAffinityDefinition.WEAK_MULTIPLIER)
 	var outcome_count_before := _outcomes.size()
 	_expect(combat._commit_player_contacts(locked_ids, ray[0], ray[1], sword_profile, &"copper_sword"), "random sword damage did not commit both contacts")
 	_expect(_outcomes.size() == outcome_count_before + actors.size(), "random sword damage did not emit one outcome per enemy")
 	for index in range(actors.size()):
 		var outcome := _outcomes[outcome_count_before + index]
 		_expect(is_equal_approx(outcome.applied_damage, expected_damage[index]), "sword enemy damage did not use its independent contact-time roll")
-		_expect(outcome.applied_damage >= 14.0 and outcome.applied_damage <= 18.0, "default player sword damage against zombie defense left the expected 14-18 range")
+		_expect(outcome.applied_damage >= 21.0 and outcome.applied_damage <= 27.0, "slash-weak zombie damage left the expected 21-27 range")
 		_expect(is_equal_approx(coordinator.get_runtime().get_current_hp(actors[index].runtime_id), 80.0 - expected_damage[index]), "random sword damage changed the wrong enemy HP")
+	await _cleanup(combat, coordinator, player, fixture["camera"] as Camera3D)
+
+func _test_damage_affinities(world: VoxelWorld, sword_profile: MeleeAttackProfile, hammer_profile: MeleeAttackProfile, zombie_definition: EntityDefinition, skeleton_definition: EntityDefinition) -> void:
+	var slash := load("res://combat/damage/types/slash.tres") as DamageTypeDefinition
+	var blunt := load("res://combat/damage/types/blunt.tres") as DamageTypeDefinition
+	var pierce := load("res://combat/damage/types/pierce.tres") as DamageTypeDefinition
+	_expect(zombie_definition.get_damage_response(slash) == DamageAffinityDefinition.Response.WEAK, "zombie is not weak to slash damage")
+	_expect(zombie_definition.get_damage_response(blunt) == DamageAffinityDefinition.Response.NEUTRAL, "zombie is not neutral to blunt damage")
+	_expect(zombie_definition.get_damage_response(pierce) == DamageAffinityDefinition.Response.NEUTRAL, "zombie is not neutral to unconfigured pierce damage")
+	_expect(skeleton_definition.get_damage_response(slash) == DamageAffinityDefinition.Response.RESISTANT, "Skeleton is not resistant to slash damage")
+	_expect(skeleton_definition.get_damage_response(blunt) == DamageAffinityDefinition.Response.WEAK, "Skeleton is not weak to blunt damage")
+	_expect(skeleton_definition.get_damage_response(pierce) == DamageAffinityDefinition.Response.NEUTRAL, "Skeleton is not neutral to unconfigured pierce damage")
+	var fixture := _make_combat_fixture(world, 1, 0, 8022)
+	var coordinator := fixture["coordinator"] as WorldEntityCoordinator
+	var combat := fixture["combat"] as MeleeCombatCoordinator
+	var player := fixture["player"] as PlayerMotor
+	var actors := _get_sorted_actors(coordinator)
+	_expect(actors.size() == 1, "blunt neutrality fixture did not spawn one zombie")
+	if actors.size() != 1:
+		await _cleanup(combat, coordinator, player, fixture["camera"] as Camera3D)
+		return
+	_place_at_angle(actors[0], player.global_position, 0.0, 1.5)
+	coordinator.tick(0.0, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
+	var ray := _orthographic_ray(player, Vector2(0.0, -1.0))
+	var locked_ids := combat.acquire_player_targets(ray[0], ray[1], hammer_profile)
+	_expect(locked_ids == _active_ids(actors), "hammer did not lock the blunt-neutral zombie")
+	var player_center := player.global_position + Vector3.UP * (player.player_height * 0.5)
+	var radial_offset := actors[0].get_world_bounds().get_center() - player_center
+	radial_offset.y = 0.0
+	var expected_damage := hammer_profile.calculate_damage_at_distance(10.0, 4.0, radial_offset.length())
+	var outcome_count_before := _outcomes.size()
+	_expect(combat._commit_player_contacts(locked_ids, ray[0], ray[1], hammer_profile, &"copper_hammer"), "hammer damage did not commit against the blunt-neutral zombie")
+	_expect(_outcomes.size() == outcome_count_before + 1, "neutral hammer damage did not emit one outcome")
+	if _outcomes.size() == outcome_count_before + 1:
+		var outcome: MeleeOutcome = _outcomes.back()
+		_expect(is_equal_approx(outcome.applied_damage, expected_damage), "neutral blunt damage applied an affinity multiplier")
+	await _cleanup(combat, coordinator, player, fixture["camera"] as Camera3D)
+
+	fixture = _make_combat_fixture(world, 0, 0, 8023, 1)
+	coordinator = fixture["coordinator"] as WorldEntityCoordinator
+	combat = fixture["combat"] as MeleeCombatCoordinator
+	player = fixture["player"] as PlayerMotor
+	actors = _get_sorted_actors(coordinator)
+	_expect(actors.size() == 1, "Skeleton affinity fixture did not spawn one Skeleton")
+	if actors.size() != 1:
+		await _cleanup(combat, coordinator, player, fixture["camera"] as Camera3D)
+		return
+	_place_at_angle(actors[0], player.global_position, 0.0, 1.5)
+	coordinator.tick(0.0, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
+	ray = _orthographic_ray(player, Vector2(0.0, -1.0))
+	locked_ids = combat.acquire_player_targets(ray[0], ray[1], hammer_profile)
+	_expect(locked_ids == _active_ids(actors), "hammer did not lock the blunt-weak Skeleton")
+	player_center = player.global_position + Vector3.UP * (player.player_height * 0.5)
+	radial_offset = actors[0].get_world_bounds().get_center() - player_center
+	radial_offset.y = 0.0
+	expected_damage = hammer_profile.calculate_damage_at_distance(10.0, 4.0, radial_offset.length()) * DamageAffinityDefinition.WEAK_MULTIPLIER
+	outcome_count_before = _outcomes.size()
+	_expect(combat._commit_player_contacts(locked_ids, ray[0], ray[1], hammer_profile, &"copper_hammer"), "hammer damage did not commit against the blunt-weak Skeleton")
+	_expect(_outcomes.size() == outcome_count_before + 1, "Skeleton blunt weakness did not emit one outcome")
+	if _outcomes.size() == outcome_count_before + 1:
+		var hammer_outcome: MeleeOutcome = _outcomes.back()
+		_expect(is_equal_approx(hammer_outcome.applied_damage, expected_damage), "Skeleton blunt weakness did not apply its 1.5 damage multiplier")
+	locked_ids = combat.acquire_player_targets(ray[0], ray[1], sword_profile)
+	_expect(locked_ids == _active_ids(actors), "sword did not lock the slash-resistant Skeleton")
+	expected_damage = sword_profile.calculate_damage(10.0, 4.0) * DamageAffinityDefinition.RESISTANT_MULTIPLIER
+	outcome_count_before = _outcomes.size()
+	_expect(combat._commit_player_contacts(locked_ids, ray[0], ray[1], sword_profile, &"copper_sword"), "sword damage did not commit against the slash-resistant Skeleton")
+	_expect(_outcomes.size() == outcome_count_before + 1, "Skeleton slash resistance did not emit one outcome")
+	if _outcomes.size() == outcome_count_before + 1:
+		var sword_outcome: MeleeOutcome = _outcomes.back()
+		_expect(is_equal_approx(sword_outcome.applied_damage, expected_damage), "Skeleton slash resistance did not apply its 0.5 damage multiplier")
 	await _cleanup(combat, coordinator, player, fixture["camera"] as Camera3D)
 
 func _test_zero_degree_compatibility(world: VoxelWorld, sword_profile: MeleeAttackProfile) -> void:
@@ -888,7 +969,7 @@ func _test_untargetable_bird(world: VoxelWorld, sword_profile: MeleeAttackProfil
 	_expect(inventory.setup_starter(), "untargetable bird combat inventory setup failed")
 	var inventory_loadout := InventoryTestFixture.create_loadout(inventory, player_stats)
 	_expect(inventory_loadout != null and inventory_loadout.select_slot(3), "untargetable bird combat sword selection failed")
-	combat.setup(world, player, player_stats, inventory, coordinator.get_runtime())
+	combat.setup(world, player, player_stats, inventory, coordinator.get_runtime(), load("res://combat/damage/damage_type_catalog.tres") as DamageTypeCatalog)
 	coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT), 12.0)
 	var bird := coordinator.get_runtime().get_active_actors()[0] as BirdActor if coordinator.get_runtime().get_active_count() == 1 else null
 	_expect(bird != null, "untargetable bird fixture did not spawn")

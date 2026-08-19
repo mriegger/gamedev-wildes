@@ -15,6 +15,7 @@ enum SpawnPlacement {
 @export var actor_scene: PackedScene
 @export var behavior: EntityBehaviorDefinition
 @export var stats_definition: CombatStatsDefinition
+@export var damage_affinities: Array[DamageAffinityDefinition]
 @export_range(0, 999999999, 1, "or_greater") var experience_reward: int = 0
 @export var loot_pool: LootPoolDefinition
 @export_range(0.1, 4.0, 0.01) var body_width: float = 0.6
@@ -47,6 +48,16 @@ func validate(source: String) -> bool:
 	elif not stats_definition.validate():
 		push_error("[EntityDefinition] Invalid stats definition for %s at %s" % [id, source])
 		valid = false
+	var affinity_ids: Dictionary[StringName, bool] = {}
+	for affinity in damage_affinities:
+		if affinity == null or not affinity.validate(source):
+			valid = false
+			continue
+		if affinity_ids.has(affinity.damage_type.id):
+			push_error("[EntityDefinition] Duplicate %s affinity for %s at %s" % [affinity.damage_type.id, id, source])
+			valid = false
+		else:
+			affinity_ids[affinity.damage_type.id] = true
 	if experience_reward < 0:
 		push_error("[EntityDefinition] Invalid experience reward for %s at %s" % [id, source])
 		valid = false
@@ -93,3 +104,10 @@ func is_actor_compatible() -> bool:
 
 func can_spawn_ambiently_on(block_id: int) -> bool:
 	return block_id in ambient_spawn_floor_ids
+
+func get_damage_response(damage_type: DamageTypeDefinition) -> int:
+	assert(damage_type != null)
+	for affinity in damage_affinities:
+		if affinity.damage_type.id == damage_type.id:
+			return affinity.response
+	return DamageAffinityDefinition.Response.NEUTRAL

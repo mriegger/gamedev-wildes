@@ -17,6 +17,7 @@ var _player: PlayerMotor
 var _player_stats: ActorStats
 var _player_inventory: InventoryModel
 var _entity_runtime: EntityRuntime
+var _damage_type_catalog: DamageTypeCatalog
 var _damage_rng := RandomNumberGenerator.new()
 
 func _init() -> void:
@@ -28,6 +29,7 @@ func setup(
 	p_player_stats: ActorStats,
 	p_player_inventory: InventoryModel,
 	p_entity_runtime: EntityRuntime,
+	p_damage_type_catalog: DamageTypeCatalog,
 ) -> void:
 	assert(p_voxel_space != null)
 	assert(p_player != null)
@@ -37,9 +39,11 @@ func setup(
 	assert(p_player_stats.has_stat(&"defense"))
 	assert(p_player_inventory != null)
 	assert(p_entity_runtime != null)
+	assert(p_damage_type_catalog != null and p_damage_type_catalog.validate())
 	_player = p_player
 	_player_stats = p_player_stats
 	_player_inventory = p_player_inventory
+	_damage_type_catalog = p_damage_type_catalog
 	bind_context(p_voxel_space, p_entity_runtime)
 
 func prepare_player_attack(
@@ -298,24 +302,30 @@ func shutdown() -> void:
 	_player_stats = null
 	_player_inventory = null
 	_entity_runtime = null
+	_damage_type_catalog = null
 
 func _commit_contact(contact: MeleeContactType, profile: MeleeAttackProfileType, source_item_id: StringName, distance_from_attack_center: float = 0.0) -> bool:
 	assert(contact.attack_id == profile.id)
 	assert(is_finite(distance_from_attack_center) and distance_from_attack_center >= 0.0)
+	if not _damage_type_catalog.has_definition(profile.damage_type):
+		return false
 	var applied_damage: float
 	var target_defeated := false
+	var damage_response := DamageAffinityDefinition.Response.NEUTRAL
 	if contact.source_runtime_id == PLAYER_RUNTIME_ID:
 		if _player_stats.is_dead():
 			return false
 		var target := _entity_runtime.get_actor(contact.target_runtime_id)
 		if target == null or target.definition.id != contact.target_definition_id:
 			return false
+		damage_response = target.definition.get_damage_response(profile.damage_type)
 		var damage := profile.roll_damage_at_distance(
 			_damage_rng,
 			_player_stats.get_value(&"strength"),
 			_entity_runtime.get_stat_value(contact.target_runtime_id, &"defense"),
 			distance_from_attack_center,
 		)
+		damage = maxf(1.0, damage * DamageAffinityDefinition.get_multiplier(damage_response))
 		var damage_result := _entity_runtime.try_apply_damage(contact.target_runtime_id, damage)
 		if damage_result == null:
 			return false
@@ -418,4 +428,4 @@ func _bounds_overlap_vertically(first: AABB, second: AABB) -> bool:
 	return minf(first.end.y, second.end.y) - maxf(first.position.y, second.position.y) > GEOMETRY_EPSILON
 
 func _is_setup() -> bool:
-	return _voxel_space != null and _player != null and _player_stats != null and _player_inventory != null and _entity_runtime != null
+	return _voxel_space != null and _player != null and _player_stats != null and _player_inventory != null and _entity_runtime != null and _damage_type_catalog != null

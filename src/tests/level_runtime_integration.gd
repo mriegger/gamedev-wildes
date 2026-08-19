@@ -229,6 +229,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	game.block_catalog = block_catalog
 	game.item_catalog = load("res://items/item_catalog.tres") as ItemCatalog
 	game.entity_catalog = load("res://entities/entity_catalog.tres") as EntityCatalog
+	game.damage_type_catalog = load("res://combat/damage/damage_type_catalog.tres") as DamageTypeCatalog
 	game.player_stats_definition = load("res://player/player_stats.tres") as CombatStatsDefinition
 	game.level_catalog = catalog
 	game.level_entrance_definition = load("res://levels/content/dungeons/stone/entrance.tres") as LevelEntranceDefinition
@@ -353,7 +354,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	structure_dialogs.open_state_changed.connect(game._on_structure_dialog_open_state_changed)
 	camera_rig.setup(player, game.input_buffer)
 	entities.setup(game.entity_catalog, voxel_world, 1337, _position_ready)
-	combat.setup(voxel_world, player, game.player_stats, game.inventory_model, entities.get_runtime())
+	combat.setup(voxel_world, player, game.player_stats, game.inventory_model, entities.get_runtime(), game.damage_type_catalog)
 	enemy_combat_feedback.setup(combat, camera_rig.camera)
 	player.setup(
 		camera_rig,

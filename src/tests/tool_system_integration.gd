@@ -346,7 +346,7 @@ func _run():
 	var item_proficiency := ItemProficiency.new(item_catalog)
 	_inventory_loadout = InventoryLoadoutCoordinator.new()
 	_expect(_inventory_loadout.setup(_inventory, player_stats, item_proficiency), "inventory stat coordinator setup failed")
-	_combat.setup(_voxel_world, _player, player_stats, _inventory, _world_entity_coordinator.get_runtime())
+	_combat.setup(_voxel_world, _player, player_stats, _inventory, _world_entity_coordinator.get_runtime(), load("res://combat/damage/damage_type_catalog.tres") as DamageTypeCatalog)
 	var movement_camera_rig := (load("res://player/camera/camera_rig.tscn") as PackedScene).instantiate() as CameraRig
 	root.add_child(movement_camera_rig)
 	movement_camera_rig.camera = _camera

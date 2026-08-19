@@ -19,6 +19,7 @@ signal main_menu_requested
 @export var anvil_recipe_catalog: CraftingRecipeCatalog
 @export var cauldron_recipe_catalog: CraftingRecipeCatalog
 @export var entity_catalog: EntityCatalog
+@export var damage_type_catalog: DamageTypeCatalog
 @export var combat_hit_particle_catalog: CombatHitParticleCatalog
 @export var player_stats_definition: CombatStatsDefinition
 @export var player_perk_rules: PlayerPerkRules
@@ -123,13 +124,14 @@ func _ready():
 	var cauldron_catalog_valid := cauldron_recipe_catalog != null and cauldron_recipe_catalog.validate(item_catalog)
 	var entity_catalog_valid := entity_catalog.validate()
 	var loot_catalog_valid := entity_catalog_valid and item_catalog_valid and LootCatalogValidator.validate_entity_catalog(entity_catalog, item_catalog)
+	var damage_type_catalog_valid := damage_type_catalog != null and damage_type_catalog.validate()
 	var combat_particle_catalog_valid := combat_hit_particle_catalog.validate(entity_catalog)
 	var player_stats_valid := player_stats_definition.validate()
 	var player_perks_valid := player_perk_rules != null and player_perk_rules.validate(player_stats_definition)
 	var level_catalog_valid := level_catalog.validate()
 	var level_encounter_catalog_valid := level_catalog_valid and entity_catalog_valid and LevelEncounterCatalogValidator.validate(level_catalog, entity_catalog)
 	var level_entrance_valid := level_catalog_valid and level_entrance_definition != null and level_entrance_definition.validate(level_catalog)
-	if not block_catalog_valid or not item_catalog_valid or not chest_content_valid or not crafting_catalog_valid or not anvil_catalog_valid or not cauldron_catalog_valid or not entity_catalog_valid or not loot_catalog_valid or not combat_particle_catalog_valid or not player_stats_valid or not player_perks_valid or not level_catalog_valid or not level_encounter_catalog_valid or not level_entrance_valid:
+	if not block_catalog_valid or not item_catalog_valid or not chest_content_valid or not crafting_catalog_valid or not anvil_catalog_valid or not cauldron_catalog_valid or not entity_catalog_valid or not loot_catalog_valid or not damage_type_catalog_valid or not combat_particle_catalog_valid or not player_stats_valid or not player_perks_valid or not level_catalog_valid or not level_encounter_catalog_valid or not level_entrance_valid:
 		_fail_session_start("Game content validation failed. The save was not changed.")
 		return
 	var structure_file_store := StructureFileStore.new(ProjectSettings.globalize_path("res://../").simplify_path())
@@ -344,7 +346,7 @@ func _setup_gameplay() -> bool:
 	camera_rig.setup(player, input_buffer)
 	world_entity_coordinator.setup(entity_catalog, world.voxel_model, world.config.seed_value, world.is_position_streamed)
 	var world_entities := world_entity_coordinator.get_runtime()
-	melee_combat.setup(world.voxel_model, player, player_stats, inventory_model, world_entities)
+	melee_combat.setup(world.voxel_model, player, player_stats, inventory_model, world_entities, damage_type_catalog)
 	melee_combat.melee_outcome_committed.connect(combat_progression_coordinator.record_melee_outcome)
 	melee_combat.melee_outcome_committed.connect(_on_melee_outcome_committed)
 	combat_hit_particles.setup(melee_combat, combat_hit_particle_catalog)

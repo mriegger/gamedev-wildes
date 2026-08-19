@@ -337,6 +337,7 @@ func _make_ground_melee_behavior() -> GroundMeleeEnemyBehaviorDefinition:
 	behavior.target_memory_seconds = 2.0
 	var melee_profile := MeleeAttackProfile.new()
 	melee_profile.id = &"test_zombie_melee"
+	melee_profile.damage_type = load("res://combat/damage/types/blunt.tres") as DamageTypeDefinition
 	melee_profile.reach = 1.5
 	melee_profile.duration = 0.5
 	melee_profile.contact_time = 0.25

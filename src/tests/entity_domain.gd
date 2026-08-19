@@ -42,6 +42,17 @@ func _run():
 	_expect(is_equal_approx(zombie.stats_definition.maximum_hp, 80.0), "zombie maximum HP is not 80")
 	_expect(is_equal_approx(zombie.stats_definition.defense, 4.0), "zombie defense is not 4")
 	_expect(is_equal_approx(zombie.stats_definition.strength, 5.0), "zombie strength is not 5")
+	var slash := load("res://combat/damage/types/slash.tres") as DamageTypeDefinition
+	var blunt := load("res://combat/damage/types/blunt.tres") as DamageTypeDefinition
+	var pierce := load("res://combat/damage/types/pierce.tres") as DamageTypeDefinition
+	_expect(slash.validate(slash.resource_path) and blunt.validate(blunt.resource_path) and pierce.validate(pierce.resource_path), "physical damage type definitions are invalid")
+	var damage_type_catalog := load("res://combat/damage/damage_type_catalog.tres") as DamageTypeCatalog
+	_expect(damage_type_catalog != null and damage_type_catalog.validate(), "damage type catalog failed validation")
+	_expect(damage_type_catalog.definitions.size() == 3, "damage type catalog does not register three physical types")
+	_expect(damage_type_catalog.has_definition(slash) and damage_type_catalog.has_definition(blunt) and damage_type_catalog.has_definition(pierce), "damage type catalog is missing a canonical physical type")
+	_expect(zombie.get_damage_response(slash) == DamageAffinityDefinition.Response.WEAK, "zombie slash weakness is missing")
+	_expect(zombie.get_damage_response(blunt) == DamageAffinityDefinition.Response.NEUTRAL, "zombie blunt response is not neutral")
+	_expect(zombie.get_damage_response(pierce) == DamageAffinityDefinition.Response.NEUTRAL, "zombie pierce response is not neutral")
 	var sheep := catalog.get_definition(&"sheep")
 	_expect(sheep.ambient_spawn_phase == EntityDefinition.SpawnPhase.DAY, "sheep is not day-spawned")
 	_expect(sheep.ambient_max_active == 6, "sheep population cap is not six")
@@ -58,6 +69,9 @@ func _run():
 	_expect(is_equal_approx(skeleton.stats_definition.maximum_hp, 80.0), "Skeleton maximum HP is not 80")
 	_expect(is_equal_approx(skeleton.stats_definition.defense, 4.0), "Skeleton defense is not 4")
 	_expect(is_equal_approx(skeleton.stats_definition.strength, 5.0), "Skeleton strength is not 5")
+	_expect(skeleton.get_damage_response(slash) == DamageAffinityDefinition.Response.RESISTANT, "Skeleton slash resistance is missing")
+	_expect(skeleton.get_damage_response(blunt) == DamageAffinityDefinition.Response.WEAK, "Skeleton blunt weakness is missing")
+	_expect(skeleton.get_damage_response(pierce) == DamageAffinityDefinition.Response.NEUTRAL, "Skeleton pierce response is not neutral")
 	_expect(skeleton.experience_reward == 10, "Skeleton experience reward is not 10")
 	var stone_golem := catalog.get_definition(&"stone_golem")
 	_expect(stone_golem.id == &"stone_golem", "Stone Golem ID changed")
@@ -68,6 +82,12 @@ func _run():
 	_expect(is_equal_approx(stone_golem.stats_definition.maximum_hp, 200.0), "Stone Golem maximum HP is not 200")
 	_expect(is_equal_approx(stone_golem.stats_definition.defense, 10.0), "Stone Golem defense is not 10")
 	_expect(is_equal_approx(stone_golem.stats_definition.strength, 10.0), "Stone Golem strength is not 10")
+	var stone_golem_behavior := stone_golem.behavior as StoneGolemBehaviorDefinition
+	_expect(stone_golem_behavior.punch_profile.damage_type == blunt, "Stone Golem punch is not blunt damage")
+	_expect(stone_golem_behavior.slam_profile.damage_type == blunt, "Stone Golem slam is not blunt damage")
+	_expect(stone_golem.get_damage_response(slash) == DamageAffinityDefinition.Response.RESISTANT, "Stone Golem slash resistance is missing")
+	_expect(stone_golem.get_damage_response(blunt) == DamageAffinityDefinition.Response.NEUTRAL, "Stone Golem blunt response is not neutral")
+	_expect(stone_golem.get_damage_response(pierce) == DamageAffinityDefinition.Response.RESISTANT, "Stone Golem pierce resistance is missing")
 	_expect(stone_golem.experience_reward == 30, "Stone Golem experience reward is not 30")
 	_expect(is_equal_approx(stone_golem.body_width, 1.2), "Stone Golem body width is not 1.2")
 	_expect(is_equal_approx(stone_golem.body_height, 2.4), "Stone Golem body height is not 2.4")

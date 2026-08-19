@@ -1,10 +1,12 @@
-[gd_resource type="Resource" script_class="MeleeAttackProfile" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="MeleeAttackProfile" load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://combat/melee_attack_profile.gd" id="1_profile"]
+[ext_resource type="Resource" path="res://combat/damage/types/blunt.tres" id="2_damage_type"]
 
 [resource]
 script = ExtResource("1_profile")
 id = &"stone_golem_punch"
+damage_type = ExtResource("2_damage_type")
 duration = 0.8
 contact_time = 0.46
 cooldown = 1.4

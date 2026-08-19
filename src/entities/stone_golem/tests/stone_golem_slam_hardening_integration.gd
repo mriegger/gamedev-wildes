@@ -94,7 +94,7 @@ func _create_fixture(player_position: Vector3) -> Fixture:
 	_expect(fixture.player_stats.set_base_value(&"defense", 0.0), "unarmored player defense setup failed")
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
 	fixture.player_inventory = InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
-	fixture.combat.setup(fixture.world, fixture.player, fixture.player_stats, fixture.player_inventory, fixture.runtime)
+	fixture.combat.setup(fixture.world, fixture.player, fixture.player_stats, fixture.player_inventory, fixture.runtime, load("res://combat/damage/damage_type_catalog.tres") as DamageTypeCatalog)
 	fixture.runtime.entity_melee_contact_reached.connect(fixture.combat.try_commit_entity_contact)
 	fixture.runtime.entity_radial_contact_reached.connect(_record_radial_contact)
 	fixture.runtime.entity_radial_contact_reached.connect(fixture.combat.try_commit_entity_radial_contact)
