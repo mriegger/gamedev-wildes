@@ -61,3 +61,7 @@ systems. Keep features independently changeable without introducing shared mutab
 7. Do not add comments. Make ownership, naming, types, and boundaries explain the code.
 8. Before finishing, search every added symbol, remove dead code and temporary files, and confirm
    `git status` contains only intended changes.
+
+## Definition of done
+
+Once implementation is done and before pushing a PR, run `REVEIEW.md` ONLY ONCE to get feedback, do not run more than once. Fix any P0 blockers. 
