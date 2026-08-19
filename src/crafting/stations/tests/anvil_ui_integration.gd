@@ -84,7 +84,8 @@ func _process(_delta: float) -> bool:
 		var stats_heading := _hud.anvil_panel.get_node("Margin/Content/Body/Details/StatsHeading") as Label
 		var stats_label := _hud.anvil_panel.get_node("Margin/Content/Body/Details/Stats") as RichTextLabel
 		_expect(stats_label.has_theme_font_override(&"bold_font") and stats_label.size_flags_vertical == Control.SIZE_SHRINK_CENTER and stats_label.get_theme_font_size(&"bold_font_size") == 13 and stats_label.get_theme_constant(&"line_separation") == 3, "crafting stats no longer use the compact card layout")
-		_expect(not stats_heading.visible and not stats_label.visible, "non-weapon recipe displayed weapon stats")
+		_expect(stats_heading.visible and stats_label.visible, "copper pickaxe recipe did not display mining stats")
+		_expect(stats_label.get_parsed_text().contains("Mining Power: 2") and stats_label.get_parsed_text().contains("Speed Multiplier: 2x"), "copper pickaxe recipe stats are incomplete")
 		_hud.anvil_panel.select_recipe(&"copper_sword")
 		_expect(stats_heading.visible and stats_label.visible, "sword recipe did not display weapon stats")
 		for expected_stat in ["Slash: 10 (8–10)", "Reach: 2.5", "Cooldown: 0.48s", "Sweep: 120°", "Knockback: 0"]:
@@ -122,6 +123,9 @@ func _process(_delta: float) -> bool:
 		_expect(_hud.crafting_panel.is_open() and _hud.side_panel.is_open(), "Tab did not open general crafting and the backpack")
 		var general_recipe_list := _hud.crafting_panel.get_node("Margin/Content/Body/Recipes/RecipeScroll/RecipeList") as VBoxContainer
 		_expect(general_recipe_list.get_child_count() == 7, "general crafting contains metal recipes or is missing a station recipe")
+		_hud.crafting_panel.select_recipe(&"stone_pickaxe")
+		var general_stats := _hud.crafting_panel.get_node("Margin/Content/Body/Details/Stats") as RichTextLabel
+		_expect(general_stats.visible and general_stats.get_parsed_text().contains("Mining Power: 1") and general_stats.get_parsed_text().contains("Speed Multiplier: 1.5x"), "stone pickaxe recipe stats are incomplete")
 		_hud.open_crafting_station(_cauldron_position, _cauldron_station)
 		_phase = 4
 	elif _phase == 4 and _frame == 134:

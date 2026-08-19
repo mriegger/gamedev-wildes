@@ -163,6 +163,34 @@ func _run():
 	_expect(is_equal_approx(hammer_profile.radial_damage_center_multiplier, 1.0) and is_equal_approx(hammer_profile.radial_damage_edge_multiplier, 1.0 / 3.0), "copper hammer radial damage falloff is misconfigured")
 	_expect(hammer_profile.acquire_targets_on_contact and is_equal_approx(hammer_profile.knockback_speed, 8.0) and is_equal_approx(hammer_profile.impact_origin_forward_offset, 1.445), "copper hammer impact behavior is incomplete")
 	_expect(hammer.rarity == sword.rarity and hammer.proficiency == sword.proficiency, "copper hammer does not use canonical weapon progression")
+	var highlight_color := CombatPresentationPalette.WEAK_DAMAGE_COLOR.to_html(false)
+	_expect(ItemStatFormatter.get_item_stat_lines(stone_pickaxe) == [
+		"Mining Power: [b][color=#%s]1[/color][/b]" % highlight_color,
+		"Speed Multiplier: [b][color=#%s]1.5x[/color][/b]" % highlight_color,
+	], "stone pickaxe presentation stats are incorrect")
+	_expect(ItemStatFormatter.get_item_stat_lines(copper_pickaxe) == [
+		"Mining Power: [b][color=#%s]2[/color][/b]" % highlight_color,
+		"Speed Multiplier: [b][color=#%s]2x[/color][/b]" % highlight_color,
+	], "copper pickaxe presentation stats are incorrect")
+	var pickaxe_inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
+	InventoryTestFixture.restore_slot(pickaxe_inventory, 0, InventoryStack.new(
+		&"stone_pickaxe",
+		1,
+		pickaxe_inventory.equipment_instance_factory.create(&"stone_pickaxe"),
+	))
+	var pickaxe_slot := (load("res://inventory/ui/inventory_slot.tscn") as PackedScene).instantiate() as InventorySlot
+	root.add_child(pickaxe_slot)
+	pickaxe_slot.set_inventory(pickaxe_inventory)
+	pickaxe_slot.set_item_proficiency(ItemProficiency.new(item_catalog))
+	pickaxe_slot.set_slot_index(0)
+	pickaxe_slot.set_item(&"stone_pickaxe", 1)
+	var pickaxe_tooltip := pickaxe_slot._make_custom_tooltip(pickaxe_slot.tooltip_text) as ItemTooltip
+	_expect(pickaxe_tooltip != null, "stone pickaxe did not expose its mining stat tooltip")
+	if pickaxe_tooltip != null:
+		root.add_child(pickaxe_tooltip)
+		_expect(pickaxe_tooltip.stats_label.get_parsed_text().contains("Mining Power: 1") and pickaxe_tooltip.stats_label.get_parsed_text().contains("Speed Multiplier: 1.5x"), "stone pickaxe tooltip stats are incomplete")
+		pickaxe_tooltip.free()
+	pickaxe_slot.free()
 	var hammer_held := hammer.held_scene.instantiate() as Node3D
 	var hammer_handle := hammer_held.get_node_or_null("Handle") as MeshInstance3D
 	var hammer_head := hammer_held.get_node_or_null("Head") as MeshInstance3D

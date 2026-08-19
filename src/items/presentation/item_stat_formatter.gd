@@ -8,6 +8,7 @@ static func get_item_stat_lines(item_definition: ItemDefinition) -> Array[String
 	if armor != null:
 		lines.append("Slot: %s" % ArmorDefinition.get_slot_label(armor.armor_slot))
 	lines.append_array(get_melee_stat_lines(item_definition))
+	lines.append_array(get_pickaxe_stat_lines(item_definition))
 	lines.append_array(get_consumable_stat_lines(item_definition))
 	lines.append_array(get_modifier_stat_lines(item_definition.stat_modifiers))
 	return lines
@@ -29,6 +30,19 @@ static func get_melee_stat_lines(item_definition: ItemDefinition) -> Array[Strin
 	lines.append("Cooldown: %s" % highlight("%ss" % format_number(profile.cooldown)))
 	lines.append("Sweep: %s" % highlight("%s°" % format_number(profile.sweep_degrees)))
 	lines.append("Knockback: %s" % highlight(format_number(profile.knockback_speed)))
+	return lines
+
+static func get_pickaxe_stat_lines(item_definition: ItemDefinition) -> Array[String]:
+	assert(item_definition != null)
+	var lines: Array[String] = []
+	var mining_action := item_definition.primary_action as MiningActionDefinition
+	if mining_action == null:
+		return lines
+	var pickaxe_stat := mining_action.get_tool_stat(&"pickaxe")
+	if pickaxe_stat == null:
+		return lines
+	lines.append("Mining Power: %s" % highlight(format_number(pickaxe_stat.power)))
+	lines.append("Speed Multiplier: %s" % highlight("%sx" % format_number(pickaxe_stat.speed_multiplier)))
 	return lines
 
 static func get_consumable_stat_lines(item_definition: ItemDefinition) -> Array[String]:
