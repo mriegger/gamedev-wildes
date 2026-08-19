@@ -9,9 +9,9 @@ from pathlib import Path
 from typing import Any
 
 
-RUN_COUNT = 5
+RUN_COUNT = 3
 RELATIVE_THRESHOLD = 0.15
-REQUIRED_REGRESSION_PAIRS = 3
+REQUIRED_REGRESSION_PAIRS = 2
 
 
 @dataclass(frozen=True)

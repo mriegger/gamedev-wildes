@@ -45,14 +45,14 @@ class ComparePerformanceTest(unittest.TestCase):
         schema_version: int = 2,
     ) -> None:
         values = {
-            "entity_frame": entity_values or [1.0] * 5,
-            "bounded_path_search": path_values or [1.0] * 5,
-            "steady_game_frame": steady_values or [4.0] * 5,
-            "streaming_game_frame": streaming_values or [6.0] * 5,
-            "chunk_build": chunk_build_values or [10.0] * 5,
-            "chunk_apply": chunk_apply_values or [1.0] * 5,
+            "entity_frame": entity_values or [1.0] * 3,
+            "bounded_path_search": path_values or [1.0] * 3,
+            "steady_game_frame": steady_values or [4.0] * 3,
+            "streaming_game_frame": streaming_values or [6.0] * 3,
+            "chunk_build": chunk_build_values or [10.0] * 3,
+            "chunk_apply": chunk_apply_values or [1.0] * 3,
         }
-        for run_number in range(1, 6):
+        for run_number in range(1, 4):
             entity_report = {
                 "schema_version": schema_version,
                 "benchmark_id": "entity_efficiency",
@@ -107,13 +107,13 @@ class ComparePerformanceTest(unittest.TestCase):
 
     def test_reports_majority_relative_regression(self) -> None:
         self._reports(self.base_dir)
-        self._reports(self.candidate_dir, steady_values=[5.0, 5.0, 5.0, 4.0, 4.0])
+        self._reports(self.candidate_dir, steady_values=[5.0, 5.0, 4.0])
         completed = self._run()
         self.assertEqual(completed.returncode, 0)
         self.assertIn("::warning title=Performance regression%3A Steady gameplay CPU::", completed.stdout)
         metric = self._metric("steady_game_frame")
         self.assertTrue(metric["relative_regression"])
-        self.assertEqual(metric["regressed_runs"], [1, 2, 3])
+        self.assertEqual(metric["regressed_runs"], [1, 2])
 
     def test_includes_unbudgeted_telemetry_without_warning(self) -> None:
         self._reports(self.base_dir)
@@ -129,7 +129,7 @@ class ComparePerformanceTest(unittest.TestCase):
 
     def test_suppresses_relative_change_below_noise_floor(self) -> None:
         self._reports(self.base_dir)
-        self._reports(self.candidate_dir, entity_values=[1.2] * 5)
+        self._reports(self.candidate_dir, entity_values=[1.2] * 3)
         completed = self._run()
         self.assertEqual(completed.returncode, 0)
         metric = self._metric("entity_frame")
@@ -137,19 +137,19 @@ class ComparePerformanceTest(unittest.TestCase):
         self.assertEqual(metric["regressed_runs"], [])
         self.assertEqual(metric["status"], "ok")
 
-    def test_two_regressed_pairs_do_not_form_majority(self) -> None:
+    def test_one_regressed_pair_does_not_form_majority(self) -> None:
         self._reports(self.base_dir)
-        self._reports(self.candidate_dir, steady_values=[5.0, 5.0, 4.0, 4.0, 4.0])
+        self._reports(self.candidate_dir, steady_values=[5.0, 4.0, 4.0])
         completed = self._run()
         self.assertEqual(completed.returncode, 0)
         metric = self._metric("steady_game_frame")
         self.assertFalse(metric["relative_regression"])
-        self.assertEqual(metric["regressed_runs"], [1, 2])
+        self.assertEqual(metric["regressed_runs"], [1])
         self.assertEqual(metric["status"], "ok")
 
     def test_warns_when_absolute_budget_is_exceeded_without_regression(self) -> None:
-        self._reports(self.base_dir, entity_values=[2.1] * 5)
-        self._reports(self.candidate_dir, entity_values=[2.1] * 5)
+        self._reports(self.base_dir, entity_values=[2.1] * 3)
+        self._reports(self.candidate_dir, entity_values=[2.1] * 3)
         completed = self._run()
         self.assertEqual(completed.returncode, 0)
         self.assertIn("Performance budget exceeded%3A Entity update", completed.stdout)
@@ -162,7 +162,7 @@ class ComparePerformanceTest(unittest.TestCase):
         self._reports(self.base_dir)
         self._reports(self.candidate_dir)
         (self.base_dir / "game_performance_2.json").unlink()
-        (self.candidate_dir / "entity_efficiency_4.json").write_text("not json", encoding="utf-8")
+        (self.candidate_dir / "entity_efficiency_3.json").write_text("not json", encoding="utf-8")
         completed = self._run()
         self.assertEqual(completed.returncode, 0)
         self.assertTrue(self.output_json.is_file())
@@ -179,7 +179,7 @@ class ComparePerformanceTest(unittest.TestCase):
         self.assertEqual(completed.returncode, 0)
         self.assertTrue(self.output_json.is_file())
         result = self._result()
-        self.assertEqual(result["telemetry_issue_count"], 10)
+        self.assertEqual(result["telemetry_issue_count"], 6)
         self.assertTrue(all(metric["status"] == "telemetry_unavailable" for metric in result["metrics"]))
 
     def test_invalid_arguments_return_zero(self) -> None:

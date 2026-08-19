@@ -19,18 +19,28 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  performance-advisory:
-    name: Non-blocking performance advisory
+  collect-performance:
+    name: ${{ matrix.label }} performance telemetry
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 20
     continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - benchmark_id: entity_efficiency
+            label: Entity
+          - benchmark_id: game_performance
+            label: Game
     steps:
       - name: Prepare advisory outputs
         continue-on-error: true
+        env:
+          BENCHMARK_ID: ${{ matrix.benchmark_id }}
         run: |
           set +e
           mkdir -p /tmp/performance-advisory
-          : > /tmp/performance-advisory/workflow-issues.md
+          : > "/tmp/performance-advisory/workflow-issues-$BENCHMARK_ID.md"
 
       - name: Checkout candidate revision
         id: candidate_checkout
@@ -90,54 +100,42 @@ jobs:
         continue-on-error: true
         env:
           BASELINE_OUTCOME: ${{ steps.baseline_checkout.outcome }}
+          BENCHMARK_ID: ${{ matrix.benchmark_id }}
           CANDIDATE_OUTCOME: ${{ steps.candidate_checkout.outcome }}
         run: |
           set +e
+          issue_file="/tmp/performance-advisory/workflow-issues-$BENCHMARK_ID.md"
           if [ "$CANDIDATE_OUTCOME" != success ]; then
-            message="Candidate checkout failed; telemetry unavailable"
+            message="Candidate checkout failed; $BENCHMARK_ID telemetry unavailable"
             printf '::warning title=Performance telemetry unavailable::%s\n' "$message"
-            printf -- '- **Performance telemetry unavailable:** %s\n' "$message" >> /tmp/performance-advisory/workflow-issues.md
+            printf -- '- **Performance telemetry unavailable:** %s\n' "$message" >> "$issue_file"
           fi
           if [ "$BASELINE_OUTCOME" != success ]; then
-            message="Baseline checkout failed; relative telemetry unavailable"
+            message="Baseline checkout failed; $BENCHMARK_ID relative telemetry unavailable"
             printf '::warning title=Performance telemetry unavailable::%s\n' "$message"
-            printf -- '- **Performance telemetry unavailable:** %s\n' "$message" >> /tmp/performance-advisory/workflow-issues.md
-          fi
-
-      - name: Validate performance comparator
-        if: always()
-        continue-on-error: true
-        run: |
-          set +e
-          python3 -B -m unittest discover -s .github/scripts/tests -p 'test_*.py' \
-            > /tmp/performance-advisory/comparator-tests.log 2>&1
-          test_status=$?
-          cat /tmp/performance-advisory/comparator-tests.log
-          if [ "$test_status" -ne 0 ]; then
-            message="Performance comparator tests failed; telemetry may be unreliable"
-            printf '::warning title=Performance telemetry unavailable::%s\n' "$message"
-            printf -- '- **Performance telemetry unavailable:** %s\n' "$message" >> /tmp/performance-advisory/workflow-issues.md
+            printf -- '- **Performance telemetry unavailable:** %s\n' "$message" >> "$issue_file"
           fi
 
       - name: Overlay candidate benchmark harness onto baseline
-        id: overlay
         if: always()
         continue-on-error: true
+        env:
+          BENCHMARK_ID: ${{ matrix.benchmark_id }}
         run: |
           set +e
+          issue_file="/tmp/performance-advisory/workflow-issues-$BENCHMARK_ID.md"
           files=(
             src/tests/performance_sample_stats.gd
             src/tests/performance_entity_target.gd
-            src/tests/entity_efficiency_benchmark.gd
-            src/tests/game_performance_benchmark.gd
+            "src/tests/${BENCHMARK_ID}_benchmark.gd"
           )
           for file in "${files[@]}"; do
             if [ -f "$file" ] && [ -d baseline/src/tests ]; then
               cp "$file" "baseline/$file"
             else
-              message="Could not overlay $file onto the baseline; relative telemetry may be unavailable"
+              message="Could not overlay $file onto the baseline; $BENCHMARK_ID relative telemetry may be unavailable"
               printf '::warning title=Performance telemetry unavailable::%s\n' "$message"
-              printf -- '- **Performance telemetry unavailable:** %s\n' "$message" >> /tmp/performance-advisory/workflow-issues.md
+              printf -- '- **Performance telemetry unavailable:** %s\n' "$message" >> "$issue_file"
             fi
           done
 
@@ -154,19 +152,21 @@ jobs:
         if: always()
         continue-on-error: true
         env:
+          BENCHMARK_ID: ${{ matrix.benchmark_id }}
           IMPORT_OUTCOME: ${{ steps.candidate_import.outcome }}
         run: |
           set +e
+          issue_file="/tmp/performance-advisory/workflow-issues-$BENCHMARK_ID.md"
           if [ -f /tmp/godot-import-initial.log ]; then
-            cp /tmp/godot-import-initial.log /tmp/performance-advisory/candidate-import-initial.log
+            cp /tmp/godot-import-initial.log "/tmp/performance-advisory/candidate-import-initial-$BENCHMARK_ID.log"
           fi
           if [ -f /tmp/godot-import-validation.log ]; then
-            cp /tmp/godot-import-validation.log /tmp/performance-advisory/candidate-import-validation.log
+            cp /tmp/godot-import-validation.log "/tmp/performance-advisory/candidate-import-validation-$BENCHMARK_ID.log"
           fi
           if [ "$IMPORT_OUTCOME" != success ]; then
-            message="Candidate import failed; candidate telemetry may be unavailable"
+            message="Candidate import failed; $BENCHMARK_ID candidate telemetry may be unavailable"
             printf '::warning title=Performance telemetry unavailable::%s\n' "$message"
-            printf -- '- **Performance telemetry unavailable:** %s\n' "$message" >> /tmp/performance-advisory/workflow-issues.md
+            printf -- '- **Performance telemetry unavailable:** %s\n' "$message" >> "$issue_file"
           fi
           : > /tmp/godot-import-initial.log
           : > /tmp/godot-import-validation.log
@@ -184,50 +184,141 @@ jobs:
         if: always()
         continue-on-error: true
         env:
+          BENCHMARK_ID: ${{ matrix.benchmark_id }}
           IMPORT_OUTCOME: ${{ steps.baseline_import.outcome }}
         run: |
           set +e
+          issue_file="/tmp/performance-advisory/workflow-issues-$BENCHMARK_ID.md"
           if [ -f /tmp/godot-import-initial.log ]; then
-            cp /tmp/godot-import-initial.log /tmp/performance-advisory/baseline-import-initial.log
+            cp /tmp/godot-import-initial.log "/tmp/performance-advisory/baseline-import-initial-$BENCHMARK_ID.log"
           fi
           if [ -f /tmp/godot-import-validation.log ]; then
-            cp /tmp/godot-import-validation.log /tmp/performance-advisory/baseline-import-validation.log
+            cp /tmp/godot-import-validation.log "/tmp/performance-advisory/baseline-import-validation-$BENCHMARK_ID.log"
           fi
           if [ "$IMPORT_OUTCOME" != success ]; then
-            message="Baseline import failed; relative telemetry may be unavailable"
+            message="Baseline import failed; $BENCHMARK_ID relative telemetry may be unavailable"
             printf '::warning title=Performance telemetry unavailable::%s\n' "$message"
-            printf -- '- **Performance telemetry unavailable:** %s\n' "$message" >> /tmp/performance-advisory/workflow-issues.md
+            printf -- '- **Performance telemetry unavailable:** %s\n' "$message" >> "$issue_file"
           fi
 
       - name: Collect balanced performance telemetry
         if: always()
         continue-on-error: true
+        env:
+          BENCHMARK_ID: ${{ matrix.benchmark_id }}
         run: |
           set +e
+          issue_file="/tmp/performance-advisory/workflow-issues-$BENCHMARK_ID.md"
           if [ -f .github/scripts/run_performance_advisory.sh ]; then
-            bash .github/scripts/run_performance_advisory.sh baseline/src src /tmp/performance-advisory
+            bash .github/scripts/run_performance_advisory.sh baseline/src src /tmp/performance-advisory "$BENCHMARK_ID"
           else
             message="Performance runner was unavailable in the candidate checkout"
             printf '::warning title=Performance telemetry unavailable::%s\n' "$message"
-            printf -- '- **Performance telemetry unavailable:** %s\n' "$message" >> /tmp/performance-advisory/workflow-issues.md
+            printf -- '- **Performance telemetry unavailable:** %s\n' "$message" >> "$issue_file"
           fi
           exit 0
+
+      - name: Upload benchmark telemetry
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-advisory-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.benchmark_id }}
+          path: /tmp/performance-advisory
+          if-no-files-found: warn
+          retention-days: 1
+
+  summarize-performance:
+    name: Non-blocking performance advisory
+    if: always()
+    needs: collect-performance
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - name: Prepare advisory outputs
+        continue-on-error: true
+        run: |
+          set +e
+          mkdir -p /tmp/performance-advisory/base /tmp/performance-advisory/candidate
+          : > /tmp/performance-advisory/workflow-issues-summary.md
+
+      - name: Checkout candidate revision
+        id: candidate_checkout
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Download benchmark telemetry
+        id: download
+        if: always()
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          pattern: performance-advisory-${{ github.run_id }}-${{ github.run_attempt }}-*
+          path: /tmp/performance-advisory
+          merge-multiple: true
+
+      - name: Record summary inputs
+        if: always()
+        continue-on-error: true
+        env:
+          CHECKOUT_OUTCOME: ${{ steps.candidate_checkout.outcome }}
+          DOWNLOAD_OUTCOME: ${{ steps.download.outcome }}
+        run: |
+          set +e
+          issue_file=/tmp/performance-advisory/workflow-issues-summary.md
+          if [ "$CHECKOUT_OUTCOME" != success ]; then
+            message="Candidate checkout failed; performance comparison unavailable"
+            printf '::warning title=Performance telemetry unavailable::%s\n' "$message"
+            printf -- '- **Performance telemetry unavailable:** %s\n' "$message" >> "$issue_file"
+          fi
+          if [ "$DOWNLOAD_OUTCOME" != success ]; then
+            message="Benchmark telemetry download failed; performance comparison may be incomplete"
+            printf '::warning title=Performance telemetry unavailable::%s\n' "$message"
+            printf -- '- **Performance telemetry unavailable:** %s\n' "$message" >> "$issue_file"
+          fi
+
+      - name: Validate performance comparator
+        if: always()
+        continue-on-error: true
+        run: |
+          set +e
+          test_status=1
+          if [ -f .github/scripts/compare_performance.py ]; then
+            python3 -B -m unittest discover -s .github/scripts/tests -p 'test_*.py' \
+              > /tmp/performance-advisory/comparator-tests.log 2>&1
+            test_status=$?
+            cat /tmp/performance-advisory/comparator-tests.log
+          fi
+          if [ "$test_status" -ne 0 ]; then
+            message="Performance comparator tests failed; telemetry may be unreliable"
+            printf '::warning title=Performance telemetry unavailable::%s\n' "$message"
+            printf -- '- **Performance telemetry unavailable:** %s\n' "$message" >> /tmp/performance-advisory/workflow-issues-summary.md
+          fi
 
       - name: Compare performance telemetry
         if: always()
         continue-on-error: true
         run: |
           set +e
-          python3 .github/scripts/compare_performance.py \
-            --base-dir /tmp/performance-advisory/base \
-            --candidate-dir /tmp/performance-advisory/candidate \
-            --output-json /tmp/performance-advisory/comparison.json \
-            --summary /tmp/performance-advisory/summary.md
-          comparator_status=$?
+          comparator_status=1
+          if [ -f .github/scripts/compare_performance.py ]; then
+            python3 .github/scripts/compare_performance.py \
+              --base-dir /tmp/performance-advisory/base \
+              --candidate-dir /tmp/performance-advisory/candidate \
+              --output-json /tmp/performance-advisory/comparison.json \
+              --summary /tmp/performance-advisory/summary.md
+            comparator_status=$?
+          fi
           if [ "$comparator_status" -ne 0 ]; then
             message="Performance comparison exited with status $comparator_status; telemetry unavailable"
             printf '::warning title=Performance telemetry unavailable::%s\n' "$message"
-            printf -- '- **Performance telemetry unavailable:** %s\n' "$message" >> /tmp/performance-advisory/workflow-issues.md
+            printf -- '- **Performance telemetry unavailable:** %s\n' "$message" >> /tmp/performance-advisory/workflow-issues-summary.md
           fi
           if [ ! -s /tmp/performance-advisory/comparison.json ]; then
             printf '{"status":"telemetry unavailable"}\n' > /tmp/performance-advisory/comparison.json
@@ -245,9 +336,13 @@ jobs:
           if [ ! -s /tmp/performance-advisory/summary.md ]; then
             printf '# Performance Advisory\n\nPerformance telemetry unavailable. This advisory is non-blocking.\n' > /tmp/performance-advisory/summary.md
           fi
-          for issue_file in /tmp/performance-advisory/workflow-issues.md /tmp/performance-advisory/collection-issues.md; do
+          issue_heading_written=0
+          for issue_file in /tmp/performance-advisory/workflow-issues-*.md /tmp/performance-advisory/collection-issues-*.md; do
             if [ -s "$issue_file" ]; then
-              printf '\n## Telemetry issues\n\n' >> /tmp/performance-advisory/summary.md
+              if [ "$issue_heading_written" -eq 0 ]; then
+                printf '\n## Telemetry issues\n\n' >> /tmp/performance-advisory/summary.md
+                issue_heading_written=1
+              fi
               cat "$issue_file" >> /tmp/performance-advisory/summary.md
             fi
           done
