@@ -2,6 +2,7 @@ extends Node
 class_name PlayerActionAudio
 
 @onready var _clunk_player: AudioStreamPlayer = $ClunkPlayer
+@onready var _melee_impact_player: AudioStreamPlayer = $MeleeImpactPlayer
 @onready var _creature_hit_player: AudioStreamPlayer = $CreatureHitPlayer
 @onready var _player_hit_player: AudioStreamPlayer = $PlayerHitPlayer
 @onready var _equip_player: AudioStreamPlayer = $EquipPlayer
@@ -62,6 +63,7 @@ func setup(
 	_selected_item_id = _get_selected_item_id()
 	_animation_driver.mining_impact.connect(_on_mining_impact)
 	_interactor.melee_terrain_hit.connect(_on_melee_terrain_hit)
+	_interactor.melee_attack_impacted.connect(_on_melee_attack_impacted)
 	_interactor.soil_tilled.connect(_on_soil_tilled)
 	_combat.melee_outcome_committed.connect(_on_melee_outcome_committed)
 	_inventory.inventory_changed.connect(_on_inventory_changed)
@@ -85,6 +87,14 @@ func _on_mining_impact():
 
 func _on_melee_terrain_hit(_pos: Vector3i):
 	_play_clunk(-4.0)
+
+func _on_melee_attack_impacted(action: MeleeAttackActionDefinition, _position: Vector3):
+	if action == null or action.impact_audio == null:
+		return
+	_melee_impact_player.stop()
+	_melee_impact_player.stream = action.impact_audio
+	_melee_impact_player.volume_db = action.impact_audio_volume_db
+	_melee_impact_player.play()
 
 
 func _on_soil_tilled():
@@ -165,6 +175,8 @@ func _exit_tree():
 	if _interactor != null:
 		if _interactor.melee_terrain_hit.is_connected(_on_melee_terrain_hit):
 			_interactor.melee_terrain_hit.disconnect(_on_melee_terrain_hit)
+		if _interactor.melee_attack_impacted.is_connected(_on_melee_attack_impacted):
+			_interactor.melee_attack_impacted.disconnect(_on_melee_attack_impacted)
 		if _interactor.soil_tilled.is_connected(_on_soil_tilled):
 			_interactor.soil_tilled.disconnect(_on_soil_tilled)
 	if _combat != null and _combat.melee_outcome_committed.is_connected(_on_melee_outcome_committed):
@@ -182,6 +194,7 @@ func _exit_tree():
 	_harvest = null
 	_consumption = null
 	_release_player(_clunk_player)
+	_release_player(_melee_impact_player)
 	_release_player(_creature_hit_player)
 	_release_player(_player_hit_player)
 	_release_player(_equip_player)

@@ -1,7 +1,8 @@
-[gd_resource type="Resource" script_class="MeleeAttackActionDefinition" load_steps=3 format=3]
+[gd_resource type="Resource" script_class="MeleeAttackActionDefinition" load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://items/actions/melee_attack_action_definition.gd" id="1_melee"]
 [ext_resource type="Resource" path="res://combat/profiles/copper_hammer_melee.tres" id="2_profile"]
+[ext_resource type="AudioStream" path="res://assets/audio/combat/weapons/hammer/impacts/low_thump_332670_CC0.ogg" id="3_impact"]
 
 [resource]
 script = ExtResource("1_melee")
@@ -19,3 +20,5 @@ held_rotation_degrees = Vector3(-15.944, -89.474, -152.891)
 compensate_attack_arm_pitch = false
 align_overhead_striking_face = true
 impact_effect_radius = 4.0
+impact_audio = ExtResource("3_impact")
+impact_audio_volume_db = -2.0

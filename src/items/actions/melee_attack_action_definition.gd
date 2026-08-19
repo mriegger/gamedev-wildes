@@ -20,6 +20,8 @@ enum AnimationStyle {
 @export var compensate_attack_arm_pitch: bool = true
 @export var align_overhead_striking_face: bool = false
 @export_range(0.0, 32.0, 0.01, "or_greater") var impact_effect_radius: float = 0.0
+@export var impact_audio: AudioStream
+@export_range(-80.0, 24.0, 0.1) var impact_audio_volume_db: float = -6.0
 
 func validate(source: String) -> bool:
 	if attack_profile == null or not attack_profile.validate(source):
@@ -44,5 +46,8 @@ func validate(source: String) -> bool:
 		return false
 	if not is_finite(impact_effect_radius) or impact_effect_radius < 0.0:
 		push_error("[MeleeAttackActionDefinition] Invalid impact effect radius at %s" % source)
+		return false
+	if not is_finite(impact_audio_volume_db):
+		push_error("[MeleeAttackActionDefinition] Invalid impact audio volume at %s" % source)
 		return false
 	return true

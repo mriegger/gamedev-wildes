@@ -9,6 +9,9 @@ script = ExtResource("1")
 bus = &"SFX"
 volume_db = -6.0
 
+[node name="MeleeImpactPlayer" type="AudioStreamPlayer" parent="."]
+bus = &"SFX"
+
 [node name="CreatureHitPlayer" type="AudioStreamPlayer" parent="."]
 bus = &"SFX"
 volume_db = -3.0

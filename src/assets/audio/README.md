@@ -6,6 +6,7 @@
 - `combat/weapons/pickaxe/draw/*.ogg` provides three copper-pickaxe and copper-hoe equip variations.
 - `combat/impacts/creature/*.wav` provides three creature-impact variations.
 - `combat/impacts/player/player_hit.wav` provides player-hit impact feedback.
+- `combat/weapons/hammer/impacts/low_thump_332670_CC0.ogg` provides the copper hammer's ground-impact thump.
 - `entities/sheep/vocalizations/real_sheep_*.wav` provides seven positional sheep vocalizations.
 - `entities/zombie/vocalizations/Zombie_*.mp3` provides six positional zombie vocalizations.
 - `footsteps/dirt/Footstep_Dirt_*.wav` provides nine dirt footstep variations.
@@ -24,6 +25,7 @@
 | `ambient/forest_night_avocado.ogg` | Avocado, prompted by Michael Riegger | Project-authored | Converted from the generated WAV source to looping Ogg Vorbis for streaming. |
 | `combat/weapons/sword/draw/*.ogg`, `combat/weapons/pickaxe/draw/*.ogg`, and `combat/impacts/creature/*.wav` (9 files) | [Voiceover Pack](https://kenney.nl/assets/voiceover-pack) – Kenney | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) | Attribution, license notice, and source credit are not required under CC0; documented here for provenance. The pickaxe files are copies of the three knife-draw sounds. |
 | `combat/impacts/player/player_hit.wav` | Muse, prompted by Michael Riegger | Project-authored | Player-hit impact feedback. |
+| `combat/weapons/hammer/impacts/low_thump_332670_CC0.ogg` | [low thump.wav](https://freesound.org/people/Reitanna/sounds/332670/) – Reitanna, Freesound sound 332670 | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) | Unmodified Freesound high-quality Ogg preview transcode of the original WAV, used for the copper hammer's ground impact. Attribution is not legally required under CC0; documented here for provenance. |
 | `entities/sheep/vocalizations/real_sheep_*.wav` (7 files) | [Sheep 1 and related sheep recordings](https://bigsoundbank.com/sheep-1-s2343.html) – Joseph SARDIN, BigSoundBank | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) | Free for any use, including commercial use; attribution is not required. Documented here for provenance. No changes beyond file placement. |
 | `entities/zombie/vocalizations/Zombie_*.mp3` (6 files) | [Little Robot Sound Factory](https://web.archive.org/web/20160314071020id_/http://www.littlerobotsoundfactory.com/) – Morten Barfod Søegaard, Little Robot Sound Factory | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | Positional zombie vocalizations. No changes beyond file selection and placement. |
 | `footsteps/dirt/Footstep_Dirt_01.wav` to `Footstep_Dirt_09.wav` (9 files) | Fantasy Sound Effects Library – Footstep Dirt – by Morten Barfod Søegaard, Little Robot Sound Factory – https://littlerobotsoundfactory.com/ | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | Original source: Little Robot Sound Factory. No changes beyond file placement. |
