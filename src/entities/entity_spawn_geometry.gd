@@ -2,6 +2,28 @@ extends RefCounted
 class_name EntitySpawnGeometry
 
 static func can_spawn(voxel_space: VoxelSpace, definition: EntityDefinition, feet_position: Vector3) -> bool:
+	if definition == null:
+		return false
+	if definition.spawn_placement == EntityDefinition.SpawnPlacement.AERIAL:
+		return can_spawn_aerial(voxel_space, definition, feet_position)
+	return can_spawn_grounded(voxel_space, definition, feet_position)
+
+static func can_spawn_grounded(voxel_space: VoxelSpace, definition: EntityDefinition, feet_position: Vector3) -> bool:
+	if not _has_valid_spawn_coordinates(voxel_space, definition, feet_position):
+		return false
+	if VoxelBodySolver.collides_at(voxel_space, feet_position, definition.body_width, definition.body_height, false):
+		return false
+	var ground_y := VoxelBodySolver.get_ground_y(voxel_space, feet_position, definition.body_width)
+	return ground_y != VoxelSpace.NO_SURFACE_Y and is_equal_approx(ground_y, feet_position.y)
+
+static func can_spawn_aerial(voxel_space: VoxelSpace, definition: EntityDefinition, feet_position: Vector3) -> bool:
+	if not _has_valid_spawn_coordinates(voxel_space, definition, feet_position):
+		return false
+	if VoxelBodySolver.collides_at(voxel_space, feet_position, definition.body_width, definition.body_height, false):
+		return false
+	return VoxelBodySolver.get_ground_y(voxel_space, feet_position, definition.body_width) == VoxelSpace.NO_SURFACE_Y
+
+static func _has_valid_spawn_coordinates(voxel_space: VoxelSpace, definition: EntityDefinition, feet_position: Vector3) -> bool:
 	if voxel_space == null or definition == null or not feet_position.is_finite():
 		return false
 	if not is_equal_approx(feet_position.x - floorf(feet_position.x), 0.5):
@@ -10,10 +32,7 @@ static func can_spawn(voxel_space: VoxelSpace, definition: EntityDefinition, fee
 		return false
 	if not is_equal_approx(feet_position.z - floorf(feet_position.z), 0.5):
 		return false
-	if VoxelBodySolver.collides_at(voxel_space, feet_position, definition.body_width, definition.body_height, false):
-		return false
-	var ground_y := VoxelBodySolver.get_ground_y(voxel_space, feet_position, definition.body_width)
-	return ground_y != VoxelSpace.NO_SURFACE_Y and is_equal_approx(ground_y, feet_position.y)
+	return true
 
 static func get_bounds(definition: EntityDefinition, feet_position: Vector3) -> AABB:
 	assert(definition != null and feet_position.is_finite())

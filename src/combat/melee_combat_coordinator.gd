@@ -69,14 +69,14 @@ func acquire_player_targets(
 				return result
 		for runtime_id in candidate_ids:
 			var actor := _entity_runtime.get_actor(runtime_id)
-			if actor != null and _get_valid_player_hit(actor, attack_origin, ray_origin, direction, planar_aim, profile) is Vector3:
+			if actor != null and actor.definition != null and actor.definition.combat_targetable and _get_valid_player_hit(actor, attack_origin, ray_origin, direction, planar_aim, profile) is Vector3:
 				result.append(runtime_id)
 		return result
 	var nearest_runtime_id := -1
 	var nearest_distance_squared := INF
 	for runtime_id in candidate_ids:
 		var actor := _entity_runtime.get_actor(runtime_id)
-		if actor == null or actor.definition == null:
+		if actor == null or actor.definition == null or not actor.definition.combat_targetable:
 			continue
 		var hit: Variant = _get_valid_player_hit(actor, attack_origin, ray_origin, direction, Vector3.ZERO, profile)
 		if not hit is Vector3:
@@ -122,7 +122,7 @@ func try_commit_player_contacts(
 			continue
 		previous_runtime_id = target_runtime_id
 		var actor := _entity_runtime.get_actor(target_runtime_id)
-		if actor == null or actor.definition == null:
+		if actor == null or actor.definition == null or not actor.definition.combat_targetable:
 			continue
 		var hit: Variant = _get_valid_player_hit(actor, attack_origin, locked_ray_origin, direction, planar_aim, profile)
 		if not hit is Vector3:
