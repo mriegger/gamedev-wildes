@@ -130,6 +130,7 @@ func _run():
 	_expect(sword.secondary_action == null, "sword unexpectedly has a secondary action")
 	var sword_action := sword.primary_action as MeleeAttackActionDefinition
 	_expect(is_equal_approx(sword_action.attack_profile.duration, 0.48), "sword attack duration changed")
+	_expect(is_equal_approx(sword_action.attack_profile.base_damage, 10.0) and sword_action.attack_profile.base_damage_variance == 2, "sword base damage spread is not 8-12")
 	_expect(is_equal_approx(sword_action.chain_input_window, 0.26), "sword chain input window changed")
 	var hammer := item_catalog.get_definition(&"copper_hammer")
 	_expect(hammer.max_stack == 1, "copper hammer stack limit is not one")

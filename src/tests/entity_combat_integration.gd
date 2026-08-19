@@ -173,24 +173,24 @@ func _swap_selected_sword_on_outcome(_outcome: MeleeOutcome) -> void:
 		_expect(_reentrant_inventory_loadout.handle_drop(3, _reentrant_swap_index, 1), "reentrant sword swap failed")
 
 func _run() -> void:
-	var sword_profile := load("res://combat/profiles/copper_sword_melee.tres") as MeleeAttackProfile
+	var configured_sword_profile := load("res://combat/profiles/copper_sword_melee.tres") as MeleeAttackProfile
 	var hammer_profile := load("res://combat/profiles/copper_hammer_melee.tres") as MeleeAttackProfile
 	var zombie_profile := load("res://combat/profiles/zombie_melee.tres") as MeleeAttackProfile
 	var skeleton_profile := load("res://combat/profiles/skeleton_melee.tres") as MeleeAttackProfile
-	_expect(sword_profile != null and sword_profile.validate(sword_profile.resource_path), "copper sword profile is invalid")
+	_expect(configured_sword_profile != null and configured_sword_profile.validate(configured_sword_profile.resource_path), "copper sword profile is invalid")
 	_expect(hammer_profile != null and hammer_profile.validate(hammer_profile.resource_path), "copper hammer profile is invalid")
 	_expect(zombie_profile != null and zombie_profile.validate(zombie_profile.resource_path), "zombie profile is invalid")
 	_expect(skeleton_profile != null and skeleton_profile.validate(skeleton_profile.resource_path), "skeleton profile is invalid")
-	_expect(sword_profile.id == &"copper_sword_melee", "copper sword attack ID changed")
+	_expect(configured_sword_profile.id == &"copper_sword_melee", "copper sword attack ID changed")
 	_expect(zombie_profile.id == &"zombie_melee", "zombie attack ID changed")
 	_expect(skeleton_profile.id == &"skeleton_melee", "skeleton attack ID changed")
-	_expect(is_equal_approx(sword_profile.base_damage, 10.0), "copper sword base damage changed")
+	_expect(is_equal_approx(configured_sword_profile.base_damage, 10.0) and configured_sword_profile.base_damage_variance == 2, "copper sword damage spread is not 8-12")
 	_expect(is_equal_approx(hammer_profile.damage_multiplier, 1.0), "copper hammer base damage multiplier changed")
 	_expect(is_equal_approx(hammer_profile.reach, 4.0) and is_equal_approx(hammer_profile.sweep_degrees, 360.0), "copper hammer radius changed")
 	_expect(hammer_profile.acquire_targets_on_contact and hammer_profile.knockback_speed > 0.0, "copper hammer impact behavior changed")
 	_expect(is_equal_approx(zombie_profile.base_damage, 15.0), "zombie base damage changed")
 	_expect(is_equal_approx(skeleton_profile.base_damage, 5.0), "skeleton base damage changed")
-	_expect(is_equal_approx(sword_profile.sweep_degrees, 120.0), "copper sword sweep changed")
+	_expect(is_equal_approx(configured_sword_profile.sweep_degrees, 120.0), "copper sword sweep changed")
 	_expect(is_zero_approx(zombie_profile.sweep_degrees), "zombie attack became a sweep")
 	_expect(is_zero_approx(skeleton_profile.sweep_degrees), "skeleton attack became a sweep")
 	_expect(MeleeAttackProfile.is_valid_sweep_degrees(0.0), "zero-degree sweep validation was rejected")
@@ -198,6 +198,18 @@ func _run() -> void:
 	_expect(not MeleeAttackProfile.is_valid_sweep_degrees(-0.1), "negative sweep validation was accepted")
 	_expect(not MeleeAttackProfile.is_valid_sweep_degrees(360.1), "over-full-circle sweep validation was accepted")
 	_expect(not MeleeAttackProfile.is_valid_sweep_degrees(INF), "non-finite sweep validation was accepted")
+	_expect(MeleeAttackProfile.is_valid_base_damage_variance(10.0, 2), "copper sword damage variance validation was rejected")
+	_expect(not MeleeAttackProfile.is_valid_base_damage_variance(10.0, 10), "damage variance accepted a non-positive minimum roll")
+	_expect(not MeleeAttackProfile.is_valid_base_damage_variance(10.0, -1), "negative damage variance was accepted")
+	var damage_roll_rng := RandomNumberGenerator.new()
+	damage_roll_rng.seed = 73421
+	var observed_base_damage: Dictionary[float, bool] = {}
+	for _roll_index in range(100):
+		var rolled_damage := configured_sword_profile.roll_damage(damage_roll_rng, 0.0, 0.0)
+		_expect(rolled_damage >= 8.0 and rolled_damage <= 12.0 and is_equal_approx(rolled_damage, roundf(rolled_damage)), "copper sword rolled damage outside its integer 8-12 spread")
+		observed_base_damage[rolled_damage] = true
+	_expect(observed_base_damage.has(8.0) and observed_base_damage.has(12.0), "copper sword damage rolls did not include both configured endpoints")
+	var sword_profile := configured_sword_profile
 	var full_circle_profile := sword_profile.duplicate(true) as MeleeAttackProfile
 	full_circle_profile.sweep_degrees = 360.0
 	_expect(not full_circle_profile.requires_planar_aim(), "full-circle sweep required a planar aim")
@@ -221,6 +233,8 @@ func _run() -> void:
 	_expect(is_equal_approx(normalized_contact.hit_direction.length(), 1.0), "melee contact did not normalize its direction")
 
 	var world := _make_flat_world()
+	await _test_randomized_sword_damage(world, configured_sword_profile)
+	sword_profile.base_damage_variance = 0
 	var coordinator := WorldEntityCoordinator.new()
 	var combat := MeleeCombatCoordinator.new()
 	var player := (load("res://player/player.tscn") as PackedScene).instantiate() as PlayerMotor
@@ -780,6 +794,39 @@ func _test_sheep_damage(world: VoxelWorld, sword_profile: MeleeAttackProfile) ->
 	_expect(not coordinator.get_runtime()._retiring.has(target_id), "completed sheep fade remained coordinator-owned")
 	_expect(retiring_actor.get_ref() == null, "completed sheep fade did not free its actor")
 	await _cleanup(combat, coordinator, player, camera)
+
+func _test_randomized_sword_damage(world: VoxelWorld, sword_profile: MeleeAttackProfile) -> void:
+	var fixture := _make_combat_fixture(world, 2, 0, 8021)
+	var coordinator := fixture["coordinator"] as WorldEntityCoordinator
+	var combat := fixture["combat"] as MeleeCombatCoordinator
+	var player := fixture["player"] as PlayerMotor
+	var actors := _get_sorted_actors(coordinator)
+	_expect(actors.size() == 2, "random sword damage fixture did not spawn two zombies")
+	if actors.size() != 2:
+		await _cleanup(combat, coordinator, player, fixture["camera"] as Camera3D)
+		return
+	_place_at_angle(actors[0], player.global_position, -20.0, 1.5)
+	_place_at_angle(actors[1], player.global_position, 20.0, 1.5)
+	coordinator.tick(0.0, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
+	var ray := _orthographic_ray(player, Vector2(0.0, -1.0))
+	var locked_ids := combat.acquire_player_targets(ray[0], ray[1], sword_profile)
+	_expect(locked_ids == _active_ids(actors), "random sword damage fixture did not lock both targets")
+	var roll_seed := 52917
+	combat._damage_rng.seed = roll_seed
+	var expected_rng := RandomNumberGenerator.new()
+	expected_rng.seed = roll_seed
+	var expected_damage: Array[float] = []
+	for actor in actors:
+		expected_damage.append(sword_profile.roll_damage_at_distance(expected_rng, 10.0, coordinator.get_runtime().get_stat_value(actor.runtime_id, &"defense"), 0.0))
+	var outcome_count_before := _outcomes.size()
+	_expect(combat._commit_player_contacts(locked_ids, ray[0], ray[1], sword_profile, &"copper_sword"), "random sword damage did not commit both contacts")
+	_expect(_outcomes.size() == outcome_count_before + actors.size(), "random sword damage did not emit one outcome per enemy")
+	for index in range(actors.size()):
+		var outcome := _outcomes[outcome_count_before + index]
+		_expect(is_equal_approx(outcome.applied_damage, expected_damage[index]), "sword enemy damage did not use its independent contact-time roll")
+		_expect(outcome.applied_damage >= 14.0 and outcome.applied_damage <= 18.0, "default player sword damage against zombie defense left the expected 14-18 range")
+		_expect(is_equal_approx(coordinator.get_runtime().get_current_hp(actors[index].runtime_id), 80.0 - expected_damage[index]), "random sword damage changed the wrong enemy HP")
+	await _cleanup(combat, coordinator, player, fixture["camera"] as Camera3D)
 
 func _test_zero_degree_compatibility(world: VoxelWorld, sword_profile: MeleeAttackProfile) -> void:
 	var fixture := _make_combat_fixture(world, 2, 0, 8011)

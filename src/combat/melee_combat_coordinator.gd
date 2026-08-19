@@ -17,6 +17,10 @@ var _player: PlayerMotor
 var _player_stats: ActorStats
 var _player_inventory: InventoryModel
 var _entity_runtime: EntityRuntime
+var _damage_rng := RandomNumberGenerator.new()
+
+func _init() -> void:
+	_damage_rng.randomize()
 
 func setup(
 	p_voxel_space: VoxelSpace,
@@ -272,7 +276,8 @@ func _commit_contact(contact: MeleeContactType, profile: MeleeAttackProfileType,
 		var target := _entity_runtime.get_actor(contact.target_runtime_id)
 		if target == null or target.definition.id != contact.target_definition_id:
 			return false
-		var damage := profile.calculate_damage_at_distance(
+		var damage := profile.roll_damage_at_distance(
+			_damage_rng,
 			_player_stats.get_value(&"strength"),
 			_entity_runtime.get_stat_value(contact.target_runtime_id, &"defense"),
 			distance_from_attack_center,
@@ -290,7 +295,8 @@ func _commit_contact(contact: MeleeContactType, profile: MeleeAttackProfileType,
 		var source := _entity_runtime.get_actor(contact.source_runtime_id)
 		if source == null or source.definition.id != contact.source_definition_id:
 			return false
-		var damage := profile.calculate_damage(
+		var damage := profile.roll_damage(
+			_damage_rng,
 			_entity_runtime.get_stat_value(contact.source_runtime_id, &"strength"),
 			_player_stats.get_value(&"defense"),
 		)
