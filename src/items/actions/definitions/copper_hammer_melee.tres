@@ -7,5 +7,14 @@
 script = ExtResource("1_melee")
 attack_profile = ExtResource("2_profile")
 chain_input_window = 0.3
+animation_style = 1
+two_handed_pose = true
+two_handed_left_arm_rotation_degrees = Vector3(-57, 0, 3)
+two_handed_right_arm_rotation_degrees = Vector3(-47, 0, -3)
+held_rest_position_offset = Vector3(-0.12, 0.1, 0.08)
+held_rest_rotation_degrees = Vector3(0, 0, 62)
+held_windup_rotation_degrees = Vector3(0, 0, -62)
 held_position_offset = Vector3(0, 0.08, 0.04)
-held_rotation_degrees = Vector3(0, 0, 0)
+held_rotation_degrees = Vector3(-15.944, -89.474, -152.891)
+compensate_attack_arm_pitch = false
+align_overhead_striking_face = true

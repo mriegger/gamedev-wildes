@@ -312,6 +312,195 @@ func _run():
 	_expect(not animator._attacking and is_zero_approx(animator.attack_pose_weight), "cancelled sword attack remained active")
 	_expect(abs(animator.right_arm_action.rotation.z) < 0.001, "cancelled sword attack retained its sweep")
 
+	var hammer_item := load("res://items/definitions/copper_hammer.tres") as ItemDefinition
+	var hammer_action := hammer_item.primary_action as MeleeAttackActionDefinition
+	animator.rotation.y = deg_to_rad(37.0)
+	var held_item_view := animator.get_node("RigRoot/BodySecondary/BodyAction/TorsoBase/RightShoulder/RightArmBase/RightArmAction/RightHandSocket") as HeldItemView
+	held_item_view.show_preview_item(hammer_item)
+	animator.set_held_melee_action(hammer_action)
+	state.set_motion(Vector3(0.0, 0.0, 5.5), 1.0, false, true, 0.0, 0.0, false, Vector3.ZERO)
+	_advance(animator, 8)
+	held_item_view.set_attack_pose(animator.held_item_pose_weight, animator.right_arm_action.rotation.x, hammer_action, animator.held_item_windup_pose_weight)
+	var walking_hammer_head := held_item_view.held_node.get_node("Head") as MeshInstance3D
+	var left_hand_position: Vector3 = animator.left_arm_action.to_global(Vector3(0.0, -0.675, 0.0))
+	var right_hand_position: Vector3 = animator.right_arm_action.to_global(Vector3(0.0, -0.675, 0.0))
+	_expect(animator.left_arm_action.rotation.x < animator.right_arm_action.rotation.x - deg_to_rad(8.0), "walking hammer pose did not hold the left hand higher than the right")
+	_expect(abs(animator.left_arm_action.rotation.z) < deg_to_rad(5.0) and abs(animator.right_arm_action.rotation.z) < deg_to_rad(5.0), "walking hammer pose leaned the arms too far inward")
+	_expect(Vector2(left_hand_position.x, left_hand_position.z).distance_to(Vector2(right_hand_position.x, right_hand_position.z)) > 0.5, "walking hammer pose did not keep the hands apart")
+	_expect(left_hand_position.y > right_hand_position.y, "walking hammer pose did not place the left hand above the right")
+	_expect(left_hand_position.distance_to(walking_hammer_head.global_position) < right_hand_position.distance_to(walking_hammer_head.global_position), "walking hammer pose did not place the left hand closer to the hammer head")
+	var hammer_head_from_grip: Vector3 = walking_hammer_head.global_position - held_item_view.global_position
+	_expect(hammer_head_from_grip.y > 0.0 and hammer_head_from_grip.y < Vector2(hammer_head_from_grip.x, hammer_head_from_grip.z).length(), "walking hammer was not held at a slight angle above horizontal")
+	state.set_motion(Vector3.ZERO, 0.0, false, true, 0.0, 0.0, false, Vector3.ZERO)
+	_advance(animator, 12)
+	held_item_view.set_attack_pose(animator.held_item_pose_weight, animator.right_arm_action.rotation.x, hammer_action, animator.held_item_windup_pose_weight)
+	var hammer_rest_height: float = animator.rig_root.position.y
+	var minimum_hammer_pitch := 0.0
+	var impact_hammer_pitch := 0.0
+	var maximum_hammer_lean := 0.0
+	var minimum_hammer_height := INF
+	var maximum_hammer_head_height := -INF
+	var impact_hammer_head_height := INF
+	var impact_striking_face_height := INF
+	var impact_arm_pitch_difference := INF
+	var previous_hammer_pitch: float = animator.right_arm_action.rotation.x
+	var maximum_pitch_step: float = 0.0
+	var overhead_hammer_basis := Basis.IDENTITY
+	var maximum_mid_swing_up_dot := -1.0
+	var impact_hammer_basis := Basis.IDENTITY
+	var impact_hammer_head_position := Vector3.ZERO
+	var impact_grip_position := Vector3.ZERO
+	var impact_left_hand_position := Vector3.ZERO
+	var impact_right_hand_position := Vector3.ZERO
+	var impact_hold_start_pitch := 0.0
+	var impact_hold_end_pitch := 0.0
+	var recovery_midpoint_hammer_head_height := -INF
+	var overhead_hand_distance := INF
+	var impact_hand_distance := INF
+	var hold_end_hand_distance := INF
+	var recovery_midpoint_hand_distance := 0.0
+	var recovery_midpoint_alignment_weight := 0.0
+	var recovery_midpoint_pose_weight := 0.0
+	var recovery_midpoint_linear_error := INF
+	var maximum_recovery_grip_step := 0.0
+	var maximum_recovery_rotation_step := 0.0
+	var maximum_recovery_grip_step_progress := 0.0
+	var maximum_recovery_rotation_step_progress := 0.0
+	var maximum_aligned_grip_to_hands := 0.0
+	var previous_hammer_grip_position := held_item_view.global_position
+	var previous_hammer_rotation := held_item_view.held_node.global_transform.basis.orthonormalized().get_rotation_quaternion()
+	var overhead_captured := false
+	var impact_captured := false
+	var hold_end_captured := false
+	var recovery_midpoint_captured := false
+	held_item_view.capture_attack_idle_transform(animator.right_arm_base.global_transform)
+	animator.play_attack(hammer_action.attack_profile.duration, -1, hammer_action.animation_style)
+	var hammer_attack_frames := ceili(hammer_action.attack_profile.duration * 60.0) + 2
+	for _frame in range(hammer_attack_frames):
+		_advance(animator, 1)
+		if not is_zero_approx(animator.held_item_recovery_progress):
+			held_item_view.begin_linear_attack_recovery(animator.global_transform)
+		held_item_view.set_attack_pose(animator.held_item_pose_weight, animator.right_arm_action.rotation.x, hammer_action, animator.held_item_windup_pose_weight)
+		held_item_view.align_overhead_striking_face(animator.held_item_alignment_weight, animator.held_item_face_turn_weight, hammer_action, animator.global_transform.basis.z)
+		held_item_view.anchor_two_handed_grip(
+			animator.held_item_alignment_weight,
+			animator.left_arm_action.to_global(Vector3(0.0, -0.675, 0.0)),
+			animator.right_arm_action.to_global(Vector3(0.0, -0.675, 0.0))
+		)
+		held_item_view.apply_linear_attack_recovery(animator.held_item_recovery_progress, animator.global_transform, animator.right_arm_base.global_transform)
+		var hammer_head := held_item_view.held_node.get_node("Head") as MeshInstance3D
+		var hammer_basis := held_item_view.held_node.global_transform.basis.orthonormalized()
+		var hammer_rotation := hammer_basis.get_rotation_quaternion()
+		var attack_progress: float = animator._attack_elapsed / hammer_action.attack_profile.duration
+		if attack_progress >= BlockyHumanoidAnimator.HAMMER_WINDUP_END and attack_progress <= BlockyHumanoidAnimator.HAMMER_HOLD_END:
+			var aligned_left_hand: Vector3 = animator.left_arm_action.to_global(Vector3(0.0, -0.675, 0.0))
+			var aligned_right_hand: Vector3 = animator.right_arm_action.to_global(Vector3(0.0, -0.675, 0.0))
+			var aligned_hand_midpoint: Vector3 = (aligned_left_hand + aligned_right_hand) * 0.5
+			maximum_aligned_grip_to_hands = maxf(maximum_aligned_grip_to_hands, held_item_view.global_position.distance_to(aligned_hand_midpoint))
+		if attack_progress >= BlockyHumanoidAnimator.HAMMER_HOLD_END:
+			var recovery_grip_step := held_item_view.global_position.distance_to(previous_hammer_grip_position)
+			var recovery_rotation_step := hammer_rotation.angle_to(previous_hammer_rotation)
+			if recovery_grip_step > maximum_recovery_grip_step:
+				maximum_recovery_grip_step = recovery_grip_step
+				maximum_recovery_grip_step_progress = attack_progress
+			if recovery_rotation_step > maximum_recovery_rotation_step:
+				maximum_recovery_rotation_step = recovery_rotation_step
+				maximum_recovery_rotation_step_progress = attack_progress
+		previous_hammer_grip_position = held_item_view.global_position
+		previous_hammer_rotation = hammer_rotation
+		maximum_pitch_step = maxf(maximum_pitch_step, abs(animator.right_arm_action.rotation.x - previous_hammer_pitch))
+		previous_hammer_pitch = animator.right_arm_action.rotation.x
+		minimum_hammer_pitch = minf(minimum_hammer_pitch, animator.right_arm_action.rotation.x)
+		maximum_hammer_lean = maxf(maximum_hammer_lean, animator.body_action.rotation.x)
+		minimum_hammer_height = minf(minimum_hammer_height, animator.rig_root.position.y)
+		maximum_hammer_head_height = maxf(maximum_hammer_head_height, hammer_head.global_position.y)
+		if not overhead_captured and attack_progress >= BlockyHumanoidAnimator.HAMMER_WINDUP_END - 0.005:
+			overhead_captured = true
+			overhead_hammer_basis = hammer_basis
+			overhead_hand_distance = animator.left_arm_action.to_global(Vector3(0.0, -0.675, 0.0)).distance_to(animator.right_arm_action.to_global(Vector3(0.0, -0.675, 0.0)))
+		if attack_progress >= BlockyHumanoidAnimator.HAMMER_WINDUP_END and attack_progress <= BlockyHumanoidAnimator.HAMMER_IMPACT:
+			maximum_mid_swing_up_dot = maxf(maximum_mid_swing_up_dot, hammer_basis.y.dot(Vector3.UP))
+		if not impact_captured and attack_progress >= BlockyHumanoidAnimator.HAMMER_IMPACT + 0.01:
+			impact_captured = true
+			impact_hammer_pitch = animator.right_arm_action.rotation.x
+			impact_hammer_head_height = hammer_head.global_position.y
+			impact_hammer_basis = hammer_basis
+			impact_hammer_head_position = hammer_head.global_position
+			var hammer_head_mesh := hammer_head.mesh as BoxMesh
+			impact_striking_face_height = (hammer_head.global_position + hammer_basis.x * hammer_head_mesh.size.x * 0.5).y
+			impact_grip_position = held_item_view.global_position
+			impact_left_hand_position = animator.left_arm_action.to_global(Vector3(0.0, -0.675, 0.0))
+			impact_right_hand_position = animator.right_arm_action.to_global(Vector3(0.0, -0.675, 0.0))
+			impact_arm_pitch_difference = abs(animator.left_arm_action.rotation.x - animator.right_arm_action.rotation.x)
+			impact_hand_distance = animator.left_arm_action.to_global(Vector3(0.0, -0.675, 0.0)).distance_to(animator.right_arm_action.to_global(Vector3(0.0, -0.675, 0.0)))
+			impact_hold_start_pitch = animator.right_arm_action.rotation.x
+		if not hold_end_captured and attack_progress >= BlockyHumanoidAnimator.HAMMER_HOLD_END - 0.01:
+			hold_end_captured = true
+			impact_hold_end_pitch = animator.right_arm_action.rotation.x
+			hold_end_hand_distance = animator.left_arm_action.to_global(Vector3(0.0, -0.675, 0.0)).distance_to(animator.right_arm_action.to_global(Vector3(0.0, -0.675, 0.0)))
+		var recovery_midpoint := BlockyHumanoidAnimator.HAMMER_HOLD_END + (1.0 - BlockyHumanoidAnimator.HAMMER_HOLD_END) * 0.5
+		if not recovery_midpoint_captured and attack_progress >= recovery_midpoint:
+			recovery_midpoint_captured = true
+			recovery_midpoint_hammer_head_height = hammer_head.global_position.y
+			recovery_midpoint_hand_distance = animator.left_arm_action.to_global(Vector3(0.0, -0.675, 0.0)).distance_to(animator.right_arm_action.to_global(Vector3(0.0, -0.675, 0.0)))
+			recovery_midpoint_alignment_weight = animator.held_item_alignment_weight
+			recovery_midpoint_pose_weight = animator.held_item_pose_weight
+			var midpoint_relative: Transform3D = animator.global_transform.affine_inverse() * held_item_view.global_transform
+			var idle_midpoint_global: Transform3D = animator.right_arm_base.global_transform * held_item_view._attack_idle_relative_transform
+			var idle_midpoint_relative: Transform3D = animator.global_transform.affine_inverse() * idle_midpoint_global
+			var expected_midpoint: Vector3 = held_item_view._recovery_start_relative_transform.origin.lerp(idle_midpoint_relative.origin, animator.held_item_recovery_progress)
+			recovery_midpoint_linear_error = midpoint_relative.origin.distance_to(expected_midpoint)
+	_expect(minimum_hammer_pitch < -deg_to_rad(155.0), "hammer slam did not raise both hands overhead")
+	_expect(maximum_pitch_step < deg_to_rad(30.0), "hammer slam snapped between animation poses")
+	_expect(overhead_hammer_basis.x.dot(Vector3.UP) > 0.999, "hammer striking face did not point straight up overhead")
+	_expect(overhead_hammer_basis.y.dot(-animator.global_transform.basis.z.normalized()) > 0.999, "overhead hammer head did not extend behind the player's hands")
+	_expect(overhead_hand_distance < 0.12, "hammer hands did not come together overhead distance=%.2f" % overhead_hand_distance)
+	_expect(maximum_mid_swing_up_dot > 0.95, "hammer head did not travel over the hands during the swing up_dot=%.2f" % maximum_mid_swing_up_dot)
+	_expect(impact_hammer_pitch > -deg_to_rad(45.0), "hammer slam did not drive the hands toward the ground")
+	_expect(impact_hammer_basis.x.dot(Vector3.DOWN) > 0.999, "hammer striking face was not flat against the ground at impact")
+	_expect(impact_hammer_basis.y.dot(animator.global_transform.basis.z.normalized()) > 0.999, "impact hammer handle was not aligned with the player")
+	_expect((impact_hammer_head_position - impact_grip_position).dot(animator.global_transform.basis.z.normalized()) > 0.0, "hammer head did not land in front of the player")
+	_expect(abs(impact_hold_start_pitch - impact_hold_end_pitch) < 0.001, "hammer did not pause briefly against the ground")
+	_expect(impact_arm_pitch_difference < 0.001, "hammer slam arms did not move together at impact")
+	_expect(impact_hand_distance < 0.12 and hold_end_hand_distance < 0.12, "hammer hands separated before pickup impact=%.2f hold=%.2f" % [impact_hand_distance, hold_end_hand_distance])
+	_expect(impact_grip_position.distance_to(impact_left_hand_position) < 0.001 and impact_grip_position.distance_to(impact_right_hand_position) < 0.001, "hammer grip floated away from the joined hands at impact")
+	_expect(maximum_aligned_grip_to_hands < 0.001, "hammer grip separated from the hands during its aligned swing")
+	_expect(maximum_hammer_lean > deg_to_rad(20.0), "hammer slam did not lean into the impact")
+	_expect(minimum_hammer_height < hammer_rest_height - 0.1, "hammer slam did not crouch at impact")
+	_expect(maximum_hammer_head_height > 1.8, "hammer head did not rise above the player height=%.2f" % maximum_hammer_head_height)
+	_expect(absf(impact_striking_face_height - 0.04) < 0.03, "hammer striking face did not meet the ground plane face=%.3f" % impact_striking_face_height)
+	_expect(recovery_midpoint_hammer_head_height > impact_hammer_head_height + 0.25, "hammer recovery did not lift the head clear of the ground impact=%.2f midpoint=%.2f" % [impact_hammer_head_height, recovery_midpoint_hammer_head_height])
+	_expect(recovery_midpoint_hand_distance > 0.2, "hammer hands did not separate during the direct return distance=%.2f" % recovery_midpoint_hand_distance)
+	_expect(is_zero_approx(recovery_midpoint_alignment_weight) and abs(recovery_midpoint_pose_weight - 0.5) < 0.08, "hammer recovery did not linearly interpolate the authored local pose")
+	_expect(recovery_midpoint_linear_error < 0.01, "hammer grip did not follow its straight recovery path error=%.3f" % recovery_midpoint_linear_error)
+	var recovery_frame_count := hammer_action.attack_profile.duration * (1.0 - BlockyHumanoidAnimator.HAMMER_HOLD_END) * 60.0
+	var idle_endpoint_global: Transform3D = animator.right_arm_base.global_transform * held_item_view._attack_idle_relative_transform
+	var idle_endpoint_relative: Transform3D = animator.global_transform.affine_inverse() * idle_endpoint_global
+	var expected_recovery_grip_step := held_item_view._recovery_start_relative_transform.origin.distance_to(idle_endpoint_relative.origin) / recovery_frame_count
+	_expect(maximum_recovery_grip_step < expected_recovery_grip_step * 2.0, "hammer grip exceeded its linear step with moving hand target step=%.2f expected=%.2f progress=%.2f" % [maximum_recovery_grip_step, expected_recovery_grip_step, maximum_recovery_grip_step_progress])
+	_expect(maximum_recovery_rotation_step < deg_to_rad(25.0), "hammer recovery snapped the held model angle=%.1f progress=%.2f" % [rad_to_deg(maximum_recovery_rotation_step), maximum_recovery_rotation_step_progress])
+	_expect(not animator._attacking, "hammer slam one-shot did not end")
+	var hammer_scale_before_repeats := held_item_view.scale
+	for _attack_index in range(5):
+		held_item_view.capture_attack_idle_transform(animator.right_arm_base.global_transform)
+		animator.play_attack(hammer_action.attack_profile.duration, -1, hammer_action.animation_style)
+		for _frame in range(hammer_attack_frames):
+			_advance(animator, 1)
+			if not is_zero_approx(animator.held_item_recovery_progress):
+				held_item_view.begin_linear_attack_recovery(animator.global_transform)
+			held_item_view.set_attack_pose(animator.held_item_pose_weight, animator.right_arm_action.rotation.x, hammer_action, animator.held_item_windup_pose_weight)
+			held_item_view.align_overhead_striking_face(animator.held_item_alignment_weight, animator.held_item_face_turn_weight, hammer_action, animator.global_transform.basis.z)
+			held_item_view.anchor_two_handed_grip(
+				animator.held_item_alignment_weight,
+				animator.left_arm_action.to_global(Vector3(0.0, -0.675, 0.0)),
+				animator.right_arm_action.to_global(Vector3(0.0, -0.675, 0.0))
+			)
+			held_item_view.apply_linear_attack_recovery(animator.held_item_recovery_progress, animator.global_transform, animator.right_arm_base.global_transform)
+	_expect(held_item_view.scale.is_equal_approx(hammer_scale_before_repeats), "repeated hammer attacks compounded the held model scale")
+	animator.set_held_melee_action(null)
+	_advance(animator, 2)
+	_expect(abs(animator.left_arm_action.rotation.z) < 0.001 and abs(animator.right_arm_action.rotation.z) < 0.001, "hammer two-handed pose did not clear")
+
 	await _run_crowd_smoke(packed)
 	animator.queue_free()
 	await process_frame

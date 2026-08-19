@@ -154,6 +154,39 @@ func _run():
 	_expect(restored_pickaxe.texture == item_catalog.get_definition(&"stone_pickaxe").icon, "leaving attack preview did not restore the stone pickaxe")
 	_expect(player.held_item_view.position.is_equal_approx(resting_socket_position), "leaving attack preview did not restore the held-item position")
 	_expect(player.held_item_view.rotation.is_equal_approx(resting_socket_rotation), "leaving attack preview did not restore the held-item rotation")
+	var hammer_item := item_catalog.get_definition(&"copper_hammer")
+	var hammer_action := hammer_item.primary_action as MeleeAttackActionDefinition
+	player.animation_driver.setup_attack_preview(hammer_item)
+	player.animation_driver.set_preview_state(PlayerAnimationDriver.PREVIEW_ATTACK)
+	player.animation_driver.set_attack_preview_progress(0.79)
+	player.animation_driver._attack_preview_paused = false
+	player.animation_driver._update_preview(hammer_action.attack_profile.duration * 0.03)
+	var crossed_recovery: Transform3D = player.animation_driver.animator.global_transform.affine_inverse() * player.held_item_view.global_transform
+	player.animation_driver.set_attack_preview_progress(0.95)
+	player.animation_driver.set_attack_preview_progress(0.82)
+	var direct_recovery: Transform3D = player.animation_driver.animator.global_transform.affine_inverse() * player.held_item_view.global_transform
+	_expect(crossed_recovery.origin.distance_to(direct_recovery.origin) < 0.001, "hammer preview recovery depended on crossing-frame history")
+	_expect(crossed_recovery.basis.orthonormalized().get_rotation_quaternion().angle_to(direct_recovery.basis.orthonormalized().get_rotation_quaternion()) < 0.001, "hammer preview recovery rotation depended on scrub history")
+	player.animation_driver.set_attack_preview_progress(BlockyHumanoidAnimator.HAMMER_HOLD_END)
+	_expect(player.held_item_view._recovery_started, "hammer preview discarded its exact ground-hold recovery snapshot")
+	player.animation_driver._attack_preview_paused = false
+	player.animation_driver._update_preview(hammer_action.attack_profile.duration * 0.01)
+	var boundary_recovery: Transform3D = player.animation_driver.animator.global_transform.affine_inverse() * player.held_item_view.global_transform
+	player.animation_driver.set_attack_preview_progress(BlockyHumanoidAnimator.HAMMER_HOLD_END + 0.01)
+	var direct_boundary_recovery: Transform3D = player.animation_driver.animator.global_transform.affine_inverse() * player.held_item_view.global_transform
+	_expect(boundary_recovery.origin.distance_to(direct_boundary_recovery.origin) < 0.001, "hammer recovery changed after resuming from the exact ground-hold boundary")
+	_expect(boundary_recovery.basis.orthonormalized().get_rotation_quaternion().angle_to(direct_boundary_recovery.basis.orthonormalized().get_rotation_quaternion()) < 0.001, "hammer recovery rotation changed after resuming from the exact ground-hold boundary")
+	player.animation_driver.set_attack_preview_progress(1.0)
+	var hammer_recovery_end: Transform3D = player.animation_driver.animator.global_transform.affine_inverse() * player.held_item_view.global_transform
+	var hammer_idle_global: Transform3D = player.animation_driver.animator.right_arm_base.global_transform * player.held_item_view._attack_idle_relative_transform
+	var hammer_idle_relative: Transform3D = player.animation_driver.animator.global_transform.affine_inverse() * hammer_idle_global
+	_expect(hammer_recovery_end.origin.distance_to(hammer_idle_relative.origin) < 0.001, "hammer preview recovery missed its authored idle endpoint")
+	var hammer_recovery_end_rotation := hammer_recovery_end.basis.orthonormalized().get_rotation_quaternion()
+	player.animation_driver._update_preview(1.0 / 60.0)
+	var hammer_restart: Transform3D = player.animation_driver.animator.global_transform.affine_inverse() * player.held_item_view.global_transform
+	_expect(hammer_restart.origin.distance_to(hammer_recovery_end.origin) < 0.2, "hammer preview snapped when its attack loop restarted")
+	_expect(hammer_restart.basis.orthonormalized().get_rotation_quaternion().angle_to(hammer_recovery_end_rotation) < deg_to_rad(20.0), "hammer preview rotated abruptly when its attack loop restarted")
+	player.animation_driver.set_preview_state(PlayerAnimationDriver.PREVIEW_LIVE)
 	var export_path = ProjectSettings.globalize_path("user://animation_tuning_panel_test.json")
 	var export_error = panel.export_values_to_path(export_path)
 	_expect(export_error == OK, "panel export failed")

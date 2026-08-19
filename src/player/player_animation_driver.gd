@@ -66,7 +66,10 @@ func set_preview_state(state: StringName):
 		_attack_preview_elapsed = 0.0
 		_attack_preview_direction = -1
 		_motor.held_item_view.show_preview_item(_attack_preview_item)
-		animator.play_attack(_attack_preview_action.attack_profile.duration, _attack_preview_direction)
+		_prepare_attack_idle_reference(_attack_preview_action)
+		animator.play_attack(_attack_preview_action.attack_profile.duration, _attack_preview_direction, _attack_preview_action.animation_style)
+	else:
+		animator.set_held_melee_action(null)
 
 func set_attack_preview_paused(paused: bool):
 	assert(_preview_state == PREVIEW_ATTACK)
@@ -75,10 +78,11 @@ func set_attack_preview_paused(paused: bool):
 func set_attack_preview_progress(progress: float):
 	assert(_preview_state == PREVIEW_ATTACK)
 	_attack_preview_elapsed = clampf(progress, 0.0, 1.0) * _attack_preview_action.attack_profile.duration
-	animator.prepare_preview(true)
-	animator.play_attack(_attack_preview_action.attack_profile.duration, _attack_preview_direction)
-	animator.advance_animation(_attack_preview_elapsed)
-	_motor.held_item_view.set_attack_pose(animator.attack_pose_weight, animator.right_arm_action.rotation.x, _attack_preview_action)
+	animator.prepare_attack_preview()
+	_prepare_attack_idle_reference(_attack_preview_action)
+	animator.play_attack(_attack_preview_action.attack_profile.duration, _attack_preview_direction, _attack_preview_action.animation_style)
+	_advance_presented_animation(_attack_preview_elapsed, _attack_preview_action)
+	_apply_held_item_attack_pose(_attack_preview_action)
 
 func get_attack_preview_progress() -> float:
 	assert(_preview_state == PREVIEW_ATTACK)
@@ -92,6 +96,8 @@ func _process(delta: float):
 	if _active_attack_action != null and (_interactor.melee_attack_action != _active_attack_action or _interactor.get_selected_primary_action() != _active_attack_action):
 		_active_attack_action = null
 		animator.cancel_attack()
+	var selected_attack_action := _interactor.get_selected_primary_action() as MeleeAttackActionDefinition
+	animator.set_held_melee_action(selected_attack_action)
 	var model_basis = _motor.model_root.global_transform.basis.orthonormalized()
 	var local_velocity = model_basis.inverse() * _motor.velocity
 	var planar_speed = Vector2(_motor.velocity.x, _motor.velocity.z).length()
@@ -111,8 +117,8 @@ func _process(delta: float):
 	var mining_active = _interactor.is_mining and _interactor.can_primary_target
 	animator.set_mining_active(mining_active)
 	_update_mining_impact(delta, mining_active)
-	animator.advance_animation(delta)
-	_motor.held_item_view.set_attack_pose(animator.attack_pose_weight, animator.right_arm_action.rotation.x, _active_attack_action)
+	_advance_presented_animation(delta, selected_attack_action)
+	_apply_held_item_attack_pose(selected_attack_action)
 
 func _update_preview(delta: float):
 	var local_velocity = Vector3.ZERO
@@ -138,7 +144,7 @@ func _update_preview(delta: float):
 	if _preview_state == PREVIEW_ATTACK:
 		if not _attack_preview_paused:
 			_advance_attack_preview(delta)
-		_motor.held_item_view.set_attack_pose(animator.attack_pose_weight, animator.right_arm_action.rotation.x, _attack_preview_action)
+		_apply_held_item_attack_pose(_attack_preview_action)
 	else:
 		animator.advance_animation(delta)
 		_motor.held_item_view.set_attack_pose(0.0, 0.0, null)
@@ -156,21 +162,59 @@ func _update_mining_impact(delta: float, active: bool):
 		_mining_impact_elapsed -= animator.profile.mine_cycle_seconds
 		mining_impact.emit()
 
+func _apply_held_item_attack_pose(action: MeleeAttackActionDefinition) -> void:
+	if not is_zero_approx(animator.held_item_recovery_progress):
+		_motor.held_item_view.begin_linear_attack_recovery(animator.global_transform)
+	_motor.held_item_view.set_attack_pose(animator.held_item_pose_weight, animator.right_arm_action.rotation.x, action, animator.held_item_windup_pose_weight)
+	_motor.held_item_view.align_overhead_striking_face(animator.held_item_alignment_weight, animator.held_item_face_turn_weight, action, animator.global_transform.basis.z)
+	if action != null and action.two_handed_pose:
+		var left_hand_position := animator.left_arm_action.to_global(Vector3(0.0, -0.675, 0.0))
+		var right_hand_position := animator.right_arm_action.to_global(Vector3(0.0, -0.675, 0.0))
+		_motor.held_item_view.anchor_two_handed_grip(animator.held_item_alignment_weight, left_hand_position, right_hand_position)
+	_motor.held_item_view.apply_linear_attack_recovery(animator.held_item_recovery_progress, animator.global_transform, animator.right_arm_base.global_transform)
+
+func _prepare_attack_idle_reference(action: MeleeAttackActionDefinition) -> void:
+	animator.prepare_held_idle_reference(action)
+	_motor.held_item_view.set_attack_pose(0.0, animator.right_arm_action.rotation.x, action)
+	_motor.held_item_view.capture_attack_idle_transform(animator.right_arm_base.global_transform)
+
 func _advance_attack_preview(delta: float):
 	var remaining := delta
 	while remaining > 0.0:
 		var step := minf(remaining, _attack_preview_action.attack_profile.duration - _attack_preview_elapsed)
-		animator.advance_animation(step)
+		_advance_presented_animation(step, _attack_preview_action)
 		_attack_preview_elapsed += step
 		remaining -= step
 		if is_equal_approx(_attack_preview_elapsed, _attack_preview_action.attack_profile.duration):
 			_attack_preview_elapsed = 0.0
 			_attack_preview_direction *= -1
-			animator.play_attack(_attack_preview_action.attack_profile.duration, _attack_preview_direction)
+			_prepare_attack_idle_reference(_attack_preview_action)
+			animator.play_attack(_attack_preview_action.attack_profile.duration, _attack_preview_direction, _attack_preview_action.animation_style)
+
+func _advance_presented_animation(delta: float, action: MeleeAttackActionDefinition) -> void:
+	if (
+		action == null
+		or action.animation_style != MeleeAttackActionDefinition.AnimationStyle.OVERHEAD_SLAM
+		or not animator.is_attacking()
+	):
+		animator.advance_animation(delta)
+		return
+	var current_progress := animator.get_attack_progress()
+	var recovery_start_seconds := action.attack_profile.duration * BlockyHumanoidAnimator.HAMMER_HOLD_END
+	var current_seconds := current_progress * action.attack_profile.duration
+	if current_seconds < recovery_start_seconds and current_seconds + delta >= recovery_start_seconds:
+		var ground_hold_delta := recovery_start_seconds - current_seconds
+		animator.advance_animation(ground_hold_delta)
+		_apply_held_item_attack_pose(action)
+		_motor.held_item_view.begin_linear_attack_recovery(animator.global_transform)
+		animator.advance_animation(delta - ground_hold_delta)
+		return
+	animator.advance_animation(delta)
 
 func _on_block_placed():
 	animator.play_place()
 
 func _on_melee_attack_started(action: MeleeAttackActionDefinition, direction: int):
 	_active_attack_action = action
-	animator.play_attack(action.attack_profile.duration, direction)
+	_prepare_attack_idle_reference(action)
+	animator.play_attack(action.attack_profile.duration, direction, action.animation_style)
