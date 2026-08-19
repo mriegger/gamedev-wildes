@@ -68,6 +68,15 @@ func _init() -> void:
 		_expect(drop_leaf.y >= 0, "deterministic apple tree had no eligible decorative drop")
 		var drop_sources := (apple_trees._decorations_by_leaf.get(drop_leaf, []) as Array).duplicate(true)
 		var removed_decorations := drop_sources.size()
+		var expected_drop_source := _find_eligible_decorative_source(apple_trees, drop_sources)
+		var tree_center := Vector2(apple_position.x + 0.5, apple_position.z + 0.5)
+		var source_planar := Vector2(expected_drop_source.x, expected_drop_source.z)
+		var support_sample := source_planar.move_toward(tree_center, apple_trees.definition.ground_apple_size * 0.5)
+		var support_column := Vector2i(floori(support_sample.x), floori(support_sample.y))
+		var source_column := Vector2i(floori(source_planar.x), floori(source_planar.y))
+		_expect(support_column != source_column, "apple landing fixture did not cross a voxel boundary")
+		world.height_map_dict[support_column] = apple_position.y - 1
+		world.height_map_dict[source_column] = apple_position.y + 2
 		_expect(VoxelWorldTestFixture.commit_mine(world, drop_leaf) != null, "apple-bearing leaf could not be mined")
 		chunk_root = apple_trees._chunk_roots[Vector2i.ZERO] as Node3D
 		var fallen := apple_trees._state.get_fallen_apples()
@@ -89,6 +98,11 @@ func _init() -> void:
 		if impact_player != null:
 			_expect(apple_trees.definition.fall_impact_streams.has(impact_player.stream), "fallen apple played an unconfigured landing impact sound")
 		await create_timer(0.2).timeout
+		for y in range(apple_position.y + 1, apple_position.y + 4):
+			_expect(VoxelWorldTestFixture.commit_mine(world, Vector3i(apple_position.x, y, apple_position.z)) != null, "remaining apple tree trunk block could not be mined")
+		chunk_root = apple_trees._chunk_roots[Vector2i.ZERO] as Node3D
+		_expect(_count_children(chunk_root, "DecorativeApple_") == decorative_count - removed_decorations, "destroying the trunk removed the surviving canopy apples")
+		_expect(_count_children(chunk_root, "AppleFoliage_") == foliage_count - 1, "destroying the trunk removed the apple tree foliage tint")
 		if not fallen.is_empty():
 			var fallen_snapshot := apple_trees.snapshot()
 			var restored_fallen := AppleTreeState.new()
@@ -243,6 +257,14 @@ func _find_drop_leaf(coordinator: AppleTreeCoordinator) -> Vector3i:
 func _find_decorative_source(records: Array, decorative_index: int) -> Vector3:
 	for record in records:
 		if int((record as Dictionary)["decorative_index"]) == decorative_index:
+			return (record as Dictionary)["position"] as Vector3
+	return Vector3.INF
+
+func _find_eligible_decorative_source(coordinator: AppleTreeCoordinator, records: Array) -> Vector3:
+	for record in records:
+		var tree_position := (record as Dictionary)["tree_position"] as Vector3i
+		var decorative_index := int((record as Dictionary)["decorative_index"])
+		if coordinator._should_drop_decorative_apple(tree_position, decorative_index):
 			return (record as Dictionary)["position"] as Vector3
 	return Vector3.INF
 

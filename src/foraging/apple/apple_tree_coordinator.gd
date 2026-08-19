@@ -237,23 +237,15 @@ func _on_block_edit_committed(edit: BlockEdit) -> void:
 
 func _render_chunk(coord: Vector2i) -> void:
 	_unload_chunk(coord)
-	var tree_blocks := _voxel_world.get_tree_blocks_for_chunk(coord)
+	var tree_blocks := _get_nearby_tree_blocks(coord)
 	if tree_blocks.is_empty() and not _fallen_by_chunk.has(coord):
 		return
 	var root := Node3D.new()
 	root.name = "AppleTrees_%d_%d" % [coord.x, coord.y]
 	add_child(root)
 	_chunk_roots[coord] = root
-	var trunk_base_set: Dictionary = {}
-	for raw_position in tree_blocks:
-		var position := raw_position as Vector3i
-		if int(tree_blocks[position]) == BlockId.Type.LOG:
-			var base := Vector3i(position.x, _voxel_world.get_terrain_height(position.x, position.z) + 1, position.z)
-			trunk_base_set[base] = true
-	var trunk_bases: Array = trunk_base_set.keys()
-	trunk_bases.sort()
-	for tree_position in trunk_bases:
-		if _is_apple_tree(tree_position):
+	for tree_position in _find_tree_positions(tree_blocks):
+		if ChunkCoord.world_to_chunk_vec3i(tree_position, _voxel_world.chunk_size) == coord and _is_apple_tree(tree_position):
 			_render_apple_tree(root, coord, tree_position, tree_blocks)
 	_render_fallen_apples(root, coord)
 	if root.get_child_count() == 0:
@@ -276,11 +268,7 @@ func _render_apple_tree(root: Node3D, coord: Vector2i, tree_position: Vector3i, 
 			ground_height = tree_position.y - 1
 		apple_position.y = float(ground_height + 1)
 		_spawn_ground_apple(root, coord, tree_position, slot_index, apple_position)
-	var top_log_y := tree_position.y
-	for raw_position in tree_blocks:
-		var position := raw_position as Vector3i
-		if position.x == tree_position.x and position.z == tree_position.z and int(tree_blocks[position]) == BlockId.Type.LOG:
-			top_log_y = maxi(top_log_y, position.y)
+	var top_log_y := _get_top_log_y(tree_position, tree_blocks)
 	_spawn_foliage(root, tree_position, top_log_y, tree_blocks)
 	var decorative_offsets := DECORATIVE_OFFSETS.duplicate()
 	_shuffle(decorative_offsets, random)
@@ -428,10 +416,62 @@ func _should_drop_decorative_apple(tree_position: Vector3i, decorative_index: in
 	return _stable_seed(tree_position, 1000 + decorative_index) % 100 < DECORATIVE_DROP_PERCENT
 
 func _get_drop_position(tree_position: Vector3i, source_position: Vector3) -> Vector3:
-	var ground_height := _voxel_world.get_terrain_height(floori(source_position.x), floori(source_position.z))
-	if ground_height < 0:
-		ground_height = tree_position.y - 1
-	return Vector3(source_position.x, float(ground_height + 1), source_position.z)
+	var tree_center := Vector2(tree_position.x + 0.5, tree_position.z + 0.5)
+	var source_planar := Vector2(source_position.x, source_position.z)
+	var support_sample := source_planar.move_toward(tree_center, definition.ground_apple_size * 0.5)
+	var ground_y := _voxel_world.get_terrain_surface_top(floori(support_sample.x), floori(support_sample.y))
+	if ground_y == VoxelSpace.NO_SURFACE_Y:
+		ground_y = float(tree_position.y)
+	return Vector3(source_position.x, ground_y, source_position.z)
+
+func _get_nearby_tree_blocks(coord: Vector2i) -> Dictionary:
+	var tree_blocks: Dictionary = {}
+	for x_offset in range(-1, 2):
+		for z_offset in range(-1, 2):
+			tree_blocks.merge(_voxel_world.get_tree_blocks_for_chunk(coord + Vector2i(x_offset, z_offset)))
+	return tree_blocks
+
+func _find_tree_positions(tree_blocks: Dictionary) -> Array[Vector3i]:
+	var positions: Dictionary = {}
+	var canopy_candidates: Dictionary = {}
+	for raw_position in tree_blocks:
+		var position := raw_position as Vector3i
+		var block_id := int(tree_blocks[position])
+		if block_id == BlockId.Type.LOG:
+			var surface_y := _voxel_world.get_terrain_surface_top(position.x, position.z)
+			if surface_y != VoxelSpace.NO_SURFACE_Y:
+				positions[Vector3i(position.x, roundi(surface_y), position.z)] = true
+		elif block_id == BlockId.Type.LEAVES:
+			for x_offset in range(-1, 2):
+				for z_offset in range(-1, 2):
+					var candidate := Vector3i(position.x + x_offset, position.y, position.z + z_offset)
+					canopy_candidates[candidate] = int(canopy_candidates.get(candidate, 0)) + 1
+	for raw_candidate in canopy_candidates:
+		if int(canopy_candidates[raw_candidate]) < 7:
+			continue
+		var candidate := raw_candidate as Vector3i
+		var surface_y := _voxel_world.get_terrain_surface_top(candidate.x, candidate.z)
+		if surface_y != VoxelSpace.NO_SURFACE_Y:
+			positions[Vector3i(candidate.x, roundi(surface_y), candidate.z)] = true
+	var sorted_positions: Array[Vector3i] = []
+	for position in positions:
+		sorted_positions.append(position as Vector3i)
+	sorted_positions.sort()
+	return sorted_positions
+
+func _get_top_log_y(tree_position: Vector3i, tree_blocks: Dictionary) -> int:
+	var top_log_y := tree_position.y
+	var lowest_canopy_y := _voxel_world.max_build_y
+	for raw_position in tree_blocks:
+		var position := raw_position as Vector3i
+		if absi(position.x - tree_position.x) > 1 or absi(position.z - tree_position.z) > 1:
+			continue
+		var block_id := int(tree_blocks[position])
+		if block_id == BlockId.Type.LEAVES:
+			lowest_canopy_y = mini(lowest_canopy_y, position.y)
+		elif block_id == BlockId.Type.LOG and position.x == tree_position.x and position.z == tree_position.z:
+			top_log_y = maxi(top_log_y, position.y)
+	return lowest_canopy_y - 1 if lowest_canopy_y < _voxel_world.max_build_y else top_log_y
 
 func _get_supporting_leaf(tree_position: Vector3i, top_log_y: int, offset: Vector3) -> Vector3i:
 	return Vector3i(tree_position.x + clampi(roundi(offset.x), -1, 1), top_log_y + 1, tree_position.z + clampi(roundi(offset.z), -1, 1))
