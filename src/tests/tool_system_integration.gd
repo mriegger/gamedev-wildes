@@ -237,6 +237,87 @@ func _run():
 		_expect(pickaxe_tooltip.stats_label.get_parsed_text().contains("Mining Power: 1") and pickaxe_tooltip.stats_label.get_parsed_text().contains("Speed Multiplier: 1.5x"), "stone pickaxe tooltip stats are incomplete")
 		pickaxe_tooltip.free()
 	pickaxe_slot.free()
+	var bow := item_catalog.get_definition(&"bow")
+	var stone_arrow := item_catalog.get_definition(&"stone_arrow")
+	var copper_arrow := item_catalog.get_definition(&"copper_arrow")
+	_expect(bow.max_stack == 1 and stone_arrow.max_stack == 99 and copper_arrow.max_stack == 99, "ranged item stack limits are incorrect")
+	_expect_pixel_icon(bow, "res://assets/textures/tools/bow/bow.png", 6)
+	_expect_pixel_icon(stone_arrow, "res://assets/textures/tools/bow/stone_arrow.png", 6)
+	_expect_pixel_icon(copper_arrow, "res://assets/textures/tools/bow/copper_arrow.png", 6)
+	var bow_icon := bow.icon.get_image()
+	_expect(bow_icon.get_pixel(3, 2).a > 0.0 and bow_icon.get_pixel(12, 12).a > 0.0 and is_zero_approx(bow_icon.get_pixel(12, 2).a) and is_zero_approx(bow_icon.get_pixel(3, 12).a), "bow inventory icon is not in its counterclockwise orientation")
+	var stone_arrow_icon_bounds := stone_arrow.icon.get_image().get_used_rect()
+	var copper_arrow_icon_bounds := copper_arrow.icon.get_image().get_used_rect()
+	_expect(stone_arrow_icon_bounds.size.x > stone_arrow_icon_bounds.size.y * 2 and copper_arrow_icon_bounds.size.x > copper_arrow_icon_bounds.size.y * 2, "arrow inventory icons are not horizontal")
+	var stone_arrow_icon := stone_arrow.icon.get_image()
+	var copper_arrow_icon := copper_arrow.icon.get_image()
+	for y in range(16):
+		for x in range(16):
+			_expect(is_zero_approx(stone_arrow_icon.get_pixel(x, y).a - copper_arrow_icon.get_pixel(x, y).a), "arrow icon silhouettes differ at %d,%d" % [x, y])
+	_expect(stone_arrow_icon.get_pixel(1, 6).a > 0.0 and stone_arrow_icon.get_pixel(1, 8).a > 0.0 and stone_arrow_icon.get_pixel(2, 7).a > 0.0, "arrow fletching is missing its three-pixel chevron")
+	_expect(is_zero_approx(stone_arrow_icon.get_pixel(1, 7).a) and is_zero_approx(stone_arrow_icon.get_pixel(2, 6).a) and is_zero_approx(stone_arrow_icon.get_pixel(2, 8).a), "arrow fletching retained its square center pixels")
+	_expect(stone_arrow_icon.get_pixel(3, 7).a > 0.0 and stone_arrow_icon.get_pixel(12, 7).a > 0.0 and stone_arrow_icon.get_pixel(15, 7).a > 0.0, "arrow shaft and point do not span the icon")
+	for x in range(16):
+		for offset in range(1, 8):
+			_expect(is_zero_approx(stone_arrow_icon.get_pixel(x, 7 - offset).a - stone_arrow_icon.get_pixel(x, 7 + offset).a), "arrow icon is not vertically symmetric at column %d" % x)
+	var bow_held := bow.held_scene.instantiate() as Node3D
+	var depth_pivot := bow_held.get_node_or_null("DepthPivot") as Node3D
+	var bow_plane := bow_held.get_node_or_null("DepthPivot/PlanePivot") as Node3D
+	var bow_grip := bow_held.get_node_or_null("DepthPivot/PlanePivot/Grip") as MeshInstance3D
+	var bow_string := bow_held.get_node_or_null("DepthPivot/PlanePivot/String") as MeshInstance3D
+	var upper_inner_limb := bow_held.get_node_or_null("DepthPivot/PlanePivot/UpperInnerLimb") as MeshInstance3D
+	var upper_limb := bow_held.get_node_or_null("DepthPivot/PlanePivot/UpperOuterLimb") as MeshInstance3D
+	var lower_inner_limb := bow_held.get_node_or_null("DepthPivot/PlanePivot/LowerInnerLimb") as MeshInstance3D
+	var lower_limb := bow_held.get_node_or_null("DepthPivot/PlanePivot/LowerOuterLimb") as MeshInstance3D
+	_expect(bow_held.get_child_count() == 1 and depth_pivot != null and bow_plane != null, "bow held model is missing its orientation pivots")
+	_expect(bow_grip != null and bow_grip.position.is_zero_approx(), "bow grip is not anchored at the player's hand")
+	_expect(bow_string != null and bow_string.mesh is CylinderMesh and is_equal_approx((bow_string.mesh as CylinderMesh).height, 1.36), "bow string is incomplete")
+	_expect(upper_limb != null and lower_limb != null and is_equal_approx(upper_limb.position.y, -lower_limb.position.y), "bow limbs are not vertically balanced around the grip")
+	_expect(upper_inner_limb.rotation.z > 0.0 and upper_limb.rotation.z > upper_inner_limb.rotation.z, "upper bow limb does not form a continuous curve")
+	_expect(is_equal_approx(lower_inner_limb.rotation.z, -upper_inner_limb.rotation.z) and is_equal_approx(lower_limb.rotation.z, -upper_limb.rotation.z), "lower bow limb does not mirror the upper curve")
+	_expect(bow_string.position.x < upper_limb.position.x and bow_string.position.x < bow_grip.position.x, "bow string is not stretched across the open side of the curve")
+	var hand_socket_basis := Basis.from_euler(Vector3(PI / 4.0, 0.0, 0.0))
+	var composed_bow_basis := hand_socket_basis * bow_held.basis * depth_pivot.basis * bow_plane.basis
+	var limb_axis := (composed_bow_basis * Vector3.UP).normalized()
+	var string_side := (composed_bow_basis * Vector3.LEFT).normalized()
+	_expect(absf(limb_axis.dot(Vector3.BACK)) > 0.999, "bow limbs do not run front-to-back beside the player")
+	_expect(string_side.dot(Vector3.UP) > 0.999, "bow string side does not face up")
+	var upper_limb_mesh := upper_limb.mesh as CylinderMesh
+	var lower_limb_mesh := lower_limb.mesh as CylinderMesh
+	var grip_mesh := bow_grip.mesh as CylinderMesh
+	var string_mesh := bow_string.mesh as CylinderMesh
+	var upper_inner_mesh := upper_inner_limb.mesh as CylinderMesh
+	var lower_inner_mesh := lower_inner_limb.mesh as CylinderMesh
+	var upper_grip_end := bow_grip.position + bow_grip.basis.y.normalized() * grip_mesh.height * 0.5
+	var lower_grip_end := bow_grip.position - bow_grip.basis.y.normalized() * grip_mesh.height * 0.5
+	var upper_inner_lower_end := upper_inner_limb.position - upper_inner_limb.basis.y.normalized() * upper_inner_mesh.height * 0.5
+	var upper_inner_upper_end := upper_inner_limb.position + upper_inner_limb.basis.y.normalized() * upper_inner_mesh.height * 0.5
+	var upper_outer_lower_end := upper_limb.position - upper_limb.basis.y.normalized() * upper_limb_mesh.height * 0.5
+	var upper_outer_upper_end := upper_limb.position + upper_limb.basis.y.normalized() * upper_limb_mesh.height * 0.5
+	var lower_inner_upper_end := lower_inner_limb.position + lower_inner_limb.basis.y.normalized() * lower_inner_mesh.height * 0.5
+	var lower_inner_lower_end := lower_inner_limb.position - lower_inner_limb.basis.y.normalized() * lower_inner_mesh.height * 0.5
+	var lower_outer_upper_end := lower_limb.position + lower_limb.basis.y.normalized() * lower_limb_mesh.height * 0.5
+	var lower_outer_lower_end := lower_limb.position - lower_limb.basis.y.normalized() * lower_limb_mesh.height * 0.5
+	var upper_string_end := bow_string.position + bow_string.basis.y.normalized() * string_mesh.height * 0.5
+	var lower_string_end := bow_string.position - bow_string.basis.y.normalized() * string_mesh.height * 0.5
+	_expect(upper_grip_end.distance_to(upper_inner_lower_end) < 0.001 and upper_inner_upper_end.distance_to(upper_outer_lower_end) < 0.001 and upper_outer_upper_end.distance_to(upper_string_end) < 0.001, "upper bow curve contains a visible gap")
+	_expect(lower_grip_end.distance_to(lower_inner_upper_end) < 0.001 and lower_inner_lower_end.distance_to(lower_outer_upper_end) < 0.001 and lower_outer_lower_end.distance_to(lower_string_end) < 0.001, "lower bow curve contains a visible gap")
+	_expect(is_equal_approx(upper_limb_mesh.top_radius, lower_limb_mesh.bottom_radius) and is_equal_approx(upper_limb_mesh.bottom_radius, lower_limb_mesh.top_radius), "bow limb taper is not mirrored around the grip")
+	bow_held.free()
+	var stone_arrow_held := stone_arrow.held_scene.instantiate() as Node3D
+	var copper_arrow_held := copper_arrow.held_scene.instantiate() as Node3D
+	var stone_arrow_head := stone_arrow_held.get_node_or_null("Head") as MeshInstance3D
+	var copper_arrow_head := copper_arrow_held.get_node_or_null("Head") as MeshInstance3D
+	var stone_arrow_shaft := stone_arrow_held.get_node_or_null("Shaft") as MeshInstance3D
+	_expect(stone_arrow_held.get_child_count() == 4 and copper_arrow_held.get_child_count() == 4, "arrow held models do not contain shaft, head, and fletching")
+	_expect(stone_arrow_shaft != null and stone_arrow_shaft.mesh is CylinderMesh and is_equal_approx((stone_arrow_shaft.mesh as CylinderMesh).height, 0.82), "arrow shaft dimensions changed")
+	_expect(stone_arrow_head != null and stone_arrow_head.mesh is CylinderMesh and (stone_arrow_head.mesh as CylinderMesh).radial_segments == 4, "stone arrowhead is not low-poly")
+	_expect(copper_arrow_head != null and copper_arrow_head.mesh is CylinderMesh and (copper_arrow_head.mesh as CylinderMesh).radial_segments == 4, "copper arrowhead is not low-poly")
+	var stone_head_material := (stone_arrow_head.mesh as CylinderMesh).material as StandardMaterial3D
+	var copper_head_material := (copper_arrow_head.mesh as CylinderMesh).material as StandardMaterial3D
+	_expect(stone_head_material.albedo_color != copper_head_material.albedo_color, "stone and copper arrows use indistinguishable head materials")
+	stone_arrow_held.free()
+	copper_arrow_held.free()
 	var hammer_held := hammer.held_scene.instantiate() as Node3D
 	var hammer_handle := hammer_held.get_node_or_null("Handle") as MeshInstance3D
 	var hammer_head := hammer_held.get_node_or_null("Head") as MeshInstance3D
@@ -1020,6 +1101,24 @@ func _find_inventory_item(item_id: StringName) -> int:
 		if stack != null and stack.item_id == item_id:
 			return index
 	return -1
+
+func _expect_pixel_icon(definition: ItemDefinition, expected_path: String, maximum_colors: int) -> void:
+	_expect(definition.icon.resource_path == expected_path, "%s uses the wrong inventory icon" % definition.id)
+	var image := definition.icon.get_image()
+	_expect(image != null and image.get_size() == Vector2i(16, 16), "%s icon is not 16x16" % definition.id)
+	if image == null:
+		return
+	var colors: Dictionary[Color, bool] = {}
+	var partial_alpha_pixels := 0
+	for y in range(image.get_height()):
+		for x in range(image.get_width()):
+			var pixel := image.get_pixel(x, y)
+			if pixel.a > 0.0:
+				colors[Color(pixel.r, pixel.g, pixel.b, 1.0)] = true
+			if pixel.a > 0.0 and pixel.a < 1.0:
+				partial_alpha_pixels += 1
+	_expect(colors.size() <= maximum_colors, "%s icon exceeds its pixel-art palette" % definition.id)
+	_expect(partial_alpha_pixels == 0, "%s icon contains anti-aliased alpha" % definition.id)
 
 func _expect(condition: bool, message: String):
 	if not condition:

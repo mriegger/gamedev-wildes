@@ -1,0 +1,52 @@
+[gd_scene load_steps=7 format=3]
+
+[sub_resource type="StandardMaterial3D" id="Material_wood"]
+albedo_color = Color(0.48, 0.27, 0.12, 1)
+roughness = 0.94
+
+[sub_resource type="StandardMaterial3D" id="Material_stone"]
+albedo_color = Color(0.66, 0.68, 0.7, 1)
+roughness = 0.92
+
+[sub_resource type="StandardMaterial3D" id="Material_feather"]
+albedo_color = Color(0.84, 0.8, 0.68, 1)
+roughness = 1.0
+
+[sub_resource type="CylinderMesh" id="Cylinder_shaft"]
+material = SubResource("Material_wood")
+top_radius = 0.018
+bottom_radius = 0.018
+height = 0.82
+radial_segments = 6
+rings = 1
+
+[sub_resource type="CylinderMesh" id="Cylinder_head"]
+material = SubResource("Material_stone")
+top_radius = 0.0
+bottom_radius = 0.085
+height = 0.18
+radial_segments = 4
+rings = 1
+
+[sub_resource type="BoxMesh" id="Box_fletching"]
+material = SubResource("Material_feather")
+size = Vector3(0.12, 0.15, 0.018)
+
+[node name="StoneArrow" type="Node3D"]
+rotation = Vector3(-0.785398, 0, 0)
+
+[node name="Shaft" type="MeshInstance3D" parent="."]
+mesh = SubResource("Cylinder_shaft")
+
+[node name="Head" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.5, 0)
+mesh = SubResource("Cylinder_head")
+
+[node name="FletchingHorizontal" type="MeshInstance3D" parent="."]
+position = Vector3(0, -0.35, 0)
+mesh = SubResource("Box_fletching")
+
+[node name="FletchingVertical" type="MeshInstance3D" parent="."]
+position = Vector3(0, -0.35, 0)
+rotation = Vector3(0, 1.5708, 0)
+mesh = SubResource("Box_fletching")
