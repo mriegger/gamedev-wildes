@@ -1,6 +1,8 @@
 extends CanvasLayer
 class_name HUD
 
+const NavigationCompassType := preload("res://ui/hud/navigation_compass.gd")
+
 @onready var hotbar: InventoryHotbar = $InventoryHotbar as InventoryHotbar
 @onready var health_bar: PlayerHealthBar = $HealthBar as PlayerHealthBar
 @onready var experience_bar: PlayerExperienceBar = $PlayerExperienceBar as PlayerExperienceBar
@@ -11,6 +13,7 @@ class_name HUD
 @onready var cauldron_panel: CraftingPanel = $CauldronPanel as CraftingPanel
 @onready var player_hit_vignette: PlayerHitVignette = $PlayerHitVignette as PlayerHitVignette
 @onready var interaction_prompt: Label = $InteractionPrompt as Label
+@onready var navigation_compass: NavigationCompassType = $NavigationCompass as NavigationCompassType
 
 var anvil_coordinator: AnvilCoordinator
 var chest_coordinator: ChestTransferCoordinator
@@ -84,6 +87,15 @@ func setup_progression(actor_stats: ActorStats, perk_coordinator: PlayerPerkCoor
 func setup_consumption(consumption: ItemConsumptionCoordinator) -> void:
 	hotbar.setup_consumption(consumption)
 	side_panel.setup_consumption(consumption)
+
+func setup_compass(camera: Camera3D, tracked_position: Node3D) -> void:
+	navigation_compass.setup(camera, tracked_position)
+
+func set_compass_target(position: Vector3) -> void:
+	navigation_compass.set_target_position(position)
+
+func clear_compass_target() -> void:
+	navigation_compass.clear_target()
 
 func _on_side_panel_progress_changed(progress: float):
 	var right_inset := SidePanel.PANEL_WIDTH * progress

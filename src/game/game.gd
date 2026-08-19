@@ -467,6 +467,7 @@ func _setup_gameplay() -> bool:
 	hud.setup_socketing(inventory_model, rune_socketing_coordinator, item_proficiency)
 	hud.setup_progression(player_stats, player_perk_coordinator)
 	hud.setup_consumption(item_consumption_coordinator)
+	hud.setup_compass(camera_rig.camera, player)
 	world.set_player_ref(player)
 	camera_rig.snap_to_follow_target()
 	camera_rig.current_yaw_deg = camera_rig.target_yaw_deg
@@ -676,6 +677,7 @@ func _enter_level():
 	player.set_physics_process(false)
 	input_buffer.clear_gameplay()
 	await _fade_to(1.0)
+	hud.clear_compass_target()
 	player.unbind_space()
 	_unbind_entity_context()
 	_location_state.enter_level(return_position)
@@ -761,6 +763,7 @@ func _on_dungeon_one_time_reward_claimed(reward_id: StringName) -> void:
 func _show_world_level_interaction():
 	if _level_entrance != null:
 		level_interaction.set_target(_level_entrance.interaction_position, level_entrance_definition.enter_prompt)
+		hud.set_compass_target(_level_entrance.global_position)
 
 func _reset_camera_position():
 	camera_rig.snap_to_follow_target()

@@ -465,6 +465,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 		entities.get_runtime(),
 	)
 	slime_attachments.setup(player, game.player_stats)
+	hud.setup_compass(camera_rig.camera, player)
 	_expect(game.inventory_loadout_coordinator.select_slot(3), "transition test could not select the starter sword")
 	loot.setup(
 		game.entity_catalog,
@@ -542,6 +543,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	_expect(door_open_player != null and not door_open_player.playing, "dungeon entrance door audio played before entry")
 	game._entrance_coordinate = Vector3i(floori(entrance.interaction_position.x), floori(entrance.interaction_position.y), floori(entrance.interaction_position.z))
 	game._show_world_level_interaction()
+	_expect(hud.navigation_compass._has_target, "overworld compass omitted the dungeon entrance")
 	var inventory_identity := game.inventory_model
 	var stats_identity := game.player_stats
 	var preserved_yaw := 315.0
@@ -607,6 +609,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 		_expect(not loot.is_physics_processing() and not loot.visible, "Game did not suspend overworld loot in cycle %d" % cycle)
 		_expect(not world.visible and not entrance.is_visible_in_tree(), "overworld presentation remained visible in cycle %d" % cycle)
 		_expect(mining_break_particles.is_visible_in_tree() and mining_hit_particles.is_visible_in_tree(), "level entry hid location-neutral mining effects in cycle %d" % cycle)
+		_expect(not hud.navigation_compass._has_target, "dungeon compass retained the overworld entrance in cycle %d" % cycle)
 		_expect(environment._world_environment.environment == null and not environment._sun.visible and not environment._sun_fill.visible, "outdoor environment remained active in cycle %d" % cycle)
 		_expect(not environment._ambient_soundscape._running, "outdoor ambient audio remained active in cycle %d" % cycle)
 		_expect(runtime.visible and runtime.is_processing(), "level runtime is inactive in cycle %d" % cycle)
@@ -652,6 +655,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 		if persistent_watcher != null:
 			_expect(persistent_watcher.is_aggressive() and watcher_encounter.get_tracked_count() == 1 and watcher_effect.visible, "level transition lost the permanent overworld Watcher encounter in cycle %d" % cycle)
 		_expect(world.visible and entrance.is_visible_in_tree(), "overworld presentation remained hidden after cycle %d" % cycle)
+		_expect(hud.navigation_compass._has_target, "overworld compass did not restore the dungeon entrance in cycle %d" % cycle)
 		_expect(environment._world_environment.environment != null and environment._sun.visible and environment._sun_fill.visible, "outdoor environment was not restored after cycle %d" % cycle)
 		_expect(game._level_runtime == null and not is_instance_valid(runtime), "level runtime survived cycle %d teardown" % cycle)
 		_expect(game.inventory_model == inventory_identity, "level exit replaced inventory identity in cycle %d" % cycle)
