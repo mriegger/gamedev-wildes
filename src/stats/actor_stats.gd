@@ -2,6 +2,7 @@ extends RefCounted
 class_name ActorStats
 
 signal health_depleted
+signal health_changed(current_hp: float, maximum_hp: float)
 
 var level: int
 var experience: int
@@ -287,6 +288,8 @@ func _commit_current_hp(value: float):
 	assert(is_finite(value) and value >= 0.0)
 	var was_alive := has_stat(&"hp") and _current_hp > 0.0
 	_current_hp = value
+	if has_stat(&"hp"):
+		health_changed.emit(_current_hp, get_value(&"hp"))
 	if was_alive and _current_hp <= 0.0:
 		health_depleted.emit()
 

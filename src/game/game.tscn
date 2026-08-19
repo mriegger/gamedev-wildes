@@ -1,4 +1,4 @@
-[gd_scene load_steps=37 format=3 uid="uid://b22g4me0x1f3h"]
+[gd_scene load_steps=38 format=3 uid="uid://b22g4me0x1f3h"]
 
 [ext_resource type="Script" path="res://game/game.gd" id="1_game"]
 [ext_resource type="PackedScene" path="res://world/world.tscn" id="2_world"]
@@ -36,6 +36,7 @@
 [ext_resource type="Resource" path="res://crafting/stations/anvil_recipe_catalog.tres" id="34_anvil_catalog"]
 [ext_resource type="PackedScene" path="res://foraging/apple/apple_tree_coordinator.tscn" id="35_apple_trees"]
 [ext_resource type="Resource" path="res://crafting/stations/cauldron_recipe_catalog.tres" id="36_cauldron_catalog"]
+[ext_resource type="Script" path="res://combat/presentation/enemy_combat_feedback.gd" id="37_enemy_feedback"]
 
 [node name="Game" type="Node3D"]
 script = ExtResource("1_game")
@@ -73,6 +74,9 @@ script = ExtResource("14_entities")
 script = ExtResource("18_melee_combat")
 
 [node name="CombatHitParticles" parent="." instance=ExtResource("21_combat_particles")]
+
+[node name="EnemyCombatFeedback" type="Node3D" parent="."]
+script = ExtResource("37_enemy_feedback")
 
 [node name="HUD" parent="." instance=ExtResource("6_hud")]
 

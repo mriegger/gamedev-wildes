@@ -5,6 +5,7 @@ const STRUCTURE_RUNTIME_SCENE: String = "res://structures/runtime/structure_desi
 const STRUCTURE_DIALOGS_SCENE: String = "res://structures/presentation/structure_designer_dialogs.tscn"
 const STRUCTURE_TERRAIN_SHADER: String = "res://levels/presentation/level_terrain.gdshader"
 const STRUCTURE_RUNTIME_TEST = preload("res://structures/tests/structure_designer_runtime.gd")
+const EnemyCombatFeedbackType := preload("res://combat/presentation/enemy_combat_feedback.gd")
 const WORLD_SCENE: String = "res://world/world.tscn"
 const CATALOG_PATH: String = "res://levels/content/dungeons/stone/level_catalog.tres"
 const BLOCK_CATALOG_PATH: String = "res://blocks/block_catalog.tres"
@@ -248,6 +249,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	var entities := WorldEntityCoordinator.new()
 	var combat := MeleeCombatCoordinator.new()
 	var combat_hit_particles := (load("res://combat/particles/combat_hit_particles.tscn") as PackedScene).instantiate() as CombatHitParticles
+	var enemy_combat_feedback := EnemyCombatFeedbackType.new()
 	var mining_break_particles := (load("res://mining/presentation/mining_break_particles.tscn") as PackedScene).instantiate()
 	var mining_hit_particles := (load("res://mining/presentation/mining_hit_particles.tscn") as PackedScene).instantiate()
 	var pumpkin_patch := (load("res://farming/pumpkin/pumpkin_patch_coordinator.tscn") as PackedScene).instantiate() as PumpkinPatchCoordinator
@@ -266,6 +268,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	entities.name = "WorldEntities"
 	combat.name = "MeleeCombat"
 	combat_hit_particles.name = "CombatHitParticles"
+	enemy_combat_feedback.name = "EnemyCombatFeedback"
 	mining_break_particles.name = "MiningBreakParticles"
 	mining_hit_particles.name = "MiningHitParticles"
 	pumpkin_patch.name = "PumpkinPatch"
@@ -277,6 +280,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	game.add_child(entities)
 	game.add_child(combat)
 	game.add_child(combat_hit_particles)
+	game.add_child(enemy_combat_feedback)
 	game.add_child(hud)
 	game.add_child(dev_console)
 	game.add_child(structure_workflow)
@@ -306,6 +310,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	root.add_child(game)
 	await process_frame
 	_expect(game.world == world and game.player == player and game.camera_rig == camera_rig, "Game onready dependencies were not wired")
+	_expect(game.enemy_combat_feedback == enemy_combat_feedback, "Game combat feedback dependency was not wired")
 	_expect(game.game_environment == environment and game.level_interaction == coordinator and game.dev_console == dev_console and game.pumpkin_patch == pumpkin_patch and game.apple_trees == apple_trees, "Game transition dependencies were not wired")
 	_expect(game.structure_designer_workflow == structure_workflow and game.structure_designer_dialogs == structure_dialogs, "Game structure designer dependencies were not wired")
 	_expect(game.structure_designer_runtime_scene != null and game.structure_terrain_shader != null, "Game structure designer resources were not wired")
@@ -338,6 +343,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	camera_rig.setup(player, game.input_buffer)
 	entities.setup(game.entity_catalog, voxel_world, 1337, _position_ready)
 	combat.setup(voxel_world, player, game.player_stats, entities.get_runtime())
+	enemy_combat_feedback.setup(combat, camera_rig.camera)
 	player.setup(camera_rig, game.inventory_model, game.input_buffer, game.player_stats, combat, entities.get_runtime())
 	game._bind_entity_context(voxel_world, entities.get_runtime())
 	var world_entity_runtime := entities.get_runtime()

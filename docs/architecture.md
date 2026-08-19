@@ -49,9 +49,11 @@ reusable deterministic wander, perception-memory, chase, and melee-attack decisi
 combat and presentation. Sheep retain their distinct deterministic decision state. The shared voxel
 solver and bounded path follower own reusable movement calculations. Voxel A* expands eight planar
 directions with distance-weighted diagonal edges and refuses diagonals through blocked orthogonal
-corners. Custom animation drivers present actor state without deciding gameplay outcomes. Spawned
-actors fade in through instance-local geometry transparency. Despawn or lethal
-damage removes stats, active state, targeting, and spatial entries together. Lethal retirement
+corners. Custom animation drivers present actor state without deciding gameplay outcomes. Each actor
+binds its runtime stats to a billboarded health bar before visual-fade setup,
+so the bar remains hidden at full health, updates from completed health changes, and shares the
+actor's fade lifecycle. Spawned actors fade in through instance-local geometry transparency.
+Despawn or lethal damage removes stats, active state, targeting, and spatial entries together. Lethal retirement
 plays the species-owned death pose, then starts an actor-owned one-shot smoke poof and model fade
 together; the scene is freed only after both complete. Ordinary distance and streaming retirement
 uses only the fade. The overworld retiring-visual cap bounds actors, fades, and their child particle
@@ -81,9 +83,12 @@ aim. The profile calculates
 physical hit applies that damage through the target state owner, optionally adds a decaying planar
 knockback velocity, then produces an immutable `MeleeOutcome` containing the contact, exact applied
 damage, source item ID, and lethal result. The player interactor separately emits the AoE's ground
-origin for presentation; the hammer consumes it with a procedural expanding and fading ring. Rejected
-contacts change no health and produce no outcome. `Game` explicitly connects completed outcomes to
-entity reactions, progression, and presentation without making combat own those policies.
+origin for presentation; the hammer consumes it with a procedural expanding and fading ring.
+`EnemyCombatFeedback` consumes committed player outcomes through a bounded pool of billboarded
+damage labels, resolves active or retiring actors through `EntityRuntime`, and suppresses labels
+beyond its authored camera-size threshold. Rejected contacts change no health and produce no outcome.
+`Game` explicitly connects completed outcomes to entity reactions, progression, and presentation
+without making combat own those policies.
 
 `ActorStats` owns the player's level and current-level experience. `CombatProgressionCoordinator`
 awards the reward authored on an `EntityDefinition` exactly once for a player-caused defeat.

@@ -1,6 +1,8 @@
 extends Node3D
 class_name EntityActor
 
+const EnemyHealthBar3DType := preload("res://entities/presentation/enemy_health_bar_3d.gd")
+
 signal melee_contact_reached(source_runtime_id: int, profile: MeleeAttackProfile)
 
 @export_node_path("Node") var animation_driver_path: NodePath
@@ -21,11 +23,21 @@ var animation_driver: EntityAnimationDriver
 var visual_fader: EntityVisualFader
 var death_poof: EntityDeathPoof
 var vocalizations: EntityVocalizations
+var health_bar: EnemyHealthBar3DType
 var _death_retirement: bool = false
 var _death_fade_started: bool = false
 
 func _ready():
 	set_process(false)
+
+func bind_stats(stats: ActorStats, body_height: float) -> void:
+	assert(stats != null and stats.has_stat(&"hp"))
+	assert(is_finite(body_height) and body_height > 0.0)
+	assert(model_root != null and health_bar == null)
+	health_bar = EnemyHealthBar3DType.new()
+	health_bar.name = "HealthBar"
+	model_root.add_child(health_bar)
+	health_bar.setup(stats, body_height)
 
 func setup(
 	p_runtime_id: int,
