@@ -5,15 +5,17 @@ var _errors: Array[String] = []
 func _init() -> void:
 	var block_catalog := load("res://blocks/block_catalog.tres") as BlockCatalog
 	var foliage_catalog := load("res://foliage/foliage_catalog.tres") as FoliageCatalog
+	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
 	_expect(block_catalog.validate(), "block catalog invalid")
 	_expect(foliage_catalog.validate(block_catalog), "foliage catalog invalid")
+	_expect(item_catalog.validate(block_catalog), "item catalog invalid")
 	var expected: Dictionary = {
-		BlockId.Type.SHORT_GRASS: [105, "Short Grass", "short_grass.png", 57],
-		BlockId.Type.GRASS_FOLIAGE: [106, "Grass", "grass.png", 35],
-		BlockId.Type.BLUE_WILDFLOWER: [107, "Blue Wildflower", "blue_wildflower.png", 2],
-		BlockId.Type.ORANGE_TULIP: [108, "Orange Tulip", "orange_tulip.png", 2],
-		BlockId.Type.PINK_HEARTFLOWER: [109, "Pink Heartflower", "pink_heartflower.png", 2],
-		BlockId.Type.RED_FLOWER: [110, "Red Flower", "red_flower.png", 2],
+		BlockId.Type.SHORT_GRASS: [105, "Short Grass", "short_grass.png", 57, &""],
+		BlockId.Type.GRASS_FOLIAGE: [106, "Grass", "grass.png", 35, &""],
+		BlockId.Type.BLUE_WILDFLOWER: [107, "Blue Wildflower", "blue_wildflower.png", 2, &"blue_wildflower"],
+		BlockId.Type.ORANGE_TULIP: [108, "Orange Tulip", "orange_tulip.png", 2, &"orange_tulip"],
+		BlockId.Type.PINK_HEARTFLOWER: [109, "Pink Heartflower", "pink_heartflower.png", 2, &"pink_heartflower"],
+		BlockId.Type.RED_FLOWER: [110, "Red Flower", "red_flower.png", 2, &"red_flower"],
 	}
 	_expect(BlockId.Type.COUNT == 111, "block ID count changed")
 	_expect(foliage_catalog.species.size() == expected.size(), "foliage species count mismatch")
@@ -24,6 +26,7 @@ func _init() -> void:
 		var display_name := values[1] as String
 		var texture_name := values[2] as String
 		var generation_weight := values[3] as int
+		var drop_item_id := values[4] as StringName
 		var block := block_catalog.get_definition(block_id)
 		var definition := foliage_catalog.get_species(block_id)
 		_expect(block_id == stable_id, "stable ID changed for %s" % display_name)
@@ -39,6 +42,7 @@ func _init() -> void:
 		_expect(block.sprite_texture.get_size() == Vector2(16, 16), "%s texture dimensions invalid" % display_name)
 		var opaque_bounds := OpaquePixelBounds.find(block.sprite_texture.get_image())
 		var uv_rect := block.interaction_bounds.resolve_uv_rect(block.sprite_texture)
+		var interaction_bounds := block_catalog.get_interaction_bounds(block_id)
 		var expected_width := minf(1.0, float(opaque_bounds.size.x + 1) / 16.0)
 		var expected_height := minf(1.0, float(opaque_bounds.size.y + 1) / 16.0)
 		_expect(block.interaction_bounds != null, "%s interaction bounds are missing" % display_name)
@@ -47,7 +51,24 @@ func _init() -> void:
 		_expect(is_equal_approx(uv_rect.size.y, expected_height), "%s UV height does not match its opaque pixels" % display_name)
 		_expect(uv_rect.position.x >= 0.0 and uv_rect.end.x <= 1.0, "%s UV bounds escaped the texture width" % display_name)
 		_expect(uv_rect.position.y >= 0.0 and uv_rect.end.y <= 1.0, "%s UV bounds escaped the texture height" % display_name)
+		_expect(is_equal_approx(interaction_bounds.size.x, expected_width), "%s interaction width does not match its opaque pixels" % display_name)
+		_expect(is_equal_approx(interaction_bounds.size.z, expected_width), "%s interaction depth does not match its opaque pixels" % display_name)
+		_expect(is_equal_approx(interaction_bounds.size.y, expected_height), "%s interaction height does not match its opaque pixels" % display_name)
+		_expect(is_equal_approx(interaction_bounds.get_center().x, 0.5), "%s interaction bounds are not centered on X" % display_name)
+		_expect(is_equal_approx(interaction_bounds.get_center().z, 0.5), "%s interaction bounds are not centered on Z" % display_name)
+		_expect(interaction_bounds.position.y >= 0.0 and interaction_bounds.end.y <= 1.0, "%s interaction bounds escaped the block height" % display_name)
+		if not drop_item_id.is_empty():
+			_expect(interaction_bounds.size.x < 1.0, "%s flower interaction width was not reduced" % display_name)
+			_expect(interaction_bounds.size.y < 1.0, "%s flower interaction height was not reduced" % display_name)
 		_expect(definition.generation_weight == generation_weight, "%s generation weight mismatch" % display_name)
+		_expect(block.drop_item_id == drop_item_id, "%s drop item mismatch" % display_name)
+		if not drop_item_id.is_empty():
+			var item := item_catalog.get_definition(drop_item_id)
+			_expect(item.display_name == display_name, "%s item display name mismatch" % display_name)
+			_expect(item.icon == block.sprite_texture, "%s item icon is not its foliage texture" % display_name)
+			_expect(item.max_stack == 99, "%s item stack limit mismatch" % display_name)
+			_expect(item.primary_action == null and item.secondary_action == null, "%s item has an unsupported action" % display_name)
+	_expect(block_catalog.get_interaction_bounds(BlockId.Type.STONE) == AABB(Vector3.ZERO, Vector3.ONE), "default block interaction bounds changed")
 	var classified_count := 0
 	for block_id in BlockId.DISPLAY_NAMES:
 		if BlockId.is_foliage(block_id):

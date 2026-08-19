@@ -18,6 +18,9 @@ var _till_grass_pos := Vector3i(1, 0, 1)
 var _till_dirt_pos := Vector3i(2, 0, 1)
 var _covered_dirt_pos := Vector3i(3, 0, 1)
 var _nonsoil_pos := Vector3i(4, 0, 1)
+var _flower_pos := Vector3i(-1, 0, 0)
+var _flower_support_pos := Vector3i(-2, 0, 0)
+var _blocked_flower_pos := Vector3i(-3, 0, 0)
 var _melee_attack_directions: Array[int] = []
 var _melee_attack_facings: Array[Vector3] = []
 var _soil_tilled_count: int = 0
@@ -345,6 +348,10 @@ func _run():
 		_covered_dirt_pos: BlockId.Type.DIRT,
 		_covered_dirt_pos + Vector3i.UP: BlockId.Type.DIRT,
 		_nonsoil_pos: BlockId.Type.SAND,
+		_flower_pos: BlockId.Type.BLUE_WILDFLOWER,
+		_flower_support_pos: BlockId.Type.GRASS,
+		_flower_support_pos + Vector3i.UP: BlockId.Type.RED_FLOWER,
+		_blocked_flower_pos: BlockId.Type.ORANGE_TULIP,
 	}, {})
 	var chest_position := Vector3i(4, 20, 0)
 	var chest_place_change := VoxelWorldTestFixture.commit_place(_voxel_world, chest_position, BlockId.Type.CHEST)
@@ -805,6 +812,24 @@ func _run():
 	await process_frame
 	_input_buffer.poll()
 
+	var blue_flower_count := _inventory.get_inventory_item_count(&"blue_wildflower")
+	_prepare_target(_flower_pos, unarmed)
+	_interactor._commit_mine(_flower_pos, _inventory.create_selected_item_source())
+	_expect(_voxel_world.get_block_id_at(_flower_pos) == BlockId.Type.AIR, "flower block was not mined")
+	_expect(_inventory.get_inventory_item_count(&"blue_wildflower") == blue_flower_count + 1, "mined flower did not enter inventory")
+
+	var grass_count := _inventory.get_inventory_item_count(&"grass_block")
+	var red_flower_count := _inventory.get_inventory_item_count(&"red_flower")
+	var support_preview := _voxel_world.prepare_mine_block(_flower_support_pos)
+	var support_preview_edits: Array[BlockEdit] = [] if support_preview == null else support_preview.get_edits()
+	_expect(support_preview_edits.size() == 2 and support_preview_edits[0].old_id == BlockId.Type.GRASS and support_preview_edits[1].old_id == BlockId.Type.RED_FLOWER, "support mining preview omitted its flower drop")
+	_prepare_target(_flower_support_pos, unarmed)
+	_interactor._commit_mine(_flower_support_pos, _inventory.create_selected_item_source())
+	_expect(_voxel_world.get_block_id_at(_flower_support_pos) == BlockId.Type.AIR, "flower support block was not mined")
+	_expect(_voxel_world.get_block_id_at(_flower_support_pos + Vector3i.UP) == BlockId.Type.AIR, "unsupported flower remained in the world")
+	_expect(_inventory.get_inventory_item_count(&"grass_block") == grass_count + 1, "mined flower support did not add its block drop")
+	_expect(_inventory.get_inventory_item_count(&"red_flower") == red_flower_count + 1, "support mining did not collect the flower above")
+
 	var selected_stack := _inventory.get_slot(0)
 	if selected_stack != null:
 		_expect(_inventory_loadout.discard_stack(0, selected_stack.count), "selected tool could not be cleared")
@@ -858,6 +883,19 @@ func _run():
 	_push_primary(false)
 	await process_frame
 	_input_buffer.poll()
+
+	var full_inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
+	var grass_max_stack: int = item_catalog.get_definition(&"grass_block").max_stack
+	for index in range(InventoryModel.FILLABLE_SIZE):
+		_expect(InventoryTestFixture.restore_slot(full_inventory, index, InventoryStack.new(&"grass_block", grass_max_stack)), "full-inventory flower fixture slot could not be restored")
+	var full_inventory_loadout := InventoryTestFixture.create_loadout(full_inventory)
+	_expect(full_inventory_loadout != null, "full-inventory flower loadout setup failed")
+	var full_inventory_mining := MiningActionExecutor.new()
+	_expect(full_inventory_mining.setup(full_inventory, full_inventory_loadout, unarmed_action, Callable()), "full-inventory flower mining setup failed")
+	full_inventory_mining.bind_world(_voxel_world)
+	_expect(full_inventory_mining.try_mine(_blocked_flower_pos, full_inventory.create_selected_item_source()).is_empty(), "full inventory allowed flower mining")
+	_expect(_voxel_world.get_block_id_at(_blocked_flower_pos) == BlockId.Type.ORANGE_TULIP, "full inventory allowed flower mining")
+	_expect(full_inventory.get_inventory_item_count(&"orange_tulip") == 0, "full inventory received an uncommitted flower drop")
 
 	_player.queue_free()
 	_camera.queue_free()

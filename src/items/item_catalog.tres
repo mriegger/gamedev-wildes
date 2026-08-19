@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="ItemCatalog" load_steps=50 format=3]
+[gd_resource type="Resource" script_class="ItemCatalog" load_steps=54 format=3]
 
 [ext_resource type="Script" path="res://items/item_catalog.gd" id="1_catalog"]
 [ext_resource type="Script" path="res://items/item_definition.gd" id="2_definition"]
@@ -49,9 +49,13 @@
 [ext_resource type="Resource" path="res://items/affixes/definitions/stout.tres" id="41_stout"]
 [ext_resource type="Resource" path="res://items/runes/definitions/power_rune.tres" id="42_power_rune"]
 [ext_resource type="Resource" path="res://items/affixes/definitions/nimble.tres" id="43_nimble"]
+[ext_resource type="Resource" path="res://items/definitions/blue_wildflower.tres" id="44_blue_wildflower"]
+[ext_resource type="Resource" path="res://items/definitions/orange_tulip.tres" id="45_orange_tulip"]
+[ext_resource type="Resource" path="res://items/definitions/pink_heartflower.tres" id="46_pink_heartflower"]
+[ext_resource type="Resource" path="res://items/definitions/red_flower.tres" id="47_red_flower"]
 
 [resource]
 script = ExtResource("1_catalog")
 equipment_types = Array[ExtResource("33_equipment_type_definition")]([ExtResource("34_equipment"), ExtResource("35_weapon"), ExtResource("36_weapon_sword"), ExtResource("37_weapon_hammer"), ExtResource("38_armor")])
-definitions = Array[ExtResource("2_definition")]([ExtResource("3_grass"), ExtResource("4_dirt"), ExtResource("5_sand"), ExtResource("6_stone"), ExtResource("7_log"), ExtResource("8_leaves"), ExtResource("17_copper"), ExtResource("20_cobblestone"), ExtResource("21_mossy_stone_bricks"), ExtResource("22_stone_bricks"), ExtResource("23_terracotta_bricks"), ExtResource("24_wood_planks"), ExtResource("100_bricks"), ExtResource("101_cracked_cinder_bricks"), ExtResource("102_deepstone_brick"), ExtResource("103_sedimentary_stone"), ExtResource("104_chiseled_marble"), ExtResource("9_torch"), ExtResource("27_anvil"), ExtResource("29_chest"), ExtResource("30_cauldron"), ExtResource("33_campfire"), ExtResource("19_basic_rune"), ExtResource("42_power_rune"), ExtResource("18_stone_pickaxe"), ExtResource("10_pickaxe"), ExtResource("25_hoe"), ExtResource("11_sword"), ExtResource("32_hammer"), ExtResource("26_pumpkin"), ExtResource("28_apple"), ExtResource("31_health_potion"), ExtResource("12_test_totem"), ExtResource("13_helmet"), ExtResource("14_chest_plate"), ExtResource("15_pants"), ExtResource("16_shoes")])
+definitions = Array[ExtResource("2_definition")]([ExtResource("3_grass"), ExtResource("4_dirt"), ExtResource("5_sand"), ExtResource("6_stone"), ExtResource("7_log"), ExtResource("8_leaves"), ExtResource("17_copper"), ExtResource("20_cobblestone"), ExtResource("21_mossy_stone_bricks"), ExtResource("22_stone_bricks"), ExtResource("23_terracotta_bricks"), ExtResource("24_wood_planks"), ExtResource("100_bricks"), ExtResource("101_cracked_cinder_bricks"), ExtResource("102_deepstone_brick"), ExtResource("103_sedimentary_stone"), ExtResource("104_chiseled_marble"), ExtResource("9_torch"), ExtResource("27_anvil"), ExtResource("29_chest"), ExtResource("30_cauldron"), ExtResource("33_campfire"), ExtResource("44_blue_wildflower"), ExtResource("45_orange_tulip"), ExtResource("46_pink_heartflower"), ExtResource("47_red_flower"), ExtResource("19_basic_rune"), ExtResource("42_power_rune"), ExtResource("18_stone_pickaxe"), ExtResource("10_pickaxe"), ExtResource("25_hoe"), ExtResource("11_sword"), ExtResource("32_hammer"), ExtResource("26_pumpkin"), ExtResource("28_apple"), ExtResource("31_health_potion"), ExtResource("12_test_totem"), ExtResource("13_helmet"), ExtResource("14_chest_plate"), ExtResource("15_pants"), ExtResource("16_shoes")])
 equipment_affixes = Array[ExtResource("39_affix_definition")]([ExtResource("40_vicious"), ExtResource("43_nimble"), ExtResource("41_stout")])
