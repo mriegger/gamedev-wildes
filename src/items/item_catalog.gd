@@ -11,14 +11,21 @@ class_name ItemCatalog
 		definitions = value
 		_rebuild_lookup()
 
+@export var equipment_affixes: Array[EquipmentAffixDefinition]:
+	set(value):
+		equipment_affixes = value
+		_rebuild_lookup()
+
 var _equipment_types_by_id: Dictionary = {}
 var _definitions_by_id: Dictionary = {}
+var _equipment_affixes_by_id: Dictionary = {}
 var _definitions_by_block: Array[ItemDefinition] = []
 var _is_valid: bool = false
 
 func _rebuild_lookup() -> void:
 	_equipment_types_by_id.clear()
 	_definitions_by_id.clear()
+	_equipment_affixes_by_id.clear()
 	_definitions_by_block.clear()
 	_definitions_by_block.resize(BlockId.Type.COUNT)
 	_is_valid = true
@@ -59,6 +66,9 @@ func _rebuild_lookup() -> void:
 			_is_valid = false
 		if definition.max_stack < 1:
 			push_error("[ItemCatalog] Invalid max stack for %s at %s" % [definition.id, source])
+			_is_valid = false
+		if definition.equipment_type != null and definition.max_stack != 1:
+			push_error("[ItemCatalog] Equipment requires a single-item stack for %s at %s" % [definition.id, source])
 			_is_valid = false
 		if definition.proficiency != null and not definition.proficiency.validate():
 			push_error("[ItemCatalog] Invalid proficiency for %s at %s" % [definition.id, source])
@@ -104,6 +114,22 @@ func _rebuild_lookup() -> void:
 			_is_valid = false
 			continue
 		_definitions_by_block[block_id] = definition
+	for affix in equipment_affixes:
+		if affix == null:
+			push_error("[ItemCatalog] Null equipment affix")
+			_is_valid = false
+			continue
+		var source := affix.resource_path
+		if affix.id.is_empty():
+			push_error("[ItemCatalog] Empty equipment affix ID at %s" % source)
+			_is_valid = false
+			continue
+		if _equipment_affixes_by_id.has(affix.id):
+			push_error("[ItemCatalog] Duplicate equipment affix ID %s at %s" % [affix.id, source])
+			_is_valid = false
+			continue
+		_equipment_affixes_by_id[affix.id] = affix
+		_is_valid = affix.validate(source) and _is_valid
 
 func _is_supported_primary_action(action: ItemActionDefinition) -> bool:
 	return action == null or action is MiningActionDefinition or action is MeleeAttackActionDefinition or action is TillingActionDefinition
@@ -116,6 +142,7 @@ func _ensure_lookup() -> void:
 		_equipment_types_by_id.size() != equipment_types.size()
 		or _definitions_by_block.size() != BlockId.Type.COUNT
 		or _definitions_by_id.size() != definitions.size()
+		or _equipment_affixes_by_id.size() != equipment_affixes.size()
 	):
 		_rebuild_lookup()
 
@@ -129,6 +156,7 @@ func validate(block_catalog: BlockCatalog) -> bool:
 	var rarities_by_id: Dictionary = {}
 	var block_tags: Dictionary = {}
 	var maximum_power_by_tag: Dictionary = {}
+	var used_affix_ids: Dictionary = {}
 	for block in block_catalog.definitions:
 		if block != null and not block.mining_tool_tag.is_empty():
 			block_tags[block.mining_tool_tag] = true
@@ -198,6 +226,9 @@ func validate(block_catalog: BlockCatalog) -> bool:
 					push_error("[ItemCatalog] Non-canonical tilling source for %s" % definition.id)
 					valid = false
 		var mining := definition.primary_action as MiningActionDefinition
+		for affix in equipment_affixes:
+			if affix != null and affix.is_compatible_with(definition):
+				used_affix_ids[affix.id] = true
 		if mining == null:
 			continue
 		for stat in mining.tool_stats:
@@ -215,6 +246,14 @@ func validate(block_catalog: BlockCatalog) -> bool:
 			valid = false
 		if block.minimum_mining_power > int(maximum_power_by_tag.get(block.mining_tool_tag, 0)):
 			push_error("[ItemCatalog] No tool can mine %s at power %d" % [BlockId.get_display_name(block.id), block.minimum_mining_power])
+			valid = false
+	for affix in equipment_affixes:
+		if affix == null:
+			continue
+		valid = affix.validate(affix.resource_path, armor_type) and valid
+		valid = _validate_compatible_equipment_types(affix.compatible_equipment_types, "equipment affix %s" % affix.id) and valid
+		if not used_affix_ids.has(affix.id):
+			push_error("[ItemCatalog] Equipment affix %s is incompatible with every item" % affix.id)
 			valid = false
 	return valid
 
@@ -273,6 +312,51 @@ func is_combat_item(id: StringName) -> bool:
 	if not has_definition(id):
 		return false
 	return _is_combat_definition(get_definition(id))
+
+func is_valid_socket_loadout(item_id: StringName, rune_ids: Array[StringName]) -> bool:
+	if rune_ids.is_empty():
+		return true
+	if (
+		not has_definition(item_id)
+		or not is_combat_item(item_id)
+		or rune_ids.size() > ProficiencyDefinition.MAXIMUM_SLOT_COUNT
+	):
+		return false
+	var item := get_definition(item_id)
+	if item.proficiency == null or rune_ids.size() > item.proficiency.slot_unlock_levels.size():
+		return false
+	if rune_ids.back().is_empty():
+		return false
+	for rune_id in rune_ids:
+		if rune_id.is_empty():
+			continue
+		if not has_definition(rune_id):
+			return false
+		var rune := get_definition(rune_id) as RuneDefinition
+		if rune == null or not rune.is_compatible_with(item):
+			return false
+	return true
+
+func is_valid_persisted_socket_loadout(rune_ids: Array[StringName]) -> bool:
+	if rune_ids.size() > ProficiencyDefinition.MAXIMUM_SLOT_COUNT:
+		return false
+	if not rune_ids.is_empty() and rune_ids.back().is_empty():
+		return false
+	for rune_id in rune_ids:
+		if rune_id.is_empty():
+			continue
+		if not has_definition(rune_id) or not get_definition(rune_id) is RuneDefinition:
+			return false
+	return true
+
+func has_equipment_affix(id: StringName) -> bool:
+	_ensure_lookup()
+	return _equipment_affixes_by_id.has(id)
+
+func get_equipment_affix(id: StringName) -> EquipmentAffixDefinition:
+	_ensure_lookup()
+	assert(_equipment_affixes_by_id.has(id))
+	return _equipment_affixes_by_id[id] as EquipmentAffixDefinition
 
 func _is_combat_definition(definition: ItemDefinition) -> bool:
 	return definition.equipment_type != null

@@ -6,7 +6,7 @@ const RUNE_BONUS_COLOR: Color = Color(0.96, 0.28, 0.26, 1.0)
 var _item_definition: ItemDefinition
 var _item_proficiency: ItemProficiency
 var _item_catalog: ItemCatalog
-var _socketed_rune_ids: Array[StringName] = []
+var _equipment_instance: EquipmentInstance
 var _displayed_level: int = -1
 var _displayed_experience: float = -1.0
 
@@ -22,7 +22,7 @@ func setup(
 	item_definition: ItemDefinition,
 	item_proficiency: ItemProficiency,
 	item_catalog: ItemCatalog,
-	socketed_rune_ids: Array[StringName] = [],
+	equipment_instance: EquipmentInstance = null,
 ) -> void:
 	assert(item_definition != null)
 	assert(item_definition.rarity != null)
@@ -33,7 +33,7 @@ func setup(
 	_item_definition = item_definition
 	_item_proficiency = item_proficiency
 	_item_catalog = item_catalog
-	_socketed_rune_ids = socketed_rune_ids.duplicate()
+	_equipment_instance = null if equipment_instance == null else equipment_instance.copy()
 	if is_node_ready():
 		_refresh()
 		set_process(_has_proficiency())
@@ -57,6 +57,9 @@ func _refresh() -> void:
 		return
 	icon.texture = _item_definition.icon
 	item_name_label.text = _item_definition.display_name
+	if _equipment_instance != null:
+		for affix in _equipment_instance.affixes:
+			item_name_label.text += " %s" % _item_catalog.get_equipment_affix(affix.affix_id).display_name_suffix
 	rarity_label.text = _item_definition.rarity.display_name
 	rarity_label.add_theme_color_override("font_color", _item_definition.rarity.display_color)
 	var has_proficiency := _has_proficiency()
@@ -110,6 +113,16 @@ func _get_stat_lines() -> Array[String]:
 		lines.append("Cooldown: %ss" % _format_number(profile.cooldown))
 		lines.append("Sweep: %s°" % _format_number(profile.sweep_degrees))
 	lines.append_array(_get_modifier_stat_lines(_item_definition.stat_modifiers))
+	if _equipment_instance != null:
+		var affix_modifiers: Array[StatModifier] = []
+		for affix in _equipment_instance.affixes:
+			for stat_roll in affix.stat_rolls:
+				var modifier := StatModifier.new()
+				modifier.stat_id = stat_roll.stat_id
+				modifier.operation = stat_roll.operation
+				modifier.amount = stat_roll.amount
+				affix_modifiers.append(modifier)
+		lines.append_array(_get_modifier_stat_lines(affix_modifiers))
 	return lines
 
 func _get_modifier_stat_lines(modifiers: Array[StatModifier]) -> Array[String]:
@@ -128,7 +141,9 @@ func _get_modifier_stat_lines(modifiers: Array[StatModifier]) -> Array[String]:
 func _get_socketed_rune_stat_lines() -> Array[String]:
 	var additive_by_stat: Dictionary = {}
 	var multiplier_by_stat: Dictionary = {}
-	for rune_id in _socketed_rune_ids:
+	if _equipment_instance == null:
+		return []
+	for rune_id in _equipment_instance.socketed_rune_ids:
 		if rune_id.is_empty():
 			continue
 		var rune := _item_catalog.get_definition(rune_id) as RuneDefinition

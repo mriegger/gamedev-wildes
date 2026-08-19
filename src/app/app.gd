@@ -4,6 +4,7 @@ extends Node
 @export var world_select_scene: PackedScene
 @export var loading_scene: PackedScene
 @export var game_scene: PackedScene
+@export var item_catalog: Resource
 
 @onready var game_root: Node = $GameRoot
 @onready var screen_root: Node = $ScreenRoot
@@ -28,6 +29,7 @@ func _show_main_menu():
 
 func _show_world_select():
 	var world_select = world_select_scene.instantiate() as SaveSlotScreen
+	world_select.setup(item_catalog)
 	world_select.back_requested.connect(_show_main_menu)
 	world_select.session_requested.connect(_start_session)
 	_replace_screen(world_select)

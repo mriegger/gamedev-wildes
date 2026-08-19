@@ -228,7 +228,8 @@ func _make_saved_world() -> Dictionary:
 		"player_stats": null,
 		"item_proficiency": {},
 		"inventory": null,
-		"chest_inventories": {},
+		"next_equipment_instance_id": 1,
+		"chests": {},
 		"pumpkin_patch": null,
 		"apple_trees": AppleTreeState.new().snapshot(),
 	}
@@ -855,7 +856,7 @@ func _verify_alive_save_timers() -> bool:
 	if not is_zero_approx(session._auto_save_elapsed):
 		_fail("alive autosave timer did not commit")
 		return false
-	var auto_save := SaveManager.load_slot(_test_save_slot_id)
+	var auto_save := SaveManager.load_slot(_test_save_slot_id, _game.item_catalog)
 	if not _saved_position_matches(auto_save, auto_save_position):
 		_fail("alive autosave did not persist the player position")
 		return false
@@ -874,7 +875,7 @@ func _verify_alive_save_timers() -> bool:
 	if session._pending_edit_save or not is_zero_approx(session._edit_idle_elapsed):
 		_fail("alive edit-debounce timer did not commit")
 		return false
-	var edit_save := SaveManager.load_slot(_test_save_slot_id)
+	var edit_save := SaveManager.load_slot(_test_save_slot_id, _game.item_catalog)
 	if not _saved_position_matches(edit_save, edit_save_position):
 		_fail("alive edit-debounce save did not persist the player position")
 		return false
@@ -896,7 +897,7 @@ func _saved_state_is_living_spawn(save_data: Dictionary, spawn_position: Vector3
 	var inventory_data = save_data.get("inventory", null)
 	if not inventory_data is Dictionary:
 		return false
-	var restored_inventory := InventoryModel.new(item_catalog)
+	var restored_inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	if not restored_inventory.from_dict(inventory_data as Dictionary):
 		return false
 	return restored_inventory.to_dict() == inventory_snapshot
@@ -1052,7 +1053,7 @@ func _verify_player_defeat_flow() -> bool:
 	if session._pending_edit_save:
 		_fail("resumed edit-debounce save did not commit")
 		return false
-	var respawn_save := SaveManager.load_slot(_test_save_slot_id)
+	var respawn_save := SaveManager.load_slot(_test_save_slot_id, _game.item_catalog)
 	if not _saved_state_is_living_spawn(respawn_save, expected_spawn, _game.player_stats.get_value(&"hp"), inventory_before, _game.item_catalog):
 		_fail("resumed edit-debounce save did not persist the living Respawn state")
 		return false
@@ -1118,7 +1119,7 @@ func _verify_dead_main_menu_save() -> bool:
 	if _game._session_active or _game.is_physics_processing() or _game.is_processing_unhandled_input():
 		_fail("Main Menu left gameplay callbacks active after shutdown")
 		return false
-	var saved_state := SaveManager.load_slot(_test_save_slot_id)
+	var saved_state := SaveManager.load_slot(_test_save_slot_id, _game.item_catalog)
 	if not _saved_state_is_living_spawn(saved_state, expected_spawn, _game.player_stats.get_value(&"hp"), inventory_before, _game.item_catalog):
 		_fail("dead Main Menu did not save a living spawn state with preserved inventory")
 		return false
@@ -1157,7 +1158,7 @@ func _verify_dead_window_close_save() -> bool:
 		close_game.queue_free()
 		_fail("zero-HP save recovery did not place the player and camera at spawn")
 		return false
-	var recovered_save := SaveManager.load_slot(_test_close_save_slot_id)
+	var recovered_save := SaveManager.load_slot(_test_close_save_slot_id, close_game.item_catalog)
 	if not _saved_state_is_living_spawn(recovered_save, expected_spawn, close_game.player_stats.get_value(&"hp"), inventory_before, close_game.item_catalog):
 		close_game.queue_free()
 		_fail("zero-HP save recovery did not immediately persist a living spawn state")
@@ -1188,7 +1189,7 @@ func _verify_dead_window_close_save() -> bool:
 		close_game.queue_free()
 		_fail("window close left gameplay callbacks active after shutdown")
 		return false
-	var saved_state := SaveManager.load_slot(_test_close_save_slot_id)
+	var saved_state := SaveManager.load_slot(_test_close_save_slot_id, close_game.item_catalog)
 	if not _saved_state_is_living_spawn(saved_state, expected_spawn, close_game.player_stats.get_value(&"hp"), inventory_before, close_game.item_catalog):
 		close_game.queue_free()
 		_fail("dead window close did not save a living spawn state with preserved inventory")

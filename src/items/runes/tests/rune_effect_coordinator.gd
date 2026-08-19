@@ -12,12 +12,12 @@ func _init() -> void:
 
 	var basic_rune_ids: Array[StringName] = [&"basic_rune"]
 	var no_rune_ids: Array[StringName] = []
-	var inventory := InventoryModel.new(item_catalog)
+	var inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	inventory.setup_empty()
-	inventory.slots[0] = InventoryStack.new(&"copper_sword", 1, basic_rune_ids)
+	inventory.slots[0] = _equipment_stack(inventory, &"copper_sword", basic_rune_ids)
 	inventory.slots[1] = InventoryStack.new(&"sand_block", 1)
-	inventory.slots[InventoryModel.HOTBAR_SIZE] = InventoryStack.new(&"copper_helmet", 1, basic_rune_ids)
-	inventory.slots[InventoryModel.HOTBAR_SIZE + 1] = InventoryStack.new(&"copper_chest_plate", 1, basic_rune_ids)
+	inventory.slots[InventoryModel.HOTBAR_SIZE] = _equipment_stack(inventory, &"copper_helmet", basic_rune_ids)
+	inventory.slots[InventoryModel.HOTBAR_SIZE + 1] = _equipment_stack(inventory, &"copper_chest_plate", basic_rune_ids)
 
 	var stats := ActorStats.new(stats_definition)
 	var coordinator := RuneEffectCoordinator.new()
@@ -86,3 +86,13 @@ func _init() -> void:
 func _expect(condition: bool, message: String) -> void:
 	if not condition:
 		_errors.append(message)
+
+func _equipment_stack(
+	inventory: InventoryModel,
+	item_id: StringName,
+	rune_ids: Array[StringName],
+) -> InventoryStack:
+	var affixes: Array[EquipmentAffixDefinition] = []
+	var instance := inventory.equipment_instance_factory.create(item_id, affixes, rune_ids)
+	assert(instance != null)
+	return InventoryStack.new(item_id, 1, instance)

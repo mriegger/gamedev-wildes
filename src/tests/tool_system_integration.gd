@@ -217,14 +217,15 @@ func _run():
 		_expect(held_root is Node3D, "held scene root is not Node3D for %s" % definition.id)
 		held_root.free()
 
-	_inventory = InventoryModel.new(item_catalog)
+	_inventory = InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	_inventory.setup_starter()
 	_expect(_inventory.get_slot(0) == null, "new inventory still grants a copper pickaxe")
 	_expect(_inventory.get_slot(3) is InventoryStack and _inventory.get_slot(3).item_id == &"copper_sword", "starter sword missing")
 	var test_totem_slot := InventoryModel.FILLABLE_SIZE - 1
 	_expect(_inventory.get_slot(test_totem_slot) is InventoryStack and _inventory.get_slot(test_totem_slot).item_id == &"test_totem", "test totem is not in the starter backpack")
 	var encoded := _inventory.to_dict()
-	var restored := InventoryModel.new(item_catalog)
+	var encoded_next_instance_id := _inventory.equipment_instance_factory.get_next_instance_id()
+	var restored := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog, encoded_next_instance_id))
 	_expect(restored.from_dict(encoded), "typed inventory did not restore")
 	_expect(restored.get_slot(0) == null, "restored new inventory gained a copper pickaxe")
 	_expect(restored.get_slot(3) is InventoryStack and restored.get_slot(3).item_id == &"copper_sword", "restored sword missing")
@@ -234,24 +235,24 @@ func _run():
 	existing_pickaxe_encoded["regions"]["hotbar"][0] = {
 		"item_id": "copper_pickaxe",
 		"count": 1,
-		"socketed_rune_ids": [],
+		"equipment_instance": null,
 	}
 	existing_pickaxe_encoded.erase("starter_item_migration_version")
-	var existing_pickaxe_save := InventoryModel.new(item_catalog)
+	var existing_pickaxe_save := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog, encoded_next_instance_id))
 	_expect(existing_pickaxe_save.from_dict(existing_pickaxe_encoded), "existing copper pickaxe save did not restore")
 	_expect(existing_pickaxe_save.migrate_starter_items(), "existing copper pickaxe save did not migrate")
 	_expect(existing_pickaxe_save.get_slot(0) != null and existing_pickaxe_save.get_slot(0).item_id == &"copper_pickaxe", "existing copper pickaxe was not preserved")
 	var legacy_encoded := encoded.duplicate(true)
 	legacy_encoded["regions"]["hotbar"][3] = null
 	legacy_encoded.erase("starter_item_migration_version")
-	var legacy := InventoryModel.new(item_catalog)
+	var legacy := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog, encoded_next_instance_id))
 	_expect(legacy.from_dict(legacy_encoded), "legacy inventory did not restore")
 	_expect(legacy.migrate_starter_items(), "legacy inventory could not receive starter items")
 	_expect(legacy.get_inventory_item_count(&"copper_pickaxe") == 0, "legacy migration granted a copper pickaxe")
 	_expect(legacy.get_inventory_item_count(&"copper_sword") == 1, "legacy migration did not restore the sword")
 	var restore_game := Game.new()
 	restore_game.item_catalog = item_catalog
-	restore_game.inventory_model = InventoryModel.new(item_catalog)
+	restore_game.inventory_model = InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog, encoded_next_instance_id))
 	restore_game._save_data = {"inventory": legacy_encoded}
 	restore_game._restore_inventory()
 	_expect(restore_game.inventory_model.get_inventory_item_count(&"copper_pickaxe") == 0, "game restore granted a copper pickaxe")
@@ -259,13 +260,13 @@ func _run():
 	restore_game.free()
 	var new_game := Game.new()
 	new_game.item_catalog = item_catalog
-	new_game.inventory_model = InventoryModel.new(item_catalog)
+	new_game.inventory_model = InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	new_game._save_data = {"inventory": null}
 	new_game._restore_inventory()
 	for index in range(new_game.inventory_model.size):
 		_expect(new_game.inventory_model.get_slot(index) == null, "new world inventory contains an item in slot %d" % index)
 	_expect(new_game.inventory_model.starter_item_migration_version == InventoryModel.STARTER_ITEM_MIGRATION_VERSION, "new world inventory can receive legacy starter items after reload")
-	var reloaded_new_world := InventoryModel.new(item_catalog)
+	var reloaded_new_world := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	_expect(reloaded_new_world.from_dict(new_game.inventory_model.to_dict()), "new world inventory did not survive save serialization")
 	_expect(reloaded_new_world.migrate_starter_items(), "new world inventory migration state did not survive reload")
 	for index in range(reloaded_new_world.size):
@@ -277,13 +278,13 @@ func _run():
 			break
 	_expect(legacy.migrate_starter_items(), "completed starter migration did not remain complete")
 	_expect(legacy.get_inventory_item_count(&"copper_sword") == 0, "completed starter migration re-granted a removed sword")
-	var crowded := InventoryModel.new(item_catalog)
+	var crowded := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	var grass_id := item_catalog.get_item_for_block(BlockId.Type.GRASS).id
 	for index in range(InventoryModel.HOTBAR_SIZE):
 		crowded.slots[index] = InventoryStack.new(grass_id, index + 1)
 	_expect(crowded.ensure_item(&"copper_pickaxe"), "full hotbar could not receive a pickaxe")
 	_expect(crowded.get_slot(0).item_id == &"copper_pickaxe" and crowded.get_slot(InventoryModel.HOTBAR_SIZE).count == 1, "adding a pickaxe lost its displaced stack")
-	var full := InventoryModel.new(item_catalog)
+	var full := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	for index in range(InventoryModel.FILLABLE_SIZE):
 		full.slots[index] = InventoryStack.new(grass_id, 1)
 	_expect(not full.migrate_starter_items(), "full inventory unexpectedly accepted starter items")

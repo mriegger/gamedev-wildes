@@ -20,8 +20,15 @@ var slot_instances: Array[SaveSlotItem] = []
 
 var _pending_creation_slot: int = -1
 var _pending_creation_seed: int = 0
+var _item_catalog: ItemCatalog
+
+func setup(item_catalog: Resource) -> void:
+	assert(item_catalog is ItemCatalog)
+	assert(_item_catalog == null)
+	_item_catalog = item_catalog as ItemCatalog
 
 func _ready():
+	assert(_item_catalog != null)
 	_apply_frosted_panel_styles()
 
 	back_button.pressed.connect(_on_back_pressed)
@@ -47,7 +54,7 @@ func _refresh_slots():
 		child.queue_free()
 	slot_instances.clear()
 
-	var all = SaveManager.get_all_slots()
+	var all = SaveManager.get_all_slots(_item_catalog)
 	for slot_id in range(SaveManager.SLOT_COUNT):
 		var data = all[slot_id]
 

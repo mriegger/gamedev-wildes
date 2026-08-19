@@ -101,7 +101,9 @@ func _get_active_rune_ids() -> Array[StringName]:
 	return rune_ids
 
 func _append_socketed_rune_ids(stack: InventoryStack, rune_ids: Array[StringName]) -> void:
-	for rune_id in stack.socketed_rune_ids:
+	if stack.equipment_instance == null:
+		return
+	for rune_id in stack.equipment_instance.socketed_rune_ids:
 		if not rune_id.is_empty():
 			rune_ids.append(rune_id)
 

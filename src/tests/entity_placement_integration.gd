@@ -94,7 +94,7 @@ func _run() -> void:
 	_world.restore_block_edits({Vector3i(8, int(bird_air_position.y), 8): BlockId.Type.STONE}, {})
 	_expect(not EntitySpawnGeometry.can_spawn_aerial(_world, bird_definition, bird_air_position), "bird aerial geometry accepted a blocked body volume")
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
-	_inventory = InventoryModel.new(item_catalog)
+	_inventory = InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	_inventory.setup_starter()
 	_inventory.select_slot(GRASS_SLOT)
 	_input_buffer = InputBuffer.new()

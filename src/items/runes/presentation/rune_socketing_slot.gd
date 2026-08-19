@@ -24,7 +24,7 @@ var _drop_validator: Callable
 var _tooltip_definition: ItemDefinition
 var _tooltip_proficiency: ItemProficiency
 var _tooltip_catalog: ItemCatalog
-var _tooltip_socketed_rune_ids: Array[StringName] = []
+var _tooltip_equipment_instance: EquipmentInstance
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
@@ -52,7 +52,7 @@ func set_item_tooltip(
 	definition: ItemDefinition,
 	item_proficiency: ItemProficiency,
 	item_catalog: ItemCatalog,
-	socketed_rune_ids: Array[StringName] = [],
+	equipment_instance: EquipmentInstance = null,
 ) -> void:
 	assert(definition != null)
 	assert(item_proficiency != null)
@@ -60,8 +60,11 @@ func set_item_tooltip(
 	_tooltip_definition = definition
 	_tooltip_proficiency = item_proficiency
 	_tooltip_catalog = item_catalog
-	_tooltip_socketed_rune_ids = socketed_rune_ids.duplicate()
 	tooltip_text = definition.display_name
+	_tooltip_equipment_instance = null if equipment_instance == null else equipment_instance.copy()
+	if _tooltip_equipment_instance != null:
+		for affix in _tooltip_equipment_instance.affixes:
+			tooltip_text += " %s" % item_catalog.get_equipment_affix(affix.affix_id).display_name_suffix
 
 func _make_custom_tooltip(_for_text: String) -> Object:
 	if tooltip_text.is_empty() or _tooltip_definition == null:
@@ -73,7 +76,7 @@ func _make_custom_tooltip(_for_text: String) -> Object:
 		_tooltip_definition,
 		_tooltip_proficiency,
 		_tooltip_catalog,
-		_tooltip_socketed_rune_ids,
+		_tooltip_equipment_instance,
 	)
 	return tooltip
 
@@ -81,7 +84,7 @@ func _clear_item_tooltip() -> void:
 	_tooltip_definition = null
 	_tooltip_proficiency = null
 	_tooltip_catalog = null
-	_tooltip_socketed_rune_ids.clear()
+	_tooltip_equipment_instance = null
 	tooltip_text = ""
 
 func _can_drop_data(_at_position: Vector2, data: Variant) -> bool:

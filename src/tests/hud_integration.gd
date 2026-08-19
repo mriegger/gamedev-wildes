@@ -41,7 +41,7 @@ var _trash_start_frame: int = 0
 func _init() -> void:
 	print("[hud_integration] starting")
 	_item_catalog = load("res://items/item_catalog.tres") as ItemCatalog
-	_inv = InventoryModel.new(_item_catalog)
+	_inv = InventoryModel.new(_item_catalog, EquipmentInstanceFactory.new(_item_catalog))
 	_inv.setup_starter()
 	_stats = ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
 	_item_proficiency = ItemProficiency.new(_item_catalog)
@@ -52,7 +52,7 @@ func _init() -> void:
 		_fail("equipment coordinator setup failed")
 	_crafting_recipe_catalog = load("res://crafting/crafting_recipe_catalog.tres") as CraftingRecipeCatalog
 	_crafting_coordinator = CraftingCoordinator.new()
-	_crafting_coordinator.setup(_inv, _crafting_recipe_catalog)
+	_crafting_coordinator.setup(_inv, _crafting_recipe_catalog, _inv.equipment_instance_factory)
 	_unhandled_wheel_probe = UnhandledWheelProbe.new()
 	root.add_child(_unhandled_wheel_probe)
 	_orphan_before = int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))

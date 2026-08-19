@@ -16,18 +16,21 @@ func setup(p_inventory_model: InventoryModel, p_item_proficiency: ItemProficienc
 	assert(p_item_proficiency != null)
 	if _inventory_model != null or _item_proficiency != null:
 		return false
-	if not _validate_existing_loadouts(p_inventory_model, p_item_proficiency):
+	if not _validate_existing_loadouts(p_inventory_model):
 		return false
 	_inventory_model = p_inventory_model
 	_item_proficiency = p_item_proficiency
 	return true
 
 func is_socketable_gear_index(gear_index: int) -> bool:
-	return _get_gear_definition(_inventory_model, _item_proficiency, gear_index) != null
+	return get_total_slot_count(gear_index) > 0
 
 func get_total_slot_count(gear_index: int) -> int:
 	var gear := _get_gear_definition(_inventory_model, _item_proficiency, gear_index)
-	return 0 if gear == null else gear.proficiency.slot_unlock_levels.size()
+	var configured_slot_count := 0 if gear == null else gear.proficiency.slot_unlock_levels.size()
+	if _get_persisted_gear_definition(_inventory_model, gear_index) == null:
+		return configured_slot_count
+	return maxi(configured_slot_count, _inventory_model.get_socketed_rune_ids(gear_index).size())
 
 func get_unlocked_slot_count(gear_index: int) -> int:
 	var gear := _get_gear_definition(_inventory_model, _item_proficiency, gear_index)
@@ -47,9 +50,11 @@ func get_socketed_rune_id(gear_index: int, slot_index: int) -> StringName:
 func get_slot_state(gear_index: int, slot_index: int) -> SlotState:
 	if slot_index < 0 or slot_index >= get_total_slot_count(gear_index):
 		return SlotState.UNAVAILABLE
+	if not get_socketed_rune_id(gear_index, slot_index).is_empty():
+		return SlotState.FILLED
 	if slot_index >= get_unlocked_slot_count(gear_index):
 		return SlotState.LOCKED
-	return SlotState.EMPTY if get_socketed_rune_id(gear_index, slot_index).is_empty() else SlotState.FILLED
+	return SlotState.EMPTY
 
 func can_socket(gear_index: int, slot_index: int, rune_source_index: int) -> bool:
 	return not _prepare_socket(gear_index, slot_index, rune_source_index).is_empty()
@@ -130,7 +135,7 @@ func _prepare_unsocket(gear_index: int, slot_index: int) -> Dictionary:
 	if get_slot_state(gear_index, slot_index) != SlotState.FILLED:
 		return {}
 	var current_rune_ids := _inventory_model.get_socketed_rune_ids(gear_index)
-	if not _is_valid_loadout(_inventory_model, _item_proficiency, gear_index, current_rune_ids):
+	if not _is_valid_persisted_loadout(_inventory_model, gear_index, current_rune_ids):
 		return {}
 	var rune_id := current_rune_ids[slot_index]
 	var next_rune_ids := current_rune_ids.duplicate()
@@ -149,19 +154,26 @@ func _prepare_unsocket(gear_index: int, slot_index: int) -> Dictionary:
 		"rune_id": rune_id,
 	}
 
-func _validate_existing_loadouts(
-	p_inventory_model: InventoryModel,
-	p_item_proficiency: ItemProficiency,
-) -> bool:
+func _validate_existing_loadouts(p_inventory_model: InventoryModel) -> bool:
 	for gear_index in range(p_inventory_model.size):
 		if p_inventory_model.get_slot(gear_index) == null:
 			continue
 		var rune_ids := p_inventory_model.get_socketed_rune_ids(gear_index)
 		if rune_ids.is_empty():
 			continue
-		if not _is_valid_loadout(p_inventory_model, p_item_proficiency, gear_index, rune_ids):
+		if not _is_valid_persisted_loadout(p_inventory_model, gear_index, rune_ids):
 			return false
 	return true
+
+func _is_valid_persisted_loadout(
+	p_inventory_model: InventoryModel,
+	gear_index: int,
+	rune_ids: Array[StringName],
+) -> bool:
+	return (
+		_get_persisted_gear_definition(p_inventory_model, gear_index) != null
+		and p_inventory_model.item_catalog.is_valid_persisted_socket_loadout(rune_ids)
+	)
 
 func _is_valid_loadout(
 	p_inventory_model: InventoryModel,
@@ -209,6 +221,23 @@ func _get_gear_definition(
 	var gear := p_inventory_model.item_catalog.get_definition(stack.item_id)
 	var total_slot_count := gear.proficiency.slot_unlock_levels.size()
 	return gear if total_slot_count > 0 and total_slot_count <= ProficiencyDefinition.MAXIMUM_SLOT_COUNT else null
+
+func _get_persisted_gear_definition(
+	p_inventory_model: InventoryModel,
+	gear_index: int,
+) -> ItemDefinition:
+	if p_inventory_model == null:
+		return null
+	var stack := p_inventory_model.get_slot(gear_index)
+	if (
+		stack == null
+		or stack.count != 1
+		or stack.equipment_instance == null
+		or not p_inventory_model.item_catalog.has_definition(stack.item_id)
+		or not p_inventory_model.item_catalog.is_combat_item(stack.item_id)
+	):
+		return null
+	return p_inventory_model.item_catalog.get_definition(stack.item_id)
 
 func _trim_trailing_empty_slots(rune_ids: Array[StringName]) -> void:
 	while not rune_ids.is_empty() and rune_ids.back().is_empty():

@@ -78,7 +78,7 @@ func _run():
 	_expect(item_catalog.get_definition(&"stone_pickaxe").equip_audio == null, "stone pickaxe unexpectedly has equip audio")
 	for stream in sword_equip_profile.streams + pickaxe_equip_profile.streams + hoe_equip_profile.streams:
 		_expect(stream != null, "equip audio stream is null")
-	var inventory := InventoryModel.new(item_catalog)
+	var inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	inventory.setup_starter()
 	inventory.slots[0] = InventoryStack.new(&"stone_pickaxe", 1)
 	inventory.slots[1] = InventoryStack.new(&"copper_pickaxe", 1)

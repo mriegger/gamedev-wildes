@@ -21,13 +21,13 @@ func _run() -> void:
 	if item_catalog == null or game_scene == null or app_scene == null:
 		_finish()
 		return
-	var inventory := InventoryModel.new(item_catalog)
+	var inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	inventory.setup_empty()
 	var encoded_inventory := inventory.to_dict()
 	encoded_inventory["regions"]["backpack"][0] = {
 		"item_id": "retired_test_item",
 		"count": 1,
-		"socketed_rune_ids": [],
+		"equipment_instance": null,
 	}
 	var save_data := {
 		"slot_id": _slot_id,
@@ -40,12 +40,13 @@ func _run() -> void:
 		"placed_blocks": {},
 		"removed_blocks": {},
 		"torch_attachments": {},
-		"chest_inventories": {},
+		"chests": {},
 		"player_position": null,
 		"player_stats": null,
 		"player_perks": {"allocations": {}},
 		"item_proficiency": {},
 		"inventory": encoded_inventory,
+		"next_equipment_instance_id": 1,
 		"playtime_seconds": 0.0,
 		"time_of_day": 6.0,
 		"pumpkin_patch": null,
@@ -60,7 +61,7 @@ func _run() -> void:
 		return
 	save_file.store_string(original_text)
 	save_file.close()
-	var loaded := SaveManager.load_slot(_slot_id)
+	var loaded := SaveManager.load_slot(_slot_id, item_catalog)
 	var loaded_before := loaded.duplicate(true)
 	_expect(not bool(loaded.get("incompatible", false)), "current-version test save was rejected before domain restore")
 	await _verify_game_failure(game_scene, loaded, loaded_before, original_text)

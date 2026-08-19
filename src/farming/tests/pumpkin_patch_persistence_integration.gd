@@ -46,7 +46,7 @@ func _run() -> void:
 	var prompt_coordinator := InteractionPromptCoordinator.new()
 	prompt_coordinator.setup(hud, Callable(self, "_is_interaction_blocked"))
 	prompt_coordinator.set_level_prompt("F  Enter Dungeon")
-	var inventory := InventoryModel.new(item_catalog)
+	var inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	var harvest := HarvestCoordinator.new()
 	var harvest_sources: Array[HarvestSource] = [pumpkin_patch]
 	_expect(harvest.setup(harvest_sources, inventory, prompt_coordinator), "pumpkin harvest setup rejected valid content")
@@ -92,7 +92,7 @@ func _run() -> void:
 	var full_patch := _new_pumpkin_patch()
 	root.add_child(full_patch)
 	_expect(full_patch.setup(voxel_world, player, 17391, generated_snapshot), "full-inventory harvest patch did not restore")
-	var full_inventory := InventoryModel.new(item_catalog)
+	var full_inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	for index in range(InventoryModel.FILLABLE_SIZE):
 		full_inventory.slots[index] = InventoryStack.new(&"dirt_block", 99)
 	var full_harvest := HarvestCoordinator.new()
@@ -132,8 +132,9 @@ func _run() -> void:
 	var processor := DevConsoleCommandProcessor.new()
 	var actor_stats := ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
 	var structure_command := Callable(self, "_accept_structure_command")
+	var console_catalog := load("res://items/item_catalog.tres") as ItemCatalog
 	processor.setup(
-		InventoryModel.new(load("res://items/item_catalog.tres") as ItemCatalog),
+		InventoryModel.new(console_catalog, EquipmentInstanceFactory.new(console_catalog)),
 		actor_stats,
 		pumpkin_patch,
 		structure_command,

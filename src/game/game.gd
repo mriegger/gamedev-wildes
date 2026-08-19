@@ -51,6 +51,7 @@ signal main_menu_requested
 @onready var _fade: ColorRect = $TransitionLayer/Fade as ColorRect
 
 var inventory_model: InventoryModel
+var equipment_instance_factory: EquipmentInstanceFactory
 var player_stats: ActorStats
 var player_perks: PlayerPerks
 var player_perk_coordinator: PlayerPerkCoordinator
@@ -130,7 +131,9 @@ func _ready():
 	game_environment.apply_settings(settings)
 	world.block_catalog = block_catalog
 	world.configure_settings(settings)
-	inventory_model = InventoryModel.new(item_catalog)
+	var next_instance_id := int(_save_data.get("next_equipment_instance_id", 1))
+	equipment_instance_factory = EquipmentInstanceFactory.new(item_catalog, next_instance_id)
+	inventory_model = InventoryModel.new(item_catalog, equipment_instance_factory)
 	player_stats = ActorStats.new(player_stats_definition)
 	dev_console.setup(
 		inventory_model,
@@ -143,7 +146,7 @@ func _ready():
 		Callable(world, "try_set_water_ripple_strength")
 	)
 	player_perks = PlayerPerks.new(player_perk_rules)
-	chest_storage = ChestInventoryStore.new(item_catalog)
+	chest_storage = ChestInventoryStore.new(item_catalog, equipment_instance_factory)
 	item_proficiency = ItemProficiency.new(item_catalog)
 	if not _restore_inventory():
 		_fail_session_start("This world could not be loaded because its saved inventory is invalid or references unavailable content. The save was not changed.")
@@ -167,11 +170,11 @@ func _ready():
 		_fail_session_start("This world could not be loaded because its saved rune modifiers are invalid. The save was not changed.")
 		return
 	crafting_coordinator = CraftingCoordinator.new()
-	crafting_coordinator.setup(inventory_model, crafting_recipe_catalog)
+	crafting_coordinator.setup(inventory_model, crafting_recipe_catalog, equipment_instance_factory)
 	anvil_crafting_coordinator = CraftingCoordinator.new()
-	anvil_crafting_coordinator.setup(inventory_model, anvil_recipe_catalog)
+	anvil_crafting_coordinator.setup(inventory_model, anvil_recipe_catalog, equipment_instance_factory)
 	cauldron_crafting_coordinator = CraftingCoordinator.new()
-	cauldron_crafting_coordinator.setup(inventory_model, cauldron_recipe_catalog)
+	cauldron_crafting_coordinator.setup(inventory_model, cauldron_recipe_catalog, equipment_instance_factory)
 	if not _restore_player_progression():
 		_fail_session_start("This world could not be loaded because its saved player progression is invalid. The save was not changed.")
 		return
@@ -189,7 +192,7 @@ func _ready():
 	level_interaction.interaction_requested.connect(_on_level_interaction_requested)
 	_setup_level_entrance()
 	game_session.save_status_changed.connect(_show_save_status)
-	game_session.setup(_slot_id, _save_data, world, player_stats, inventory_model, player_perks, chest_storage, item_proficiency, game_environment, pumpkin_patch, apple_trees, _get_persisted_position)
+	game_session.setup(_slot_id, _save_data, world, player_stats, inventory_model, equipment_instance_factory, player_perks, chest_storage, item_proficiency, game_environment, pumpkin_patch, apple_trees, _get_persisted_position)
 	if _recovered_defeated_save and _slot_id != -1 and not game_session.save("defeated_save_recovery"):
 		push_error("[Game] Failed to persist recovered player state")
 	_recovered_defeated_save = false
@@ -213,8 +216,15 @@ func _restore_inventory() -> bool:
 	return true
 
 func _restore_chest_inventories() -> bool:
-	var saved_chests = _save_data.get("chest_inventories", {})
-	return saved_chests is Dictionary and chest_storage.restore(saved_chests)
+	var saved_chests = SaveManager.decode_chest_state(_save_data)
+	if not saved_chests is Dictionary or not chest_storage.restore(saved_chests):
+		return false
+	var equipment_instance_ids := inventory_model.get_equipment_instance_ids()
+	equipment_instance_ids.append_array(chest_storage.get_equipment_instance_ids())
+	return equipment_instance_factory.can_restore_state(
+		equipment_instance_factory.get_next_instance_id(),
+		equipment_instance_ids,
+	)
 
 func _restore_player_progression() -> bool:
 	var saved_stats = _save_data.get("player_stats", null)

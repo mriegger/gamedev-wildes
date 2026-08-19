@@ -13,7 +13,7 @@ var _stats: ActorStats
 
 func _init() -> void:
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
-	_inventory = InventoryModel.new(item_catalog)
+	_inventory = InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	_pumpkin_patch = PumpkinPatchCoordinator.new()
 	_stats = ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
 	_console = (load("res://dev_console/presentation/dev_console.tscn") as PackedScene).instantiate() as DevConsole

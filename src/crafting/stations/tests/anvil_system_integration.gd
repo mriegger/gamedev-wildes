@@ -84,7 +84,7 @@ func _run() -> void:
 	_expect(targeting_view._interaction_cursor_active, "anvil interaction did not enable the pointing-hand cursor state")
 	targeting_view._set_interaction_cursor(false)
 	_expect(not targeting_view._interaction_cursor_active, "anvil interaction cursor state did not reset")
-	var cursor_inventory := InventoryModel.new(item_catalog)
+	var cursor_inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	var cursor_interactor := PlayerInteractor.new()
 	cursor_interactor.inventory_model = cursor_inventory
 	cursor_interactor.target_has = true
@@ -123,7 +123,7 @@ func _run() -> void:
 	_expect(mesh_data != null and (mesh_data["vertices"] as PackedVector3Array).size() == 24, "anvil hid a face of the supporting terrain block")
 
 	var world := VoxelWorld.new(20, 36, 5, 12.0, block_catalog)
-	var inventory := InventoryModel.new(item_catalog)
+	var inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	var coordinator := AnvilCoordinator.new()
 	coordinator.setup(world)
 	var pickup_position := Vector3i(2, 20, 2)
@@ -151,7 +151,7 @@ func _run() -> void:
 	_expect(inventory.get_inventory_item_count(&"anvil") == 1, "picked-up anvil was not returned to inventory")
 	_expect(inventory.get_inventory_item_count(&"torch") == 1, "attached torch was not returned to inventory")
 
-	var full_inventory := InventoryModel.new(item_catalog)
+	var full_inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	for index in range(InventoryModel.FILLABLE_SIZE):
 		full_inventory.slots[index] = InventoryStack.new(&"dirt_block", 99)
 	_expect(world.try_place_block(pickup_position, BlockId.Type.ANVIL).is_success(), "capacity-test anvil could not be placed")

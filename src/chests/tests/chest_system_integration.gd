@@ -33,7 +33,7 @@ func _run():
 	_expect(mine_result.size() == 1 and mine_result[0].result == BlockEdit.Result.FAIL_NOT_BREAKABLE, "voxel model mined the chest")
 	_expect(world.get_block_id_at(chest_position) == BlockId.Type.CHEST, "failed mining removed the chest")
 
-	var player_inventory := InventoryModel.new(item_catalog)
+	var player_inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	player_inventory.setup_empty()
 	var backpack_a := InventoryModel.HOTBAR_SIZE
 	var backpack_b := backpack_a + 1
@@ -41,7 +41,7 @@ func _run():
 	player_inventory.slots[backpack_a] = InventoryStack.new(&"log_block", 10)
 	player_inventory.slots[backpack_b] = InventoryStack.new(&"stone_block", 4)
 	player_inventory.slots[0] = InventoryStack.new(&"torch", 8)
-	var storage := ChestInventoryStore.new(item_catalog)
+	var storage := ChestInventoryStore.new(item_catalog, player_inventory.equipment_instance_factory)
 	var coordinator := ChestCoordinator.new()
 	coordinator.setup(world, player_inventory, storage)
 	_expect(coordinator.try_open(chest_position, container), "coordinator rejected a valid chest")
@@ -84,11 +84,14 @@ func _run():
 	_expect(coordinator.active_inventory.get_slot(1).item_id == &"stone_block", "opening another chest changed the first chest")
 	_expect(storage.get_inventory(second_chest_position).get_slot(0).item_id == &"leaves_block", "first chest changed the second chest")
 
-	var encoded: Variant = JSON.parse_string(JSON.stringify(storage.snapshot()))
-	var restored_storage := ChestInventoryStore.new(item_catalog)
-	_expect(encoded is Dictionary and restored_storage.restore(encoded), "chest storage JSON round trip failed")
-	var oversized_storage := ChestInventoryStore.new(item_catalog)
-	_expect(not oversized_storage.restore({"0,0,0": {"size": ContainerBlockDefinition.MAX_SLOT_COUNT + 1, "slots": []}}), "oversized chest save was accepted")
+	var encoded: Variant = JSON.parse_string(JSON.stringify(SaveManager.serialize_vector3i_dict(storage.snapshot())))
+	var decoded = SaveManager.decode_chest_state({"chests": encoded}) if encoded is Dictionary else null
+	var restored_storage := ChestInventoryStore.new(item_catalog, player_inventory.equipment_instance_factory)
+	_expect(decoded is Dictionary and restored_storage.restore(decoded), "chest storage JSON round trip failed")
+	var oversized_storage := ChestInventoryStore.new(item_catalog, player_inventory.equipment_instance_factory)
+	var oversized_slots: Array = []
+	oversized_slots.resize(ContainerBlockDefinition.MAX_SLOT_COUNT + 1)
+	_expect(not oversized_storage.restore({Vector3i.ZERO: oversized_slots}), "oversized chest save was accepted")
 	var restored_inventory := restored_storage.get_inventory(chest_position)
 	_expect(restored_inventory != null and restored_inventory.size == 15, "restored chest has the wrong size")
 	_expect(restored_inventory.get_slot(0).item_id == &"log_block" and restored_inventory.get_slot(0).count == 2, "restored chest changed a partial stack")
@@ -96,10 +99,10 @@ func _run():
 	var restored_second_inventory := restored_storage.get_inventory(second_chest_position)
 	_expect(restored_second_inventory != null and restored_second_inventory != restored_inventory, "restored world chests share one inventory model")
 	_expect(restored_second_inventory.get_slot(0).item_id == &"leaves_block" and restored_second_inventory.get_slot(0).count == 5, "restored second chest lost its position-linked contents")
-	var full_player_inventory := InventoryModel.new(item_catalog)
+	var full_player_inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	for index in range(InventoryModel.HOTBAR_SIZE, InventoryModel.FILLABLE_SIZE):
 		full_player_inventory.slots[index] = InventoryStack.new(&"sand_block", item_catalog.get_definition(&"sand_block").max_stack)
-	var full_storage := ChestInventoryStore.new(item_catalog)
+	var full_storage := ChestInventoryStore.new(item_catalog, full_player_inventory.equipment_instance_factory)
 	var full_coordinator := ChestCoordinator.new()
 	full_coordinator.setup(world, full_player_inventory, full_storage)
 	_expect(full_coordinator.try_open(second_chest_position, container), "full-backpack coordinator could not open a chest")
@@ -111,8 +114,8 @@ func _run():
 	var attached_torch_position := pickup_position + Vector3i(1, 0, 0)
 	_expect(world.try_place_block(pickup_position, BlockId.Type.CHEST).is_success(), "pickup chest placement failed")
 	_expect(world.try_place_block(attached_torch_position, BlockId.Type.TORCH, Vector3i(-1, 0, 0)).is_success(), "pickup chest torch placement failed")
-	var pickup_inventory := InventoryModel.new(item_catalog)
-	var pickup_storage := ChestInventoryStore.new(item_catalog)
+	var pickup_inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
+	var pickup_storage := ChestInventoryStore.new(item_catalog, pickup_inventory.equipment_instance_factory)
 	var pickup_coordinator := ChestCoordinator.new()
 	var stone_pickaxe_action := item_catalog.get_definition(&"stone_pickaxe").primary_action as MiningActionDefinition
 	pickup_coordinator.setup(world, pickup_inventory, pickup_storage)
@@ -130,8 +133,9 @@ func _run():
 	_expect(pickup_storage.get_inventory(pickup_position) == null, "picked-up chest retained stored inventory data")
 
 	var input := InputBuffer.new()
-	var interaction_inventory := InventoryModel.new(item_catalog)
-	interaction_inventory.slots[0] = InventoryStack.new(&"copper_sword", 1)
+	var interaction_inventory := InventoryModel.new(item_catalog, restored_storage.equipment_instance_factory)
+	var interaction_sword := interaction_inventory.equipment_instance_factory.create(&"copper_sword")
+	interaction_inventory.slots[0] = InventoryStack.new(&"copper_sword", 1, interaction_sword)
 	var interactor := PlayerInteractor.new()
 	interactor.inventory_model = interaction_inventory
 	interactor._input_buffer = input
@@ -185,7 +189,7 @@ func _run():
 	chest_renderer._process(1.0)
 	_expect(not targeting._should_show_interaction(), "pickaxe chest target also shows its interaction hover")
 	_expect(not targeting._interaction_cursor_active, "pickaxe chest target enabled the interaction cursor")
-	interaction_inventory.slots[0] = InventoryStack.new(&"copper_sword", 1)
+	interaction_inventory.slots[0] = InventoryStack.new(&"copper_sword", 1, interaction_sword)
 	_expect(targeting._should_show_interaction(), "in-range chest does not expose its hover presentation without a pickaxe")
 	targeting._update_interaction_visuals(1.0)
 	chest_renderer._process(1.0)
@@ -255,7 +259,7 @@ func _run():
 	_expect(inventory_stats.setup(player_inventory, stats), "inventory stat coordinator setup failed")
 	var recipe_catalog := load("res://crafting/crafting_recipe_catalog.tres") as CraftingRecipeCatalog
 	var crafting := CraftingCoordinator.new()
-	crafting.setup(player_inventory, recipe_catalog)
+	crafting.setup(player_inventory, recipe_catalog, player_inventory.equipment_instance_factory)
 	var hud := (load("res://ui/hud/hud.tscn") as PackedScene).instantiate() as HUD
 	get_root().add_child(hud)
 	await process_frame

@@ -2,6 +2,7 @@ extends ItemSlotView
 class_name InventorySlot
 
 var item_id = null
+var equipment_instance_fingerprint: String = ""
 var inventory_model: InventoryModel = null
 var inventory_stat_coordinator: InventoryStatCoordinator = null
 var item_proficiency: ItemProficiency = null
@@ -63,10 +64,15 @@ func set_empty_label(label: String):
 		refresh_visuals()
 
 func set_item(p_item_id, count: int):
-	if item_id == p_item_id and item_count == count:
+	var next_instance_fingerprint := ""
+	if p_item_id != null and inventory_model != null:
+		var instance := _get_equipment_instance_copy()
+		next_instance_fingerprint = JSON.stringify(null if instance == null else instance.to_dict())
+	if item_id == p_item_id and item_count == count and equipment_instance_fingerprint == next_instance_fingerprint:
 		return
 	item_id = p_item_id
 	item_count = count
+	equipment_instance_fingerprint = next_instance_fingerprint
 	_update_tooltip_text()
 	refresh_visuals()
 
@@ -78,7 +84,14 @@ func _update_tooltip_text() -> void:
 		tooltip_text = ""
 		return
 	var definition := _get_tooltip_definition()
-	tooltip_text = definition.display_name if definition != null else ""
+	if definition == null:
+		tooltip_text = ""
+	else:
+		tooltip_text = definition.display_name
+		var instance := _get_equipment_instance_copy()
+		if instance != null:
+			for affix in instance.affixes:
+				tooltip_text += " %s" % inventory_model.item_catalog.get_equipment_affix(affix.affix_id).display_name_suffix
 
 func _make_custom_tooltip(_for_text: String) -> Object:
 	var definition := _get_tooltip_definition()
@@ -91,7 +104,7 @@ func _make_custom_tooltip(_for_text: String) -> Object:
 		definition,
 		item_proficiency,
 		inventory_model.item_catalog,
-		_get_socketed_rune_ids(),
+		_get_equipment_instance_copy(),
 	)
 	return tooltip
 
@@ -266,10 +279,9 @@ func _get_current_stack() -> InventoryStack:
 		return inventory_transfer_coordinator.get_inventory_stack(inventory_scope, slot_index)
 	return inventory_model.get_slot(slot_index)
 
-func _get_socketed_rune_ids() -> Array[StringName]:
-	if inventory_transfer_coordinator != null:
-		return inventory_transfer_coordinator.get_socketed_rune_ids(inventory_scope, slot_index)
-	return inventory_model.get_socketed_rune_ids(slot_index)
+func _get_equipment_instance_copy() -> EquipmentInstance:
+	var stack := _get_current_stack()
+	return null if stack == null or stack.equipment_instance == null else stack.equipment_instance.copy()
 
 func _create_drag_preview(source_item_id: StringName, count: int) -> Control:
 	var preview = Panel.new()

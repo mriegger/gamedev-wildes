@@ -24,7 +24,7 @@ func _run() -> void:
 	_expect(pumpkin.consume_audio.streams[0].resource_path == "res://assets/audio/sfx/items/consume/munch_crunchy_fruit_sequence_3x_CC0.wav", "pumpkin uses the wrong consume sound")
 	_expect(health_potion.consume_audio != null and health_potion.consume_audio.streams.size() == 1, "health potion consume audio is not configured")
 
-	var inventory := InventoryModel.new(item_catalog)
+	var inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	inventory.slots[0] = InventoryStack.new(&"pumpkin", 2)
 	var stats := ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
 	var max_health := stats.get_value(&"hp")

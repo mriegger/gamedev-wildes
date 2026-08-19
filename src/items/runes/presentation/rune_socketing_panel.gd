@@ -127,12 +127,16 @@ func _refresh_gear_slot() -> void:
 		return
 	var stack := _inventory.get_slot(_selected_gear_index)
 	var definition := _inventory.item_catalog.get_definition(stack.item_id)
+	var display_name := definition.display_name
+	if stack.equipment_instance != null:
+		for affix in stack.equipment_instance.affixes:
+			display_name += " %s" % _inventory.item_catalog.get_equipment_affix(affix.affix_id).display_name_suffix
 	var rarity_text := definition.rarity.display_name if definition.rarity != null else ""
 	var rarity_color := definition.rarity.display_color if definition.rarity != null else Color.WHITE
 	_gear_slot.present(
 		RuneSocketingSlot.State.GEAR_SELECTED,
 		definition.icon,
-		definition.display_name,
+		display_name,
 		rarity_text,
 		rarity_color
 	)
@@ -140,28 +144,27 @@ func _refresh_gear_slot() -> void:
 		definition,
 		_item_proficiency,
 		_inventory.item_catalog,
-		_inventory.get_socketed_rune_ids(_selected_gear_index),
+		_inventory.get_equipment_instance_copy(_selected_gear_index),
 	)
 	_status_label.text = "Drop a rune into an unlocked slot. Click a filled slot to remove it."
 
 func _refresh_rune_slots() -> void:
-	var total_slots := 0
-	var unlocked_slots := 0
-	if _selected_gear_index >= 0 and _socketing_coordinator != null:
-		total_slots = _socketing_coordinator.get_total_slot_count(_selected_gear_index)
-		unlocked_slots = _socketing_coordinator.get_unlocked_slot_count(_selected_gear_index)
 	for slot_index in range(_rune_slots.size()):
 		var slot := _rune_slots[slot_index]
-		if slot_index >= total_slots:
+		var state := RuneSocketingCoordinator.SlotState.UNAVAILABLE
+		if _selected_gear_index >= 0 and _socketing_coordinator != null:
+			state = _socketing_coordinator.get_slot_state(_selected_gear_index, slot_index)
+		if state == RuneSocketingCoordinator.SlotState.UNAVAILABLE:
 			slot.present(RuneSocketingSlot.State.UNAVAILABLE, null, "SLOT %d" % (slot_index + 1), "Unavailable")
 			continue
-		if slot_index >= unlocked_slots:
+		if state == RuneSocketingCoordinator.SlotState.LOCKED:
 			slot.present(RuneSocketingSlot.State.LOCKED, null, "SLOT %d" % (slot_index + 1), "Locked")
 			continue
 		var rune_id := _socketing_coordinator.get_socketed_rune_id(_selected_gear_index, slot_index)
-		if rune_id.is_empty():
+		if state == RuneSocketingCoordinator.SlotState.EMPTY:
 			slot.present(RuneSocketingSlot.State.EMPTY, null, "SLOT %d" % (slot_index + 1), "Drop rune")
 			continue
+		assert(not rune_id.is_empty())
 		var definition := _inventory.item_catalog.get_definition(rune_id) as RuneDefinition
 		var rarity_text := definition.rarity.display_name if definition.rarity != null else "Socketed"
 		var rarity_color := definition.rarity.display_color if definition.rarity != null else Color.WHITE

@@ -15,7 +15,7 @@ func _run():
 	root.add_child(panel)
 	await process_frame
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
-	var inventory := InventoryModel.new(item_catalog)
+	var inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	inventory.setup_starter()
 	inventory.slots[0] = InventoryStack.new(&"stone_pickaxe", 1)
 	player.held_item_view.setup(inventory)

@@ -3,12 +3,30 @@ class_name SaveManager
 
 const SAVE_DIR: String = "user://saves"
 const SLOT_COUNT: int = 3
-const CURRENT_SAVE_VERSION: int = 9
+const CURRENT_SAVE_VERSION: int = 12
 const MINIMUM_MIGRATABLE_SAVE_VERSION: int = 4
 const VERSION_SEVEN_BASE_EXPERIENCE_TO_LEVEL: int = 100
 const VERSION_SEVEN_EXPERIENCE_GROWTH: float = 1.25
 const VERSION_EIGHT_BASE_EXPERIENCE_TO_LEVEL: int = 100
 const VERSION_EIGHT_EXPERIENCE_INCREASE_PER_LEVEL: int = 25
+const VERSION_ELEVEN_MAXIMUM_DURABILITY: int = 1000000
+const PERSISTED_CHEST_SLOT_COUNT: int = 15
+const VERSION_TEN_AFFIX_ROLLS: Dictionary = {
+	&"vicious": [
+		{
+			"stat_id": "strength",
+			"operation": StatModifier.Operation.ADD,
+			"amount": 2.0,
+		},
+	],
+	&"stout": [
+		{
+			"stat_id": "defense",
+			"operation": StatModifier.Operation.ADD,
+			"amount": 2.0,
+		},
+	],
+}
 
 static func ensure_save_dir() -> void:
 	if not DirAccess.dir_exists_absolute(SAVE_DIR):
@@ -22,7 +40,13 @@ static func _try_parse_vector3i(s: String) -> Variant:
 	var parts = s.split(",")
 	if parts.size() != 3:
 		return null
+	for part in parts:
+		if not part.is_valid_int():
+			return null
 	return Vector3i(int(parts[0]), int(parts[1]), int(parts[2]))
+
+static func _encode_vector3i(value: Vector3i) -> String:
+	return "%d,%d,%d" % [value.x, value.y, value.z]
 
 static func get_slot_path(slot_id: int) -> String:
 	return "%s/slot_%d.json" % [SAVE_DIR, slot_id]
@@ -54,10 +78,11 @@ static func get_slot_info(slot_id: int) -> Dictionary:
 		parsed["version"] = int(parsed["version"])
 	return parsed
 
-static func get_all_slots() -> Array:
+static func get_all_slots(item_catalog: ItemCatalog) -> Array:
+	assert(item_catalog != null)
 	var out: Array = []
 	for i in range(SLOT_COUNT):
-		out.append(load_slot(i))
+		out.append(load_slot(i, item_catalog))
 	return out
 
 static func generate_random_seed() -> int:
@@ -79,12 +104,13 @@ static func create_new_world(slot_id: int, seed_value: int, world_name: String) 
 		"placed_blocks": {},
 		"removed_blocks": {},
 		"torch_attachments": {},
+		"chests": {},
 		"player_position": null,
 		"player_stats": null,
 		"player_perks": {"allocations": {}},
 		"item_proficiency": {},
 		"inventory": null,
-		"chest_inventories": {},
+		"next_equipment_instance_id": 1,
 		"playtime_seconds": 0,
 		"time_of_day": 6.0,
 		"pumpkin_patch": null,
@@ -213,13 +239,41 @@ static func decode_world_state(data: Dictionary) -> Variant:
 		position
 	)
 
-static func load_slot(slot_id: int) -> Dictionary:
+static func _index_chest_slots(encoded_chests: Dictionary) -> Variant:
+	var slots_by_position: Dictionary = {}
+	for encoded_position in encoded_chests:
+		if (
+			not encoded_position is String
+			or not encoded_chests[encoded_position] is Array
+			or (encoded_chests[encoded_position] as Array).size() != PERSISTED_CHEST_SLOT_COUNT
+		):
+			return null
+		var position = _try_parse_vector3i(encoded_position)
+		if position == null or _encode_vector3i(position) != encoded_position or slots_by_position.has(position):
+			return null
+		slots_by_position[position] = encoded_chests[encoded_position]
+	return slots_by_position
+
+static func decode_chest_state(data: Dictionary) -> Variant:
+	if not data.has("chests") or not data["chests"] is Dictionary:
+		return null
+	var indexed = _index_chest_slots(data["chests"])
+	if indexed == null:
+		return null
+	var decoded: Dictionary = {}
+	for position in indexed:
+		decoded[position] = (indexed[position] as Array).duplicate(true)
+	return decoded
+
+static func load_slot(slot_id: int, item_catalog: ItemCatalog) -> Dictionary:
+	assert(item_catalog != null)
 	var info = get_slot_info(slot_id)
 	if not info.get("exists", false):
 		return info
-	if not _migrate_save_data(info):
+	if not _migrate_save_data(info, item_catalog):
 		info["incompatible"] = true
 		return info
+	info["next_equipment_instance_id"] = int(info["next_equipment_instance_id"])
 	if not info.has("seed"):
 		info["seed"] = generate_random_seed()
 	if not info.has("world_name"):
@@ -244,20 +298,22 @@ static func load_slot(slot_id: int) -> Dictionary:
 		info["item_proficiency"] = {}
 	if not info.has("pumpkin_patch"):
 		info["pumpkin_patch"] = {"present": false}
-	if not info.has("chest_inventories"):
-		info["chest_inventories"] = {}
 	if not info.has("apple_trees"):
 		info["apple_trees"] = AppleTreeState.new().snapshot()
 	return info
 
-static func _migrate_save_data(data: Dictionary) -> bool:
+static func _migrate_save_data(data: Dictionary, item_catalog: ItemCatalog) -> bool:
+	if item_catalog == null or not data.has("version") or not _is_integer_number(data["version"]):
+		return false
 	var migrated := data.duplicate(true)
-	var version := int(migrated.get("version", 0))
+	var version := int(migrated["version"])
 	if version < MINIMUM_MIGRATABLE_SAVE_VERSION or version > CURRENT_SAVE_VERSION:
 		return false
 	while version < CURRENT_SAVE_VERSION:
 		match version:
 			4:
+				if migrated.has("item_proficiency"):
+					return false
 				migrated["item_proficiency"] = {}
 				version = 5
 			5:
@@ -265,19 +321,41 @@ static func _migrate_save_data(data: Dictionary) -> bool:
 					return false
 				version = 6
 			6:
+				if migrated.has("pumpkin_patch"):
+					return false
 				migrated["pumpkin_patch"] = {"present": false}
 				version = 7
 			7:
 				if not _migrate_player_progression_data(migrated):
 					return false
+				if migrated.has("chest_inventories"):
+					return false
 				migrated["chest_inventories"] = {}
 				version = 8
 			8:
+				if migrated.has("apple_trees"):
+					return false
 				migrated["apple_trees"] = AppleTreeState.new().snapshot()
 				version = 9
+			9:
+				if not _migrate_chest_inventory_data(migrated):
+					return false
+				if not _migrate_equipment_variant_data(migrated):
+					return false
+				version = 10
+			10:
+				if not _migrate_equipment_instance_data(migrated, item_catalog):
+					return false
+				version = 11
+			11:
+				if not _migrate_version_eleven_equipment_instances(migrated):
+					return false
+				version = 12
 			_:
 				return false
 		migrated["version"] = version
+	if not _validate_equipment_instance_identity(migrated, item_catalog):
+		return false
 	data.clear()
 	data.merge(migrated, true)
 	return true
@@ -356,7 +434,8 @@ static func _migrate_inventory_socket_data(data: Dictionary) -> bool:
 				return false
 			var encoded_stack := raw_stack as Dictionary
 			if (
-				not encoded_stack.has("item_id")
+				encoded_stack.size() != 2
+				or not encoded_stack.has("item_id")
 				or not encoded_stack.has("count")
 				or encoded_stack.has("socketed_rune_ids")
 			):
@@ -364,10 +443,351 @@ static func _migrate_inventory_socket_data(data: Dictionary) -> bool:
 			encoded_stack["socketed_rune_ids"] = []
 	return true
 
-static func save_world_state(slot_id: int, current_data: Dictionary, voxel_model: VoxelWorld, persisted_player_position: Vector3, player_stats: ActorStats, inventory: InventoryModel, player_perks: PlayerPerks, chest_storage: ChestInventoryStore, item_proficiency: ItemProficiency, pumpkin_patch: Dictionary, apple_trees: Dictionary, extra_seconds: float, time_of_day: float) -> bool:
+static func _migrate_chest_inventory_data(data: Dictionary) -> bool:
+	if data.has("chests"):
+		return false
+	var encoded_chest_inventories = data.get("chest_inventories", null)
+	if not encoded_chest_inventories is Dictionary:
+		return false
+	var encoded_chests: Dictionary = {}
+	var indexed_positions: Dictionary = {}
+	for encoded_position in encoded_chest_inventories:
+		if not encoded_position is String:
+			return false
+		var position = _try_parse_vector3i(encoded_position)
+		if position == null or _encode_vector3i(position) != encoded_position or indexed_positions.has(position):
+			return false
+		var encoded_inventory = encoded_chest_inventories[encoded_position]
+		if not encoded_inventory is Dictionary or (encoded_inventory as Dictionary).size() != 2:
+			return false
+		if not encoded_inventory.has("size") or not encoded_inventory.has("slots"):
+			return false
+		var raw_size = encoded_inventory["size"]
+		var encoded_slots = encoded_inventory["slots"]
+		if (
+			(typeof(raw_size) != TYPE_INT and typeof(raw_size) != TYPE_FLOAT)
+			or not is_finite(float(raw_size))
+			or float(raw_size) != float(int(raw_size))
+			or int(raw_size) != PERSISTED_CHEST_SLOT_COUNT
+			or not encoded_slots is Array
+			or (encoded_slots as Array).size() != PERSISTED_CHEST_SLOT_COUNT
+		):
+			return false
+		indexed_positions[position] = true
+		encoded_chests[encoded_position] = (encoded_slots as Array).duplicate(true)
+	data.erase("chest_inventories")
+	data["chests"] = encoded_chests
+	return true
+
+static func _migrate_equipment_variant_data(data: Dictionary) -> bool:
+	var inventory = data.get("inventory", null)
+	if inventory != null:
+		if not inventory is Dictionary:
+			return false
+		var regions = (inventory as Dictionary).get("regions", null)
+		if not regions is Dictionary:
+			return false
+		for region_name in ["hotbar", "backpack", "equipment"]:
+			var encoded_region = (regions as Dictionary).get(region_name, null)
+			if not encoded_region is Array:
+				return false
+			if not _add_empty_equipment_variant_ids(encoded_region as Array):
+				return false
+	var chests = data.get("chests", null)
+	if not chests is Dictionary:
+		return false
+	for encoded_slots in chests.values():
+		if not encoded_slots is Array:
+			return false
+		if not _add_empty_equipment_variant_ids(encoded_slots as Array):
+			return false
+	return true
+
+static func _add_empty_equipment_variant_ids(encoded_stacks: Array) -> bool:
+	for raw_stack in encoded_stacks:
+		if raw_stack == null:
+			continue
+		if not raw_stack is Dictionary:
+			return false
+		var encoded_stack := raw_stack as Dictionary
+		if (
+			encoded_stack.size() != 3
+			or not encoded_stack.has("item_id")
+			or not encoded_stack.has("count")
+			or not encoded_stack.has("socketed_rune_ids")
+			or encoded_stack.has("equipment_variant_id")
+		):
+			return false
+		encoded_stack["equipment_variant_id"] = ""
+	return true
+
+static func _migrate_equipment_instance_data(data: Dictionary, item_catalog: ItemCatalog) -> bool:
+	if data.has("next_equipment_instance_id"):
+		return false
+	var allocation := {"next_instance_id": 1}
+	var inventory = data.get("inventory", null)
+	if inventory != null:
+		if not inventory is Dictionary:
+			return false
+		var regions = (inventory as Dictionary).get("regions", null)
+		if not regions is Dictionary:
+			return false
+		for region_name in ["hotbar", "backpack", "equipment"]:
+			var encoded_region = (regions as Dictionary).get(region_name, null)
+			if not encoded_region is Array:
+				return false
+			if not _migrate_equipment_instance_stacks(encoded_region as Array, item_catalog, allocation):
+				return false
+	var chests = data.get("chests", null)
+	if not chests is Dictionary:
+		return false
+	var encoded_slots_by_position = _index_chest_slots(chests)
+	if encoded_slots_by_position == null:
+		return false
+	var positions: Array[Vector3i] = []
+	positions.assign(encoded_slots_by_position.keys())
+	positions.sort_custom(_is_position_before)
+	for position in positions:
+		if not _migrate_equipment_instance_stacks(encoded_slots_by_position[position], item_catalog, allocation):
+			return false
+	data["next_equipment_instance_id"] = int(allocation["next_instance_id"])
+	return true
+
+static func _migrate_equipment_instance_stacks(
+	encoded_stacks: Array,
+	item_catalog: ItemCatalog,
+	allocation: Dictionary,
+) -> bool:
+	for raw_stack in encoded_stacks:
+		if raw_stack == null:
+			continue
+		if not raw_stack is Dictionary:
+			return false
+		var encoded_stack := raw_stack as Dictionary
+		if (
+			encoded_stack.size() != 4
+			or not encoded_stack.has("item_id")
+			or not encoded_stack.has("count")
+			or not encoded_stack.has("socketed_rune_ids")
+			or not encoded_stack.has("equipment_variant_id")
+			or (typeof(encoded_stack["item_id"]) != TYPE_STRING and typeof(encoded_stack["item_id"]) != TYPE_STRING_NAME)
+			or (typeof(encoded_stack["count"]) != TYPE_INT and typeof(encoded_stack["count"]) != TYPE_FLOAT)
+			or not encoded_stack["socketed_rune_ids"] is Array
+			or (typeof(encoded_stack["equipment_variant_id"]) != TYPE_STRING and typeof(encoded_stack["equipment_variant_id"]) != TYPE_STRING_NAME)
+		):
+			return false
+		var item_id := StringName(encoded_stack["item_id"])
+		if item_id.is_empty() or not item_catalog.has_definition(item_id):
+			return false
+		var count := int(encoded_stack["count"])
+		if not is_finite(float(encoded_stack["count"])) or float(encoded_stack["count"]) != float(count) or count < 1:
+			return false
+		var definition := item_catalog.get_definition(item_id)
+		var rune_ids: Array[StringName] = []
+		for raw_rune_id in encoded_stack["socketed_rune_ids"] as Array:
+			if typeof(raw_rune_id) != TYPE_STRING and typeof(raw_rune_id) != TYPE_STRING_NAME:
+				return false
+			rune_ids.append(StringName(raw_rune_id))
+		var affix_id := StringName(encoded_stack["equipment_variant_id"])
+		if definition.equipment_type == null:
+			if not rune_ids.is_empty() or not affix_id.is_empty():
+				return false
+			encoded_stack["equipment_instance"] = null
+		else:
+			if count != 1 or not item_catalog.is_valid_persisted_socket_loadout(rune_ids):
+				return false
+			var encoded_affixes: Array = []
+			if not affix_id.is_empty():
+				if not item_catalog.has_equipment_affix(affix_id):
+					return false
+				if not VERSION_TEN_AFFIX_ROLLS.has(affix_id):
+					return false
+				var encoded_rolls: Array = (VERSION_TEN_AFFIX_ROLLS[affix_id] as Array).duplicate(true)
+				encoded_affixes.append({
+					"affix_id": String(affix_id),
+					"stat_rolls": encoded_rolls,
+				})
+			var encoded_rune_ids: Array[String] = []
+			for rune_id in rune_ids:
+				encoded_rune_ids.append(String(rune_id))
+			encoded_stack["equipment_instance"] = {
+				"instance_id": int(allocation["next_instance_id"]),
+				"affixes": encoded_affixes,
+				"socketed_rune_ids": encoded_rune_ids,
+			}
+			allocation["next_instance_id"] = int(allocation["next_instance_id"]) + 1
+		encoded_stack.erase("socketed_rune_ids")
+		encoded_stack.erase("equipment_variant_id")
+	return true
+
+static func _migrate_version_eleven_equipment_instances(data: Dictionary) -> bool:
+	var inventory = data.get("inventory", null)
+	if inventory != null:
+		if not inventory is Dictionary:
+			return false
+		var regions = (inventory as Dictionary).get("regions", null)
+		if not regions is Dictionary:
+			return false
+		for region_name in ["hotbar", "backpack", "equipment"]:
+			var encoded_region = (regions as Dictionary).get(region_name, null)
+			if not encoded_region is Array or not _migrate_version_eleven_equipment_instance_stacks(encoded_region):
+				return false
+	var chests = data.get("chests", null)
+	if not chests is Dictionary:
+		return false
+	for encoded_slots in chests.values():
+		if not encoded_slots is Array or not _migrate_version_eleven_equipment_instance_stacks(encoded_slots):
+			return false
+	return true
+
+static func _migrate_version_eleven_equipment_instance_stacks(encoded_stacks: Array) -> bool:
+	for raw_stack in encoded_stacks:
+		if raw_stack == null:
+			continue
+		if not raw_stack is Dictionary or (raw_stack as Dictionary).size() != 3:
+			return false
+		var encoded_stack := raw_stack as Dictionary
+		if not encoded_stack.has("item_id") or not encoded_stack.has("count") or not encoded_stack.has("equipment_instance"):
+			return false
+		var raw_instance = encoded_stack["equipment_instance"]
+		if raw_instance == null:
+			continue
+		if not raw_instance is Dictionary:
+			return false
+		var encoded_instance := raw_instance as Dictionary
+		if (
+			(encoded_instance.size() != 3 and encoded_instance.size() != 5)
+			or not encoded_instance.has("instance_id")
+			or not encoded_instance.has("affixes")
+			or not encoded_instance.has("socketed_rune_ids")
+		):
+			return false
+		if encoded_instance.size() == 5:
+			if (
+				not encoded_instance.has("current_durability")
+				or not encoded_instance.has("maximum_durability")
+				or not _is_integer_number(encoded_instance["current_durability"])
+				or not _is_integer_number(encoded_instance["maximum_durability"])
+			):
+				return false
+			var current_durability := int(encoded_instance["current_durability"])
+			var maximum_durability := int(encoded_instance["maximum_durability"])
+			if (
+				maximum_durability < 1
+				or maximum_durability > VERSION_ELEVEN_MAXIMUM_DURABILITY
+				or current_durability < 0
+				or current_durability > maximum_durability
+			):
+				return false
+		encoded_stack["equipment_instance"] = {
+			"instance_id": encoded_instance["instance_id"],
+			"affixes": encoded_instance["affixes"],
+			"socketed_rune_ids": encoded_instance["socketed_rune_ids"],
+		}
+	return true
+
+static func _validate_equipment_instance_identity(data: Dictionary, item_catalog: ItemCatalog) -> bool:
+	if data.has("chest_inventories"):
+		return false
+	var raw_next_instance_id = data.get("next_equipment_instance_id", null)
+	if (
+		(typeof(raw_next_instance_id) != TYPE_INT and typeof(raw_next_instance_id) != TYPE_FLOAT)
+		or not is_finite(float(raw_next_instance_id))
+		or float(raw_next_instance_id) != float(int(raw_next_instance_id))
+	):
+		return false
+	var next_instance_id := int(raw_next_instance_id)
+	if next_instance_id < 1 or next_instance_id > EquipmentInstanceFactory.MAXIMUM_NEXT_INSTANCE_ID:
+		return false
+	var factory := EquipmentInstanceFactory.new(item_catalog, next_instance_id)
+	var instance_ids: Array[int] = []
+	var inventory = data.get("inventory", null)
+	if inventory != null:
+		if not inventory is Dictionary:
+			return false
+		var regions = (inventory as Dictionary).get("regions", null)
+		if not regions is Dictionary:
+			return false
+		for region_name in ["hotbar", "backpack", "equipment"]:
+			var encoded_region = (regions as Dictionary).get(region_name, null)
+			if not encoded_region is Array or not _validate_encoded_instance_stacks(encoded_region, factory, instance_ids):
+				return false
+	var chests = data.get("chests", null)
+	if not chests is Dictionary:
+		return false
+	var encoded_slots_by_position = _index_chest_slots(chests)
+	if encoded_slots_by_position == null:
+		return false
+	for encoded_slots in encoded_slots_by_position.values():
+		if not encoded_slots is Array or not _validate_encoded_instance_stacks(encoded_slots, factory, instance_ids):
+			return false
+	return factory.can_restore_state(next_instance_id, instance_ids)
+
+static func _validate_encoded_instance_stacks(
+	encoded_stacks: Array,
+	factory: EquipmentInstanceFactory,
+	instance_ids: Array[int],
+) -> bool:
+	for raw_stack in encoded_stacks:
+		if raw_stack == null:
+			continue
+		if not raw_stack is Dictionary or (raw_stack as Dictionary).size() != 3:
+			return false
+		var stack := InventoryStack.from_dict(raw_stack)
+		if stack == null:
+			return false
+		if not factory.item_catalog.has_definition(stack.item_id):
+			if stack.equipment_instance != null:
+				instance_ids.append(stack.equipment_instance.instance_id)
+			continue
+		var definition := factory.item_catalog.get_definition(stack.item_id)
+		if stack.count < 1 or stack.count > definition.max_stack:
+			return false
+		if definition.equipment_type == null:
+			if stack.equipment_instance != null:
+				return false
+		elif stack.count != 1 or not factory.is_valid_instance(stack.item_id, stack.equipment_instance):
+			return false
+		else:
+			instance_ids.append(stack.equipment_instance.instance_id)
+	return true
+
+static func _is_position_before(left: Vector3i, right: Vector3i) -> bool:
+	if left.x != right.x:
+		return left.x < right.x
+	if left.y != right.y:
+		return left.y < right.y
+	return left.z < right.z
+
+static func save_world_state(
+	slot_id: int,
+	current_data: Dictionary,
+	voxel_model: VoxelWorld,
+	persisted_player_position: Vector3,
+	player_stats: ActorStats,
+	inventory: InventoryModel,
+	equipment_instance_factory: EquipmentInstanceFactory,
+	player_perks: PlayerPerks,
+	item_proficiency: ItemProficiency,
+	chest_storage: ChestInventoryStore,
+	pumpkin_patch: Dictionary,
+	apple_trees: Dictionary,
+	extra_seconds: float,
+	time_of_day: float,
+) -> bool:
 	assert(player_perks != null)
 	assert(item_proficiency != null)
+	assert(equipment_instance_factory != null)
+	assert(inventory.equipment_instance_factory == equipment_instance_factory)
 	assert(chest_storage != null)
+	assert(chest_storage.equipment_instance_factory == equipment_instance_factory)
+	var equipment_instance_ids := inventory.get_equipment_instance_ids()
+	equipment_instance_ids.append_array(chest_storage.get_equipment_instance_ids())
+	if not equipment_instance_factory.can_restore_state(
+		equipment_instance_factory.get_next_instance_id(),
+		equipment_instance_ids,
+	):
+		return false
 	var updated = current_data.duplicate()
 	updated["last_played"] = _now_str()
 	updated["version"] = CURRENT_SAVE_VERSION
@@ -377,6 +797,8 @@ static func save_world_state(slot_id: int, current_data: Dictionary, voxel_model
 	updated["placed_blocks"] = serialize_vector3i_dict(block_edits["placed"])
 	updated["removed_blocks"] = serialize_vector3i_dict(block_edits["removed"])
 	updated["torch_attachments"] = serialize_vector3i_dict(voxel_model.torch_attachments)
+	updated["chests"] = serialize_vector3i_dict(chest_storage.snapshot())
+	updated.erase("chest_inventories")
 	updated.erase("copper_blocks")
 	updated.erase("generated_copper_chunks")
 	var p = persisted_player_position
@@ -384,7 +806,7 @@ static func save_world_state(slot_id: int, current_data: Dictionary, voxel_model
 	updated["player_stats"] = player_stats.snapshot_progression()
 	updated["player_perks"] = player_perks.snapshot()
 	updated["inventory"] = inventory.to_dict()
-	updated["chest_inventories"] = chest_storage.snapshot()
+	updated["next_equipment_instance_id"] = equipment_instance_factory.get_next_instance_id()
 	updated["item_proficiency"] = item_proficiency.snapshot()
 	updated["pumpkin_patch"] = pumpkin_patch.duplicate(true)
 	updated["apple_trees"] = apple_trees.duplicate(true)

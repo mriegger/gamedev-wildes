@@ -51,7 +51,7 @@ func _init() -> void:
 			_expect(copper_armor_set.full_set_modifiers[0].stat_id == &"defense", "copper full-set stat mismatch")
 			_expect(is_equal_approx(copper_armor_set.full_set_modifiers[0].amount, FULL_SET_DEFENSE_BONUS), "copper full-set defense mismatch")
 
-	var selected_armor_inventory := InventoryModel.new(item_catalog)
+	var selected_armor_inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	selected_armor_inventory.setup_starter()
 	var selected_armor_source := _find_item(selected_armor_inventory, &"copper_helmet")
 	_expect(selected_armor_inventory.handle_drop(selected_armor_source, 4, 1), "selected armor setup move failed")
@@ -70,7 +70,7 @@ func _init() -> void:
 	_expect(selected_armor_inventory.get_slot(selected_helmet_index) == null, "equipped armor discard retained its stack")
 	_expect(is_equal_approx(selected_armor_stats.get_value(&"defense"), 0.0), "equipped armor discard retained stats")
 
-	var selected_item_inventory := InventoryModel.new(item_catalog)
+	var selected_item_inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	selected_item_inventory.setup_starter()
 	var totem_source := _find_item(selected_item_inventory, &"test_totem")
 	_expect(selected_item_inventory.handle_drop(totem_source, 4, 1), "selected modifier item setup move failed")
@@ -86,7 +86,10 @@ func _init() -> void:
 	_expect(is_equal_approx(selected_item_stats.get_value(&"defense"), 1.0), "selected and equipped modifiers did not coexist")
 	var selected_item_snapshot := selected_item_inventory.to_dict()
 	var selected_progression := selected_item_stats.snapshot_progression()
-	var selected_restore_inventory := InventoryModel.new(item_catalog)
+	var selected_restore_inventory := InventoryModel.new(
+		item_catalog,
+		EquipmentInstanceFactory.new(item_catalog, selected_item_inventory.equipment_instance_factory.get_next_instance_id()),
+	)
 	_expect(selected_restore_inventory.from_dict(selected_item_snapshot), "selected-item inventory restore failed")
 	var selected_restore_stats := ActorStats.new(stats_definition)
 	var selected_restore_coordinator := InventoryStatCoordinator.new()
@@ -100,7 +103,7 @@ func _init() -> void:
 	_expect(is_equal_approx(selected_restore_stats.get_value(&"hp"), 200.0), "selected modifier did not reactivate")
 	_expect(is_equal_approx(selected_restore_stats.current_hp, 100.0), "selected modifier reactivation healed current HP")
 
-	var inventory := InventoryModel.new(item_catalog)
+	var inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	inventory.setup_starter()
 	var stats := ActorStats.new(stats_definition)
 	var coordinator := InventoryStatCoordinator.new()
@@ -135,7 +138,10 @@ func _init() -> void:
 		_expect(_inventory_change_count == changes_before + 1, "equip emitted the wrong change count for slot %d" % armor_slot)
 
 	var encoded := inventory.to_dict()
-	var restored_inventory := InventoryModel.new(item_catalog)
+	var restored_inventory := InventoryModel.new(
+		item_catalog,
+		EquipmentInstanceFactory.new(item_catalog, inventory.equipment_instance_factory.get_next_instance_id()),
+	)
 	_expect(restored_inventory.from_dict(encoded), "equipped armor did not restore")
 	var restored_stats := ActorStats.new(stats_definition)
 	var restored_coordinator := InventoryStatCoordinator.new()
@@ -164,7 +170,7 @@ func _init() -> void:
 		_expect(is_equal_approx(restored_stats.get_value(&"defense"), expected_defense), "unequipped defense mismatch for slot %d" % armor_slot)
 		_expect(not restored_stats.has_modifier(&"armor_set_0"), "full-set modifier remained after slot %d was unequipped" % armor_slot)
 
-	var blocked := InventoryModel.new(item_catalog)
+	var blocked := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	blocked.setup_starter()
 	var blocked_stats := ActorStats.new(stats_definition)
 	var blocked_coordinator := InventoryStatCoordinator.new()
@@ -189,7 +195,7 @@ func _init() -> void:
 		var armor := definition as ArmorDefinition
 		if armor != null and armor.armor_set != null and armor.armor_set.id == invalid_set.id:
 			armor.armor_set = invalid_set
-	var invalid_set_inventory := InventoryModel.new(invalid_set_catalog)
+	var invalid_set_inventory := InventoryModel.new(invalid_set_catalog, EquipmentInstanceFactory.new(invalid_set_catalog))
 	invalid_set_inventory.setup_starter()
 	var invalid_set_stats := ActorStats.new(stats_definition)
 	var invalid_set_coordinator := InventoryStatCoordinator.new()
@@ -211,7 +217,7 @@ func _init() -> void:
 	var invalid_definitions := _duplicate_item_definitions(item_catalog)
 	var invalid_catalog := ItemCatalog.new()
 	invalid_catalog.definitions = invalid_definitions
-	var invalid_inventory := InventoryModel.new(invalid_catalog)
+	var invalid_inventory := InventoryModel.new(invalid_catalog, EquipmentInstanceFactory.new(invalid_catalog))
 	invalid_inventory.setup_starter()
 	var invalid_stats := ActorStats.new(stats_definition)
 	var invalid_coordinator := InventoryStatCoordinator.new()
@@ -227,7 +233,7 @@ func _init() -> void:
 	_expect(is_equal_approx(invalid_stats.get_value(&"defense"), 0.0), "invalid modifier equip changed stats")
 	_expect(_invalid_signal_count == 0, "invalid modifier equip emitted inventory change")
 
-	var legacy_source := InventoryModel.new(item_catalog)
+	var legacy_source := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	legacy_source.setup_starter()
 	var legacy_encoded := legacy_source.to_dict()
 	for backpack_offset in range(legacy_encoded["regions"]["backpack"].size()):
@@ -235,13 +241,16 @@ func _init() -> void:
 		if raw != null and ARMOR_IDS.has(StringName(raw["item_id"])):
 			legacy_encoded["regions"]["backpack"][backpack_offset] = null
 	legacy_encoded["starter_item_migration_version"] = 2
-	var legacy := InventoryModel.new(item_catalog)
+	var legacy := InventoryModel.new(
+		item_catalog,
+		EquipmentInstanceFactory.new(item_catalog, legacy_source.equipment_instance_factory.get_next_instance_id()),
+	)
 	_expect(legacy.from_dict(legacy_encoded), "pre-armor inventory did not restore")
 	_expect(legacy.migrate_starter_items(), "pre-armor inventory migration failed")
 	for armor_id in ARMOR_IDS:
 		_expect(_find_item(legacy, armor_id) >= 0, "migrated armor missing for %s" % armor_id)
 
-	var crowded := InventoryModel.new(item_catalog)
+	var crowded := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	for index in range(InventoryModel.FILLABLE_SIZE):
 		crowded.slots[index] = InventoryStack.new(grass_id, 1)
 	crowded.slots[InventoryModel.FILLABLE_SIZE - 1] = null

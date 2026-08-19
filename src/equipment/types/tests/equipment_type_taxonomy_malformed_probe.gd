@@ -11,14 +11,14 @@ func _init() -> void:
 	cycle_second.display_name = "Cycle Second"
 	cycle_first.parent = cycle_second
 	cycle_second.parent = cycle_first
-	var cycle_catalog := _catalog(_types_with(source, [cycle_first, cycle_second]), source.definitions)
+	var cycle_catalog := _catalog(_types_with(source, [cycle_first, cycle_second]), source.definitions, source.equipment_affixes)
 
 	var noncanonical_parent := source.get_equipment_type(&"weapon").duplicate() as EquipmentTypeDefinition
 	var detached_type := EquipmentTypeDefinition.new()
 	detached_type.id = &"weapon_detached"
 	detached_type.display_name = "Detached Weapons"
 	detached_type.parent = noncanonical_parent
-	var parent_catalog := _catalog(_types_with(source, [detached_type]), source.definitions)
+	var parent_catalog := _catalog(_types_with(source, [detached_type]), source.definitions, source.equipment_affixes)
 
 	var noncanonical_sword := source.get_equipment_type(&"weapon_sword").duplicate() as EquipmentTypeDefinition
 	var detached_sword := source.get_definition(&"copper_sword").duplicate() as ItemDefinition
@@ -28,7 +28,7 @@ func _init() -> void:
 	var detached_definitions: Array[ItemDefinition] = []
 	detached_definitions.assign(source.definitions)
 	detached_definitions.append(detached_sword)
-	var item_catalog := _catalog(source.equipment_types, detached_definitions)
+	var item_catalog := _catalog(source.equipment_types, detached_definitions, source.equipment_affixes)
 
 	var untyped_sword := source.get_definition(&"copper_sword").duplicate() as ItemDefinition
 	untyped_sword.id = &"untyped_sword"
@@ -37,7 +37,7 @@ func _init() -> void:
 	var untyped_definitions: Array[ItemDefinition] = []
 	untyped_definitions.assign(source.definitions)
 	untyped_definitions.append(untyped_sword)
-	var melee_catalog := _catalog(source.equipment_types, untyped_definitions)
+	var melee_catalog := _catalog(source.equipment_types, untyped_definitions, source.equipment_affixes)
 
 	if (
 		block_catalog != null
@@ -62,8 +62,10 @@ func _types_with(source: ItemCatalog, additions: Array[EquipmentTypeDefinition])
 func _catalog(
 	types: Array[EquipmentTypeDefinition],
 	definitions: Array[ItemDefinition],
+	equipment_affixes: Array[EquipmentAffixDefinition],
 ) -> ItemCatalog:
 	var catalog := ItemCatalog.new()
 	catalog.equipment_types = types
 	catalog.definitions = definitions
+	catalog.equipment_affixes = equipment_affixes
 	return catalog

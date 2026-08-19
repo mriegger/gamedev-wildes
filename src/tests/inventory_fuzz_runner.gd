@@ -46,7 +46,7 @@ func _make_catalog(max_stack: int, include_nonplaceable: bool = false) -> ItemCa
 	var definitions: Array[ItemDefinition] = []
 	for source in _base_item_catalog.definitions:
 		var definition := source.duplicate() as ItemDefinition
-		definition.max_stack = 1 if definition is ArmorDefinition else max_stack
+		definition.max_stack = 1 if definition.equipment_type != null else max_stack
 		definitions.append(definition)
 	if include_nonplaceable:
 		var nonplaceable := ItemDefinition.new()
@@ -98,6 +98,10 @@ func _slots_equal(a: Array, b: Array) -> bool:
 			return false
 		if left.item_id != right.item_id or left.count != right.count:
 			return false
+		if (left.equipment_instance == null) != (right.equipment_instance == null):
+			return false
+		if left.equipment_instance != null and left.equipment_instance.to_dict() != right.equipment_instance.to_dict():
+			return false
 	return true
 
 func _validate_inv(inv: InventoryModel) -> bool:
@@ -113,9 +117,20 @@ func _validate_inv(inv: InventoryModel) -> bool:
 		var count: int = slot.count
 		if count < 1 or count > inv.item_catalog.get_definition(item_id).max_stack:
 			return false
+		var definition := inv.item_catalog.get_definition(item_id)
+		if definition.equipment_type == null:
+			if slot.equipment_instance != null:
+				return false
+		elif count != 1 or not inv.equipment_instance_factory.is_valid_instance(item_id, slot.equipment_instance):
+			return false
 		if not inv.can_slot_accept_item_id(index, item_id):
 			return false
 	return true
+
+func _equipment_stack(inventory: InventoryModel, item_id: StringName) -> InventoryStack:
+	var instance := inventory.equipment_instance_factory.create(item_id)
+	assert(instance != null)
+	return InventoryStack.new(item_id, 1, instance)
 
 func _assert(condition: bool, message: String) -> bool:
 	_asserts += 1
@@ -142,7 +157,8 @@ func _random_batch(rng: RandomNumberGenerator, size: int) -> Array[StringName]:
 
 func _make_random_inventory(rng: RandomNumberGenerator) -> InventoryModel:
 	var max_stack := MAX_STACK_OPTIONS[rng.randi_range(0, MAX_STACK_OPTIONS.size() - 1)]
-	var inv := InventoryModel.new(_make_catalog(max_stack))
+	var catalog := _make_catalog(max_stack)
+	var inv := InventoryModel.new(catalog, EquipmentInstanceFactory.new(catalog))
 	for _batch_index in range(rng.randi_range(0, 6)):
 		var batch := _random_batch(rng, rng.randi_range(0, 14))
 		var can_add := inv.can_add_batch(batch)
@@ -155,7 +171,10 @@ func _make_random_inventory(rng: RandomNumberGenerator) -> InventoryModel:
 		else:
 			var item_id := _random_item_id(rng)
 			var limit := inv.item_catalog.get_definition(item_id).max_stack
-			inv.slots[index] = InventoryStack.new(item_id, rng.randi_range(1, limit))
+			if inv.item_catalog.get_definition(item_id).equipment_type == null:
+				inv.slots[index] = InventoryStack.new(item_id, rng.randi_range(1, limit))
+			else:
+				inv.slots[index] = _equipment_stack(inv, item_id)
 	assert(_validate_inv(inv))
 	return inv
 
@@ -170,14 +189,14 @@ func _run_edge_cases() -> bool:
 	var torch_id := catalog.get_item_for_block(BlockId.Type.TORCH).id
 	var helmet := catalog.get_definition(&"copper_helmet") as ArmorDefinition
 
-	var empty := InventoryModel.new(catalog)
+	var empty := InventoryModel.new(catalog, EquipmentInstanceFactory.new(catalog))
 	_assert(empty.size == InventoryModel.TOTAL_SIZE, "default size")
 	_assert(not empty.can_handle_drop(0, 1, 1), "empty source rejected")
 	var empty_before := _copy_stacks(empty.slots)
 	_assert(not empty.handle_drop(0, 1, 1), "empty drop rejected")
 	_assert(_slots_equal(empty_before, empty.slots), "empty drop unchanged")
 
-	var moved := InventoryModel.new(catalog)
+	var moved := InventoryModel.new(catalog, EquipmentInstanceFactory.new(catalog))
 	moved.slots[0] = InventoryStack.new(grass_id, 10)
 	var moved_totals := _compute_totals(moved)
 	_assert(moved.can_handle_drop(0, 1, 10), "full move accepted")
@@ -186,16 +205,16 @@ func _run_edge_cases() -> bool:
 	_assert(moved.slots[1].item_id == grass_id and moved.slots[1].count == 10, "full move preserves stack")
 	_assert(_compute_totals(moved) == moved_totals, "full move conserves totals")
 
-	var split := InventoryModel.new(catalog)
+	var split := InventoryModel.new(catalog, EquipmentInstanceFactory.new(catalog))
 	split.slots[0] = InventoryStack.new(stone_id, 10)
 	_assert(split.handle_drop(0, 5, 3), "split succeeds")
 	_assert(split.slots[0].count == 7 and split.slots[5].count == 3, "split counts")
 
-	var discarded := InventoryModel.new(catalog)
+	var discarded := InventoryModel.new(catalog, EquipmentInstanceFactory.new(catalog))
 	discarded.slots[0] = InventoryStack.new(stone_id, 10)
 	discarded.slots[InventoryModel.HOTBAR_SIZE] = InventoryStack.new(grass_id, 4)
 	var discarded_helmet_index := InventoryModel.get_equipment_index(ArmorDefinition.Slot.HEAD)
-	discarded.slots[discarded_helmet_index] = InventoryStack.new(helmet.id, 1)
+	discarded.slots[discarded_helmet_index] = _equipment_stack(discarded, helmet.id)
 	_assert(discarded.can_discard_stack(0, 3), "partial hotbar discard accepted")
 	_assert(discarded.discard_stack(0, 3), "partial hotbar discard succeeds")
 	_assert(discarded.slots[0].count == 7, "partial hotbar discard count")
@@ -207,19 +226,19 @@ func _run_edge_cases() -> bool:
 	_assert(not discarded.discard_stack(0, 8), "oversized discard rejected")
 	_assert(not discarded.discard_stack(InventoryModel.TOTAL_SIZE, 1), "out-of-range discard rejected")
 
-	var merged := InventoryModel.new(catalog)
+	var merged := InventoryModel.new(catalog, EquipmentInstanceFactory.new(catalog))
 	merged.slots[0] = InventoryStack.new(dirt_id, 5)
 	merged.slots[1] = InventoryStack.new(dirt_id, 3)
 	_assert(merged.handle_drop(0, 1, 5), "merge succeeds")
 	_assert(merged.slots[0] == null and merged.slots[1].count == 8, "merge counts")
 
-	var overflow := InventoryModel.new(catalog)
+	var overflow := InventoryModel.new(catalog, EquipmentInstanceFactory.new(catalog))
 	overflow.slots[0] = InventoryStack.new(sand_id, 10)
 	overflow.slots[1] = InventoryStack.new(sand_id, 95)
 	_assert(overflow.handle_drop(0, 1, 10), "overflow merge succeeds")
 	_assert(overflow.slots[0].count == 6 and overflow.slots[1].count == 99, "overflow capped")
 
-	var swapped := InventoryModel.new(catalog)
+	var swapped := InventoryModel.new(catalog, EquipmentInstanceFactory.new(catalog))
 	swapped.slots[0] = InventoryStack.new(grass_id, 4)
 	swapped.slots[1] = InventoryStack.new(stone_id, 6)
 	_assert(swapped.handle_drop(0, 1, 4), "swap succeeds")
@@ -228,7 +247,7 @@ func _run_edge_cases() -> bool:
 	_assert(not swapped.handle_drop(0, 1, 2), "partial swap rejected")
 	_assert(_slots_equal(swap_before, swapped.slots), "partial swap unchanged")
 
-	var assigned := InventoryModel.new(catalog)
+	var assigned := InventoryModel.new(catalog, EquipmentInstanceFactory.new(catalog))
 	assigned.slots[2] = InventoryStack.new(stone_id, 6)
 	assigned.slots[InventoryModel.HOTBAR_SIZE] = InventoryStack.new(grass_id, 4)
 	var assigned_totals := _compute_totals(assigned)
@@ -241,12 +260,12 @@ func _run_edge_cases() -> bool:
 	_assert(not assigned.assign_slot_to_hotbar(2, 2), "same hotbar assignment rejected")
 	_assert(not assigned.assign_slot_to_hotbar(InventoryModel.HOTBAR_SIZE, InventoryModel.HOTBAR_SIZE), "backpack destination assignment rejected")
 	_assert(_slots_equal(assigned_before, assigned.slots), "invalid backpack hotbar assignments unchanged")
-	var assigned_to_empty := InventoryModel.new(catalog)
+	var assigned_to_empty := InventoryModel.new(catalog, EquipmentInstanceFactory.new(catalog))
 	assigned_to_empty.slots[InventoryModel.HOTBAR_SIZE] = InventoryStack.new(grass_id, 4)
 	_assert(assigned_to_empty.assign_slot_to_hotbar(InventoryModel.HOTBAR_SIZE, 2), "empty hotbar assignment succeeds")
 	_assert(assigned_to_empty.slots[InventoryModel.HOTBAR_SIZE] == null, "empty hotbar assignment clears backpack slot")
 	_assert(assigned_to_empty.slots[2].item_id == grass_id and assigned_to_empty.slots[2].count == 4, "empty hotbar receives backpack item")
-	var reassigned := InventoryModel.new(catalog)
+	var reassigned := InventoryModel.new(catalog, EquipmentInstanceFactory.new(catalog))
 	reassigned.slots[2] = InventoryStack.new(grass_id, 4)
 	reassigned.slots[4] = InventoryStack.new(stone_id, 6)
 	var reassigned_totals := _compute_totals(reassigned)
@@ -258,7 +277,7 @@ func _run_edge_cases() -> bool:
 	_assert(assigned_to_empty.slots[2] == null, "hotbar to backpack move clears hotbar slot")
 	_assert(assigned_to_empty.slots[InventoryModel.HOTBAR_SIZE].item_id == grass_id and assigned_to_empty.slots[InventoryModel.HOTBAR_SIZE].count == 4, "backpack receives hotbar item")
 
-	var merged_into_backpack := InventoryModel.new(catalog)
+	var merged_into_backpack := InventoryModel.new(catalog, EquipmentInstanceFactory.new(catalog))
 	merged_into_backpack.slots[0] = InventoryStack.new(grass_id, 4)
 	merged_into_backpack.slots[InventoryModel.HOTBAR_SIZE] = InventoryStack.new(grass_id, 97)
 	_assert(merged_into_backpack.move_hotbar_slot_to_backpack(0), "hotbar item merges into backpack")
@@ -266,7 +285,7 @@ func _run_edge_cases() -> bool:
 	_assert(merged_into_backpack.slots[InventoryModel.HOTBAR_SIZE].count == 99, "existing backpack stack filled first")
 	_assert(merged_into_backpack.slots[InventoryModel.HOTBAR_SIZE + 1].count == 2, "merge remainder moved to empty backpack slot")
 
-	var full_backpack := InventoryModel.new(catalog)
+	var full_backpack := InventoryModel.new(catalog, EquipmentInstanceFactory.new(catalog))
 	full_backpack.slots[0] = InventoryStack.new(grass_id, 4)
 	for backpack_idx in range(InventoryModel.HOTBAR_SIZE, InventoryModel.FILLABLE_SIZE):
 		full_backpack.slots[backpack_idx] = InventoryStack.new(stone_id, 99)
@@ -274,11 +293,11 @@ func _run_edge_cases() -> bool:
 	_assert(not full_backpack.move_hotbar_slot_to_backpack(0), "full backpack rejects hotbar move")
 	_assert(_slots_equal(full_backpack_before, full_backpack.slots), "failed hotbar move leaves inventory unchanged")
 
-	var equipment := InventoryModel.new(catalog)
+	var equipment := InventoryModel.new(catalog, EquipmentInstanceFactory.new(catalog))
 	equipment.slots[0] = InventoryStack.new(torch_id, 5)
 	for index in range(InventoryModel.FILLABLE_SIZE, equipment.size):
 		_assert(not equipment.handle_drop(0, index, 5), "non-armor equipment drop rejected")
-	equipment.slots[0] = InventoryStack.new(helmet.id, 1)
+	equipment.slots[0] = _equipment_stack(equipment, helmet.id)
 	var helmet_index := InventoryModel.get_equipment_index(ArmorDefinition.Slot.HEAD)
 	var chest_index := InventoryModel.get_equipment_index(ArmorDefinition.Slot.CHEST)
 	_assert(not equipment.handle_drop(0, chest_index, 1), "wrong armor slot rejected")
@@ -292,7 +311,7 @@ func _run_edge_cases() -> bool:
 
 	var capped_catalog := _make_catalog(10)
 	var capped_log := capped_catalog.get_item_for_block(BlockId.Type.LOG).id
-	var capped := InventoryModel.new(capped_catalog)
+	var capped := InventoryModel.new(capped_catalog, EquipmentInstanceFactory.new(capped_catalog))
 	capped.slots[0] = InventoryStack.new(capped_log, 10)
 	capped.slots[1] = InventoryStack.new(capped_log, 10)
 	var capped_before := _copy_stacks(capped.slots)
@@ -300,13 +319,13 @@ func _run_edge_cases() -> bool:
 	_assert(_slots_equal(capped_before, capped.slots), "full destination unchanged")
 
 	var general_catalog := _make_catalog(99, true)
-	var general := InventoryModel.new(general_catalog)
+	var general := InventoryModel.new(general_catalog, EquipmentInstanceFactory.new(general_catalog))
 	var tool_batch: Array[StringName] = [&"test_tool"]
 	_assert(general.add_batch(tool_batch), "non-placeable item accepted")
 	_assert(general.get_selected_item_id() == &"test_tool", "non-placeable item selected")
 	_assert(general_catalog.get_definition(&"test_tool").secondary_action == null, "non-placeable item has no secondary action")
 
-	var saved_source := InventoryModel.new(catalog)
+	var saved_source := InventoryModel.new(catalog, EquipmentInstanceFactory.new(catalog))
 	saved_source.setup_starter()
 	var saved_helmet_source := _find_item(saved_source, &"copper_helmet")
 	_assert(saved_helmet_source >= 0, "starter helmet missing")
@@ -316,7 +335,10 @@ func _run_edge_cases() -> bool:
 	_assert(encoded_slot["item_id"] is String, "save item ID is string")
 	_assert(not encoded_slot.has("type"), "old save key absent")
 	_assert(saved_source.get_slot(3).item_id == &"copper_sword", "starter sword missing")
-	var restored := InventoryModel.new(catalog)
+	var restored := InventoryModel.new(
+		catalog,
+		EquipmentInstanceFactory.new(catalog, saved_source.equipment_instance_factory.get_next_instance_id())
+	)
 	_assert(restored.from_dict(encoded), "version 3 inventory restores")
 	_assert(_slots_equal(saved_source.slots, restored.slots), "save round trip")
 	_assert(restored.get_equipped_armor(ArmorDefinition.Slot.HEAD).id == &"copper_helmet", "equipped armor round trip failed")
@@ -331,7 +353,7 @@ func _run_edge_cases() -> bool:
 	long_region["regions"]["hotbar"].append(null)
 	_assert(not restored.from_dict(long_region), "long inventory region rejected")
 	var occupied_equipment := encoded.duplicate(true)
-	occupied_equipment["regions"]["equipment"][0] = {"item_id": String(grass_id), "count": 1, "socketed_rune_ids": []}
+	occupied_equipment["regions"]["equipment"][0] = {"item_id": String(grass_id), "count": 1, "equipment_instance": null}
 	_assert(not restored.from_dict(occupied_equipment), "non-armor equipment save rejected")
 
 	_assert(_validate_inv(moved), "moved inventory valid")
@@ -351,7 +373,7 @@ func _run_raw_throughput() -> bool:
 	print("[perf] measuring raw model throughput")
 	_tests_run += 1
 	var catalog := _make_catalog(99)
-	var inv := InventoryModel.new(catalog)
+	var inv := InventoryModel.new(catalog, EquipmentInstanceFactory.new(catalog))
 	inv.slots[0] = InventoryStack.new(catalog.get_item_for_block(BlockId.Type.GRASS).id, 50)
 	inv.slots[1] = InventoryStack.new(catalog.get_item_for_block(BlockId.Type.STONE).id, 50)
 	inv.slots[2] = InventoryStack.new(catalog.get_item_for_block(BlockId.Type.DIRT).id, 50)
@@ -378,7 +400,8 @@ func _run_add_batch_properties() -> bool:
 	rng.seed = 0x12345678
 	for iteration in range(5000):
 		var max_stack := MAX_STACK_OPTIONS[rng.randi_range(0, MAX_STACK_OPTIONS.size() - 1)]
-		var inv := InventoryModel.new(_make_catalog(max_stack))
+		var catalog := _make_catalog(max_stack)
+		var inv := InventoryModel.new(catalog, EquipmentInstanceFactory.new(catalog))
 		var batch := _random_batch(rng, rng.randi_range(0, 20))
 		var before := _copy_stacks(inv.slots)
 		var can_add := inv.can_add_batch(batch)

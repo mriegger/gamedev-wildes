@@ -14,8 +14,14 @@ var _panel: CraftingPanel
 
 func _init() -> void:
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
-	_inventory = InventoryModel.new(item_catalog)
-	_inventory.slots[GEAR_INDEX] = InventoryStack.new(&"copper_sword", 1)
+	_inventory = InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
+	var affixes: Array[EquipmentAffixDefinition] = [item_catalog.get_equipment_affix(&"vicious")]
+	var instance := _inventory.equipment_instance_factory.create(
+		&"copper_sword",
+		affixes,
+		_rune_ids([&"basic_rune"]),
+	)
+	_inventory.slots[GEAR_INDEX] = InventoryStack.new(&"copper_sword", 1, instance)
 	_inventory.slots[RUNE_INDEX] = InventoryStack.new(&"basic_rune", 2)
 	_inventory.slots[2] = InventoryStack.new(&"stone_block", 10)
 	_inventory.slots[3] = InventoryStack.new(&"log_block", 5)
@@ -24,7 +30,7 @@ func _init() -> void:
 	_expect(_socketing.setup(_inventory, _proficiency), "socketing setup failed")
 	_recipe_catalog = load("res://crafting/crafting_recipe_catalog.tres") as CraftingRecipeCatalog
 	_crafting = CraftingCoordinator.new()
-	_crafting.setup(_inventory, _recipe_catalog)
+	_crafting.setup(_inventory, _recipe_catalog, _inventory.equipment_instance_factory)
 	_panel = (load("res://crafting/presentation/crafting_panel.tscn") as PackedScene).instantiate() as CraftingPanel
 	root.add_child(_panel)
 
@@ -59,9 +65,25 @@ func _test_workspace_and_slot_states() -> void:
 	rune_panel.get_gear_slot()._drop_data(Vector2.ZERO, gear_payload)
 	_expect(rune_panel.get_selected_gear_index() == GEAR_INDEX, "gear drop did not select a reference")
 	var rune_slots := rune_panel.get_rune_slots()
-	_expect(rune_slots[0].get_state() == RuneSocketingSlot.State.LOCKED, "locked rune slot was not rendered")
+	_expect(rune_slots[0].get_state() == RuneSocketingSlot.State.FILLED, "preattached rune in a locked slot was not rendered")
 	_expect(rune_slots[1].get_state() == RuneSocketingSlot.State.UNAVAILABLE, "second unavailable slot was not rendered")
 	_expect(rune_slots[2].get_state() == RuneSocketingSlot.State.UNAVAILABLE, "third unavailable slot was not rendered")
+	var gear_slot := rune_panel.get_gear_slot()
+	_expect(gear_slot.tooltip_text == "Copper Sword of Viciousness", "affixed gear workspace lost its display suffix")
+	var gear_tooltip := gear_slot._make_custom_tooltip(gear_slot.tooltip_text) as ItemTooltip
+	_expect(gear_tooltip != null, "affixed gear workspace did not create a tooltip")
+	if gear_tooltip != null:
+		root.add_child(gear_tooltip)
+		_expect(gear_tooltip.item_name_label.text == "Copper Sword of Viciousness", "affixed gear workspace tooltip lost its suffix")
+		_expect(gear_tooltip.stats_label.text.contains("Strength: +2"), "affixed gear workspace tooltip lost its stat")
+		gear_tooltip.free()
+	var click := InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_RIGHT
+	click.pressed = true
+	rune_slots[0]._gui_input(click)
+	_expect(rune_slots[0].get_state() == RuneSocketingSlot.State.LOCKED, "removing a preattached rune did not reveal the locked slot")
+	_expect(_inventory.get_socketed_rune_ids(GEAR_INDEX).is_empty(), "preattached locked rune was not removed")
+	_expect(_inventory.get_inventory_item_count(&"basic_rune") == 3, "preattached rune was not returned to inventory")
 	_expect(_proficiency.add_experience(&"copper_sword", 100.0) == 1, "fixture did not unlock the common rune slot")
 	_expect(rune_slots[0].get_state() == RuneSocketingSlot.State.EMPTY, "proficiency unlock did not refresh the rune slot")
 
@@ -93,7 +115,7 @@ func _test_socket_and_unsocket() -> void:
 	slot._gui_input(click)
 	_expect(slot.get_state() == RuneSocketingSlot.State.EMPTY, "unsocketed rune slot did not return to empty")
 	_expect(_inventory.get_socketed_rune_ids(GEAR_INDEX).is_empty(), "rune UI did not unsocket the rune")
-	_expect(_inventory.get_inventory_item_count(&"basic_rune") == 2, "unsocket did not return the rune")
+	_expect(_inventory.get_inventory_item_count(&"basic_rune") == 3, "unsocket did not return the rune")
 	_expect(slot.tooltip_text.is_empty(), "unsocketed rune slot retained tooltip text")
 	_expect(slot._make_custom_tooltip(slot.tooltip_text) == null, "unsocketed rune slot retained tooltip data")
 	var unsocketed_gear_tooltip := gear_slot._make_custom_tooltip(gear_slot.tooltip_text) as ItemTooltip

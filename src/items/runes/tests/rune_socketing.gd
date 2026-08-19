@@ -11,9 +11,9 @@ var _errors: Array[String] = []
 
 func _init() -> void:
 	var catalog := _build_catalog()
-	var inventory := InventoryModel.new(catalog)
-	inventory.slots[0] = InventoryStack.new(WEAPON_ID, 1)
-	inventory.slots[1] = InventoryStack.new(WEAPON_ID, 1)
+	var inventory := InventoryModel.new(catalog, EquipmentInstanceFactory.new(catalog))
+	inventory.slots[0] = _equipment_stack(inventory, WEAPON_ID)
+	inventory.slots[1] = _equipment_stack(inventory, WEAPON_ID)
 	inventory.slots[RUNE_SOURCE_INDEX] = InventoryStack.new(RUNE_ID, 3)
 	inventory.slots[NON_RUNE_SOURCE_INDEX] = InventoryStack.new(&"sand_block", 32)
 	inventory.slots[INCOMPATIBLE_RUNE_SOURCE_INDEX] = InventoryStack.new(ARMOR_ONLY_RUNE_ID, 1)
@@ -75,39 +75,59 @@ func _init() -> void:
 		quit(1)
 
 func _test_setup_validation(catalog: ItemCatalog) -> void:
-	var valid := InventoryModel.new(catalog)
-	valid.slots[0] = InventoryStack.new(WEAPON_ID, 1, _rune_ids([RUNE_ID]))
+	var valid := InventoryModel.new(catalog, EquipmentInstanceFactory.new(catalog))
+	valid.slots[0] = _equipment_stack(valid, WEAPON_ID, _rune_ids([RUNE_ID]))
 	_expect(RuneSocketingCoordinator.new().setup(valid, ItemProficiency.new(catalog)), "valid restored loadout was rejected")
 
-	var trailing_empty := InventoryModel.new(catalog)
-	trailing_empty.slots[0] = InventoryStack.new(WEAPON_ID, 1, _rune_ids([RUNE_ID, &""]))
+	var trailing_empty := InventoryModel.new(catalog, EquipmentInstanceFactory.new(catalog))
+	trailing_empty.slots[0] = _unchecked_equipment_stack(WEAPON_ID, _rune_ids([RUNE_ID, &""]))
 	_expect(not RuneSocketingCoordinator.new().setup(trailing_empty, ItemProficiency.new(catalog)), "trailing empty socket sentinel was accepted")
 
-	var unknown_rune := InventoryModel.new(catalog)
-	unknown_rune.slots[0] = InventoryStack.new(WEAPON_ID, 1, _rune_ids([&"missing_rune"]))
+	var unknown_rune := InventoryModel.new(catalog, EquipmentInstanceFactory.new(catalog))
+	unknown_rune.slots[0] = _unchecked_equipment_stack(WEAPON_ID, _rune_ids([&"missing_rune"]))
 	_expect(not RuneSocketingCoordinator.new().setup(unknown_rune, ItemProficiency.new(catalog)), "unknown restored rune was accepted")
 
-	var incompatible_rune := InventoryModel.new(catalog)
-	incompatible_rune.slots[0] = InventoryStack.new(WEAPON_ID, 1, _rune_ids([ARMOR_ONLY_RUNE_ID]))
-	_expect(not RuneSocketingCoordinator.new().setup(incompatible_rune, ItemProficiency.new(catalog)), "incompatible restored rune was accepted")
+	var incompatible_rune := InventoryModel.new(catalog, EquipmentInstanceFactory.new(catalog))
+	incompatible_rune.slots[0] = _unchecked_equipment_stack(WEAPON_ID, _rune_ids([ARMOR_ONLY_RUNE_ID]))
+	var incompatible_coordinator := RuneSocketingCoordinator.new()
+	_expect(incompatible_coordinator.setup(incompatible_rune, ItemProficiency.new(catalog)), "grandfathered incompatible rune was rejected")
+	_expect(incompatible_coordinator.can_unsocket(0, 0), "grandfathered incompatible rune could not be unsocketed")
+	_expect(incompatible_coordinator.try_unsocket(0, 0), "grandfathered incompatible rune did not unsocket")
+	_expect(incompatible_rune.get_socketed_rune_ids(0).is_empty(), "grandfathered incompatible rune remained socketed")
 
-	var locked_rune := InventoryModel.new(catalog)
-	locked_rune.slots[0] = InventoryStack.new(WEAPON_ID, 1, _rune_ids([&"", RUNE_ID]))
-	_expect(not RuneSocketingCoordinator.new().setup(locked_rune, ItemProficiency.new(catalog)), "rune in a locked restored slot was accepted")
+	var reduced_slots := InventoryModel.new(catalog, EquipmentInstanceFactory.new(catalog))
+	reduced_slots.slots[0] = _equipment_stack(reduced_slots, WEAPON_ID, _rune_ids([&"", &"", RUNE_ID]))
+	var weapon := catalog.get_definition(WEAPON_ID)
+	var original_slot_unlock_levels := weapon.proficiency.slot_unlock_levels
+	weapon.proficiency.slot_unlock_levels = PackedInt32Array([0])
+	var reduced_slot_coordinator := RuneSocketingCoordinator.new()
+	_expect(reduced_slot_coordinator.setup(reduced_slots, ItemProficiency.new(catalog)), "grandfathered removed socket was rejected")
+	_expect(reduced_slot_coordinator.get_total_slot_count(0) == 3, "grandfathered removed socket was hidden")
+	_expect(reduced_slot_coordinator.get_slot_state(0, 2) == RuneSocketingCoordinator.SlotState.FILLED, "grandfathered removed socket was not filled")
+	_expect(reduced_slot_coordinator.can_unsocket(0, 2), "grandfathered removed socket could not be unsocketed")
+	_expect(reduced_slot_coordinator.try_unsocket(0, 2), "grandfathered removed socket did not unsocket")
+	weapon.proficiency.slot_unlock_levels = original_slot_unlock_levels
 
-	var too_many := InventoryModel.new(catalog)
-	too_many.slots[0] = InventoryStack.new(WEAPON_ID, 1, _rune_ids([RUNE_ID, RUNE_ID, RUNE_ID, RUNE_ID]))
+	var preattached_rune := InventoryModel.new(catalog, EquipmentInstanceFactory.new(catalog))
+	preattached_rune.slots[0] = _equipment_stack(preattached_rune, WEAPON_ID, _rune_ids([&"", RUNE_ID]))
+	var preattached_coordinator := RuneSocketingCoordinator.new()
+	_expect(preattached_coordinator.setup(preattached_rune, ItemProficiency.new(catalog)), "preattached rune in a locked slot was rejected")
+	_expect(preattached_coordinator.get_slot_state(0, 1) == RuneSocketingCoordinator.SlotState.FILLED, "preattached locked rune was not visible")
+	_expect(preattached_coordinator.can_unsocket(0, 1), "preattached locked rune could not be unsocketed")
+
+	var too_many := InventoryModel.new(catalog, EquipmentInstanceFactory.new(catalog))
+	too_many.slots[0] = _unchecked_equipment_stack(WEAPON_ID, _rune_ids([RUNE_ID, RUNE_ID, RUNE_ID, RUNE_ID]))
 	_expect(not RuneSocketingCoordinator.new().setup(too_many, ItemProficiency.new(catalog)), "loadout beyond gear capacity was accepted")
 
-	var non_gear := InventoryModel.new(catalog)
-	non_gear.slots[0] = InventoryStack.new(&"sand_block", 1, _rune_ids([RUNE_ID]))
+	var non_gear := InventoryModel.new(catalog, EquipmentInstanceFactory.new(catalog))
+	non_gear.slots[0] = _unchecked_equipment_stack(&"sand_block", _rune_ids([RUNE_ID]))
 	var failed_coordinator := RuneSocketingCoordinator.new()
 	_expect(not failed_coordinator.setup(non_gear, ItemProficiency.new(catalog)), "socketed non-gear item was accepted")
 	_expect(not failed_coordinator.is_socketable_gear_index(0), "failed setup retained dependencies")
 
 func _test_full_inventory_rejection(catalog: ItemCatalog) -> void:
-	var inventory := InventoryModel.new(catalog)
-	inventory.slots[0] = InventoryStack.new(WEAPON_ID, 1, _rune_ids([RUNE_ID]))
+	var inventory := InventoryModel.new(catalog, EquipmentInstanceFactory.new(catalog))
+	inventory.slots[0] = _equipment_stack(inventory, WEAPON_ID, _rune_ids([RUNE_ID]))
 	for index in range(1, InventoryModel.FILLABLE_SIZE):
 		inventory.slots[index] = InventoryStack.new(&"sand_block", 99)
 	var coordinator := RuneSocketingCoordinator.new()
@@ -144,6 +164,23 @@ func _proficiency_definition() -> ProficiencyDefinition:
 
 func _rune_ids(values: Array[StringName]) -> Array[StringName]:
 	return values
+
+func _equipment_stack(
+	inventory: InventoryModel,
+	item_id: StringName,
+	rune_ids: Array[StringName] = [],
+) -> InventoryStack:
+	var affixes: Array[EquipmentAffixDefinition] = []
+	var instance := inventory.equipment_instance_factory.create(item_id, affixes, rune_ids)
+	assert(instance != null)
+	return InventoryStack.new(item_id, 1, instance)
+
+func _unchecked_equipment_stack(
+	item_id: StringName,
+	rune_ids: Array[StringName],
+) -> InventoryStack:
+	var affixes: Array[EquipmentAffixInstance] = []
+	return InventoryStack.new(item_id, 1, EquipmentInstance.new(1, affixes, rune_ids))
 
 func _expect(condition: bool, message: String) -> void:
 	if not condition:

@@ -35,10 +35,17 @@ func _init() -> void:
 		_expect(item_catalog.get_definition(armor_id).equipment_type == armor_type, "%s does not use the canonical armor type" % armor_id)
 
 	var basic_rune := item_catalog.get_definition(&"basic_rune") as RuneDefinition
+	var vicious := item_catalog.get_equipment_affix(&"vicious")
+	var stout := item_catalog.get_equipment_affix(&"stout")
 	_expect(basic_rune.is_compatible_with(sword), "basic rune rejected a sword")
 	_expect(basic_rune.is_compatible_with(hammer), "basic rune rejected a hammer")
+	_expect(vicious.is_compatible_with(sword), "Vicious rejected a sword")
+	_expect(not vicious.is_compatible_with(hammer), "sword-only Vicious accepted a hammer")
+	_expect(not stout.is_compatible_with(sword), "Stout accepted a sword")
 	var helmet := item_catalog.get_definition(&"copper_helmet")
 	_expect(basic_rune.is_compatible_with(helmet), "basic rune rejected armor")
+	_expect(not vicious.is_compatible_with(helmet), "Vicious accepted armor")
+	_expect(stout.is_compatible_with(helmet), "Stout rejected armor")
 	var heavy_armor_type := EquipmentTypeDefinition.new()
 	heavy_armor_type.id = &"armor_heavy"
 	heavy_armor_type.display_name = "Heavy Armor"
@@ -60,6 +67,15 @@ func _init() -> void:
 	_expect(heavy_rune.is_compatible_with(heavy_helmet), "heavy-armor rune rejected heavy armor")
 	_expect(not heavy_rune.is_compatible_with(helmet), "heavy-armor rune accepted base armor")
 	_expect(not heavy_rune.is_compatible_with(sword), "heavy-armor rune accepted a weapon")
+	var heavy_stout := stout.duplicate() as EquipmentAffixDefinition
+	heavy_stout.id = &"test_heavy_stout"
+	heavy_stout.display_name_suffix = "of Heavy Testing"
+	heavy_stout.compatible_equipment_types = _equipment_types([heavy_armor_type])
+	heavy_stout.compatible_armor_slots = EquipmentAffixDefinition.ArmorSlotMask.HEAD
+	_expect(heavy_stout.validate("heavy armor subtype test", armor_type), "heavy-armor affix is invalid")
+	_expect(heavy_stout.is_compatible_with(heavy_helmet), "heavy-armor affix rejected heavy armor")
+	_expect(not heavy_stout.is_compatible_with(helmet), "heavy-armor affix accepted base armor")
+	_expect(not heavy_stout.is_compatible_with(sword), "heavy-armor affix accepted a weapon")
 	var equipment_head_rune := heavy_rune.duplicate() as RuneDefinition
 	equipment_head_rune.compatible_equipment_types = _equipment_types([equipment_type])
 	_expect(equipment_head_rune.validate("equipment root test", armor_type), "equipment-root rune is invalid")
@@ -87,9 +103,15 @@ func _init() -> void:
 	var extended_catalog := ItemCatalog.new()
 	extended_catalog.equipment_types = equipment_types
 	extended_catalog.definitions = definitions
+	var equipment_affixes: Array[EquipmentAffixDefinition] = []
+	equipment_affixes.assign(item_catalog.equipment_affixes)
+	equipment_affixes.append(heavy_stout)
+	extended_catalog.equipment_affixes = equipment_affixes
 	_expect(extended_catalog.validate(block_catalog), "catalog rejected a second weapon family")
 	_expect(extended_catalog.is_combat_item(staff.id), "staff is not classified as combat equipment")
 	_expect(basic_rune.is_compatible_with(staff), "weapon-compatible rune rejected a staff")
+	_expect(not vicious.is_compatible_with(staff), "sword-only Vicious accepted a staff")
+	_expect(not stout.is_compatible_with(staff), "armor-only Stout accepted a staff")
 	var tooltip := ItemTooltip.new()
 	tooltip._item_catalog = extended_catalog
 	_expect(tooltip._get_rune_compatibility_line(heavy_rune) == "Compatible: Heavy Armor (Head)", "heavy-armor rune tooltip lost its subtype")

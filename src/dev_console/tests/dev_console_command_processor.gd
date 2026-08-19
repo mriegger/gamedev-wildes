@@ -22,7 +22,7 @@ func _init() -> void:
 	_expect(copper.max_stack == 99, "copper stack limit mismatch")
 	_expect(copper.icon != null and copper.icon.resource_path == "res://assets/textures/blocks/copper.png", "copper texture mismatch")
 	_expect(copper.icon != null and copper.icon.get_width() == 16 and copper.icon.get_height() == 16, "copper texture was not 16x16")
-	var inventory := InventoryModel.new(item_catalog)
+	var inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	var pumpkin_patch := PumpkinPatchStub.new()
 	var stats := ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
 	inventory.slots[0] = InventoryStack.new(&"stone_block", 4)
@@ -42,20 +42,20 @@ func _init() -> void:
 	_expect(inventory.get_inventory_item_count(&"pumpkin") == 1, "pumpkin spawn did not add one inventory item")
 
 	for definition in item_catalog.definitions:
-		var definition_inventory := InventoryModel.new(item_catalog)
+		var definition_inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 		var definition_processor := DevConsoleCommandProcessor.new()
 		_setup_processor(definition_processor, definition_inventory, stats, pumpkin_patch)
 		_expect_result(definition_processor.execute("spawn %s 1" % definition.id), DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN, "canonical item ID failed for %s" % definition.id)
 		_expect(definition_inventory.get_backpack_item_count(definition.id) == 1, "%s ID did not add one item" % definition.id)
 		_expect_result(definition_processor.execute("spawn %s 1" % definition.display_name), DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN, "display name failed for %s" % definition.display_name)
 		_expect(definition_inventory.get_backpack_item_count(definition.id) == 2, "%s display name did not add one item" % definition.display_name)
-	var multi_word_inventory := InventoryModel.new(item_catalog)
+	var multi_word_inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	var multi_word_processor := DevConsoleCommandProcessor.new()
 	_setup_processor(multi_word_processor, multi_word_inventory, stats, pumpkin_patch)
 	_expect_result(multi_word_processor.execute("spawn Copper Pickaxe"), DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN, "multi-word display name failed without a count")
 	_expect(multi_word_inventory.get_backpack_item_count(&"copper_pickaxe") == 1, "multi-word display name did not default to one item")
 
-	var alias_inventory := InventoryModel.new(item_catalog)
+	var alias_inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	var alias_processor := DevConsoleCommandProcessor.new()
 	_setup_processor(alias_processor, alias_inventory, stats, pumpkin_patch)
 	var expected_aliases: Dictionary[String, StringName] = {
@@ -65,7 +65,7 @@ func _init() -> void:
 		_expect_result(alias_processor.execute("spawn %s 1" % alias), DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN, "spawn alias failed for %s" % alias)
 		_expect(alias_inventory.get_backpack_item_count(expected_aliases[alias]) == 1, "%s alias spawned the wrong item" % alias)
 
-	var split_stack_inventory := InventoryModel.new(item_catalog)
+	var split_stack_inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	split_stack_inventory.slots[InventoryModel.HOTBAR_SIZE] = InventoryStack.new(&"stone_block", 98)
 	var split_stack_processor := DevConsoleCommandProcessor.new()
 	_setup_processor(split_stack_processor, split_stack_inventory, stats, pumpkin_patch)
@@ -119,7 +119,7 @@ func _init() -> void:
 
 	var maximum_grant_stats := ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
 	var maximum_grant_processor := DevConsoleCommandProcessor.new()
-	_setup_processor(maximum_grant_processor, InventoryModel.new(item_catalog), maximum_grant_stats, pumpkin_patch)
+	_setup_processor(maximum_grant_processor, InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog)), maximum_grant_stats, pumpkin_patch)
 	_expect_result(
 		maximum_grant_processor.execute("give_xp %d" % DevConsoleCommandProcessor.MAXIMUM_GIVE_XP_AMOUNT),
 		DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN,
@@ -180,7 +180,7 @@ func _init() -> void:
 	_expect(is_equal_approx(stats.current_hp, health_before_invalid), "invalid commands changed player health")
 	_expect(is_equal_approx(_ripple_strength, ripple_strength_before_invalid), "invalid commands changed ripple strength")
 
-	var full_inventory := InventoryModel.new(item_catalog)
+	var full_inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	for index in range(InventoryModel.HOTBAR_SIZE, InventoryModel.FILLABLE_SIZE):
 		full_inventory.slots[index] = InventoryStack.new(&"dirt_block", 99)
 	var full_before := full_inventory.to_dict()

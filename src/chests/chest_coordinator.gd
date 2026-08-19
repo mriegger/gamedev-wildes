@@ -53,7 +53,7 @@ func get_inventory_stack(scope: StringName, index: int) -> InventoryStack:
 
 func get_socketed_rune_ids(scope: StringName, index: int) -> Array[StringName]:
 	var stack := get_inventory_stack(scope, index)
-	return [] if stack == null else stack.socketed_rune_ids.duplicate()
+	return [] if stack == null or stack.equipment_instance == null else stack.equipment_instance.socketed_rune_ids.duplicate()
 
 func can_handle_drop(source_scope: StringName, source_index: int, destination_scope: StringName, destination_index: int, drag_count: int) -> bool:
 	var source := _get_inventory(source_scope)
@@ -116,7 +116,11 @@ func can_pick_up_chest(position: Vector3i, action: MiningActionDefinition) -> bo
 	var inventory := storage.get_inventory(position)
 	if inventory != null and inventory.slots.any(func(stack): return stack != null):
 		return false
-	return player_inventory.can_exchange_inventory_items({}, _get_pickup_grants(position))
+	return player_inventory.can_exchange_inventory_items(
+		{},
+		_get_pickup_grants(position),
+		player_inventory.equipment_instance_factory,
+	)
 
 func pick_up_chest(position: Vector3i, action: MiningActionDefinition) -> bool:
 	if not can_pick_up_chest(position, action):
@@ -129,7 +133,11 @@ func pick_up_chest(position: Vector3i, action: MiningActionDefinition) -> bool:
 	if active_inventory != null and active_position == position:
 		active_inventory = null
 		closed.emit()
-	var added := player_inventory.exchange_inventory_items({}, grants)
+	var added := player_inventory.exchange_inventory_items(
+		{},
+		grants,
+		player_inventory.equipment_instance_factory,
+	)
 	assert(added)
 	return true
 

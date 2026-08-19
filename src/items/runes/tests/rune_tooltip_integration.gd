@@ -10,12 +10,15 @@ var _slot: InventorySlot
 
 func _init() -> void:
 	var item_catalog := _build_catalog()
-	_inventory = InventoryModel.new(item_catalog)
+	_inventory = InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
+	var no_affixes: Array[EquipmentAffixDefinition] = []
+	var vicious: Array[EquipmentAffixDefinition] = [item_catalog.get_equipment_affix(&"vicious")]
 	_inventory.slots[0] = InventoryStack.new(&"basic_rune", 1)
-	_inventory.slots[1] = InventoryStack.new(&"copper_sword", 1, _rune_ids([&"basic_rune"]))
-	_inventory.slots[2] = InventoryStack.new(&"copper_sword", 1)
-	_inventory.slots[3] = InventoryStack.new(&"copper_helmet", 1, _rune_ids([&"basic_rune"]))
-	_inventory.slots[4] = InventoryStack.new(STACKING_WEAPON_ID, 1, _rune_ids([&"basic_rune", &"basic_rune"]))
+	_inventory.slots[1] = _equipment_stack(&"copper_sword", no_affixes, _rune_ids([&"basic_rune"]))
+	_inventory.slots[2] = _equipment_stack(&"copper_sword", no_affixes, _rune_ids([]))
+	_inventory.slots[3] = _equipment_stack(&"copper_helmet", no_affixes, _rune_ids([&"basic_rune"]))
+	_inventory.slots[4] = _equipment_stack(STACKING_WEAPON_ID, no_affixes, _rune_ids([&"basic_rune", &"basic_rune"]))
+	_inventory.slots[5] = _equipment_stack(&"copper_sword", vicious, _rune_ids([]))
 	_item_proficiency = ItemProficiency.new(item_catalog)
 	_expect(_item_proficiency.add_experience(&"copper_sword", 100.0) == 1, "sword proficiency fixture did not unlock")
 	_expect(_item_proficiency.add_experience(&"copper_helmet", 100.0) == 1, "helmet proficiency fixture did not unlock")
@@ -38,6 +41,7 @@ func _process(_delta: float) -> bool:
 		_test_unsocketed_weapon_tooltip()
 		_test_socketed_armor_tooltip()
 		_test_duplicate_rune_aggregation()
+		_test_affixed_weapon_tooltip()
 		_slot.free()
 	elif _frame == 10:
 		_finish()
@@ -101,6 +105,17 @@ func _test_duplicate_rune_aggregation() -> void:
 	_expect(tooltip.rune_stats_label.get_theme_color("font_color") == ItemTooltip.RUNE_BONUS_COLOR, "aggregated rune bonus is not red")
 	tooltip.free()
 
+func _test_affixed_weapon_tooltip() -> void:
+	_slot.set_slot_index(5)
+	_slot.set_item(&"copper_sword", 1)
+	var tooltip := _create_slot_tooltip("affixed weapon")
+	if tooltip == null:
+		return
+	_expect(_slot.tooltip_text == "Copper Sword of Viciousness", "affixed inventory slot lost its suffix")
+	_expect(tooltip.item_name_label.text == "Copper Sword of Viciousness", "affixed tooltip name lost its suffix")
+	_expect(tooltip.stats_label.text.contains("Strength: +2"), "affixed tooltip stat is missing")
+	tooltip.free()
+
 func _build_catalog() -> ItemCatalog:
 	var source := load("res://items/item_catalog.tres") as ItemCatalog
 	var stacking_weapon := source.get_definition(&"copper_sword").duplicate(true) as ItemDefinition
@@ -118,6 +133,7 @@ func _build_catalog() -> ItemCatalog:
 	var catalog := ItemCatalog.new()
 	catalog.equipment_types = source.equipment_types
 	catalog.definitions = definitions
+	catalog.equipment_affixes = source.equipment_affixes
 	return catalog
 
 func _create_slot_tooltip(context: String) -> ItemTooltip:
@@ -130,6 +146,15 @@ func _create_slot_tooltip(context: String) -> ItemTooltip:
 
 func _rune_ids(values: Array[StringName]) -> Array[StringName]:
 	return values
+
+func _equipment_stack(
+	item_id: StringName,
+	affixes: Array[EquipmentAffixDefinition],
+	rune_ids: Array[StringName],
+) -> InventoryStack:
+	var instance := _inventory.equipment_instance_factory.create(item_id, affixes, rune_ids)
+	assert(instance != null)
+	return InventoryStack.new(item_id, 1, instance)
 
 func _finish() -> void:
 	if _errors.is_empty():

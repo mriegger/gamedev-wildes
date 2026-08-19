@@ -30,7 +30,7 @@ func _init() -> void:
 	_general_catalog = load("res://crafting/crafting_recipe_catalog.tres") as CraftingRecipeCatalog
 	_anvil_catalog = load("res://crafting/stations/anvil_recipe_catalog.tres") as CraftingRecipeCatalog
 	_cauldron_catalog = load("res://crafting/stations/cauldron_recipe_catalog.tres") as CraftingRecipeCatalog
-	_inventory = InventoryModel.new(item_catalog)
+	_inventory = InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	_inventory.slots[0] = InventoryStack.new(&"copper", 20)
 	_inventory.slots[1] = InventoryStack.new(&"log_block", 5)
 	_inventory.slots[2] = InventoryStack.new(&"pumpkin", 2)
@@ -40,11 +40,11 @@ func _init() -> void:
 	_inventory_stats = InventoryStatCoordinator.new()
 	_expect(_inventory_stats.setup(_inventory, _stats), "inventory stat setup failed")
 	_general_crafting = CraftingCoordinator.new()
-	_general_crafting.setup(_inventory, _general_catalog)
+	_general_crafting.setup(_inventory, _general_catalog, _inventory.equipment_instance_factory)
 	_anvil_crafting = CraftingCoordinator.new()
-	_anvil_crafting.setup(_inventory, _anvil_catalog)
+	_anvil_crafting.setup(_inventory, _anvil_catalog, _inventory.equipment_instance_factory)
 	_cauldron_crafting = CraftingCoordinator.new()
-	_cauldron_crafting.setup(_inventory, _cauldron_catalog)
+	_cauldron_crafting.setup(_inventory, _cauldron_catalog, _inventory.equipment_instance_factory)
 	_world = VoxelWorld.new(20, 36, 5, 12.0, block_catalog)
 	_expect(_world.try_place_block(_position, BlockId.Type.ANVIL).is_success(), "test anvil could not be placed")
 	_expect(_world.try_place_block(_cauldron_position, BlockId.Type.CAULDRON).is_success(), "test cauldron could not be placed")

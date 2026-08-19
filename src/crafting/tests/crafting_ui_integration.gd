@@ -30,7 +30,7 @@ var _unhandled_input_probe: UnhandledInputProbe
 func _init() -> void:
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
 	_recipe_catalog = load("res://crafting/crafting_recipe_catalog.tres") as CraftingRecipeCatalog
-	_inventory = InventoryModel.new(item_catalog)
+	_inventory = InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	_inventory.slots[0] = InventoryStack.new(&"copper", 20)
 	_inventory.slots[1] = InventoryStack.new(&"log_block", 4)
 	_inventory.slots[2] = InventoryStack.new(&"stone_block", 10)
@@ -41,7 +41,7 @@ func _init() -> void:
 	_inventory_stats = InventoryStatCoordinator.new()
 	_expect(_inventory_stats.setup(_inventory, _stats), "inventory stat setup failed")
 	_crafting = CraftingCoordinator.new()
-	_crafting.setup(_inventory, _recipe_catalog)
+	_crafting.setup(_inventory, _recipe_catalog, _inventory.equipment_instance_factory)
 	var packed := load("res://ui/hud/hud.tscn") as PackedScene
 	_hud = packed.instantiate() as HUD
 	root.add_child(_hud)

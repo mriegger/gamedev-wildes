@@ -325,7 +325,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	environment.setup(6.0, settings.get_shadow_distance())
 	environment.apply_settings(settings)
 	environment.start_clock()
-	game.inventory_model = InventoryModel.new(game.item_catalog)
+	game.inventory_model = InventoryModel.new(game.item_catalog, EquipmentInstanceFactory.new(game.item_catalog))
 	game.inventory_model.setup_starter()
 	game.player_stats = ActorStats.new(game.player_stats_definition)
 	dev_console.setup(

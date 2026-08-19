@@ -97,7 +97,7 @@ func _init() -> void:
 			var first_bounds := apple_trees.get_harvest_target_bounds(int(apple_trees._targets.keys()[0]))
 			var ray_target := apple_trees.find_harvest_target(first_bounds.get_center() + Vector3.UP, Vector3.DOWN, 2.0)
 			_expect(not ray_target.is_empty(), "ground apple could not be selected by a ray")
-			var inventory := InventoryModel.new(item_catalog)
+			var inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 			var target_id := int(apple_trees._targets.keys()[0])
 			var item_ids := apple_trees.get_harvest_item_ids(target_id)
 			_expect(inventory.can_add_batch(item_ids), "empty inventory rejected an apple")

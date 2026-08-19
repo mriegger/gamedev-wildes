@@ -283,6 +283,12 @@ jobs:
             30 "EQUIPMENT_TYPE_TAXONOMY PASS" /tmp/equipment_type_taxonomy.log -- \
             godot --headless --path src --script res://equipment/types/tests/equipment_type_taxonomy.gd
 
+      - name: Validate equipment instance identity and rolls
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "EQUIPMENT_INSTANCE_SYSTEM PASS" /tmp/equipment_instance_system.log -- \
+            godot --headless --path src --script res://equipment/instances/tests/equipment_instance_system.gd
+
   armor-visual:
     runs-on: ubuntu-latest
     timeout-minutes: 10

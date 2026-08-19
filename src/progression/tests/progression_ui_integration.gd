@@ -10,12 +10,12 @@ var _panel: CraftingPanel
 
 func _init() -> void:
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
-	var inventory := InventoryModel.new(item_catalog)
+	var inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	inventory.slots[0] = InventoryStack.new(&"stone_block", 10)
 	inventory.slots[1] = InventoryStack.new(&"log_block", 5)
 	var recipe_catalog := load("res://crafting/crafting_recipe_catalog.tres") as CraftingRecipeCatalog
 	_crafting_coordinator = CraftingCoordinator.new()
-	_crafting_coordinator.setup(inventory, recipe_catalog)
+	_crafting_coordinator.setup(inventory, recipe_catalog, inventory.equipment_instance_factory)
 	_actor_stats = ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
 	_expect(_actor_stats.set_progression(4, 50), "progression fixture was rejected")
 	var perk_rules := load("res://progression/player_perk_rules.tres") as PlayerPerkRules

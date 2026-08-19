@@ -342,7 +342,7 @@ func _run() -> void:
 	_expect(is_equal_approx(accepted_contact.hit_direction.length(), 1.0), "committed player contact direction is not normalized")
 
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
-	var inventory := InventoryModel.new(item_catalog)
+	var inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	inventory.setup_starter()
 	inventory.select_slot(3)
 	var input_buffer := InputBuffer.new()
@@ -691,7 +691,7 @@ func _test_sheep_damage(world: VoxelWorld, sword_profile: MeleeAttackProfile) ->
 	combat.melee_outcome_committed.connect(coordinator.get_runtime().record_melee_outcome)
 	combat.melee_outcome_committed.connect(_on_melee_contact)
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
-	var inventory := InventoryModel.new(item_catalog)
+	var inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	inventory.setup_starter()
 	var item_proficiency := ItemProficiency.new(item_catalog)
 	var progression := CombatProgressionCoordinator.new()
@@ -998,7 +998,7 @@ func _test_uncapped_mixed_damage(world: VoxelWorld, sword_profile: MeleeAttackPr
 	var progression_item_catalog := ItemCatalog.new()
 	var progression_definitions: Array[ItemDefinition] = [progression_sword]
 	progression_item_catalog.definitions = progression_definitions
-	var progression_inventory := InventoryModel.new(progression_item_catalog)
+	var progression_inventory := InventoryModel.new(progression_item_catalog, EquipmentInstanceFactory.new(progression_item_catalog))
 	var item_proficiency := ItemProficiency.new(progression_item_catalog)
 	var progression := CombatProgressionCoordinator.new()
 	progression.setup(player_stats, progression_inventory, fixture["entity_catalog"] as EntityCatalog, item_proficiency)
@@ -1081,7 +1081,7 @@ func _test_multi_target_interactor_timing(world: VoxelWorld, sword_profile: Mele
 	var locked_ids := combat.acquire_player_targets(ray[0], ray[1], sword_profile)
 	_expect(locked_ids == _active_ids(actors), "interactor timing did not lock both targets")
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
-	var inventory := InventoryModel.new(item_catalog)
+	var inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	inventory.setup_starter()
 	inventory.select_slot(3)
 	var input_buffer := InputBuffer.new()
@@ -1137,7 +1137,7 @@ func _test_hammer_slam(world: VoxelWorld, hammer_profile: MeleeAttackProfile) ->
 		await _cleanup(combat, coordinator, player, camera)
 		return
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
-	var inventory := InventoryModel.new(item_catalog)
+	var inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	inventory.slots[0] = InventoryStack.new(&"copper_hammer", 1)
 	var input_buffer := InputBuffer.new()
 	player.interactor.setup(camera, player, inventory, input_buffer, combat, coordinator.get_runtime())

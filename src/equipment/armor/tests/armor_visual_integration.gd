@@ -17,7 +17,7 @@ func _run() -> void:
 	var orphan_before := int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
 	var stats_definition := load("res://player/player_stats.tres") as ActorStatsDefinition
-	var inventory := InventoryModel.new(item_catalog)
+	var inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	inventory.setup_starter()
 	var stats := ActorStats.new(stats_definition)
 	var coordinator := InventoryStatCoordinator.new()
@@ -70,7 +70,10 @@ func _run() -> void:
 			_expect(not transform_after.is_equal_approx(transform_before), "armor visual did not follow animation for slot %d part %d" % [armor_slot, part_index])
 
 	var equipped_snapshot := inventory.to_dict()
-	var restored_inventory := InventoryModel.new(item_catalog)
+	var restored_inventory := InventoryModel.new(
+		item_catalog,
+		EquipmentInstanceFactory.new(item_catalog, inventory.equipment_instance_factory.get_next_instance_id()),
+	)
 	_expect(restored_inventory.from_dict(equipped_snapshot), "equipped inventory restore failed")
 	var restored_stats := ActorStats.new(stats_definition)
 	var restored_coordinator := InventoryStatCoordinator.new()

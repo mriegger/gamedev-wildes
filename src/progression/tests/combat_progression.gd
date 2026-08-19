@@ -8,7 +8,7 @@ func _init():
 	var entity_catalog := load("res://entities/entity_catalog.tres") as EntityCatalog
 	_expect(item_catalog.validate(block_catalog), "item catalog is invalid")
 	_expect(entity_catalog.validate(), "entity catalog is invalid")
-	var inventory := InventoryModel.new(item_catalog)
+	var inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	inventory.setup_starter()
 	var player_stats := ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
 	var inventory_stats := InventoryStatCoordinator.new()

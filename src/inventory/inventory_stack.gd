@@ -3,33 +3,50 @@ class_name InventoryStack
 
 var item_id: StringName
 var count: int
-var socketed_rune_ids: Array[StringName]
+var equipment_instance: EquipmentInstance
 
-func _init(p_item_id: StringName, p_count: int, p_socketed_rune_ids: Array[StringName] = []):
+func _init(
+	p_item_id: StringName,
+	p_count: int,
+	p_equipment_instance: EquipmentInstance = null,
+):
 	item_id = p_item_id
 	count = p_count
-	socketed_rune_ids = p_socketed_rune_ids.duplicate()
+	equipment_instance = null if p_equipment_instance == null else p_equipment_instance.copy()
 
 func copy() -> InventoryStack:
-	return InventoryStack.new(item_id, count, socketed_rune_ids)
+	return InventoryStack.new(item_id, count, equipment_instance)
+
+func has_instance_data() -> bool:
+	return equipment_instance != null
 
 func to_dict() -> Dictionary:
-	var encoded_rune_ids: Array[String] = []
-	for rune_id in socketed_rune_ids:
-		encoded_rune_ids.append(String(rune_id))
 	return {
 		"item_id": String(item_id),
 		"count": count,
-		"socketed_rune_ids": encoded_rune_ids,
+		"equipment_instance": null if equipment_instance == null else equipment_instance.to_dict(),
 	}
 
 static func from_dict(data: Dictionary) -> InventoryStack:
-	var encoded_rune_ids = data.get("socketed_rune_ids", null)
-	if not encoded_rune_ids is Array:
+	if not data.has("item_id") or not data.has("count") or not data.has("equipment_instance"):
 		return null
-	var rune_ids: Array[StringName] = []
-	for encoded_rune_id in encoded_rune_ids as Array:
-		if typeof(encoded_rune_id) != TYPE_STRING and typeof(encoded_rune_id) != TYPE_STRING_NAME:
+	if (
+		(typeof(data["item_id"]) != TYPE_STRING and typeof(data["item_id"]) != TYPE_STRING_NAME)
+		or (typeof(data["count"]) != TYPE_INT and typeof(data["count"]) != TYPE_FLOAT)
+	):
+		return null
+	var count := int(data["count"])
+	if not is_finite(float(data["count"])) or float(data["count"]) != float(count) or count < 1:
+		return null
+	var instance: EquipmentInstance
+	if data["equipment_instance"] != null:
+		if not data["equipment_instance"] is Dictionary:
 			return null
-		rune_ids.append(StringName(encoded_rune_id))
-	return InventoryStack.new(StringName(data.get("item_id", "")), int(data.get("count", 0)), rune_ids)
+		instance = EquipmentInstance.from_dict(data["equipment_instance"])
+		if instance == null:
+			return null
+	return InventoryStack.new(
+		StringName(data["item_id"]),
+		count,
+		instance,
+	)
