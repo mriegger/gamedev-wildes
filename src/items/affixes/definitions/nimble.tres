@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="EquipmentAffixDefinition" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://items/affixes/equipment_affix_definition.gd" id="1_affix"]
+[ext_resource type="Script" path="res://items/affixes/equipment_affix_stat_definition.gd" id="2_stat_roll"]
+[ext_resource type="Script" path="res://equipment/types/equipment_type_definition.gd" id="3_equipment_type_definition"]
+[ext_resource type="Resource" path="res://equipment/types/definitions/weapon_sword.tres" id="4_weapon_sword"]
+
+[sub_resource type="Resource" id="defense"]
+script = ExtResource("2_stat_roll")
+stat_id = &"defense"
+minimum_amount = 1.0
+maximum_amount = 3.0
+
+[resource]
+script = ExtResource("1_affix")
+id = &"nimble"
+display_name_suffix = "of Agility"
+compatible_equipment_types = Array[ExtResource("3_equipment_type_definition")]([ExtResource("4_weapon_sword")])
+stat_rolls = Array[ExtResource("2_stat_roll")]([SubResource("defense")])

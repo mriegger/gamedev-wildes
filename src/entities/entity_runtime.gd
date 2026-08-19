@@ -156,6 +156,8 @@ func _retire_defeated(runtime_id: int) -> void:
 	var defeat := EntityDefeat.new(
 		runtime_id,
 		actor.definition.id,
+		actor.global_position,
+		actor.behavior_seed,
 	)
 	_retain_retiring_actor(runtime_id, actor)
 	actor.begin_death_retirement()

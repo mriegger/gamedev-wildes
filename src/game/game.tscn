@@ -1,4 +1,4 @@
-[gd_scene load_steps=38 format=3 uid="uid://b22g4me0x1f3h"]
+[gd_scene load_steps=40 format=3 uid="uid://b22g4me0x1f3h"]
 
 [ext_resource type="Script" path="res://game/game.gd" id="1_game"]
 [ext_resource type="PackedScene" path="res://world/world.tscn" id="2_world"]
@@ -37,6 +37,8 @@
 [ext_resource type="PackedScene" path="res://foraging/apple/apple_tree_coordinator.tscn" id="35_apple_trees"]
 [ext_resource type="Resource" path="res://crafting/stations/cauldron_recipe_catalog.tres" id="36_cauldron_catalog"]
 [ext_resource type="Script" path="res://combat/presentation/enemy_combat_feedback.gd" id="37_enemy_feedback"]
+[ext_resource type="Script" path="res://loot/runtime/overworld_loot_coordinator.gd" id="38_loot_coordinator"]
+[ext_resource type="PackedScene" path="res://loot/presentation/loot_drop_view.tscn" id="39_loot_drop"]
 
 [node name="Game" type="Node3D"]
 script = ExtResource("1_game")
@@ -58,6 +60,7 @@ level_entrance_definition = ExtResource("26_level_entrance")
 level_runtime_scene = ExtResource("24_level_runtime")
 structure_designer_runtime_scene = ExtResource("30_structure_runtime")
 structure_terrain_shader = ExtResource("31_structure_shader")
+loot_drop_scene = ExtResource("39_loot_drop")
 
 [node name="World" parent="." instance=ExtResource("2_world")]
 
@@ -69,6 +72,9 @@ structure_terrain_shader = ExtResource("31_structure_shader")
 
 [node name="WorldEntities" type="Node3D" parent="."]
 script = ExtResource("14_entities")
+
+[node name="OverworldLoot" type="Node3D" parent="."]
+script = ExtResource("38_loot_coordinator")
 
 [node name="MeleeCombat" type="Node" parent="."]
 script = ExtResource("18_melee_combat")

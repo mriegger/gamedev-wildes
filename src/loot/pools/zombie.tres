@@ -1,0 +1,111 @@
+[gd_resource type="Resource" script_class="LootPoolDefinition" load_steps=32 format=3]
+
+[ext_resource type="Script" path="res://loot/loot_pool_definition.gd" id="1_pool"]
+[ext_resource type="Script" path="res://loot/loot_independent_roll_definition.gd" id="2_independent"]
+[ext_resource type="Script" path="res://loot/loot_exclusive_group_definition.gd" id="3_group"]
+[ext_resource type="Script" path="res://loot/loot_weighted_choice_definition.gd" id="4_choice"]
+[ext_resource type="Script" path="res://loot/loot_drop_definition.gd" id="5_drop"]
+[ext_resource type="Script" path="res://loot/loot_equipment_roll_definition.gd" id="6_equipment_roll"]
+[ext_resource type="Script" path="res://loot/loot_affix_choice_definition.gd" id="7_affix_choice"]
+[ext_resource type="Script" path="res://loot/loot_rune_choice_definition.gd" id="8_rune_choice"]
+[ext_resource type="Resource" path="res://items/definitions/copper.tres" id="9_copper"]
+[ext_resource type="Resource" path="res://items/definitions/copper_sword.tres" id="10_sword"]
+[ext_resource type="Resource" path="res://equipment/armor/sets/copper/copper_helmet.tres" id="11_helmet"]
+[ext_resource type="Resource" path="res://items/affixes/definitions/vicious.tres" id="12_vicious"]
+[ext_resource type="Resource" path="res://items/affixes/definitions/nimble.tres" id="13_nimble"]
+[ext_resource type="Resource" path="res://items/affixes/definitions/stout.tres" id="14_stout"]
+[ext_resource type="Resource" path="res://items/runes/definitions/basic_rune.tres" id="15_basic_rune"]
+[ext_resource type="Resource" path="res://items/runes/definitions/power_rune.tres" id="16_power_rune"]
+[ext_resource type="Script" path="res://items/affixes/equipment_affix_definition.gd" id="17_affix_definition"]
+
+[sub_resource type="Resource" id="copper_drop"]
+script = ExtResource("5_drop")
+item = ExtResource("9_copper")
+minimum_count = 1
+maximum_count = 3
+
+[sub_resource type="Resource" id="copper_roll"]
+script = ExtResource("2_independent")
+id = &"copper"
+chance = 0.75
+drop = SubResource("copper_drop")
+
+[sub_resource type="Resource" id="plain_sword_drop"]
+script = ExtResource("5_drop")
+item = ExtResource("10_sword")
+
+[sub_resource type="Resource" id="plain_sword_choice"]
+script = ExtResource("4_choice")
+id = &"plain_copper_sword"
+weight = 10.0
+drop = SubResource("plain_sword_drop")
+
+[sub_resource type="Resource" id="vicious_choice"]
+script = ExtResource("7_affix_choice")
+id = &"vicious"
+weight = 1.0
+affix = ExtResource("12_vicious")
+
+[sub_resource type="Resource" id="nimble_choice"]
+script = ExtResource("7_affix_choice")
+id = &"nimble"
+weight = 1.0
+affix = ExtResource("13_nimble")
+
+[sub_resource type="Resource" id="basic_rune_choice"]
+script = ExtResource("8_rune_choice")
+id = &"basic_rune"
+weight = 1.0
+rune = ExtResource("15_basic_rune")
+
+[sub_resource type="Resource" id="power_rune_choice"]
+script = ExtResource("8_rune_choice")
+id = &"power_rune"
+weight = 1.0
+rune = ExtResource("16_power_rune")
+
+[sub_resource type="Resource" id="rolled_sword_equipment"]
+script = ExtResource("6_equipment_roll")
+minimum_random_affix_count = 1
+maximum_random_affix_count = 2
+random_affixes = Array[ExtResource("7_affix_choice")]([SubResource("vicious_choice"), SubResource("nimble_choice")])
+random_rune_slot_count = 1
+random_runes = Array[ExtResource("8_rune_choice")]([SubResource("basic_rune_choice"), SubResource("power_rune_choice")])
+
+[sub_resource type="Resource" id="rolled_sword_drop"]
+script = ExtResource("5_drop")
+item = ExtResource("10_sword")
+equipment_roll = SubResource("rolled_sword_equipment")
+
+[sub_resource type="Resource" id="rolled_sword_choice"]
+script = ExtResource("4_choice")
+id = &"rolled_runed_copper_sword"
+weight = 4.0
+drop = SubResource("rolled_sword_drop")
+
+[sub_resource type="Resource" id="stout_helmet_equipment"]
+script = ExtResource("6_equipment_roll")
+fixed_affixes = Array[ExtResource("17_affix_definition")]([ExtResource("14_stout")])
+
+[sub_resource type="Resource" id="stout_helmet_drop"]
+script = ExtResource("5_drop")
+item = ExtResource("11_helmet")
+equipment_roll = SubResource("stout_helmet_equipment")
+
+[sub_resource type="Resource" id="stout_helmet_choice"]
+script = ExtResource("4_choice")
+id = &"stout_copper_helmet"
+weight = 3.0
+drop = SubResource("stout_helmet_drop")
+
+[sub_resource type="Resource" id="gear_group"]
+script = ExtResource("3_group")
+id = &"gear"
+chance = 0.17
+choices = Array[ExtResource("4_choice")]([SubResource("plain_sword_choice"), SubResource("rolled_sword_choice"), SubResource("stout_helmet_choice")])
+
+[resource]
+script = ExtResource("1_pool")
+id = &"zombie"
+independent_rolls = Array[ExtResource("2_independent")]([SubResource("copper_roll")])
+exclusive_groups = Array[ExtResource("3_group")]([SubResource("gear_group")])

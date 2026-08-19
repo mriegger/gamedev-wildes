@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="RuneDefinition" load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://items/runes/rune_definition.gd" id="1_definition"]
+[ext_resource type="Texture2D" path="res://assets/textures/items/basic_rune.svg" id="2_icon"]
+[ext_resource type="Resource" path="res://items/rarity/definitions/common.tres" id="3_rarity"]
+[ext_resource type="Script" path="res://stats/stat_modifier.gd" id="4_modifier"]
+[ext_resource type="Script" path="res://equipment/types/equipment_type_definition.gd" id="5_equipment_type_definition"]
+[ext_resource type="Resource" path="res://equipment/types/definitions/weapon.tres" id="6_weapon"]
+
+[sub_resource type="Resource" id="strength"]
+script = ExtResource("4_modifier")
+id = &"power_rune_strength"
+source_id = &"power_rune"
+stat_id = &"strength"
+amount = 1.0
+
+[resource]
+script = ExtResource("1_definition")
+id = &"power_rune"
+display_name = "Power Rune"
+icon = ExtResource("2_icon")
+max_stack = 99
+rarity = ExtResource("3_rarity")
+compatible_equipment_types = Array[ExtResource("5_equipment_type_definition")]([ExtResource("6_weapon")])
+socket_modifiers = Array[ExtResource("4_modifier")]([SubResource("strength")])

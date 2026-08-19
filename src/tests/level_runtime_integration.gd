@@ -236,6 +236,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	game.player_death_screen_scene = load("res://ui/screens/death/player_death_screen.tscn") as PackedScene
 	game.structure_designer_runtime_scene = load(STRUCTURE_RUNTIME_SCENE) as PackedScene
 	game.structure_terrain_shader = load(STRUCTURE_TERRAIN_SHADER) as Shader
+	game.loot_drop_scene = load("res://loot/presentation/loot_drop_view.tscn") as PackedScene
 	var world := (load(WORLD_SCENE) as PackedScene).instantiate() as WorldController
 	var player := (load("res://player/player.tscn") as PackedScene).instantiate() as PlayerMotor
 	var camera_rig := (load("res://player/camera/camera_rig.tscn") as PackedScene).instantiate() as CameraRig
@@ -247,6 +248,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	var session := GameSession.new()
 	var coordinator := LevelInteractionCoordinator.new()
 	var entities := WorldEntityCoordinator.new()
+	var loot := OverworldLootCoordinator.new()
 	var combat := MeleeCombatCoordinator.new()
 	var combat_hit_particles := (load("res://combat/particles/combat_hit_particles.tscn") as PackedScene).instantiate() as CombatHitParticles
 	var enemy_combat_feedback := EnemyCombatFeedbackType.new()
@@ -266,6 +268,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	session.name = "GameSession"
 	coordinator.name = "LevelInteractionCoordinator"
 	entities.name = "WorldEntities"
+	loot.name = "OverworldLoot"
 	combat.name = "MeleeCombat"
 	combat_hit_particles.name = "CombatHitParticles"
 	enemy_combat_feedback.name = "EnemyCombatFeedback"
@@ -278,6 +281,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	game.add_child(camera_rig)
 	game.add_child(environment)
 	game.add_child(entities)
+	game.add_child(loot)
 	game.add_child(combat)
 	game.add_child(combat_hit_particles)
 	game.add_child(enemy_combat_feedback)
@@ -312,6 +316,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	_expect(game.world == world and game.player == player and game.camera_rig == camera_rig, "Game onready dependencies were not wired")
 	_expect(game.enemy_combat_feedback == enemy_combat_feedback, "Game combat feedback dependency was not wired")
 	_expect(game.game_environment == environment and game.level_interaction == coordinator and game.dev_console == dev_console and game.pumpkin_patch == pumpkin_patch and game.apple_trees == apple_trees, "Game transition dependencies were not wired")
+	_expect(game.overworld_loot == loot, "Game overworld loot dependency was not wired")
 	_expect(game.structure_designer_workflow == structure_workflow and game.structure_designer_dialogs == structure_dialogs, "Game structure designer dependencies were not wired")
 	_expect(game.structure_designer_runtime_scene != null and game.structure_terrain_shader != null, "Game structure designer resources were not wired")
 	var manager := ChunkManager.new()
@@ -328,6 +333,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	game.equipment_instance_factory = EquipmentInstanceFactory.new(game.item_catalog)
 	game.inventory_model = InventoryModel.new(game.item_catalog, game.equipment_instance_factory)
 	game.inventory_model.setup_starter()
+	game.world_loot_state = WorldLootState.new(game.item_catalog, game.equipment_instance_factory)
 	game.player_stats = ActorStats.new(game.player_stats_definition)
 	game.inventory_loadout_coordinator = InventoryTestFixture.create_loadout(game.inventory_model, game.player_stats)
 	_expect(game.inventory_loadout_coordinator != null, "transition inventory loadout setup failed")
@@ -363,6 +369,25 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 		entities.get_runtime(),
 	)
 	_expect(game.inventory_loadout_coordinator.select_slot(3), "transition test could not select the starter sword")
+	loot.setup(
+		game.entity_catalog,
+		game.item_catalog,
+		game.equipment_instance_factory,
+		game.world_loot_state,
+		entities.get_runtime(),
+		game.loot_drop_scene,
+	)
+	for loot_seed in range(10):
+		entities.get_runtime().entity_defeated.emit(
+			EntityDefeat.new(
+				loot_seed + 1,
+				&"zombie",
+				Vector3(200.0 + float(loot_seed), 0.0, 200.0),
+				loot_seed,
+			),
+		)
+	_expect(game.world_loot_state.get_entry_count() > 0, "Game-owned loot state did not receive composed entity defeats")
+	_expect(loot.get_child_count() == game.world_loot_state.get_entry_count(), "Game-composed loot views did not follow state")
 	game._bind_entity_context(voxel_world, entities.get_runtime())
 	var world_entity_runtime := entities.get_runtime()
 	var world_spawn := voxel_world.get_spawn_position()
@@ -417,6 +442,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 		_expect(game._get_persisted_position().is_equal_approx(doorway_anchor), "indoor persisted position differs from doorway anchor in cycle %d" % cycle)
 		_expect(world.is_suspended() and manager._suspended and world.chunk_scheduler._suspended, "Game did not suspend world streaming in cycle %d" % cycle)
 		_expect(entities.is_suspended() and not entities.visible, "Game did not suspend overworld entities in cycle %d" % cycle)
+		_expect(not loot.visible, "Game did not suspend overworld loot in cycle %d" % cycle)
 		_expect(not world.visible and not entrance.visible, "overworld presentation remained visible in cycle %d" % cycle)
 		_expect(environment._world_environment.environment == null and not environment._sun.visible and not environment._sun_fill.visible, "outdoor environment remained active in cycle %d" % cycle)
 		_expect(not environment._ambient_soundscape._running, "outdoor ambient audio remained active in cycle %d" % cycle)
@@ -449,6 +475,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 		_expect(player.targeting_view.voxel_space == voxel_world and player.targeting_view.selection_box.get_parent() == world, "world targeting presentation was not restored in cycle %d" % cycle)
 		_expect(not world.is_suspended() and not manager._suspended and not world.chunk_scheduler._suspended, "Game did not resume world streaming in cycle %d" % cycle)
 		_expect(not entities.is_suspended() and entities.visible, "Game did not resume overworld entities in cycle %d" % cycle)
+		_expect(loot.visible, "Game did not resume overworld loot in cycle %d" % cycle)
 		_expect(game._active_entity_runtime == world_entity_runtime and player.interactor.entity_runtime == world_entity_runtime, "level exit did not restore player entity queries in cycle %d" % cycle)
 		_expect(combat._entity_runtime == world_entity_runtime and combat._voxel_space == voxel_world, "level exit did not restore overworld combat in cycle %d" % cycle)
 		_expect(world.visible and entrance.visible, "overworld presentation remained hidden after cycle %d" % cycle)
@@ -490,6 +517,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	player.unbind_space()
 	game._unbind_entity_context()
 	combat.shutdown()
+	loot.shutdown()
 	entities.shutdown()
 	world.shutdown()
 	game.queue_free()
@@ -532,6 +560,7 @@ func _run_structure_designer_cycle(game: TransitionGame, in_level: bool, cycle: 
 	var world_visible := world.visible
 	var entities_suspended := entities.is_suspended()
 	var entities_visible := entities.visible
+	var loot_visible := game.overworld_loot.visible
 	var entrance_visible := game._level_entrance.visible
 	var outdoor_environment := environment._world_environment.environment
 	var outdoor_sun_visible := environment._sun.visible
@@ -590,11 +619,13 @@ func _run_structure_designer_cycle(game: TransitionGame, in_level: bool, cycle: 
 		_expect(designer_controller._input_enabled, "closing the export dialog did not restore designer input for %s" % label)
 	if in_level:
 		_expect(world.is_suspended() == world_suspended and entities.is_suspended() == entities_suspended, "designer entry changed suspended overworld systems for %s" % label)
+		_expect(game.overworld_loot.visible == loot_visible, "designer entry changed suspended overworld loot for %s" % label)
 		_expect(level_runtime != null and not level_runtime.visible and not level_runtime.is_processing(), "designer entry did not suspend the level runtime for %s" % label)
 		_expect(level_runtime.get_entity_runtime().is_suspended(), "designer entry left dungeon entities active for %s" % label)
 		_expect((level_runtime.get_node("WorldEnvironment") as WorldEnvironment).environment == null, "designer entry retained the level environment for %s" % label)
 	else:
 		_expect(world.is_suspended() and entities.is_suspended() and not world.visible and not entities.visible, "designer entry did not suspend overworld systems for %s" % label)
+		_expect(not game.overworld_loot.visible, "designer entry did not suspend overworld loot for %s" % label)
 		_expect(environment._world_environment.environment == null and not environment._sun.visible and not environment._sun_fill.visible, "designer entry retained the outdoor environment for %s" % label)
 	await game._exit_structure_designer()
 	await process_frame
@@ -615,6 +646,7 @@ func _run_structure_designer_cycle(game: TransitionGame, in_level: bool, cycle: 
 	_expect(level_interaction.process_mode == level_interaction_process_mode, "designer exit did not restore gameplay interaction for %s" % label)
 	_expect(world.is_suspended() == world_suspended and world.visible == world_visible, "designer exit did not restore the world for %s" % label)
 	_expect(entities.is_suspended() == entities_suspended and entities.visible == entities_visible, "designer exit did not restore entities for %s" % label)
+	_expect(game.overworld_loot.visible == loot_visible, "designer exit did not restore overworld loot for %s" % label)
 	_expect(game._level_entrance.visible == entrance_visible, "designer exit did not restore the entrance for %s" % label)
 	_expect(environment._world_environment.environment == outdoor_environment and environment._sun.visible == outdoor_sun_visible and environment._sun_fill.visible == outdoor_fill_visible and environment._ambient_soundscape._running == outdoor_audio_running, "designer exit did not restore the outdoor environment for %s" % label)
 	if in_level:

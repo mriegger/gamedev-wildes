@@ -278,6 +278,25 @@ jobs:
             30 "RUNE_TOOLTIP PASS" /tmp/rune_tooltip.log -- \
             godot --headless --path src --script res://items/runes/tests/rune_tooltip_integration.gd
 
+  loot-system:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Validate keyed loot rolls, definitions, and allocator atomicity
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            45 "LOOT_SYSTEM PASS" /tmp/loot_system.log -- \
+            godot --headless --path src --script res://loot/tests/loot_system.gd
+      - name: Validate the overworld defeat-to-drop path
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "LOOT_INTEGRATION PASS" /tmp/loot_integration.log -- \
+            godot --headless --path src --script res://loot/tests/loot_integration.gd
+
   armor-system:
     runs-on: ubuntu-latest
     timeout-minutes: 10

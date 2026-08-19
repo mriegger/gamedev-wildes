@@ -13,6 +13,7 @@ signal melee_contact_reached(source_runtime_id: int, profile: MeleeAttackProfile
 @onready var model_root: Node3D = $ModelRoot as Node3D
 
 var runtime_id: int = -1
+var behavior_seed: int = 0
 var definition: EntityDefinition
 var voxel_space: VoxelSpace
 var velocity: Vector3 = Vector3.ZERO
@@ -43,13 +44,14 @@ func setup(
 	p_runtime_id: int,
 	p_definition: EntityDefinition,
 	p_voxel_space: VoxelSpace,
-	behavior_seed: int,
+	p_behavior_seed: int,
 	_navigation_limits: EntityNavigationLimits,
 ):
 	assert(p_runtime_id >= 0)
 	assert(p_definition != null)
 	assert(p_voxel_space != null)
 	runtime_id = p_runtime_id
+	behavior_seed = p_behavior_seed
 	definition = p_definition
 	voxel_space = p_voxel_space
 	animation_driver = get_node(animation_driver_path) as EntityAnimationDriver

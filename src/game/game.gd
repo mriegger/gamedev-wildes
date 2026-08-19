@@ -27,12 +27,14 @@ signal main_menu_requested
 @export var level_runtime_scene: PackedScene
 @export var structure_designer_runtime_scene: PackedScene
 @export var structure_terrain_shader: Shader
+@export var loot_drop_scene: PackedScene
 
 @onready var world: WorldController = $World as WorldController
 @onready var player: PlayerMotor = $Player as PlayerMotor
 @onready var camera_rig: CameraRig = $CameraRig as CameraRig
 @onready var game_environment: GameEnvironment = $Environment as GameEnvironment
 @onready var world_entity_coordinator: WorldEntityCoordinator = $WorldEntities as WorldEntityCoordinator
+@onready var overworld_loot: OverworldLootCoordinator = $OverworldLoot as OverworldLootCoordinator
 @onready var melee_combat: MeleeCombatCoordinator = $MeleeCombat as MeleeCombatCoordinator
 @onready var combat_hit_particles: CombatHitParticles = $CombatHitParticles as CombatHitParticles
 @onready var enemy_combat_feedback: EnemyCombatFeedbackType = $EnemyCombatFeedback as EnemyCombatFeedbackType
@@ -52,6 +54,7 @@ signal main_menu_requested
 
 var inventory_model: InventoryModel
 var equipment_instance_factory: EquipmentInstanceFactory
+var world_loot_state: WorldLootState
 var player_stats: ActorStats
 var player_perks: PlayerPerks
 var player_perk_coordinator: PlayerPerkCoordinator
@@ -111,13 +114,14 @@ func _ready():
 	var anvil_catalog_valid := anvil_recipe_catalog != null and anvil_recipe_catalog.validate(item_catalog)
 	var cauldron_catalog_valid := cauldron_recipe_catalog != null and cauldron_recipe_catalog.validate(item_catalog)
 	var entity_catalog_valid := entity_catalog.validate()
+	var loot_catalog_valid := entity_catalog_valid and item_catalog_valid and LootCatalogValidator.validate_entity_catalog(entity_catalog, item_catalog)
 	var combat_particle_catalog_valid := combat_hit_particle_catalog.validate(entity_catalog)
 	var player_stats_valid := player_stats_definition.validate()
 	var player_perks_valid := player_perk_rules != null and player_perk_rules.validate(player_stats_definition)
 	var level_catalog_valid := level_catalog.validate()
 	var level_encounter_catalog_valid := level_catalog_valid and entity_catalog_valid and LevelEncounterCatalogValidator.validate(level_catalog, entity_catalog)
 	var level_entrance_valid := level_catalog_valid and level_entrance_definition != null and level_entrance_definition.validate(level_catalog)
-	if not block_catalog_valid or not item_catalog_valid or not crafting_catalog_valid or not anvil_catalog_valid or not cauldron_catalog_valid or not entity_catalog_valid or not combat_particle_catalog_valid or not player_stats_valid or not player_perks_valid or not level_catalog_valid or not level_encounter_catalog_valid or not level_entrance_valid:
+	if not block_catalog_valid or not item_catalog_valid or not crafting_catalog_valid or not anvil_catalog_valid or not cauldron_catalog_valid or not entity_catalog_valid or not loot_catalog_valid or not combat_particle_catalog_valid or not player_stats_valid or not player_perks_valid or not level_catalog_valid or not level_encounter_catalog_valid or not level_entrance_valid:
 		_fail_session_start("Game content validation failed. The save was not changed.")
 		return
 	var structure_file_store := StructureFileStore.new(ProjectSettings.globalize_path("res://../").simplify_path())
@@ -133,6 +137,7 @@ func _ready():
 	world.configure_settings(settings)
 	var next_instance_id := int(_save_data.get("next_equipment_instance_id", 1))
 	equipment_instance_factory = EquipmentInstanceFactory.new(item_catalog, next_instance_id)
+	world_loot_state = WorldLootState.new(item_catalog, equipment_instance_factory)
 	inventory_model = InventoryModel.new(item_catalog, equipment_instance_factory)
 	player_stats = ActorStats.new(player_stats_definition)
 	player_perks = PlayerPerks.new(player_perk_rules)
@@ -267,6 +272,14 @@ func _setup_gameplay() -> bool:
 	camera_rig.setup(player, input_buffer)
 	world_entity_coordinator.setup(entity_catalog, world.voxel_model, world.config.seed_value, world.is_position_streamed)
 	var world_entities := world_entity_coordinator.get_runtime()
+	overworld_loot.setup(
+		entity_catalog,
+		item_catalog,
+		equipment_instance_factory,
+		world_loot_state,
+		world_entities,
+		loot_drop_scene,
+	)
 	melee_combat.setup(world.voxel_model, player, player_stats, inventory_model, world_entities)
 	melee_combat.melee_outcome_committed.connect(combat_progression_coordinator.record_melee_outcome)
 	melee_combat.melee_outcome_committed.connect(_on_melee_outcome_committed)
@@ -528,6 +541,7 @@ func _enter_level():
 	_location_state.enter_level(return_position)
 	world.suspend()
 	world_entity_coordinator.suspend()
+	overworld_loot.suspend()
 	_level_entrance.visible = false
 	game_environment.set_outdoor_presentation_enabled(false)
 	_level_runtime = next_runtime
@@ -561,6 +575,7 @@ func _exit_level(restore_from_defeat: bool = false):
 	game_environment.set_outdoor_presentation_enabled(true)
 	world.resume()
 	world_entity_coordinator.resume()
+	overworld_loot.resume()
 	_level_entrance.visible = true
 	_reset_camera_position()
 	_level_runtime.queue_free()
@@ -744,6 +759,7 @@ func _enter_structure_designer(draft: StructureDraft) -> void:
 	else:
 		world.suspend()
 		world_entity_coordinator.suspend()
+		overworld_loot.suspend()
 		game_environment.set_outdoor_presentation_enabled(false)
 		if _level_entrance != null:
 			_level_entrance.visible = false
@@ -786,6 +802,7 @@ func _restore_structure_lifecycle() -> void:
 			world.resume()
 		if not snapshot.entities_were_suspended:
 			world_entity_coordinator.resume()
+			overworld_loot.resume()
 		if _level_entrance != null:
 			_level_entrance.visible = snapshot.entrance_visible
 	player.process_mode = snapshot.player_process_mode
@@ -880,6 +897,7 @@ func _save_and_request_main_menu():
 	game_session.shutdown("quit_to_menu")
 	_unbind_entity_context()
 	melee_combat.shutdown()
+	overworld_loot.shutdown()
 	world_entity_coordinator.shutdown()
 	_teardown_level_runtime()
 	world.shutdown()
@@ -893,6 +911,7 @@ func _notification(what):
 		game_session.shutdown("close")
 		_unbind_entity_context()
 		melee_combat.shutdown()
+		overworld_loot.shutdown()
 		world_entity_coordinator.shutdown()
 		_teardown_level_runtime()
 		world.shutdown()

@@ -16,6 +16,7 @@ enum SpawnPlacement {
 @export var behavior: EntityBehaviorDefinition
 @export var stats_definition: CombatStatsDefinition
 @export_range(0, 999999999, 1, "or_greater") var experience_reward: int = 0
+@export var loot_pool: LootPoolDefinition
 @export_range(0.1, 4.0, 0.01) var body_width: float = 0.6
 @export_range(0.1, 4.0, 0.01) var body_height: float = 1.8
 @export var ambient_spawn_phase: SpawnPhase = SpawnPhase.NIGHT
@@ -48,6 +49,9 @@ func validate(source: String) -> bool:
 		valid = false
 	if experience_reward < 0:
 		push_error("[EntityDefinition] Invalid experience reward for %s at %s" % [id, source])
+		valid = false
+	if loot_pool != null and not loot_pool.validate():
+		push_error("[EntityDefinition] Invalid loot pool for %s at %s" % [id, source])
 		valid = false
 	if actor_scene != null and behavior != null and not is_actor_compatible():
 		push_error("[EntityDefinition] Actor scene and behavior are incompatible for %s at %s" % [id, source])

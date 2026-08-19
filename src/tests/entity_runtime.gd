@@ -71,6 +71,8 @@ func _run() -> void:
 	_expect(_defeated.size() == 1, "defeat did not emit exactly once")
 	if _defeated.size() == 1:
 		_expect(_defeated[0].runtime_id == 2 and _defeated[0].definition_id == &"sheep", "defeat signal identified the wrong actor")
+		_expect(_defeated[0].world_position == Vector3(2.5, FEET_Y, 0.5), "defeat signal lost the actor position")
+		_expect(_defeated[0].loot_seed == 102, "defeat signal lost the actor seed")
 
 	runtime.shutdown()
 	_expect(_defeated.size() == 1, "shutdown emitted an entity defeat")

@@ -97,6 +97,10 @@ func _test_failed_allocations(item_catalog: ItemCatalog) -> void:
 	_expect(not factory.is_valid_instance(&"copper_sword", unallocated), "unallocated next equipment ID was accepted")
 	_expect(factory.create(&"sand_block") == null, "non-equipment received an instance")
 	_expect(factory.get_next_instance_id() == 50, "rejected factory creation consumed an ID")
+	var ranged_affixes := _affixes([item_catalog.get_equipment_affix(&"nimble")])
+	_expect(factory.create(&"copper_sword", ranged_affixes) == null, "ranged affix resolved without an amount callable")
+	_expect(factory.create(&"copper_sword", ranged_affixes, [], _resolve_invalid_affix_amount) == null, "out-of-range affix amount was accepted")
+	_expect(factory.get_next_instance_id() == 50, "rejected affix amount consumed an ID")
 	var inventory := InventoryModel.new(item_catalog, factory, InventoryModel.HOTBAR_SIZE + 1)
 	for index in range(InventoryModel.HOTBAR_SIZE):
 		InventoryTestFixture.restore_slot(inventory, index, InventoryStack.new(&"dirt_block", 1))
@@ -198,6 +202,14 @@ func _resolve_affix_amount(
 	maximum_amount: float,
 ) -> float:
 	return lerpf(minimum_amount, maximum_amount, 0.5)
+
+func _resolve_invalid_affix_amount(
+	_affix_id: StringName,
+	_stat_id: StringName,
+	_minimum_amount: float,
+	maximum_amount: float,
+) -> float:
+	return maximum_amount + 1.0
 
 func _expect(condition: bool, message: String) -> void:
 	if not condition:

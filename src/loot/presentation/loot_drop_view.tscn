@@ -1,0 +1,13 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://loot/presentation/loot_drop_view.gd" id="1_view"]
+
+[node name="LootDropView" type="Node3D"]
+script = ExtResource("1_view")
+
+[node name="Icon" type="Sprite3D" parent="."]
+position = Vector3(0, 0.5, 0)
+pixel_size = 0.015
+billboard = 1
+texture_filter = 0
+shaded = false
