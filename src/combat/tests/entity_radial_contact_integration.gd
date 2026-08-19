@@ -70,7 +70,9 @@ func _run() -> void:
 	bystander.set_process(false)
 	var player_stats := ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
 	_expect(player_stats.set_base_value(&"defense", 0.0), "unarmored player defense setup failed")
-	combat.setup(world, player, player_stats, runtime)
+	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
+	var player_inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
+	combat.setup(world, player, player_stats, player_inventory, runtime)
 	runtime.entity_radial_contact_reached.connect(combat.try_commit_entity_radial_contact)
 	combat.melee_outcome_committed.connect(_record_outcome)
 	var bystander_hp := runtime.get_current_hp(bystander.runtime_id)

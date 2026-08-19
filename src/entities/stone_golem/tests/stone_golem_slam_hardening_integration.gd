@@ -18,6 +18,7 @@ class Fixture:
 	var combat: MeleeCombatCoordinator
 	var player: PlayerMotor
 	var player_stats: ActorStats
+	var player_inventory: InventoryModel
 	var runtime_id: int = -1
 	var actor: StoneGolemActor
 	var marker: StoneGolemLandingMarker
@@ -90,7 +91,9 @@ func _create_fixture(player_position: Vector3) -> Fixture:
 	fixture.runtime.setup(_make_catalog(), fixture.world, 1, 2, EntityNavigationLimits.new(32, 512, 2))
 	fixture.player_stats = ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
 	_expect(fixture.player_stats.set_base_value(&"defense", 0.0), "unarmored player defense setup failed")
-	fixture.combat.setup(fixture.world, fixture.player, fixture.player_stats, fixture.runtime)
+	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
+	fixture.player_inventory = InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
+	fixture.combat.setup(fixture.world, fixture.player, fixture.player_stats, fixture.player_inventory, fixture.runtime)
 	fixture.runtime.entity_melee_contact_reached.connect(fixture.combat.try_commit_entity_contact)
 	fixture.runtime.entity_radial_contact_reached.connect(_record_radial_contact)
 	fixture.runtime.entity_radial_contact_reached.connect(fixture.combat.try_commit_entity_radial_contact)
