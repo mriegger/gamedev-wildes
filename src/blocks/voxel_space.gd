@@ -2,6 +2,7 @@ extends RefCounted
 class_name VoxelSpace
 
 const NO_SURFACE_Y: float = -9999.0
+const WATER_SURFACE_HEIGHT: float = 0.75
 
 var block_catalog: BlockCatalog
 

@@ -1,6 +1,8 @@
 extends Node
 class_name PlayerFootsteps
 
+signal step_committed(surface_block_id: int)
+
 @export var catalog: FootstepAudioCatalog
 
 @onready var _player: AudioStreamPlayer = $FootstepPlayer
@@ -42,7 +44,7 @@ func _process(delta: float):
 		_was_in_water = is_in_water
 		if is_in_water:
 			_step_timer = 0.0
-			_play_random_stream(catalog.get_profile(BlockId.Type.WATER))
+			_commit_step(BlockId.Type.WATER)
 			return
 	if not _motor.on_ground:
 		_step_timer = 0.0
@@ -60,8 +62,12 @@ func _process(delta: float):
 
 
 func _play_step():
-	var profile := catalog.get_profile(_motor.get_footstep_surface_block_id())
-	_play_random_stream(profile)
+	_commit_step(_motor.get_footstep_surface_block_id())
+
+
+func _commit_step(surface_block_id: int):
+	_play_random_stream(catalog.get_profile(surface_block_id))
+	step_committed.emit(surface_block_id)
 
 
 func _play_random_stream(profile: FootstepAudioProfile):

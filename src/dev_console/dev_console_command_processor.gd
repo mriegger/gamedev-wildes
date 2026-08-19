@@ -19,6 +19,7 @@ var _new_structure: Callable
 var _import_structure: Callable
 var _export_structure: Callable
 var _exit_structure: Callable
+var _set_ripple_strength: Callable
 
 func setup(
 	p_inventory_model: InventoryModel,
@@ -28,6 +29,7 @@ func setup(
 	p_import_structure: Callable,
 	p_export_structure: Callable,
 	p_exit_structure: Callable,
+	p_set_ripple_strength: Callable,
 ) -> void:
 	assert(p_inventory_model != null and p_actor_stats != null and p_pumpkin_patch != null)
 	assert(inventory_model == null and actor_stats == null and pumpkin_patch == null)
@@ -35,6 +37,7 @@ func setup(
 	assert(p_import_structure.is_valid())
 	assert(p_export_structure.is_valid())
 	assert(p_exit_structure.is_valid())
+	assert(p_set_ripple_strength.is_valid())
 	inventory_model = p_inventory_model
 	actor_stats = p_actor_stats
 	pumpkin_patch = p_pumpkin_patch
@@ -42,6 +45,7 @@ func setup(
 	_import_structure = p_import_structure
 	_export_structure = p_export_structure
 	_exit_structure = p_exit_structure
+	_set_ripple_strength = p_set_ripple_strength
 
 func execute(command_line: String) -> ExecutionResult:
 	if inventory_model == null or actor_stats == null or pumpkin_patch == null:
@@ -56,6 +60,8 @@ func execute(command_line: String) -> ExecutionResult:
 		return _execute_give_xp(tokens)
 	if command == "sethealth":
 		return _execute_sethealth(tokens)
+	if command == "set":
+		return _execute_set(tokens)
 	if command == "dev":
 		return _execute_dev(tokens)
 	return ExecutionResult.REJECTED
@@ -100,6 +106,14 @@ func _execute_sethealth(tokens: PackedStringArray) -> ExecutionResult:
 		return ExecutionResult.REJECTED
 	actor_stats.set_current_hp(minf(health, actor_stats.get_value(&"hp")))
 	return ExecutionResult.KEEP_OPEN
+
+func _execute_set(tokens: PackedStringArray) -> ExecutionResult:
+	if tokens.size() != 4 or tokens[1].to_lower() != "ripple" or tokens[2].to_lower() != "strength" or not tokens[3].is_valid_float():
+		return ExecutionResult.REJECTED
+	var strength := tokens[3].to_float()
+	if not is_finite(strength) or strength < 0.0 or strength > 1.0:
+		return ExecutionResult.REJECTED
+	return ExecutionResult.KEEP_OPEN if bool(_set_ripple_strength.call(strength)) else ExecutionResult.REJECTED
 
 func _execute_dev(tokens: PackedStringArray) -> ExecutionResult:
 	if tokens.size() != 3 or tokens[1].to_lower() != "structure":
