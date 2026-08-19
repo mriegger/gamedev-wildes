@@ -27,7 +27,13 @@ enum Type {
 	DEEPSTONE_BRICK = 102,
 	SEDIMENTARY_STONE = 103,
 	CHISELED_MARBLE = 104,
-	COUNT = 105,
+	SHORT_GRASS = 105,
+	GRASS_FOLIAGE = 106,
+	BLUE_WILDFLOWER = 107,
+	ORANGE_TULIP = 108,
+	PINK_HEARTFLOWER = 109,
+	RED_FLOWER = 110,
+	COUNT = 111,
 }
 
 const DISPLAY_NAMES: Dictionary = {
@@ -56,6 +62,12 @@ const DISPLAY_NAMES: Dictionary = {
 	Type.DEEPSTONE_BRICK: "Deepstone Brick",
 	Type.SEDIMENTARY_STONE: "Sedimentary Stone",
 	Type.CHISELED_MARBLE: "Chiseled Marble",
+	Type.SHORT_GRASS: "Short Grass",
+	Type.GRASS_FOLIAGE: "Grass",
+	Type.BLUE_WILDFLOWER: "Blue Wildflower",
+	Type.ORANGE_TULIP: "Orange Tulip",
+	Type.PINK_HEARTFLOWER: "Pink Heartflower",
+	Type.RED_FLOWER: "Red Flower",
 }
 
 static func get_display_name(id: Type) -> String:
@@ -64,11 +76,14 @@ static func get_display_name(id: Type) -> String:
 static func is_valid(id: int) -> bool:
 	return DISPLAY_NAMES.has(id)
 
+static func is_foliage(id: int) -> bool:
+	return id >= Type.SHORT_GRASS and id <= Type.RED_FLOWER
+
 static func is_chunk_cube(id: int) -> bool:
-	return is_valid(id) and id != Type.AIR and id != Type.TORCH and id != Type.WATER and id != Type.ANVIL and id != Type.CHEST and id != Type.CAULDRON and id != Type.CAMPFIRE
+	return is_valid(id) and not is_foliage(id) and id != Type.AIR and id != Type.TORCH and id != Type.WATER and id != Type.ANVIL and id != Type.CHEST and id != Type.CAULDRON and id != Type.CAMPFIRE
 
 static func occludes_chunk_face(id: int) -> bool:
 	return is_chunk_cube(id)
 
 static func is_ao_solid(id: int) -> bool:
-	return is_valid(id) and id != Type.AIR and id != Type.TORCH and id != Type.WATER and id != Type.CAMPFIRE
+	return is_valid(id) and not is_foliage(id) and id != Type.AIR and id != Type.TORCH and id != Type.WATER and id != Type.CAMPFIRE

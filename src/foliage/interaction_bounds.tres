@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="BlockInteractionBoundsDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://blocks/interaction/block_interaction_bounds_definition.gd" id="1_bounds"]
+
+[resource]
+script = ExtResource("1_bounds")
+horizontal_padding_pixels = 1
+vertical_padding_pixels = 1

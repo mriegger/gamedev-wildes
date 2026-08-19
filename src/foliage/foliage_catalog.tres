@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="FoliageCatalog" load_steps=9 format=3]
+
+[ext_resource type="Script" path="res://foliage/foliage_catalog.gd" id="1_catalog"]
+[ext_resource type="Script" path="res://foliage/foliage_species_definition.gd" id="2_species"]
+[ext_resource type="Resource" path="res://foliage/species/short_grass.tres" id="2_short_grass"]
+[ext_resource type="Resource" path="res://foliage/species/grass.tres" id="3_grass"]
+[ext_resource type="Resource" path="res://foliage/species/blue_wildflower.tres" id="4_blue_wildflower"]
+[ext_resource type="Resource" path="res://foliage/species/orange_tulip.tres" id="5_orange_tulip"]
+[ext_resource type="Resource" path="res://foliage/species/pink_heartflower.tres" id="6_pink_heartflower"]
+[ext_resource type="Resource" path="res://foliage/species/red_flower.tres" id="7_red_flower"]
+
+[resource]
+script = ExtResource("1_catalog")
+species = Array[ExtResource("2_species")]([ExtResource("2_short_grass"), ExtResource("3_grass"), ExtResource("4_blue_wildflower"), ExtResource("5_orange_tulip"), ExtResource("6_pink_heartflower"), ExtResource("7_red_flower")])

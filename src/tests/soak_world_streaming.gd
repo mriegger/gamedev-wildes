@@ -325,7 +325,7 @@ func _verify_texture_pipeline() -> bool:
 		_fail("terrain material texture array mismatch")
 		return false
 	var layer_count := texture_set.texture_array.get_layers()
-	for block_id in range(BlockId.Type.COUNT):
+	for block_id in BlockId.DISPLAY_NAMES:
 		if not BlockId.is_chunk_cube(block_id):
 			continue
 		for layer in [texture_set.top_layers[block_id], texture_set.side_layers[block_id], texture_set.bottom_layers[block_id]]:

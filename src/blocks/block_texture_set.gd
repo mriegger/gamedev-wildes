@@ -18,7 +18,7 @@ func _init(block_catalog: BlockCatalog) -> void:
 	top_layers.fill(-1)
 	side_layers.fill(-1)
 	bottom_layers.fill(-1)
-	for block_id in range(BlockId.Type.COUNT):
+	for block_id in BlockId.DISPLAY_NAMES:
 		if not BlockId.is_chunk_cube(block_id):
 			continue
 		var definition := block_catalog.get_definition(block_id)

@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="BlockDefinition" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://blocks/block_definition.gd" id="1_block"]
+[ext_resource type="Texture2D" path="res://assets/textures/foliage/pink_heartflower.png" id="2_sprite"]
+[ext_resource type="Resource" path="res://foliage/interaction_bounds.tres" id="3_bounds"]
+
+[resource]
+script = ExtResource("1_block")
+interaction_bounds = ExtResource("3_bounds")
+sprite_texture = ExtResource("2_sprite")
+id = 109
+is_solid = false
+is_opaque = false
+is_raycast_solid = true
+is_breakable = true
+is_replaceable = true
+mine_duration = 0.1

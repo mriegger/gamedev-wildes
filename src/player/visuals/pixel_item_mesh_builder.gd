@@ -7,7 +7,7 @@ static func build(texture: Texture2D, grip_pixel: Vector2i, max_dimension: float
 	var image := texture.get_image()
 	assert(image != null and not image.is_empty())
 	assert(image.get_width() == image.get_height())
-	var bounds := _get_opaque_bounds(image)
+	var bounds := OpaquePixelBounds.find(image)
 	assert(bounds.size != Vector2i.ZERO)
 	var pixel_scale := max_dimension / float(max(bounds.size.x, bounds.size.y))
 	var depth := pixel_scale * depth_pixels
@@ -15,7 +15,7 @@ static func build(texture: Texture2D, grip_pixel: Vector2i, max_dimension: float
 	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
 	for y in range(image.get_height()):
 		for x in range(image.get_width()):
-			if not _is_opaque(image, x, y):
+			if not OpaquePixelBounds.contains(image, x, y):
 				continue
 			_add_pixel(surface, image, Vector2i(x, y), grip_pixel, pixel_scale, depth)
 	var material := StandardMaterial3D.new()
@@ -25,23 +25,6 @@ static func build(texture: Texture2D, grip_pixel: Vector2i, max_dimension: float
 	material.roughness = 0.82
 	surface.set_material(material)
 	return surface.commit() as ArrayMesh
-
-static func _get_opaque_bounds(image: Image) -> Rect2i:
-	var min_pos := Vector2i(image.get_width(), image.get_height())
-	var max_pos := Vector2i(-1, -1)
-	for y in range(image.get_height()):
-		for x in range(image.get_width()):
-			if _is_opaque(image, x, y):
-				min_pos.x = min(min_pos.x, x)
-				min_pos.y = min(min_pos.y, y)
-				max_pos.x = max(max_pos.x, x)
-				max_pos.y = max(max_pos.y, y)
-	if max_pos.x < min_pos.x:
-		return Rect2i()
-	return Rect2i(min_pos, max_pos - min_pos + Vector2i.ONE)
-
-static func _is_opaque(image: Image, x: int, y: int) -> bool:
-	return x >= 0 and x < image.get_width() and y >= 0 and y < image.get_height() and image.get_pixel(x, y).a >= 0.5
 
 static func _add_pixel(surface: SurfaceTool, image: Image, pixel: Vector2i, grip: Vector2i, scale: float, depth: float):
 	var left := (float(pixel.x - grip.x) - 0.5) * scale
@@ -63,13 +46,13 @@ static func _add_pixel(surface: SurfaceTool, image: Image, pixel: Vector2i, grip
 		Vector3(right, bottom, back), Vector3(left, bottom, back), Vector3(left, top, back), Vector3(right, top, back),
 		Vector3.FORWARD,
 		Vector2(uv_right, uv_bottom), Vector2(uv_left, uv_bottom), Vector2(uv_left, uv_top), Vector2(uv_right, uv_top))
-	if not _is_opaque(image, pixel.x - 1, pixel.y):
+	if not OpaquePixelBounds.contains(image, pixel.x - 1, pixel.y):
 		_add_solid_quad(surface, Vector3(left, bottom, back), Vector3(left, bottom, front), Vector3(left, top, front), Vector3(left, top, back), Vector3.LEFT, center_uv)
-	if not _is_opaque(image, pixel.x + 1, pixel.y):
+	if not OpaquePixelBounds.contains(image, pixel.x + 1, pixel.y):
 		_add_solid_quad(surface, Vector3(right, bottom, front), Vector3(right, bottom, back), Vector3(right, top, back), Vector3(right, top, front), Vector3.RIGHT, center_uv)
-	if not _is_opaque(image, pixel.x, pixel.y - 1):
+	if not OpaquePixelBounds.contains(image, pixel.x, pixel.y - 1):
 		_add_solid_quad(surface, Vector3(left, top, front), Vector3(right, top, front), Vector3(right, top, back), Vector3(left, top, back), Vector3.UP, center_uv)
-	if not _is_opaque(image, pixel.x, pixel.y + 1):
+	if not OpaquePixelBounds.contains(image, pixel.x, pixel.y + 1):
 		_add_solid_quad(surface, Vector3(left, bottom, back), Vector3(right, bottom, back), Vector3(right, bottom, front), Vector3(left, bottom, front), Vector3.DOWN, center_uv)
 
 static func _add_solid_quad(surface: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: Vector3, normal: Vector3, uv: Vector2):

@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="FoliageSpeciesDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://foliage/foliage_species_definition.gd" id="1_species"]
+[ext_resource type="Resource" path="res://foliage/blocks/blue_wildflower.tres" id="2_block"]
+
+[resource]
+script = ExtResource("1_species")
+block = ExtResource("2_block")
+generation_weight = 2

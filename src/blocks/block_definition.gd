@@ -13,8 +13,10 @@ class_name BlockDefinition
 @export var mining_tool_tag: StringName
 @export_range(0, 999) var minimum_mining_power: int = 0
 @export var drop_item_id: StringName
+@export var interaction_bounds: BlockInteractionBoundsDefinition
 
 @export_group("Appearance")
+@export var sprite_texture: Texture2D
 @export var top_texture: Texture2D
 @export var side_texture: Texture2D
 @export var bottom_texture: Texture2D
