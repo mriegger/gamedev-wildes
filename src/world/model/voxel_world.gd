@@ -4,6 +4,8 @@ class_name VoxelWorld
 signal block_edit_committed(edit: BlockEdit)
 signal terrain_chunk_evicted(coord: Vector2i)
 
+const MAXIMUM_TRANSACTION_MUTATION_HISTORY: int = 256
+
 var chunk_size: int
 var max_build_y: int
 var water_level: int
@@ -34,6 +36,12 @@ var cell_revisions: Dictionary = {}
 var _highest_cache: Dictionary = {}
 var torch_attachments: Dictionary = {}
 var _protected_edit_cells: Dictionary = {}
+var _transaction_sequence: int = 0
+var _transaction_eviction_watermark: int = 0
+var _transaction_history_positions: Array[Vector3i] = []
+var _transaction_history_sequences: Array[int] = []
+var _transaction_history_cursor: int = 0
+var _latest_transaction_sequences: Dictionary = {}
 
 func _init(p_chunk_size: int, p_max_build_y: int, p_water_level: int, p_spawn_search_radius: float, p_block_catalog: BlockCatalog):
 	chunk_size = p_chunk_size
@@ -46,6 +54,7 @@ func set_generator_ref(gen: TerrainGenerator):
 	_generator_ref = gen
 
 func restore_block_edits(p_placed_blocks: Dictionary, p_removed_blocks: Dictionary) -> void:
+	_invalidate_prepared_transactions()
 	_placed_blocks = p_placed_blocks.duplicate()
 	_removed_blocks = p_removed_blocks.duplicate()
 	_rebuild_edit_index(_placed_blocks, _placed_edits_by_chunk)
@@ -367,19 +376,178 @@ func get_attached_torches(support_pos: Vector3i) -> Array[Vector3i]:
 			attached.append(torch_pos)
 	return attached
 
-func try_mine_block(p: Vector3i) -> Array:
+func prepare_mine_block(p: Vector3i) -> PreparedVoxelWorldChange:
+	var evaluated: Variant = _evaluate_mine_block(p)
+	return evaluated as PreparedVoxelWorldChange
+
+func prepare_place_block(
+	p: Vector3i,
+	block_type: int,
+	attach_dir: Vector3i = Vector3i.ZERO,
+) -> PreparedVoxelWorldChange:
+	var evaluated: Variant = _evaluate_place_block(p, block_type, attach_dir)
+	return evaluated as PreparedVoxelWorldChange
+
+func prepare_replace_block(
+	p: Vector3i,
+	expected_old_id: int,
+	new_id: int,
+) -> PreparedVoxelWorldChange:
+	var evaluated: Variant = _evaluate_replace_block(p, expected_old_id, new_id)
+	return evaluated as PreparedVoxelWorldChange
+
+func can_commit_prepared_change(prepared: PreparedVoxelWorldChange) -> bool:
+	if prepared == null or not prepared._is_for(self) or not prepared._is_prepared():
+		return false
+	var expected_transaction_sequence := prepared._get_expected_transaction_sequence()
+	if expected_transaction_sequence < _transaction_eviction_watermark:
+		return false
+	var expected_revisions := prepared._get_expected_revisions()
+	for position in expected_revisions:
+		if int(_latest_transaction_sequences.get(position, 0)) > expected_transaction_sequence:
+			return false
+		if get_revision(position) != int(expected_revisions[position]):
+			return false
+	var expected_contents := prepared._get_expected_contents()
+	for position in expected_contents:
+		if _snapshot_transaction_cell(position) != expected_contents[position]:
+			return false
+	return true
+
+func _commit_prepared_change(
+	prepared: PreparedVoxelWorldChange,
+	emit_signals: bool = true,
+) -> bool:
+	if not can_commit_prepared_change(prepared):
+		return false
+	match prepared._get_operation():
+		BlockEdit.Operation.MINE:
+			_apply_prepared_mine(prepared)
+		BlockEdit.Operation.PLACE:
+			_apply_prepared_place(prepared)
+		BlockEdit.Operation.REPLACE:
+			_apply_prepared_replace(prepared)
+		_:
+			return false
+	var marked := prepared._mark_committed(self)
+	assert(marked)
+	if emit_signals:
+		var notified := _notify_prepared_change(prepared)
+		assert(notified)
+	return true
+
+func _notify_prepared_change(prepared: PreparedVoxelWorldChange) -> bool:
+	if prepared == null or not prepared._mark_notified(self):
+		return false
+	for edit in prepared._copy_committed_edits():
+		block_edit_committed.emit(edit)
+	return true
+
+func _evaluate_mine_block(p: Vector3i) -> Variant:
 	if is_edit_protected(p):
-		return [BlockEdit.fail(p, BlockEdit.Operation.MINE, BlockEdit.Result.FAIL_PROTECTED)]
-	var attached_torches := get_attached_torches(p)
-	for torch_position in attached_torches:
+		return BlockEdit.fail(p, BlockEdit.Operation.MINE, BlockEdit.Result.FAIL_PROTECTED)
+	for torch_position in get_attached_torches(p):
 		if is_edit_protected(torch_position):
-			return [BlockEdit.fail(p, BlockEdit.Operation.MINE, BlockEdit.Result.FAIL_PROTECTED)]
+			return BlockEdit.fail(p, BlockEdit.Operation.MINE, BlockEdit.Result.FAIL_PROTECTED)
 	if not is_breakable(p):
-		return [BlockEdit.fail(p, BlockEdit.Operation.MINE, BlockEdit.Result.FAIL_NOT_BREAKABLE)]
-	var old_id = get_block_id_at(p)
-	var prev_rev = get_revision(p)
+		return BlockEdit.fail(p, BlockEdit.Operation.MINE, BlockEdit.Result.FAIL_NOT_BREAKABLE)
+	var attached_torches := get_attached_torches(p)
+	var expected_revisions: Dictionary = {p: get_revision(p)}
+	var expected_contents: Dictionary = {p: _snapshot_transaction_cell(p)}
+	for attach_dir in TorchPlacement.CARDINAL_DIRECTIONS:
+		var candidate_position := p - attach_dir
+		expected_revisions[candidate_position] = get_revision(candidate_position)
+		expected_contents[candidate_position] = _snapshot_transaction_cell(candidate_position)
+	var edits: Array[BlockEdit] = [BlockEdit.success_mine(p, get_block_id_at(p), get_revision(p) + 1)]
+	for torch_position in attached_torches:
+		edits.append(BlockEdit.success_mine(
+			torch_position,
+			int(_placed_blocks.get(torch_position, BlockId.Type.TORCH)),
+			get_revision(torch_position) + 1,
+		))
+	return PreparedVoxelWorldChange.new(
+		self,
+		expected_revisions,
+		expected_contents,
+		_transaction_sequence,
+		BlockEdit.Operation.MINE,
+		p,
+		BlockId.Type.AIR,
+		Vector3i.ZERO,
+		attached_torches,
+		edits,
+	)
+
+func _evaluate_place_block(p: Vector3i, block_type: int, attach_dir: Vector3i) -> Variant:
+	if is_edit_protected(p):
+		return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_PROTECTED)
+	if block_type == BlockId.Type.AIR:
+		return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_INVALID_POS, "AIR not placeable")
+	if not BlockId.is_valid(block_type):
+		return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_INVALID_POS, "Invalid block id")
+	if p.y < 0 or p.y >= max_build_y:
+		return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_Y_OUT_OF_RANGE)
+	if is_occupied(p):
+		var existing_id = get_block_id_at(p)
+		if not block_catalog.get_definition(existing_id).is_replaceable:
+			return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_OCCUPIED)
+	var expected_revisions: Dictionary = {p: get_revision(p)}
+	if block_type == BlockId.Type.TORCH:
+		if attach_dir == Vector3i.ZERO:
+			return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_NO_SUPPORT, "Torch requires attach_dir")
+		if attach_dir not in TorchPlacement.CARDINAL_DIRECTIONS:
+			return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_NO_SUPPORT, "Torch attach_dir must be cardinal")
+		var support_pos = p + attach_dir
+		if support_pos.y < 0 or support_pos.y >= max_build_y:
+			return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_NO_TORCH_SUPPORT, "Support Y out of bounds")
+		ensure_region_generated(support_pos.x -1, support_pos.z -1, 3, 3)
+		if not is_opaque(support_pos) and not is_solid(support_pos):
+			return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_NO_TORCH_SUPPORT)
+		expected_revisions[support_pos] = get_revision(support_pos)
+	var expected_contents: Dictionary = {p: _snapshot_transaction_cell(p)}
+	if block_type == BlockId.Type.TORCH:
+		expected_contents[p + attach_dir] = _snapshot_transaction_cell(p + attach_dir)
+	var edit := BlockEdit.success_place(p, block_type, get_revision(p) + 1, attach_dir)
+	return PreparedVoxelWorldChange.new(
+		self,
+		expected_revisions,
+		expected_contents,
+		_transaction_sequence,
+		BlockEdit.Operation.PLACE,
+		p,
+		block_type,
+		attach_dir,
+		[],
+		[edit],
+	)
+
+func _evaluate_replace_block(p: Vector3i, expected_old_id: int, new_id: int) -> Variant:
+	if not BlockId.is_valid(expected_old_id) or expected_old_id == BlockId.Type.AIR:
+		return BlockEdit.fail(p, BlockEdit.Operation.REPLACE, BlockEdit.Result.FAIL_INVALID_POS, "Invalid expected block id")
+	if not BlockId.is_valid(new_id) or new_id == BlockId.Type.AIR:
+		return BlockEdit.fail(p, BlockEdit.Operation.REPLACE, BlockEdit.Result.FAIL_INVALID_POS, "Invalid replacement block id")
+	if p.y < 0 or p.y >= max_build_y:
+		return BlockEdit.fail(p, BlockEdit.Operation.REPLACE, BlockEdit.Result.FAIL_Y_OUT_OF_RANGE)
+	if get_block_id_at(p) != expected_old_id:
+		return BlockEdit.fail(p, BlockEdit.Operation.REPLACE, BlockEdit.Result.FAIL_BLOCK_CHANGED)
+	var edit := BlockEdit.success_replace(p, expected_old_id, new_id, get_revision(p) + 1)
+	return PreparedVoxelWorldChange.new(
+		self,
+		{p: get_revision(p)},
+		{p: _snapshot_transaction_cell(p)},
+		_transaction_sequence,
+		BlockEdit.Operation.REPLACE,
+		p,
+		new_id,
+		Vector3i.ZERO,
+		[],
+		[edit],
+	)
+
+func _apply_prepared_mine(prepared: PreparedVoxelWorldChange) -> void:
+	var p := prepared._get_position()
 	var was_placed = _placed_blocks.has(p)
-	var surviving_after = false
+	var surviving_after := false
 	if was_placed:
 		_erase_indexed_edit(_placed_blocks, _placed_edits_by_chunk, p)
 		var col_key = Vector2i(p.x, p.z)
@@ -398,102 +566,81 @@ func try_mine_block(p: Vector3i) -> Array:
 	if torch_attachments.has(p):
 		torch_attachments.erase(p)
 	_invalidate_highest_cache(p.x, p.z)
-	var rev: int
 	if surviving_after:
-		rev = _increment_revision(p)
+		_increment_revision(p)
 	else:
 		cell_revisions.erase(p)
-		rev = prev_rev + 1
-	var edit = BlockEdit.success_mine(p, old_id, rev)
-	block_edit_committed.emit(edit)
-	var batch: Array[BlockEdit] = [edit]
-	batch.append_array(_remove_attached_torches(attached_torches))
-	return batch
+	_record_transaction_mutation(p)
+	for torch_pos in prepared._get_cascade_positions():
+		_erase_indexed_edit(_placed_blocks, _placed_edits_by_chunk, torch_pos)
+		torch_attachments.erase(torch_pos)
+		_invalidate_highest_cache(torch_pos.x, torch_pos.z)
+		cell_revisions.erase(torch_pos)
+		_record_transaction_mutation(torch_pos)
 
-func try_pick_up_placed_block(p: Vector3i, expected_block_id: int) -> Array[BlockEdit]:
-	if is_edit_protected(p):
-		return [BlockEdit.fail(p, BlockEdit.Operation.PICK_UP, BlockEdit.Result.FAIL_PROTECTED)]
-	var attached_torches := get_attached_torches(p)
-	for torch_position in attached_torches:
-		if is_edit_protected(torch_position):
-			return [BlockEdit.fail(p, BlockEdit.Operation.PICK_UP, BlockEdit.Result.FAIL_PROTECTED)]
-	if not BlockId.is_valid(expected_block_id) or _placed_blocks.get(p, BlockId.Type.AIR) != expected_block_id:
-		return [BlockEdit.fail(p, BlockEdit.Operation.PICK_UP, BlockEdit.Result.FAIL_INVALID_POS)]
-	var previous_revision := get_revision(p)
-	_erase_indexed_edit(_placed_blocks, _placed_edits_by_chunk, p)
-	_invalidate_highest_cache(p.x, p.z)
-	cell_revisions.erase(p)
-	var edit := BlockEdit.success_pick_up(p, expected_block_id, previous_revision + 1)
-	block_edit_committed.emit(edit)
-	var batch: Array[BlockEdit] = [edit]
-	batch.append_array(_remove_attached_torches(attached_torches))
-	return batch
-
-func _remove_attached_torches(positions: Array[Vector3i]) -> Array[BlockEdit]:
-	var edits: Array[BlockEdit] = []
-	for position in positions:
-		var old_id: int = int(_placed_blocks.get(position, BlockId.Type.TORCH))
-		var previous_revision := get_revision(position)
-		_erase_indexed_edit(_placed_blocks, _placed_edits_by_chunk, position)
-		torch_attachments.erase(position)
-		_invalidate_highest_cache(position.x, position.z)
-		cell_revisions.erase(position)
-		var edit := BlockEdit.success_mine(position, old_id, previous_revision + 1)
-		block_edit_committed.emit(edit)
-		edits.append(edit)
-	return edits
-
-func try_place_block(p: Vector3i, block_type: int, attach_dir: Vector3i = Vector3i.ZERO) -> BlockEdit:
-	if is_edit_protected(p):
-		return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_PROTECTED)
-	if block_type == BlockId.Type.AIR:
-		return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_INVALID_POS, "AIR not placeable")
-	if not BlockId.is_valid(block_type):
-		return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_INVALID_POS, "Invalid block id")
-	if p.y < 0 or p.y >= max_build_y:
-		return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_Y_OUT_OF_RANGE)
-	if is_occupied(p):
-		var existing_id = get_block_id_at(p)
-		if not block_catalog.get_definition(existing_id).is_replaceable:
-			return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_OCCUPIED)
-	if block_type == BlockId.Type.TORCH:
-		if attach_dir == Vector3i.ZERO:
-			return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_NO_SUPPORT, "Torch requires attach_dir")
-		if attach_dir not in TorchPlacement.CARDINAL_DIRECTIONS:
-			return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_NO_SUPPORT, "Torch attach_dir must be cardinal")
-		var support_pos = p + attach_dir
-		if support_pos.y < 0 or support_pos.y >= max_build_y:
-			return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_NO_TORCH_SUPPORT, "Support Y out of bounds")
-		ensure_region_generated(support_pos.x -1, support_pos.z -1, 3, 3)
-		if not is_opaque(support_pos) and not is_solid(support_pos):
-			return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_NO_TORCH_SUPPORT)
+func _apply_prepared_place(prepared: PreparedVoxelWorldChange) -> void:
+	var p := prepared._get_position()
+	var block_type := prepared._get_new_id()
 	if _removed_blocks.has(p):
 		_erase_indexed_edit(_removed_blocks, _removed_edits_by_chunk, p)
 	_put_indexed_edit(_placed_blocks, _placed_edits_by_chunk, p, block_type)
 	if block_type == BlockId.Type.TORCH:
-		torch_attachments[p] = attach_dir
+		torch_attachments[p] = prepared._get_attach_dir()
 	_invalidate_highest_cache(p.x, p.z)
-	var rev = _increment_revision(p)
-	var edit = BlockEdit.success_place(p, block_type, rev, attach_dir)
-	block_edit_committed.emit(edit)
-	return edit
+	_increment_revision(p)
+	_record_transaction_mutation(p)
 
-func try_replace_block(p: Vector3i, expected_old_id: int, new_id: int) -> BlockEdit:
-	if not BlockId.is_valid(expected_old_id) or expected_old_id == BlockId.Type.AIR:
-		return BlockEdit.fail(p, BlockEdit.Operation.REPLACE, BlockEdit.Result.FAIL_INVALID_POS, "Invalid expected block id")
-	if not BlockId.is_valid(new_id) or new_id == BlockId.Type.AIR:
-		return BlockEdit.fail(p, BlockEdit.Operation.REPLACE, BlockEdit.Result.FAIL_INVALID_POS, "Invalid replacement block id")
-	if p.y < 0 or p.y >= max_build_y:
-		return BlockEdit.fail(p, BlockEdit.Operation.REPLACE, BlockEdit.Result.FAIL_Y_OUT_OF_RANGE)
-	if get_block_id_at(p) != expected_old_id:
-		return BlockEdit.fail(p, BlockEdit.Operation.REPLACE, BlockEdit.Result.FAIL_BLOCK_CHANGED)
+func _apply_prepared_replace(prepared: PreparedVoxelWorldChange) -> void:
+	var p := prepared._get_position()
+	var new_id := prepared._get_new_id()
 	_put_indexed_edit(_placed_blocks, _placed_edits_by_chunk, p, new_id)
 	_erase_indexed_edit(_removed_blocks, _removed_edits_by_chunk, p)
 	_invalidate_highest_cache(p.x, p.z)
-	var rev := _increment_revision(p)
-	var edit := BlockEdit.success_replace(p, expected_old_id, new_id, rev)
-	block_edit_committed.emit(edit)
-	return edit
+	_increment_revision(p)
+	_record_transaction_mutation(p)
+
+func _record_transaction_mutation(position: Vector3i) -> void:
+	_transaction_sequence += 1
+	if _transaction_history_positions.size() < MAXIMUM_TRANSACTION_MUTATION_HISTORY:
+		_transaction_history_positions.append(position)
+		_transaction_history_sequences.append(_transaction_sequence)
+	else:
+		var evicted_position := _transaction_history_positions[_transaction_history_cursor]
+		var evicted_sequence := _transaction_history_sequences[_transaction_history_cursor]
+		if int(_latest_transaction_sequences.get(evicted_position, 0)) == evicted_sequence:
+			_latest_transaction_sequences.erase(evicted_position)
+		_transaction_eviction_watermark = evicted_sequence
+		_transaction_history_positions[_transaction_history_cursor] = position
+		_transaction_history_sequences[_transaction_history_cursor] = _transaction_sequence
+	_latest_transaction_sequences[position] = _transaction_sequence
+	_transaction_history_cursor = (
+		_transaction_history_cursor + 1
+	) % MAXIMUM_TRANSACTION_MUTATION_HISTORY
+
+func _invalidate_prepared_transactions() -> void:
+	_transaction_sequence += 1
+	_transaction_eviction_watermark = _transaction_sequence
+	_transaction_history_positions.clear()
+	_transaction_history_sequences.clear()
+	_transaction_history_cursor = 0
+	_latest_transaction_sequences.clear()
+
+func _snapshot_transaction_cell(position: Vector3i) -> Dictionary:
+	var column := Vector2i(position.x, position.z)
+	return {
+		"block_id": get_block_id_at(position),
+		"has_placed_edit": _placed_blocks.has(position),
+		"placed_edit": _placed_blocks.get(position, null),
+		"has_removed_edit": _removed_blocks.has(position),
+		"has_tree_block": tree_block_fast.has(position),
+		"tree_block": tree_block_fast.get(position, null),
+		"has_copper_block": copper_block_fast.has(position),
+		"copper_block": copper_block_fast.get(position, null),
+		"torch_attachment": torch_attachments.get(position, Vector3i.ZERO),
+		"protected": is_edit_protected(position),
+		"terrain_height": height_map_dict.get(column, null),
+		"terrain_type": type_map_dict.get(column, null),
+	}
 
 func get_spawn_position() -> Vector3:
 	var meadow_radius_squared = spawn_search_radius * spawn_search_radius

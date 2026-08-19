@@ -12,15 +12,16 @@ func _init() -> void:
 		BlockId.Type.STONE_BRICKS,
 		BlockId.Type.TERRACOTTA_BRICKS,
 		BlockId.Type.WOOD_PLANKS,
+		BlockId.Type.CHEST,
 	]
 	for block_id in block_ids:
 		var display_name := BlockId.get_display_name(block_id)
 		var position := Vector3i(block_id, 8, 0)
-		var placement_edit := world.try_place_block(position, block_id)
-		_expect(placement_edit.is_success(), "world placement failed for %s" % display_name)
+		var placement := VoxelWorldTestFixture.commit_place(world, position, block_id)
+		_expect(placement != null, "world placement failed for %s" % display_name)
 		_expect(world.get_block_id_at(position) == block_id, "placed world state mismatch for %s" % display_name)
-		var mining_edits := world.try_mine_block(position)
-		_expect(mining_edits.size() == 1 and mining_edits[0].is_success(), "world mining failed for %s" % display_name)
+		var mining := VoxelWorldTestFixture.commit_mine(world, position)
+		_expect(mining != null and mining.get_edits().size() == 1, "world mining failed for %s" % display_name)
 		_expect(world.get_block_id_at(position) == BlockId.Type.AIR, "mined block remained for %s" % display_name)
 	if _errors.is_empty():
 		print("BLOCK_WORLD_EDITS PASS")

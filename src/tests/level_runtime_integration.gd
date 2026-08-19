@@ -346,17 +346,23 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	structure_dialogs.open_state_changed.connect(game._on_structure_dialog_open_state_changed)
 	camera_rig.setup(player, game.input_buffer)
 	entities.setup(game.entity_catalog, voxel_world, 1337, _position_ready)
-	combat.setup(voxel_world, player, game.player_stats, entities.get_runtime())
+	combat.setup(voxel_world, player, game.player_stats, game.inventory_model, entities.get_runtime())
 	enemy_combat_feedback.setup(combat, camera_rig.camera)
 	player.setup(
 		camera_rig,
 		game.inventory_model,
 		game.inventory_loadout_coordinator,
+		InventoryTestFixture.create_player_action_executors(
+			game.inventory_model,
+			game.inventory_loadout_coordinator,
+			player.interactor.unarmed_primary_action,
+		),
 		game.input_buffer,
 		game.player_stats,
 		combat,
 		entities.get_runtime(),
 	)
+	_expect(game.inventory_loadout_coordinator.select_slot(3), "transition test could not select the starter sword")
 	game._bind_entity_context(voxel_world, entities.get_runtime())
 	var world_entity_runtime := entities.get_runtime()
 	var world_spawn := voxel_world.get_spawn_position()
@@ -397,7 +403,12 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 		player.interactor.melee_attack_queue = 1
 		player.interactor._melee_contact_pending = true
 		player.interactor._melee_impact_pending = true
-		player.interactor._melee_target_runtime_ids.assign([999999])
+		player.interactor._melee_attack_command = combat.prepare_player_attack(
+			game.inventory_model.create_selected_item_source(),
+			Vector3.ZERO,
+			Vector3.FORWARD,
+		)
+		_expect(player.interactor._melee_attack_command != null, "transition test could not prepare an exact-source attack in cycle %d" % cycle)
 		await game._enter_level()
 		var runtime := game._level_runtime
 		var dungeon_entity_runtime := runtime.get_entity_runtime()
@@ -413,7 +424,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 		_expect(dungeon_entity_runtime != world_entity_runtime and not dungeon_entity_runtime.is_suspended(), "level entry did not activate a dedicated entity runtime in cycle %d" % cycle)
 		_expect(game._active_entity_runtime == dungeon_entity_runtime and player.interactor.entity_runtime == dungeon_entity_runtime, "level entry did not rebind player entity queries in cycle %d" % cycle)
 		_expect(combat._entity_runtime == dungeon_entity_runtime and combat._voxel_space == runtime.get_voxel_space(), "level entry did not rebind combat in cycle %d" % cycle)
-		_expect(player.interactor.melee_attack_timer == 0.0 and player.interactor.melee_attack_queue == 0 and not player.interactor._melee_contact_pending and not player.interactor._melee_impact_pending and player.interactor._melee_target_runtime_ids.is_empty(), "level entry retained a pending overworld attack in cycle %d" % cycle)
+		_expect(player.interactor.melee_attack_timer == 0.0 and player.interactor.melee_attack_queue == 0 and not player.interactor._melee_contact_pending and not player.interactor._melee_impact_pending and player.interactor._melee_attack_command == null, "level entry retained a pending overworld attack in cycle %d" % cycle)
 		_expect(player.voxel_space == runtime.get_voxel_space(), "player is not bound to LevelState in cycle %d" % cycle)
 		_expect(player.interactor.voxel_space == runtime.get_voxel_space(), "interactor is not bound to LevelState in cycle %d" % cycle)
 		_expect(not player.interactor.is_editing_enabled() and player.interactor.editable_voxel_world == null, "level binding retained edit authority in cycle %d" % cycle)

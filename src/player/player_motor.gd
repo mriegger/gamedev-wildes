@@ -42,10 +42,22 @@ var _jump_windup_remaining: float = 0.0
 var _jump_ready: bool = false
 var _defeated: bool = false
 
-func setup(p_camera_rig: CameraRig, p_inventory: InventoryModel, p_inventory_loadout: InventoryLoadoutCoordinator, p_input_buffer: InputBuffer, p_stats: ActorStats, p_combat: MeleeCombatCoordinator, p_entity_runtime: EntityRuntime):
+func setup(
+	p_camera_rig: CameraRig,
+	p_inventory: InventoryModel,
+	p_inventory_loadout: InventoryLoadoutCoordinator,
+	p_action_executors: PlayerActionExecutors,
+	p_input_buffer: InputBuffer,
+	p_stats: ActorStats,
+	p_combat: MeleeCombatCoordinator,
+	p_entity_runtime: EntityRuntime,
+	p_block_interaction_handler: Callable = Callable(),
+	p_block_break_validator: Callable = Callable(),
+):
 	assert(p_camera_rig != null)
 	assert(p_inventory != null)
 	assert(p_inventory_loadout != null and p_inventory_loadout.inventory_model == p_inventory)
+	assert(p_action_executors != null)
 	assert(p_input_buffer != null)
 	assert(p_stats != null)
 	assert(p_inventory_loadout.actor_stats == p_stats)
@@ -54,7 +66,7 @@ func setup(p_camera_rig: CameraRig, p_inventory: InventoryModel, p_inventory_loa
 	if _is_setup:
 		assert(camera_rig == p_camera_rig)
 		assert(_inventory_model == p_inventory)
-		assert(interactor.inventory_loadout == p_inventory_loadout)
+		assert(interactor.action_executors == p_action_executors)
 		assert(_input_buffer == p_input_buffer)
 		assert(stats == p_stats)
 		assert(interactor.combat == p_combat)
@@ -65,7 +77,18 @@ func setup(p_camera_rig: CameraRig, p_inventory: InventoryModel, p_inventory_loa
 	_input_buffer = p_input_buffer
 	stats = p_stats
 	stat_modifier_clock.setup(stats)
-	interactor.setup(p_camera_rig.camera, self, p_inventory, p_inventory_loadout, p_input_buffer, p_combat, p_entity_runtime)
+	interactor.setup(
+		p_camera_rig.camera,
+		self,
+		p_inventory,
+		p_inventory_loadout,
+		p_action_executors,
+		p_input_buffer,
+		p_combat,
+		p_entity_runtime,
+		p_block_interaction_handler,
+		p_block_break_validator,
+	)
 	targeting_view.setup(self, interactor)
 	animation_driver.setup(self, interactor)
 	held_item_view.setup(p_inventory)

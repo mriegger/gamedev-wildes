@@ -165,7 +165,7 @@ func _on_block_edit_committed(edit: BlockEdit):
 	elif edit.new_id == BlockId.Type.ANVIL:
 		if chunk_manager.visible_chunks.has(edit_chunk):
 			anvil_renderer.spawn_anvil(edit.pos)
-	elif (edit.is_mine() or edit.is_pick_up()) and edit.old_id == BlockId.Type.CHEST:
+	elif edit.is_mine() and edit.old_id == BlockId.Type.CHEST:
 		chest_renderer.remove_chest(edit.pos)
 		chunk_manager.queue_rebuild_for_world_pos(edit.pos)
 	elif edit.new_id == BlockId.Type.CHEST:

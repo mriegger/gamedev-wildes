@@ -15,12 +15,14 @@ signal melee_outcome_committed(outcome: MeleeOutcomeType)
 var _voxel_space: VoxelSpace
 var _player: PlayerMotor
 var _player_stats: ActorStats
+var _player_inventory: InventoryModel
 var _entity_runtime: EntityRuntime
 
 func setup(
 	p_voxel_space: VoxelSpace,
 	p_player: PlayerMotor,
 	p_player_stats: ActorStats,
+	p_player_inventory: InventoryModel,
 	p_entity_runtime: EntityRuntime,
 ) -> void:
 	assert(p_voxel_space != null)
@@ -29,10 +31,76 @@ func setup(
 	assert(p_player_stats.has_stat(&"hp"))
 	assert(p_player_stats.has_stat(&"strength"))
 	assert(p_player_stats.has_stat(&"defense"))
+	assert(p_player_inventory != null)
 	assert(p_entity_runtime != null)
 	_player = p_player
 	_player_stats = p_player_stats
+	_player_inventory = p_player_inventory
 	bind_context(p_voxel_space, p_entity_runtime)
+
+func prepare_player_attack(
+	source: SelectedItemSource,
+	ray_origin: Vector3,
+	ray_direction: Vector3,
+) -> PreparedPlayerMeleeAttack:
+	assert(_is_setup())
+	if not _player_inventory.is_selected_item_source_current(source):
+		return null
+	var item_id := source.get_item_id()
+	if item_id.is_empty() or not _player_inventory.item_catalog.has_definition(item_id):
+		return null
+	var action := _player_inventory.item_catalog.get_definition(item_id).primary_action as MeleeAttackActionDefinition
+	if action == null or action.attack_profile == null:
+		return null
+	if not ray_origin.is_finite() or not ray_direction.is_finite() or ray_direction.is_zero_approx():
+		return null
+	var target_runtime_ids: Array[int] = []
+	if not action.attack_profile.acquire_targets_on_contact:
+		target_runtime_ids = acquire_player_targets(ray_origin, ray_direction, action.attack_profile)
+	return PreparedPlayerMeleeAttack.new(
+		self,
+		source,
+		action,
+		target_runtime_ids,
+		ray_origin,
+		ray_direction.normalized(),
+	)
+
+func try_commit_player_attack(
+	prepared: PreparedPlayerMeleeAttack,
+	impact_origin: Vector3 = Vector3.INF,
+) -> bool:
+	assert(_is_setup())
+	if (
+		prepared == null
+		or not _player_inventory.is_selected_item_source_current(prepared._get_source())
+		or not prepared._consume(self)
+	):
+		return false
+	var target_runtime_ids := prepared.get_target_runtime_ids()
+	if prepared.get_profile().acquire_targets_on_contact:
+		target_runtime_ids = acquire_player_targets(
+			prepared._get_ray_origin(),
+			prepared._get_ray_direction(),
+			prepared.get_profile(),
+			impact_origin,
+		)
+	return _commit_player_contacts(
+		target_runtime_ids,
+		prepared._get_ray_origin(),
+		prepared._get_ray_direction(),
+		prepared.get_profile(),
+		prepared._get_source().get_item_id(),
+		impact_origin,
+		prepared._get_source(),
+	)
+
+func is_player_attack_source_current(prepared: PreparedPlayerMeleeAttack) -> bool:
+	return (
+		prepared != null
+		and prepared._is_for(self)
+		and _player_inventory.is_selected_item_source_current(prepared._get_source())
+	)
 
 func bind_context(p_voxel_space: VoxelSpace, p_entity_runtime: EntityRuntime) -> void:
 	assert(p_voxel_space != null)
@@ -90,13 +158,14 @@ func acquire_player_targets(
 		result.append(nearest_runtime_id)
 	return result
 
-func try_commit_player_contacts(
+func _commit_player_contacts(
 	target_runtime_ids: Array[int],
 	locked_ray_origin: Vector3,
 	locked_ray_direction: Vector3,
 	profile: MeleeAttackProfileType,
 	source_item_id: StringName,
 	impact_origin: Vector3 = Vector3.INF,
+	exact_source: SelectedItemSource = null,
 ) -> bool:
 	assert(_is_setup())
 	assert(profile != null)
@@ -118,6 +187,8 @@ func try_commit_player_contacts(
 	var previous_runtime_id := -1
 	var committed := false
 	for target_runtime_id in sorted_runtime_ids:
+		if exact_source != null and not _player_inventory.is_selected_item_source_current(exact_source):
+			break
 		if target_runtime_id <= PLAYER_RUNTIME_ID or target_runtime_id == previous_runtime_id:
 			continue
 		previous_runtime_id = target_runtime_id
@@ -187,6 +258,7 @@ func shutdown() -> void:
 	_voxel_space = null
 	_player = null
 	_player_stats = null
+	_player_inventory = null
 	_entity_runtime = null
 
 func _commit_contact(contact: MeleeContactType, profile: MeleeAttackProfileType, source_item_id: StringName, distance_from_attack_center: float = 0.0) -> bool:
@@ -303,4 +375,4 @@ func _get_bounds_center(bounds: AABB) -> Vector3:
 	return bounds.position + bounds.size * 0.5
 
 func _is_setup() -> bool:
-	return _voxel_space != null and _player != null and _player_stats != null and _entity_runtime != null
+	return _voxel_space != null and _player != null and _player_stats != null and _player_inventory != null and _entity_runtime != null

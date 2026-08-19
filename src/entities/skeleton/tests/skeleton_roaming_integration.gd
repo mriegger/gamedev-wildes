@@ -138,7 +138,8 @@ func _run() -> void:
 	actor.on_ground = true
 	actor._path_follower.request_repath()
 	for y in range(FEET_Y, FEET_Y + 2):
-		_expect(world.try_place_block(Vector3i(0, y, 1), BlockId.Type.STONE).is_success(), "Could not build off-position Skeleton cover fixture")
+		var placed := VoxelWorldTestFixture.commit_place(world, Vector3i(0, y, 1), BlockId.Type.STONE)
+		_expect(placed != null and placed.get_primary_edit().is_success(), "Could not build off-position Skeleton cover fixture")
 	var nearby_observation := _make_observation(
 		Vector3(20.5, float(FEET_Y), 0.5),
 		Vector3(0.5, float(FEET_Y) + 0.9, -8.5),
@@ -191,8 +192,8 @@ func _run() -> void:
 	_expect(actor.brain.state == SkeletonBrain.State.HIDE, "Skeleton did not recognize restored current-position cover")
 
 	for y in range(FEET_Y, FEET_Y + 2):
-		var mined_edits := world.try_mine_block(Vector3i(0, y, 1))
-		_expect(not mined_edits.is_empty() and (mined_edits[0] as BlockEdit).is_success(), "Could not remove Skeleton cover fixture")
+		var mined := VoxelWorldTestFixture.commit_mine(world, Vector3i(0, y, 1))
+		_expect(mined != null and mined.get_primary_edit().is_success(), "Could not remove Skeleton cover fixture")
 	budget.reset()
 	actor.tick(0.124, nearby_observation, Vector3.ZERO, budget)
 	_expect(actor.brain.state == SkeletonBrain.State.HIDE, "Mined cover invalidated hide before the 0.125-second cadence")
@@ -261,7 +262,8 @@ func _run() -> void:
 
 	var stale_world := _make_world()
 	for y in range(FEET_Y, FEET_Y + 2):
-		_expect(stale_world.try_place_block(Vector3i(0, y, 5), BlockId.Type.STONE).is_success(), "Could not build stale-cover fixture")
+		var placed := VoxelWorldTestFixture.commit_place(stale_world, Vector3i(0, y, 5), BlockId.Type.STONE)
+		_expect(placed != null and placed.get_primary_edit().is_success(), "Could not build stale-cover fixture")
 	var stale_actor := definition.actor_scene.instantiate() as SkeletonActor
 	get_root().add_child(stale_actor)
 	stale_actor.global_position = Vector3(0.5, float(FEET_Y), 0.5)
@@ -290,7 +292,8 @@ func _run() -> void:
 
 	var result_world := _make_world()
 	for y in range(FEET_Y, FEET_Y + 2):
-		_expect(result_world.try_place_block(Vector3i(0, y, 1), BlockId.Type.STONE).is_success(), "Could not build background-result fixture")
+		var placed := VoxelWorldTestFixture.commit_place(result_world, Vector3i(0, y, 1), BlockId.Type.STONE)
+		_expect(placed != null and placed.get_primary_edit().is_success(), "Could not build background-result fixture")
 	var result_actor := definition.actor_scene.instantiate() as SkeletonActor
 	get_root().add_child(result_actor)
 	result_actor.global_position = Vector3(0.5, float(FEET_Y), 0.5)

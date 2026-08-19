@@ -43,6 +43,11 @@ jobs:
           bash .github/scripts/run_godot_check.sh \
             30 "BLOCK_WORLD_EDITS PASS" /tmp/block_world_edits.log -- \
             godot --headless --path src --script res://blocks/tests/block_world_edits.gd
+      - name: Run voxel world transaction tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "VOXEL_WORLD_TRANSACTIONS PASS" /tmp/voxel_world_transactions.log -- \
+            godot --headless --path src --script res://blocks/tests/voxel_world_transactions.gd
       - name: Run deterministic voxel raycast tests
         run: |
           bash .github/scripts/run_godot_check.sh \
@@ -81,6 +86,11 @@ jobs:
           bash .github/scripts/run_godot_check.sh \
             30 "INVENTORY_LOADOUT_ATOMICITY PASS" /tmp/inventory_loadout_atomicity.log -- \
             godot --headless --path src --script res://inventory/tests/inventory_loadout_atomicity.gd
+      - name: Run exact action transaction tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            60 "EXACT_ACTION_TRANSACTIONS PASS" /tmp/exact_action_transactions.log -- \
+            godot --headless --path src --script res://player/tests/exact_action_transactions.gd
       - name: Run model-free hotbar view tests
         run: |
           bash .github/scripts/run_godot_check.sh \

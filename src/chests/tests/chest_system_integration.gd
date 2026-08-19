@@ -29,10 +29,10 @@ func _run():
 	var second_chest_position := Vector3i(5, 10, 3)
 	var pickup_position := Vector3i(8, 10, 3)
 	var attached_torch_position := pickup_position + Vector3i(1, 0, 0)
-	_expect(world.try_place_block(chest_position, BlockId.Type.CHEST).is_success(), "chest placement failed")
-	_expect(world.try_place_block(second_chest_position, BlockId.Type.CHEST).is_success(), "second chest placement failed")
-	_expect(world.try_place_block(pickup_position, BlockId.Type.CHEST).is_success(), "pickup chest placement failed")
-	_expect(world.try_place_block(attached_torch_position, BlockId.Type.TORCH, Vector3i(-1, 0, 0)).is_success(), "pickup chest torch placement failed")
+	_expect(VoxelWorldTestFixture.commit_place(world, chest_position, BlockId.Type.CHEST) != null, "chest placement failed")
+	_expect(VoxelWorldTestFixture.commit_place(world, second_chest_position, BlockId.Type.CHEST) != null, "second chest placement failed")
+	_expect(VoxelWorldTestFixture.commit_place(world, pickup_position, BlockId.Type.CHEST) != null, "pickup chest placement failed")
+	_expect(VoxelWorldTestFixture.commit_place(world, attached_torch_position, BlockId.Type.TORCH, Vector3i(-1, 0, 0)) != null, "pickup chest torch placement failed")
 
 	var player_inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	player_inventory.setup_empty()
@@ -131,16 +131,15 @@ func _run():
 	_expect(not coordinator.can_break(pickup_position), "non-empty chest was breakable")
 	_expect(coordinator.quick_transfer(ChestCoordinator.CHEST_SCOPE, 0), "pickup chest contents could not be removed")
 	_expect(coordinator.can_break(pickup_position), "empty chest remained blocked")
-	var pickup_edits := world.try_mine_block(pickup_position)
-	_expect(not pickup_edits.is_empty() and pickup_edits[0].is_success(), "empty chest mining failed")
+	var pickup_change := VoxelWorldTestFixture.commit_mine(world, pickup_position)
+	_expect(pickup_change != null and not pickup_change.get_edits().is_empty(), "empty chest mining failed")
 	_expect(not coordinator.is_open() and world.get_block_id_at(pickup_position) == BlockId.Type.AIR, "mined chest remained open or in the world")
 	_expect(world.get_block_id_at(attached_torch_position) == BlockId.Type.AIR, "mined chest left its attached torch behind")
 	_expect(not storage.has_chest(pickup_position), "mined chest retained storage state")
 	var lifecycle_position := Vector3i(11, 10, 3)
-	_expect(world.try_place_block(lifecycle_position, BlockId.Type.CHEST).is_success(), "runtime chest placement failed")
+	_expect(VoxelWorldTestFixture.commit_place(world, lifecycle_position, BlockId.Type.CHEST) != null, "runtime chest placement failed")
 	_expect(storage.has_chest(lifecycle_position) and storage.is_chest_empty(lifecycle_position), "runtime chest placement did not create storage")
-	var lifecycle_edits := world.try_mine_block(lifecycle_position)
-	_expect(not lifecycle_edits.is_empty() and lifecycle_edits[0].is_success(), "runtime chest mining returned no edit")
+	_expect(VoxelWorldTestFixture.commit_mine(world, lifecycle_position) != null, "runtime chest mining returned no edit")
 	_expect(not storage.has_chest(lifecycle_position), "runtime chest mining retained storage")
 
 	var storage_snapshot := storage.snapshot()
@@ -187,6 +186,7 @@ func _run():
 	interactor.inventory_model = interaction_inventory
 	interactor.inventory_loadout = interaction_loadout
 	interactor._input_buffer = input
+	interactor._block_break_validator = interaction_chest_coordinator.can_break
 	interactor.voxel_space = world
 	interactor.editable_voxel_world = null
 	_expect(interactor._get_target_container(chest_position) == null, "read-only voxel space exposed an overworld chest interaction")
@@ -325,7 +325,7 @@ func _run():
 	_expect(move_all_icon.custom_minimum_size == Vector2(16, 16), "move-all button icon is too large")
 	_expect(hud.chest_panel._chest_grid.columns == 5, "chest panel does not use five columns")
 	var variant_chest_slot := hud.chest_panel.get_chest_slots()[4]
-	var presented_variant: EquipmentInstance = variant_chest_slot._get_presented_equipment_instance()
+	var presented_variant := variant_chest_slot._get_presented_equipment_instance()
 	_expect(presented_variant != null and presented_variant.to_dict() == variant_fingerprint, "chest slot presentation lost variant equipment data")
 	var saved_backpack_slots: Array[InventoryStack] = []
 	for index in range(InventoryModel.HOTBAR_SIZE, InventoryModel.FILLABLE_SIZE):

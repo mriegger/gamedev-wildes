@@ -162,9 +162,6 @@ func add_batch(ids: Array[StringName]) -> bool:
 func can_consume_selected() -> bool:
 	return _prepare(inventory_model.prepare_consume_selected()) != null
 
-func consume_selected() -> bool:
-	return commit_prepared_change(_prepare(inventory_model.prepare_consume_selected()))
-
 func can_handle_drop(source_index: int, destination_index: int, drag_count: int) -> bool:
 	return _prepare(inventory_model.prepare_handle_drop(source_index, destination_index, drag_count)) != null
 

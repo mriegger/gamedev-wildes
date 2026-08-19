@@ -301,6 +301,33 @@ func get_selected_item_id():
 		return null
 	return stack.item_id
 
+func create_selected_item_source() -> SelectedItemSource:
+	var stack := get_selected_data()
+	return SelectedItemSource.new(
+		self,
+		_selected_slot,
+		&"" if stack == null else stack.item_id,
+		_get_stack_instance_id(stack),
+		_get_stack_fingerprint(stack),
+	)
+
+func is_selected_item_source_current(source: SelectedItemSource) -> bool:
+	if source == null:
+		return false
+	var stack := get_selected_data()
+	return source._matches(
+		self,
+		_selected_slot,
+		&"" if stack == null else stack.item_id,
+		_get_stack_instance_id(stack),
+		_get_stack_fingerprint(stack),
+	)
+
+func prepare_consume_selected_source(source: SelectedItemSource) -> PreparedInventoryChange:
+	if not is_selected_item_source_current(source):
+		return null
+	return prepare_consume_selected()
+
 func get_socketed_rune_ids(idx: int) -> Array[StringName]:
 	var stack := get_slot(idx)
 	var rune_ids: Array[StringName] = []

@@ -99,7 +99,6 @@ func _run() -> void:
 	_inventory.setup_starter()
 	var player_stats := ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
 	_inventory_loadout = InventoryTestFixture.create_loadout(_inventory, player_stats)
-	_expect(_inventory_loadout != null, "inventory loadout setup failed")
 	_inventory_loadout.select_slot(GRASS_SLOT)
 	_input_buffer = InputBuffer.new()
 
@@ -120,12 +119,13 @@ func _run() -> void:
 	_interactor.set_physics_process(false)
 	_player.animation_driver.set_process(false)
 	_coordinator.setup(_make_one_zombie_catalog(), _world, 1337, _always_ready)
-	_combat.setup(_world, _player, player_stats, _coordinator.get_runtime())
+	_combat.setup(_world, _player, player_stats, _inventory, _coordinator.get_runtime())
 	_interactor.setup(
 		_camera,
 		_player,
 		_inventory,
 		_inventory_loadout,
+		InventoryTestFixture.create_player_action_executors(_inventory, _inventory_loadout, _interactor.unarmed_primary_action),
 		_input_buffer,
 		_combat,
 		_coordinator.get_runtime(),

@@ -44,6 +44,26 @@ static func create_loadout(
 		return null
 	return coordinator
 
+static func create_player_action_executors(
+	inventory: InventoryModel,
+	inventory_loadout: InventoryLoadoutCoordinator,
+	unarmed_action: MiningActionDefinition,
+	block_break_validator: Callable = Callable(),
+) -> PlayerActionExecutors:
+	var mining := MiningActionExecutor.new()
+	var tilling := TillingActionExecutor.new()
+	var placement := BlockPlacementActionExecutor.new()
+	if (
+		not mining.setup(inventory, inventory_loadout, unarmed_action, block_break_validator)
+		or not tilling.setup(inventory)
+		or not placement.setup(inventory, inventory_loadout)
+	):
+		return null
+	var executors := PlayerActionExecutors.new()
+	if not executors.setup(mining, tilling, placement):
+		return null
+	return executors
+
 static func _get_location(index: int, inventory_size: int) -> Dictionary:
 	if index < 0 or index >= inventory_size:
 		return {}

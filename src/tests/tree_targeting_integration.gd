@@ -52,8 +52,8 @@ func _run() -> void:
 	if mineable_log.x != -999:
 		_expect(model.is_raycast_solid(mineable_log), "rendered log was invisible to voxel targeting")
 		_expect(model.is_breakable(mineable_log), "rendered log was not mineable")
-		var mined := model.try_mine_block(mineable_log)
-		_expect(not mined.is_empty() and (mined[0] as BlockEdit).is_success(), "rendered log could not be mined")
+		var mined := VoxelWorldTestFixture.commit_mine(model, mineable_log)
+		_expect(mined != null and not mined.get_edits().is_empty(), "rendered log could not be mined")
 		_expect(model.get_block_id_at(mineable_log) == BlockId.Type.AIR, "mined log remained in the voxel model")
 
 		var rebuild_origin_x := log_owner.x * config.chunk_size

@@ -133,15 +133,16 @@ func _run() -> void:
 	var coordinator := AnvilCoordinator.new()
 	coordinator.setup(world)
 	var pickup_position := Vector3i(2, 20, 2)
-	var placed := world.try_place_block(pickup_position, BlockId.Type.ANVIL)
-	_expect(placed.is_success(), "test anvil could not be placed")
+	var placed := VoxelWorldTestFixture.commit_place(world, pickup_position, BlockId.Type.ANVIL)
+	_expect(placed != null, "test anvil could not be placed")
 	var unarmed_action := load("res://items/actions/definitions/unarmed_mining.tres") as MiningActionDefinition
 	var pickaxe_action := item_catalog.get_definition(&"stone_pickaxe").primary_action as MiningActionDefinition
 	_expect(not unarmed_action.can_mine(anvil_block), "bare hands can mine an anvil")
 	_expect(pickaxe_action.can_mine(anvil_block), "stone pickaxe cannot mine an anvil")
 	var torch_position := pickup_position + Vector3i.RIGHT
-	_expect(world.try_place_block(torch_position, BlockId.Type.TORCH, Vector3i.LEFT).is_success(), "test torch could not attach to the anvil")
-	var mine_batch := world.try_mine_block(pickup_position)
+	_expect(VoxelWorldTestFixture.commit_place(world, torch_position, BlockId.Type.TORCH, Vector3i.LEFT) != null, "test torch could not attach to the anvil")
+	var mine_change := VoxelWorldTestFixture.commit_mine(world, pickup_position)
+	var mine_batch: Array[BlockEdit] = [] if mine_change == null else mine_change.get_edits()
 	_expect(mine_batch.size() == 2, "mining an anvil did not include its attached torch")
 	var collected_item_ids: Array[StringName] = []
 	for edit in mine_batch:
@@ -158,27 +159,26 @@ func _run() -> void:
 	_expect(inventory.get_inventory_item_count(&"torch") == 1, "attached torch was not returned to inventory")
 
 	var full_inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
-	for index in range(InventoryModel.FILLABLE_SIZE):
+	InventoryTestFixture.restore_slot(full_inventory, 0, InventoryStack.new(
+		&"stone_pickaxe",
+		1,
+		full_inventory.equipment_instance_factory.create(&"stone_pickaxe"),
+	))
+	for index in range(1, InventoryModel.FILLABLE_SIZE):
 		InventoryTestFixture.restore_slot(full_inventory, index, InventoryStack.new(&"dirt_block", 99))
 	var full_inventory_loadout := InventoryTestFixture.create_loadout(full_inventory)
 	_expect(full_inventory_loadout != null, "full inventory loadout setup failed")
-	_expect(world.try_place_block(pickup_position, BlockId.Type.ANVIL).is_success(), "capacity-test anvil could not be placed")
-	_expect(world.try_place_block(torch_position, BlockId.Type.TORCH, Vector3i.LEFT).is_success(), "capacity-test torch could not attach to the anvil")
-	var full_inventory_motor := (load("res://player/player.tscn") as PackedScene).instantiate() as PlayerMotor
-	root.add_child(full_inventory_motor)
-	full_inventory_motor.global_position = Vector3(pickup_position) + Vector3(0.5, 0.0, 1.5)
-	var full_inventory_interactor := PlayerInteractor.new()
-	full_inventory_interactor.voxel_space = world
-	full_inventory_interactor.editable_voxel_world = world
-	full_inventory_interactor.motor = full_inventory_motor
-	full_inventory_interactor.inventory_model = full_inventory
-	full_inventory_interactor.inventory_loadout = full_inventory_loadout
-	full_inventory_interactor._commit_mine(pickup_position, pickaxe_action)
+	_expect(VoxelWorldTestFixture.commit_place(world, pickup_position, BlockId.Type.ANVIL) != null, "capacity-test anvil could not be placed")
+	_expect(VoxelWorldTestFixture.commit_place(world, torch_position, BlockId.Type.TORCH, Vector3i.LEFT) != null, "capacity-test torch could not attach to the anvil")
+	var mining_executor := MiningActionExecutor.new()
+	_expect(mining_executor.setup(full_inventory, full_inventory_loadout, unarmed_action, Callable()), "mining executor setup failed")
+	mining_executor.bind_world(world)
+	_expect(mining_executor.try_mine(pickup_position, full_inventory.create_selected_item_source()).is_empty(), "full inventory accepted mining drops")
 	_expect(world.get_block_id_at(pickup_position) == BlockId.Type.ANVIL, "failed pickup changed the world")
 	_expect(world.get_block_id_at(torch_position) == BlockId.Type.TORCH, "failed pickup removed the attached torch")
 
 	var other_chunk_position := Vector3i(45, 20, 2)
-	_expect(world.try_place_block(other_chunk_position, BlockId.Type.ANVIL).is_success(), "indexed-load anvil could not be placed")
+	_expect(VoxelWorldTestFixture.commit_place(world, other_chunk_position, BlockId.Type.ANVIL) != null, "indexed-load anvil could not be placed")
 	var chunk_renderer := AnvilRenderer.new()
 	root.add_child(chunk_renderer)
 	chunk_renderer.setup()
@@ -187,8 +187,6 @@ func _run() -> void:
 
 	renderer.queue_free()
 	chunk_renderer.queue_free()
-	full_inventory_interactor.free()
-	full_inventory_motor.queue_free()
 	cursor_interactor.free()
 	targeting_view.free()
 	await process_frame
@@ -302,18 +300,19 @@ func _test_cauldron(block_catalog: BlockCatalog, item_catalog: ItemCatalog, gene
 
 	var world := VoxelWorld.new(20, 36, 5, 12.0, block_catalog)
 	var pickup_position := Vector3i(2, 20, 2)
-	_expect(world.try_place_block(pickup_position, BlockId.Type.CAULDRON).is_success(), "test cauldron could not be placed")
+	_expect(VoxelWorldTestFixture.commit_place(world, pickup_position, BlockId.Type.CAULDRON) != null, "test cauldron could not be placed")
 	var unarmed_action := load("res://items/actions/definitions/unarmed_mining.tres") as MiningActionDefinition
 	var pickaxe_action := item_catalog.get_definition(&"stone_pickaxe").primary_action as MiningActionDefinition
 	_expect(not unarmed_action.can_mine(cauldron_block), "bare hands can mine a cauldron")
 	_expect(pickaxe_action.can_mine(cauldron_block), "stone pickaxe cannot mine a cauldron")
-	var mine_batch := world.try_mine_block(pickup_position)
+	var mine_change := VoxelWorldTestFixture.commit_mine(world, pickup_position)
+	var mine_batch: Array[BlockEdit] = [] if mine_change == null else mine_change.get_edits()
 	_expect(mine_batch.size() == 1 and (mine_batch[0] as BlockEdit).is_success(), "cauldron could not be mined normally")
 	_expect(block_catalog.get_definition((mine_batch[0] as BlockEdit).old_id).drop_item_id == &"cauldron", "mined cauldron returned the wrong item")
 
 	var other_chunk_position := Vector3i(45, 20, 2)
-	_expect(world.try_place_block(pickup_position, BlockId.Type.CAULDRON).is_success(), "indexed-load cauldron could not be placed")
-	_expect(world.try_place_block(other_chunk_position, BlockId.Type.CAULDRON).is_success(), "other-chunk cauldron could not be placed")
+	_expect(VoxelWorldTestFixture.commit_place(world, pickup_position, BlockId.Type.CAULDRON) != null, "indexed-load cauldron could not be placed")
+	_expect(VoxelWorldTestFixture.commit_place(world, other_chunk_position, BlockId.Type.CAULDRON) != null, "other-chunk cauldron could not be placed")
 	var chunk_renderer := CauldronRenderer.new()
 	root.add_child(chunk_renderer)
 	chunk_renderer.setup()

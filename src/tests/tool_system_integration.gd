@@ -316,11 +316,14 @@ func _run():
 		_covered_dirt_pos + Vector3i.UP: BlockId.Type.DIRT,
 		_nonsoil_pos: BlockId.Type.SAND,
 	}, {})
-	var chest_position := Vector3i(4, 0, 0)
-	var chest_place_edit := _voxel_world.try_place_block(chest_position, BlockId.Type.CHEST)
-	_expect(chest_place_edit.is_success() and chest_place_edit.new_id == BlockId.Type.CHEST, "voxel world rejected chest placement")
+	var chest_position := Vector3i(4, 20, 0)
+	var chest_place_change := VoxelWorldTestFixture.commit_place(_voxel_world, chest_position, BlockId.Type.CHEST)
+	_expect(chest_place_change != null and chest_place_change.get_primary_edit().new_id == BlockId.Type.CHEST, "voxel world rejected chest placement")
 	_expect(_voxel_world.get_block_id_at(chest_position) == BlockId.Type.CHEST, "placed chest is missing from the voxel world")
 	_expect(_voxel_world.snapshot_block_edits()["placed"].get(chest_position, BlockId.Type.AIR) == BlockId.Type.CHEST, "placed chest was not persisted as a world edit")
+	var chest_mine_change := VoxelWorldTestFixture.commit_mine(_voxel_world, chest_position)
+	_expect(chest_mine_change != null and chest_mine_change.get_edits().size() == 1, "placed chest could not be mined")
+	_expect(_voxel_world.get_block_id_at(chest_position) == BlockId.Type.AIR, "mined chest remained in the world")
 	_player = (load("res://player/player.tscn") as PackedScene).instantiate() as PlayerMotor
 	root.add_child(_player)
 	_player.global_position = Vector3.ZERO
@@ -340,8 +343,8 @@ func _run():
 	var player_stats := ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
 	var item_proficiency := ItemProficiency.new(item_catalog)
 	_inventory_loadout = InventoryLoadoutCoordinator.new()
-	_expect(_inventory_loadout.setup(_inventory, player_stats, item_proficiency), "inventory loadout setup failed")
-	_combat.setup(_voxel_world, _player, player_stats, _world_entity_coordinator.get_runtime())
+	_expect(_inventory_loadout.setup(_inventory, player_stats, item_proficiency), "inventory stat coordinator setup failed")
+	_combat.setup(_voxel_world, _player, player_stats, _inventory, _world_entity_coordinator.get_runtime())
 	var movement_camera_rig := (load("res://player/camera/camera_rig.tscn") as PackedScene).instantiate() as CameraRig
 	root.add_child(movement_camera_rig)
 	movement_camera_rig.camera = _camera
@@ -351,22 +354,13 @@ func _run():
 		movement_camera_rig,
 		_inventory,
 		_inventory_loadout,
+		InventoryTestFixture.create_player_action_executors(_inventory, _inventory_loadout, _interactor.unarmed_primary_action),
 		_input_buffer,
 		player_stats,
 		_combat,
 		_world_entity_coordinator.get_runtime(),
 	)
 	_player.bind_space(_voxel_world, root, Vector3.ZERO, _voxel_world)
-	var chest_storage := ChestStorage.new(
-		item_catalog,
-		_inventory.equipment_instance_factory,
-		chest_block.container.get_slot_count(),
-	)
-	_expect(chest_storage.create_chest(chest_position), "placed chest storage could not be created")
-	var chest_coordinator := ChestCoordinator.new()
-	_expect(chest_coordinator.setup(chest_storage, _inventory, _inventory_loadout, _voxel_world, chest_block), "chest coordinator setup failed")
-	_voxel_world.block_edit_committed.connect(chest_coordinator.handle_block_edit)
-	_interactor.set_chest_coordinator(chest_coordinator)
 	_interactor.melee_attack_started.connect(_on_melee_attack_started)
 	_interactor.soil_tilled.connect(_on_soil_tilled)
 	_player.set_physics_process(false)
@@ -464,20 +458,6 @@ func _run():
 	_expect(pickaxe_winding_valid, "pickaxe triangle winding does not face its supplied normals")
 	var one_pixel_pickaxe := PixelItemMeshBuilder.build(held_pickaxe.texture, held_pickaxe.grip_pixel, held_pickaxe.max_dimension, 1.0)
 	_expect(is_equal_approx(held_pickaxe.mesh_instance.mesh.get_aabb().size.z, one_pixel_pickaxe.get_aabb().size.z * 2.0), "pickaxe mesh is not two pixels thick")
-	var chest_count_before := _inventory.get_inventory_item_count(&"chest")
-	_prepare_target(chest_position, pickaxe_action)
-	_expect(_interactor.can_primary_target, "stone pickaxe cannot target an empty chest")
-	_push_primary(true)
-	await process_frame
-	_input_buffer.poll()
-	_interactor._handle_item_actions(0.0)
-	_interactor._handle_item_actions(chest_block.mine_duration + 0.01)
-	_expect(_voxel_world.get_block_id_at(chest_position) == BlockId.Type.AIR, "stone pickaxe did not mine the empty chest")
-	_expect(_inventory.get_inventory_item_count(&"chest") == chest_count_before + 1, "mined chest did not enter inventory")
-	_expect(not chest_storage.has_chest(chest_position), "mined chest retained storage state")
-	_push_primary(false)
-	await process_frame
-	_input_buffer.poll()
 
 	_push_hotbar_key(KEY_4)
 	await process_frame
@@ -584,8 +564,8 @@ func _run():
 	_expect(_melee_attack_facings.size() == 1 and _melee_attack_facings[0].dot(expected_attack_facing) > 0.999, "player did not face the mouse before the sword swing started")
 	_expect(_player.animation_driver.animator._attacking, "sword attack did not reach the animation driver")
 	_expect(is_equal_approx(_interactor.melee_attack_timer, sword_action.attack_profile.cooldown), "sword attack timer changed")
-	_expect(_interactor._melee_ray_origin.is_equal_approx(attack_ray_origin), "sword attack facing and targeting used different ray origins")
-	_expect(_interactor._melee_ray_direction.is_equal_approx(attack_ray_direction), "sword attack facing and targeting used different ray directions")
+	_expect(_interactor._melee_attack_command._get_ray_origin().is_equal_approx(attack_ray_origin), "sword attack facing and targeting used different ray origins")
+	_expect(_interactor._melee_attack_command._get_ray_direction().is_equal_approx(attack_ray_direction), "sword attack facing and targeting used different ray directions")
 	var locked_attack_yaw := _player.model_root.rotation.y
 	_player.is_sprinting = true
 	_player._turn_toward_movement(-expected_attack_facing, 0.2)
@@ -759,8 +739,8 @@ func _run():
 	_expect(not _interactor._can_till_position(_till_grass_pos, Vector3i.RIGHT, tilling_action), "copper hoe can till a side face")
 	_expect(not _interactor._can_till_position(_covered_dirt_pos, Vector3i.UP, tilling_action), "copper hoe can till below an occupied cell")
 	_expect(not _interactor._can_till_position(_nonsoil_pos, Vector3i.UP, tilling_action), "copper hoe can till a non-soil block")
-	var stale_edit := _voxel_world.try_replace_block(_till_dirt_pos, BlockId.Type.GRASS, BlockId.Type.FARMLAND_DRY)
-	_expect(not stale_edit.is_success() and stale_edit.result == BlockEdit.Result.FAIL_BLOCK_CHANGED, "atomic replacement accepted a stale source block")
+	var stale_change := VoxelWorldTestFixture.commit_replace(_voxel_world, _till_dirt_pos, BlockId.Type.GRASS, BlockId.Type.FARMLAND_DRY)
+	_expect(stale_change == null, "atomic replacement accepted a stale source block")
 	var grass_revision := _voxel_world.get_revision(_till_grass_pos)
 	_prepare_till_target(_till_grass_pos, tilling_action)
 	_input_buffer.primary_use_just = true

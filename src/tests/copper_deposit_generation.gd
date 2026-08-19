@@ -147,7 +147,7 @@ func _run() -> void:
 		_expect((rebuilt["copper_block_fast"] as Dictionary).is_empty(), "chunk rebuild rerolled copper")
 		for position in deposit:
 			_expect(_cache_block(rebuilt, position) == BlockId.Type.COPPER, "chunk rebuild did not reuse stored copper")
-		world.try_mine_block(first_position)
+		_expect(VoxelWorldTestFixture.commit_mine(world, first_position) != null, "generated copper mining failed")
 		_expect(world.get_block_id_at(first_position) == BlockId.Type.AIR, "mined copper remained in the world")
 		_expect((world.snapshot_edits_for_chunk(origin_x, origin_z)["removed"] as Dictionary).has(first_position), "mined copper was not recorded as removed")
 		var saved_edits := world.snapshot_block_edits()

@@ -571,7 +571,7 @@ func _verify_item_block_round_trip() -> bool:
 	if inventory.get_slot(0).count != before_count - 1:
 		_fail("placing block did not consume item")
 		return false
-	_player.interactor._commit_mine(placed_pos, _player.interactor.get_selected_primary_action() as MiningActionDefinition)
+	_player.interactor._commit_mine(placed_pos, _player.interactor.inventory_model.create_selected_item_source())
 	if voxel_world.get_block_id_at(placed_pos) != BlockId.Type.AIR:
 		_fail("placed grass block was not mined")
 		return false
@@ -621,8 +621,8 @@ func _start_streaming_race_sequence() -> void:
 	var surface_x := int(floor(_player.global_position.x))
 	var surface_z := int(floor(_player.global_position.z))
 	var edit_pos := Vector3i(surface_x, vm.get_highest_solid_y(surface_x, surface_z) + 1, surface_z)
-	var edit := vm.try_place_block(edit_pos, BlockId.Type.DIRT)
-	if not edit.is_success():
+	var edit := VoxelWorldTestFixture.commit_place(vm, edit_pos, BlockId.Type.DIRT)
+	if edit == null:
 		_fail("streaming race edit failed at %s" % str(edit_pos))
 		return
 	_edited_chunk = ChunkCoord.world_to_chunk_vec3i(edit_pos, _world.config.chunk_size)
@@ -709,15 +709,15 @@ func _do_mine_place(do_mine: bool, do_place: bool) -> void:
 		for dx in range(-1, 2):
 			var p = base + Vector3i(dx, 0, dz)
 			if do_mine and vm.is_breakable(p):
-				var edits: Array = vm.try_mine_block(p)
-				if not edits.is_empty():
+				var mine_change := VoxelWorldTestFixture.commit_mine(vm, p)
+				if mine_change != null:
 					_mine_place_count += 1
 					break
 			if do_place:
 				var above = p + Vector3i(0, 1, 0)
 				if not vm.is_occupied(above) and vm.is_occupied(p):
-					var edit: BlockEdit = vm.try_place_block(above, BlockId.Type.DIRT)
-					if edit != null and edit.is_success():
+					var place_change := VoxelWorldTestFixture.commit_place(vm, above, BlockId.Type.DIRT)
+					if place_change != null:
 						_mine_place_count += 1
 						break
 		if _mine_place_count > 0 and _frame % 33 == 0:

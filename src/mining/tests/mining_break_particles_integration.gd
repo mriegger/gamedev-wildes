@@ -52,16 +52,16 @@ func _run():
 	var voxel_world := VoxelWorld.new(20, 36, 5, 100.0, block_catalog)
 	var tint_palette := MiningParticleTintPalette.new(block_catalog)
 	particles.setup(voxel_world, tint_palette)
-	var placement := voxel_world.try_place_block(Vector3i(1, 8, 3), BlockId.Type.DIRT)
-	_expect(placement.is_success(), "test placement failed")
+	var placement := VoxelWorldTestFixture.commit_place(voxel_world, Vector3i(1, 8, 3), BlockId.Type.DIRT)
+	_expect(placement != null, "test placement failed")
 	for child in emitters:
 		_expect(not (child as CPUParticles3D).emitting, "%s played for placement" % child.name)
 	var terrain_pos := Vector3i(4, 5, 4)
 	var terrain_column := Vector2i(terrain_pos.x, terrain_pos.z)
 	voxel_world.height_map_dict[terrain_column] = terrain_pos.y
 	voxel_world.type_map_dict[terrain_column] = BlockId.Type.GRASS
-	var terrain_edits := voxel_world.try_mine_block(terrain_pos)
-	_expect(terrain_edits.size() == 1 and (terrain_edits[0] as BlockEdit).is_success(), "terrain mining failed")
+	var terrain_change := VoxelWorldTestFixture.commit_mine(voxel_world, terrain_pos)
+	_expect(terrain_change != null and terrain_change.get_edits().size() == 1, "terrain mining failed")
 	var first := particles.get_node("Dirt01") as CPUParticles3D
 	_expect(first.emitting, "first emitter did not play")
 	_expect(first.global_position.is_equal_approx(Vector3(4.5, 5.5, 4.5)), "removal position was %s" % first.global_position)
@@ -71,12 +71,12 @@ func _run():
 
 	for child in emitters:
 		(child as CPUParticles3D).emitting = false
-	var failed_edits := voxel_world.try_mine_block(Vector3i(100, 100, 100))
-	_expect(failed_edits.size() == 1 and not (failed_edits[0] as BlockEdit).is_success(), "invalid mining unexpectedly succeeded")
+	var failed_change := VoxelWorldTestFixture.commit_mine(voxel_world, Vector3i(100, 100, 100))
+	_expect(failed_change == null, "invalid mining unexpectedly succeeded")
 	var torch_pos := Vector3i(2, 8, 3)
 	voxel_world.restore_block_edits({torch_pos: BlockId.Type.TORCH}, {})
-	var torch_edits := voxel_world.try_mine_block(torch_pos)
-	_expect(torch_edits.size() == 1 and (torch_edits[0] as BlockEdit).is_success(), "torch mining failed")
+	var torch_change := VoxelWorldTestFixture.commit_mine(voxel_world, torch_pos)
+	_expect(torch_change != null and torch_change.get_edits().size() == 1, "torch mining failed")
 	for child in emitters:
 		_expect(not (child as CPUParticles3D).emitting, "%s played for failed or torch mining" % child.name)
 

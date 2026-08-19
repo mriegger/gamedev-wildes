@@ -61,13 +61,13 @@ func _init() -> void:
 				_expect(_position_touches_leaf((record as Dictionary)["position"] as Vector3, leaf), "decorative apple was mapped to a leaf it did not touch")
 		_expect(mapped_decorations == decorative_count, "decorative apple ownership did not cover every canopy apple")
 		var base_log := apple_position
-		world.try_mine_block(base_log)
+		_expect(VoxelWorldTestFixture.commit_mine(world, base_log) != null, "apple tree base log could not be mined")
 		chunk_root = apple_trees._chunk_roots[Vector2i.ZERO] as Node3D
 		_expect(_count_children(chunk_root, "DecorativeApple_") == decorative_count, "mining the base log removed canopy apples")
 		var drop_leaf := _find_drop_leaf(apple_trees)
 		_expect(drop_leaf.y >= 0, "deterministic apple tree had no eligible decorative drop")
 		var removed_decorations := (apple_trees._decorations_by_leaf.get(drop_leaf, []) as Array).size()
-		world.try_mine_block(drop_leaf)
+		_expect(VoxelWorldTestFixture.commit_mine(world, drop_leaf) != null, "apple-bearing leaf could not be mined")
 		chunk_root = apple_trees._chunk_roots[Vector2i.ZERO] as Node3D
 		var fallen := apple_trees._state.get_fallen_apples()
 		_expect(fallen.size() == 1, "mining an apple-bearing leaf did not create one fallen apple")

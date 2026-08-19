@@ -18,9 +18,6 @@ func _expect(condition: bool, message: String) -> void:
 	_failures += 1
 	push_error("[entity_species_population_integration] FAIL: %s" % message)
 
-func _single_target(runtime_id: int) -> Array[int]:
-	return [runtime_id]
-
 func _make_flat_world() -> VoxelWorld:
 	var block_catalog := load("res://blocks/block_catalog.tres") as BlockCatalog
 	var world := VoxelWorld.new(16, 32, 5, 8.0, block_catalog)
@@ -127,19 +124,25 @@ func _route_sheep_contact(coordinator: WorldEntityCoordinator, world: VoxelWorld
 	sheep.global_position = Vector3(1.5, FEET_Y, 0.5)
 	sheep.velocity = Vector3.ZERO
 	sheep.on_ground = true
+	coordinator.get_runtime().tick(0.0, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT))
 	var combat := MeleeCombatCoordinator.new()
 	get_root().add_child(combat)
 	var player_stats := ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
-	combat.setup(world, player, player_stats, coordinator.get_runtime())
+	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
+	var inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
+	_expect(inventory.setup_starter(), "combat inventory setup failed")
+	var inventory_loadout := InventoryTestFixture.create_loadout(inventory, player_stats)
+	_expect(inventory_loadout != null and inventory_loadout.select_slot(3), "combat sword selection failed")
+	combat.setup(world, player, player_stats, inventory, coordinator.get_runtime())
 	combat.melee_outcome_committed.connect(coordinator.get_runtime().record_melee_outcome)
-	var profile := load("res://combat/profiles/copper_sword_melee.tres") as MeleeAttackProfile
 	var player_center := player.global_position + Vector3.UP * (player.player_height * 0.5)
 	var target_bounds := sheep.get_world_bounds()
 	var target_center := target_bounds.position + target_bounds.size * 0.5
 	var aim_point := Vector3(target_center.x, player_center.y, target_center.z)
 	var ray_origin := player_center + Vector3(0.0, 6.0, 5.5)
 	var ray_direction := (aim_point - ray_origin).normalized()
-	var committed := combat.try_commit_player_contacts(_single_target(sheep.runtime_id), ray_origin, ray_direction, profile, &"copper_sword")
+	var prepared := combat.prepare_player_attack(inventory.create_selected_item_source(), ray_origin, ray_direction)
+	var committed := combat.try_commit_player_attack(prepared)
 	_expect(committed, "player contact did not commit through MeleeCombatCoordinator")
 	_expect(sheep.brain.state == SheepBrain.State.FLEE, "coordinator-routed contact did not start sheep flee")
 	var animation := sheep.animation_driver as SheepAnimationDriver

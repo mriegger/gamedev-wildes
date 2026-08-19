@@ -57,6 +57,7 @@ var player_perks: PlayerPerks
 var player_perk_coordinator: PlayerPerkCoordinator
 var item_proficiency: ItemProficiency
 var inventory_loadout_coordinator: InventoryLoadoutCoordinator
+var player_action_executors: PlayerActionExecutors
 var crafting_coordinator: CraftingCoordinator
 var anvil_crafting_coordinator: CraftingCoordinator
 var cauldron_crafting_coordinator: CraftingCoordinator
@@ -266,12 +267,38 @@ func _setup_gameplay() -> bool:
 	camera_rig.setup(player, input_buffer)
 	world_entity_coordinator.setup(entity_catalog, world.voxel_model, world.config.seed_value, world.is_position_streamed)
 	var world_entities := world_entity_coordinator.get_runtime()
-	melee_combat.setup(world.voxel_model, player, player_stats, world_entities)
+	melee_combat.setup(world.voxel_model, player, player_stats, inventory_model, world_entities)
 	melee_combat.melee_outcome_committed.connect(combat_progression_coordinator.record_melee_outcome)
 	melee_combat.melee_outcome_committed.connect(_on_melee_outcome_committed)
 	combat_hit_particles.setup(melee_combat, combat_hit_particle_catalog)
 	enemy_combat_feedback.setup(melee_combat, camera_rig.camera)
-	player.setup(camera_rig, inventory_model, inventory_loadout_coordinator, input_buffer, player_stats, melee_combat, world_entities)
+	var mining_executor := MiningActionExecutor.new()
+	var tilling_executor := TillingActionExecutor.new()
+	var placement_executor := BlockPlacementActionExecutor.new()
+	var mining_ready: bool = mining_executor.setup(
+		inventory_model,
+		inventory_loadout_coordinator,
+		player.interactor.unarmed_primary_action,
+		_can_break_block,
+	)
+	var tilling_ready: bool = tilling_executor.setup(inventory_model)
+	var placement_ready: bool = placement_executor.setup(inventory_model, inventory_loadout_coordinator)
+	assert(mining_ready and tilling_ready and placement_ready)
+	player_action_executors = PlayerActionExecutors.new()
+	var actions_ready: bool = player_action_executors.setup(mining_executor, tilling_executor, placement_executor)
+	assert(actions_ready)
+	player.setup(
+		camera_rig,
+		inventory_model,
+		inventory_loadout_coordinator,
+		player_action_executors,
+		input_buffer,
+		player_stats,
+		melee_combat,
+		world_entities,
+		_try_interact_with_block,
+		_can_break_block,
+	)
 	player.water_step_committed.connect(world.play_water_ripple)
 	item_consumption_coordinator = ItemConsumptionCoordinator.new()
 	item_consumption_coordinator.setup(inventory_model, inventory_loadout_coordinator, player_stats)
@@ -294,7 +321,6 @@ func _setup_gameplay() -> bool:
 		_fail_session_start("Chest runtime setup failed. The save was not changed.")
 		return false
 	world.voxel_model.block_edit_committed.connect(chest_coordinator.handle_block_edit)
-	player.interactor.set_chest_coordinator(chest_coordinator)
 	player.interactor.container_open_requested.connect(_on_container_open_requested)
 	player_stats.health_depleted.connect(_on_player_defeated)
 	var mining_particle_tints := MiningParticleTintPalette.new(block_catalog)
@@ -458,6 +484,27 @@ func _on_level_interaction_requested():
 
 func _on_crafting_station_open_requested(position: Vector3i, definition: CraftingStationBlockDefinition) -> void:
 	hud.open_crafting_station(position, definition)
+
+func _try_interact_with_block(position: Vector3i) -> bool:
+	if chest_coordinator == null or _location_state == null or _location_state.is_in_level():
+		return false
+	var center := Vector3(position) + Vector3(0.5, 0.5, 0.5)
+	if player.global_position.distance_squared_to(center) > player.interactor.reach * player.interactor.reach:
+		return false
+	if not chest_coordinator.can_open(position):
+		return false
+	var block_id := world.voxel_model.get_block_id_at(position)
+	var container := block_catalog.get_definition(block_id).container
+	if container == null:
+		return false
+	hud.open_container(position, container)
+	if not chest_coordinator.is_open():
+		return false
+	input_buffer.clear_gameplay()
+	return true
+
+func _can_break_block(position: Vector3i) -> bool:
+	return chest_coordinator == null or chest_coordinator.can_break(position)
 
 func _enter_level():
 	_level_transitioning = true

@@ -707,10 +707,10 @@ func _test_entrance_placement_stability() -> void:
 	_expect(protected_cells.size() == 45 and protected_set.size() == 45, "entrance protection volume is not a unique 3x5x3 prism")
 	_expect(protected_set.has(center) and protected_set.has(center + Vector3i.DOWN), "entrance protection omits doorway or foundation cells")
 	voxel_world.protect_edit_cells(protected_cells)
-	var blocked_placement := voxel_world.try_place_block(center, BlockId.Type.STONE)
-	var blocked_mining := voxel_world.try_mine_block(center + Vector3i.DOWN)
-	_expect(not blocked_placement.is_success() and blocked_placement.result == BlockEdit.Result.FAIL_PROTECTED, "entrance headspace accepted a block placement")
-	_expect(blocked_mining.size() == 1 and not blocked_mining[0].is_success() and blocked_mining[0].result == BlockEdit.Result.FAIL_PROTECTED, "entrance foundation accepted mining")
+	var blocked_placement := VoxelWorldTestFixture.commit_place(voxel_world, center, BlockId.Type.STONE)
+	var blocked_mining := VoxelWorldTestFixture.commit_mine(voxel_world, center + Vector3i.DOWN)
+	_expect(blocked_placement == null, "entrance headspace accepted a block placement")
+	_expect(blocked_mining == null, "entrance foundation accepted mining")
 	_expect(voxel_world.get_block_edit_count() == 0, "rejected entrance edits changed voxel state")
 
 func _test_generation_fuzz() -> int:

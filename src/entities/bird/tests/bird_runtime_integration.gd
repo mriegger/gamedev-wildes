@@ -98,8 +98,8 @@ func _run() -> void:
 	_expect(not VoxelBodySolver.collides_at(world, bird.global_position, definition.body_width, definition.body_height, false), "bird ended inside solid terrain")
 
 	var canopy_world := _make_world()
-	var canopy_edit := canopy_world.try_place_block(Vector3i(0, FLAT_HEIGHT + 2, 0), BlockId.Type.LEAVES)
-	_expect(canopy_edit.is_success(), "failed to construct the takeoff obstruction")
+	var canopy_edit := VoxelWorldTestFixture.commit_place(canopy_world, Vector3i(0, FLAT_HEIGHT + 2, 0), BlockId.Type.LEAVES)
+	_expect(canopy_edit != null, "failed to construct the takeoff obstruction")
 	var canopy_runtime := EntityRuntime.new()
 	root.add_child(canopy_runtime)
 	canopy_runtime.setup(catalog, canopy_world, 1, 1, EntityNavigationLimits.new(24, 256, 1))

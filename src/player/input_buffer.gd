@@ -14,6 +14,7 @@ var primary_use_pressed: bool = false
 var primary_use_just: bool = false
 var secondary_use_just: bool = false
 var secondary_use_pressed: bool = false
+var secondary_use_physical_pressed: bool = false
 
 func poll():
 	var move_right = Input.is_action_pressed("move_right")
@@ -38,7 +39,8 @@ func poll():
 	zoom_in_pressed = Input.is_action_pressed("zoom_in")
 	zoom_out_pressed = Input.is_action_pressed("zoom_out")
 	primary_use_pressed = Input.is_action_pressed("primary_use")
-	secondary_use_pressed = Input.is_action_pressed("secondary_use")
+	secondary_use_physical_pressed = Input.is_action_pressed("secondary_use")
+	secondary_use_pressed = secondary_use_physical_pressed
 	jump_just = jump_just or Input.is_action_just_pressed("jump")
 	rotate_left_just = rotate_left_just or Input.is_action_just_pressed("rotate_left")
 	rotate_right_just = rotate_right_just or Input.is_action_just_pressed("rotate_right")

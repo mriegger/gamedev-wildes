@@ -83,7 +83,7 @@ func _test_mutation_transitions() -> void:
 	var placed_pos := Vector3i(2, 8, 2)
 	world.restore_block_edits({placed_pos: BlockId.Type.STONE}, {})
 	_expect((world.snapshot_edits_for_chunk(0, 0)["placed"] as Dictionary).has(placed_pos), "restored placement missing")
-	world.try_mine_block(placed_pos)
+	_expect(VoxelWorldTestFixture.commit_mine(world, placed_pos) != null, "restored placement could not be mined")
 	var mined_placement := world.snapshot_edits_for_chunk(0, 0)
 	_expect(not (mined_placement["placed"] as Dictionary).has(placed_pos), "mined placement remained indexed")
 	_expect(not (mined_placement["removed"] as Dictionary).has(placed_pos), "mined placement created removal without terrain")
@@ -92,9 +92,9 @@ func _test_mutation_transitions() -> void:
 	var terrain_column := Vector2i(terrain_pos.x, terrain_pos.z)
 	world.height_map_dict[terrain_column] = terrain_pos.y
 	world.type_map_dict[terrain_column] = BlockId.Type.GRASS
-	world.try_mine_block(terrain_pos)
+	_expect(VoxelWorldTestFixture.commit_mine(world, terrain_pos) != null, "terrain could not be mined")
 	_expect((world.snapshot_edits_for_chunk(0, 0)["removed"] as Dictionary).has(terrain_pos), "mined terrain removal missing")
-	world.try_place_block(terrain_pos, BlockId.Type.DIRT)
+	_expect(VoxelWorldTestFixture.commit_place(world, terrain_pos, BlockId.Type.DIRT) != null, "terrain replacement could not be placed")
 	var replaced_terrain := world.snapshot_edits_for_chunk(0, 0)
 	_expect((replaced_terrain["placed"] as Dictionary).get(terrain_pos) == BlockId.Type.DIRT, "replacement placement missing")
 	_expect(not (replaced_terrain["removed"] as Dictionary).has(terrain_pos), "replacement removal remained indexed")
@@ -106,7 +106,8 @@ func _test_mutation_transitions() -> void:
 		torch_pos: BlockId.Type.TORCH,
 	}, {})
 	world.torch_attachments[torch_pos] = Vector3i.LEFT
-	var edits := world.try_mine_block(support_pos)
+	var support_mine := VoxelWorldTestFixture.commit_mine(world, support_pos)
+	var edits: Array[BlockEdit] = [] if support_mine == null else support_mine.get_edits()
 	var cascade_snapshot := world.snapshot_edits_for_chunk(0, 0)
 	_expect(edits.size() == 2, "support mining did not cascade to torch")
 	_expect(not (cascade_snapshot["placed"] as Dictionary).has(support_pos), "mined support remained indexed")
