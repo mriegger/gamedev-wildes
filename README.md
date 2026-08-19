@@ -142,6 +142,9 @@ pickaxes can mine copper, and the sword uses click-triggered, alternating melee 
 hammer uses a slower two-handed overhead slam that damages and knocks back enemies within about
 four blocks of the hammer's ground contact while an expanding white ring marks that area. Its
 damage falls linearly from 1.5 times sword damage at the center to half sword damage at the edge.
+Damaged enemies show a small black-and-red health bar above their model. Successful hits also show
+damage numbers that rise and fade above each affected enemy; the numbers remain legible at the
+default camera zoom and are hidden once the camera is zoomed farther out.
 Held tools use either runtime-extruded pixel art or authored 3D scenes.
 
 **Lighting.** Per-vertex ambient occlusion is baked into chunk meshes. A directional sun plus a

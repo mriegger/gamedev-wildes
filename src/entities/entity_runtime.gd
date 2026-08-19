@@ -322,6 +322,15 @@ func get_actor(runtime_id: int) -> EntityActor:
 	var actor := _active.get(runtime_id) as EntityActor
 	return actor if is_instance_valid(actor) else null
 
+func get_presented_actor(runtime_id: int) -> EntityActor:
+	var active_actor := _active.get(runtime_id) as EntityActor
+	if is_instance_valid(active_actor):
+		return active_actor
+	var retirement := _retiring.get(runtime_id) as Retirement
+	if retirement != null and is_instance_valid(retirement.actor):
+		return retirement.actor
+	return null
+
 func get_current_hp(runtime_id: int) -> float:
 	return _get_stats(runtime_id).current_hp
 

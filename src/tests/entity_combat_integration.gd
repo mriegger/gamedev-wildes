@@ -6,6 +6,8 @@ const TEST_RADIUS: int = 48
 
 const MeleeContactType := preload("res://combat/melee_contact.gd")
 const EnemyHealthBar3DType := preload("res://entities/presentation/enemy_health_bar_3d.gd")
+const EnemyCombatFeedbackType := preload("res://combat/presentation/enemy_combat_feedback.gd")
+const EnemyDamageNumber3DType := preload("res://combat/presentation/enemy_damage_number_3d.gd")
 
 var _failures: int = 0
 var _contacts: Array[MeleeContactType] = []
@@ -196,6 +198,11 @@ func _run() -> void:
 	coordinator.get_runtime().entity_melee_contact_reached.connect(combat.try_commit_entity_contact)
 	combat.melee_outcome_committed.connect(coordinator.get_runtime().record_melee_outcome)
 	combat.melee_outcome_committed.connect(_on_melee_contact)
+	var enemy_feedback := EnemyCombatFeedbackType.new()
+	root.add_child(enemy_feedback)
+	camera.size = CameraRig.DEFAULT_ORTHO_SIZE
+	enemy_feedback.setup(combat, camera)
+	enemy_feedback.bind_runtime(coordinator.get_runtime())
 	player_stats.health_depleted.connect(_on_player_defeated)
 	coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, player.global_position, 20.0)
 	coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, player.global_position, 20.0)
@@ -244,6 +251,25 @@ func _run() -> void:
 	_expect(is_equal_approx(coordinator.get_runtime().get_current_hp(near_actor.runtime_id), 63.0), "sword sweep applied incorrect damage to the first target")
 	_expect(is_equal_approx(coordinator.get_runtime().get_current_hp(far_actor.runtime_id), 64.0), "sword sweep applied incorrect damage to the second target")
 	_expect(far_actor.health_bar.visible and is_equal_approx(far_actor.health_bar.get_health_ratio(), 0.8), "sword damage did not update the second enemy health bar")
+	var active_damage_numbers := enemy_feedback._damage_numbers.filter(func(number): return number.is_active())
+	_expect(active_damage_numbers.size() == 2, "multi-target sword hit did not show one damage number per enemy")
+	if active_damage_numbers.size() == 2:
+		var first_damage_number := active_damage_numbers[0] as EnemyDamageNumber3DType
+		var start_height := first_damage_number.global_position.y
+		_expect(first_damage_number.text == "16" and first_damage_number.visible, "default-zoom damage number is not visible and legible")
+		_expect(first_damage_number.font_size == 24 and first_damage_number.outline_size == 4, "damage number typography changed")
+		enemy_feedback._process(EnemyDamageNumber3DType.DURATION_SECONDS * 0.5)
+		_expect(first_damage_number.global_position.y > start_height and first_damage_number.modulate.a < 1.0, "damage number did not float upward and fade")
+		_expect(first_damage_number.outline_modulate.a < EnemyDamageNumber3DType.OUTLINE_COLOR.a, "damage number outline remained opaque while its text faded")
+		enemy_feedback._process(EnemyDamageNumber3DType.DURATION_SECONDS * 0.5)
+		_expect(not first_damage_number.is_active() and not first_damage_number.visible, "damage number did not finish its animation")
+		first_damage_number.play(Vector3.ZERO, 12.6)
+		_expect(first_damage_number.text == "13", "fractional damage number was not rounded to the nearest integer")
+		first_damage_number.reset()
+	camera.size = EnemyCombatFeedbackType.MAX_DAMAGE_NUMBER_CAMERA_SIZE + 1.0
+	enemy_feedback._on_melee_outcome_committed(_outcomes[-1])
+	_expect(enemy_feedback._damage_numbers.all(func(number): return not number.is_active()), "zoomed-out combat showed an unreadable damage number")
+	camera.size = CameraRig.DEFAULT_ORTHO_SIZE
 
 	near_actor.global_position = Vector3(0.5, FEET_Y, -4.0)
 	far_actor.global_position = Vector3(0.5, FEET_Y, -5.0)
@@ -426,6 +452,8 @@ func _run() -> void:
 	_expect(coordinator.get_runtime().get_active_count() == 0, "lethal damage left an unexpected active entity")
 	_expect(coordinator.get_runtime()._spatial_index.get_entry_count() == 0, "lethal damage left the zombie in the spatial index")
 	_expect(coordinator.get_runtime()._retiring.has(target_id), "lethal damage did not retain the zombie for death presentation")
+	_expect(coordinator.get_runtime().get_presented_actor(target_id) == zombie_actor, "lethal damage hid the retiring actor from combat presentation")
+	_expect(not zombie_actor.health_bar.visible, "defeated enemy retained its health bar")
 	_expect(zombie_actor.velocity.is_zero_approx(), "lethal damage did not freeze zombie movement")
 	_expect(not zombie_actor._melee_contact_pending, "lethal damage did not cancel the zombie's pending attack")
 	_expect(zombie_actor._zombie_animation.get_current_state() == ZombieAnimationDriver.DEATH, "lethal damage did not start the zombie death pose")
@@ -446,6 +474,9 @@ func _run() -> void:
 	_expect(retiring_actor.get_ref() == null, "completed zombie fade did not free its actor")
 	_expect(coordinator.get_runtime().get_active_count() == 1, "replacement did not remain active after zombie retirement")
 
+	enemy_feedback.unbind_runtime()
+	enemy_feedback.queue_free()
+	await process_frame
 	await _cleanup(combat, coordinator, player, camera)
 	await _test_sheep_damage(world, sword_profile)
 	await _test_zero_degree_compatibility(world, sword_profile)

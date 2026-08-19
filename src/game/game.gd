@@ -1,6 +1,7 @@
 extends Node3D
 class_name Game
 
+const EnemyCombatFeedbackType := preload("res://combat/presentation/enemy_combat_feedback.gd")
 const LEVEL_FADE_SECONDS: float = 0.18
 
 signal loading_progress(stage: String, percent: float, details: String)
@@ -33,6 +34,7 @@ signal main_menu_requested
 @onready var world_entity_coordinator: WorldEntityCoordinator = $WorldEntities as WorldEntityCoordinator
 @onready var melee_combat: MeleeCombatCoordinator = $MeleeCombat as MeleeCombatCoordinator
 @onready var combat_hit_particles: CombatHitParticles = $CombatHitParticles as CombatHitParticles
+@onready var enemy_combat_feedback: EnemyCombatFeedbackType = $EnemyCombatFeedback as EnemyCombatFeedbackType
 @onready var hud: HUD = $HUD as HUD
 @onready var dev_console: DevConsole = $DevConsole as DevConsole
 @onready var game_session: GameSession = $GameSession as GameSession
@@ -248,6 +250,7 @@ func _setup_gameplay() -> bool:
 	melee_combat.melee_outcome_committed.connect(combat_progression_coordinator.record_melee_outcome)
 	melee_combat.melee_outcome_committed.connect(_on_melee_outcome_committed)
 	combat_hit_particles.setup(melee_combat, combat_hit_particle_catalog)
+	enemy_combat_feedback.setup(melee_combat, camera_rig.camera)
 	player.setup(camera_rig, inventory_model, input_buffer, player_stats, melee_combat, world_entities)
 	player.water_step_committed.connect(world.play_water_ripple)
 	item_consumption_coordinator = ItemConsumptionCoordinator.new()
@@ -823,6 +826,7 @@ func _bind_entity_context(space: VoxelSpace, runtime: EntityRuntime) -> void:
 	_unbind_entity_context()
 	player.bind_entity_runtime(runtime)
 	melee_combat.bind_context(space, runtime)
+	enemy_combat_feedback.bind_runtime(runtime)
 	runtime.entity_melee_contact_reached.connect(melee_combat.try_commit_entity_contact)
 	melee_combat.melee_outcome_committed.connect(runtime.record_melee_outcome)
 	_active_entity_runtime = runtime
@@ -834,5 +838,6 @@ func _unbind_entity_context() -> void:
 		_active_entity_runtime.entity_melee_contact_reached.disconnect(melee_combat.try_commit_entity_contact)
 	if melee_combat.melee_outcome_committed.is_connected(_active_entity_runtime.record_melee_outcome):
 		melee_combat.melee_outcome_committed.disconnect(_active_entity_runtime.record_melee_outcome)
+	enemy_combat_feedback.unbind_runtime()
 	melee_combat.unbind_context()
 	_active_entity_runtime = null
