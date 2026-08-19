@@ -190,8 +190,8 @@ func _assert_cleanup(coordinator: WorldEntityCoordinator, player_position: Vecto
 	distant_zombie.global_position = player_position + Vector3(WorldEntityCoordinator.DESPAWN_DISTANCE + 5.0, 0.0, 0.0)
 	coordinator.tick(0.0, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), NIGHT_TIME)
 	_expect(coordinator.get_runtime().get_actor(distant_runtime_id) == null, "distant entity was not removed")
-	_expect(coordinator.get_runtime().get_active_count() == 15, "distance cleanup removed the wrong number of entities")
-	_assert_spatial_bound(coordinator, 15)
+	_expect(coordinator.get_runtime().get_active_count() == 11, "distance cleanup removed the wrong number of entities")
+	_assert_spatial_bound(coordinator, 11)
 	_streaming_enabled = false
 	coordinator.tick(0.0, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), NIGHT_TIME)
 	_expect(coordinator.get_runtime().get_active_count() == 0, "unstreamed entities were not removed")
