@@ -31,11 +31,12 @@ signal main_menu_requested
 @export var structure_terrain_shader: Shader
 @export var loot_drop_scene: PackedScene
 
-@onready var world: WorldController = $World as WorldController
+@onready var overworld: Node3D = $Overworld as Node3D
+@onready var world: WorldController = $Overworld/World as WorldController
 @onready var player: PlayerMotor = $Player as PlayerMotor
 @onready var camera_rig: CameraRig = $CameraRig as CameraRig
 @onready var game_environment: GameEnvironment = $Environment as GameEnvironment
-@onready var world_entity_coordinator: WorldEntityCoordinator = $WorldEntities as WorldEntityCoordinator
+@onready var world_entity_coordinator: WorldEntityCoordinator = $Overworld/WorldEntities as WorldEntityCoordinator
 @onready var slime_attachment_coordinator: SlimeAttachmentCoordinator = $SlimeAttachments as SlimeAttachmentCoordinator
 @onready var watcher_encounter: WatcherEncounterCoordinator = $WatcherEncounter as WatcherEncounterCoordinator
 @onready var watcher_screen_effect: WatcherScreenEffect = $WatcherScreenEffect as WatcherScreenEffect
@@ -51,8 +52,8 @@ signal main_menu_requested
 @onready var level_interaction: LevelInteractionCoordinator = $LevelInteractionCoordinator as LevelInteractionCoordinator
 @onready var structure_designer_workflow: StructureDesignerWorkflow = $StructureDesignerWorkflow as StructureDesignerWorkflow
 @onready var structure_designer_dialogs: StructureDesignerDialogs = $StructureDesignerDialogs as StructureDesignerDialogs
-@onready var pumpkin_patch: PumpkinPatchCoordinator = $PumpkinPatch as PumpkinPatchCoordinator
-@onready var apple_trees: AppleTreeCoordinator = $AppleTrees as AppleTreeCoordinator
+@onready var pumpkin_patch: PumpkinPatchCoordinator = $Overworld/PumpkinPatch as PumpkinPatchCoordinator
+@onready var apple_trees: AppleTreeCoordinator = $Overworld/AppleTrees as AppleTreeCoordinator
 @onready var _save_canvas: CanvasLayer = $SaveStatusLayer as CanvasLayer
 @onready var _save_label: Label = $SaveStatusLayer/SaveStatusLabel as Label
 @onready var _fade: ColorRect = $TransitionLayer/Fade as ColorRect
@@ -543,7 +544,7 @@ func _setup_level_entrance():
 	_entrance_coordinate = Vector3i(floori(position.x), floori(position.y), floori(position.z))
 	world.voxel_model.protect_edit_cells(LevelEntrancePlacement.get_protected_cells(position))
 	_level_entrance = LevelEntrance.new()
-	add_child(_level_entrance)
+	overworld.add_child(_level_entrance)
 	_level_entrance.setup(position, world_spawn, block_catalog, level_entrance_definition)
 	_show_world_level_interaction()
 
@@ -680,6 +681,7 @@ func _enter_level():
 	_location_state.enter_level(return_position)
 	world.suspend()
 	world_entity_coordinator.suspend()
+	overworld.visible = false
 	overworld_loot.suspend()
 	_level_entrance.visible = false
 	game_environment.set_outdoor_presentation_enabled(false)
@@ -742,6 +744,7 @@ func _exit_level(restore_from_defeat: bool = false):
 	if restore_from_defeat:
 		_restore_player_from_defeat(player.global_position)
 	game_environment.set_outdoor_presentation_enabled(true)
+	overworld.visible = true
 	_level_entrance.visible = true
 	_reset_camera_position()
 	_level_runtime.queue_free()
@@ -907,6 +910,7 @@ func _enter_structure_designer(draft: StructureDraft) -> void:
 		game_session.is_saving_suspended(),
 		world.is_suspended(),
 		world_entity_coordinator.is_suspended(),
+		overworld.visible,
 		game_environment.is_clock_paused(),
 		game_environment.is_debug_panel_input_enabled(),
 		player,
@@ -942,10 +946,9 @@ func _enter_structure_designer(draft: StructureDraft) -> void:
 	else:
 		world.suspend()
 		world_entity_coordinator.suspend()
+		overworld.visible = false
 		overworld_loot.suspend()
 		game_environment.set_outdoor_presentation_enabled(false)
-		if _level_entrance != null:
-			_level_entrance.visible = false
 	_structure_designer_runtime = structure_designer_runtime_scene.instantiate() as StructureDesignerRuntime
 	assert(_structure_designer_runtime != null)
 	add_child(_structure_designer_runtime)
@@ -988,6 +991,7 @@ func _restore_structure_lifecycle() -> void:
 			overworld_loot.resume()
 		if _level_entrance != null:
 			_level_entrance.visible = snapshot.entrance_visible
+	overworld.visible = snapshot.overworld_visible
 	player.process_mode = snapshot.player_process_mode
 	player.visible = snapshot.player_visible
 	camera_rig.process_mode = snapshot.camera_process_mode

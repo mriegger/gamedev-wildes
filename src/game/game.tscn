@@ -69,7 +69,9 @@ structure_designer_runtime_scene = ExtResource("30_structure_runtime")
 structure_terrain_shader = ExtResource("31_structure_shader")
 loot_drop_scene = ExtResource("39_loot_drop")
 
-[node name="World" parent="." instance=ExtResource("2_world")]
+[node name="Overworld" type="Node3D" parent="."]
+
+[node name="World" parent="Overworld" instance=ExtResource("2_world")]
 
 [node name="Player" parent="." instance=ExtResource("3_player")]
 
@@ -77,7 +79,7 @@ loot_drop_scene = ExtResource("39_loot_drop")
 
 [node name="Environment" parent="." instance=ExtResource("5_environment")]
 
-[node name="WorldEntities" type="Node3D" parent="."]
+[node name="WorldEntities" type="Node3D" parent="Overworld"]
 script = ExtResource("14_entities")
 
 [node name="SlimeAttachments" type="Node" parent="."]
@@ -118,9 +120,9 @@ script = ExtResource("7_session")
 [node name="LevelInteractionCoordinator" type="Node" parent="."]
 script = ExtResource("25_level_interaction")
 
-[node name="PumpkinPatch" parent="." instance=ExtResource("32_pumpkin_patch")]
+[node name="PumpkinPatch" parent="Overworld" instance=ExtResource("32_pumpkin_patch")]
 
-[node name="AppleTrees" parent="." instance=ExtResource("35_apple_trees")]
+[node name="AppleTrees" parent="Overworld" instance=ExtResource("35_apple_trees")]
 
 [node name="SaveStatusLayer" type="CanvasLayer" parent="."]
 process_mode = 2

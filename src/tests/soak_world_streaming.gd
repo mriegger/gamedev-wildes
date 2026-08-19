@@ -76,8 +76,8 @@ func _process(_delta: float) -> bool:
 		print("[soak] game added frame %d" % _frame)
 		_phase = 1
 	elif _phase == 1 and _frame == 10:
-		_world = _game.get_node_or_null("World") as WorldController
-		_player = _game.get_node_or_null("Player") as PlayerMotor
+		_world = _game.world
+		_player = _game.player
 		if _world == null or _player == null:
 			_fail("world or player null after add")
 			return false
