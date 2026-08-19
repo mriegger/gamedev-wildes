@@ -8,6 +8,7 @@ static func get_item_stat_lines(item_definition: ItemDefinition) -> Array[String
 	if armor != null:
 		lines.append("Slot: %s" % ArmorDefinition.get_slot_label(armor.armor_slot))
 	lines.append_array(get_melee_stat_lines(item_definition))
+	lines.append_array(get_consumable_stat_lines(item_definition))
 	lines.append_array(get_modifier_stat_lines(item_definition.stat_modifiers))
 	return lines
 
@@ -28,6 +29,16 @@ static func get_melee_stat_lines(item_definition: ItemDefinition) -> Array[Strin
 	lines.append("Cooldown: %s" % highlight("%ss" % format_number(profile.cooldown)))
 	lines.append("Sweep: %s" % highlight("%s°" % format_number(profile.sweep_degrees)))
 	lines.append("Knockback: %s" % highlight(format_number(profile.knockback_speed)))
+	return lines
+
+static func get_consumable_stat_lines(item_definition: ItemDefinition) -> Array[String]:
+	assert(item_definition != null)
+	var lines: Array[String] = []
+	var consumable_action := item_definition.secondary_action as ConsumableActionDefinition
+	if consumable_action == null:
+		return lines
+	var restored_health := consumable_action.health_restore_fraction * 100.0
+	lines.append("Health: %s" % highlight("+%s" % format_number(restored_health)))
 	return lines
 
 static func get_modifier_stat_lines(modifiers: Array[StatModifier]) -> Array[String]:

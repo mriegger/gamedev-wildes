@@ -185,7 +185,7 @@ panel; its initial recipe combines two pumpkins and two apples into one health p
 show a short description of the selected output above its ingredients. Weapon and armor recipes
 also show their item stats below the ingredients, with numeric values in the same yellow-gold used
 for weakness damage. Weapon stats include damage type, maximum damage and its authored range,
-reach, cooldown, sweep, and knockback. Catalogs
+reach, cooldown, sweep, and knockback; consumable stats show the amount of health restored. Catalogs
 use materials from the backpack and hotbar and craft immediately when the enabled Craft button is
 pressed, playing one success sound. Apples and pumpkins each restore 10% of maximum health, while
 health potions restore health completely.

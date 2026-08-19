@@ -15,6 +15,7 @@ var _displayed_experience: float = -1.0
 @onready var rarity_label: Label = $Margin/Content/Header/Identity/Rarity
 @onready var proficiency_level_label: Label = $Margin/Content/ProficiencyLevel
 @onready var proficiency_experience_label: Label = $Margin/Content/ProficiencyExperience
+@onready var stats_heading: Label = $Margin/Content/StatsHeading
 @onready var stats_label: RichTextLabel = $Margin/Content/Stats
 @onready var rune_stats_label: Label = $Margin/Content/RuneStats
 
@@ -25,11 +26,8 @@ func setup(
 	equipment_instance: EquipmentInstance = null,
 ) -> void:
 	assert(item_definition != null)
-	assert(item_definition.rarity != null)
 	assert(item_proficiency != null)
 	assert(item_catalog != null)
-	assert(item_definition is RuneDefinition or item_definition.proficiency != null)
-	assert(item_definition is RuneDefinition or item_proficiency.has_proficiency(item_definition.id))
 	_item_definition = item_definition
 	_item_proficiency = item_proficiency
 	_item_catalog = item_catalog
@@ -60,14 +58,20 @@ func _refresh() -> void:
 	if _equipment_instance != null:
 		for affix in _equipment_instance.affixes:
 			item_name_label.text += " %s" % _item_catalog.get_equipment_affix(affix.affix_id).display_name_suffix
-	rarity_label.text = _item_definition.rarity.display_name
-	rarity_label.add_theme_color_override("font_color", _item_definition.rarity.display_color)
+	var rarity := _item_definition.rarity
+	rarity_label.visible = rarity != null
+	if rarity != null:
+		rarity_label.text = rarity.display_name
+		rarity_label.add_theme_color_override("font_color", rarity.display_color)
 	var has_proficiency := _has_proficiency()
 	proficiency_level_label.visible = has_proficiency
 	proficiency_experience_label.visible = has_proficiency
 	if has_proficiency:
 		_refresh_proficiency()
-	stats_label.text = "\n".join(_get_stat_lines())
+	var stat_lines := _get_stat_lines()
+	stats_heading.visible = not stat_lines.is_empty()
+	stats_label.visible = not stat_lines.is_empty()
+	stats_label.text = "\n".join(stat_lines)
 	var rune_stat_lines := _get_socketed_rune_stat_lines()
 	rune_stats_label.text = "\n".join(rune_stat_lines)
 	rune_stats_label.visible = not rune_stat_lines.is_empty()

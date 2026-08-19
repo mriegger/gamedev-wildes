@@ -115,9 +115,7 @@ func _get_tooltip_definition() -> ItemDefinition:
 	var definition := catalog.get_definition(item_id)
 	if definition is RuneDefinition:
 		return definition
-	if not catalog.is_combat_item(item_id):
-		return null
-	if definition.rarity == null or definition.proficiency == null or not item_proficiency.has_proficiency(item_id):
+	if ItemStatFormatter.get_item_stat_lines(definition).is_empty():
 		return null
 	return definition
 

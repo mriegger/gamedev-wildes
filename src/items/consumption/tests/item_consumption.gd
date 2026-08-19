@@ -20,6 +20,10 @@ func _run() -> void:
 	_expect(pumpkin_action != null and is_equal_approx(pumpkin_action.health_restore_fraction, 0.1), "pumpkin does not restore ten percent health")
 	_expect(apple_action != null and is_equal_approx(apple_action.health_restore_fraction, 0.1), "apple does not restore ten percent health")
 	_expect(potion_action != null and is_equal_approx(potion_action.health_restore_fraction, 1.0), "health potion is not a full-health consumable")
+	var highlight_color := CombatPresentationPalette.WEAK_DAMAGE_COLOR.to_html(false)
+	_expect(ItemStatFormatter.get_item_stat_lines(pumpkin) == ["Health: [b][color=#%s]+10[/color][/b]" % highlight_color], "pumpkin health stat is incorrect")
+	_expect(ItemStatFormatter.get_item_stat_lines(apple) == ["Health: [b][color=#%s]+10[/color][/b]" % highlight_color], "apple health stat is incorrect")
+	_expect(ItemStatFormatter.get_item_stat_lines(health_potion) == ["Health: [b][color=#%s]+100[/color][/b]" % highlight_color], "health potion stat is incorrect")
 	_expect(pumpkin.consume_audio != null and pumpkin.consume_audio.streams.size() == 1, "pumpkin munch audio is not configured")
 	_expect(pumpkin.consume_audio.streams[0].resource_path == "res://assets/audio/sfx/items/consume/munch_crunchy_fruit_sequence_3x_CC0.wav", "pumpkin uses the wrong consume sound")
 	_expect(health_potion.consume_audio != null and health_potion.consume_audio.streams.size() == 1, "health potion consume audio is not configured")
@@ -41,6 +45,22 @@ func _run() -> void:
 		),
 		"test inventory contents could not be restored",
 	)
+	var consumable_slot := (load("res://inventory/ui/inventory_slot.tscn") as PackedScene).instantiate() as InventorySlot
+	root.add_child(consumable_slot)
+	consumable_slot.set_inventory(inventory)
+	consumable_slot.set_item_proficiency(ItemProficiency.new(item_catalog))
+	consumable_slot.set_slot_index(0)
+	consumable_slot.set_item(&"pumpkin", 2)
+	var consumable_tooltip := consumable_slot._make_custom_tooltip(consumable_slot.tooltip_text) as ItemTooltip
+	_expect(consumable_tooltip != null, "pumpkin did not expose its health stat tooltip")
+	if consumable_tooltip != null:
+		root.add_child(consumable_tooltip)
+		_expect(not consumable_tooltip.rarity_label.visible, "ordinary consumable tooltip showed a rarity")
+		_expect(not consumable_tooltip.proficiency_level_label.visible and not consumable_tooltip.proficiency_experience_label.visible, "ordinary consumable tooltip showed proficiency")
+		_expect(consumable_tooltip.stats_label.get_parsed_text() == "Health: +10", "pumpkin tooltip health stat is incorrect")
+		_expect(consumable_tooltip.get_combined_minimum_size().y < 200.0, "pumpkin tooltip expanded beyond its content")
+		consumable_tooltip.free()
+	consumable_slot.free()
 	var stats := ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
 	var inventory_loadout := InventoryTestFixture.create_loadout(inventory, stats)
 	_expect(inventory_loadout != null, "inventory loadout setup failed")

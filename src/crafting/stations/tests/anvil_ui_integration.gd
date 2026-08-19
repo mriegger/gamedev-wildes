@@ -132,6 +132,9 @@ func _process(_delta: float) -> bool:
 		var recipe_list := _hud.cauldron_panel.get_node("Margin/Content/Body/Recipes/RecipeScroll/RecipeList") as VBoxContainer
 		_expect(recipe_list.get_child_count() == 1, "cauldron panel did not show one potion recipe")
 		_expect(_hud.cauldron_panel.get_selected_recipe_id() == &"health_potion", "cauldron did not select the health potion recipe")
+		var potion_stats := _hud.cauldron_panel.get_node("Margin/Content/Body/Details/Stats") as RichTextLabel
+		_expect(potion_stats.visible and potion_stats.get_parsed_text().contains("Health: +100"), "health potion recipe did not show its recovery stat")
+		_expect(potion_stats.text.contains("[b][color=#%s]+100[/color][/b]" % CombatPresentationPalette.WEAK_DAMAGE_COLOR.to_html(false)), "health potion recovery value is not highlighted and bold")
 		_expect(_hud.cauldron_panel.get_craft_button().is_craft_enabled(), "available health potion recipe was disabled")
 		_hud.cauldron_panel.get_craft_button().pressed.emit()
 		_expect(_inventory.get_inventory_item_count(&"health_potion") == 1, "cauldron did not craft a health potion")
