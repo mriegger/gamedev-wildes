@@ -16,7 +16,13 @@ const MIXED_NIGHT_STEPS: int = 120
 const MIXED_NIGHT_DELTA: float = 0.05
 const STREAM_RETIRE_SECONDS: float = 0.4
 const EXPECTED_STONE_GOLEM_COUNT: int = 2
-const ZOMBIE_OFFSETS: Array[Vector2i] = [Vector2i(0, -10)]
+const ZOMBIE_OFFSETS: Array[Vector2i] = [
+	Vector2i(-8, -4),
+	Vector2i(0, -10),
+	Vector2i(8, -4),
+	Vector2i(-4, -16),
+	Vector2i(4, -16),
+]
 const SKELETON_OFFSETS: Array[Vector2i] = [Vector2i(-10, -8), Vector2i(0, -12), Vector2i(10, -8)]
 const STONE_GOLEM_OFFSETS: Array[Vector2i] = [Vector2i(-16, 0), Vector2i(16, 0)]
 const SHEEP_OFFSETS: Array[Vector2i] = [Vector2i(-14, 8), Vector2i(-7, 14), Vector2i(7, 14), Vector2i(14, 8), Vector2i(-14, -14), Vector2i(14, -14)]
@@ -184,6 +190,29 @@ func _assert_mixed_night_population(coordinator: WorldEntityCoordinator, catalog
 	_expect(night_ids.size() == 3 and night_ids.has(&"zombie") and night_ids.has(&"skeleton") and night_ids.has(&"stone_golem"), "%s night species IDs changed" % context)
 	_expect(coordinator.get_runtime().get_definition_count(&"stone_golem") == 2, "%s did not contain exactly two Stone Golems" % context)
 
+func _prepare_full_night_population(coordinator: WorldEntityCoordinator, catalog: EntityCatalog, player_position: Vector3, region_index: int) -> void:
+	var runtime := coordinator.get_runtime()
+	var bird_count := runtime.get_definition_count(&"bird")
+	var expected_bird_count := catalog.get_definition(&"bird").ambient_max_active
+	_expect(bird_count == expected_bird_count, "region %d did not reach the Bird cap before its final night transition" % region_index)
+	coordinator._spawn_elapsed = 0.0
+	coordinator.tick(0.0, _observation(player_position), NIGHT_TIME)
+	var transition_context := "region %d final night transition" % region_index
+	_assert_population(coordinator, catalog, player_position, NIGHT_TIME, transition_context)
+	_expect(runtime.get_active_count() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE - bird_count, "%s did not retire every Bird" % transition_context)
+	for replacement_index in range(bird_count):
+		var count_before := runtime.get_active_count()
+		coordinator._spawn_elapsed = WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS
+		coordinator.tick(0.0, _observation(player_position), NIGHT_TIME)
+		var replacement_context := "region %d night replacement %d" % [region_index, replacement_index]
+		_assert_population(coordinator, catalog, player_position, NIGHT_TIME, replacement_context)
+		_expect(runtime.get_active_count() == count_before + 1, "%s did not add exactly one night actor" % replacement_context)
+	_expect(
+		runtime.get_active_count() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE,
+		"region %d night replacements did not restore the total population cap" % region_index,
+	)
+	_assert_mixed_night_population(coordinator, catalog, "region %d prepared night workload" % region_index)
+
 func _workload_offsets(definition_id: StringName) -> Array[Vector2i]:
 	match definition_id:
 		&"zombie":
@@ -254,7 +283,7 @@ func _arrange_active_population(coordinator: WorldEntityCoordinator, player_posi
 				if sheep != null:
 					sheep._path_follower.request_repath()
 		coordinator.get_runtime()._spatial_index.upsert(actor.runtime_id, actor.global_position, actor.get_world_bounds())
-	_expect(int(next_index[&"zombie"]) == ZOMBIE_OFFSETS.size(), "active workload did not arrange its Zombie")
+	_expect(int(next_index[&"zombie"]) == ZOMBIE_OFFSETS.size(), "active workload did not arrange %d Zombies" % ZOMBIE_OFFSETS.size())
 	_expect(int(next_index[&"skeleton"]) == SKELETON_OFFSETS.size(), "active workload did not arrange three Skeletons")
 	_expect(int(next_index[&"stone_golem"]) == STONE_GOLEM_OFFSETS.size(), "active workload did not arrange two Stone Golems")
 	_expect(int(next_index[&"sheep"]) == SHEEP_OFFSETS.size(), "active workload did not arrange six Sheep")
@@ -308,12 +337,13 @@ func _record_path_acquisition(coordinator: WorldEntityCoordinator) -> void:
 
 func _assert_full_region_path_acquisition(coordinator: WorldEntityCoordinator, context: String) -> void:
 	var actors := coordinator.get_runtime().get_active_actors()
-	_expect(actors.size() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "%s did not retain twelve actors for path evidence" % context)
+	_expect(actors.size() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "%s did not retain the full population for path evidence" % context)
 	for actor in actors:
-		var record := _path_acquisition_by_runtime_id.get(actor.runtime_id) as Dictionary
-		_expect(record != null, "%s runtime ID %d had no path record" % [context, actor.runtime_id])
-		if record == null:
+		var record_value: Variant = _path_acquisition_by_runtime_id.get(actor.runtime_id)
+		_expect(record_value is Dictionary, "%s runtime ID %d had no path record" % [context, actor.runtime_id])
+		if not record_value is Dictionary:
 			continue
+		var record := record_value as Dictionary
 		var acquired := bool(record["path_seen"])
 		_expect(acquired, "%s %s runtime ID %d never acquired a path" % [context, actor.definition.id, actor.runtime_id])
 		if acquired:
@@ -380,7 +410,7 @@ func _run() -> void:
 			_assert_population(coordinator, catalog, player_position, time_of_day, context)
 			_assert_path_budget(world, catalog, _ready_region, time_of_day, cycle, context)
 		_expect(coordinator.get_runtime().get_active_count() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "region %d did not reach the total population cap" % region_index)
-		_assert_mixed_night_population(coordinator, catalog, "region %d mixed night" % region_index)
+		_prepare_full_night_population(coordinator, catalog, player_position, region_index)
 		var stone_golem_activity := _arrange_active_population(coordinator, player_position)
 		var stream_mid_action := region_index % 2 == 1
 		var reached_mid_action := false
@@ -423,7 +453,9 @@ func _run() -> void:
 	coordinator.tick(0.0, _observation(final_position), NIGHT_TIME)
 	_assert_population(coordinator, catalog, final_position, NIGHT_TIME, "final streaming loss")
 	_expect(coordinator.get_runtime().get_definition_count(&"stone_golem") == 0, "final streaming loss retained a Stone Golem")
-	_expect(_instance_by_runtime_id.size() == STREAM_REGIONS.size() * CYCLES_PER_REGION, "soak observed %d unique runtime IDs instead of %d" % [_instance_by_runtime_id.size(), STREAM_REGIONS.size() * CYCLES_PER_REGION])
+	var expected_runtime_ids_per_region := CYCLES_PER_REGION + catalog.get_definition(&"bird").ambient_max_active
+	var expected_runtime_ids := STREAM_REGIONS.size() * expected_runtime_ids_per_region
+	_expect(_instance_by_runtime_id.size() == expected_runtime_ids, "soak observed %d unique runtime IDs instead of %d" % [_instance_by_runtime_id.size(), expected_runtime_ids])
 	_expect(_max_navigation_searches == WorldEntityCoordinator.MAX_NAVIGATION_SEARCHES_PER_TICK, "active workload never consumed both navigation searches")
 	_expect(_frames_with_navigation_search > 0, "active workload performed no navigation searches")
 	_expect(_full_combat_regions == STREAM_REGIONS.size() / 2, "soak completed %d full-combat regions instead of four" % _full_combat_regions)
