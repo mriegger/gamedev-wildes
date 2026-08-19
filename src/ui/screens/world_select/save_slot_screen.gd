@@ -13,6 +13,7 @@ signal session_requested(slot_id: int, save_data: Dictionary)
 @onready var dialog_confirm_button: WildesButton = $CreateDialog/CenterContainer/Panel/VBox/HBoxActions/ConfirmButton
 @onready var dialog_cancel_button: WildesButton = $CreateDialog/CenterContainer/Panel/VBox/HBoxActions/CancelButton
 @onready var delete_hold_screen: DeleteHoldScreen = $DeleteHoldScreen
+@onready var load_error_dialog: AcceptDialog = $LoadErrorDialog
 
 var slot_item_scene: PackedScene = preload("res://ui/screens/world_select/save_slot_item.tscn")
 var slot_instances: Array[SaveSlotItem] = []
@@ -122,6 +123,10 @@ func _on_delete_hold_confirmed(slot_id: int):
 
 func _on_back_pressed():
 	back_requested.emit()
+
+func show_load_error(message: String) -> void:
+	load_error_dialog.dialog_text = message
+	load_error_dialog.popup_centered()
 
 func _request_session(slot_id: int, data: Dictionary):
 	session_requested.emit(slot_id, data)

@@ -152,7 +152,24 @@ func add_modifier(modifier: StatModifier) -> bool:
 
 func can_replace_source_modifiers(source_id: StringName, source_instance_id: StringName, modifiers: Array[StatModifier]) -> bool:
 	var runtime_modifiers: Array[StatModifier] = []
-	return _prepare_source_modifiers(source_id, source_instance_id, modifiers, runtime_modifiers)
+	return _project_source_modifiers(source_id, source_instance_id, modifiers, runtime_modifiers) is Dictionary
+
+func can_restore_progression_with_replaced_source_modifiers(
+	snapshot: Dictionary,
+	source_id: StringName,
+	source_instance_id: StringName,
+	modifiers: Array[StatModifier],
+) -> bool:
+	var runtime_modifiers: Array[StatModifier] = []
+	var projected = _project_source_modifiers(
+		source_id,
+		source_instance_id,
+		modifiers,
+		runtime_modifiers,
+	)
+	if not projected is Dictionary:
+		return false
+	return not _validated_progression(snapshot, projected).is_empty()
 
 func replace_source_modifiers(source_id: StringName, source_instance_id: StringName, modifiers: Array[StatModifier]) -> bool:
 	return _replace_source_modifiers(source_id, source_instance_id, modifiers, false)
@@ -162,7 +179,7 @@ func replace_source_modifiers_preserving_health_ratio(source_id: StringName, sou
 
 func _replace_source_modifiers(source_id: StringName, source_instance_id: StringName, modifiers: Array[StatModifier], preserve_health_ratio: bool) -> bool:
 	var runtime_modifiers: Array[StatModifier] = []
-	if not _prepare_source_modifiers(source_id, source_instance_id, modifiers, runtime_modifiers):
+	if not _project_source_modifiers(source_id, source_instance_id, modifiers, runtime_modifiers) is Dictionary:
 		return false
 	var previous_maximum_hp := get_value(&"hp") if preserve_health_ratio and has_stat(&"hp") else 0.0
 	var previous_health_ratio := current_hp / previous_maximum_hp if previous_maximum_hp > 0.0 else 0.0
@@ -178,18 +195,23 @@ func _replace_source_modifiers(source_id: StringName, source_instance_id: String
 		_clamp_current_hp()
 	return true
 
-func _prepare_source_modifiers(source_id: StringName, source_instance_id: StringName, modifiers: Array[StatModifier], runtime_modifiers: Array[StatModifier]) -> bool:
+func _project_source_modifiers(
+	source_id: StringName,
+	source_instance_id: StringName,
+	modifiers: Array[StatModifier],
+	runtime_modifiers: Array[StatModifier],
+) -> Variant:
 	if source_id.is_empty() or source_instance_id.is_empty():
-		return false
+		return null
 	for index in range(modifiers.size()):
 		if modifiers[index] == null:
-			return false
+			return null
 		var modifier := modifiers[index].duplicate() as StatModifier
 		modifier.id = StringName("%s_%d" % [source_instance_id, index])
 		modifier.source_id = source_id
 		modifier.source_instance_id = source_instance_id
 		if not modifier.is_valid(_definition):
-			return false
+			return null
 		runtime_modifiers.append(modifier)
 	var projected := _modifiers.duplicate()
 	for modifier_id in projected.keys():
@@ -198,7 +220,9 @@ func _prepare_source_modifiers(source_id: StringName, source_instance_id: String
 			projected.erase(modifier_id)
 	for modifier in runtime_modifiers:
 		projected[modifier.id] = modifier
-	return _has_valid_modifier_values(projected)
+	if not _has_valid_modifier_values(projected):
+		return null
+	return projected
 
 func remove_modifier(modifier_id: StringName) -> bool:
 	if not _modifiers.has(modifier_id):
@@ -261,24 +285,34 @@ func snapshot_progression() -> Dictionary:
 	}
 
 func restore_progression(snapshot: Dictionary) -> bool:
+	var restored := _validated_progression(snapshot, _modifiers)
+	if restored.is_empty():
+		return false
+	level = int(restored["level"])
+	experience = int(restored["experience"])
+	_commit_current_hp(float(restored["current_hp"]))
+	return true
+
+func _validated_progression(snapshot: Dictionary, modifiers: Dictionary) -> Dictionary:
 	var restored_level := int(snapshot.get("level", 0))
 	var restored_experience := int(snapshot.get("experience", -1))
 	if restored_level < 1 or restored_experience < 0:
-		return false
+		return {}
 	if _definition.maximum_level > 0 and restored_level > _definition.maximum_level:
-		return false
+		return {}
 	if _definition.maximum_level > 0 and restored_level == _definition.maximum_level and restored_experience != 0:
-		return false
+		return {}
 	if (_definition.maximum_level == 0 or restored_level < _definition.maximum_level) and restored_experience >= _definition.get_experience_requirement(restored_level):
-		return false
-	var maximum_hp := get_value(&"hp") if has_stat(&"hp") else 0.0
+		return {}
+	var maximum_hp := _get_value_with_modifiers(&"hp", modifiers) if has_stat(&"hp") else 0.0
 	var restored_hp := float(snapshot.get("current_hp", maximum_hp))
-	if not is_finite(restored_hp) or restored_hp < 0.0:
-		return false
-	level = restored_level
-	experience = restored_experience
-	_commit_current_hp(minf(restored_hp, maximum_hp))
-	return true
+	if not is_finite(restored_hp) or restored_hp < 0.0 or restored_hp > maximum_hp:
+		return {}
+	return {
+		"level": restored_level,
+		"experience": restored_experience,
+		"current_hp": restored_hp,
+	}
 
 func _clamp_current_hp():
 	if has_stat(&"hp"):

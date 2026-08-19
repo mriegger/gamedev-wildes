@@ -117,6 +117,7 @@ func _init():
 	_expect(hp_stats.set_current_hp(0.0) and depletion_count[0] == 2, "repeated zero HP emitted health depletion")
 	_expect(hp_stats.heal(1.0), "direct-death actor could not be healed")
 	_expect(hp_stats.restore_progression({"level": 1, "experience": 0, "current_hp": 0.0}) and depletion_count[0] == 3, "restored lethal HP did not emit health depletion")
+	_expect(not hp_stats.restore_progression({"level": 1, "experience": 0, "current_hp": 101.0}), "current HP above the effective maximum restored")
 	_expect(not hp_stats.set_current_hp(NAN), "non-finite current HP was accepted")
 	_expect(not hp_stats.set_base_value(&"strength", INF), "non-finite base stat was accepted")
 	var invalid_amount := _modifier(&"invalid_amount", &"invalid_item", &"strength", StatModifier.Operation.ADD, NAN)

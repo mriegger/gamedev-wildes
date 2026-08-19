@@ -152,10 +152,15 @@ func _run() -> void:
 		var saved_edits := world.snapshot_block_edits()
 		var decoded := SaveManager.decode_world_state({
 			"seed": 1337,
+			"placed_blocks": {},
+			"torch_attachments": {},
 			"copper_blocks": {"999,9,999": BlockId.Type.COPPER},
 			"generated_copper_chunks": {"49,49": true},
 			"removed_blocks": SaveManager.serialize_vector3i_dict(saved_edits["removed"]),
-		})
+		}) as WorldState
+		_expect(decoded != null, "deterministic copper save did not decode")
+		if decoded == null:
+			continue
 		var regenerated := matching_generator.build_cache_with_generation(origin_x, origin_z, matching_config.chunk_size, matching_config.max_build_y, decoded.placed_blocks, decoded.removed_blocks, {}, false, {}, true)
 		_expect((regenerated["copper_block_fast"] as Dictionary) == deposit, "save reload changed the deterministic deposit layout")
 		_expect(_cache_block(regenerated, first_position) == -1, "save reload restored mined copper in rebuilt chunk data")

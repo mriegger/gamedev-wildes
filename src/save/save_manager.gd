@@ -126,46 +126,90 @@ static func serialize_vector3i_dict(dict: Dictionary) -> Dictionary:
 			out[key_str] = v
 	return out
 
-static func _deserialize_block_ids(dict: Dictionary) -> Dictionary:
+static func _deserialize_block_ids(dict: Dictionary) -> Variant:
 	var out := {}
 	for key in dict:
+		if not key is String:
+			return null
 		var pos = _try_parse_vector3i(key)
-		if pos != null:
-			out[pos] = int(dict[key])
+		var encoded_block_id = dict[key]
+		if (
+			pos == null
+			or (typeof(encoded_block_id) != TYPE_INT and typeof(encoded_block_id) != TYPE_FLOAT)
+			or not is_finite(float(encoded_block_id))
+			or float(encoded_block_id) != float(int(encoded_block_id))
+		):
+			return null
+		var block_id := int(encoded_block_id)
+		if not BlockId.is_valid(block_id) or block_id == BlockId.Type.AIR:
+			return null
+		out[pos] = block_id
 	return out
 
-static func _deserialize_removed_blocks(dict: Dictionary) -> Dictionary:
+static func _deserialize_removed_blocks(dict: Dictionary) -> Variant:
 	var out := {}
 	for key in dict:
+		if not key is String or dict[key] != true:
+			return null
 		var pos = _try_parse_vector3i(key)
-		if pos != null:
-			out[pos] = true
+		if pos == null:
+			return null
+		out[pos] = true
 	return out
 
-static func _deserialize_torch_attachments(dict: Dictionary) -> Dictionary:
+static func _deserialize_torch_attachments(dict: Dictionary) -> Variant:
 	var out := {}
 	for key in dict:
+		if not key is String or not dict[key] is String:
+			return null
 		var pos = _try_parse_vector3i(key)
-		var attach_dir = _try_parse_vector3i(dict[key]) if dict[key] is String else null
-		if pos != null and attach_dir != null:
-			out[pos] = attach_dir
+		var attach_dir = _try_parse_vector3i(dict[key])
+		if pos == null or attach_dir == null or attach_dir not in TorchPlacement.CARDINAL_DIRECTIONS:
+			return null
+		out[pos] = attach_dir
 	return out
 
-static func decode_world_state(data: Dictionary) -> WorldState:
-	var placed_raw = data.get("placed_blocks", {})
-	var removed_raw = data.get("removed_blocks", {})
-	var torch_raw = data.get("torch_attachments", {})
+static func decode_world_state(data: Dictionary) -> Variant:
+	var encoded_seed = data.get("seed", null)
+	var placed_raw = data.get("placed_blocks", null)
+	var removed_raw = data.get("removed_blocks", null)
+	var torch_raw = data.get("torch_attachments", null)
+	if (
+		typeof(encoded_seed) != TYPE_INT
+		or int(encoded_seed) < 1
+		or not placed_raw is Dictionary
+		or not removed_raw is Dictionary
+		or not torch_raw is Dictionary
+	):
+		return null
+	var placed = _deserialize_block_ids(placed_raw)
+	var removed = _deserialize_removed_blocks(removed_raw)
+	var torch_attachments = _deserialize_torch_attachments(torch_raw)
+	if placed == null or removed == null or torch_attachments == null:
+		return null
+	for position in placed:
+		if removed.has(position):
+			return null
+	for position in torch_attachments:
+		if int(placed.get(position, BlockId.Type.AIR)) != BlockId.Type.TORCH:
+			return null
+	for position in placed:
+		if int(placed[position]) == BlockId.Type.TORCH and not torch_attachments.has(position):
+			return null
 	var position = Vector3.ZERO
 	var position_data = data.get("player_position", null)
-	if position_data is Array and position_data.size() == 3:
-		var decoded = Vector3(float(position_data[0]), float(position_data[1]), float(position_data[2]))
-		if decoded.length() > 1.0:
-			position = decoded
+	if position_data != null:
+		if not position_data is Array or position_data.size() != 3:
+			return null
+		for component in position_data:
+			if (typeof(component) != TYPE_INT and typeof(component) != TYPE_FLOAT) or not is_finite(float(component)):
+				return null
+		position = Vector3(float(position_data[0]), float(position_data[1]), float(position_data[2]))
 	return WorldState.new(
-		int(data.get("seed", -1)),
-		_deserialize_block_ids(placed_raw) if placed_raw is Dictionary else {},
-		_deserialize_removed_blocks(removed_raw) if removed_raw is Dictionary else {},
-		_deserialize_torch_attachments(torch_raw) if torch_raw is Dictionary else {},
+		int(encoded_seed),
+		placed,
+		removed,
+		torch_attachments,
 		position
 	)
 

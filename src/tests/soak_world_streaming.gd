@@ -223,7 +223,14 @@ func _make_saved_world() -> Dictionary:
 		"player_position": [SAVED_PLAYER_POSITION.x, SAVED_PLAYER_POSITION.y, SAVED_PLAYER_POSITION.z],
 		"player_perks": {"allocations": {}},
 		"placed_blocks": placed_blocks,
+		"removed_blocks": {},
 		"torch_attachments": torch_attachments,
+		"player_stats": null,
+		"item_proficiency": {},
+		"inventory": null,
+		"chest_inventories": {},
+		"pumpkin_patch": null,
+		"apple_trees": AppleTreeState.new().snapshot(),
 	}
 
 func _verify_torch_shadow_pool() -> bool:

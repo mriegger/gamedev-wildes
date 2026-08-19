@@ -12,6 +12,16 @@ func _init() -> void:
 	_expect(item_catalog != null and item_catalog.validate(block_catalog), "item catalog invalid")
 	_expect(player_stats_definition != null and player_stats_definition.validate(), "player stats definition invalid")
 	_expect(player_perk_rules != null and player_perk_rules.validate(player_stats_definition), "player perk rules invalid")
+	var version_six := {"version": 6}
+	_expect(SaveManager._migrate_save_data(version_six), "version six migration failed")
+	_expect(version_six.get("version", -1) == SaveManager.CURRENT_SAVE_VERSION, "version six migration version changed")
+	_expect(version_six.get("pumpkin_patch", null) == {"present": false}, "version six pumpkin migration shape changed")
+	_expect(version_six.get("player_perks", null) == {"allocations": {}}, "version six perk migration shape changed")
+	_expect(version_six.get("chest_inventories", null) == {}, "version six chest migration shape changed")
+	_expect(version_six.get("apple_trees", null) == AppleTreeState.new().snapshot(), "version six apple migration shape changed")
+	_expect(SaveManager.decode_world_state({"seed": 1, "placed_blocks": {"0,1,0": BlockId.Type.COUNT}, "removed_blocks": {}, "torch_attachments": {}, "player_position": null}) == null, "unknown placed block decoded")
+	_expect(SaveManager.decode_world_state({"seed": 1, "placed_blocks": {"0,1,0": BlockId.Type.TORCH}, "removed_blocks": {}, "torch_attachments": {}, "player_position": null}) == null, "torch without attachment decoded")
+	_expect(SaveManager.decode_world_state({"seed": 1, "placed_blocks": {}, "removed_blocks": {"invalid": true}, "torch_attachments": {}, "player_position": null}) == null, "malformed removed block decoded")
 	if block_catalog == null or item_catalog == null or player_stats_definition == null or player_perk_rules == null:
 		_finish("")
 		return
@@ -62,7 +72,11 @@ func _init() -> void:
 		var loaded := SaveManager.load_slot(slot_id)
 		_expect(bool(loaded.get("exists", false)), "saved slot did not load")
 		_expect(int(loaded.get("version", -1)) == SaveManager.CURRENT_SAVE_VERSION and not bool(loaded.get("incompatible", false)), "current-version slot marked incompatible")
-		var decoded := SaveManager.decode_world_state(loaded)
+		var decoded := SaveManager.decode_world_state(loaded) as WorldState
+		_expect(decoded != null, "saved world state did not decode")
+		if decoded == null:
+			_finish(path)
+			return
 		_expect(decoded.seed == 1337, "decoded seed changed")
 		_expect(decoded.player_position.is_equal_approx(doorway_anchor), "decoded persisted position differs")
 		var restored_inventory := InventoryModel.new(item_catalog)

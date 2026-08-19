@@ -70,6 +70,28 @@ func restore(saved_state: Dictionary) -> bool:
 	assert(applied)
 	return true
 
+func restore_progression(stats_snapshot: Dictionary, perk_snapshot: Dictionary) -> bool:
+	assert(_player_perks != null and _actor_stats != null)
+	var restored_level := int(stats_snapshot.get("level", 0))
+	var projected := PlayerPerks.new(_player_perks.get_rules())
+	if not projected.restore(perk_snapshot, restored_level):
+		return false
+	var modifiers := _build_modifiers(projected)
+	if not _actor_stats.can_restore_progression_with_replaced_source_modifiers(
+		stats_snapshot,
+		MODIFIER_SOURCE_ID,
+		MODIFIER_SOURCE_INSTANCE_ID,
+		modifiers,
+	):
+		return false
+	var perks_restored := _player_perks.restore(perk_snapshot, restored_level)
+	assert(perks_restored)
+	var modifiers_applied := _replace_modifiers(modifiers)
+	assert(modifiers_applied)
+	var stats_restored := _actor_stats.restore_progression(stats_snapshot)
+	assert(stats_restored)
+	return true
+
 func _apply_allocations() -> bool:
 	var modifiers := _build_modifiers(_player_perks)
 	if not _can_replace_modifiers(modifiers):

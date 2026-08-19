@@ -229,13 +229,15 @@ accumulating. Respawn, Main Menu, and window close restore a living player at wo
 saving resumes; exit paths then use the normal final-save and shutdown flow so zero HP is never
 persisted. Loading a historical zero-HP snapshot restores full health at world spawn before gameplay
 begins and immediately replaces the stored snapshot with that living state.
-Save version eight stores perk allocations separately and chest inventories keyed by stable block
-position, while item proficiency and per-stack socket IDs retain their existing shapes. Version-four
-saves first gain empty item proficiency, version-five inventory stacks then gain empty socket arrays,
-version-six saves gain an absent pumpkin-patch snapshot, and version-seven saves gain empty perk and
-chest allocations while their current-level XP is translated to the linear curve. The migration
-chain operates on a copy and commits only after every step is valid, preserving the original data on
-failure.
+Save version nine stores perk allocations, chest inventories keyed by stable block position, apple
+tree harvest state, item proficiency, and per-stack socket IDs. Version-four saves gain empty item
+proficiency, version-five inventory stacks gain empty socket arrays, version-six saves gain an absent
+pumpkin-patch snapshot, version-seven saves gain empty perk and chest allocations while their
+current-level XP is translated to the linear curve, and version-eight saves gain empty apple-tree
+state. The migration chain operates on a copy and commits only after every step is valid, preserving
+the original data on failure. `Game` restores world edits, inventory, proficiency, player progression,
+runes, modifiers, and chest contents before enabling `GameSession`. Invalid or retired content aborts
+startup, returns to world selection, and leaves the caller-owned payload and save file unchanged.
 
 Ambient overworld populations are transient and bounded by each definition's authored cap and a
 twelve-entity total. The current caps are six Sheep, six Zombies, and three Skeletons. A deterministic

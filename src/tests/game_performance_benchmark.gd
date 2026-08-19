@@ -119,6 +119,7 @@ func _make_saved_world() -> Dictionary:
 		"time_of_day": DAY_TIME,
 		"player_position": null,
 		"player_perks": {"allocations": {}},
+		"item_proficiency": {},
 		"placed_blocks": {},
 		"removed_blocks": {},
 		"torch_attachments": {},

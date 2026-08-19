@@ -202,3 +202,8 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 visible = false
+
+[node name="LoadErrorDialog" type="AcceptDialog" parent="."]
+title = "WORLD COULD NOT LOAD"
+dialog_text = "The selected world could not be loaded."
+ok_button_text = "BACK TO WORLDS"

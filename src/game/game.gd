@@ -6,6 +6,7 @@ const LEVEL_FADE_SECONDS: float = 0.18
 
 signal loading_progress(stage: String, percent: float, details: String)
 signal session_ready
+signal session_start_failed(message: String)
 signal main_menu_requested
 
 @export var pause_menu_scene: PackedScene
@@ -93,13 +94,16 @@ var _structure_lifecycle_snapshot: StructureDesignerLifecycleSnapshot
 
 func configure_session(slot_id: int, save_data: Dictionary, p_settings: GameSettings):
 	_slot_id = slot_id
-	_save_data = save_data
+	_save_data = save_data.duplicate(true)
 	settings = p_settings
-	_world_state = SaveManager.decode_world_state(save_data)
+	_world_state = SaveManager.decode_world_state(_save_data) as WorldState
 
 func _ready():
 	set_physics_process(false)
 	set_process_unhandled_input(false)
+	if _world_state == null:
+		_fail_session_start("This world could not be loaded because its saved world state is invalid or references unavailable blocks. The save was not changed.")
+		return
 	var block_catalog_valid := block_catalog.validate()
 	var item_catalog_valid := item_catalog.validate(block_catalog)
 	var crafting_catalog_valid := crafting_recipe_catalog.validate(item_catalog)
@@ -113,7 +117,7 @@ func _ready():
 	var level_encounter_catalog_valid := level_catalog_valid and entity_catalog_valid and LevelEncounterCatalogValidator.validate(level_catalog, entity_catalog)
 	var level_entrance_valid := level_catalog_valid and level_entrance_definition != null and level_entrance_definition.validate(level_catalog)
 	if not block_catalog_valid or not item_catalog_valid or not crafting_catalog_valid or not anvil_catalog_valid or not cauldron_catalog_valid or not entity_catalog_valid or not combat_particle_catalog_valid or not player_stats_valid or not player_perks_valid or not level_catalog_valid or not level_encounter_catalog_valid or not level_entrance_valid:
-		push_error("[Game] Catalog validation failed")
+		_fail_session_start("Game content validation failed. The save was not changed.")
 		return
 	var structure_file_store := StructureFileStore.new(ProjectSettings.globalize_path("res://../").simplify_path())
 	structure_designer_workflow.setup(structure_designer_dialogs, structure_file_store)
@@ -141,20 +145,26 @@ func _ready():
 	player_perks = PlayerPerks.new(player_perk_rules)
 	chest_storage = ChestInventoryStore.new(item_catalog)
 	item_proficiency = ItemProficiency.new(item_catalog)
-	_restore_inventory()
-	_restore_chest_inventories()
-	_restore_item_proficiency()
+	if not _restore_inventory():
+		_fail_session_start("This world could not be loaded because its saved inventory is invalid or references unavailable content. The save was not changed.")
+		return
+	if not _restore_chest_inventories():
+		_fail_session_start("This world could not be loaded because its saved chest contents are invalid or reference unavailable content. The save was not changed.")
+		return
+	if not _restore_item_proficiency():
+		_fail_session_start("This world could not be loaded because its saved item proficiency is invalid or references unavailable content. The save was not changed.")
+		return
 	rune_socketing_coordinator = RuneSocketingCoordinator.new()
 	if not rune_socketing_coordinator.setup(inventory_model, item_proficiency):
-		push_error("[Game] Saved rune socket state is invalid")
+		_fail_session_start("This world could not be loaded because its saved rune socket state is invalid. The save was not changed.")
 		return
 	inventory_stat_coordinator = InventoryStatCoordinator.new()
 	if not inventory_stat_coordinator.setup(inventory_model, player_stats):
-		push_error("[Game] Equipment modifiers are invalid")
+		_fail_session_start("This world could not be loaded because its saved equipment modifiers are invalid. The save was not changed.")
 		return
 	rune_effect_coordinator = RuneEffectCoordinator.new()
 	if not rune_effect_coordinator.setup(inventory_model, player_stats):
-		push_error("[Game] Socketed rune modifiers are invalid")
+		_fail_session_start("This world could not be loaded because its saved rune modifiers are invalid. The save was not changed.")
 		return
 	crafting_coordinator = CraftingCoordinator.new()
 	crafting_coordinator.setup(inventory_model, crafting_recipe_catalog)
@@ -163,6 +173,7 @@ func _ready():
 	cauldron_crafting_coordinator = CraftingCoordinator.new()
 	cauldron_crafting_coordinator.setup(inventory_model, cauldron_recipe_catalog)
 	if not _restore_player_progression():
+		_fail_session_start("This world could not be loaded because its saved player progression is invalid. The save was not changed.")
 		return
 	combat_progression_coordinator = CombatProgressionCoordinator.new()
 	combat_progression_coordinator.setup(player_stats, inventory_model, entity_catalog, item_proficiency)
@@ -190,43 +201,36 @@ func _ready():
 	set_process_unhandled_input(true)
 	session_ready.emit()
 
-func _restore_inventory():
+func _restore_inventory() -> bool:
 	var saved_inventory = _save_data.get("inventory", null)
-	if saved_inventory is Dictionary and not saved_inventory.is_empty():
-		if not inventory_model.from_dict(saved_inventory):
-			push_error("[Game] Saved inventory is invalid; using an empty inventory")
-			inventory_model.setup_empty()
-			return
-		if not inventory_model.migrate_starter_items():
-			push_warning("[Game] Starter item migration deferred because inventory is full")
-	else:
+	if saved_inventory == null:
 		inventory_model.setup_empty()
+		return true
+	if not saved_inventory is Dictionary or not inventory_model.from_dict(saved_inventory):
+		return false
+	if not inventory_model.migrate_starter_items():
+		push_warning("[Game] Starter item migration deferred because inventory is full")
+	return true
 
-func _restore_chest_inventories():
+func _restore_chest_inventories() -> bool:
 	var saved_chests = _save_data.get("chest_inventories", {})
-	if not saved_chests is Dictionary or not chest_storage.restore(saved_chests):
-		push_error("[Game] Saved chest inventories are invalid; using empty chest storage")
-		chest_storage = ChestInventoryStore.new(item_catalog)
+	return saved_chests is Dictionary and chest_storage.restore(saved_chests)
 
 func _restore_player_progression() -> bool:
 	var saved_stats = _save_data.get("player_stats", null)
-	var stats_restored := false
-	if saved_stats is Dictionary:
-		stats_restored = player_stats.restore_progression(saved_stats)
-		if not stats_restored:
-			push_error("[Game] Saved player stats are invalid; using base progression")
-	player_perk_coordinator = PlayerPerkCoordinator.new()
-	if not player_perk_coordinator.setup(player_perks, player_stats):
-		push_error("[Game] Player perk modifiers are invalid")
+	if saved_stats != null and not saved_stats is Dictionary:
 		return false
 	var saved_perks = _save_data.get("player_perks", {"allocations": {}})
-	if not saved_perks is Dictionary or not player_perk_coordinator.restore(saved_perks):
-		push_error("[Game] Saved player perks are invalid; using empty allocations")
-		var empty_perks_restored := player_perk_coordinator.restore({"allocations": {}})
-		assert(empty_perks_restored)
-	if stats_restored:
-		var final_stats_restored := player_stats.restore_progression(saved_stats)
-		assert(final_stats_restored)
+	if not saved_perks is Dictionary:
+		return false
+	player_perk_coordinator = PlayerPerkCoordinator.new()
+	if not player_perk_coordinator.setup(player_perks, player_stats):
+		return false
+	if saved_stats == null:
+		if not player_perk_coordinator.restore(saved_perks):
+			return false
+	elif not player_perk_coordinator.restore_progression(saved_stats, saved_perks):
+		return false
 	if not player_stats.is_dead():
 		return true
 	var health_restored := player_stats.set_current_hp(player_stats.get_value(&"hp"))
@@ -237,10 +241,9 @@ func _restore_player_progression() -> bool:
 	_save_data["player_stats"] = player_stats.snapshot_progression()
 	return true
 
-func _restore_item_proficiency():
+func _restore_item_proficiency() -> bool:
 	var saved_proficiency = _save_data.get("item_proficiency", null)
-	if saved_proficiency is Dictionary and not item_proficiency.restore(saved_proficiency):
-		push_error("[Game] Saved item proficiency is invalid; using base proficiency")
+	return saved_proficiency is Dictionary and item_proficiency.restore(saved_proficiency)
 
 func _setup_gameplay() -> bool:
 	camera_rig.setup(player, input_buffer)
@@ -279,15 +282,15 @@ func _setup_gameplay() -> bool:
 	player.bind_space(world.voxel_model, world, world_spawn, world.voxel_model)
 	_location_state = GameplayLocationState.new(player.global_position)
 	if not pumpkin_patch.setup(world.voxel_model, player, world.config.seed_value, _save_data.get("pumpkin_patch", null)):
-		push_error("[Game] Pumpkin patch state is invalid or no suitable new-world placement exists")
+		_fail_session_start("This world could not be loaded because its saved pumpkin patch is invalid, or a new patch could not be placed. The save was not changed.")
 		return false
 	if not apple_trees.setup(world.voxel_model, world.chunk_manager, world.config.seed_value, _save_data.get("apple_trees", null), item_catalog):
-		push_error("[Game] Apple tree state or content is invalid")
+		_fail_session_start("This world could not be loaded because its saved apple tree state or harvest content is invalid. The save was not changed.")
 		return false
 	harvest_coordinator = HarvestCoordinator.new()
 	var harvest_sources: Array[HarvestSource] = [pumpkin_patch, apple_trees]
 	if not harvest_coordinator.setup(harvest_sources, inventory_model, interaction_prompt_coordinator):
-		push_error("[Game] Harvest content is invalid")
+		_fail_session_start("Harvest content validation failed. The save was not changed.")
 		return false
 	player.setup_harvesting(harvest_coordinator)
 	camera_rig.reset_panel_obstruction()
@@ -306,6 +309,11 @@ func _setup_gameplay() -> bool:
 	camera_rig.current_yaw_deg = camera_rig.target_yaw_deg
 	camera_rig.camera.current = true
 	return true
+
+func _fail_session_start(message: String) -> void:
+	set_physics_process(false)
+	set_process_unhandled_input(false)
+	session_start_failed.emit(message)
 
 func _on_player_defeated():
 	if _death_screen != null and is_instance_valid(_death_screen):

@@ -41,6 +41,7 @@ func _start_session(slot_id: int, save_data: Dictionary):
 	_game.configure_session(slot_id, save_data, _settings)
 	_game.loading_progress.connect(loading.update_progress)
 	_game.session_ready.connect(_on_session_ready)
+	_game.session_start_failed.connect(_on_session_start_failed)
 	_game.main_menu_requested.connect(_on_game_main_menu_requested)
 	_game.visible = false
 	game_root.add_child(_game)
@@ -48,6 +49,13 @@ func _start_session(slot_id: int, save_data: Dictionary):
 func _on_session_ready():
 	_game.visible = true
 	_clear_screen()
+
+func _on_session_start_failed(message: String) -> void:
+	if _game and is_instance_valid(_game):
+		_game.queue_free()
+	_game = null
+	_show_world_select()
+	(_screen as SaveSlotScreen).show_load_error(message)
 
 func _on_game_main_menu_requested():
 	if _game and is_instance_valid(_game):
