@@ -96,6 +96,7 @@ func _test_duplicate_rune_aggregation() -> void:
 	var tooltip := _create_slot_tooltip("stacked-rune weapon")
 	if tooltip == null:
 		return
+	_expect(tooltip.stats_label.text.contains("Base Damage: 15"), "weapon tooltip ignored its damage multiplier")
 	_expect(tooltip.rune_stats_label.text == "(+200 HP)", "duplicate rune bonuses were not aggregated")
 	_expect(tooltip.rune_stats_label.get_theme_color("font_color") == ItemTooltip.RUNE_BONUS_COLOR, "aggregated rune bonus is not red")
 	tooltip.free()
@@ -107,10 +108,15 @@ func _build_catalog() -> ItemCatalog:
 	stacking_weapon.proficiency = ProficiencyDefinition.new()
 	stacking_weapon.proficiency.experience_requirements = PackedFloat64Array([100.0, 100.0, 100.0])
 	stacking_weapon.proficiency.slot_unlock_levels = PackedInt32Array([0, 1, 2])
+	var stacking_action := stacking_weapon.primary_action.duplicate(true) as MeleeAttackActionDefinition
+	stacking_action.attack_profile = stacking_action.attack_profile.duplicate(true) as MeleeAttackProfile
+	stacking_action.attack_profile.damage_multiplier = 1.5
+	stacking_weapon.primary_action = stacking_action
 	var definitions: Array[ItemDefinition] = []
 	definitions.assign(source.definitions)
 	definitions.append(stacking_weapon)
 	var catalog := ItemCatalog.new()
+	catalog.equipment_types = source.equipment_types
 	catalog.definitions = definitions
 	return catalog
 

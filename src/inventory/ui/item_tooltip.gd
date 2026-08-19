@@ -157,15 +157,30 @@ func _get_socketed_rune_stat_lines() -> Array[String]:
 
 func _get_rune_compatibility_line(rune: RuneDefinition) -> String:
 	var targets: Array[String] = []
-	if (rune.compatible_gear & RuneDefinition.CompatibleGear.WEAPON) != 0:
-		targets.append("Weapons")
-	if (rune.compatible_gear & RuneDefinition.CompatibleGear.ARMOR) != 0:
-		if rune.compatible_armor_slots == RuneDefinition.ALL_ARMOR_SLOTS:
-			targets.append("All Armor")
+	var armor_type := _item_catalog.get_equipment_type(&"armor")
+	for compatible_type in rune.compatible_equipment_types:
+		if not compatible_type.overlaps_branch(armor_type):
+			targets.append(compatible_type.display_name)
+			continue
+		var armor_slots: Array[String] = []
+		for armor_slot in range(ArmorDefinition.SLOT_COUNT):
+			if (rune.compatible_armor_slots & (1 << armor_slot)) != 0:
+				armor_slots.append(ArmorDefinition.get_slot_label(armor_slot))
+		if compatible_type == armor_type:
+			if rune.compatible_armor_slots == RuneDefinition.ALL_ARMOR_SLOTS:
+				targets.append("All Armor")
+			else:
+				for armor_slot in armor_slots:
+					targets.append("%s Armor" % armor_slot)
+		elif compatible_type.is_or_inherits(armor_type):
+			if rune.compatible_armor_slots == RuneDefinition.ALL_ARMOR_SLOTS:
+				targets.append("All %s" % compatible_type.display_name)
+			else:
+				targets.append("%s (%s)" % [compatible_type.display_name, ", ".join(armor_slots)])
+		elif rune.compatible_armor_slots == RuneDefinition.ALL_ARMOR_SLOTS:
+			targets.append(compatible_type.display_name)
 		else:
-			for armor_slot in range(ArmorDefinition.SLOT_COUNT):
-				if (rune.compatible_armor_slots & (1 << armor_slot)) != 0:
-					targets.append("%s Armor" % ArmorDefinition.get_slot_label(armor_slot))
+			targets.append("%s (Armor: %s)" % [compatible_type.display_name, ", ".join(armor_slots)])
 	return "Compatible: %s" % ", ".join(targets)
 
 func _get_stat_display_name(stat_id: StringName) -> String:

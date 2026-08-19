@@ -119,17 +119,20 @@ func _test_full_inventory_rejection(catalog: ItemCatalog) -> void:
 
 func _build_catalog() -> ItemCatalog:
 	var source := load("res://items/item_catalog.tres") as ItemCatalog
+	var armor_type := source.get_equipment_type(&"armor")
 	var weapon := source.get_definition(&"copper_sword").duplicate(true) as ItemDefinition
 	weapon.id = WEAPON_ID
 	weapon.proficiency = _proficiency_definition()
 	var rune := source.get_definition(RUNE_ID).duplicate(true) as RuneDefinition
 	var armor_only_rune := rune.duplicate(true) as RuneDefinition
 	armor_only_rune.id = ARMOR_ONLY_RUNE_ID
-	armor_only_rune.compatible_gear = RuneDefinition.CompatibleGear.ARMOR
+	var compatible_types: Array[EquipmentTypeDefinition] = [armor_type]
+	armor_only_rune.compatible_equipment_types = compatible_types
 	armor_only_rune.compatible_armor_slots = RuneDefinition.ALL_ARMOR_SLOTS
 	var sand := source.get_definition(&"sand_block")
 	var definitions: Array[ItemDefinition] = [weapon, rune, armor_only_rune, sand]
 	var catalog := ItemCatalog.new()
+	catalog.equipment_types = source.equipment_types
 	catalog.definitions = definitions
 	return catalog
 

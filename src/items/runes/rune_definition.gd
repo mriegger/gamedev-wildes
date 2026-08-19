@@ -1,11 +1,6 @@
 extends ItemDefinition
 class_name RuneDefinition
 
-enum CompatibleGear {
-	WEAPON = 1,
-	ARMOR = 2,
-}
-
 enum ArmorSlotMask {
 	HEAD = 1,
 	CHEST = 2,
@@ -13,14 +8,13 @@ enum ArmorSlotMask {
 	FEET = 8,
 }
 
-const ALL_COMPATIBLE_GEAR: int = CompatibleGear.WEAPON | CompatibleGear.ARMOR
 const ALL_ARMOR_SLOTS: int = ArmorSlotMask.HEAD | ArmorSlotMask.CHEST | ArmorSlotMask.LEGS | ArmorSlotMask.FEET
 
-@export_flags("Weapon:1", "Armor:2") var compatible_gear: int = 0
+@export var compatible_equipment_types: Array[EquipmentTypeDefinition] = []
 @export_flags("Head:1", "Chest:2", "Legs:4", "Feet:8") var compatible_armor_slots: int = 0
 @export var socket_modifiers: Array[StatModifier]
 
-func validate(source: String) -> bool:
+func validate(source: String, armor_type: EquipmentTypeDefinition) -> bool:
 	var valid := true
 	if rarity == null:
 		push_error("[RuneDefinition] Missing rarity for %s at %s" % [id, source])
@@ -31,14 +25,20 @@ func validate(source: String) -> bool:
 	if not stat_modifiers.is_empty():
 		push_error("[RuneDefinition] Rune modifiers must be socket-only for %s at %s" % [id, source])
 		valid = false
-	if compatible_gear == 0 or (compatible_gear & ALL_COMPATIBLE_GEAR) != compatible_gear:
-		push_error("[RuneDefinition] Invalid compatible gear for %s at %s" % [id, source])
+	if compatible_equipment_types.is_empty():
+		push_error("[RuneDefinition] Missing compatible equipment types for %s at %s" % [id, source])
 		valid = false
-	var supports_armor := (compatible_gear & CompatibleGear.ARMOR) != 0
+	var compatible_type_ids: Dictionary = {}
+	for equipment_type in compatible_equipment_types:
+		if equipment_type == null or equipment_type.id.is_empty() or compatible_type_ids.has(equipment_type.id):
+			push_error("[RuneDefinition] Invalid compatible equipment type for %s at %s" % [id, source])
+			valid = false
+			continue
+		compatible_type_ids[equipment_type.id] = true
 	if compatible_armor_slots < 0 or (compatible_armor_slots & ALL_ARMOR_SLOTS) != compatible_armor_slots:
 		push_error("[RuneDefinition] Invalid armor slots for %s at %s" % [id, source])
 		valid = false
-	elif supports_armor != (compatible_armor_slots != 0):
+	elif armor_type != null and _targets_branch(armor_type) != (compatible_armor_slots != 0):
 		push_error("[RuneDefinition] Armor compatibility mismatch for %s at %s" % [id, source])
 		valid = false
 	if socket_modifiers.is_empty():
@@ -68,15 +68,23 @@ func validate(source: String) -> bool:
 	return valid
 
 func is_compatible_with(item: ItemDefinition) -> bool:
-	if item == null or item is RuneDefinition:
+	if item == null or item is RuneDefinition or not is_equipment_type_compatible(item.equipment_type):
 		return false
 	var armor := item as ArmorDefinition
 	if armor != null:
-		return (
-			(compatible_gear & CompatibleGear.ARMOR) != 0
-			and (compatible_armor_slots & (1 << armor.armor_slot)) != 0
-		)
-	return (
-		(compatible_gear & CompatibleGear.WEAPON) != 0
-		and item.primary_action is MeleeAttackActionDefinition
-	)
+		return (compatible_armor_slots & (1 << armor.armor_slot)) != 0
+	return true
+
+func is_equipment_type_compatible(equipment_type: EquipmentTypeDefinition) -> bool:
+	if equipment_type == null:
+		return false
+	for compatible_type in compatible_equipment_types:
+		if compatible_type != null and equipment_type.is_or_inherits(compatible_type):
+			return true
+	return false
+
+func _targets_branch(branch_root: EquipmentTypeDefinition) -> bool:
+	for compatible_type in compatible_equipment_types:
+		if compatible_type != null and compatible_type.overlaps_branch(branch_root):
+			return true
+	return false

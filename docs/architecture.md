@@ -208,6 +208,10 @@ changes preserve the player's current health percentage. Runes on unselected wea
 armor remain persisted but inactive. Setup validates each rune and a conservative maximum active
 loadout before inventory changes can drive effect replacement.
 
+`EquipmentTypeDefinition` forms a catalog-owned hierarchy rooted at equipment. Weapons and armor
+use canonical type resources, and compatibility follows type ancestry plus the authoritative armor
+slot where applicable. Adding a weapon family extends that hierarchy without action-class checks.
+
 `Game` owns player stats and handles their completed health-depleted transition. Defeat puts
 the player motor into an input-blocking stopped state, closes inventory and debug panels, and
 presents a high-layer death screen. Overworld time and ambient entities continue, while dungeon

@@ -1,20 +1,42 @@
 extends Resource
 class_name ItemCatalog
 
+@export var equipment_types: Array[EquipmentTypeDefinition]:
+	set(value):
+		equipment_types = value
+		_rebuild_lookup()
+
 @export var definitions: Array[ItemDefinition]:
 	set(value):
 		definitions = value
 		_rebuild_lookup()
 
+var _equipment_types_by_id: Dictionary = {}
 var _definitions_by_id: Dictionary = {}
 var _definitions_by_block: Array[ItemDefinition] = []
 var _is_valid: bool = false
 
 func _rebuild_lookup() -> void:
+	_equipment_types_by_id.clear()
 	_definitions_by_id.clear()
 	_definitions_by_block.clear()
 	_definitions_by_block.resize(BlockId.Type.COUNT)
 	_is_valid = true
+	for equipment_type in equipment_types:
+		if equipment_type == null:
+			push_error("[ItemCatalog] Null equipment type")
+			_is_valid = false
+			continue
+		var source := equipment_type.resource_path
+		if not equipment_type.validate(source):
+			_is_valid = false
+		if equipment_type.id.is_empty():
+			continue
+		if _equipment_types_by_id.has(equipment_type.id):
+			push_error("[ItemCatalog] Duplicate equipment type ID %s at %s" % [equipment_type.id, source])
+			_is_valid = false
+			continue
+		_equipment_types_by_id[equipment_type.id] = equipment_type
 	for definition in definitions:
 		if definition == null:
 			push_error("[ItemCatalog] Null item definition")
@@ -90,12 +112,19 @@ func _is_supported_secondary_action(action: ItemActionDefinition) -> bool:
 	return action == null or action is BlockPlacementActionDefinition or action is ConsumableActionDefinition
 
 func _ensure_lookup() -> void:
-	if _definitions_by_block.size() != BlockId.Type.COUNT:
+	if (
+		_equipment_types_by_id.size() != equipment_types.size()
+		or _definitions_by_block.size() != BlockId.Type.COUNT
+		or _definitions_by_id.size() != definitions.size()
+	):
 		_rebuild_lookup()
 
 func validate(block_catalog: BlockCatalog) -> bool:
 	_ensure_lookup()
 	var valid := _is_valid
+	valid = _validate_equipment_type_hierarchy() and valid
+	var weapon_type := _equipment_types_by_id.get(&"weapon") as EquipmentTypeDefinition
+	var armor_type := _equipment_types_by_id.get(&"armor") as EquipmentTypeDefinition
 	var armor_sets_by_id: Dictionary = {}
 	var rarities_by_id: Dictionary = {}
 	var block_tags: Dictionary = {}
@@ -108,6 +137,20 @@ func validate(block_catalog: BlockCatalog) -> bool:
 			continue
 		var armor := definition as ArmorDefinition
 		var rune := definition as RuneDefinition
+		var melee := definition.primary_action as MeleeAttackActionDefinition
+		if definition.equipment_type != null and not _is_canonical_equipment_type(definition.equipment_type):
+			push_error("[ItemCatalog] Non-canonical equipment type %s for %s" % [definition.equipment_type.id, definition.id])
+			valid = false
+		if melee != null and (weapon_type == null or definition.equipment_type == null or not definition.equipment_type.is_or_inherits(weapon_type)):
+			push_error("[ItemCatalog] Melee item %s has a non-weapon equipment type" % definition.id)
+			valid = false
+		if armor != null:
+			if armor_type == null or definition.equipment_type == null or not definition.equipment_type.is_or_inherits(armor_type):
+				push_error("[ItemCatalog] Armor item %s has a non-armor equipment type" % definition.id)
+				valid = false
+		elif definition.equipment_type != null and armor_type != null and definition.equipment_type.is_or_inherits(armor_type):
+			push_error("[ItemCatalog] Non-armor item %s uses an armor equipment type" % definition.id)
+			valid = false
 		var combat_item := _is_combat_definition(definition)
 		if combat_item and definition.proficiency == null:
 			push_error("[ItemCatalog] Missing proficiency for combat item %s" % definition.id)
@@ -138,7 +181,8 @@ func validate(block_catalog: BlockCatalog) -> bool:
 					armor_sets_by_id[armor_set.id] = armor_set
 					valid = armor_set.validate(armor_set.resource_path) and valid
 		if rune != null:
-			valid = rune.validate(definition.resource_path) and valid
+			valid = rune.validate(definition.resource_path, armor_type) and valid
+			valid = _validate_compatible_equipment_types(rune.compatible_equipment_types, "rune %s" % rune.id) and valid
 		var placement := definition.secondary_action as BlockPlacementActionDefinition
 		if placement != null and placement.block != null and BlockId.is_valid(placement.block.id):
 			if block_catalog.get_definition(placement.block.id) != placement.block:
@@ -174,9 +218,56 @@ func validate(block_catalog: BlockCatalog) -> bool:
 			valid = false
 	return valid
 
+func _validate_equipment_type_hierarchy() -> bool:
+	var valid := true
+	var root := _equipment_types_by_id.get(&"equipment") as EquipmentTypeDefinition
+	if root == null or root.parent != null:
+		push_error("[ItemCatalog] Missing canonical equipment root")
+		valid = false
+	for equipment_type in equipment_types:
+		if equipment_type == null:
+			continue
+		if equipment_type.parent != null and not _is_canonical_equipment_type(equipment_type.parent):
+			push_error("[ItemCatalog] Non-canonical parent %s for equipment type %s" % [equipment_type.parent.id, equipment_type.id])
+			valid = false
+		var visited: Dictionary = {}
+		var current: EquipmentTypeDefinition = equipment_type
+		while current != null:
+			if visited.has(current):
+				push_error("[ItemCatalog] Equipment type cycle includes %s" % equipment_type.id)
+				valid = false
+				break
+			visited[current] = true
+			current = current.parent
+		if root != null and equipment_type != root and not equipment_type.is_or_inherits(root):
+			push_error("[ItemCatalog] Equipment type %s is outside the equipment hierarchy" % equipment_type.id)
+			valid = false
+	return valid
+
+func _validate_compatible_equipment_types(types: Array[EquipmentTypeDefinition], owner: String) -> bool:
+	var valid := true
+	for equipment_type in types:
+		if not _is_canonical_equipment_type(equipment_type):
+			var equipment_type_id: StringName = &"" if equipment_type == null else equipment_type.id
+			push_error("[ItemCatalog] Non-canonical compatible equipment type %s for %s" % [equipment_type_id, owner])
+			valid = false
+	return valid
+
+func _is_canonical_equipment_type(equipment_type: EquipmentTypeDefinition) -> bool:
+	return (
+		equipment_type != null
+		and _equipment_types_by_id.has(equipment_type.id)
+		and _equipment_types_by_id[equipment_type.id] == equipment_type
+	)
+
 func has_definition(id: StringName) -> bool:
 	_ensure_lookup()
 	return _definitions_by_id.has(id)
+
+func get_equipment_type(id: StringName) -> EquipmentTypeDefinition:
+	_ensure_lookup()
+	assert(_equipment_types_by_id.has(id))
+	return _equipment_types_by_id[id] as EquipmentTypeDefinition
 
 func is_combat_item(id: StringName) -> bool:
 	if not has_definition(id):
@@ -184,7 +275,7 @@ func is_combat_item(id: StringName) -> bool:
 	return _is_combat_definition(get_definition(id))
 
 func _is_combat_definition(definition: ItemDefinition) -> bool:
-	return definition is ArmorDefinition or definition.primary_action is MeleeAttackActionDefinition
+	return definition.equipment_type != null
 
 func get_definition(id: StringName) -> ItemDefinition:
 	_ensure_lookup()

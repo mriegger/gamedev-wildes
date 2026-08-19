@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="EquipmentTypeDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://equipment/types/equipment_type_definition.gd" id="1_type"]
+[ext_resource type="Resource" path="res://equipment/types/definitions/equipment.tres" id="2_parent"]
+
+[resource]
+script = ExtResource("1_type")
+id = &"armor"
+display_name = "Armor"
+parent = ExtResource("2_parent")

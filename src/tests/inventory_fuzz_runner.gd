@@ -56,6 +56,7 @@ func _make_catalog(max_stack: int, include_nonplaceable: bool = false) -> ItemCa
 		nonplaceable.max_stack = 1
 		definitions.append(nonplaceable)
 	var catalog := ItemCatalog.new()
+	catalog.equipment_types = _base_item_catalog.equipment_types
 	catalog.definitions = definitions
 	assert(catalog.validate(_block_catalog))
 	if not include_nonplaceable:
