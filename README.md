@@ -5,8 +5,9 @@ endless procedurally generated world under an orthographic isometric camera, min
 a nine-slot hotbar, and build with them. The loop is explore → mine → build, on terrain that
 streams in around you as you walk, under a running day/night cycle.
 
-Worlds are saved to three local slots and persist your seed, edits, player and chest inventories,
-position, and world time. Copper deposits regenerate deterministically from the world seed.
+Worlds are saved to three local slots and persist your seed, edits, inventory, equipment instances,
+progression, chest contents, uncollected overworld loot, harvest state, position, and world time.
+Copper deposits regenerate deterministically from the world seed.
 
 ## Controls
 
@@ -18,7 +19,7 @@ position, and world time. Copper deposits regenerate deterministically from the 
 | `Q` / `E` | Rotate the camera 45° |
 | Mouse wheel / pinch | Zoom |
 | Left-click / hold | Open a targeted chest or crafting station, or use the selected item; hold to mine, or click to attack, till soil, or consume food and potions |
-| Right-click | Use the selected item's secondary action, such as placing blocks |
+| Right-click | Use the selected item's secondary action, including consuming food or potions and placing blocks |
 | `F` | Enter or leave a nearby dungeon |
 | `1`–`9` | Select hotbar slot; while the backpack is open, assign the hovered item to that slot |
 | `Tab` | Toggle backpack and crafting |
@@ -123,7 +124,8 @@ Seeded copper deposits generate after the surrounding terrain as connected 5–3
 of each deposit stays underground, while some deposits expose up to three blocks at the surface.
 Stone and the other common blocks are hand-minable. Copper requires a stone or copper pickaxe,
 while the masonry blocks require a copper pickaxe. Torches are placeable blocks that you can walk
-through — each is an omni light with a 9-block radius.
+through — each is an omni light with a 9-block radius. Chests are crafted from wood, placed in the
+overworld, and open a 15-slot storage panel. A chest must be empty before it can be mined.
 Overworld torch shadows are configurable for the nearest 0, 1, 2, or 4 lights and default to the
 nearest one. Chests are solid 1×1 placeable blocks rendered as separate body and lid meshes with
 dedicated chest textures. They cannot be mined by hand, and only empty chests can be mined with a
@@ -146,6 +148,16 @@ Damaged enemies show a small black-and-red health bar above their model. Success
 damage numbers that rise and fade above each affected enemy; the numbers remain legible at the
 default camera zoom and are hidden once the camera is zoomed farther out.
 Held tools use either runtime-extruded pixel art or authored 3D scenes.
+
+**Loot.** Overworld enemies roll deterministic per-species loot pools when defeated. A zombie
+independently has a 75% chance to drop 1–3 Copper and a 17% chance to select one gear reward weighted
+10 plain Copper Sword, 4 affixed-and-runed Copper Sword, and 3 Stout Copper Helmet. Each physical
+weapon or armor copy has its own stable instance ID, rolled affixes, and ordered rune
+slots even when two copies share the same item definition. Material drops merge nearby and expire
+after five minutes; equipment does not time-expire. The bounded world-loot state survives chunk
+streaming, transitions, and save/load. A full backpack leaves the drop in the world; at the hard
+128-entry cap, admitting a new batch evicts the nearest-expiring material first, then the oldest
+equipment entry only when every retained entry is equipment.
 
 **Lighting.** Per-vertex ambient occlusion is baked into chunk meshes. A directional sun plus a
 fill light drive real-time shadows, and a keyframed day/night profile interpolates sky, ambient,
@@ -191,7 +203,8 @@ the game. The pause menu exposes persistent frame-rate, 3D resolution,
 anti-aliasing, fog, sun-shadow, shadow-range, overworld and dungeon torch-shadow, and
 ambient-audio settings. Dungeon shadows default to the nearest six authored torches and fade
 between active casters. Saves live in `user://saves/` and autosave every 30 seconds, plus shortly
-after any block edit. Saving inside a dungeon records its overworld return position because
+after any block edit, chest-content change, or persistent world-loot change. Saving inside a dungeon
+records its overworld return position because
 dungeon layouts are recreated on entry.
 
 ## Project Structure
@@ -210,6 +223,7 @@ src/                    Godot project. Entry scene: app/app.tscn
 ├── entities/           Entity catalog, AI, voxel navigation, populations, and custom presentation
 ├── levels/             Dungeon content, definitions, generation, runtime, entrance, and presentation
 ├── items/              Item catalog, action definitions, and held-item scenes
+├── loot/               Loot definitions, deterministic resolution, world drops, and focused tests
 ├── mining/             Mining-owned presentation and focused tests
 ├── player/             Motor, interaction, targeting, input, animation, camera/, debug/, and visuals/
 ├── environment/        Packaged environment scene and day_night/ system

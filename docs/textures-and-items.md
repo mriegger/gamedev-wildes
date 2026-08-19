@@ -50,16 +50,120 @@ Create and register an `ItemDefinition` in the same way. Assign only the actions
 
 Item IDs are `StringName` values at runtime and JSON strings in saves. `BlockId` integers remain limited to world generation, voxel edits, meshing, and world persistence.
 
-Inventory slots contain typed `InventoryStack` objects at runtime. Saves encode each stack as `{item_id, count, socketed_rune_ids}`. The rune IDs are empty for ordinary stacks and preserve the installed runes on each physical gear copy. New worlds begin with every inventory region empty and record the current starter-item migration version so a reload cannot grant legacy items. When a pre-tool save is restored, its one-time migration still preserves every existing stack and inserts the historical starter items when fillable inventory space is available. Previously saved tools remain untouched even when they are no longer granted to new worlds.
+Inventory slots contain typed `InventoryStack` objects. Saves encode every stack as
+`{item_id, count, equipment_instance}`. Materials use `equipment_instance: null`. Every weapon or
+armor stack has count one and an `EquipmentInstance` containing its stable `instance_id`, concrete
+affix stat rolls, and ordered `socketed_rune_ids`.
+
+The item ID identifies the shared definition; the instance ID identifies one physical copy. Two
+ordinary Copper Swords in the backpack both have item ID `copper_sword`, but each has a different
+instance ID. Moving either sword through the hotbar, backpack, equipment slots, a chest, or world
+loot preserves that ID and its per-copy data. Instance IDs are allocated monotonically and must be
+unique across all of those owners. Do not author or reuse instance IDs in content resources.
+
+New worlds begin with every inventory region empty and record the current starter-item migration
+version so a reload cannot grant legacy items. A pre-tool save's one-time migration preserves every
+existing stack and inserts the historical starter items only when fillable inventory space is
+available. Previously saved tools remain untouched even when they are no longer granted to new
+worlds.
+
+## Add equipment
+
+Create an `ItemDefinition`, or an `ArmorDefinition` for armor, and configure:
+
+- the canonical `EquipmentTypeDefinition` from the hierarchy under `src/equipment/types/definitions`
+- `max_stack = 1`
+- the base actions, stat modifiers, rarity, proficiency, icon, and held or armor presentation the item needs
+- an armor slot and optional armor set when using `ArmorDefinition`
+
+Register the item in `src/items/item_catalog.tres`. Runtime factories create the physical
+`EquipmentInstance`; the definition remains immutable shared content.
+
+## Add an equipment affix
+
+Create an `EquipmentAffixDefinition` under `src/items/affixes/definitions`. Give it a stable ID and
+display-name suffix, list compatible canonical equipment types, set armor-slot flags when it supports
+armor, and add one or more `EquipmentAffixStatDefinition` ranges. Register it in the
+`equipment_affixes` array of `src/items/item_catalog.tres`.
+
+An affix definition is not a second item. When loot creates equipment, it captures the affix ID and
+the concrete amount rolled for every stat on that `EquipmentInstance`. The same `copper_sword`
+definition can therefore produce plain, Vicious, Nimble, or combined copies without a separate
+variant resource or variant ID. Current affixes support additive or multiplicative numeric stat
+rolls.
 
 ## Add a rune
 
-Create a `RuneDefinition` under `src/items/runes/definitions`, assign a stable item ID, icon,
-stack size, canonical rarity, compatibility flags, and permanent socket modifiers. Armor-compatible
+Create a `RuneDefinition` under `src/items/runes/definitions`, assign a stable item ID, icon, stack
+size, canonical rarity, compatible equipment types, and socket-only stat modifiers. Armor-compatible
 runes must also declare the supported head, chest, legs, or feet slots. Register the resource in
-`src/items/item_catalog.tres`; acquisition remains separate content, such as a canonical crafting
-recipe. Rune modifiers do not belong in the inherited selected-item modifier list because they are
-activated only through socketed gear.
+`src/items/item_catalog.tres`; acquisition remains separate content, such as a crafting recipe or
+loot entry.
+
+Socketed rune IDs belong to the physical `EquipmentInstance`. Their array index is the physical
+socket index, so fixed loot runes preserve authored order and an empty interior ID preserves an empty
+slot. Trailing empty slots are omitted. `InventoryLoadoutCoordinator` activates rune modifiers only
+for the selected weapon and equipped armor.
+
+## Add enemy loot
+
+Create a `LootPoolDefinition` under `src/loot/pools` and assign it directly to the relevant
+`EntityDefinition`. No separate entity-to-loot table exists.
+
+Use `LootIndependentRollDefinition` for results that each get their own chance. Use
+`LootExclusiveGroupDefinition` for a group chance followed by exactly one weighted
+`LootWeightedChoiceDefinition`. Every roll, group, and choice needs a stable unique ID. A
+`LootDropDefinition` references the canonical item and count range; equipment must have count one and
+may attach a `LootEquipmentRollDefinition`. Keyed resolution makes the same pool and defeat seed
+produce the same result, and reordering arrays does not change it.
+
+The current `src/loot/pools/zombie.tres` contains:
+
+- an independent 75% roll for 1–3 Copper
+- a separate 17% exclusive-group gate with weights 10 plain Copper Sword, 4 rolled-and-runed
+  Copper Sword, and 3 Stout Copper Helmet
+- one or two equal-weight Vicious/Nimble affixes on the rolled sword, selected without replacement
+- one rune slot on that sword, independently selected from equal-weight Basic Rune and Power Rune
+
+The gear weights apply only after the 17% group gate succeeds. Copper and gear rolls are independent,
+so a defeat may produce neither, either one, or both.
+
+To add one guaranteed Sand to every zombie defeat, add a `LootDropDefinition` referencing
+`src/items/definitions/sand_block.tres` with minimum and maximum count one. Wrap it in a
+`LootIndependentRollDefinition` with a new stable ID such as `sand` and `chance = 1.0`, then append
+that roll to the pool's `independent_rolls`. This does not replace or perturb the keyed Copper and
+gear decisions. To make Sand the only possible result, keep only that independent roll and clear the
+pool's exclusive groups.
+
+For random affixes, set the minimum and maximum random-affix counts and add weighted
+`LootAffixChoiceDefinition` resources. Selection removes each chosen affix, so one copy cannot roll
+the same affix twice. For random runes, set `random_rune_slot_count` and add weighted
+`LootRuneChoiceDefinition` resources. Every slot samples the full choice set independently, so
+multiple slots may receive the same rune. All configured choices must be compatible with every slot
+they may fill.
+
+For fixed special gear, set `fixed_affixes` and `fixed_runes` instead. Fixed rune array order is
+socket order. Give an affix stat equal minimum and maximum amounts when the special result needs an
+exact value rather than a range. This still creates the canonical base item with a unique instance
+ID and captured per-copy data. Create a separate `ItemDefinition` only when the special weapon
+genuinely needs its own stable content identity, action, visuals, or base values.
+
+Affixes and runes currently change numeric stats; there is no generic flame, knockback, or arbitrary
+trait payload. A new behavior family must add its typed definition, executor, validation, and a real
+combat caller together before loot can author that behavior.
+
+## World-loot lifetime and persistence
+
+`WorldLootState` owns at most 128 entries with stable monotonic entry IDs. Material drops merge with
+nearby same-item stacks within 1.5 blocks, refresh their remaining lifetime when merged, and expire
+after five minutes of active overworld simulation. Equipment never merges or expires. At capacity,
+the material entry nearest expiration is evicted first. If every retained entry is equipment, the
+oldest equipment entry is evicted so a new validated batch cannot permanently deadlock loot drops.
+
+Streaming controls drop views, not gameplay state. An unloaded drop reappears when its position is
+ready again. Material pickup can fill available inventory space partially while leaving the remainder
+under the same world entry ID. Equipment pickup is all-or-none. Save version thirteen persists entry
+IDs, positions, remaining material lifetimes, complete stacks, and the next world-entry ID.
 
 ## Add a mining tool
 

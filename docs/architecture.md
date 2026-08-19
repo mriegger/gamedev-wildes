@@ -18,13 +18,16 @@ crafting/                    recipe definitions, inventory coordination, and pre
 chests/                      container definitions, storage, transfers, and presentation
 entities/                    content, AI, navigation, populations, and presentation
 environment/                 packaged environment and day/night feature
+equipment/                   equipment taxonomy, physical instances, armor, and presentation
 inventory/                   inventory model and inventory-owned UI
 items/                       item resources, actions, catalogs, and held scenes
 levels/                      finite dungeon content, generation, runtime, entrance, and presentation
+loot/                        deterministic pools, persistent world state, runtime, and presentation
 player/                      player behavior, camera, and visuals
 progression/                 player leveling, perks, item proficiency, and presentation
 save/                        save encoding and storage
 settings/                    persistent display and rendering configuration
+stats/                       actor stat ownership and prepared modifier changes
 structures/                  generic definitions, drafts, root-file storage, runtime, and presentation
 ui/                          app screens, HUD, shared controls, and theme
 world/
@@ -161,56 +164,108 @@ source slot owns the adjustable drag count and consumes wheel input before gamep
 `InventoryModel` remains the authority for partial moves and discards, while the source and
 drag-preview visuals show the pending split without mutating inventory until a drop succeeds.
 
-`ChestInventoryStore` owns the persistent inventory model keyed by each placed chest position, and
-`ChestCoordinator` validates the active block before exposing atomic transfers. While a chest is
-open, `ChestPanel` presents only its centered 3×5 grid, while the existing right-side `SidePanel`
-and bottom `InventoryHotbar` present player storage through a temporary
-`InventoryTransferCoordinator` context. Closing the chest removes that context before ordinary
-inventory interactions resume.
-Click transfers and the move-all action use the same transactional model path to fill compatible
-stacks before empty slots, and reject a source stack when the destination cannot hold it in full.
-Every chest position resolves to a distinct stored `InventoryModel`, including after save restore.
+`ChestStorage` owns persistent slot arrays keyed by placed chest position. Its slot count comes from
+the canonical chest block's `ContainerBlockDefinition`, so layout, runtime storage, and persistence
+share one definition. `ChestCoordinator` binds that owner to `InventoryModel` and
+`InventoryLoadoutCoordinator`; cross-scope moves prepare exact expected and replacement stacks in
+both owners, validate both revisions, commit both silently, and notify only after both commits.
+Click transfer, drag/drop, and move-all reuse those command paths without exposing mutable slots.
+While a chest is open, `ChestPanel` presents its centered 3×5 grid, while the existing right-side
+`SidePanel` and bottom `InventoryHotbar` present player storage.
 `ChestRenderer` presents placed chests outside the chunk cube mesh. The body uses explicit face
 quads so each wooden face is rendered once, while the lid remains a separately hinged box.
 `TargetingView` forwards the reachable chest position so the renderer highlights both pieces and
 hinges the real lid slightly without changing block or inventory state. Chest placement delegates
-to that renderer for a translucent preview of the same split model. Pickaxe mining delegates empty
-chest validation and pickup to `ChestCoordinator`, which checks player inventory capacity before
-removing the placed block and its position-keyed storage.
+to that renderer for a translucent preview of the same split model. Mining uses the normal prepared
+world-and-inventory transaction. `Game` supplies `ChestCoordinator.can_break()` as the focused
+validator, so only empty chests can commit; the completed block edit then removes their empty
+position-keyed storage.
 
-## Runes and socketing
-
-See [Progression, runes, and enchanting](progression-runes-enchanting.md) for the player-facing
-design, current implementation status, and planned enchantment rules.
-
-`RuneDefinition` is typed item content with rarity, weapon and armor compatibility, optional armor
-slot restrictions, and socket-only stat modifiers. The Basic Rune is Common, is compatible with
-every melee weapon and armor slot, and adds one hundred maximum HP. Its crafting recipe exchanges
-thirty-two Sand for one stackable rune. Enchantments remain outside the implemented system.
-
-Each `InventoryStack` owns the stable rune IDs installed on that physical gear copy. The array
-preserves physical slot positions, permits an empty value between filled positions, and omits
-trailing empty positions. `InventoryModel` preserves that state across full-stack moves and save
-round trips. It commits socketing as one transaction that consumes exactly one inventory rune and
-updates the target copy. Unsocketing updates the copy and returns the rune together, or rejects the
-whole command when the inventory has no capacity.
-
-`RuneSocketingCoordinator` combines the target item's `ProficiencyDefinition`, shared
-`ItemProficiency`, and `RuneDefinition` compatibility into the socket command and query API. It
-does not own inventory state. The Rune workspace presents one referenced inventory gear slot and
-three physical rune slots; it delegates every mutation to the coordinator and keeps the backpack
-visible as the drag source.
-
-`RuneEffectCoordinator` derives active modifiers from socketed runes on the selected melee weapon
-and all equipped armor. It replaces one bounded `ActorStats` modifier source whenever that active
-loadout changes, so duplicate runes stack without accumulating stale runtime modifiers. Maximum-HP
-changes preserve the player's current health percentage. Runes on unselected weapons and unequipped
-armor remain persisted but inactive. Setup validates each rune and a conservative maximum active
-loadout before inventory changes can drive effect replacement.
+## Equipment instances, runes, and loot
 
 `EquipmentTypeDefinition` forms a catalog-owned hierarchy rooted at equipment. Weapons and armor
 use canonical type resources, and compatibility follows type ancestry plus the authoritative armor
 slot where applicable. Adding a weapon family extends that hierarchy without action-class checks.
+
+See [Progression, runes, and enchanting](progression-runes-enchanting.md) for the player-facing
+progression and socketing design.
+
+An `ItemDefinition` is the shared identity and base configuration for an item type. Every physical
+weapon or armor copy is instead an `InventoryStack` with count one and an `EquipmentInstance`. The
+instance owns a globally unique, monotonic `instance_id`, copied
+affix rolls, and ordered socketed-rune IDs. Two Copper Swords in the backpack therefore both use
+item ID `copper_sword` but retain different instance IDs and may have different affixes and runes.
+Moves among backpack, hotbar, equipment slots, chests, and world loot preserve
+the same instance; material stacks have no instance data. `EquipmentInstanceFactory` is the sole
+allocator, and prepared cross-system operations advance it only when every destination can commit.
+
+`EquipmentAffixDefinition` is canonical content registered by `ItemCatalog`. It declares compatible
+equipment types, optional armor-slot restrictions, a display-name suffix, and one or more stat roll
+ranges. `EquipmentAffixInstance` freezes the affix ID and each concrete `EquipmentAffixStatRoll` on
+the physical copy, so later definition changes do not silently reroll existing gear. Affixes and
+their stat rolls are stored in canonical ID order. `InventoryLoadoutCoordinator` projects base item
+and affix modifiers from the selected weapon and equipped armor into `ActorStats`; tooltips use the
+same instance values.
+
+`RuneDefinition` is typed item content with rarity, equipment-type and armor-slot compatibility,
+and socket-only stat modifiers. The Basic Rune is Common, works on every weapon and armor slot, and
+adds one hundred maximum HP. The weapon-only Power Rune adds one Strength. A gear instance's
+`socketed_rune_ids` array preserves physical slot order, permits empty interior slots, and omits
+trailing empty slots.
+
+`RuneSocketingCoordinator` combines the target item's `ProficiencyDefinition`, shared
+`ItemProficiency`, and rune compatibility into command and query APIs without owning inventory.
+`InventoryLoadoutCoordinator` prepares the corresponding inventory and stat projections together,
+then commits and notifies only after both remain valid. It applies runes on the selected weapon and
+equipped armor; runes on unselected weapons and unequipped armor remain persisted but inactive.
+Duplicate active runes stack without accumulating stale modifiers, and maximum-HP changes preserve
+the player's current health percentage.
+
+Each `EntityDefinition` can reference one `LootPoolDefinition`. A pool contains independent rolls
+and exclusive weighted groups. Each drop names one canonical item, a count range, and, for
+equipment, an optional `LootEquipmentRollDefinition` with fixed or random affixes and runes.
+`LootResolver` is node-independent and keys every decision by the pool ID, defeat seed, stable roll
+ID, and child path. Reordering resource arrays does not change results, and unrelated rolls do not
+consume a shared random stream. Random affixes are weighted and selected without replacement;
+random rune slots each sample the weighted choice set independently with replacement. Fixed affix
+and rune arrays author an exact selected set, with fixed rune order defining physical socket order;
+an affix stat uses one exact value when its minimum and maximum are equal.
+Catalog validation rejects non-canonical or incompatible item, affix, and rune resources before
+gameplay starts.
+
+The current zombie pool independently rolls a 75% chance for 1–3 Copper. It separately has a 17%
+chance to choose exactly one gear result with weights 10 plain Copper Sword, 4 Copper Sword with
+one or two random Vicious/Nimble affixes plus one random Basic/Power Rune, and 3 Copper Helmet with
+the fixed Stout affix. The rolled sword is not a separate variant or item ID: it is another
+`copper_sword` instance whose per-copy data records the result.
+
+Affixes and runes currently contribute numeric stat modifiers; they are not a generic behavior-trait
+framework. A future effect such as flame or knockback must introduce its concrete typed definition,
+executor, validation, and real combat caller together. Loot may then reference that validated
+content without adding behavior branches to the resolver.
+
+`EntityRuntime` emits one immutable `EntityDefeat` after authoritative removal, preserving the
+entity ID, position, and loot seed without coupling drops to melee. `LootResolver` prepares the
+complete drop batch and provisional equipment IDs. `OverworldLootCoordinator` commits that allocator
+advance and the `WorldLootState` batch through `WorldLootDropTransaction` only after both validate.
+The world change records the allocator floor required by its provisional IDs, preventing either
+owner from accepting the batch independently.
+
+`WorldLootState` is the node-independent mutable owner for at most 128 persistent overworld entries.
+Entries receive stable monotonic IDs and are queried through a bounded spatial index. Nearby material
+stacks of the same item merge up to the item stack limit within 1.5 blocks and refresh their
+five-minute active-simulation lifetime. Equipment never merges or expires. When capacity requires
+an eviction, the material entry with the least remaining lifetime is removed first. If every
+retained entry is equipment, the oldest equipment entry is removed. Incoming entries are protected
+while their batch is being admitted, so an all-equipment state cannot permanently block future loot.
+
+Pickup is another prepared cross-owner transaction. Materials may move partially into available
+inventory capacity while the remainder keeps its world entry ID and lifetime; equipment moves only
+as one complete instance. Inventory, active loadout stats, and world loot commit before observers are
+notified. Chunk readiness controls `LootDropView` nodes only: streaming a position out removes its
+view but not its state, and streaming it back recreates the view. Dungeon and structure-designer
+transitions suspend views, pickup, and lifetime advancement without clearing entries. Shutdown also
+leaves `WorldLootState` intact for the session owner and save system.
 
 `Game` owns player stats and handles their completed health-depleted transition. Defeat puts
 the player motor into an input-blocking stopped state, closes inventory and debug panels, and
@@ -223,9 +278,9 @@ owning either value.
 `SidePanel` owns its animation
 progress and reports committed progress changes to `HUD`, which translates that value into the
 right inset so presentation state stays clear of the inventory panel and narrows within the
-available viewport when necessary. Entity HP is transient and is not serialized. Drops, enemy
-health bars, regeneration, knockback, death audio, and post-respawn invulnerability remain
-outside the combat system.
+available viewport when necessary. Entity HP is transient, while uncollected overworld loot is
+serialized independently from entity presentation. Enemy health bars, regeneration, knockback,
+death audio, and post-respawn invulnerability remain outside the combat system.
 
 `GameSession` owns save suspension as part of the gameplay lifecycle. Suspension or authoritative
 zero HP blocks manual, periodic, and edit-debounce writes while session playtime continues
@@ -233,15 +288,25 @@ accumulating. Respawn, Main Menu, and window close restore a living player at wo
 saving resumes; exit paths then use the normal final-save and shutdown flow so zero HP is never
 persisted. Loading a historical zero-HP snapshot restores full health at world spawn before gameplay
 begins and immediately replaces the stored snapshot with that living state.
-Save version nine stores perk allocations, chest inventories keyed by stable block position, apple
-tree harvest state, item proficiency, and per-stack socket IDs. Version-four saves gain empty item
-proficiency, version-five inventory stacks gain empty socket arrays, version-six saves gain an absent
-pumpkin-patch snapshot, version-seven saves gain empty perk and chest allocations while their
-current-level XP is translated to the linear curve, and version-eight saves gain empty apple-tree
-state. The migration chain operates on a copy and commits only after every step is valid, preserving
-the original data on failure. `Game` restores world edits, inventory, proficiency, player progression,
-runes, modifiers, and chest contents before enabling `GameSession`. Invalid or retired content aborts
-startup, returns to world selection, and leaves the caller-owned payload and save file unchanged.
+Save version thirteen stores the shared equipment allocator and persistent `WorldLootState` alongside
+inventory, item proficiency, player perks, pumpkin and apple harvest state, and canonical chest
+slots keyed by stable block position. Version-four saves gain empty item proficiency; version five
+adds rune-slot arrays; version six adds empty pumpkin state; version seven translates current-level
+XP to the linear curve and adds empty perks and legacy chest inventories; and version eight adds
+empty apple state. The version-nine-to-ten migration converts legacy chest inventory snapshots to
+canonical 15-slot chest arrays and normalizes legacy equipment variant fields. Version ten converts
+each equipment stack into a concrete `EquipmentInstance`, assigns globally unique IDs, captures
+rune slots, converts known legacy variants into exact affix rolls, and records the
+next allocator ID when migrating to version eleven. The version-eleven-to-twelve migration validates
+and removes retired durability fields from equipment instances. Version twelve adds an empty
+world-loot snapshot when migrating to version thirteen. The chain operates on a copy and commits
+only after every region is valid, preserving the original payload on failure.
+`Game` restores inventory, proficiency, player stats, chest contents, the shared equipment allocator,
+and world loot before enabling `GameSession`. Save validation requires equipment instance IDs to be
+unique across backpack, hotbar, equipped slots, every chest, and world loot, and requires every ID to
+precede the saved allocator value. Any invalid or retired content aborts startup, returns to world
+selection, and leaves the caller-owned payload and save file unchanged. Loot creation, pickup,
+expiration, and merge events queue the same debounced save path as world and chest changes.
 
 Ambient overworld populations are transient and bounded by each definition's authored cap and a
 twelve-entity total. The current caps are six Sheep, six Zombies, and three Skeletons. A deterministic
@@ -258,8 +323,8 @@ overlap immediately before committing.
 `VoxelSpace` is the read-only query boundary shared by the streamed `VoxelWorld` and finite
 `LevelState`. Player setup is one-time; `Game` atomically rebinds movement, collision, targeting,
 and edit capabilities when the active space changes. Dungeon levels never become save-state
-owners: saves receive an explicit overworld position while retaining the version-five format,
-version-four migration, and item proficiency state.
+owners: version-thirteen saves receive an explicit overworld position while retaining player-owned
+inventory, equipment instances, progression, chest contents, and overworld loot.
 
 Dungeon content is selected through stable typed resources. `LevelEntranceDefinition` maps a
 doorway ID to a level ID and owns its current doorway presentation. `LevelDefinition` selects its
