@@ -24,6 +24,7 @@ var block_texture_set: BlockTextureSet
 var chunk_mesher: ChunkMesher
 var chunk_manager: ChunkManager
 var _settings: GameSettings
+var _water_ripples := WaterRipplePresentation.new()
 
 var _start_state: WorldState
 var _player_ref: Node3D
@@ -115,6 +116,7 @@ func _prepare_materials():
 	water_block_material = ShaderMaterial.new()
 	water_block_material.shader = water_shader
 	water_profile.apply_to_material(water_block_material)
+	_water_ripples.setup(water_block_material, water_profile.ripple_duration)
 	var normal_texture := NoiseTexture2D.new()
 	normal_texture.width = 512
 	normal_texture.height = 512
@@ -132,6 +134,7 @@ func _prepare_materials():
 func _process(delta: float):
 	if _suspended:
 		return
+	_water_ripples.tick(delta)
 	chunk_manager.tick(_player_ref.global_position)
 	chunk_manager.poll_completed()
 	voxel_model.prune_terrain_cache(2)
@@ -209,6 +212,12 @@ func update_water_tint(sky_color: Color):
 	tint.z = maxf(tint.z, 0.25)
 	water_block_material.set_shader_parameter("tint_color", tint)
 
+func play_water_ripple(position: Vector3, planar_velocity: Vector2) -> void:
+	_water_ripples.play(position, planar_velocity)
+
+func try_set_water_ripple_strength(strength: float) -> bool:
+	return _water_ripples.try_set_strength(strength)
+
 func suspend():
 	if _suspended:
 		return
@@ -229,4 +238,5 @@ func is_suspended() -> bool:
 
 func shutdown():
 	set_process(false)
+	_water_ripples.clear()
 	chunk_manager.shutdown()

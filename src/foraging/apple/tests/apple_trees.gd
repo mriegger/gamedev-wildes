@@ -11,6 +11,10 @@ func _init() -> void:
 	var apple_trees := (load("res://foraging/apple/apple_tree_coordinator.tscn") as PackedScene).instantiate() as AppleTreeCoordinator
 	root.add_child(apple_trees)
 	_expect(apple_trees.definition.apple_scene.resource_path == "res://assets/models/foraging/apple/apple.glb", "apple trees did not use the Kenney Food Kit model")
+	_expect(apple_trees.definition.fall_impact_streams.size() == 4, "fallen apples did not configure four light impact sounds")
+	for index in range(apple_trees.definition.fall_impact_streams.size()):
+		var expected_path := "res://assets/audio/sfx/tools/impactGeneric_light_%03d.ogg" % (index + 1)
+		_expect(apple_trees.definition.fall_impact_streams[index].resource_path == expected_path, "fallen apple configured the wrong light impact sound")
 	var apple_position := _find_apple_tree_position(apple_trees.definition, 872341)
 	_populate_tree(world, apple_position)
 	_expect(apple_trees.setup(world, chunk_manager, 872341, null, item_catalog), "apple tree setup rejected valid content")
@@ -44,6 +48,51 @@ func _init() -> void:
 		_expect(lower_canopy_count >= 15, "decorative apples were not biased toward the lower canopy")
 		_expect(foliage_count == 9, "apple tree foliage tint did not cover every generated leaf block")
 		_expect(apple_trees._targets.size() == ground_count, "decorative apples became harvest targets")
+		var mapped_decorations := 0
+		for raw_leaf in apple_trees._decorations_by_leaf:
+			var leaf := raw_leaf as Vector3i
+			for record in apple_trees._decorations_by_leaf[leaf] as Array:
+				mapped_decorations += 1
+				_expect(_position_touches_leaf((record as Dictionary)["position"] as Vector3, leaf), "decorative apple was mapped to a leaf it did not touch")
+		_expect(mapped_decorations == decorative_count, "decorative apple ownership did not cover every canopy apple")
+		var base_log := apple_position
+		world.try_mine_block(base_log)
+		chunk_root = apple_trees._chunk_roots[Vector2i.ZERO] as Node3D
+		_expect(_count_children(chunk_root, "DecorativeApple_") == decorative_count, "mining the base log removed canopy apples")
+		var drop_leaf := _find_drop_leaf(apple_trees)
+		_expect(drop_leaf.y >= 0, "deterministic apple tree had no eligible decorative drop")
+		var removed_decorations := (apple_trees._decorations_by_leaf.get(drop_leaf, []) as Array).size()
+		world.try_mine_block(drop_leaf)
+		chunk_root = apple_trees._chunk_roots[Vector2i.ZERO] as Node3D
+		var fallen := apple_trees._state.get_fallen_apples()
+		_expect(fallen.size() == 1, "mining an apple-bearing leaf did not create one fallen apple")
+		_expect(_count_children(chunk_root, "DecorativeApple_") == decorative_count - removed_decorations, "mined leaf did not remove its decorative apples")
+		_expect(_count_children(chunk_root, "FallenApple_") == 1, "fallen apple presentation was not created")
+		_expect(apple_trees._targets.size() == ground_count + 1, "fallen apple did not become a harvest target")
+		await create_timer(0.48).timeout
+		var fallen_holder := chunk_root.find_child("FallenApple_*", false, false) as Node3D
+		var impact_player := _find_impact_player(fallen_holder)
+		_expect(impact_player != null and impact_player.playing, "fallen apple did not play a landing impact sound")
+		if impact_player != null:
+			_expect(apple_trees.definition.fall_impact_streams.has(impact_player.stream), "fallen apple played an unconfigured landing impact sound")
+		await create_timer(0.2).timeout
+		if not fallen.is_empty():
+			var fallen_snapshot := apple_trees.snapshot()
+			var restored_fallen := AppleTreeState.new()
+			_expect(restored_fallen.restore(JSON.parse_string(JSON.stringify(fallen_snapshot))), "fallen apple state did not restore")
+			_expect(restored_fallen.snapshot() == fallen_snapshot, "fallen apple state changed during save round trip")
+			var legacy_state := AppleTreeState.new()
+			_expect(legacy_state.restore({"version": 1, "collected_slots": []}), "version one apple state did not migrate")
+			_expect(legacy_state.snapshot() == {"version": 2, "collected_slots": [], "fallen_apples": []}, "version one apple state migration was incorrect")
+			var empty_world := VoxelWorld.new(20, 36, 5, 12.0, block_catalog)
+			var restored_chunks := ChunkManager.new()
+			restored_chunks.visible_chunks[Vector2i.ZERO] = true
+			var restored_trees := (load("res://foraging/apple/apple_tree_coordinator.tscn") as PackedScene).instantiate() as AppleTreeCoordinator
+			root.add_child(restored_trees)
+			_expect(restored_trees.setup(empty_world, restored_chunks, 872341, fallen_snapshot, item_catalog), "fallen apple coordinator state did not restore")
+			var restored_root := restored_trees._chunk_roots.get(Vector2i.ZERO) as Node3D
+			_expect(_count_children(restored_root, "FallenApple_") == 1, "fallen apple did not render without its original tree blocks")
+			restored_trees.free()
 		if not apple_trees._targets.is_empty():
 			var first_bounds := apple_trees.get_harvest_target_bounds(int(apple_trees._targets.keys()[0]))
 			var ray_target := apple_trees.find_harvest_target(first_bounds.get_center() + Vector3.UP, Vector3.DOWN, 2.0)
@@ -70,11 +119,18 @@ func _init() -> void:
 			var before_invalid_restore := restored.snapshot()
 			_expect(not restored.restore({"version": 1, "collected_slots": [[0, 6, 0, 6]]}), "out-of-range apple slot restored")
 			_expect(restored.snapshot() == before_invalid_restore, "failed apple state restore changed collected slots")
+		var fallen_target_id := _find_fallen_target(apple_trees)
+		_expect(fallen_target_id >= 0, "fallen apple target could not be identified")
+		if fallen_target_id >= 0:
+			_expect(apple_trees.try_harvest_target(fallen_target_id), "fallen apple could not be picked up")
+			_expect(apple_trees._state.get_fallen_apples().is_empty(), "picked fallen apple remained in persistent state")
+			_expect(not apple_trees._fallen_by_chunk.has(Vector2i.ZERO), "picked fallen apple remained in the chunk index")
 	var apple := item_catalog.get_definition(&"apple")
 	var consumption := apple.secondary_action as ConsumableActionDefinition
 	_expect(consumption != null and is_equal_approx(consumption.health_restore_fraction, 0.1), "apple did not restore ten percent of maximum health")
 	_expect(apple.consume_audio != null and apple.consume_audio.streams.size() == 1, "apple munch audio was not configured")
 	apple_trees.free()
+	await process_frame
 	if _failures == 0:
 		print("APPLE_TREES PASS")
 		quit(0)
@@ -86,14 +142,59 @@ func _find_apple_tree_position(definition: AppleTreeDefinition, seed_value: int)
 	var probe := AppleTreeCoordinator.new()
 	probe.definition = definition
 	probe._world_seed = seed_value
-	for x in range(20):
-		for z in range(20):
+	for x in range(2, 18):
+		for z in range(2, 18):
 			var position := Vector3i(x, 6, z)
-			if probe._is_apple_tree(position):
+			var has_drop := false
+			for decorative_index in range(definition.decorative_apple_count):
+				if probe._should_drop_decorative_apple(position, decorative_index):
+					has_drop = true
+					break
+			if probe._is_apple_tree(position) and has_drop:
 				probe.free()
 				return position
 	probe.free()
 	return Vector3i(-1, 6, -1)
+
+func _find_drop_leaf(coordinator: AppleTreeCoordinator) -> Vector3i:
+	var leaves := coordinator._decorations_by_leaf.keys()
+	leaves.sort()
+	for raw_leaf in leaves:
+		var leaf := raw_leaf as Vector3i
+		for record in coordinator._decorations_by_leaf[leaf] as Array:
+			var tree_position := (record as Dictionary)["tree_position"] as Vector3i
+			var decorative_index := int((record as Dictionary)["decorative_index"])
+			if coordinator._should_drop_decorative_apple(tree_position, decorative_index):
+				return leaf
+	return Vector3i(-1, -1, -1)
+
+func _count_children(parent: Node, prefix: String) -> int:
+	if parent == null:
+		return 0
+	var count := 0
+	for child in parent.get_children():
+		if child.name.begins_with(prefix):
+			count += 1
+	return count
+
+func _find_fallen_target(coordinator: AppleTreeCoordinator) -> int:
+	for target_id in coordinator._targets:
+		if int((coordinator._targets[target_id] as Dictionary)["decorative_index"]) >= 0:
+			return int(target_id)
+	return -1
+
+func _find_impact_player(holder: Node3D) -> AudioStreamPlayer3D:
+	if holder == null:
+		return null
+	for child in holder.get_children():
+		if child is AudioStreamPlayer3D:
+			return child as AudioStreamPlayer3D
+	return null
+
+func _position_touches_leaf(position: Vector3, leaf: Vector3i) -> bool:
+	var minimum := Vector3(leaf) - Vector3.ONE * 0.001
+	var maximum := Vector3(leaf) + Vector3.ONE * 1.001
+	return position.x >= minimum.x and position.x <= maximum.x and position.y >= minimum.y and position.y <= maximum.y and position.z >= minimum.z and position.z <= maximum.z
 
 func _populate_tree(world: VoxelWorld, tree_position: Vector3i) -> void:
 	_expect(tree_position.x >= 0, "could not find deterministic apple tree coordinate")
@@ -105,7 +206,7 @@ func _populate_tree(world: VoxelWorld, tree_position: Vector3i) -> void:
 		blocks[Vector3i(tree_position.x, y, tree_position.z)] = BlockId.Type.LOG
 	for x_offset in range(-1, 2):
 		for z_offset in range(-1, 2):
-			blocks[Vector3i(tree_position.x + x_offset, tree_position.y + 5, tree_position.z + z_offset)] = BlockId.Type.LEAVES
+			blocks[Vector3i(tree_position.x + x_offset, tree_position.y + 4, tree_position.z + z_offset)] = BlockId.Type.LEAVES
 	world.tree_chunks_fast[Vector2i.ZERO] = blocks
 	world.tree_block_fast.merge(blocks)
 

@@ -14,6 +14,10 @@ const TUNING_LEFT_ARM: StringName = &"Left Arm"
 const TUNING_RIGHT_ARM: StringName = &"Right Arm"
 const TUNING_LEFT_LEG: StringName = &"Left Leg"
 const TUNING_RIGHT_LEG: StringName = &"Right Leg"
+const HAMMER_WINDUP_END: float = 0.465
+const HAMMER_IMPACT: float = 0.59
+const HAMMER_HOLD_END: float = 0.80
+const HAMMER_BODY_DROP: float = 0.17
 
 @export var profile: BlockyHumanoidAnimationProfile
 
@@ -49,8 +53,15 @@ var _placing: bool = false
 var _attack_elapsed: float = 0.0
 var _attack_duration: float = 0.0
 var _attack_direction: int = -1
+var _attack_animation_style: int = MeleeAttackActionDefinition.AnimationStyle.SWEEP
 var _attacking: bool = false
+var _held_melee_action: MeleeAttackActionDefinition
 var attack_pose_weight: float = 0.0
+var held_item_windup_pose_weight: float = 0.0
+var held_item_pose_weight: float = 0.0
+var held_item_alignment_weight: float = 0.0
+var held_item_face_turn_weight: float = 0.0
+var held_item_recovery_progress: float = 0.0
 var _landing_elapsed: float = 0.0
 var _landing_strength: float = 0.0
 var _previous_vertical_speed: float = 0.0
@@ -63,6 +74,7 @@ var _previous_forward_speed: float = 0.0
 var _inertia_pitch: float = 0.0
 var _rig_root_origin: Vector3
 var _body_secondary_origin: Vector3
+var _body_action_origin: Vector3
 var _head_secondary_origin: Vector3
 var _left_arm_action_origin: Vector3
 var _right_arm_action_origin: Vector3
@@ -83,6 +95,7 @@ func setup(p_animation_state: ActorAnimationState):
 	_previous_forward_speed = animation_state.local_velocity.z
 	_rig_root_origin = rig_root.position
 	_body_secondary_origin = body_secondary.position
+	_body_action_origin = body_action.position
 	_head_secondary_origin = head_secondary.position
 	_left_arm_action_origin = left_arm_action.position
 	_right_arm_action_origin = right_arm_action.position
@@ -133,20 +146,47 @@ func play_place():
 	_placing = true
 	_place_elapsed = 0.0
 
-func play_attack(duration: float, direction: int):
+func set_held_melee_action(action: MeleeAttackActionDefinition) -> void:
+	_held_melee_action = action
+
+func prepare_held_idle_reference(action: MeleeAttackActionDefinition) -> void:
+	cancel_attack()
+	_placing = false
+	_place_elapsed = 0.0
+	_mining_active = false
+	_mine_blend = 0.0
+	_held_melee_action = action
+	_update_actions(0.0)
+
+func play_attack(duration: float, direction: int, animation_style: int = MeleeAttackActionDefinition.AnimationStyle.SWEEP):
 	assert(duration > 0.0)
 	assert(direction == -1 or direction == 1)
+	assert(animation_style >= MeleeAttackActionDefinition.AnimationStyle.SWEEP and animation_style <= MeleeAttackActionDefinition.AnimationStyle.OVERHEAD_SLAM)
 	_placing = false
 	_attacking = true
 	_attack_elapsed = 0.0
 	_attack_duration = duration
 	_attack_direction = direction
+	_attack_animation_style = animation_style
 
 func cancel_attack():
 	_attacking = false
 	_attack_elapsed = 0.0
 	_attack_duration = 0.0
 	attack_pose_weight = 0.0
+	held_item_windup_pose_weight = 0.0
+	held_item_pose_weight = 0.0
+	held_item_alignment_weight = 0.0
+	held_item_face_turn_weight = 0.0
+	held_item_recovery_progress = 0.0
+
+func is_attacking() -> bool:
+	return _attacking
+
+func get_attack_progress() -> float:
+	if not _attacking:
+		return 0.0
+	return clampf(_attack_elapsed / _attack_duration, 0.0, 1.0)
 
 func prepare_preview(grounded: bool):
 	_was_grounded = grounded
@@ -158,6 +198,22 @@ func prepare_preview(grounded: bool):
 	_attacking = false
 	attack_pose_weight = 0.0
 	_gait_direction = Vector2(0.0, 1.0)
+	held_item_windup_pose_weight = 0.0
+	held_item_pose_weight = 0.0
+	held_item_alignment_weight = 0.0
+	held_item_face_turn_weight = 0.0
+	held_item_recovery_progress = 0.0
+
+func prepare_attack_preview() -> void:
+	prepare_preview(true)
+	_elapsed = 0.0
+	_walk_phase = 0.0
+	_shaped_gait_phase = 0.0
+	_current_body_rotation = Vector3.ZERO
+	_current_head_rotation = Vector3.ZERO
+	_previous_forward_speed = animation_state.local_velocity.z
+	_inertia_pitch = 0.0
+	advance_animation(0.0)
 
 func advance_animation(delta: float):
 	assert(animation_state != null)
@@ -429,6 +485,11 @@ func _update_head(delta: float):
 func _update_actions(delta: float):
 	var response = 1.0 - exp(-profile.motion_response * delta)
 	attack_pose_weight = 0.0
+	held_item_windup_pose_weight = 0.0
+	held_item_pose_weight = 0.0
+	held_item_alignment_weight = 0.0
+	held_item_face_turn_weight = 0.0
+	held_item_recovery_progress = 0.0
 	if animation_state.sprinting:
 		_placing = false
 	var attack_active := _attacking
@@ -442,6 +503,7 @@ func _update_actions(delta: float):
 	var right_rotation = Vector3.ZERO
 	var left_rotation = Vector3.ZERO
 	var body_rotation = Vector3.ZERO
+	body_action.position = _body_action_origin
 	left_arm_base.rotation = Vector3.ZERO
 	right_arm_base.rotation = Vector3.ZERO
 	match _current_state:
@@ -476,20 +538,61 @@ func _update_actions(delta: float):
 			_placing = false
 	if attack_active:
 		attack_pose_weight = sin(attack_progress * PI)
-		var sweep_degrees := _attack_sweep_degrees(attack_progress) * float(_attack_direction)
-		right_rotation = Vector3(
-			deg_to_rad(profile.attack_right_arm_pitch_degrees * attack_pose_weight),
-			0.0,
-			deg_to_rad(sweep_degrees)
-		)
-		body_rotation.x = deg_to_rad(profile.attack_body_lean_degrees * attack_pose_weight)
-		body_rotation.y = deg_to_rad(profile.attack_body_twist_degrees * sweep_degrees / profile.attack_follow_through_degrees)
-		left_leg_base.rotation.x -= deg_to_rad(profile.attack_leg_brace_degrees * attack_pose_weight * _attack_direction)
-		right_leg_base.rotation.x += deg_to_rad(profile.attack_leg_brace_degrees * attack_pose_weight * _attack_direction)
-		rig_root.position.y -= profile.attack_crouch_depth * attack_pose_weight
+		if _attack_animation_style == MeleeAttackActionDefinition.AnimationStyle.OVERHEAD_SLAM:
+			var arm_pitch := deg_to_rad(_overhead_slam_arm_pitch_degrees(attack_progress))
+			var inward_angle := deg_to_rad(_overhead_slam_inward_angle_degrees(attack_progress))
+			left_rotation = Vector3(arm_pitch, 0.0, inward_angle)
+			right_rotation = Vector3(arm_pitch, 0.0, -inward_angle)
+			if attack_progress >= HAMMER_HOLD_END:
+				var recovery_progress := (attack_progress - HAMMER_HOLD_END) / (1.0 - HAMMER_HOLD_END)
+				var left_idle := _held_melee_action.two_handed_left_arm_rotation_degrees
+				var right_idle := _held_melee_action.two_handed_right_arm_rotation_degrees
+				left_rotation = Vector3(
+					deg_to_rad(lerp(-26.0, left_idle.x, recovery_progress)),
+					deg_to_rad(lerp(0.0, left_idle.y, recovery_progress)),
+					deg_to_rad(lerp(30.0, left_idle.z, recovery_progress))
+				)
+				right_rotation = Vector3(
+					deg_to_rad(lerp(-26.0, right_idle.x, recovery_progress)),
+					deg_to_rad(lerp(0.0, right_idle.y, recovery_progress)),
+					deg_to_rad(lerp(-30.0, right_idle.z, recovery_progress))
+				)
+			held_item_windup_pose_weight = _overhead_slam_windup_weight(attack_progress)
+			held_item_alignment_weight = _overhead_slam_alignment_weight(attack_progress)
+			held_item_face_turn_weight = _overhead_slam_face_turn_weight(attack_progress)
+			if attack_progress >= HAMMER_HOLD_END:
+				held_item_recovery_progress = (attack_progress - HAMMER_HOLD_END) / (1.0 - HAMMER_HOLD_END)
+			var impact_weight := _overhead_slam_impact_weight(attack_progress)
+			held_item_pose_weight = impact_weight
+			body_rotation.x = deg_to_rad(24.0) * impact_weight
+			body_action.position.y -= HAMMER_BODY_DROP * impact_weight
+			left_leg_base.rotation.x -= deg_to_rad(12.0) * impact_weight
+			right_leg_base.rotation.x += deg_to_rad(12.0) * impact_weight
+			rig_root.position.y -= 0.14 * impact_weight
+		else:
+			held_item_pose_weight = attack_pose_weight
+			var sweep_degrees := _attack_sweep_degrees(attack_progress) * float(_attack_direction)
+			right_rotation = Vector3(
+				deg_to_rad(profile.attack_right_arm_pitch_degrees * attack_pose_weight),
+				0.0,
+				deg_to_rad(sweep_degrees)
+			)
+			body_rotation.x = deg_to_rad(profile.attack_body_lean_degrees * attack_pose_weight)
+			body_rotation.y = deg_to_rad(profile.attack_body_twist_degrees * sweep_degrees / profile.attack_follow_through_degrees)
+			left_leg_base.rotation.x -= deg_to_rad(profile.attack_leg_brace_degrees * attack_pose_weight * _attack_direction)
+			right_leg_base.rotation.x += deg_to_rad(profile.attack_leg_brace_degrees * attack_pose_weight * _attack_direction)
+			rig_root.position.y -= profile.attack_crouch_depth * attack_pose_weight
 		if _attack_elapsed >= _attack_duration:
 			_attacking = false
-	if animation_state.grounded and animation_state.speed_ratio > 0.05 and _mine_blend <= 0.001 and not _placing and not attack_active:
+	if _uses_two_handed_pose() and not attack_active and _mine_blend <= 0.001 and not _placing:
+		var hold_wave := sin(_elapsed * 4.0) * 1.5
+		var left_hold := _held_melee_action.two_handed_left_arm_rotation_degrees
+		var right_hold := _held_melee_action.two_handed_right_arm_rotation_degrees
+		left_hold.x += hold_wave
+		right_hold.x += hold_wave
+		left_rotation = Vector3(deg_to_rad(left_hold.x), deg_to_rad(left_hold.y), deg_to_rad(left_hold.z))
+		right_rotation = Vector3(deg_to_rad(right_hold.x), deg_to_rad(right_hold.y), deg_to_rad(right_hold.z))
+	elif animation_state.grounded and animation_state.speed_ratio > 0.05 and _mine_blend <= 0.001 and not _placing and not attack_active:
 		var swing_degrees = profile.sprint_arm_swing_degrees if animation_state.sprinting else profile.walk_arm_swing_degrees
 		var arm_wave = _held_wave(_gait_phase() - profile.secondary_motion_lag) * animation_state.speed_ratio
 		var left_target = deg_to_rad(swing_degrees * arm_wave)
@@ -530,3 +633,50 @@ func _attack_sweep_degrees(progress: float) -> float:
 	if progress < 0.68:
 		return profile.attack_follow_through_degrees
 	return lerp(profile.attack_follow_through_degrees, 0.0, _pose_ease((progress - 0.68) / 0.32))
+
+func _overhead_slam_arm_pitch_degrees(progress: float) -> float:
+	if progress < HAMMER_WINDUP_END:
+		return lerp(-52.0, -162.0, smoothstep(0.0, 1.0, progress / HAMMER_WINDUP_END))
+	if progress < HAMMER_IMPACT:
+		return lerp(-162.0, -26.0, smoothstep(0.0, 1.0, (progress - HAMMER_WINDUP_END) / (HAMMER_IMPACT - HAMMER_WINDUP_END)))
+	if progress < HAMMER_HOLD_END:
+		return -26.0
+	return -26.0
+
+func _overhead_slam_inward_angle_degrees(progress: float) -> float:
+	if progress < HAMMER_WINDUP_END:
+		return lerp(3.0, 30.0, smoothstep(0.0, 1.0, progress / HAMMER_WINDUP_END))
+	return 30.0
+
+func _overhead_slam_windup_weight(progress: float) -> float:
+	if progress < HAMMER_WINDUP_END:
+		return smoothstep(0.0, 1.0, progress / HAMMER_WINDUP_END)
+	if progress < HAMMER_IMPACT:
+		return 1.0 - smoothstep(0.0, 1.0, (progress - HAMMER_WINDUP_END) / (HAMMER_IMPACT - HAMMER_WINDUP_END))
+	return 0.0
+
+func _overhead_slam_impact_weight(progress: float) -> float:
+	if progress < HAMMER_WINDUP_END:
+		return 0.0
+	if progress < HAMMER_IMPACT:
+		return smoothstep(0.0, 1.0, (progress - HAMMER_WINDUP_END) / (HAMMER_IMPACT - HAMMER_WINDUP_END))
+	if progress < HAMMER_HOLD_END:
+		return 1.0
+	return 1.0 - (progress - HAMMER_HOLD_END) / (1.0 - HAMMER_HOLD_END)
+
+func _overhead_slam_alignment_weight(progress: float) -> float:
+	if progress < HAMMER_WINDUP_END:
+		return smoothstep(0.0, 1.0, progress / HAMMER_WINDUP_END)
+	if progress < HAMMER_HOLD_END or is_equal_approx(progress, HAMMER_HOLD_END):
+		return 1.0
+	return 0.0
+
+func _overhead_slam_face_turn_weight(progress: float) -> float:
+	if progress < HAMMER_WINDUP_END:
+		return 0.0
+	if progress < HAMMER_IMPACT:
+		return smoothstep(0.0, 1.0, (progress - HAMMER_WINDUP_END) / (HAMMER_IMPACT - HAMMER_WINDUP_END))
+	return 1.0
+
+func _uses_two_handed_pose() -> bool:
+	return _held_melee_action != null and _held_melee_action.two_handed_pose

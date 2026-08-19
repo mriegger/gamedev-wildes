@@ -3,6 +3,7 @@ class_name AppleTreeCoordinator
 
 signal state_changed
 
+const DECORATIVE_DROP_PERCENT: int = 20
 const GROUND_OFFSETS: Array[Vector2] = [
 	Vector2(0.78, 0.18),
 	Vector2(-0.72, 0.28),
@@ -44,6 +45,9 @@ var _model_bounds: AABB
 var _foliage_mesh: BoxMesh
 var _chunk_roots: Dictionary = {}
 var _targets: Dictionary = {}
+var _decorations_by_leaf: Dictionary = {}
+var _new_fallen_sources: Dictionary = {}
+var _fallen_by_chunk: Dictionary = {}
 var _next_target_id: int = 1
 
 func setup(voxel_world: VoxelWorld, chunk_manager: ChunkManager, world_seed: int, saved_state: Variant, item_catalog: ItemCatalog) -> bool:
@@ -54,6 +58,7 @@ func setup(voxel_world: VoxelWorld, chunk_manager: ChunkManager, world_seed: int
 	_world_seed = world_seed
 	if definition == null or not definition.validate(item_catalog) or not _state.restore(saved_state) or not _prepare_model_bounds() or not _prepare_foliage_mesh():
 		return false
+	_rebuild_fallen_index()
 	_chunk_manager.chunk_loaded.connect(_on_chunk_loaded)
 	_chunk_manager.chunk_unloaded.connect(_on_chunk_unloaded)
 	_voxel_world.block_edit_committed.connect(_on_block_edit_committed)
@@ -102,8 +107,12 @@ func try_harvest_target(target_id: int) -> bool:
 	var record := _targets[target_id] as Dictionary
 	var tree_position := record["tree_position"] as Vector3i
 	var slot_index := int(record["slot_index"])
-	if not _state.collect(tree_position, slot_index):
+	var decorative_index := int(record["decorative_index"])
+	var collected := _state.collect_fallen_apple(tree_position, decorative_index) if decorative_index >= 0 else _state.collect(tree_position, slot_index)
+	if not collected:
 		return false
+	if decorative_index >= 0:
+		_remove_fallen_from_index(record["chunk"] as Vector2i, tree_position, decorative_index)
 	var apple := record["node"] as Node3D
 	_targets.erase(target_id)
 	apple.queue_free()
@@ -160,27 +169,35 @@ func _on_chunk_unloaded(coord: Vector2i) -> void:
 
 func _on_block_edit_committed(edit: BlockEdit) -> void:
 	var coord := ChunkCoord.world_to_chunk_vec3i(edit.pos, _voxel_world.chunk_size)
-	if _chunk_manager.visible_chunks.has(coord):
-		_render_chunk(coord)
+	var rerender_coords: Dictionary = {coord: true}
+	if edit.is_mine() and edit.old_id == BlockId.Type.LEAVES:
+		for affected_coord in _try_drop_decorative_apple(edit.pos):
+			rerender_coords[affected_coord] = true
+	for affected_coord in rerender_coords:
+		if _chunk_manager.visible_chunks.has(affected_coord):
+			_render_chunk(affected_coord)
 
 func _render_chunk(coord: Vector2i) -> void:
 	_unload_chunk(coord)
 	var tree_blocks := _voxel_world.get_tree_blocks_for_chunk(coord)
-	if tree_blocks.is_empty():
+	if tree_blocks.is_empty() and not _fallen_by_chunk.has(coord):
 		return
 	var root := Node3D.new()
 	root.name = "AppleTrees_%d_%d" % [coord.x, coord.y]
 	add_child(root)
 	_chunk_roots[coord] = root
-	var trunk_bases: Array[Vector3i] = []
+	var trunk_base_set: Dictionary = {}
 	for raw_position in tree_blocks:
 		var position := raw_position as Vector3i
-		if int(tree_blocks[position]) == BlockId.Type.LOG and position.y == _voxel_world.get_terrain_height(position.x, position.z) + 1:
-			trunk_bases.append(position)
+		if int(tree_blocks[position]) == BlockId.Type.LOG:
+			var base := Vector3i(position.x, _voxel_world.get_terrain_height(position.x, position.z) + 1, position.z)
+			trunk_base_set[base] = true
+	var trunk_bases: Array = trunk_base_set.keys()
 	trunk_bases.sort()
 	for tree_position in trunk_bases:
 		if _is_apple_tree(tree_position):
 			_render_apple_tree(root, coord, tree_position, tree_blocks)
+	_render_fallen_apples(root, coord)
 	if root.get_child_count() == 0:
 		_chunk_roots.erase(coord)
 		root.queue_free()
@@ -212,8 +229,21 @@ func _render_apple_tree(root: Node3D, coord: Vector2i, tree_position: Vector3i, 
 	for index in range(definition.decorative_apple_count):
 		var offset := decorative_offsets[index] as Vector3
 		var position := Vector3(tree_position.x + 0.5, top_log_y + 1.45, tree_position.z + 0.5) + offset
+		var supporting_leaf := _get_supporting_leaf(tree_position, top_log_y, offset)
+		if int(tree_blocks.get(supporting_leaf, BlockId.Type.AIR)) != BlockId.Type.LEAVES:
+			continue
+		var apple_radius := definition.decorative_apple_size * 0.5
+		position.y = clampf(position.y, supporting_leaf.y + apple_radius, supporting_leaf.y + 1.0 - apple_radius)
 		var apple := _spawn_apple_model(root, position, definition.decorative_apple_size, false)
 		apple.name = "DecorativeApple_%d" % index
+		if not _decorations_by_leaf.has(supporting_leaf):
+			_decorations_by_leaf[supporting_leaf] = []
+		(_decorations_by_leaf[supporting_leaf] as Array).append({
+			"chunk": coord,
+			"tree_position": tree_position,
+			"decorative_index": index,
+			"position": position,
+		})
 
 func _spawn_foliage(root: Node3D, tree_position: Vector3i, top_log_y: int, tree_blocks: Dictionary) -> void:
 	for raw_position in tree_blocks:
@@ -234,6 +264,42 @@ func _spawn_foliage(root: Node3D, tree_position: Vector3i, top_log_y: int, tree_
 func _spawn_ground_apple(root: Node3D, coord: Vector2i, tree_position: Vector3i, slot_index: int, position: Vector3) -> void:
 	var holder := _spawn_apple_model(root, position, definition.ground_apple_size, true)
 	holder.name = "GroundApple_%d" % slot_index
+	_register_harvest_target(root, holder, coord, tree_position, slot_index, -1)
+
+func _render_fallen_apples(root: Node3D, coord: Vector2i) -> void:
+	for record in _fallen_by_chunk.get(coord, []) as Array:
+		var position := record["position"] as Vector3
+		var tree_position := record["tree_position"] as Vector3i
+		var decorative_index := int(record["decorative_index"])
+		var holder := _spawn_apple_model(root, position, definition.ground_apple_size, true)
+		holder.name = "FallenApple_%d_%d_%d_%d" % [tree_position.x, tree_position.y, tree_position.z, decorative_index]
+		_register_harvest_target(root, holder, coord, tree_position, -1, decorative_index)
+		var key := _fallen_key(tree_position, decorative_index)
+		if _new_fallen_sources.has(key):
+			var target_position := holder.position
+			holder.position = _new_fallen_sources[key] as Vector3
+			var tween := holder.create_tween()
+			tween.set_trans(Tween.TRANS_QUAD)
+			tween.set_ease(Tween.EASE_IN)
+			tween.tween_property(holder, ^"position", target_position, 0.45)
+			tween.finished.connect(_play_fall_impact.bind(holder, tree_position, decorative_index))
+			_new_fallen_sources.erase(key)
+
+func _play_fall_impact(holder: Node3D, tree_position: Vector3i, decorative_index: int) -> void:
+	if not is_instance_valid(holder):
+		return
+	var player := AudioStreamPlayer3D.new()
+	var stream_index := _stable_seed(tree_position, 3000 + decorative_index) % definition.fall_impact_streams.size()
+	player.stream = definition.fall_impact_streams[stream_index]
+	player.bus = &"SFX"
+	player.volume_db = -8.0
+	player.unit_size = 3.5
+	player.max_distance = 18.0
+	holder.add_child(player)
+	player.finished.connect(player.queue_free)
+	player.play()
+
+func _register_harvest_target(root: Node3D, holder: Node3D, coord: Vector2i, tree_position: Vector3i, slot_index: int, decorative_index: int) -> void:
 	var target_id := _next_target_id
 	_next_target_id += 1
 	var coordinator_transform := global_transform if is_inside_tree() else transform
@@ -243,8 +309,83 @@ func _spawn_ground_apple(root: Node3D, coord: Vector2i, tree_position: Vector3i,
 		"chunk": coord,
 		"tree_position": tree_position,
 		"slot_index": slot_index,
+		"decorative_index": decorative_index,
 		"node": holder,
 	}
+
+func _try_drop_decorative_apple(leaf_position: Vector3i) -> Array[Vector2i]:
+	if not _decorations_by_leaf.has(leaf_position):
+		return []
+	var records := (_decorations_by_leaf[leaf_position] as Array).duplicate()
+	records.sort_custom(func(first: Dictionary, second: Dictionary): return int(first["decorative_index"]) < int(second["decorative_index"]))
+	var affected_coords: Dictionary = {}
+	for record in records:
+		affected_coords[(record as Dictionary)["chunk"] as Vector2i] = true
+		var tree_position := record["tree_position"] as Vector3i
+		var decorative_index := int(record["decorative_index"])
+		if not _should_drop_decorative_apple(tree_position, decorative_index):
+			continue
+		var source_position := record["position"] as Vector3
+		var drop_position := _get_drop_position(tree_position, decorative_index, source_position)
+		if _state.add_fallen_apple(tree_position, decorative_index, drop_position):
+			var drop_coord := ChunkCoord.world_to_chunk(drop_position, _voxel_world.chunk_size)
+			_add_fallen_to_index(drop_coord, tree_position, decorative_index, drop_position)
+			affected_coords[drop_coord] = true
+			if _chunk_manager.visible_chunks.has(drop_coord):
+				_new_fallen_sources[_fallen_key(tree_position, decorative_index)] = source_position
+			state_changed.emit()
+			break
+	var coords: Array[Vector2i] = []
+	for affected_coord in affected_coords:
+		coords.append(affected_coord as Vector2i)
+	return coords
+
+func _rebuild_fallen_index() -> void:
+	_fallen_by_chunk.clear()
+	for record in _state.get_fallen_apples():
+		var position := record["position"] as Vector3
+		var coord := ChunkCoord.world_to_chunk(position, _voxel_world.chunk_size)
+		_add_fallen_to_index(coord, record["tree_position"] as Vector3i, int(record["decorative_index"]), position)
+
+func _add_fallen_to_index(coord: Vector2i, tree_position: Vector3i, decorative_index: int, position: Vector3) -> void:
+	if not _fallen_by_chunk.has(coord):
+		_fallen_by_chunk[coord] = []
+	(_fallen_by_chunk[coord] as Array).append({
+		"tree_position": tree_position,
+		"decorative_index": decorative_index,
+		"position": position,
+	})
+
+func _remove_fallen_from_index(coord: Vector2i, tree_position: Vector3i, decorative_index: int) -> void:
+	var records := _fallen_by_chunk.get(coord, []) as Array
+	for index in range(records.size() - 1, -1, -1):
+		var record := records[index] as Dictionary
+		if record["tree_position"] == tree_position and int(record["decorative_index"]) == decorative_index:
+			records.remove_at(index)
+	if records.is_empty():
+		_fallen_by_chunk.erase(coord)
+
+func _should_drop_decorative_apple(tree_position: Vector3i, decorative_index: int) -> bool:
+	return _stable_seed(tree_position, 1000 + decorative_index) % 100 < DECORATIVE_DROP_PERCENT
+
+func _get_drop_position(tree_position: Vector3i, decorative_index: int, source_position: Vector3) -> Vector3:
+	var center := Vector2(tree_position.x + 0.5, tree_position.z + 0.5)
+	var outward := Vector2(source_position.x, source_position.z) - center
+	if outward.is_zero_approx():
+		var angle := float(_stable_seed(tree_position, 2000 + decorative_index) % 360) * PI / 180.0
+		outward = Vector2(cos(angle), sin(angle))
+	outward = outward.normalized()
+	var planar_position := center + outward * 1.15
+	var ground_height := _voxel_world.get_terrain_height(floori(planar_position.x), floori(planar_position.y))
+	if ground_height < 0:
+		ground_height = tree_position.y - 1
+	return Vector3(planar_position.x, float(ground_height + 1), planar_position.y)
+
+func _get_supporting_leaf(tree_position: Vector3i, top_log_y: int, offset: Vector3) -> Vector3i:
+	return Vector3i(tree_position.x + clampi(roundi(offset.x), -1, 1), top_log_y + 1, tree_position.z + clampi(roundi(offset.z), -1, 1))
+
+func _fallen_key(tree_position: Vector3i, decorative_index: int) -> String:
+	return "%d,%d,%d,%d" % [tree_position.x, tree_position.y, tree_position.z, decorative_index]
 
 func _spawn_apple_model(root: Node3D, position: Vector3, target_size: float, rest_on_surface: bool) -> Node3D:
 	var holder := Node3D.new()
@@ -276,6 +417,15 @@ func _unload_chunk(coord: Vector2i) -> void:
 	for target_id in _targets.keys():
 		if (_targets[target_id] as Dictionary)["chunk"] == coord:
 			_targets.erase(target_id)
+	for leaf_position in _decorations_by_leaf.keys():
+		var retained: Array = []
+		for record in _decorations_by_leaf[leaf_position] as Array:
+			if (record as Dictionary)["chunk"] != coord:
+				retained.append(record)
+		if retained.is_empty():
+			_decorations_by_leaf.erase(leaf_position)
+		else:
+			_decorations_by_leaf[leaf_position] = retained
 
 func _is_apple_tree(tree_position: Vector3i) -> bool:
 	return _stable_seed(tree_position, 5) % 10000 < roundi(definition.tree_fraction * 10000.0)

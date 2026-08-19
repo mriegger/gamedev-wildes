@@ -8,6 +8,7 @@ var _inventory: InventoryModel
 var _structure_calls: Array[StringName] = []
 var _structure_commands_accepted: bool = false
 var _pumpkin_patch: PumpkinPatchCoordinator
+var _ripple_strength: float = -1.0
 var _stats: ActorStats
 
 func _init() -> void:
@@ -30,6 +31,7 @@ func _process(_delta: float) -> bool:
 			Callable(self, "_handle_structure_command").bind(&"import"),
 			Callable(self, "_handle_structure_command").bind(&"export"),
 			Callable(self, "_handle_structure_command").bind(&"exit"),
+			Callable(self, "_handle_ripple_strength"),
 		)
 		_check_closed_layout()
 		_check_scene_ownership()
@@ -58,6 +60,10 @@ func _process(_delta: float) -> bool:
 		command_input.text_submitted.emit(command_input.text)
 		_expect(is_equal_approx(_stats.current_hp, 40.0), "submitted sethealth command did not update health")
 		_expect(_console.is_open(), "sethealth command closed the developer console")
+		command_input.text = "set ripple strength 0.7"
+		command_input.text_submitted.emit(command_input.text)
+		_expect(is_equal_approx(_ripple_strength, 0.7), "submitted ripple strength command passed the wrong value")
+		_expect(_console.is_open(), "ripple strength command closed the developer console")
 		command_input.text = "dev structure new"
 		command_input.text_submitted.emit(command_input.text)
 		_phase = 3
@@ -147,6 +153,10 @@ func _action_uses_key(action: StringName, key: Key) -> bool:
 func _handle_structure_command(action: StringName) -> bool:
 	_structure_calls.append(action)
 	return _structure_commands_accepted
+
+func _handle_ripple_strength(strength: float) -> bool:
+	_ripple_strength = strength
+	return true
 
 func _finish() -> void:
 	if _errors.is_empty():

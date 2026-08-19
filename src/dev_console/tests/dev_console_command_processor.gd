@@ -10,6 +10,7 @@ class PumpkinPatchStub:
 		return true
 
 var _errors: Array[String] = []
+var _ripple_strength: float = -1.0
 var _structure_calls: Array[StringName] = []
 var _structure_commands_accepted: bool = true
 
@@ -111,6 +112,10 @@ func _init() -> void:
 	stats.damage(25.0)
 	_expect_result(processor.execute("sethealth %s" % (stats.get_value(&"hp") + 100.0)), DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN, "sethealth value above maximum health was rejected")
 	_expect(is_equal_approx(stats.current_hp, stats.get_value(&"hp")), "sethealth value above maximum health was not clamped")
+	_expect_result(processor.execute("set ripple strength 0.65"), DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN, "ripple strength command failed")
+	_expect(is_equal_approx(_ripple_strength, 0.65), "ripple strength command passed the wrong value")
+	_expect_result(processor.execute("SET RIPPLE STRENGTH 0"), DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN, "case-insensitive zero ripple strength command failed")
+	_expect(is_zero_approx(_ripple_strength), "zero ripple strength command passed the wrong value")
 
 	var maximum_grant_stats := ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
 	var maximum_grant_processor := DevConsoleCommandProcessor.new()
@@ -136,6 +141,7 @@ func _init() -> void:
 	var level_before_invalid := stats.level
 	var experience_before_invalid := stats.experience
 	var health_before_invalid := stats.current_hp
+	var ripple_strength_before_invalid := _ripple_strength
 	_expect_result(processor.execute("spawn unknown_item 1"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "unknown item command was accepted")
 	_expect_result(processor.execute("spawn pickaxe 1"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "ambiguous pickaxe alias was accepted")
 	_expect_result(processor.execute("spawn sword 1"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "ambiguous sword alias was accepted")
@@ -159,6 +165,12 @@ func _init() -> void:
 	_expect_result(processor.execute("sethealth nope"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "non-numeric sethealth value was accepted")
 	_expect_result(processor.execute("sethealth nan"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "non-finite sethealth value was accepted")
 	_expect_result(processor.execute("sethealth 10 extra"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "sethealth command with extra arguments was accepted")
+	_expect_result(processor.execute("set ripple strength"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "ripple strength command without a value was accepted")
+	_expect_result(processor.execute("set ripple strength -0.01"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "negative ripple strength was accepted")
+	_expect_result(processor.execute("set ripple strength 1.01"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "ripple strength above one was accepted")
+	_expect_result(processor.execute("set ripple strength nan"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "non-finite ripple strength was accepted")
+	_expect_result(processor.execute("set ripple width 0.5"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "unknown ripple property was accepted")
+	_expect_result(processor.execute("set ripple strength 0.5 extra"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "ripple strength command with extra arguments was accepted")
 	_expect_result(processor.execute("give stone 1"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "unknown command was accepted")
 	_expect_result(processor.execute("spawn"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "spawn command without an item was accepted")
 	_expect_result(processor.execute("spawn pumpkin_patch 1"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "pumpkin patch count argument was accepted")
@@ -166,6 +178,7 @@ func _init() -> void:
 	_expect(inventory.to_dict() == before_invalid, "invalid commands changed the inventory")
 	_expect(stats.level == level_before_invalid and stats.experience == experience_before_invalid, "invalid commands changed player progression")
 	_expect(is_equal_approx(stats.current_hp, health_before_invalid), "invalid commands changed player health")
+	_expect(is_equal_approx(_ripple_strength, ripple_strength_before_invalid), "invalid commands changed ripple strength")
 
 	var full_inventory := InventoryModel.new(item_catalog)
 	for index in range(InventoryModel.HOTBAR_SIZE, InventoryModel.FILLABLE_SIZE):
@@ -200,11 +213,16 @@ func _setup_processor(processor: DevConsoleCommandProcessor, inventory: Inventor
 		Callable(self, "_handle_structure_command").bind(&"import"),
 		Callable(self, "_handle_structure_command").bind(&"export"),
 		Callable(self, "_handle_structure_command").bind(&"exit"),
+		Callable(self, "_handle_ripple_strength"),
 	)
 
 func _handle_structure_command(action: StringName) -> bool:
 	_structure_calls.append(action)
 	return _structure_commands_accepted
+
+func _handle_ripple_strength(strength: float) -> bool:
+	_ripple_strength = strength
+	return true
 
 func _expect_result(actual: DevConsoleCommandProcessor.ExecutionResult, expected: DevConsoleCommandProcessor.ExecutionResult, message: String) -> void:
 	_expect(actual == expected, message)

@@ -3,6 +3,8 @@ class_name PlayerMotor
 
 const _TURN_RESPONSE: float = 10.0
 
+signal water_step_committed(position: Vector3, planar_velocity: Vector2)
+
 @export_range(0.01, 30.0, 0.01) var move_speed: float = 5.5
 @export_range(0.01, 30.0, 0.01) var sprint_speed: float = 8.0
 @export_range(0.0, 30.0, 0.01) var jump_velocity: float = 9.0
@@ -18,6 +20,7 @@ const _TURN_RESPONSE: float = 10.0
 @onready var held_item_view: HeldItemView = $ModelRoot/PlayerVisual/RigRoot/BodySecondary/BodyAction/TorsoBase/RightShoulder/RightArmBase/RightArmAction/RightHandSocket as HeldItemView
 @onready var _footsteps: PlayerFootsteps = $Footsteps as PlayerFootsteps
 @onready var _action_audio: PlayerActionAudio = $ActionAudio as PlayerActionAudio
+@onready var _hammer_shockwave: HammerShockwaveView = $HammerShockwave as HammerShockwaveView
 @onready var armor_view: PlayerArmorView = $ModelRoot/PlayerVisual/ArmorView as PlayerArmorView
 @onready var stat_modifier_clock: StatModifierClock = $StatModifierClock as StatModifierClock
 
@@ -64,7 +67,9 @@ func setup(p_camera_rig: CameraRig, p_inventory: InventoryModel, p_input_buffer:
 	animation_driver.setup(self, interactor)
 	held_item_view.setup(p_inventory)
 	_footsteps.setup(self, animation_driver.animator.profile)
+	_footsteps.step_committed.connect(_on_step_committed)
 	_action_audio.setup(animation_driver, interactor, p_inventory, p_combat)
+	_hammer_shockwave.setup(interactor, p_camera_rig)
 	armor_view.setup(p_inventory)
 	_is_setup = true
 
@@ -169,6 +174,17 @@ func get_footstep_surface_block_id() -> int:
 	if not on_ground:
 		return BlockId.Type.AIR
 	return VoxelBodySolver.get_supporting_block_id(voxel_space, global_position, player_width, ground_y)
+
+func get_water_surface_position() -> Vector3:
+	assert(is_in_water())
+	var surface_cell := _get_feet_cell()
+	while voxel_space.get_block_id_at(surface_cell + Vector3i.UP) == BlockId.Type.WATER:
+		surface_cell += Vector3i.UP
+	return Vector3(global_position.x, surface_cell.y + VoxelSpace.WATER_SURFACE_HEIGHT, global_position.z)
+
+func _on_step_committed(surface_block_id: int) -> void:
+	if surface_block_id == BlockId.Type.WATER and is_in_water():
+		water_step_committed.emit(get_water_surface_position(), Vector2(velocity.x, velocity.z))
 
 func _get_feet_cell() -> Vector3i:
 	return Vector3i(

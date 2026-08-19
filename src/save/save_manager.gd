@@ -203,7 +203,7 @@ static func load_slot(slot_id: int) -> Dictionary:
 	if not info.has("chest_inventories"):
 		info["chest_inventories"] = {}
 	if not info.has("apple_trees"):
-		info["apple_trees"] = {"version": AppleTreeState.SNAPSHOT_VERSION, "collected_slots": []}
+		info["apple_trees"] = AppleTreeState.new().snapshot()
 	return info
 
 static func _migrate_save_data(data: Dictionary) -> bool:
@@ -229,7 +229,7 @@ static func _migrate_save_data(data: Dictionary) -> bool:
 				migrated["chest_inventories"] = {}
 				version = 8
 			8:
-				migrated["apple_trees"] = {"version": AppleTreeState.SNAPSHOT_VERSION, "collected_slots": []}
+				migrated["apple_trees"] = AppleTreeState.new().snapshot()
 				version = 9
 			_:
 				return false

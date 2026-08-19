@@ -129,6 +129,42 @@ func _run():
 	var sword_action := sword.primary_action as MeleeAttackActionDefinition
 	_expect(is_equal_approx(sword_action.attack_profile.duration, 0.48), "sword attack duration changed")
 	_expect(is_equal_approx(sword_action.chain_input_window, 0.26), "sword chain input window changed")
+	var hammer := item_catalog.get_definition(&"copper_hammer")
+	_expect(hammer.max_stack == 1, "copper hammer stack limit is not one")
+	_expect(hammer.primary_action is MeleeAttackActionDefinition and hammer.secondary_action == null, "copper hammer action configuration is incorrect")
+	_expect(hammer.icon.resource_path == "res://assets/textures/tools/hammer/copper_hammer.png", "copper hammer uses the wrong inventory icon")
+	var hammer_icon := hammer.icon.get_image()
+	_expect(hammer_icon != null and hammer_icon.get_size() == Vector2i(16, 16), "copper hammer inventory icon is not 16x16")
+	_expect(hammer_icon != null and hammer_icon.detect_alpha() != Image.ALPHA_NONE, "copper hammer inventory icon has no transparency")
+	var hammer_icon_colors: Dictionary[Color, bool] = {}
+	var hammer_partial_alpha_pixels := 0
+	if hammer_icon != null:
+		for y in range(hammer_icon.get_height()):
+			for x in range(hammer_icon.get_width()):
+				var pixel := hammer_icon.get_pixel(x, y)
+				if pixel.a > 0.0:
+					hammer_icon_colors[Color(pixel.r, pixel.g, pixel.b, 1.0)] = true
+				if pixel.a > 0.0 and pixel.a < 1.0:
+					hammer_partial_alpha_pixels += 1
+	_expect(hammer_icon_colors.size() <= 6, "copper hammer inventory icon exceeds its pixel-art palette")
+	_expect(hammer_partial_alpha_pixels == 0, "copper hammer inventory icon contains anti-aliased pixels")
+	var hammer_action := hammer.primary_action as MeleeAttackActionDefinition
+	_expect(hammer_action.animation_style == MeleeAttackActionDefinition.AnimationStyle.OVERHEAD_SLAM and hammer_action.two_handed_pose, "copper hammer does not use the two-handed slam presentation")
+	_expect(not hammer_action.compensate_attack_arm_pitch and is_equal_approx(hammer_action.impact_effect_radius, 4.0), "copper hammer impact presentation is misconfigured")
+	var hammer_profile := hammer_action.attack_profile
+	_expect(hammer_profile.duration >= sword_action.attack_profile.duration * 2.0, "copper hammer attack is not at least twice as slow as the sword")
+	_expect(is_equal_approx(hammer_profile.reach, 4.0) and is_equal_approx(hammer_profile.sweep_degrees, 360.0), "copper hammer does not use a four-block radial attack")
+	_expect(is_equal_approx(hammer_action.impact_effect_radius, hammer_profile.reach), "hammer shockwave radius does not match its damage and knockback radius")
+	_expect(is_equal_approx(hammer_profile.base_damage, sword_action.attack_profile.base_damage) and is_equal_approx(hammer_profile.damage_multiplier, 1.0), "copper hammer base damage does not match the sword")
+	_expect(is_equal_approx(hammer_profile.radial_damage_center_multiplier, 1.5) and is_equal_approx(hammer_profile.radial_damage_edge_multiplier, 0.5), "copper hammer radial damage falloff is misconfigured")
+	_expect(hammer_profile.acquire_targets_on_contact and is_equal_approx(hammer_profile.knockback_speed, 8.0) and is_equal_approx(hammer_profile.impact_origin_forward_offset, 1.445), "copper hammer impact behavior is incomplete")
+	_expect(hammer.rarity == sword.rarity and hammer.proficiency == sword.proficiency, "copper hammer does not use canonical weapon progression")
+	var hammer_held := hammer.held_scene.instantiate() as Node3D
+	var hammer_handle := hammer_held.get_node_or_null("Handle") as MeshInstance3D
+	var hammer_head := hammer_held.get_node_or_null("Head") as MeshInstance3D
+	_expect(hammer_handle != null and hammer_handle.mesh is CylinderMesh and (hammer_handle.mesh as CylinderMesh).height >= 1.1, "copper hammer does not have a long wooden handle")
+	_expect(hammer_head != null and hammer_head.mesh is BoxMesh and (hammer_head.mesh as BoxMesh).size.x >= 0.7, "copper hammer does not have a large head")
+	hammer_held.free()
 	var hoe := item_catalog.get_definition(&"copper_hoe")
 	_expect(hoe.max_stack == 1, "copper hoe stack limit is not one")
 	_expect(hoe.primary_action is TillingActionDefinition and hoe.secondary_action == null, "copper hoe action configuration is incorrect")
@@ -304,6 +340,64 @@ func _run():
 	_player.animation_driver.setup(_player, _interactor)
 	_player.animation_driver.set_process(false)
 	_player.held_item_view.setup(_inventory)
+	_inventory.slots[0] = InventoryStack.new(&"copper_hammer", 1)
+	_inventory.inventory_changed.emit()
+	_player.animation_driver.animator._placing = true
+	_player.animation_driver.animator._place_elapsed = 0.05
+	_player.animation_driver.animator._mining_active = true
+	_player.animation_driver.animator._mine_blend = 1.0
+	_player.animation_driver._on_melee_attack_started(hammer_action, -1)
+	_expect(not _player.animation_driver.animator._placing and not _player.animation_driver.animator._mining_active and is_zero_approx(_player.animation_driver.animator._mine_blend), "immediate hammer attack retained a stale placement or mining pose")
+	var immediate_attack_idle: Transform3D = _player.animation_driver.animator.global_transform.affine_inverse() * _player.held_item_view.global_transform
+	var immediate_idle_global: Transform3D = _player.animation_driver.animator.right_arm_base.global_transform * _player.held_item_view._attack_idle_relative_transform
+	var immediate_idle_relative: Transform3D = _player.animation_driver.animator.global_transform.affine_inverse() * immediate_idle_global
+	_expect(immediate_attack_idle.origin.distance_to(immediate_idle_relative.origin) < 0.001, "immediate hammer attack cached a transient held-item position")
+	_expect(immediate_attack_idle.basis.orthonormalized().get_rotation_quaternion().angle_to(immediate_idle_relative.basis.orthonormalized().get_rotation_quaternion()) < 0.001, "immediate hammer attack cached a transient held-item rotation")
+	_player.animation_driver.animator.cancel_attack()
+	_player.animation_driver._active_attack_action = null
+	_player.animation_driver.animator.set_held_melee_action(null)
+	_inventory.slots[0] = InventoryStack.new(&"stone_pickaxe", 1)
+	_inventory.inventory_changed.emit()
+	_player.held_item_view.set_attack_pose(0.0, 0.0, null)
+	var shake_camera_rig := (load("res://player/camera/camera_rig.tscn") as PackedScene).instantiate() as CameraRig
+	root.add_child(shake_camera_rig)
+	await process_frame
+	shake_camera_rig.set_process(false)
+	var shockwave := _player.get_node("HammerShockwave") as HammerShockwaveView
+	shockwave.setup(_interactor, shake_camera_rig)
+	var shockwave_position := Vector3(2.0, 0.04, 3.0)
+	var camera_rest_position := shake_camera_rig.camera.position
+	_interactor.melee_attack_impacted.emit(hammer_action, shockwave_position)
+	_expect(shockwave.visible and shockwave.global_position.is_equal_approx(shockwave_position), "hammer impact did not show its shockwave at the contact point")
+	_expect(is_zero_approx(shake_camera_rig._impact_shake_elapsed), "hammer impact did not start the camera shake")
+	shake_camera_rig._update_impact_shake(0.02)
+	_expect(not shake_camera_rig.camera.position.is_equal_approx(camera_rest_position), "hammer camera shake did not offset the camera")
+	_expect(shake_camera_rig.camera.position.distance_to(camera_rest_position) <= CameraRig.IMPACT_SHAKE_STRENGTH, "hammer camera shake was not subtle")
+	var default_zoom_shake_distance := shake_camera_rig.camera.position.distance_to(camera_rest_position)
+	shake_camera_rig.camera.size = shake_camera_rig.min_ortho_size
+	shake_camera_rig.play_impact_shake()
+	shake_camera_rig._update_impact_shake(0.02)
+	var zoomed_in_shake_distance := shake_camera_rig.camera.position.distance_to(camera_rest_position)
+	shake_camera_rig.camera.size = shake_camera_rig.max_ortho_size
+	shake_camera_rig.play_impact_shake()
+	shake_camera_rig._update_impact_shake(0.02)
+	var zoomed_out_shake_distance := shake_camera_rig.camera.position.distance_to(camera_rest_position)
+	_expect(zoomed_in_shake_distance > default_zoom_shake_distance and default_zoom_shake_distance > zoomed_out_shake_distance, "hammer camera shake did not scale with orthographic zoom")
+	_expect(absf(zoomed_in_shake_distance / default_zoom_shake_distance - sqrt(CameraRig.DEFAULT_ORTHO_SIZE / shake_camera_rig.min_ortho_size)) < 0.001, "fully zoomed-in hammer shake used the wrong softened scale")
+	_expect(absf(zoomed_out_shake_distance / default_zoom_shake_distance - sqrt(CameraRig.DEFAULT_ORTHO_SIZE / shake_camera_rig.max_ortho_size)) < 0.001, "fully zoomed-out hammer shake used the wrong softened scale")
+	shake_camera_rig.camera.size = CameraRig.DEFAULT_ORTHO_SIZE
+	_expect(shockwave._mesh_instance != null and shockwave._mesh_instance.mesh is ImmediateMesh, "hammer shockwave does not use a procedural ring")
+	var initial_shockwave_scale := shockwave.scale.x
+	shockwave._process(HammerShockwaveView.DURATION_SECONDS * 0.1)
+	_expect(shockwave.scale.x > initial_shockwave_scale and is_zero_approx(shockwave._inner_radius_ratio), "hammer shockwave inner edge appeared before its delay")
+	shockwave._process(HammerShockwaveView.DURATION_SECONDS * 0.4)
+	_expect(shockwave._inner_radius_ratio > 0.0 and shockwave._inner_radius_ratio < HammerShockwaveView.FINAL_INNER_RADIUS_RATIO and shockwave._material.albedo_color.a > 0.0, "hammer shockwave inner edge did not trail the outer edge")
+	shockwave._process(HammerShockwaveView.DURATION_SECONDS * 0.41)
+	_expect(is_equal_approx(shockwave._inner_radius_ratio, HammerShockwaveView.FINAL_INNER_RADIUS_RATIO) and shockwave._material.albedo_color.a > 0.0 and shockwave.visible, "hammer shockwave inner edge did not reach the outer edge before fading")
+	shockwave._process(HammerShockwaveView.DURATION_SECONDS * 0.1)
+	_expect(not shockwave.visible, "hammer shockwave did not finish")
+	shake_camera_rig._update_impact_shake(CameraRig.IMPACT_SHAKE_DURATION)
+	_expect(shake_camera_rig.camera.position.is_equal_approx(camera_rest_position), "hammer camera shake did not restore the camera")
 	_hotbar = (load("res://inventory/ui/inventory_hotbar.tscn") as PackedScene).instantiate() as InventoryHotbar
 	root.add_child(_hotbar)
 	_hotbar.setup(_inventory, inventory_stat_coordinator, ItemProficiency.new(item_catalog))
@@ -653,6 +747,7 @@ func _run():
 	_combat.queue_free()
 	_world_entity_coordinator.queue_free()
 	_hotbar.queue_free()
+	shake_camera_rig.queue_free()
 	await process_frame
 	await process_frame
 	var orphan_count := int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))

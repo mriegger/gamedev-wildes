@@ -133,7 +133,8 @@ func _ready():
 		Callable(self, "_request_new_structure"),
 		Callable(self, "_request_import_structure"),
 		Callable(self, "_request_export_structure"),
-		Callable(self, "_request_exit_structure")
+		Callable(self, "_request_exit_structure"),
+		Callable(world, "try_set_water_ripple_strength")
 	)
 	player_perks = PlayerPerks.new(player_perk_rules)
 	chest_storage = ChestInventoryStore.new(item_catalog)
@@ -248,6 +249,7 @@ func _setup_gameplay() -> bool:
 	melee_combat.melee_outcome_committed.connect(_on_melee_outcome_committed)
 	combat_hit_particles.setup(melee_combat, combat_hit_particle_catalog)
 	player.setup(camera_rig, inventory_model, input_buffer, player_stats, melee_combat, world_entities)
+	player.water_step_committed.connect(world.play_water_ripple)
 	item_consumption_coordinator = ItemConsumptionCoordinator.new()
 	item_consumption_coordinator.setup(inventory_model, player_stats)
 	player.setup_consumption(item_consumption_coordinator)

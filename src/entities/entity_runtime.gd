@@ -335,6 +335,10 @@ func try_apply_damage(runtime_id: int, amount: float) -> EntityDamageResult:
 	var applied_damage := stats.damage(amount)
 	return EntityDamageResult.new(applied_damage, stats.is_dead())
 
+func try_apply_knockback(runtime_id: int, direction: Vector3, speed: float) -> bool:
+	var actor := get_actor(runtime_id)
+	return actor != null and actor.apply_knockback(direction, speed)
+
 func _get_stats(runtime_id: int) -> ActorStats:
 	var stats := _stats_by_runtime_id.get(runtime_id) as ActorStats
 	assert(stats != null)

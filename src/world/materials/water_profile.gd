@@ -12,6 +12,13 @@ class_name WaterProfile
 @export var normal_move_dir_b: Vector2 = Vector2(0.2, 1.0)
 @export var normal_bump_strength: float = 1.0
 
+@export_group("Step Ripples")
+@export_range(0.1, 3.0, 0.01) var ripple_duration: float = 1.1
+@export_range(0.1, 4.0, 0.01) var ripple_speed: float = 1.35
+@export_range(0.05, 1.0, 0.01) var ripple_width: float = 0.28
+@export_range(0.0, 1.0, 0.01) var ripple_strength: float = 0.55
+@export_range(0.0, 1.0, 0.01) var ripple_directionality: float = 0.65
+
 @export_group("Refraction")
 @export var refraction_test: float = 0.35
 @export var refraction_offset_scale: float = 0.08
@@ -34,3 +41,8 @@ func apply_to_material(mat: ShaderMaterial) -> void:
 	mat.set_shader_parameter("specular", specular)
 	mat.set_shader_parameter("color_intensity", color_intensity)
 	mat.set_shader_parameter("normal_bump_strength", normal_bump_strength)
+	mat.set_shader_parameter("ripple_duration", ripple_duration)
+	mat.set_shader_parameter("ripple_speed", ripple_speed)
+	mat.set_shader_parameter("ripple_width", ripple_width)
+	mat.set_shader_parameter("ripple_strength", ripple_strength)
+	mat.set_shader_parameter("ripple_directionality", ripple_directionality)

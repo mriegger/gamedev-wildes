@@ -21,6 +21,7 @@ func setup(
 	import_structure: Callable,
 	export_structure: Callable,
 	exit_structure: Callable,
+	set_ripple_strength: Callable,
 ) -> void:
 	assert(inventory_model != null and actor_stats != null and pumpkin_patch != null)
 	assert(_command_processor == null)
@@ -33,6 +34,7 @@ func setup(
 		import_structure,
 		export_structure,
 		exit_structure,
+		set_ripple_strength,
 	)
 	set_process_input(true)
 

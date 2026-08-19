@@ -1,8 +1,13 @@
-[gd_resource type="Resource" script_class="AppleTreeDefinition" load_steps=3 format=3]
+[gd_resource type="Resource" script_class="AppleTreeDefinition" load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://foraging/apple/apple_tree_definition.gd" id="1_definition"]
 [ext_resource type="PackedScene" path="res://assets/models/foraging/apple/apple.glb" id="2_apple"]
+[ext_resource type="AudioStream" path="res://assets/audio/sfx/tools/impactGeneric_light_001.ogg" id="3_impact_1"]
+[ext_resource type="AudioStream" path="res://assets/audio/sfx/tools/impactGeneric_light_002.ogg" id="4_impact_2"]
+[ext_resource type="AudioStream" path="res://assets/audio/sfx/tools/impactGeneric_light_003.ogg" id="5_impact_3"]
+[ext_resource type="AudioStream" path="res://assets/audio/sfx/tools/impactGeneric_light_004.ogg" id="6_impact_4"]
 
 [resource]
 script = ExtResource("1_definition")
 apple_scene = ExtResource("2_apple")
+fall_impact_streams = Array[AudioStream]([ExtResource("3_impact_1"), ExtResource("4_impact_2"), ExtResource("5_impact_3"), ExtResource("6_impact_4")])

@@ -379,7 +379,6 @@ func build_water_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 	var tangents := PackedFloat32Array()
 	var indices := PackedInt32Array()
 
-	const WATER_SURFACE_HEIGHT: float = 0.75
 	const WATER_UV_SCALE: float = 0.12
 
 	var sy_cz = size_y * cache_z
@@ -400,12 +399,12 @@ func build_water_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 				if ly + 1 < size_y:
 					n_top = cache[lx_sycz + (ly + 1) * cache_z + lz]
 				var is_top_surface = n_top != BlockId.Type.WATER
-				var vis_top_h = WATER_SURFACE_HEIGHT if is_top_surface else 1.0
+				var vis_top_h = VoxelSpace.WATER_SURFACE_HEIGHT if is_top_surface else 1.0
 
 				if is_top_surface:
 					var above_solid = n_top != -1 and n_top != BlockId.Type.AIR and n_top != BlockId.Type.TORCH and n_top != BlockId.Type.WATER
 					if not above_solid:
-						var top_y = y + WATER_SURFACE_HEIGHT
+						var top_y = y + VoxelSpace.WATER_SURFACE_HEIGHT
 						var v0 = Vector3(x, top_y, z)
 						var v1 = Vector3(x + 1, top_y, z)
 						var v2 = Vector3(x + 1, top_y, z + 1)

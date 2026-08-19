@@ -138,8 +138,11 @@ the chest with the crafting menu while keeping the backpack open.
 
 **Tools.** New worlds start with an empty inventory, while the first pickaxe is crafted from stone
 and wood. Item actions are data-driven: the hoe tills exposed grass and dirt, stone and copper
-pickaxes can mine copper, and the sword uses click-triggered, alternating melee swings. Held tools
-use either runtime-extruded pixel art or authored 3D scenes.
+pickaxes can mine copper, and the sword uses click-triggered, alternating melee swings. The copper
+hammer uses a slower two-handed overhead slam that damages and knocks back enemies within about
+four blocks of the hammer's ground contact while an expanding white ring marks that area. Its
+damage falls linearly from 1.5 times sword damage at the center to half sword damage at the edge.
+Held tools use either runtime-extruded pixel art or authored 3D scenes.
 
 **Lighting.** Per-vertex ambient occlusion is baked into chunk meshes. A directional sun plus a
 fill light drive real-time shadows, and a keyframed day/night profile interpolates sky, ambient,
@@ -152,7 +155,7 @@ to play.
 
 **Crafting.** Opening crafting with `Tab` reveals the general recipe panel alongside the backpack.
 It contains the six recipes that do not require a workstation. A placed anvil opens its own panel
-with the seven copper tool, weapon, and armor recipes. A placed cauldron opens a food-and-potion
+with the eight copper tool, weapon, and armor recipes. A placed cauldron opens a food-and-potion
 panel; its initial recipe combines two pumpkins and two apples into one health potion. All catalogs
 use materials from the backpack and hotbar and craft immediately when the enabled Craft button is
 pressed, playing one success sound. Apples and pumpkins each restore 10% of maximum health, while
@@ -173,7 +176,9 @@ Harvested pumpkins stack in the inventory and restore 10% of maximum health when
 the backpack or hotbar, or when selected and used with left-click in the world.
 About five percent of procedural trees carry apples: two to six collectible apples spawn beneath
 the tree and twenty decorate its subtly tinted lower outer leaves. Collected apples persist in saves
-and restore 10% of maximum health through the same inventory consumption controls.
+and restore 10% of maximum health through the same inventory consumption controls. Mining an
+apple-bearing leaf gives each attached apple a 20% chance to fall as a persistent pickup, capped at
+one fallen apple per mined leaf.
 
 **UI & saves.** Backpack and hotbar stacks can be split by scrolling while left-dragging. The side
 panel includes a trash drop target that accepts backpack, hotbar, and equipped items. A
@@ -246,6 +251,7 @@ from Godot primitive meshes. Visual effects use project-authored shaders.
 | `src/assets/audio/footsteps/grass/footstep_grass_*.ogg` (5 files) | [Impact Sounds](https://kenney.nl/assets/impact-sounds) – Kenney | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `src/assets/audio/combat/` weapon-draw and creature-impact sounds (9 files) | [Voiceover Pack](https://kenney.nl/assets/voiceover-pack) – Kenney | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `src/assets/audio/combat/impacts/player/player_hit.wav` | Muse, prompted by Michael Riegger | Project-authored |
+| `src/assets/audio/combat/weapons/hammer/impacts/low_thump_332670_CC0.ogg` | [low thump.wav](https://freesound.org/people/Reitanna/sounds/332670/) – Reitanna, Freesound sound 332670 | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `src/assets/audio/footsteps/water/Footstep_Water_*.wav` (8 files) | [Little Robot Sound Factory](https://littlerobotsoundfactory.com/) – Water footsteps – by Morten Barfod Søegaard | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | `src/assets/audio/sfx/tools/impactGeneric_light_*.ogg` (4 files) | [Impact Sounds](https://kenney.nl/assets/impact-sounds) – Kenney (https://kenney.nl) – generic light impacts for tool and crafting clunks | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `src/assets/audio/sfx/farming/tilling/bookFlip*.ogg` (3 files) | [RPG Audio](https://kenney.nl/assets/rpg-audio) – Kenney | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
