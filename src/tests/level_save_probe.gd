@@ -5,11 +5,14 @@ var _failures: int = 0
 func _init() -> void:
 	var block_catalog := load("res://blocks/block_catalog.tres") as BlockCatalog
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
+	var chest_block := block_catalog.get_definition(BlockId.Type.CHEST) if block_catalog != null else null
 	var player_stats_definition := load("res://player/player_stats.tres") as CombatStatsDefinition
 	var player_perk_rules := load("res://progression/player_perk_rules.tres") as PlayerPerkRules
-	_expect(SaveManager.CURRENT_SAVE_VERSION == 12, "save version changed")
+	_expect(SaveManager.CURRENT_SAVE_VERSION == 13, "save version changed")
 	_expect(block_catalog != null and block_catalog.validate(), "block catalog invalid")
 	_expect(item_catalog != null and item_catalog.validate(block_catalog), "item catalog invalid")
+	_expect(chest_block != null and chest_block.container != null, "chest container definition invalid")
+	_expect(chest_block != null and chest_block.container != null and chest_block.container.get_slot_count() == SaveManager.PERSISTED_CHEST_SLOT_COUNT, "persisted chest slot count changed")
 	_expect(player_stats_definition != null and player_stats_definition.validate(), "player stats definition invalid")
 	_expect(player_perk_rules != null and player_perk_rules.validate(player_stats_definition), "player perk rules invalid")
 	var version_six := {"version": 6}
@@ -17,8 +20,8 @@ func _init() -> void:
 	_expect(version_six.get("version", -1) == SaveManager.CURRENT_SAVE_VERSION, "version six migration version changed")
 	_expect(version_six.get("pumpkin_patch", null) == {"present": false}, "version six pumpkin migration shape changed")
 	_expect(version_six.get("player_perks", null) == {"allocations": {}}, "version six perk migration shape changed")
-	_expect(version_six.get("chests", null) == {}, "version six chest migration shape changed")
 	_expect(version_six.get("apple_trees", null) == AppleTreeState.new().snapshot(), "version six apple migration shape changed")
+	_expect(version_six.get("chests", null) == {}, "version six chest migration shape changed")
 	var migration_factory := EquipmentInstanceFactory.new(item_catalog)
 	var migration_affixes: Array[EquipmentAffixDefinition] = [item_catalog.get_equipment_affix(&"vicious")]
 	var migration_runes: Array[StringName] = [&"basic_rune"]
@@ -47,21 +50,100 @@ func _init() -> void:
 		_expect(version_eleven.get("version", -1) == SaveManager.CURRENT_SAVE_VERSION, "version eleven equipment migration version changed")
 		var migrated_instance: Dictionary = version_eleven["inventory"]["regions"]["hotbar"][0]["equipment_instance"]
 		_expect(migrated_instance == expected_instance, "version eleven equipment migration changed identity, affixes, or runes")
+	_expect(version_six.get("next_equipment_instance_id", 0) == 1, "version six equipment allocator changed")
+	_expect(version_six.get("world_loot", null) == {"next_entry_id": 1, "entries": []}, "version six world loot migration shape changed")
+	var legacy_chest_slots: Array = []
+	legacy_chest_slots.resize(SaveManager.PERSISTED_CHEST_SLOT_COUNT)
+	legacy_chest_slots.fill(null)
+	legacy_chest_slots[0] = {
+		"item_id": "dirt_block",
+		"count": 2,
+		"socketed_rune_ids": [],
+	}
+	var version_nine := {
+		"version": 9,
+		"placed_blocks": {
+			"1,2,3": BlockId.Type.CHEST,
+			"4,5,6": BlockId.Type.CHEST,
+			"7,8,9": BlockId.Type.STONE,
+		},
+		"chest_inventories": {
+			"1,2,3": {
+				"size": SaveManager.PERSISTED_CHEST_SLOT_COUNT,
+				"slots": legacy_chest_slots,
+			},
+		},
+	}
+	_expect(SaveManager._migrate_save_data(version_nine, item_catalog), "version nine unopened chest migration failed")
+	var version_nine_chests = version_nine.get("chests", {})
+	_expect(version_nine_chests is Dictionary and version_nine_chests.has("1,2,3"), "version nine populated chest was lost")
+	_expect(version_nine_chests is Dictionary and version_nine_chests.has("4,5,6"), "version nine unopened chest storage was not synthesized")
+	_expect(version_nine_chests is Dictionary and not version_nine_chests.has("7,8,9"), "version nine non-chest block received storage")
+	if version_nine_chests is Dictionary and version_nine_chests.has("1,2,3"):
+		var migrated_stack = version_nine_chests["1,2,3"][0]
+		_expect(migrated_stack is Dictionary and migrated_stack["item_id"] == "dirt_block" and migrated_stack["count"] == 2, "version nine populated chest contents changed")
+	var expected_empty_chest_slots: Array = []
+	expected_empty_chest_slots.resize(SaveManager.PERSISTED_CHEST_SLOT_COUNT)
+	expected_empty_chest_slots.fill(null)
+	if version_nine_chests is Dictionary:
+		_expect(version_nine_chests.get("4,5,6", null) == expected_empty_chest_slots, "version nine unopened chest did not receive canonical empty storage")
+	var version_eleven := {
+		"version": 11,
+		"placed_blocks": {
+			"10,11,12": BlockId.Type.CHEST,
+			"13,14,15": BlockId.Type.STONE,
+		},
+		"chests": {},
+		"next_equipment_instance_id": 1,
+	}
+	_expect(SaveManager._migrate_save_data(version_eleven, item_catalog), "version eleven unopened chest migration failed")
+	var version_eleven_chests = version_eleven.get("chests", {})
+	_expect(version_eleven_chests is Dictionary and version_eleven_chests.get("10,11,12", null) == expected_empty_chest_slots, "version eleven unopened chest storage was not synthesized")
+	_expect(version_eleven_chests is Dictionary and not version_eleven_chests.has("13,14,15"), "version eleven non-chest block received storage")
+	var malformed_legacy := {
+		"version": 11,
+		"placed_blocks": {"invalid": BlockId.Type.CHEST},
+		"chests": {},
+		"next_equipment_instance_id": 1,
+	}
+	var malformed_legacy_before := malformed_legacy.duplicate(true)
+	_expect(not SaveManager._migrate_save_data(malformed_legacy, item_catalog), "malformed legacy placed block migrated")
+	_expect(malformed_legacy == malformed_legacy_before, "failed legacy chest migration changed save data")
+	var fractional_version := {"version": 11.5}
+	var fractional_version_before := fractional_version.duplicate(true)
+	_expect(not SaveManager._migrate_save_data(fractional_version, item_catalog), "fractional save version migrated")
+	_expect(fractional_version == fractional_version_before, "fractional version rejection changed save data")
+	var fractional_seed := {
+		"version": SaveManager.CURRENT_SAVE_VERSION,
+		"seed": 481516.5,
+		"inventory": null,
+		"chests": {},
+		"next_equipment_instance_id": 1,
+		"world_loot": {"next_entry_id": 1, "entries": []},
+	}
+	var fractional_seed_before := fractional_seed.duplicate(true)
+	_expect(not SaveManager._migrate_save_data(fractional_seed, item_catalog), "fractional world seed migrated")
+	_expect(fractional_seed == fractional_seed_before, "fractional seed rejection changed save data")
+	_test_fractional_slot_metadata(item_catalog)
+	_expect(SaveManager.decode_chest_state({"chests": {"invalid": []}}) == null, "malformed chest position decoded")
 	_expect(SaveManager.decode_world_state({"seed": 1, "placed_blocks": {"0,1,0": BlockId.Type.COUNT}, "removed_blocks": {}, "torch_attachments": {}, "player_position": null}) == null, "unknown placed block decoded")
 	_expect(SaveManager.decode_world_state({"seed": 1, "placed_blocks": {"0,1,0": BlockId.Type.TORCH}, "removed_blocks": {}, "torch_attachments": {}, "player_position": null}) == null, "torch without attachment decoded")
 	_expect(SaveManager.decode_world_state({"seed": 1, "placed_blocks": {}, "removed_blocks": {"invalid": true}, "torch_attachments": {}, "player_position": null}) == null, "malformed removed block decoded")
-	if block_catalog == null or item_catalog == null or player_stats_definition == null or player_perk_rules == null:
+	_expect(BlockId.Type.ANVIL == 16 and BlockId.Type.CHEST == 17 and BlockId.Type.CAULDRON == 18, "main station block IDs changed")
+	_expect(item_catalog != null and item_catalog.has_definition(&"chest"), "main chest item ID changed")
+	if block_catalog == null or item_catalog == null or chest_block == null or chest_block.container == null or player_stats_definition == null or player_perk_rules == null:
 		_finish("")
 		return
 	var voxel_world := VoxelWorld.new(20, 36, 5, 12.0, block_catalog)
 	var inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	inventory.setup_starter()
-	var chest_slot_count := block_catalog.get_definition(BlockId.Type.CHEST).container.get_slot_count()
-	var chest_storage := ChestStorage.new(item_catalog, inventory.equipment_instance_factory, chest_slot_count)
-	var chest_position := Vector3i(4, 5, 6)
-	_expect(chest_storage.create_chest(chest_position), "chest fixture could not be created")
-	_expect(chest_storage.add_stack(chest_position, InventoryStack.new(&"log_block", 7), 0), "chest fixture contents could not be added")
 	var item_proficiency := ItemProficiency.new(item_catalog)
+	var chest_storage := ChestStorage.new(item_catalog, inventory.equipment_instance_factory, chest_block.container.get_slot_count())
+	var world_loot_state := WorldLootState.new(item_catalog, inventory.equipment_instance_factory)
+	var chest_position := Vector3i(3, 8, -4)
+	_expect(VoxelWorldTestFixture.commit_place(voxel_world, chest_position, BlockId.Type.CHEST) != null, "chest persistence block placement failed")
+	_expect(chest_storage.create_chest(chest_position), "chest persistence storage creation failed")
+	_expect(chest_storage.add_stack(chest_position, InventoryStack.new(&"dirt_block", 4), 0), "chest persistence content setup failed")
 	var player_stats := ActorStats.new(player_stats_definition)
 	var player_perks := PlayerPerks.new(player_perk_rules)
 	var doorway_anchor := Vector3(11.5, 7.0, -9.5)
@@ -81,21 +163,27 @@ func _init() -> void:
 		"placed_blocks": {},
 		"removed_blocks": {},
 		"torch_attachments": {},
+		"chests": {},
+		"world_loot": {"next_entry_id": 1, "entries": []},
 		"playtime_seconds": 0.0,
 		"time_of_day": 6.0,
 	}
 	var pumpkin_patch := {"present": false}
-	var saved := SaveManager.save_world_state(slot_id, current_data, voxel_world, location.get_persisted_position(), player_stats, inventory, inventory.equipment_instance_factory, player_perks, item_proficiency, chest_storage, pumpkin_patch, AppleTreeState.new().snapshot(), 2.5, 27.5)
+	var apple_trees := AppleTreeState.new().snapshot()
+	var saved := SaveManager.save_world_state(slot_id, current_data, voxel_world, location.get_persisted_position(), player_stats, inventory, inventory.equipment_instance_factory, player_perks, item_proficiency, chest_storage, world_loot_state, pumpkin_patch, apple_trees, 2.5, 27.5)
 	_expect(saved, "save_world_state failed")
 	if saved:
 		_expect(int(current_data.get("version", -1)) == SaveManager.CURRENT_SAVE_VERSION, "current_data version changed")
 		_expect(current_data.get("player_position", []) == [doorway_anchor.x, doorway_anchor.y, doorway_anchor.z], "current_data position differs")
 		_expect(current_data.get("player_stats", {}) == player_stats.snapshot_progression(), "current_data player stats differ")
 		_expect(current_data.get("player_perks", {}) == player_perks.snapshot(), "current_data player perks differ")
-		_expect(current_data.get("chests", {}) == SaveManager.serialize_vector3i_dict(chest_storage.snapshot()), "current_data chest inventories differ")
+		_expect(not current_data.has("chest_inventories"), "current_data retained legacy chest inventories")
 		_expect(current_data.get("item_proficiency", {}) == item_proficiency.snapshot(), "current_data item proficiency differs")
 		_expect(current_data.get("pumpkin_patch", {}) == pumpkin_patch, "current_data pumpkin patch differs")
-		_expect(current_data.get("apple_trees", {}) == AppleTreeState.new().snapshot(), "current_data apple tree state differs")
+		_expect(current_data.get("apple_trees", {}) == apple_trees, "current_data apple tree state differs")
+		_expect(current_data.get("world_loot", {}) == world_loot_state.snapshot(), "current_data world loot differs")
+		var encoded_chests := current_data.get("chests", {}) as Dictionary
+		_expect(encoded_chests.has("3,8,-4") and encoded_chests["3,8,-4"][0]["item_id"] == "dirt_block" and encoded_chests["3,8,-4"][0]["count"] == 4, "current_data chest state differs")
 		_expect(is_equal_approx(float(current_data.get("playtime_seconds", -1.0)), 2.5), "playtime changed")
 		_expect(is_equal_approx(float(current_data.get("time_of_day", -1.0)), 3.5), "time wrapping changed")
 		var loaded := SaveManager.load_slot(slot_id, item_catalog)
@@ -108,16 +196,18 @@ func _init() -> void:
 			return
 		_expect(decoded.seed == 1337, "decoded seed changed")
 		_expect(decoded.player_position.is_equal_approx(doorway_anchor), "decoded persisted position differs")
-		var restored_factory := EquipmentInstanceFactory.new(item_catalog, int(loaded.get("next_equipment_instance_id", 1)))
+		var restored_factory := EquipmentInstanceFactory.new(item_catalog, int(loaded["next_equipment_instance_id"]))
 		var restored_inventory := InventoryModel.new(item_catalog, restored_factory)
 		var loaded_inventory: Variant = loaded.get("inventory", null)
 		_expect(loaded_inventory is Dictionary and restored_inventory.from_dict(loaded_inventory as Dictionary), "loaded inventory did not decode")
 		_expect(restored_inventory.to_dict() == inventory.to_dict(), "decoded inventory differs")
-		var restored_chest_storage := ChestStorage.new(item_catalog, restored_factory, chest_slot_count)
-		var loaded_chests: Variant = SaveManager.decode_chest_state(loaded)
-		_expect(loaded_chests is Dictionary and restored_chest_storage.restore(loaded_chests as Dictionary), "loaded chest inventories did not decode")
-		var restored_chest_stack := restored_chest_storage.get_slot(chest_position, 0)
-		_expect(restored_chest_stack != null and restored_chest_stack.item_id == &"log_block" and restored_chest_stack.count == 7, "decoded chest inventory differs")
+		var decoded_chests = SaveManager.decode_chest_state(loaded)
+		var restored_chests := ChestStorage.new(item_catalog, restored_inventory.equipment_instance_factory, chest_block.container.get_slot_count())
+		_expect(decoded_chests is Dictionary and restored_chests.restore(decoded_chests), "loaded chest state did not decode")
+		_expect(restored_chests.snapshot() == chest_storage.snapshot(), "decoded chest state differs")
+		_expect(Game._get_chest_state_error(voxel_world, restored_chests, BlockId.Type.CHEST).is_empty(), "nonempty chest round-trip failed strict validation")
+		var missing_chest_storage := ChestStorage.new(item_catalog, restored_inventory.equipment_instance_factory, chest_block.container.get_slot_count())
+		_expect(not Game._get_chest_state_error(voxel_world, missing_chest_storage, BlockId.Type.CHEST).is_empty(), "placed chest without storage passed strict validation")
 	var cleanup_error := OK
 	if FileAccess.file_exists(path):
 		cleanup_error = DirAccess.remove_absolute(path)
@@ -136,3 +226,19 @@ func _finish(path: String) -> void:
 	else:
 		print("LEVEL_SAVE_PROBE FAILED failures=%d path=%s" % [_failures, path])
 		quit(1)
+
+func _test_fractional_slot_metadata(item_catalog: ItemCatalog) -> void:
+	var slot_id := 1050000000 + OS.get_process_id()
+	while SaveManager.slot_exists(slot_id):
+		slot_id += 1
+	var path := SaveManager.get_slot_path(slot_id)
+	_expect(SaveManager._save_dict_to_file(slot_id, {"version": 11.5, "seed": 481516.5}), "fractional metadata fixture was not written")
+	var info := SaveManager.get_slot_info(slot_id)
+	_expect(typeof(info.get("version", null)) == TYPE_FLOAT and is_equal_approx(float(info["version"]), 11.5), "slot metadata coerced a fractional version")
+	_expect(typeof(info.get("seed", null)) == TYPE_FLOAT and is_equal_approx(float(info["seed"]), 481516.5), "slot metadata coerced a fractional seed")
+	var loaded := SaveManager.load_slot(slot_id, item_catalog)
+	_expect(bool(loaded.get("incompatible", false)), "fractional slot metadata loaded as compatible")
+	var cleanup_error := OK
+	if FileAccess.file_exists(path):
+		cleanup_error = DirAccess.remove_absolute(path)
+	_expect(cleanup_error == OK and not FileAccess.file_exists(path), "fractional metadata fixture cleanup failed")

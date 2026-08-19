@@ -47,9 +47,10 @@ func _test_save_omits_generated_copper(catalog: BlockCatalog) -> void:
 	var inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	var player_perks := PlayerPerks.new(load("res://progression/player_perk_rules.tres") as PlayerPerkRules)
 	_expect(player_perks.restore({"allocations": {"health": 1}}, 2), "test perk allocation was rejected")
-	var chest_slot_count := catalog.get_definition(BlockId.Type.CHEST).container.get_slot_count()
-	var chest_storage := ChestStorage.new(item_catalog, inventory.equipment_instance_factory, chest_slot_count)
 	var item_proficiency := ItemProficiency.new(item_catalog)
+	var chest_block := catalog.get_definition(BlockId.Type.CHEST)
+	var chest_storage := ChestStorage.new(item_catalog, inventory.equipment_instance_factory, chest_block.container.get_slot_count())
+	var world_loot_state := WorldLootState.new(item_catalog, inventory.equipment_instance_factory)
 	var save_data := {
 		"seed": 1337,
 		"copper_blocks": {"1,2,3": BlockId.Type.COPPER},
@@ -67,8 +68,11 @@ func _test_save_omits_generated_copper(catalog: BlockCatalog) -> void:
 		"growth_state_ids": pumpkin_state_ids,
 		"quarter_turns": pumpkin_quarter_turns,
 	}
-	_expect(SaveManager.save_world_state(slot_id, save_data, world, player.global_position, player.stats, inventory, inventory.equipment_instance_factory, player_perks, item_proficiency, chest_storage, pumpkin_snapshot, AppleTreeState.new().snapshot(), 0.0, 6.0), "save manager could not write deterministic copper test save")
+	var apple_tree_snapshot := AppleTreeState.new().snapshot()
+	_expect(SaveManager.save_world_state(slot_id, save_data, world, player.global_position, player.stats, inventory, inventory.equipment_instance_factory, player_perks, item_proficiency, chest_storage, world_loot_state, pumpkin_snapshot, apple_tree_snapshot, 0.0, 6.0), "save manager could not write deterministic copper test save")
 	_expect(save_data["player_perks"] == {"allocations": {"health": 1}}, "in-memory save did not persist perk allocations")
+	_expect(save_data["apple_trees"] == apple_tree_snapshot, "in-memory save did not persist apple tree state")
+	_expect(save_data["world_loot"] == world_loot_state.snapshot(), "in-memory save did not persist world loot")
 	_expect(not save_data.has("copper_blocks"), "in-memory save retained generated copper blocks")
 	_expect(not save_data.has("generated_copper_chunks"), "in-memory save retained generated copper chunk markers")
 	var saved_info := SaveManager.get_slot_info(slot_id)

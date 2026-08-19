@@ -1,6 +1,8 @@
 extends Node3D
 class_name OverworldLootCoordinator
 
+signal state_changed()
+
 const COLLECTION_RADIUS: float = 1.5
 const STREAMING_CHECKS_PER_TICK: int = 4
 const LIFETIME_STEP_SECONDS: float = 1.0
@@ -120,6 +122,7 @@ func _resolve_entity_defeat(defeat: EntityDefeat) -> void:
 		_finish_transaction()
 		return
 	_sync_all_views()
+	state_changed.emit()
 	_finish_transaction()
 
 func _collect_nearby_drops() -> void:
@@ -162,6 +165,7 @@ func _collect_entry(entry_id: int) -> void:
 		_finish_transaction()
 		return
 	_sync_all_views()
+	state_changed.emit()
 	var inventory_notified := loadout._notify_prepared_change(loadout_change)
 	assert(inventory_notified)
 	_finish_transaction()
@@ -184,6 +188,7 @@ func _advance_lifetimes(delta: float) -> void:
 		return
 	if expired:
 		_sync_all_views()
+		state_changed.emit()
 	_finish_transaction()
 
 func _finish_transaction() -> void:
@@ -263,6 +268,9 @@ func _clear_views() -> void:
 	for entry_id in _views.keys():
 		_remove_view(int(entry_id))
 	_views.clear()
+
+func _uses_world_loot_state(world_loot_state: WorldLootState) -> bool:
+	return _world_loot_state == world_loot_state
 
 func suspend() -> void:
 	if _suspended:

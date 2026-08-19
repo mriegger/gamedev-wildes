@@ -47,6 +47,7 @@ func _run() -> void:
 		"item_proficiency": {},
 		"inventory": encoded_inventory,
 		"next_equipment_instance_id": 1,
+		"world_loot": {"next_entry_id": 1, "entries": []},
 		"playtime_seconds": 0.0,
 		"time_of_day": 6.0,
 		"pumpkin_patch": null,

@@ -110,6 +110,14 @@ func _ready():
 		return
 	var block_catalog_valid := block_catalog.validate()
 	var item_catalog_valid := item_catalog.validate(block_catalog)
+	var chest_block: BlockDefinition = null
+	if block_catalog_valid:
+		chest_block = block_catalog.get_definition(BlockId.Type.CHEST)
+	var chest_content_valid := (
+		chest_block != null
+		and chest_block.container != null
+		and chest_block.container.get_slot_count() == SaveManager.PERSISTED_CHEST_SLOT_COUNT
+	)
 	var crafting_catalog_valid := crafting_recipe_catalog.validate(item_catalog)
 	var anvil_catalog_valid := anvil_recipe_catalog != null and anvil_recipe_catalog.validate(item_catalog)
 	var cauldron_catalog_valid := cauldron_recipe_catalog != null and cauldron_recipe_catalog.validate(item_catalog)
@@ -121,7 +129,7 @@ func _ready():
 	var level_catalog_valid := level_catalog.validate()
 	var level_encounter_catalog_valid := level_catalog_valid and entity_catalog_valid and LevelEncounterCatalogValidator.validate(level_catalog, entity_catalog)
 	var level_entrance_valid := level_catalog_valid and level_entrance_definition != null and level_entrance_definition.validate(level_catalog)
-	if not block_catalog_valid or not item_catalog_valid or not crafting_catalog_valid or not anvil_catalog_valid or not cauldron_catalog_valid or not entity_catalog_valid or not loot_catalog_valid or not combat_particle_catalog_valid or not player_stats_valid or not player_perks_valid or not level_catalog_valid or not level_encounter_catalog_valid or not level_entrance_valid:
+	if not block_catalog_valid or not item_catalog_valid or not chest_content_valid or not crafting_catalog_valid or not anvil_catalog_valid or not cauldron_catalog_valid or not entity_catalog_valid or not loot_catalog_valid or not combat_particle_catalog_valid or not player_stats_valid or not player_perks_valid or not level_catalog_valid or not level_encounter_catalog_valid or not level_entrance_valid:
 		_fail_session_start("Game content validation failed. The save was not changed.")
 		return
 	var structure_file_store := StructureFileStore.new(ProjectSettings.globalize_path("res://../").simplify_path())
@@ -135,23 +143,16 @@ func _ready():
 	game_environment.apply_settings(settings)
 	world.block_catalog = block_catalog
 	world.configure_settings(settings)
-	var next_instance_id := int(_save_data.get("next_equipment_instance_id", 1))
-	equipment_instance_factory = EquipmentInstanceFactory.new(item_catalog, next_instance_id)
-	world_loot_state = WorldLootState.new(item_catalog, equipment_instance_factory)
+	var encoded_next_instance_id = _save_data.get("next_equipment_instance_id", null)
+	if typeof(encoded_next_instance_id) != TYPE_INT or int(encoded_next_instance_id) < 1:
+		_fail_session_start("This world could not be loaded because its saved equipment identity state is invalid. The save was not changed.")
+		return
+	equipment_instance_factory = EquipmentInstanceFactory.new(item_catalog, int(encoded_next_instance_id))
 	inventory_model = InventoryModel.new(item_catalog, equipment_instance_factory)
 	player_stats = ActorStats.new(player_stats_definition)
-	player_perks = PlayerPerks.new(player_perk_rules)
-	chest_storage = ChestStorage.new(
-		item_catalog,
-		equipment_instance_factory,
-		SaveManager.PERSISTED_CHEST_SLOT_COUNT,
-	)
 	item_proficiency = ItemProficiency.new(item_catalog)
 	if not _restore_inventory():
 		_fail_session_start("This world could not be loaded because its saved inventory is invalid or references unavailable content. The save was not changed.")
-		return
-	if not _restore_chest_inventories():
-		_fail_session_start("This world could not be loaded because its saved chest contents are invalid or reference unavailable content. The save was not changed.")
 		return
 	if not _restore_item_proficiency():
 		_fail_session_start("This world could not be loaded because its saved item proficiency is invalid or references unavailable content. The save was not changed.")
@@ -172,6 +173,10 @@ func _ready():
 	anvil_crafting_coordinator.setup(inventory_model, inventory_loadout_coordinator, anvil_recipe_catalog)
 	cauldron_crafting_coordinator = CraftingCoordinator.new()
 	cauldron_crafting_coordinator.setup(inventory_model, inventory_loadout_coordinator, cauldron_recipe_catalog)
+	player_perks = PlayerPerks.new(player_perk_rules)
+	if not _restore_player_progression():
+		_fail_session_start("This world could not be loaded because its saved player progression is invalid. The save was not changed.")
+		return
 	dev_console.setup(
 		inventory_model,
 		inventory_loadout_coordinator,
@@ -183,8 +188,20 @@ func _ready():
 		Callable(self, "_request_exit_structure"),
 		Callable(world, "try_set_water_ripple_strength"),
 	)
-	if not _restore_player_progression():
-		_fail_session_start("This world could not be loaded because its saved player progression is invalid. The save was not changed.")
+	if not _restore_chest_state(chest_block):
+		_fail_session_start("This world could not be loaded because its saved chest state is invalid or references unavailable content. The save was not changed.")
+		return
+	if not _restore_world_loot_state():
+		_fail_session_start("This world could not be loaded because its saved world loot is invalid or its equipment IDs conflict with other storage. The save was not changed.")
+		return
+	var restored_instance_ids := inventory_model.get_equipment_instance_ids()
+	restored_instance_ids.append_array(chest_storage.get_equipment_instance_ids())
+	restored_instance_ids.append_array(world_loot_state.get_equipment_instance_ids())
+	if not equipment_instance_factory.can_restore_state(
+		equipment_instance_factory.get_next_instance_id(),
+		restored_instance_ids,
+	):
+		_fail_session_start("This world could not be loaded because its saved equipment IDs are duplicated or collide with the next ID. The save was not changed.")
 		return
 	combat_progression_coordinator = CombatProgressionCoordinator.new()
 	combat_progression_coordinator.setup(player_stats, inventory_model, entity_catalog, item_proficiency)
@@ -194,13 +211,33 @@ func _ready():
 	world.generation_progress.disconnect(_on_generation_progress)
 	interaction_prompt_coordinator = InteractionPromptCoordinator.new()
 	interaction_prompt_coordinator.setup(hud, Callable(self, "_is_gameplay_ui_blocked"))
+	if not _setup_chest_runtime(chest_block):
+		_fail_session_start("This world could not be loaded because its saved chest blocks and storage do not match. The save was not changed.")
+		return
 	if not _setup_gameplay():
 		return
 	level_interaction.setup(player, interaction_prompt_coordinator)
 	level_interaction.interaction_requested.connect(_on_level_interaction_requested)
 	_setup_level_entrance()
 	game_session.save_status_changed.connect(_show_save_status)
-	game_session.setup(_slot_id, _save_data, world, player_stats, inventory_model, equipment_instance_factory, player_perks, chest_storage, item_proficiency, game_environment, pumpkin_patch, apple_trees, _get_persisted_position)
+	game_session.setup(
+		_slot_id,
+		_save_data,
+		world,
+		player_stats,
+		inventory_model,
+		equipment_instance_factory,
+		player_perks,
+		item_proficiency,
+		chest_storage,
+		world_loot_state,
+		chest_coordinator,
+		overworld_loot,
+		game_environment,
+		pumpkin_patch,
+		apple_trees,
+		_get_persisted_position,
+	)
 	if _recovered_defeated_save and _slot_id != -1 and not game_session.save("defeated_save_recovery"):
 		push_error("[Game] Failed to persist recovered player state")
 	_recovered_defeated_save = false
@@ -221,29 +258,11 @@ func _restore_inventory() -> bool:
 		return false
 	return true
 
-func _restore_chest_inventories() -> bool:
-	var saved_chests = SaveManager.decode_chest_state(_save_data)
-	if not saved_chests is Dictionary or not chest_storage.restore(saved_chests):
-		return false
-	for position in saved_chests:
-		if int(_world_state.placed_blocks.get(position, BlockId.Type.AIR)) != BlockId.Type.CHEST:
-			return false
-	for position in _world_state.placed_blocks:
-		if int(_world_state.placed_blocks[position]) == BlockId.Type.CHEST and not chest_storage.has_chest(position):
-			if not chest_storage.create_chest(position):
-				return false
-	var equipment_instance_ids := inventory_model.get_equipment_instance_ids()
-	equipment_instance_ids.append_array(chest_storage.get_equipment_instance_ids())
-	return equipment_instance_factory.can_restore_state(
-		equipment_instance_factory.get_next_instance_id(),
-		equipment_instance_ids,
-	)
-
 func _restore_player_progression() -> bool:
 	var saved_stats = _save_data.get("player_stats", null)
 	if saved_stats != null and not saved_stats is Dictionary:
 		return false
-	var saved_perks = _save_data.get("player_perks", {"allocations": {}})
+	var saved_perks = _save_data.get("player_perks", null)
 	if not saved_perks is Dictionary:
 		return false
 	player_perk_coordinator = PlayerPerkCoordinator.new()
@@ -267,6 +286,58 @@ func _restore_player_progression() -> bool:
 func _restore_item_proficiency() -> bool:
 	var saved_proficiency = _save_data.get("item_proficiency", null)
 	return saved_proficiency is Dictionary and item_proficiency.restore(saved_proficiency)
+
+func _restore_chest_state(chest_block: BlockDefinition) -> bool:
+	chest_storage = ChestStorage.new(
+		item_catalog,
+		equipment_instance_factory,
+		chest_block.container.get_slot_count(),
+	)
+	var decoded_chests = SaveManager.decode_chest_state(_save_data)
+	return decoded_chests is Dictionary and chest_storage.restore(decoded_chests)
+
+func _restore_world_loot_state() -> bool:
+	var reserved_instance_ids: Dictionary = {}
+	var instance_ids := inventory_model.get_equipment_instance_ids()
+	instance_ids.append_array(chest_storage.get_equipment_instance_ids())
+	for instance_id in instance_ids:
+		if reserved_instance_ids.has(instance_id):
+			return false
+		reserved_instance_ids[instance_id] = true
+	var encoded_world_loot = _save_data.get("world_loot", null)
+	if not encoded_world_loot is Dictionary:
+		return false
+	world_loot_state = WorldLootState.new(item_catalog, equipment_instance_factory)
+	return world_loot_state.restore(encoded_world_loot, reserved_instance_ids)
+
+func _setup_chest_runtime(chest_block: BlockDefinition) -> bool:
+	var chest_state_error := _get_chest_state_error(
+		world.voxel_model,
+		chest_storage,
+		int(chest_block.id),
+	)
+	if not chest_state_error.is_empty():
+		return false
+	chest_coordinator = ChestCoordinator.new()
+	if not chest_coordinator.setup(chest_storage, inventory_model, inventory_loadout_coordinator, world.voxel_model, chest_block):
+		return false
+	world.voxel_model.block_edit_committed.connect(chest_coordinator.handle_block_edit)
+	return true
+
+static func _get_chest_state_error(
+	voxel_world: VoxelWorld,
+	storage: ChestStorage,
+	chest_block_id: int,
+) -> String:
+	var placed_blocks := voxel_world.snapshot_block_edits()["placed"] as Dictionary
+	var saved_chests := storage.snapshot()
+	for position in saved_chests:
+		if int(placed_blocks.get(position, BlockId.Type.AIR)) != chest_block_id:
+			return "Saved chest state has no placed chest block at %s" % position
+	for position in placed_blocks:
+		if int(placed_blocks[position]) == chest_block_id and not saved_chests.has(position):
+			return "Placed chest block has no saved chest state at %s" % position
+	return ""
 
 func _setup_gameplay() -> bool:
 	camera_rig.setup(player, input_buffer)
@@ -326,18 +397,6 @@ func _setup_gameplay() -> bool:
 	cauldron_coordinator = CauldronCoordinator.new()
 	cauldron_coordinator.setup(world.voxel_model)
 	player.interactor.crafting_station_open_requested.connect(_on_crafting_station_open_requested)
-	chest_coordinator = ChestCoordinator.new()
-	var chest_block := block_catalog.get_definition(BlockId.Type.CHEST)
-	if not chest_coordinator.setup(
-		chest_storage,
-		inventory_model,
-		inventory_loadout_coordinator,
-		world.voxel_model,
-		chest_block,
-	):
-		_fail_session_start("Chest runtime setup failed. The save was not changed.")
-		return false
-	world.voxel_model.block_edit_committed.connect(chest_coordinator.handle_block_edit)
 	player.interactor.container_open_requested.connect(_on_container_open_requested)
 	player_stats.health_depleted.connect(_on_player_defeated)
 	var mining_particle_tints := MiningParticleTintPalette.new(block_catalog)

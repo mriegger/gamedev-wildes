@@ -375,6 +375,33 @@ func _run_edge_cases() -> bool:
 	var occupied_equipment := encoded.duplicate(true)
 	occupied_equipment["regions"]["equipment"][0] = {"item_id": String(grass_id), "count": 1, "equipment_instance": null}
 	_assert(not restored.from_dict(occupied_equipment), "non-armor equipment save rejected")
+	var restored_before_invalid_metadata := restored.to_dict()
+	var restored_revision_before_invalid_metadata := restored.get_revision()
+	var restored_change_count := [0]
+	var restored_observer := func(): restored_change_count[0] += 1
+	restored.inventory_changed.connect(restored_observer)
+	var invalid_regions := encoded.duplicate(true)
+	invalid_regions["regions"] = []
+	_assert(not restored.from_dict(invalid_regions), "non-dictionary inventory regions accepted")
+	_assert(restored.to_dict() == restored_before_invalid_metadata, "invalid inventory regions changed restored state")
+	_assert(restored.get_revision() == restored_revision_before_invalid_metadata, "invalid inventory regions changed revision")
+	var fractional_migration_version := encoded.duplicate(true)
+	fractional_migration_version["starter_item_migration_version"] = 0.5
+	_assert(not restored.from_dict(fractional_migration_version), "fractional starter migration version accepted")
+	_assert(restored.to_dict() == restored_before_invalid_metadata, "fractional starter migration version changed restored state")
+	_assert(restored.get_revision() == restored_revision_before_invalid_metadata, "fractional starter migration version changed revision")
+	var fractional_selected_slot := encoded.duplicate(true)
+	fractional_selected_slot["selected"] = 1.5
+	_assert(not restored.from_dict(fractional_selected_slot), "fractional selected slot accepted")
+	_assert(restored.to_dict() == restored_before_invalid_metadata, "fractional selected slot changed restored state")
+	_assert(restored.get_revision() == restored_revision_before_invalid_metadata, "fractional selected slot changed revision")
+	var out_of_range_selected_slot := encoded.duplicate(true)
+	out_of_range_selected_slot["selected"] = InventoryModel.HOTBAR_SIZE
+	_assert(not restored.from_dict(out_of_range_selected_slot), "out-of-range selected slot accepted")
+	_assert(restored.to_dict() == restored_before_invalid_metadata, "out-of-range selected slot changed restored state")
+	_assert(restored.get_revision() == restored_revision_before_invalid_metadata, "out-of-range selected slot changed revision")
+	_assert(restored_change_count[0] == 0, "invalid inventory metadata emitted inventory changes")
+	restored.inventory_changed.disconnect(restored_observer)
 
 	_assert(_validate_inv(moved), "moved inventory valid")
 	_assert(_validate_inv(split), "split inventory valid")

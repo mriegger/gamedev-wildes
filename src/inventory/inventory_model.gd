@@ -1103,7 +1103,10 @@ func get_equipment_instance_ids() -> Array[int]:
 func from_dict(data: Dictionary) -> bool:
 	if _runtime_bound:
 		return false
-	var regions_dict = data.get("regions", {}) as Dictionary
+	var raw_regions = data.get("regions", null)
+	if not raw_regions is Dictionary:
+		return false
+	var regions_dict := raw_regions as Dictionary
 	var restored_slots: Array[InventoryStack] = []
 	restored_slots.resize(_size)
 	restored_slots.fill(null)
@@ -1143,14 +1146,29 @@ func from_dict(data: Dictionary) -> bool:
 					return false
 				restored_instance_ids[instance_id] = true
 			restored_slots[idx] = stack
-	var restored_migration_version := int(data.get("starter_item_migration_version", 0))
+	var raw_migration_version = data.get("starter_item_migration_version", 0)
+	if (
+		(typeof(raw_migration_version) != TYPE_INT and typeof(raw_migration_version) != TYPE_FLOAT)
+		or not is_finite(float(raw_migration_version))
+		or float(raw_migration_version) != float(int(raw_migration_version))
+	):
+		return false
+	var restored_migration_version := int(raw_migration_version)
 	if restored_migration_version < 0 or restored_migration_version > STARTER_ITEM_MIGRATION_VERSION:
+		return false
+	var raw_selected_slot = data.get("selected", 0)
+	if (
+		(typeof(raw_selected_slot) != TYPE_INT and typeof(raw_selected_slot) != TYPE_FLOAT)
+		or not is_finite(float(raw_selected_slot))
+		or float(raw_selected_slot) != float(int(raw_selected_slot))
+	):
+		return false
+	var restored_selected_slot := int(raw_selected_slot)
+	if not is_hotbar_index(restored_selected_slot):
 		return false
 	_slots = restored_slots
 	_starter_item_migration_version = restored_migration_version
-	_selected_slot = int(data.get("selected", 0))
-	if not is_hotbar_index(_selected_slot):
-		_selected_slot = 0
+	_selected_slot = restored_selected_slot
 	_revision += 1
 	inventory_changed.emit()
 	return true

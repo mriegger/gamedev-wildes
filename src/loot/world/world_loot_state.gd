@@ -296,6 +296,87 @@ func _is_current_prepared_change(prepared: PreparedWorldLootChange) -> bool:
 		and prepared.get_expected_revision() == _revision
 	)
 
+func snapshot() -> Dictionary:
+	var encoded_entries: Array = []
+	for entry_id in _entry_ids:
+		encoded_entries.append((_entries[entry_id] as WorldLootEntry).to_dict())
+	return {
+		"next_entry_id": _next_entry_id,
+		"entries": encoded_entries,
+	}
+
+func restore(data: Dictionary, reserved_equipment_instance_ids: Dictionary = {}) -> bool:
+	if (
+		data.size() != 2
+		or not data.has("next_entry_id")
+		or not data.has("entries")
+		or (typeof(data["next_entry_id"]) != TYPE_INT and typeof(data["next_entry_id"]) != TYPE_FLOAT)
+		or not data["entries"] is Array
+	):
+		return false
+	var raw_next_entry_id := float(data["next_entry_id"])
+	var restored_next_entry_id := int(raw_next_entry_id)
+	if (
+		not is_finite(raw_next_entry_id)
+		or raw_next_entry_id != float(restored_next_entry_id)
+		or restored_next_entry_id < 1
+		or restored_next_entry_id > MAXIMUM_NEXT_ENTRY_ID
+	):
+		return false
+	var raw_entries := data["entries"] as Array
+	if raw_entries.size() > MAXIMUM_ENTRY_COUNT:
+		return false
+	var restored_entries: Dictionary = {}
+	var restored_ids: Array[int] = []
+	var restored_instance_ids: Dictionary = {}
+	for raw_entry in raw_entries:
+		if not raw_entry is Dictionary:
+			return false
+		var entry := WorldLootEntry.from_dict(raw_entry)
+		if (
+			entry == null
+			or entry.entry_id < 1
+			or entry.entry_id > MAXIMUM_ENTRY_ID
+			or entry.entry_id >= restored_next_entry_id
+			or restored_entries.has(entry.entry_id)
+			or not _is_valid_entry(entry)
+		):
+			return false
+		if entry.stack.equipment_instance != null:
+			var instance_id := entry.stack.equipment_instance.instance_id
+			if restored_instance_ids.has(instance_id) or reserved_equipment_instance_ids.has(instance_id):
+				return false
+			restored_instance_ids[instance_id] = true
+		restored_entries[entry.entry_id] = entry
+		restored_ids.append(entry.entry_id)
+	restored_ids.sort()
+	_entries = restored_entries
+	_entry_ids = restored_ids
+	_next_entry_id = restored_next_entry_id
+	_revision += 1
+	_spatial_index.rebuild(_entries, _entry_ids)
+	assert(_spatial_index.get_entry_count() == _entry_ids.size())
+	return true
+
+func _is_valid_entry(entry: WorldLootEntry) -> bool:
+	if (
+		entry == null
+		or not _spatial_index.can_index_position(entry.world_position)
+		or not _is_valid_stack(entry.stack)
+	):
+		return false
+	if entry.stack.equipment_instance != null:
+		return not entry.has_lifetime()
+	return (
+		entry.has_lifetime()
+		and is_finite(entry.remaining_lifetime)
+		and entry.remaining_lifetime > 0.0
+		and entry.remaining_lifetime <= MATERIAL_LIFETIME
+	)
+
+func _is_valid_stack(stack: InventoryStack) -> bool:
+	return _is_valid_stack_with_factory(stack, equipment_instance_factory)
+
 func _is_valid_stack_with_factory(
 	stack: InventoryStack,
 	validation_factory: EquipmentInstanceFactory,

@@ -139,7 +139,9 @@ func _test_lootless_skeleton_lifecycle(
 		drop_scene,
 	)
 	var defeat_count := [0]
+	var state_change_count := [0]
 	runtime.entity_defeated.connect(func(_defeat: EntityDefeat) -> void: defeat_count[0] += 1)
+	loot_coordinator.state_changed.connect(func() -> void: state_change_count[0] += 1)
 	var initial_entry_count := state.get_entry_count()
 	var initial_instance_id := factory.get_next_instance_id()
 	var ordinary_ids := runtime.try_spawn_batch([
@@ -149,7 +151,7 @@ func _test_lootless_skeleton_lifecycle(
 	_expect(defeat_count[0] == 0, "ordinary Skeleton despawn emitted a defeat")
 	_expect(state.get_entry_count() == initial_entry_count, "ordinary Skeleton despawn changed world loot")
 	_expect(factory.get_next_instance_id() == initial_instance_id, "ordinary Skeleton despawn allocated equipment")
-	_expect(loot_coordinator.get_child_count() == 0, "ordinary Skeleton despawn presented loot")
+	_expect(loot_coordinator.get_child_count() == 0 and state_change_count[0] == 0, "ordinary Skeleton despawn presented or announced loot")
 	var lethal_ids := runtime.try_spawn_batch([
 		EntitySpawnRequest.new(&"skeleton", Vector3(2.5, 2.0, 0.5), 7002),
 	])
@@ -160,7 +162,7 @@ func _test_lootless_skeleton_lifecycle(
 	_expect(defeat_count[0] == 1, "lethal Skeleton defeat did not emit exactly once")
 	_expect(state.get_entry_count() == initial_entry_count, "lethal Skeleton defeat changed world loot")
 	_expect(factory.get_next_instance_id() == initial_instance_id, "lethal Skeleton defeat allocated equipment")
-	_expect(loot_coordinator.get_child_count() == 0, "lethal Skeleton defeat presented loot")
+	_expect(loot_coordinator.get_child_count() == 0 and state_change_count[0] == 0, "lethal Skeleton defeat presented or announced loot")
 	var distant_position := Vector3(WorldEntityCoordinator.DESPAWN_DISTANCE + 2.5, 2.0, 0.5)
 	var distant_ids := runtime.try_spawn_batch([
 		EntitySpawnRequest.new(&"skeleton", distant_position, 7003),
@@ -171,7 +173,7 @@ func _test_lootless_skeleton_lifecycle(
 	_expect(defeat_count[0] == 1, "distant Skeleton despawn emitted a defeat")
 	_expect(state.get_entry_count() == initial_entry_count, "distant Skeleton despawn changed world loot")
 	_expect(factory.get_next_instance_id() == initial_instance_id, "distant Skeleton despawn allocated equipment")
-	_expect(loot_coordinator.get_child_count() == 0, "distant Skeleton despawn presented loot")
+	_expect(loot_coordinator.get_child_count() == 0 and state_change_count[0] == 0, "distant Skeleton despawn presented or announced loot")
 	var zombie := entity_catalog.get_definition(&"zombie")
 	var zombie_seed := _find_single_drop_seed(zombie.loot_pool, item_catalog)
 	_expect(zombie_seed >= 0, "suspended defeat fixture found no dropping zombie seed")
@@ -189,6 +191,7 @@ func _test_lootless_skeleton_lifecycle(
 	_expect(defeat_count[0] == 2, "suspended lethal damage did not emit its entity defeat")
 	_expect(state.get_entry_count() == entry_count_before_suspend, "suspended entity defeat changed world loot")
 	_expect(factory.get_next_instance_id() == allocator_before_suspend, "suspended entity defeat allocated equipment")
+	_expect(state_change_count[0] == 0, "suspended entity defeat announced world loot")
 	loot_coordinator.shutdown()
 	entity_coordinator.shutdown()
 	loot_coordinator.queue_free()
@@ -218,7 +221,7 @@ func _test_partial_pickup_streaming_and_lifetime(
 	var state := WorldLootState.new(item_catalog, factory)
 	var drop_position := Vector3(2.5, 4.0, -3.5)
 	_expect(_add_world_stack(state, InventoryStack.new(&"sand_block", 5), drop_position), "partial pickup world fixture failed")
-	_expect(_add_world_stack(state, InventoryStack.new(&"copper", 1), drop_position), "second pickup world fixture failed")
+	_expect(_add_world_stack(state, InventoryStack.new(&"copper", 1), drop_position), "reentrant pickup world fixture failed")
 	_expect(_advance_world_time(state, 25.0), "partial pickup lifetime fixture failed")
 	_position_is_ready = true
 	var fixture := _create_runtime_fixture(
@@ -234,38 +237,57 @@ func _test_partial_pickup_streaming_and_lifetime(
 	var entity_runtime := fixture["entity_runtime"] as EntityRuntime
 	_expect(state.get_entry_count() == 2, "persistent materials were not active after setup")
 	_expect(coordinator.get_child_count() == 2, "ready persistent materials did not create views")
+	var state_observations: Array[Dictionary] = []
 	var inventory_observations: Array[Dictionary] = []
+	var notification_order: Array[String] = []
+	var reentrant_copper_presence: Array[bool] = []
+	var state_observer := func() -> void:
+		notification_order.append("state")
+		state_observations.append({
+			"sand_inventory": inventory.get_inventory_item_count(&"sand_block"),
+			"copper_inventory": inventory.get_inventory_item_count(&"copper"),
+			"sand_world": 0 if state.get_entry(1) == null else state.get_entry(1).stack.count,
+			"copper_world": 0 if state.get_entry(2) == null else state.get_entry(2).stack.count,
+		})
+		coordinator.tick()
+		reentrant_copper_presence.append(state.has_entry(2))
 	var inventory_observer := func() -> void:
+		notification_order.append("inventory")
 		inventory_observations.append({
 			"sand_inventory": inventory.get_inventory_item_count(&"sand_block"),
 			"copper_inventory": inventory.get_inventory_item_count(&"copper"),
 			"sand_world": 0 if state.get_entry(1) == null else state.get_entry(1).stack.count,
 			"copper_world": 0 if state.get_entry(2) == null else state.get_entry(2).stack.count,
 		})
+	coordinator.state_changed.connect(state_observer)
 	inventory.inventory_changed.connect(inventory_observer)
 	coordinator.tick()
 	var remaining := state.get_entry(1)
 	_expect(remaining != null and remaining.stack.count == 3, "partial material pickup removed the wrong count")
-	_expect(not state.has_entry(2), "second collectible material remained in the world")
+	_expect(not state.has_entry(2), "reentrant pickup left the second collectible material")
 	_expect(remaining != null and is_equal_approx(remaining.remaining_lifetime, 275.0), "partial material pickup refreshed lifetime")
 	_expect(inventory.get_inventory_item_count(&"sand_block") == sand_max, "partial material pickup did not fill available capacity")
 	_expect(inventory.get_inventory_item_count(&"copper") == copper_max, "second material pickup did not fill available capacity")
-	_expect(inventory_observations == [
-		{
+	_expect(not reentrant_copper_presence.is_empty() and reentrant_copper_presence[0], "nested pickup collected the second entry before the first transaction notified")
+	_expect(notification_order == ["state", "inventory", "state", "inventory"], "reentrant pickup notifications completed out of transaction order")
+	_expect(state_observations.size() == 2 and inventory_observations.size() == 2, "reentrant pickup emitted the wrong notification count")
+	if state_observations.size() == 2 and inventory_observations.size() == 2:
+		_expect(state_observations[0] == {
 			"sand_inventory": sand_max,
 			"copper_inventory": copper_max - 1,
 			"sand_world": 3,
 			"copper_world": 1,
-		},
-		{
+		}, "first world observer saw a partially committed pickup")
+		_expect(inventory_observations[0] == state_observations[0], "first inventory observer saw a partially committed pickup")
+		_expect(state_observations[1] == {
 			"sand_inventory": sand_max,
 			"copper_inventory": copper_max,
 			"sand_world": 3,
 			"copper_world": 0,
-		},
-	], "inventory observers saw a partially committed pickup")
+		}, "second world observer saw a partially committed pickup")
+		_expect(inventory_observations[1] == state_observations[1], "second inventory observer saw a partially committed pickup")
 	coordinator.tick()
-	_expect(inventory_observations.size() == 2, "double pickup changed committed inventory")
+	_expect(state_observations.size() == 2 and inventory_observations.size() == 2, "double pickup changed committed state")
 	_position_is_ready = false
 	coordinator.tick()
 	_expect(state.has_entry(1), "streaming unload removed persistent material")
@@ -283,24 +305,28 @@ func _test_partial_pickup_streaming_and_lifetime(
 	coordinator.tick(0.5)
 	coordinator.tick(0.5)
 	_expect(is_equal_approx(state.get_entry(1).remaining_lifetime, 274.0), "coarse lifetime step did not advance at one second")
+	_expect(state_observations.size() == 2, "non-expiring lifetime step emitted state changed")
 	coordinator.tick(274.0)
 	_expect(not state.has_entry(1), "expired material remained in persistent state")
 	_expect(coordinator.get_child_count() == 0, "expired material retained a loot view")
+	_expect(state_observations.size() == 3, "material expiration did not emit one state change")
 	var zombie := entity_catalog.get_definition(&"zombie")
 	var seed := _find_single_drop_seed(zombie.loot_pool, item_catalog)
 	_expect(seed >= 0, "no deterministic single-drop zombie seed found")
 	if seed >= 0:
 		entity_runtime.entity_defeated.emit(EntityDefeat.new(1, &"zombie", drop_position, seed))
 		_expect(state.get_entry_count() == 1, "zombie defeat did not commit persistent loot")
-	var state_before_shutdown := _state_view(state)
+		_expect(state_observations.size() == 4, "zombie loot spawn did not emit state changed")
+	var state_before_shutdown := state.snapshot()
 	var allocator_before_shutdown := factory.get_next_instance_id()
 	coordinator.shutdown()
-	_expect(_state_view(state) == state_before_shutdown, "shutdown cleared persistent loot state")
+	_expect(state.snapshot() == state_before_shutdown, "shutdown cleared persistent loot state")
 	_expect(factory.get_next_instance_id() == allocator_before_shutdown, "shutdown reset equipment instance IDs")
 	_expect(coordinator.get_child_count() == 0, "shutdown retained loot views")
 	if seed >= 0:
 		entity_runtime.entity_defeated.emit(EntityDefeat.new(2, &"zombie", drop_position, seed))
-		_expect(_state_view(state) == state_before_shutdown, "shutdown coordinator remained connected to entity defeats")
+		_expect(state.snapshot() == state_before_shutdown, "shutdown coordinator remained connected to entity defeats")
+	coordinator.state_changed.disconnect(state_observer)
 	inventory.inventory_changed.disconnect(inventory_observer)
 	await _cleanup_runtime_fixture(fixture)
 	_expect(root.get_child_count() == root_child_baseline, "partial loot integration retained root children")
@@ -341,23 +367,29 @@ func _test_equipment_exact_pickup(
 	_expect(state.has_entry(1), "full inventory partially collected equipment")
 	_expect(_find_equipment_instance(inventory, sword.instance_id) == -1, "full inventory duplicated equipment")
 	_expect(loadout.discard_stack(InventoryModel.HOTBAR_SIZE, dirt_max), "equipment pickup capacity did not open")
+	var state_observations: Array[Dictionary] = []
 	var inventory_observations: Array[Dictionary] = []
+	var state_observer := func() -> void:
+		state_observations.append({
+			"world_has_entry": state.has_entry(1),
+			"inventory_index": _find_equipment_instance(inventory, sword.instance_id),
+		})
 	var inventory_observer := func() -> void:
 		inventory_observations.append({
 			"world_has_entry": state.has_entry(1),
 			"inventory_index": _find_equipment_instance(inventory, sword.instance_id),
 		})
+	coordinator.state_changed.connect(state_observer)
 	inventory.inventory_changed.connect(inventory_observer)
 	coordinator.tick()
 	var inventory_index := _find_equipment_instance(inventory, sword.instance_id)
 	_expect(not state.has_entry(1), "equipment exact pickup retained its world entry")
 	_expect(inventory_index >= 0, "equipment exact pickup lost instance identity")
-	_expect(inventory_observations == [{
-		"world_has_entry": false,
-		"inventory_index": inventory_index,
-	}], "inventory observer saw a partial equipment pickup")
+	_expect(state_observations == [{"world_has_entry": false, "inventory_index": inventory_index}], "world observer saw a partial equipment pickup")
+	_expect(inventory_observations == [{"world_has_entry": false, "inventory_index": inventory_index}], "inventory observer saw a partial equipment pickup")
 	coordinator.tick()
 	_expect(_find_equipment_instance(inventory, sword.instance_id) == inventory_index, "double equipment pickup duplicated its instance")
+	coordinator.state_changed.disconnect(state_observer)
 	inventory.inventory_changed.disconnect(inventory_observer)
 	await _cleanup_runtime_fixture(fixture)
 
@@ -368,20 +400,22 @@ func _test_full_capacity_batch_evicts_atomically(
 	player_scene: PackedScene,
 ) -> void:
 	var factory := EquipmentInstanceFactory.new(item_catalog)
-	var state := WorldLootState.new(item_catalog, factory)
+	var encoded_entries: Array = []
 	for index in range(WorldLootState.MAXIMUM_ENTRY_COUNT):
 		var sword := factory.create(&"copper_sword")
 		_expect(sword != null, "bounded equipment fixture allocation %d failed" % index)
 		if sword != null:
-			_expect(
-				_add_world_stack(
-					state,
-					InventoryStack.new(&"copper_sword", 1, sword),
-					Vector3(float(index) * 2.0, 0.0, 0.0),
-				),
-				"bounded equipment fixture add %d failed" % index,
-			)
-	_expect(state.get_entry_count() == WorldLootState.MAXIMUM_ENTRY_COUNT, "bounded equipment fixture did not reach capacity")
+			encoded_entries.append(WorldLootEntry.new(
+				index + 1,
+				InventoryStack.new(&"copper_sword", 1, sword),
+				Vector3(float(index) * 2.0, 0.0, 0.0),
+				WorldLootEntry.NO_LIFETIME,
+			).to_dict())
+	var state := WorldLootState.new(item_catalog, factory)
+	_expect(state.restore({
+		"next_entry_id": WorldLootState.MAXIMUM_ENTRY_COUNT + 1,
+		"entries": encoded_entries,
+	}), "bounded equipment world fixture did not restore")
 	var inventory := InventoryModel.new(item_catalog, factory)
 	inventory.setup_empty()
 	_position_is_ready = false
@@ -398,22 +432,30 @@ func _test_full_capacity_batch_evicts_atomically(
 	var coordinator := fixture["coordinator"] as OverworldLootCoordinator
 	var entity_runtime := fixture["entity_runtime"] as EntityRuntime
 	var zombie := entity_catalog.get_definition(&"zombie")
-	var seed := _find_single_equipment_drop_seed(zombie.loot_pool, item_catalog)
-	_expect(seed >= 0, "no deterministic single-equipment zombie seed found")
-	var before_state := _state_view(state)
+	var seed := _find_equipment_drop_seed(zombie.loot_pool, item_catalog)
+	_expect(seed >= 0, "no deterministic equipment-drop zombie seed found")
+	var before_state := state.snapshot()
 	var before_allocator := factory.get_next_instance_id()
+	var expected_factory := EquipmentInstanceFactory.new(item_catalog, before_allocator)
+	var expected_resolution := LootResolver.prepare(zombie.loot_pool, seed, expected_factory)
+	var expected_drop_count := 0 if expected_resolution == null else expected_resolution.get_drops().size()
+	var state_change_count := [0]
+	coordinator.state_changed.connect(func() -> void: state_change_count[0] += 1)
 	if seed >= 0:
 		entity_runtime.entity_defeated.emit(EntityDefeat.new(1, &"zombie", drop_position, seed))
-	_expect(_state_view(state) != before_state, "full-cap loot batch was silently rejected")
+	_expect(state.snapshot() != before_state, "full-cap loot batch was silently rejected")
 	_expect(state.get_entry_count() == WorldLootState.MAXIMUM_ENTRY_COUNT, "full-cap loot batch exceeded the state bound")
 	_expect(factory.get_next_instance_id() == before_allocator + 1, "full-cap loot batch did not advance its equipment ID atomically")
 	_expect(state.get_equipment_instance_ids().has(before_allocator), "full-cap loot batch lost its new equipment instance")
-	_expect(not state.has_entry(1), "full-cap loot batch did not evict the oldest equipment entry")
+	_expect(state_change_count[0] == 1, "full-cap loot batch did not emit one state change")
+	_expect(expected_drop_count >= 1, "full-cap fixture resolved no drops")
+	for evicted_index in range(expected_drop_count):
+		_expect(not state.has_entry(evicted_index + 1), "full-cap loot batch did not evict the oldest required entry")
 	_expect(coordinator.get_child_count() == 0, "unready bounded loot created views")
-	var committed_state := _state_view(state)
+	var committed_state := state.snapshot()
 	var committed_allocator := factory.get_next_instance_id()
 	coordinator.shutdown()
-	_expect(_state_view(state) == committed_state, "bounded-state shutdown changed persistent loot")
+	_expect(state.snapshot() == committed_state, "bounded-state shutdown changed persistent loot")
 	_expect(factory.get_next_instance_id() == committed_allocator, "bounded-state shutdown reset equipment IDs")
 	await _cleanup_runtime_fixture(fixture)
 	_position_is_ready = true
@@ -429,10 +471,6 @@ func _test_reentrant_defeat_queue(
 	var inventory := InventoryModel.new(item_catalog, factory)
 	inventory.setup_empty()
 	var state := WorldLootState.new(item_catalog, factory)
-	_expect(
-		_add_world_stack(state, InventoryStack.new(&"copper", 1), Vector3.ZERO),
-		"reentrant pickup fixture add failed",
-	)
 	var fixture := _create_runtime_fixture(
 		entity_catalog,
 		item_catalog,
@@ -440,18 +478,18 @@ func _test_reentrant_defeat_queue(
 		player_scene,
 		inventory,
 		state,
-		Vector3.ZERO,
+		Vector3(100.0, 0.0, 100.0),
 	)
 	var coordinator := fixture["coordinator"] as OverworldLootCoordinator
 	var entity_runtime := fixture["entity_runtime"] as EntityRuntime
 	var zombie := entity_catalog.get_definition(&"zombie")
-	var seed := _find_single_equipment_drop_seed(zombie.loot_pool, item_catalog)
+	var seed := _find_equipment_drop_seed(zombie.loot_pool, item_catalog)
 	_expect(seed >= 0, "no deterministic equipment seed found for reentrant defeat")
 	var notification_count := [0]
 	var nested_emitted := [false]
 	var observer := func() -> void:
 		notification_count[0] += 1
-		if nested_emitted[0] or seed < 0:
+		if nested_emitted[0]:
 			return
 		nested_emitted[0] = true
 		entity_runtime.entity_defeated.emit(EntityDefeat.new(
@@ -460,22 +498,20 @@ func _test_reentrant_defeat_queue(
 			Vector3(12.0, 0.0, 0.0),
 			seed,
 		))
+	coordinator.state_changed.connect(observer)
+	var expected_first_instance_id := factory.get_next_instance_id()
+	if seed >= 0:
 		entity_runtime.entity_defeated.emit(EntityDefeat.new(
-			3,
+			1,
 			&"zombie",
-			Vector3(16.0, 0.0, 0.0),
+			Vector3.ZERO,
 			seed,
 		))
-	inventory.inventory_changed.connect(observer)
-	var expected_first_instance_id := factory.get_next_instance_id()
-	coordinator.tick()
 	var equipment_instance_ids := state.get_equipment_instance_ids()
-	_expect(notification_count[0] == 1, "reentrant pickup emitted the wrong inventory notification count")
-	_expect(nested_emitted[0], "pickup notification did not issue nested defeats")
+	_expect(notification_count[0] == 2, "reentrant defeat did not complete both state notifications")
 	_expect(equipment_instance_ids == [expected_first_instance_id, expected_first_instance_id + 1], "reentrant defeat lost or duplicated equipment identity")
 	_expect(factory.get_next_instance_id() == expected_first_instance_id + 2, "reentrant defeat advanced the allocator incorrectly")
-	_expect(not state.has_entry(1), "reentrant pickup retained its source material")
-	inventory.inventory_changed.disconnect(observer)
+	coordinator.state_changed.disconnect(observer)
 	await _cleanup_runtime_fixture(fixture)
 
 func _test_suspended_defeat_queue(
@@ -583,23 +619,6 @@ func _cleanup_runtime_fixture(fixture: Dictionary) -> void:
 	await process_frame
 	await process_frame
 
-func _state_view(state: WorldLootState) -> Dictionary:
-	var entries: Array[Dictionary] = []
-	for entry in state.get_entries():
-		entries.append({
-			"entry_id": entry.entry_id,
-			"item_id": entry.stack.item_id,
-			"count": entry.stack.count,
-			"instance_id": -1 if entry.stack.equipment_instance == null else entry.stack.equipment_instance.instance_id,
-			"world_position": entry.world_position,
-			"remaining_lifetime": entry.remaining_lifetime,
-		})
-	return {
-		"revision": state.get_revision(),
-		"next_entry_id": state.get_next_entry_id(),
-		"entries": entries,
-	}
-
 func _add_world_stack(state: WorldLootState, stack: InventoryStack, position: Vector3) -> bool:
 	var prepared := state._prepare_add_stack(stack, position)
 	if prepared == null:
@@ -618,11 +637,11 @@ func _find_single_drop_seed(pool: LootPoolDefinition, item_catalog: ItemCatalog)
 			return seed
 	return -1
 
-func _find_single_equipment_drop_seed(pool: LootPoolDefinition, item_catalog: ItemCatalog) -> int:
+func _find_equipment_drop_seed(pool: LootPoolDefinition, item_catalog: ItemCatalog) -> int:
 	for seed in range(1, 100000):
-		var drops := _resolve(pool, seed, EquipmentInstanceFactory.new(item_catalog))
-		if drops.size() == 1 and drops[0].equipment_instance != null:
-			return seed
+		for stack in _resolve(pool, seed, EquipmentInstanceFactory.new(item_catalog)):
+			if stack.equipment_instance != null:
+				return seed
 	return -1
 
 func _resolve(

@@ -229,6 +229,7 @@ func _make_saved_world() -> Dictionary:
 		"item_proficiency": {},
 		"inventory": null,
 		"next_equipment_instance_id": 1,
+		"world_loot": {"next_entry_id": 1, "entries": []},
 		"chests": {},
 		"pumpkin_patch": null,
 		"apple_trees": AppleTreeState.new().snapshot(),
@@ -897,7 +898,10 @@ func _saved_state_is_living_spawn(save_data: Dictionary, spawn_position: Vector3
 	var inventory_data = save_data.get("inventory", null)
 	if not inventory_data is Dictionary:
 		return false
-	var restored_inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
+	var next_instance_id := int(save_data.get("next_equipment_instance_id", 0))
+	if next_instance_id < 1:
+		return false
+	var restored_inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog, next_instance_id))
 	if not restored_inventory.from_dict(inventory_data as Dictionary):
 		return false
 	return restored_inventory.to_dict() == inventory_snapshot

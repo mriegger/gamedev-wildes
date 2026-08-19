@@ -82,6 +82,7 @@ func _test_main_version_nine_migration(item_catalog: ItemCatalog) -> void:
 	_expect(save["player_perks"] == player_perks, "main perk allocations changed during migration")
 	_expect(save["apple_trees"] == apple_trees, "main apple tree state changed during migration")
 	_expect(save["placed_blocks"]["4,5,6"] == BlockId.Type.CHEST, "main chest block ID changed during migration")
+	_expect(save["world_loot"] == {"next_entry_id": 1, "entries": []}, "main migration world loot changed")
 	var inventory_sword: Dictionary = save["inventory"]["regions"]["hotbar"][0]
 	var migrated_chest_slots: Array = save["chests"]["4,5,6"]
 	var chest_sword: Dictionary = migrated_chest_slots[0]
@@ -139,6 +140,7 @@ func _test_version_ten_migration(item_catalog: ItemCatalog) -> void:
 	}
 	_expect(SaveManager._migrate_save_data(save, item_catalog), "version-ten equipment migration failed")
 	_expect(save["version"] == SaveManager.CURRENT_SAVE_VERSION, "version-ten migration reached the wrong version")
+	_expect(save["world_loot"] == {"next_entry_id": 1, "entries": []}, "version-ten migration world loot changed")
 	var hotbar_sword: Dictionary = save["inventory"]["regions"]["hotbar"][0]
 	var backpack_sword: Dictionary = save["inventory"]["regions"]["backpack"][0]
 	var sorted_chest_sword: Dictionary = save["chests"]["-2,0,0"][0]

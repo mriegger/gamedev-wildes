@@ -14,8 +14,11 @@ var _player_stats: ActorStats
 var _inventory: InventoryModel
 var _equipment_instance_factory: EquipmentInstanceFactory
 var _player_perks: PlayerPerks
-var _chest_storage: ChestStorage
 var _item_proficiency: ItemProficiency
+var _chest_storage: ChestStorage
+var _world_loot_state: WorldLootState
+var _chest_coordinator: ChestCoordinator
+var _overworld_loot: OverworldLootCoordinator
 var _environment: GameEnvironment
 var _persisted_position_query: Callable
 var _pumpkin_patch: PumpkinPatchCoordinator
@@ -29,15 +32,42 @@ var _saving_suspended: bool = false
 func _ready():
 	set_process(false)
 
-func setup(p_slot_id: int, p_save_data: Dictionary, p_world: WorldController, p_player_stats: ActorStats, p_inventory: InventoryModel, p_equipment_instance_factory: EquipmentInstanceFactory, p_player_perks: PlayerPerks, p_chest_storage: ChestStorage, p_item_proficiency: ItemProficiency, p_environment: GameEnvironment, p_pumpkin_patch: PumpkinPatchCoordinator, p_apple_trees: AppleTreeCoordinator, p_persisted_position_query: Callable):
+func setup(
+	p_slot_id: int,
+	p_save_data: Dictionary,
+	p_world: WorldController,
+	p_player_stats: ActorStats,
+	p_inventory: InventoryModel,
+	p_equipment_instance_factory: EquipmentInstanceFactory,
+	p_player_perks: PlayerPerks,
+	p_item_proficiency: ItemProficiency,
+	p_chest_storage: ChestStorage,
+	p_world_loot_state: WorldLootState,
+	p_chest_coordinator: ChestCoordinator,
+	p_overworld_loot: OverworldLootCoordinator,
+	p_environment: GameEnvironment,
+	p_pumpkin_patch: PumpkinPatchCoordinator,
+	p_apple_trees: AppleTreeCoordinator,
+	p_persisted_position_query: Callable,
+):
 	assert(p_world != null)
 	assert(p_player_stats != null)
 	assert(p_inventory != null)
 	assert(p_equipment_instance_factory != null)
 	assert(p_inventory.equipment_instance_factory == p_equipment_instance_factory)
 	assert(p_player_perks != null)
-	assert(p_chest_storage != null)
 	assert(p_item_proficiency != null)
+	assert(
+		p_chest_storage != null
+		and p_chest_storage._uses_dependencies(
+			p_inventory.item_catalog,
+			p_equipment_instance_factory,
+		)
+	)
+	assert(p_world_loot_state != null and p_world_loot_state.item_catalog == p_inventory.item_catalog)
+	assert(p_world_loot_state.equipment_instance_factory == p_equipment_instance_factory)
+	assert(p_chest_coordinator != null)
+	assert(p_overworld_loot != null and p_overworld_loot._uses_world_loot_state(p_world_loot_state))
 	assert(p_environment != null)
 	assert(p_pumpkin_patch != null)
 	assert(p_apple_trees != null)
@@ -49,8 +79,11 @@ func setup(p_slot_id: int, p_save_data: Dictionary, p_world: WorldController, p_
 	_inventory = p_inventory
 	_equipment_instance_factory = p_equipment_instance_factory
 	_player_perks = p_player_perks
-	_chest_storage = p_chest_storage
 	_item_proficiency = p_item_proficiency
+	_chest_storage = p_chest_storage
+	_world_loot_state = p_world_loot_state
+	_chest_coordinator = p_chest_coordinator
+	_overworld_loot = p_overworld_loot
 	_environment = p_environment
 	_persisted_position_query = p_persisted_position_query
 	_pumpkin_patch = p_pumpkin_patch
@@ -62,12 +95,18 @@ func setup(p_slot_id: int, p_save_data: Dictionary, p_world: WorldController, p_
 	_saving_suspended = false
 	set_process(slot_id != -1)
 	if slot_id != -1:
+		save_data["inventory"] = _inventory.to_dict()
+		save_data["next_equipment_instance_id"] = _equipment_instance_factory.get_next_instance_id()
+		save_data["player_perks"] = _player_perks.snapshot()
+		save_data["world_loot"] = _world_loot_state.snapshot()
 		save_data["pumpkin_patch"] = _pumpkin_patch.snapshot()
 		save_data["apple_trees"] = _apple_trees.snapshot()
 		SaveManager.update_last_played(slot_id, save_data)
 		_world.voxel_model.block_edit_committed.connect(_on_world_edit)
-		_pumpkin_patch.state_changed.connect(_on_persistent_state_changed)
-		_apple_trees.state_changed.connect(_on_persistent_state_changed)
+		_pumpkin_patch.state_changed.connect(_queue_state_save)
+		_apple_trees.state_changed.connect(_queue_state_save)
+		_chest_coordinator.contents_changed.connect(_on_chest_contents_changed)
+		_overworld_loot.state_changed.connect(_queue_state_save)
 
 func _process(delta):
 	_playtime_accum += delta
@@ -85,9 +124,12 @@ func _process(delta):
 		save("auto")
 
 func _on_world_edit(_edit: BlockEdit):
-	_on_persistent_state_changed()
+	_queue_state_save()
 
-func _on_persistent_state_changed():
+func _on_chest_contents_changed(_position: Vector3i) -> void:
+	_queue_state_save()
+
+func _queue_state_save() -> void:
 	_pending_edit_save = true
 	_edit_idle_elapsed = 0.0
 	save_status_changed.emit("Pending save...")
@@ -97,7 +139,23 @@ func save(reason: String) -> bool:
 		return false
 	var time_to_save = _environment.get_time_of_day()
 	var persisted_position := _persisted_position_query.call() as Vector3
-	var success = SaveManager.save_world_state(slot_id, save_data, _world.voxel_model, persisted_position, _player_stats, _inventory, _equipment_instance_factory, _player_perks, _item_proficiency, _chest_storage, _pumpkin_patch.snapshot(), _apple_trees.snapshot(), _playtime_accum, time_to_save)
+	var success = SaveManager.save_world_state(
+		slot_id,
+		save_data,
+		_world.voxel_model,
+		persisted_position,
+		_player_stats,
+		_inventory,
+		_equipment_instance_factory,
+		_player_perks,
+		_item_proficiency,
+		_chest_storage,
+		_world_loot_state,
+		_pumpkin_patch.snapshot(),
+		_apple_trees.snapshot(),
+		_playtime_accum,
+		time_to_save,
+	)
 	if success:
 		_auto_save_elapsed = 0.0
 		_edit_idle_elapsed = 0.0
@@ -133,7 +191,11 @@ func shutdown(reason: String):
 		save(reason)
 	if _world and _world.voxel_model and _world.voxel_model.block_edit_committed.is_connected(_on_world_edit):
 		_world.voxel_model.block_edit_committed.disconnect(_on_world_edit)
-	if _pumpkin_patch and _pumpkin_patch.state_changed.is_connected(_on_persistent_state_changed):
-		_pumpkin_patch.state_changed.disconnect(_on_persistent_state_changed)
-	if _apple_trees and _apple_trees.state_changed.is_connected(_on_persistent_state_changed):
-		_apple_trees.state_changed.disconnect(_on_persistent_state_changed)
+	if _pumpkin_patch and _pumpkin_patch.state_changed.is_connected(_queue_state_save):
+		_pumpkin_patch.state_changed.disconnect(_queue_state_save)
+	if _apple_trees and _apple_trees.state_changed.is_connected(_queue_state_save):
+		_apple_trees.state_changed.disconnect(_queue_state_save)
+	if _chest_coordinator != null and _chest_coordinator.contents_changed.is_connected(_on_chest_contents_changed):
+		_chest_coordinator.contents_changed.disconnect(_on_chest_contents_changed)
+	if _overworld_loot != null and _overworld_loot.state_changed.is_connected(_queue_state_save):
+		_overworld_loot.state_changed.disconnect(_queue_state_save)

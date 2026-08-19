@@ -3,7 +3,7 @@ class_name SaveManager
 
 const SAVE_DIR: String = "user://saves"
 const SLOT_COUNT: int = 3
-const CURRENT_SAVE_VERSION: int = 12
+const CURRENT_SAVE_VERSION: int = 13
 const MINIMUM_MIGRATABLE_SAVE_VERSION: int = 4
 const VERSION_SEVEN_BASE_EXPERIENCE_TO_LEVEL: int = 100
 const VERSION_SEVEN_EXPERIENCE_GROWTH: float = 1.25
@@ -72,10 +72,6 @@ static func get_slot_info(slot_id: int) -> Dictionary:
 		return {"exists": false, "slot_id": slot_id, "corrupt": true}
 	parsed["exists"] = true
 	parsed["slot_id"] = int(parsed.get("slot_id", slot_id))
-	if parsed.has("seed"):
-		parsed["seed"] = int(parsed["seed"])
-	if parsed.has("version"):
-		parsed["version"] = int(parsed["version"])
 	return parsed
 
 static func get_all_slots(item_catalog: ItemCatalog) -> Array:
@@ -111,6 +107,10 @@ static func create_new_world(slot_id: int, seed_value: int, world_name: String) 
 		"item_proficiency": {},
 		"inventory": null,
 		"next_equipment_instance_id": 1,
+		"world_loot": {
+			"next_entry_id": 1,
+			"entries": [],
+		},
 		"playtime_seconds": 0,
 		"time_of_day": 6.0,
 		"pumpkin_patch": null,
@@ -309,6 +309,12 @@ static func _migrate_save_data(data: Dictionary, item_catalog: ItemCatalog) -> b
 	var version := int(migrated["version"])
 	if version < MINIMUM_MIGRATABLE_SAVE_VERSION or version > CURRENT_SAVE_VERSION:
 		return false
+	var source_version := version
+	migrated["version"] = version
+	if migrated.has("seed"):
+		if not _is_integer_number(migrated["seed"]) or int(migrated["seed"]) < 1:
+			return false
+		migrated["seed"] = int(migrated["seed"])
 	while version < CURRENT_SAVE_VERSION:
 		match version:
 			4:
@@ -351,9 +357,19 @@ static func _migrate_save_data(data: Dictionary, item_catalog: ItemCatalog) -> b
 				if not _migrate_version_eleven_equipment_instances(migrated):
 					return false
 				version = 12
+			12:
+				if migrated.has("world_loot"):
+					return false
+				migrated["world_loot"] = {
+					"next_entry_id": 1,
+					"entries": [],
+				}
+				version = 13
 			_:
 				return false
 		migrated["version"] = version
+	if source_version < CURRENT_SAVE_VERSION and not _synthesize_missing_chest_storage(migrated):
+		return false
 	if not _validate_equipment_instance_identity(migrated, item_catalog):
 		return false
 	data.clear()
@@ -477,6 +493,35 @@ static func _migrate_chest_inventory_data(data: Dictionary) -> bool:
 		encoded_chests[encoded_position] = (encoded_slots as Array).duplicate(true)
 	data.erase("chest_inventories")
 	data["chests"] = encoded_chests
+	return true
+
+static func _synthesize_missing_chest_storage(data: Dictionary) -> bool:
+	var encoded_chests = data.get("chests", null)
+	if not encoded_chests is Dictionary:
+		return false
+	var placed_blocks = data.get("placed_blocks", {})
+	if not placed_blocks is Dictionary:
+		return false
+	for encoded_position in placed_blocks:
+		if not encoded_position is String:
+			return false
+		var position = _try_parse_vector3i(encoded_position)
+		var raw_block_id = placed_blocks[encoded_position]
+		if (
+			position == null
+			or _encode_vector3i(position) != encoded_position
+			or not _is_integer_number(raw_block_id)
+		):
+			return false
+		var block_id := int(raw_block_id)
+		if not BlockId.is_valid(block_id) or block_id == BlockId.Type.AIR:
+			return false
+		if block_id != BlockId.Type.CHEST or encoded_chests.has(encoded_position):
+			continue
+		var slots: Array = []
+		slots.resize(PERSISTED_CHEST_SLOT_COUNT)
+		slots.fill(null)
+		encoded_chests[encoded_position] = slots
 	return true
 
 static func _migrate_equipment_variant_data(data: Dictionary) -> bool:
@@ -721,6 +766,18 @@ static func _validate_equipment_instance_identity(data: Dictionary, item_catalog
 	for encoded_slots in encoded_slots_by_position.values():
 		if not encoded_slots is Array or not _validate_encoded_instance_stacks(encoded_slots, factory, instance_ids):
 			return false
+	var reserved_instance_ids: Dictionary = {}
+	for instance_id in instance_ids:
+		if reserved_instance_ids.has(instance_id):
+			return false
+		reserved_instance_ids[instance_id] = true
+	var encoded_world_loot = data.get("world_loot", null)
+	if not encoded_world_loot is Dictionary:
+		return false
+	var world_loot_state := WorldLootState.new(item_catalog, factory)
+	if not world_loot_state.restore(encoded_world_loot, reserved_instance_ids):
+		return false
+	instance_ids.append_array(world_loot_state.get_equipment_instance_ids())
 	return factory.can_restore_state(next_instance_id, instance_ids)
 
 static func _validate_encoded_instance_stacks(
@@ -770,6 +827,7 @@ static func save_world_state(
 	player_perks: PlayerPerks,
 	item_proficiency: ItemProficiency,
 	chest_storage: ChestStorage,
+	world_loot_state: WorldLootState,
 	pumpkin_patch: Dictionary,
 	apple_trees: Dictionary,
 	extra_seconds: float,
@@ -780,9 +838,22 @@ static func save_world_state(
 	assert(equipment_instance_factory != null)
 	assert(inventory.equipment_instance_factory == equipment_instance_factory)
 	assert(chest_storage != null)
-	assert(chest_storage._uses_dependencies(inventory.item_catalog, equipment_instance_factory))
+	assert(world_loot_state != null)
+	assert(world_loot_state.item_catalog == equipment_instance_factory.item_catalog)
+	assert(world_loot_state.equipment_instance_factory == equipment_instance_factory)
+	if not chest_storage._uses_configuration(
+		equipment_instance_factory.item_catalog,
+		equipment_instance_factory,
+		PERSISTED_CHEST_SLOT_COUNT,
+	):
+		return false
+	var block_edits := voxel_model.snapshot_block_edits()
+	var chest_snapshot := chest_storage.snapshot()
+	if not _is_chest_state_consistent(block_edits["placed"], chest_snapshot):
+		return false
 	var equipment_instance_ids := inventory.get_equipment_instance_ids()
 	equipment_instance_ids.append_array(chest_storage.get_equipment_instance_ids())
+	equipment_instance_ids.append_array(world_loot_state.get_equipment_instance_ids())
 	if not equipment_instance_factory.can_restore_state(
 		equipment_instance_factory.get_next_instance_id(),
 		equipment_instance_ids,
@@ -793,11 +864,10 @@ static func save_world_state(
 	updated["version"] = CURRENT_SAVE_VERSION
 	updated["playtime_seconds"] = float(updated.get("playtime_seconds", 0)) + extra_seconds
 
-	var block_edits := voxel_model.snapshot_block_edits()
 	updated["placed_blocks"] = serialize_vector3i_dict(block_edits["placed"])
 	updated["removed_blocks"] = serialize_vector3i_dict(block_edits["removed"])
 	updated["torch_attachments"] = serialize_vector3i_dict(voxel_model.torch_attachments)
-	updated["chests"] = serialize_vector3i_dict(chest_storage.snapshot())
+	updated["chests"] = serialize_vector3i_dict(chest_snapshot)
 	updated.erase("chest_inventories")
 	updated.erase("copper_blocks")
 	updated.erase("generated_copper_chunks")
@@ -807,6 +877,7 @@ static func save_world_state(
 	updated["player_perks"] = player_perks.snapshot()
 	updated["inventory"] = inventory.to_dict()
 	updated["next_equipment_instance_id"] = equipment_instance_factory.get_next_instance_id()
+	updated["world_loot"] = world_loot_state.snapshot()
 	updated["item_proficiency"] = item_proficiency.snapshot()
 	updated["pumpkin_patch"] = pumpkin_patch.duplicate(true)
 	updated["apple_trees"] = apple_trees.duplicate(true)
@@ -816,6 +887,15 @@ static func save_world_state(
 		return false
 	current_data.clear()
 	current_data.merge(updated, true)
+	return true
+
+static func _is_chest_state_consistent(placed_blocks: Dictionary, chest_snapshot: Dictionary) -> bool:
+	for position in chest_snapshot:
+		if int(placed_blocks.get(position, BlockId.Type.AIR)) != BlockId.Type.CHEST:
+			return false
+	for position in placed_blocks:
+		if int(placed_blocks[position]) == BlockId.Type.CHEST and not chest_snapshot.has(position):
+			return false
 	return true
 
 static func update_last_played(slot_id: int, data: Dictionary) -> bool:

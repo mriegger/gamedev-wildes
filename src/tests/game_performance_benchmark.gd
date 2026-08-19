@@ -123,6 +123,7 @@ func _make_saved_world() -> Dictionary:
 		"inventory": null,
 		"next_equipment_instance_id": 1,
 		"chests": {},
+		"world_loot": {"next_entry_id": 1, "entries": []},
 		"placed_blocks": {},
 		"removed_blocks": {},
 		"torch_attachments": {},

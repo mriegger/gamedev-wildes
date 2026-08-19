@@ -13,6 +13,7 @@ func _init() -> void:
 	_test_atomic_batches()
 	_test_bounded_capacity_and_eviction()
 	_test_spatial_bounds()
+	_test_snapshot_restore_validation()
 	_finish()
 
 func _test_deterministic_merging_and_copy_queries() -> void:
@@ -111,17 +112,23 @@ func _test_prepared_change_safety() -> void:
 	_expect(state.commit_prepared_change(first), "first prepared commit failed")
 	_expect(not state.can_commit_prepared_change(first), "consumed prepared change remained committable")
 	_expect(not state.commit_prepared_change(first), "prepared change replay succeeded")
-	var after_first := _state_view(state)
+	var after_first := state.snapshot()
 	_expect(not state.commit_prepared_change(stale), "stale prepared change committed")
-	_expect(_state_view(state) == after_first, "stale commit changed world loot")
+	_expect(state.snapshot() == after_first, "stale commit changed world loot")
 	var other := WorldLootState.new(_item_catalog, _factory)
 	_expect(not other.commit_prepared_change(stale), "foreign owner committed prepared change")
+	var before_aba := state.snapshot()
+	var aba_prepared := state.prepare_take(1, 1)
+	_expect(_add(state, InventoryStack.new(&"sand_block", 1), Vector3(8.0, 0.0, 0.0)), "ABA fixture mutation failed")
+	_expect(state.restore(before_aba), "ABA fixture restore failed")
+	_expect(not state.commit_prepared_change(aba_prepared), "restore ABA allowed a stale prepared change")
+	_expect(state.snapshot() == before_aba, "rejected ABA commit changed state")
 	var duplicate_instance := _factory.create(&"copper_sword")
 	_expect(duplicate_instance != null, "duplicate instance fixture allocation failed")
 	_expect(_add(state, InventoryStack.new(&"copper_sword", 1, duplicate_instance), Vector3(12.0, 0.0, 0.0)), "duplicate instance fixture add failed")
-	var duplicate_before := _state_view(state)
+	var duplicate_before := state.snapshot()
 	_expect(state._prepare_add_stack(InventoryStack.new(&"copper_sword", 1, duplicate_instance), Vector3(16.0, 0.0, 0.0)) == null, "duplicate equipment instance was accepted")
-	_expect(_state_view(state) == duplicate_before, "duplicate equipment rejection changed state")
+	_expect(state.snapshot() == duplicate_before, "duplicate equipment rejection changed state")
 
 func _test_atomic_batches() -> void:
 	var factory := EquipmentInstanceFactory.new(_item_catalog)
@@ -174,7 +181,7 @@ func _test_atomic_batches() -> void:
 	_expect(state.get_entry(3).stack.item_id == &"copper" and state.get_entry(3).stack.count == 4, "mixed batch material changed")
 	_expect(state.get_entry(4).stack.equipment_instance.instance_id == mixed_sword.instance_id, "mixed batch equipment changed")
 
-	var before_rejections := _state_view(state)
+	var before_rejections := state.snapshot()
 	_expect(
 		state._prepare_add_batch(
 			[InventoryStack.new(&"sand_block", 1)],
@@ -183,7 +190,7 @@ func _test_atomic_batches() -> void:
 		) == null,
 		"stale pending equipment ID was accepted",
 	)
-	_expect(_state_view(state) == before_rejections, "stale pending ID changed batch state")
+	_expect(state.snapshot() == before_rejections, "stale pending ID changed batch state")
 	var duplicate_pending := factory.copy()
 	var duplicate_sword := duplicate_pending.create(&"copper_sword")
 	var duplicate_batch: Array[InventoryStack] = [
@@ -198,7 +205,7 @@ func _test_atomic_batches() -> void:
 		) == null,
 		"duplicate batch equipment instance was accepted",
 	)
-	_expect(_state_view(state) == before_rejections, "duplicate batch instance changed state")
+	_expect(state.snapshot() == before_rejections, "duplicate batch instance changed state")
 	_expect(
 		state._prepare_add_batch(
 			[InventoryStack.new(&"copper_sword", 1, first_sword)],
@@ -207,7 +214,7 @@ func _test_atomic_batches() -> void:
 		) == null,
 		"equipment instance already in world state was accepted",
 	)
-	_expect(_state_view(state) == before_rejections, "state equipment duplicate changed state")
+	_expect(state.snapshot() == before_rejections, "state equipment duplicate changed state")
 
 func _test_bounded_capacity_and_eviction() -> void:
 	var state := WorldLootState.new(_item_catalog, _factory)
@@ -325,27 +332,117 @@ func _test_spatial_bounds() -> void:
 		0.0,
 		0.0,
 	)
-	var before := _state_view(state)
+	var before := state.snapshot()
 	_expect(state._prepare_add_stack(InventoryStack.new(&"copper", 1), unsafe_position) == null, "unsafe Vector3i cell position was accepted")
-	_expect(_state_view(state) == before, "unsafe position rejection changed state")
+	_expect(state.snapshot() == before, "unsafe position rejection changed state")
+	var unsafe_snapshot := before.duplicate(true)
+	if not unsafe_snapshot["entries"].is_empty():
+		unsafe_snapshot["entries"][0]["world_position"] = [unsafe_position.x, unsafe_position.y, unsafe_position.z]
+	var restore_target := WorldLootState.new(_item_catalog, _factory)
+	_expect(not restore_target.restore(unsafe_snapshot), "unsafe persisted cell position restored")
+	_expect(restore_target.get_entry_count() == 0, "unsafe persisted position partially restored")
 
+func _test_snapshot_restore_validation() -> void:
+	var source := WorldLootState.new(_item_catalog, _factory)
+	_expect(_add(source, InventoryStack.new(&"copper", 3), Vector3(1.25, -2.5, 4.0)), "snapshot material add failed")
+	_expect(_advance(source, 25.5), "snapshot lifetime advance failed")
+	var sword := _factory.create(&"copper_sword")
+	_expect(sword != null, "snapshot equipment allocation failed")
+	_expect(_add(source, InventoryStack.new(&"copper_sword", 1, sword), Vector3(-8.0, 3.0, 2.0)), "snapshot equipment add failed")
+	var encoded := source.snapshot()
+	var decoded = JSON.parse_string(JSON.stringify(encoded))
+	_expect(decoded is Dictionary, "world loot snapshot was not JSON-safe")
+	var restored := WorldLootState.new(_item_catalog, _factory)
+	_expect(decoded is Dictionary and restored.restore(decoded), "valid JSON world loot snapshot did not restore")
+	_expect(restored.snapshot() == encoded, "world loot snapshot roundtrip changed values")
+	_expect(restored.get_equipment_instance_ids() == [sword.instance_id], "restored equipment instance index changed")
+	_expect(restored.query_nearby(Vector3(1.25, -2.5, 4.0), 0.0).size() == 1, "restored spatial index was not rebuilt")
+	var unsorted := encoded.duplicate(true)
+	unsorted["entries"].reverse()
+	var sorted_restore := WorldLootState.new(_item_catalog, _factory)
+	_expect(sorted_restore.restore(unsorted), "unsorted valid snapshot was rejected")
+	var sorted_entries := sorted_restore.snapshot()["entries"] as Array
+	_expect(sorted_entries.size() == 2 and sorted_entries[0]["entry_id"] == 1 and sorted_entries[1]["entry_id"] == 2, "snapshot entries were not stable-ID sorted")
 
-func _state_view(state: WorldLootState) -> Dictionary:
-	var entries: Array[Dictionary] = []
-	for entry in state.get_entries():
-		entries.append({
-			"entry_id": entry.entry_id,
-			"item_id": entry.stack.item_id,
-			"count": entry.stack.count,
-			"instance_id": -1 if entry.stack.equipment_instance == null else entry.stack.equipment_instance.instance_id,
-			"world_position": entry.world_position,
-			"remaining_lifetime": entry.remaining_lifetime,
-		})
-	return {
-		"revision": state.get_revision(),
-		"next_entry_id": state.get_next_entry_id(),
-		"entries": entries,
-	}
+	var reserved: Dictionary = {sword.instance_id: true}
+	var collision_target := WorldLootState.new(_item_catalog, _factory)
+	var collision_before := collision_target.snapshot()
+	_expect(not collision_target.restore(encoded, reserved), "cross-owner equipment instance collision restored")
+	_expect(collision_target.snapshot() == collision_before, "collision rejection changed target state")
+
+	var extra_field := encoded.duplicate(true)
+	extra_field["extra"] = true
+	_expect_restore_rejected(restored, extra_field, "extra snapshot field")
+	var bad_next := encoded.duplicate(true)
+	bad_next["next_entry_id"] = 2
+	_expect_restore_rejected(restored, bad_next, "next ID not above every entry")
+	var fractional_next := encoded.duplicate(true)
+	fractional_next["next_entry_id"] = 3.5
+	_expect_restore_rejected(restored, fractional_next, "fractional next ID")
+	var duplicate_entry := encoded.duplicate(true)
+	duplicate_entry["entries"][1]["entry_id"] = 1
+	_expect_restore_rejected(restored, duplicate_entry, "duplicate entry ID")
+	var unknown_item := encoded.duplicate(true)
+	unknown_item["entries"][0]["stack"]["item_id"] = "missing_item"
+	_expect_restore_rejected(restored, unknown_item, "unknown item")
+	var zero_count := encoded.duplicate(true)
+	zero_count["entries"][0]["stack"]["count"] = 0
+	_expect_restore_rejected(restored, zero_count, "zero count")
+	var excessive_count := encoded.duplicate(true)
+	excessive_count["entries"][0]["stack"]["count"] = _item_catalog.get_definition(&"copper").max_stack + 1
+	_expect_restore_rejected(restored, excessive_count, "count above item maximum")
+	var non_finite_position := encoded.duplicate(true)
+	non_finite_position["entries"][0]["world_position"][0] = INF
+	_expect_restore_rejected(restored, non_finite_position, "non-finite position")
+	var non_finite_lifetime := encoded.duplicate(true)
+	non_finite_lifetime["entries"][0]["remaining_lifetime"] = NAN
+	_expect_restore_rejected(restored, non_finite_lifetime, "non-finite lifetime")
+	var excessive_lifetime := encoded.duplicate(true)
+	excessive_lifetime["entries"][0]["remaining_lifetime"] = WorldLootState.MATERIAL_LIFETIME + 1.0
+	_expect_restore_rejected(restored, excessive_lifetime, "lifetime above material maximum")
+	var missing_material_lifetime := encoded.duplicate(true)
+	missing_material_lifetime["entries"][0]["remaining_lifetime"] = null
+	_expect_restore_rejected(restored, missing_material_lifetime, "material without lifetime")
+	var equipment_lifetime := encoded.duplicate(true)
+	equipment_lifetime["entries"][1]["remaining_lifetime"] = 1.0
+	_expect_restore_rejected(restored, equipment_lifetime, "equipment with lifetime")
+	var negative_equipment_lifetime := encoded.duplicate(true)
+	negative_equipment_lifetime["entries"][1]["remaining_lifetime"] = -1.0
+	_expect_restore_rejected(restored, negative_equipment_lifetime, "equipment with numeric lifetime sentinel")
+	var equipment_without_instance := encoded.duplicate(true)
+	equipment_without_instance["entries"][1]["stack"]["equipment_instance"] = null
+	_expect_restore_rejected(restored, equipment_without_instance, "equipment without instance")
+	var material_with_instance := encoded.duplicate(true)
+	material_with_instance["entries"][0]["stack"]["equipment_instance"] = encoded["entries"][1]["stack"]["equipment_instance"].duplicate(true)
+	_expect_restore_rejected(restored, material_with_instance, "material with equipment instance")
+	var duplicate_instance := encoded.duplicate(true)
+	var copied_equipment: Dictionary = duplicate_instance["entries"][1].duplicate(true)
+	copied_equipment["entry_id"] = 3
+	duplicate_instance["entries"].append(copied_equipment)
+	duplicate_instance["next_entry_id"] = 4
+	_expect_restore_rejected(restored, duplicate_instance, "duplicate equipment instance")
+	var oversized := {"next_entry_id": WorldLootState.MAXIMUM_ENTRY_COUNT + 2, "entries": []}
+	for index in range(WorldLootState.MAXIMUM_ENTRY_COUNT + 1):
+		var copied_material: Dictionary = encoded["entries"][0].duplicate(true)
+		copied_material["entry_id"] = index + 1
+		oversized["entries"].append(copied_material)
+	_expect_restore_rejected(restored, oversized, "entry count above cap")
+
+	var exhausted := WorldLootState.new(_item_catalog, _factory)
+	_expect(exhausted.restore({"next_entry_id": WorldLootState.MAXIMUM_NEXT_ENTRY_ID, "entries": []}), "maximum persisted next ID was rejected")
+	_expect(exhausted._prepare_add_stack(InventoryStack.new(&"copper", 1), Vector3.ZERO) == null, "exhausted stable ID space allocated an entry")
+
+	var monotonic := WorldLootState.new(_item_catalog, _factory)
+	_expect(_add(monotonic, InventoryStack.new(&"copper", 1), Vector3.ZERO), "monotonic fixture first add failed")
+	_expect(_take(monotonic, 1), "monotonic fixture removal failed")
+	_expect(_add(monotonic, InventoryStack.new(&"sand_block", 1), Vector3.ZERO), "monotonic fixture second add failed")
+	_expect(not monotonic.has_entry(1) and monotonic.has_entry(2) and monotonic.get_next_entry_id() == 3, "removed stable ID was reused")
+	var monotonic_snapshot := monotonic.snapshot()
+	var monotonic_restore := WorldLootState.new(_item_catalog, _factory)
+	_expect(monotonic_restore.restore(monotonic_snapshot), "monotonic fixture restore failed")
+	_expect(_take(monotonic_restore, 2), "restored monotonic fixture removal failed")
+	_expect(_add(monotonic_restore, InventoryStack.new(&"copper", 1), Vector3.ZERO), "restored monotonic fixture add failed")
+	_expect(monotonic_restore.has_entry(3) and monotonic_restore.get_next_entry_id() == 4, "restored next ID was not monotonic")
 
 func _add(state: WorldLootState, stack: InventoryStack, position: Vector3) -> bool:
 	var prepared := state._prepare_add_stack(stack, position)
@@ -358,6 +455,11 @@ func _take(state: WorldLootState, entry_id: int, count: int = -1) -> bool:
 func _advance(state: WorldLootState, delta: float) -> bool:
 	var prepared := state.prepare_advance_time(delta)
 	return prepared != null and state.commit_prepared_change(prepared)
+
+func _expect_restore_rejected(state: WorldLootState, data: Dictionary, context: String) -> void:
+	var before := state.snapshot()
+	_expect(not state.restore(data), "%s restored" % context)
+	_expect(state.snapshot() == before, "%s changed state after rejection" % context)
 
 func _expect(condition: bool, message: String) -> void:
 	if not condition:

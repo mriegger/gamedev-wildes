@@ -1,7 +1,6 @@
 extends SceneTree
 
 var _errors: Array[String] = []
-var _item_catalog: ItemCatalog
 
 func _init() -> void:
 	var common := _definition([10.0, 20.0, 30.0], [2])
@@ -35,7 +34,6 @@ func _init() -> void:
 	var untracked_item := _item(&"untracked_item", null)
 	var catalog := ItemCatalog.new()
 	catalog.definitions = [common_sword, rare_sword, rare_helmet, epic_sword, untracked_item]
-	_item_catalog = catalog
 	_expect(rare_sword.proficiency == rare_helmet.proficiency, "shared proficiency definition was not preserved")
 
 	var proficiency := ItemProficiency.new(catalog)
@@ -125,6 +123,9 @@ func _init() -> void:
 	_expect(version_four_save["item_proficiency"] == {}, "migration did not initialize proficiency")
 	_expect(version_four_save["pumpkin_patch"] == {"present": false}, "migration did not preserve older worlds without pumpkin patches")
 	_expect(version_four_save["apple_trees"] == AppleTreeState.new().snapshot(), "migration did not preserve older worlds without picked apples")
+	_expect(version_four_save["world_loot"] == {"next_entry_id": 1, "entries": []}, "migration did not initialize world loot")
+	_expect(version_four_save["chests"] == {}, "migration did not initialize canonical chest storage")
+	_expect(version_four_save["next_equipment_instance_id"] == 1, "migration changed the initial equipment allocator")
 	_expect((version_four_save["player_stats"] as Dictionary)["level"] == 3, "migration changed existing progression")
 	_expect(is_equal_approx(float((version_four_save["player_stats"] as Dictionary)["current_hp"]), 37.5), "migration changed current HP")
 	_expect(version_four_save["player_perks"] == {"allocations": {}}, "migration did not initialize perk allocations")
@@ -143,9 +144,9 @@ func _init() -> void:
 	var missing_stats_save := {"version": 7, "pumpkin_patch": {"present": false}}
 	_expect(SaveManager._migrate_save_data(missing_stats_save, catalog), "missing player stats did not migrate")
 	_expect(not missing_stats_save.has("player_stats") and missing_stats_save["player_perks"] == {"allocations": {}}, "missing player stats migration changed the save shape")
-	_expect_failed_migration_unchanged({"version": 7, "player_stats": {"level": 3, "experience": 156}, "pumpkin_patch": {"present": false}}, "experience at the old threshold")
-	_expect_failed_migration_unchanged({"version": 7, "player_stats": {"level": 3.5, "experience": 1}, "pumpkin_patch": {"present": false}}, "fractional player level")
-	_expect_failed_migration_unchanged({"version": 7, "player_stats": {"level": 3, "experience": 1}, "player_perks": {"allocations": {}}, "pumpkin_patch": {"present": false}}, "preexisting perk data")
+	_expect_failed_migration_unchanged({"version": 7, "player_stats": {"level": 3, "experience": 156}, "pumpkin_patch": {"present": false}}, catalog, "experience at the old threshold")
+	_expect_failed_migration_unchanged({"version": 7, "player_stats": {"level": 3.5, "experience": 1}, "pumpkin_patch": {"present": false}}, catalog, "fractional player level")
+	_expect_failed_migration_unchanged({"version": 7, "player_stats": {"level": 3, "experience": 1}, "player_perks": {"allocations": {}}, "pumpkin_patch": {"present": false}}, catalog, "preexisting perk data")
 	var version_three_save := {"version": 3}
 	_expect(not SaveManager._migrate_save_data(version_three_save, catalog), "unsupported save version migrated")
 	_expect(version_three_save == {"version": 3}, "failed migration changed an unsupported save")
@@ -177,9 +178,9 @@ func _expect_rejected_unchanged(proficiency: ItemProficiency, saved_progress: Di
 	_expect(not proficiency.restore(saved_progress), "%s passed restore validation" % context)
 	_expect(proficiency.snapshot() == before, "%s changed state after failed restore" % context)
 
-func _expect_failed_migration_unchanged(save_data: Dictionary, context: String) -> void:
+func _expect_failed_migration_unchanged(save_data: Dictionary, catalog: ItemCatalog, context: String) -> void:
 	var before := save_data.duplicate(true)
-	_expect(not SaveManager._migrate_save_data(save_data, _item_catalog), "%s passed save migration" % context)
+	_expect(not SaveManager._migrate_save_data(save_data, catalog), "%s passed save migration" % context)
 	_expect(save_data == before, "%s changed save data after failed migration" % context)
 
 func _expect(condition: bool, message: String) -> void:
