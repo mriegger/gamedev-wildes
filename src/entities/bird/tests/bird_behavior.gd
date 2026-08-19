@@ -58,7 +58,7 @@ func _run() -> void:
 	cycle.advance(0.0, position, false, true)
 	_expect(cycle.state == BirdBrain.State.DESCEND, "cruise did not restart descent")
 	cycle.reject_ground_contact()
-	_expect(cycle.state == BirdBrain.State.CRUISE, "rejected ground contact did not resume flight")
+	_expect(cycle.state == BirdBrain.State.TAKEOFF, "rejected ground contact did not trigger takeoff")
 
 	var rejection := BirdBrain.new(behavior, 991)
 	rejection.advance(0.0, position, false, true)

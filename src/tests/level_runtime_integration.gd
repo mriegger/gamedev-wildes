@@ -346,7 +346,8 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 		Callable(game, "_request_import_structure"),
 		Callable(game, "_request_export_structure"),
 		Callable(game, "_request_exit_structure"),
-		Callable(world, "try_set_water_ripple_strength")
+		Callable(world, "try_set_water_ripple_strength"),
+		Callable(game, "_spawn_debug_birds"),
 	)
 	dev_console.open_state_changed.connect(game._on_dev_console_open_state_changed)
 	structure_dialogs.open_state_changed.connect(game._on_structure_dialog_open_state_changed)

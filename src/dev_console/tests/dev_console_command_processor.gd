@@ -13,6 +13,8 @@ var _errors: Array[String] = []
 var _ripple_strength: float = -1.0
 var _structure_calls: Array[StringName] = []
 var _structure_commands_accepted: bool = true
+var _bird_spawn_calls: Array[Dictionary] = []
+var _bird_commands_accepted: bool = true
 
 func _init() -> void:
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
@@ -31,6 +33,16 @@ func _init() -> void:
 	_setup_processor(processor, inventory, stats, pumpkin_patch)
 	_expect_result(processor.execute("spawn pumpkin_patch"), DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN, "pumpkin patch spawn command failed")
 	_expect(pumpkin_patch.spawn_count == 1, "pumpkin patch command did not invoke the coordinator")
+	_expect_result(processor.execute("spawn birds"), DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN, "default mixed bird spawn command failed")
+	_expect(_bird_spawn_calls.back() == {"variant_id": &"", "count": 4}, "default mixed bird command passed the wrong request")
+	_expect_result(processor.execute("SPAWN BIRDS 12"), DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN, "counted mixed bird spawn command failed")
+	_expect(_bird_spawn_calls.back() == {"variant_id": &"", "count": 12}, "counted mixed bird command passed the wrong request")
+	for variant_id in [&"crow", &"redbird", &"duck", &"bluebird"]:
+		_expect_result(processor.execute("spawn bird %s 2" % variant_id), DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN, "specific bird spawn command failed for %s" % variant_id)
+		_expect(_bird_spawn_calls.back() == {"variant_id": variant_id, "count": 2}, "specific bird command passed the wrong request for %s" % variant_id)
+	_bird_commands_accepted = false
+	_expect_result(processor.execute("spawn bird duck"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "rejected bird spawn handler was accepted")
+	_bird_commands_accepted = true
 
 	_expect_result(processor.execute("spawn stone 5"), DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN, "stone spawn command failed")
 	_expect(inventory.get_slot(InventoryModel.HOTBAR_SIZE).count == 15, "spawn did not add to the existing backpack stack")
@@ -174,6 +186,15 @@ func _init() -> void:
 	_expect_result(processor.execute("give stone 1"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "unknown command was accepted")
 	_expect_result(processor.execute("spawn"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "spawn command without an item was accepted")
 	_expect_result(processor.execute("spawn pumpkin_patch 1"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "pumpkin patch count argument was accepted")
+	_expect_result(processor.execute("spawn birds 0"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "zero-count mixed bird command was accepted")
+	_expect_result(processor.execute("spawn birds 17"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "oversized mixed bird command was accepted")
+	_expect_result(processor.execute("spawn birds nope"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "non-numeric mixed bird count was accepted")
+	_expect_result(processor.execute("spawn birds 2 extra"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "mixed bird command with extra arguments was accepted")
+	_expect_result(processor.execute("spawn bird"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "bird command without a variant was accepted")
+	_expect_result(processor.execute("spawn bird goose"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "unknown bird variant was accepted")
+	_expect_result(processor.execute("spawn bird duck 0"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "zero-count specific bird command was accepted")
+	_expect_result(processor.execute("spawn bird duck 17"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "oversized specific bird command was accepted")
+	_expect_result(processor.execute("spawn bird duck nope"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "non-numeric specific bird count was accepted")
 	_expect(pumpkin_patch.spawn_count == 1, "invalid pumpkin patch command invoked the coordinator")
 	_expect(inventory.to_dict() == before_invalid, "invalid commands changed the inventory")
 	_expect(stats.get_level() == level_before_invalid and stats.get_experience() == experience_before_invalid, "invalid commands changed player progression")
@@ -217,6 +238,7 @@ func _setup_processor(processor: DevConsoleCommandProcessor, inventory: Inventor
 		Callable(self, "_handle_structure_command").bind(&"export"),
 		Callable(self, "_handle_structure_command").bind(&"exit"),
 		Callable(self, "_handle_ripple_strength"),
+		Callable(self, "_handle_bird_spawn"),
 	)
 
 func _new_stats() -> ActorStats:
@@ -229,6 +251,10 @@ func _handle_structure_command(action: StringName) -> bool:
 func _handle_ripple_strength(strength: float) -> bool:
 	_ripple_strength = strength
 	return true
+
+func _handle_bird_spawn(variant_id: StringName, count: int) -> bool:
+	_bird_spawn_calls.append({"variant_id": variant_id, "count": count})
+	return _bird_commands_accepted and (variant_id.is_empty() or BirdActor.color_variant_index_for_id(variant_id) >= 0)
 
 func _expect_result(actual: DevConsoleCommandProcessor.ExecutionResult, expected: DevConsoleCommandProcessor.ExecutionResult, message: String) -> void:
 	_expect(actual == expected, message)

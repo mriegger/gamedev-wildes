@@ -19,6 +19,7 @@ class_name BirdBehaviorDefinition
 @export_range(0.1, 15.0, 0.1) var grounded_walk_seconds: float = 2.5
 @export_range(1, 8, 1) var walks_before_takeoff: int = 2
 @export_range(0.1, 10.0, 0.1) var landing_retry_seconds: float = 1.0
+@export_range(0.1, 3.0, 0.05) var water_ripple_interval_seconds: float = 0.55
 
 func validate(source: String) -> bool:
 	var valid := true
@@ -43,7 +44,7 @@ func validate(source: String) -> bool:
 	if not is_finite(landed_idle_min_seconds) or not is_finite(landed_idle_max_seconds) or landed_idle_min_seconds <= 0.0 or landed_idle_min_seconds > landed_idle_max_seconds:
 		push_error("[BirdBehaviorDefinition] Invalid idle range at %s" % source)
 		valid = false
-	if not is_finite(grounded_walk_seconds) or not is_finite(landing_retry_seconds) or grounded_walk_seconds <= 0.0 or landing_retry_seconds <= 0.0 or walks_before_takeoff < 1:
+	if not is_finite(grounded_walk_seconds) or not is_finite(landing_retry_seconds) or not is_finite(water_ripple_interval_seconds) or grounded_walk_seconds <= 0.0 or landing_retry_seconds <= 0.0 or water_ripple_interval_seconds <= 0.0 or walks_before_takeoff < 1:
 		push_error("[BirdBehaviorDefinition] Invalid cycle timing at %s" % source)
 		valid = false
 	return valid

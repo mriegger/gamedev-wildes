@@ -2,11 +2,15 @@ extends SceneTree
 
 const FLAT_HEIGHT: int = 6
 const FEET_Y: float = FLAT_HEIGHT + 1.0
+const WATER_LEVEL: int = 5
+const WATER_FLOOR_HEIGHT: int = 2
+const WATER_SURFACE_Y: float = float(WATER_LEVEL) + VoxelSpace.WATER_SURFACE_HEIGHT
 const WORLD_RADIUS: int = 96
 const FRAME_DELTA: float = 1.0 / 30.0
 const SIMULATION_FRAMES: int = 1800
 
 var _failures: int = 0
+var _water_ripple_events: Array[Dictionary] = []
 
 func _init() -> void:
 	call_deferred(&"_run")
@@ -17,12 +21,12 @@ func _expect(condition: bool, message: String) -> void:
 	_failures += 1
 	push_error("[bird_runtime_integration] FAIL: %s" % message)
 
-func _make_world(floor_id: int = BlockId.Type.GRASS) -> VoxelWorld:
+func _make_world(floor_id: int = BlockId.Type.GRASS, terrain_height: int = FLAT_HEIGHT) -> VoxelWorld:
 	var block_catalog := load("res://blocks/block_catalog.tres") as BlockCatalog
-	var world := VoxelWorld.new(16, 32, 5, 8.0, block_catalog)
+	var world := VoxelWorld.new(16, 32, WATER_LEVEL, 8.0, block_catalog)
 	for x in range(-WORLD_RADIUS, WORLD_RADIUS + 1):
 		for z in range(-WORLD_RADIUS, WORLD_RADIUS + 1):
-			world.height_map_dict[Vector2i(x, z)] = FLAT_HEIGHT
+			world.height_map_dict[Vector2i(x, z)] = terrain_height
 			world.type_map_dict[Vector2i(x, z)] = floor_id
 	return world
 
@@ -40,6 +44,75 @@ func _run() -> void:
 		if not variant_seeds.has(sampled_variant):
 			variant_seeds[sampled_variant] = seed_value
 	_expect(sampled_variants.size() == BirdAnimationDriver.ColorVariant.size(), "seeded birds did not cover all four color variants")
+	var catalog := load("res://entities/entity_catalog.tres") as EntityCatalog
+	var observation := EntityTargetObservation.create(Vector3.ZERO, Vector3.ZERO, Vector3.FORWARD, Vector3.RIGHT)
+	var duck_seed := variant_seeds[BirdAnimationDriver.ColorVariant.DUCK] as int
+	var crow_seed := variant_seeds[BirdAnimationDriver.ColorVariant.CROW] as int
+	var debug_world := _make_world()
+	var debug_coordinator := WorldEntityCoordinator.new()
+	root.add_child(debug_coordinator)
+	debug_coordinator.setup(catalog, debug_world, 81173, Callable(self, "_position_ready"))
+	var debug_player_position := Vector3(0.5, FEET_Y, 0.5)
+	_expect(debug_coordinator.try_spawn_debug_birds(debug_player_position, &"", 4), "mixed debug bird command did not spawn")
+	var debug_variants: Dictionary = {}
+	for actor in debug_coordinator.get_runtime().get_active_actors():
+		debug_variants[(actor as BirdActor).color_variant] = true
+	_expect(debug_variants.size() == BirdAnimationDriver.ColorVariant.size(), "mixed debug bird command did not spawn every variant")
+	_expect(debug_coordinator.try_spawn_debug_birds(debug_player_position, &"redbird", 2), "specific debug bird command did not spawn")
+	var redbird_count := 0
+	for actor in debug_coordinator.get_runtime().get_active_actors():
+		if (actor as BirdActor).color_variant == BirdAnimationDriver.ColorVariant.REDBIRD:
+			redbird_count += 1
+	_expect(redbird_count == 3, "specific debug bird command spawned the wrong variants")
+	var debug_count := debug_coordinator.get_runtime().get_active_count()
+	_expect(not debug_coordinator.try_spawn_debug_birds(debug_player_position, &"goose", 1), "unknown debug bird variant was accepted")
+	_expect(not debug_coordinator.try_spawn_debug_birds(debug_player_position, &"", WorldEntityCoordinator.MAX_TOTAL_ACTIVE), "debug bird command exceeded the runtime cap")
+	_expect(debug_coordinator.get_runtime().get_active_count() == debug_count, "rejected debug bird command changed the runtime")
+	var water_world := _make_world(BlockId.Type.SAND, WATER_FLOOR_HEIGHT)
+	var water_runtime := EntityRuntime.new()
+	root.add_child(water_runtime)
+	water_runtime.setup(catalog, water_world, 2, 2, EntityNavigationLimits.new(24, 256, 1))
+	water_runtime.water_surface_motion_committed.connect(_on_water_surface_motion_committed)
+	var water_ids := water_runtime.try_spawn_batch([
+		EntitySpawnRequest.new(&"bird", Vector3(-0.5, FEET_Y + 10.0, 0.5), crow_seed),
+		EntitySpawnRequest.new(&"bird", Vector3(0.5, FEET_Y + 10.0, 0.5), duck_seed),
+	])
+	var water_crow := water_runtime.get_actor(water_ids[0]) as BirdActor if water_ids.size() == 2 else null
+	var water_duck := water_runtime.get_actor(water_ids[1]) as BirdActor if water_ids.size() == 2 else null
+	_expect(water_crow != null and not water_crow._has_landing_target, "crow selected submerged terrain as a landing target")
+	_expect(water_duck != null and water_duck._has_landing_target and water_duck._landing_on_water, "duck did not select a water landing target")
+	if water_duck != null:
+		_expect(is_equal_approx(water_duck._landing_target.y, WATER_SURFACE_Y), "duck targeted the submerged floor instead of the water surface")
+		var duck_visited_ground := false
+		var duck_visited_takeoff := false
+		for _frame in SIMULATION_FRAMES:
+			water_runtime.tick(FRAME_DELTA, observation)
+			if water_duck.brain.state in [BirdBrain.State.GROUNDED_IDLE, BirdBrain.State.GROUNDED_WALK]:
+				duck_visited_ground = true
+				_expect(is_equal_approx(water_duck.global_position.y, WATER_SURFACE_Y), "grounded duck sank below the water surface")
+			elif duck_visited_ground and water_duck.brain.state == BirdBrain.State.TAKEOFF:
+				duck_visited_takeoff = true
+				break
+		_expect(duck_visited_ground, "duck never landed on the water")
+		_expect(duck_visited_takeoff, "duck became stuck after landing on the water")
+		var observed_landing_ripple := false
+		var observed_swimming_ripple := false
+		for event in _water_ripple_events:
+			var ripple_position := event["position"] as Vector3
+			var ripple_velocity := event["planar_velocity"] as Vector2
+			_expect(is_equal_approx(ripple_position.y, WATER_SURFACE_Y), "duck ripple was not placed on the water surface")
+			observed_landing_ripple = observed_landing_ripple or ripple_velocity.is_zero_approx()
+			observed_swimming_ripple = observed_swimming_ripple or ripple_velocity.length() >= BirdActor.WATER_RIPPLE_MINIMUM_SPEED
+		_expect(observed_landing_ripple, "duck landing did not emit a water ripple")
+		_expect(observed_swimming_ripple, "swimming duck did not emit a directional water ripple")
+		_expect(_water_ripple_events.size() <= 12, "swimming duck emitted unbounded water ripples")
+	if water_crow != null:
+		water_crow.global_position = Vector3(-0.5, float(WATER_FLOOR_HEIGHT + 1), 0.5)
+		water_crow.velocity = Vector3.ZERO
+		water_crow.on_ground = true
+		water_crow.brain.state = BirdBrain.State.DESCEND
+		water_crow.tick(FRAME_DELTA, observation, Vector3.ZERO, NavigationSearchBudget.new(1))
+		_expect(water_crow.brain.state == BirdBrain.State.TAKEOFF and not water_crow.on_ground, "crow did not escape an invalid underwater landing")
 	var world := _make_world()
 	var aerial_position := Vector3(0.5, FEET_Y + 10.0, 0.5)
 	_expect(EntitySpawnGeometry.can_spawn(world, definition, aerial_position), "clear aerial position was rejected")
@@ -48,9 +121,7 @@ func _run() -> void:
 
 	var runtime := EntityRuntime.new()
 	root.add_child(runtime)
-	var catalog := load("res://entities/entity_catalog.tres") as EntityCatalog
 	runtime.setup(catalog, world, WorldEntityCoordinator.MAX_TOTAL_ACTIVE, WorldEntityCoordinator.MAX_RETIRING_VISUALS, EntityNavigationLimits.new(24, 256, 1))
-	var observation := EntityTargetObservation.create(Vector3.ZERO, Vector3.ZERO, Vector3.FORWARD, Vector3.RIGHT)
 	var requests: Array[EntitySpawnRequest] = [EntitySpawnRequest.new(&"bird", aerial_position, 7171)]
 	var runtime_ids := runtime.try_spawn_batch(requests)
 	_expect(runtime_ids == [1], "bird did not spawn through EntityRuntime")
@@ -103,7 +174,6 @@ func _run() -> void:
 	var canopy_runtime := EntityRuntime.new()
 	root.add_child(canopy_runtime)
 	canopy_runtime.setup(catalog, canopy_world, 1, 1, EntityNavigationLimits.new(24, 256, 1))
-	var duck_seed := variant_seeds[BirdAnimationDriver.ColorVariant.DUCK] as int
 	var canopy_ids := canopy_runtime.try_spawn_batch([EntitySpawnRequest.new(&"bird", aerial_position, duck_seed)])
 	var canopy_bird := canopy_runtime.get_actor(canopy_ids[0]) as BirdActor if not canopy_ids.is_empty() else null
 	_expect(canopy_bird != null, "canopy test bird did not spawn")
@@ -137,14 +207,13 @@ func _run() -> void:
 		canopy_bird.brain.state = BirdBrain.State.DESCEND
 		canopy_bird._update_vocalizations()
 		canopy_bird.tick(FRAME_DELTA, observation, Vector3.ZERO, NavigationSearchBudget.new(1))
-		_expect(canopy_bird.brain.state == BirdBrain.State.CRUISE, "bird accepted leaves as a landing surface")
+		_expect(canopy_bird.brain.state == BirdBrain.State.TAKEOFF, "bird did not escape a landing on leaves")
 		_expect(not canopy_bird.vocalizations.is_processing(), "bird vocalized after landing on leaves")
 
 	var blocked_world := _make_world(BlockId.Type.STONE)
 	var blocked_runtime := EntityRuntime.new()
 	root.add_child(blocked_runtime)
 	blocked_runtime.setup(catalog, blocked_world, 1, 1, EntityNavigationLimits.new(24, 256, 1))
-	var crow_seed := variant_seeds[BirdAnimationDriver.ColorVariant.CROW] as int
 	var blocked_ids := blocked_runtime.try_spawn_batch([EntitySpawnRequest.new(&"bird", aerial_position, crow_seed)])
 	var blocked_bird := blocked_runtime.get_actor(blocked_ids[0]) as BirdActor if not blocked_ids.is_empty() else null
 	_expect(blocked_bird != null and not blocked_bird._has_landing_target, "bird selected a disallowed landing floor")
@@ -168,9 +237,13 @@ func _run() -> void:
 	blocked_runtime.shutdown()
 	canopy_runtime.shutdown()
 	runtime.shutdown()
+	water_runtime.shutdown()
+	debug_coordinator.shutdown()
 	blocked_runtime.queue_free()
 	canopy_runtime.queue_free()
 	runtime.queue_free()
+	water_runtime.queue_free()
+	debug_coordinator.queue_free()
 	await process_frame
 	await process_frame
 	var orphan_count := int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
@@ -181,3 +254,9 @@ func _run() -> void:
 	else:
 		print("BIRD_RUNTIME_INTEGRATION FAIL failures=%d" % _failures)
 		quit(1)
+
+func _position_ready(_position: Vector3) -> bool:
+	return true
+
+func _on_water_surface_motion_committed(position: Vector3, planar_velocity: Vector2) -> void:
+	_water_ripple_events.append({"position": position, "planar_velocity": planar_velocity})

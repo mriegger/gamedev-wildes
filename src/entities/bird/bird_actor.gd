@@ -3,6 +3,8 @@ class_name BirdActor
 
 const LANDING_SEARCH_ATTEMPTS: int = 8
 const FLIGHT_GOAL_DISTANCE: float = 0.8
+const WATER_SURFACE_SEARCH_HEIGHT: int = 32
+const WATER_RIPPLE_MINIMUM_SPEED: float = 0.15
 
 @export var vocalization_profiles: Array[EntityVocalizationProfile] = []
 
@@ -15,7 +17,9 @@ var _landing_target: Vector3 = Vector3.ZERO
 var _cruise_target: Vector3 = Vector3.ZERO
 var _takeoff_target_y: float = 0.0
 var _has_landing_target: bool = false
+var _landing_on_water: bool = false
 var _landing_retry_remaining: float = 0.0
+var _water_ripple_remaining: float = 0.0
 
 func supports_behavior(behavior: EntityBehaviorDefinition) -> bool:
 	return behavior is BirdBehaviorDefinition
@@ -38,6 +42,7 @@ func setup(
 	(animation_driver as BirdAnimationDriver).apply_color_variant(color_variant)
 	on_ground = false
 	max_speed = _behavior.flight_speed
+	_water_ripple_remaining = 0.0
 	_try_select_landing_target()
 	_update_vocalizations()
 
@@ -45,6 +50,32 @@ static func color_variant_for_seed(seed_value: int) -> BirdAnimationDriver.Color
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value ^ 0x4b1d5eed
 	return rng.randi_range(BirdAnimationDriver.ColorVariant.CROW, BirdAnimationDriver.ColorVariant.BLUEBIRD) as BirdAnimationDriver.ColorVariant
+
+static func color_variant_index_for_id(variant_id: StringName) -> int:
+	match variant_id:
+		&"crow":
+			return BirdAnimationDriver.ColorVariant.CROW
+		&"redbird":
+			return BirdAnimationDriver.ColorVariant.REDBIRD
+		&"duck":
+			return BirdAnimationDriver.ColorVariant.DUCK
+		&"bluebird":
+			return BirdAnimationDriver.ColorVariant.BLUEBIRD
+	return -1
+
+static func color_variant_count() -> int:
+	return BirdAnimationDriver.ColorVariant.size()
+
+static func behavior_seed_for_color_variant_index(variant_index: int, seed_start: int) -> int:
+	assert(variant_index >= BirdAnimationDriver.ColorVariant.CROW and variant_index <= BirdAnimationDriver.ColorVariant.BLUEBIRD)
+	var variant := variant_index as BirdAnimationDriver.ColorVariant
+	var candidate := seed_start
+	for _attempt in 256:
+		if color_variant_for_seed(candidate) == variant:
+			return candidate
+		candidate += 1
+	assert(false)
+	return seed_start
 
 func tick(delta: float, _observation: EntityTargetObservation, separation_velocity: Vector3, navigation_search_budget: NavigationSearchBudget):
 	assert(brain != null and voxel_space != null)
@@ -69,6 +100,13 @@ func _update_vocalizations() -> void:
 	vocalizations.set_vocalizations_enabled(can_call)
 
 func _has_approved_ground_contact() -> bool:
+	var water_surface_y := _get_water_surface_y(floori(global_position.x), floori(global_position.z))
+	if water_surface_y != VoxelSpace.NO_SURFACE_Y:
+		if absf(water_surface_y - global_position.y) < 0.12:
+			return _can_land_on_water()
+		var feet_cell := Vector3i(floori(global_position.x), floori(global_position.y + 0.05), floori(global_position.z))
+		if voxel_space.get_block_id_at(feet_cell) == BlockId.Type.WATER:
+			return false
 	var ground_y := VoxelBodySolver.get_ground_y(voxel_space, global_position, definition.body_width)
 	var supporting_block_id := VoxelBodySolver.get_supporting_block_id(voxel_space, global_position, definition.body_width, ground_y)
 	return definition.can_spawn_ambiently_on(supporting_block_id)
@@ -82,6 +120,9 @@ func _configure_vocalizations(behavior_seed: int) -> void:
 	vocalizations.setup(behavior_seed)
 
 func _advance_grounded(delta: float, separation_velocity: Vector3, navigation_search_budget: NavigationSearchBudget) -> void:
+	if _can_land_on_water() and _is_on_water_surface(global_position):
+		_advance_waterborne(delta, separation_velocity)
+		return
 	max_speed = _behavior.grounded_walk_speed
 	var desired_velocity := Vector3.ZERO
 	if brain.state == BirdBrain.State.GROUNDED_WALK:
@@ -92,6 +133,34 @@ func _advance_grounded(delta: float, separation_velocity: Vector3, navigation_se
 			desired_velocity = apply_path_follow_result(result, delta, _behavior.jump_velocity)
 	desired_velocity = limit_planar_velocity(desired_velocity + separation_velocity, max_speed)
 	advance_voxel_motion(delta, desired_velocity, _behavior.gravity)
+
+func _advance_waterborne(delta: float, separation_velocity: Vector3) -> void:
+	_water_ripple_remaining = maxf(_water_ripple_remaining - delta, 0.0)
+	max_speed = _behavior.grounded_walk_speed
+	var desired_velocity := separation_velocity
+	if brain.state == BirdBrain.State.GROUNDED_WALK:
+		var offset := brain.get_movement_goal() - global_position
+		offset.y = 0.0
+		if not offset.is_zero_approx():
+			desired_velocity += offset.normalized() * max_speed
+	desired_velocity = limit_planar_velocity(desired_velocity, max_speed)
+	var requested_position := global_position + desired_velocity * delta
+	if not _is_on_water_surface(requested_position):
+		desired_velocity = Vector3.ZERO
+	var result := VoxelBodySolver.sweep(voxel_space, global_position, desired_velocity, desired_velocity * delta, definition.body_width, definition.body_height)
+	if _is_on_water_surface(result.position):
+		global_position = result.position
+		global_position.y = _get_water_surface_y(floori(global_position.x), floori(global_position.z))
+		velocity = result.velocity
+	else:
+		velocity = Vector3.ZERO
+	velocity.y = 0.0
+	on_ground = true
+	_apply_flight_yaw(delta, velocity)
+	var planar_velocity := Vector2(velocity.x, velocity.z)
+	if planar_velocity.length() >= WATER_RIPPLE_MINIMUM_SPEED and _water_ripple_remaining <= 0.0:
+		water_surface_motion_committed.emit(global_position, planar_velocity)
+		_water_ripple_remaining = _behavior.water_ripple_interval_seconds
 
 func _advance_airborne(delta: float, separation_velocity: Vector3) -> void:
 	if brain.state == BirdBrain.State.CRUISE and not _has_landing_target:
@@ -112,6 +181,13 @@ func _advance_airborne(delta: float, separation_velocity: Vector3) -> void:
 	_apply_flight_yaw(delta, velocity)
 	var start_position := global_position
 	var requested_motion := velocity * delta
+	if brain.state == BirdBrain.State.DESCEND and _landing_on_water and global_position.distance_to(_landing_target) <= requested_motion.length() + 0.05:
+		global_position = _landing_target
+		velocity = Vector3.ZERO
+		on_ground = true
+		water_surface_motion_committed.emit(global_position, Vector2.ZERO)
+		_water_ripple_remaining = _behavior.water_ripple_interval_seconds
+		return
 	var result := VoxelBodySolver.sweep(voxel_space, global_position, velocity, requested_motion, definition.body_width, definition.body_height)
 	global_position = result.position
 	velocity = result.velocity
@@ -124,10 +200,12 @@ func _advance_airborne(delta: float, separation_velocity: Vector3) -> void:
 	if blocked and brain.state == BirdBrain.State.TAKEOFF:
 		brain.reject_takeoff()
 		_has_landing_target = false
+		_landing_on_water = false
 		velocity = Vector3.ZERO
 	elif blocked and not on_ground:
 		brain.reject_flight_goal()
 		_has_landing_target = false
+		_landing_on_water = false
 		_landing_retry_remaining = _behavior.landing_retry_seconds
 		velocity.y = maxf(velocity.y, _behavior.takeoff_speed * 0.5)
 
@@ -174,6 +252,7 @@ func _handle_state_transition(previous_state: BirdBrain.State, current_state: Bi
 		on_ground = false
 	elif current_state == BirdBrain.State.CRUISE:
 		_has_landing_target = false
+		_landing_on_water = false
 		_try_select_landing_target()
 
 func _has_takeoff_clearance() -> bool:
@@ -189,6 +268,19 @@ func _try_select_landing_target() -> bool:
 		var surface_top := voxel_space.get_highest_top(x, z)
 		if surface_top == VoxelSpace.NO_SURFACE_Y:
 			continue
+		var water_surface_y := _get_water_surface_y(x, z)
+		if water_surface_y != VoxelSpace.NO_SURFACE_Y:
+			if not _can_land_on_water():
+				continue
+			var water_candidate := Vector3(float(x) + 0.5, water_surface_y, float(z) + 0.5)
+			if VoxelBodySolver.collides_at(voxel_space, water_candidate, definition.body_width, definition.body_height, false):
+				continue
+			_landing_target = water_candidate
+			_cruise_target = water_candidate + Vector3.UP * float(brain.sample_cruise_altitude())
+			_has_landing_target = true
+			_landing_on_water = true
+			_landing_retry_remaining = 0.0
+			return true
 		var floor_y := floori(surface_top - 0.001)
 		if not definition.can_spawn_ambiently_on(voxel_space.get_block_id_at(Vector3i(x, floor_y, z))):
 			continue
@@ -198,11 +290,33 @@ func _try_select_landing_target() -> bool:
 		_landing_target = landing_candidate
 		_cruise_target = landing_candidate + Vector3.UP * float(brain.sample_cruise_altitude())
 		_has_landing_target = true
+		_landing_on_water = false
 		_landing_retry_remaining = 0.0
 		return true
 	_has_landing_target = false
+	_landing_on_water = false
 	_landing_retry_remaining = _behavior.landing_retry_seconds
 	return false
+
+func _can_land_on_water() -> bool:
+	return color_variant == BirdAnimationDriver.ColorVariant.DUCK
+
+func _is_on_water_surface(position: Vector3) -> bool:
+	var water_surface_y := _get_water_surface_y(floori(position.x), floori(position.z))
+	return water_surface_y != VoxelSpace.NO_SURFACE_Y and absf(water_surface_y - position.y) < 0.12
+
+func _get_water_surface_y(x: int, z: int) -> float:
+	var solid_top := voxel_space.get_highest_top(x, z)
+	if solid_top == VoxelSpace.NO_SURFACE_Y:
+		return VoxelSpace.NO_SURFACE_Y
+	var water_y := floori(solid_top)
+	if voxel_space.get_block_id_at(Vector3i(x, water_y, z)) != BlockId.Type.WATER:
+		return VoxelSpace.NO_SURFACE_Y
+	for _step in WATER_SURFACE_SEARCH_HEIGHT:
+		if voxel_space.get_block_id_at(Vector3i(x, water_y + 1, z)) != BlockId.Type.WATER:
+			return float(water_y) + VoxelSpace.WATER_SURFACE_HEIGHT
+		water_y += 1
+	return VoxelSpace.NO_SURFACE_Y
 
 func _apply_flight_yaw(delta: float, flight_velocity: Vector3) -> void:
 	var planar_velocity := Vector2(flight_velocity.x, flight_velocity.z)

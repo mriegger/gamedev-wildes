@@ -74,7 +74,7 @@ func reject_takeoff() -> void:
 func reject_ground_contact() -> void:
 	if state != State.CRUISE:
 		_walks_done = 0
-		state = State.CRUISE
+		state = State.TAKEOFF
 
 func _finish_walk() -> void:
 	_walks_done += 1

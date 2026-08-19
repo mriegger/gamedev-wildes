@@ -187,6 +187,7 @@ func _ready():
 		Callable(self, "_request_export_structure"),
 		Callable(self, "_request_exit_structure"),
 		Callable(world, "try_set_water_ripple_strength"),
+		Callable(self, "_spawn_debug_birds"),
 	)
 	if not _restore_chest_state(chest_block):
 		_fail_session_start("This world could not be loaded because its saved chest state is invalid or references unavailable content. The save was not changed.")
@@ -376,6 +377,7 @@ func _setup_gameplay() -> bool:
 		_can_break_block,
 	)
 	player.water_step_committed.connect(world.play_water_ripple)
+	world_entities.water_surface_motion_committed.connect(world.play_water_ripple)
 	overworld_loot.setup(
 		entity_catalog,
 		item_catalog,
@@ -774,6 +776,9 @@ func _request_exit_structure() -> bool:
 	if _structure_transitioning or _structure_designer_runtime == null:
 		return false
 	return structure_designer_workflow.request_exit()
+
+func _spawn_debug_birds(variant_id: StringName, count: int) -> bool:
+	return world_entity_coordinator.try_spawn_debug_birds(player.global_position, variant_id, count)
 
 func _on_structure_designer_entry_requested(draft: StructureDraft) -> void:
 	assert(_structure_designer_runtime == null)

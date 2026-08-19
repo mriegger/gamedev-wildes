@@ -35,6 +35,7 @@ func _process(_delta: float) -> bool:
 			Callable(self, "_handle_structure_command").bind(&"export"),
 			Callable(self, "_handle_structure_command").bind(&"exit"),
 			Callable(self, "_handle_ripple_strength"),
+			Callable(self, "_handle_bird_spawn"),
 		)
 		_check_closed_layout()
 		_check_scene_ownership()
@@ -159,6 +160,9 @@ func _handle_structure_command(action: StringName) -> bool:
 
 func _handle_ripple_strength(strength: float) -> bool:
 	_ripple_strength = strength
+	return true
+
+func _handle_bird_spawn(_variant_id: StringName, _count: int) -> bool:
 	return true
 
 func _finish() -> void:
