@@ -303,6 +303,10 @@ func has_definition(id: StringName) -> bool:
 	_ensure_lookup()
 	return _definitions_by_id.has(id)
 
+func has_equipment_type(id: StringName) -> bool:
+	_ensure_lookup()
+	return _equipment_types_by_id.has(id)
+
 func get_equipment_type(id: StringName) -> EquipmentTypeDefinition:
 	_ensure_lookup()
 	assert(_equipment_types_by_id.has(id))

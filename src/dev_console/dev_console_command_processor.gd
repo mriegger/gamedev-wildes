@@ -14,6 +14,7 @@ const MAXIMUM_GIVE_XP_AMOUNT: int = 999_999_999
 
 var inventory_model: InventoryModel
 var actor_stats: ActorStats
+var inventory_loadout: InventoryLoadoutCoordinator
 var pumpkin_patch: PumpkinPatchCoordinator
 var _new_structure: Callable
 var _import_structure: Callable
@@ -23,6 +24,7 @@ var _set_ripple_strength: Callable
 
 func setup(
 	p_inventory_model: InventoryModel,
+	p_inventory_loadout: InventoryLoadoutCoordinator,
 	p_actor_stats: ActorStats,
 	p_pumpkin_patch: PumpkinPatchCoordinator,
 	p_new_structure: Callable,
@@ -31,14 +33,17 @@ func setup(
 	p_exit_structure: Callable,
 	p_set_ripple_strength: Callable,
 ) -> void:
-	assert(p_inventory_model != null and p_actor_stats != null and p_pumpkin_patch != null)
-	assert(inventory_model == null and actor_stats == null and pumpkin_patch == null)
+	assert(p_inventory_model != null and p_inventory_loadout != null and p_actor_stats != null and p_pumpkin_patch != null)
+	assert(p_inventory_loadout.inventory_model == p_inventory_model)
+	assert(p_inventory_loadout.actor_stats == p_actor_stats)
+	assert(inventory_model == null and inventory_loadout == null and actor_stats == null and pumpkin_patch == null)
 	assert(p_new_structure.is_valid())
 	assert(p_import_structure.is_valid())
 	assert(p_export_structure.is_valid())
 	assert(p_exit_structure.is_valid())
 	assert(p_set_ripple_strength.is_valid())
 	inventory_model = p_inventory_model
+	inventory_loadout = p_inventory_loadout
 	actor_stats = p_actor_stats
 	pumpkin_patch = p_pumpkin_patch
 	_new_structure = p_new_structure
@@ -48,7 +53,7 @@ func setup(
 	_set_ripple_strength = p_set_ripple_strength
 
 func execute(command_line: String) -> ExecutionResult:
-	if inventory_model == null or actor_stats == null or pumpkin_patch == null:
+	if inventory_model == null or inventory_loadout == null or actor_stats == null or pumpkin_patch == null:
 		return ExecutionResult.REJECTED
 	var tokens := command_line.strip_edges().split(" ", false)
 	if tokens.is_empty():
@@ -85,7 +90,7 @@ func _execute_spawn(tokens: PackedStringArray) -> ExecutionResult:
 	var item_id := _resolve_item_id(" ".join(item_name_parts))
 	if item_id.is_empty():
 		return ExecutionResult.REJECTED
-	if not inventory_model.add_backpack_item(item_id, count):
+	if not inventory_loadout.add_backpack_item(item_id, count):
 		return ExecutionResult.REJECTED
 	return ExecutionResult.KEEP_OPEN
 

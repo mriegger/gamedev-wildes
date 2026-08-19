@@ -20,8 +20,8 @@ func _run() -> void:
 	var inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	inventory.setup_starter()
 	var stats := ActorStats.new(stats_definition)
-	var coordinator := InventoryStatCoordinator.new()
-	_expect(coordinator.setup(inventory, stats), "inventory stat coordinator setup failed")
+	var coordinator := InventoryLoadoutCoordinator.new()
+	_expect(coordinator.setup(inventory, stats, ItemProficiency.new(inventory.item_catalog)), "inventory stat coordinator setup failed")
 
 	var player_visual_scene := load("res://player/visuals/player_visual.tscn") as PackedScene
 	var player_visual := player_visual_scene.instantiate() as BlockyHumanoidAnimator
@@ -38,7 +38,7 @@ func _run() -> void:
 	_expect(armor_view.get_displayed_armor_id(ArmorDefinition.Slot.HEAD) == &"copper_helmet", "helmet visual ID did not synchronize")
 	_expect(armor_view.get_visual_part_count(ArmorDefinition.Slot.HEAD) == VISUAL_PART_COUNTS[ArmorDefinition.Slot.HEAD], "helmet visuals were not created")
 	var helmet_instance_id := armor_view.get_visual_part_instance_id(ArmorDefinition.Slot.HEAD, 0)
-	_expect(inventory.select_slot(1), "unrelated inventory selection failed")
+	_expect(coordinator.select_slot(1), "unrelated inventory selection failed")
 	_expect(armor_view.get_visual_part_instance_id(ArmorDefinition.Slot.HEAD, 0) == helmet_instance_id, "unrelated inventory change rebuilt helmet visuals")
 
 	for armor_slot in range(1, ArmorDefinition.SLOT_COUNT):
@@ -76,8 +76,8 @@ func _run() -> void:
 	)
 	_expect(restored_inventory.from_dict(equipped_snapshot), "equipped inventory restore failed")
 	var restored_stats := ActorStats.new(stats_definition)
-	var restored_coordinator := InventoryStatCoordinator.new()
-	_expect(restored_coordinator.setup(restored_inventory, restored_stats), "restored inventory coordinator setup failed")
+	var restored_coordinator := InventoryLoadoutCoordinator.new()
+	_expect(restored_coordinator.setup(restored_inventory, restored_stats, ItemProficiency.new(restored_inventory.item_catalog)), "restored inventory coordinator setup failed")
 	var restored_player_visual := player_visual_scene.instantiate() as BlockyHumanoidAnimator
 	root.add_child(restored_player_visual)
 	await process_frame
@@ -106,7 +106,7 @@ func _run() -> void:
 		quit(1)
 
 func _find_item(inventory: InventoryModel, item_id: StringName) -> int:
-	for index in range(inventory.size):
+	for index in range(inventory.get_size()):
 		var stack := inventory.get_slot(index)
 		if stack != null and stack.item_id == item_id:
 			return index

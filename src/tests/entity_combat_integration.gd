@@ -344,9 +344,18 @@ func _run() -> void:
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
 	var inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	inventory.setup_starter()
-	inventory.select_slot(3)
+	var inventory_loadout := InventoryTestFixture.create_loadout(inventory, player_stats)
+	_expect(inventory_loadout != null and inventory_loadout.select_slot(3), "player combat sword selection failed")
 	var input_buffer := InputBuffer.new()
-	player.interactor.setup(camera, player, inventory, input_buffer, combat, coordinator.get_runtime())
+	player.interactor.setup(
+		camera,
+		player,
+		inventory,
+		inventory_loadout,
+		input_buffer,
+		combat,
+		coordinator.get_runtime(),
+	)
 	player.interactor.bind_space(world, world)
 	player.voxel_space = world
 	player.stats = player_stats
@@ -694,6 +703,8 @@ func _test_sheep_damage(world: VoxelWorld, sword_profile: MeleeAttackProfile) ->
 	var inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	inventory.setup_starter()
 	var item_proficiency := ItemProficiency.new(item_catalog)
+	var inventory_loadout := InventoryTestFixture.create_loadout(inventory, player_stats, item_proficiency)
+	_expect(inventory_loadout != null and inventory_loadout.select_slot(3), "sheep combat sword selection failed")
 	var progression := CombatProgressionCoordinator.new()
 	progression.setup(player_stats, inventory, load("res://entities/entity_catalog.tres") as EntityCatalog, item_proficiency)
 	combat.melee_outcome_committed.connect(progression.record_melee_outcome)
@@ -1083,9 +1094,18 @@ func _test_multi_target_interactor_timing(world: VoxelWorld, sword_profile: Mele
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
 	var inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	inventory.setup_starter()
-	inventory.select_slot(3)
+	var inventory_loadout := InventoryTestFixture.create_loadout(inventory, fixture["player_stats"] as ActorStats)
+	_expect(inventory_loadout != null and inventory_loadout.select_slot(3), "interactor timing sword selection failed")
 	var input_buffer := InputBuffer.new()
-	player.interactor.setup(camera, player, inventory, input_buffer, combat, coordinator.get_runtime())
+	player.interactor.setup(
+		camera,
+		player,
+		inventory,
+		inventory_loadout,
+		input_buffer,
+		combat,
+		coordinator.get_runtime(),
+	)
 	player.interactor.bind_space(world, world)
 	var sword_action := item_catalog.get_definition(&"copper_sword").primary_action as MeleeAttackActionDefinition
 	player.interactor.melee_attack_action = sword_action
@@ -1138,9 +1158,23 @@ func _test_hammer_slam(world: VoxelWorld, hammer_profile: MeleeAttackProfile) ->
 		return
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
 	var inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
-	inventory.slots[0] = InventoryStack.new(&"copper_hammer", 1)
+	_expect(inventory.setup_empty(), "hammer fixture inventory setup failed")
+	var inventory_loadout := InventoryTestFixture.create_loadout(inventory)
+	_expect(inventory_loadout != null, "hammer fixture loadout setup failed")
+	var hammer_instance := inventory.equipment_instance_factory.create(&"copper_hammer")
+	_expect(hammer_instance != null and inventory_loadout.add_stack(InventoryStack.new(&"copper_hammer", 1, hammer_instance)), "hammer fixture could not add its selected hammer")
+	var selected_index := inventory.get_selected_slot()
+	var hammer_index := -1
+	for index in range(InventoryModel.FILLABLE_SIZE):
+		var stack := inventory.get_slot(index)
+		if stack != null and stack.equipment_instance != null and stack.equipment_instance.instance_id == hammer_instance.instance_id:
+			hammer_index = index
+			break
+	_expect(hammer_index >= 0 and (hammer_index == selected_index or inventory_loadout.assign_slot_to_hotbar(hammer_index, selected_index)), "hammer fixture could not move its hammer to the selected slot")
+	var selected_hammer := inventory.get_equipment_instance_copy(selected_index)
+	_expect(selected_hammer != null and selected_hammer.instance_id == hammer_instance.instance_id, "hammer fixture did not select its hammer instance")
 	var input_buffer := InputBuffer.new()
-	player.interactor.setup(camera, player, inventory, input_buffer, combat, coordinator.get_runtime())
+	player.interactor.setup(camera, player, inventory, inventory_loadout, input_buffer, combat, coordinator.get_runtime())
 	player.interactor.bind_space(world, world)
 	var hammer_action := item_catalog.get_definition(&"copper_hammer").primary_action as MeleeAttackActionDefinition
 	player.interactor.melee_attack_action = hammer_action

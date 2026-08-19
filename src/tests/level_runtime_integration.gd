@@ -325,11 +325,15 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	environment.setup(6.0, settings.get_shadow_distance())
 	environment.apply_settings(settings)
 	environment.start_clock()
-	game.inventory_model = InventoryModel.new(game.item_catalog, EquipmentInstanceFactory.new(game.item_catalog))
+	game.equipment_instance_factory = EquipmentInstanceFactory.new(game.item_catalog)
+	game.inventory_model = InventoryModel.new(game.item_catalog, game.equipment_instance_factory)
 	game.inventory_model.setup_starter()
 	game.player_stats = ActorStats.new(game.player_stats_definition)
+	game.inventory_loadout_coordinator = InventoryTestFixture.create_loadout(game.inventory_model, game.player_stats)
+	_expect(game.inventory_loadout_coordinator != null, "transition inventory loadout setup failed")
 	dev_console.setup(
 		game.inventory_model,
+		game.inventory_loadout_coordinator,
 		game.player_stats,
 		pumpkin_patch,
 		Callable(game, "_request_new_structure"),
@@ -344,7 +348,15 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	entities.setup(game.entity_catalog, voxel_world, 1337, _position_ready)
 	combat.setup(voxel_world, player, game.player_stats, entities.get_runtime())
 	enemy_combat_feedback.setup(combat, camera_rig.camera)
-	player.setup(camera_rig, game.inventory_model, game.input_buffer, game.player_stats, combat, entities.get_runtime())
+	player.setup(
+		camera_rig,
+		game.inventory_model,
+		game.inventory_loadout_coordinator,
+		game.input_buffer,
+		game.player_stats,
+		combat,
+		entities.get_runtime(),
+	)
 	game._bind_entity_context(voxel_world, entities.get_runtime())
 	var world_entity_runtime := entities.get_runtime()
 	var world_spawn := voxel_world.get_spawn_position()

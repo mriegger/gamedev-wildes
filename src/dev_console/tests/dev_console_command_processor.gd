@@ -25,8 +25,8 @@ func _init() -> void:
 	var inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	var pumpkin_patch := PumpkinPatchStub.new()
 	var stats := ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
-	inventory.slots[0] = InventoryStack.new(&"stone_block", 4)
-	inventory.slots[InventoryModel.HOTBAR_SIZE] = InventoryStack.new(&"stone_block", 10)
+	InventoryTestFixture.restore_slot(inventory, 0, InventoryStack.new(&"stone_block", 4))
+	InventoryTestFixture.restore_slot(inventory, InventoryModel.HOTBAR_SIZE, InventoryStack.new(&"stone_block", 10))
 	var processor := DevConsoleCommandProcessor.new()
 	_setup_processor(processor, inventory, stats, pumpkin_patch)
 	_expect_result(processor.execute("spawn pumpkin_patch"), DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN, "pumpkin patch spawn command failed")
@@ -44,20 +44,20 @@ func _init() -> void:
 	for definition in item_catalog.definitions:
 		var definition_inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 		var definition_processor := DevConsoleCommandProcessor.new()
-		_setup_processor(definition_processor, definition_inventory, stats, pumpkin_patch)
+		_setup_processor(definition_processor, definition_inventory, _new_stats(), pumpkin_patch)
 		_expect_result(definition_processor.execute("spawn %s 1" % definition.id), DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN, "canonical item ID failed for %s" % definition.id)
 		_expect(definition_inventory.get_backpack_item_count(definition.id) == 1, "%s ID did not add one item" % definition.id)
 		_expect_result(definition_processor.execute("spawn %s 1" % definition.display_name), DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN, "display name failed for %s" % definition.display_name)
 		_expect(definition_inventory.get_backpack_item_count(definition.id) == 2, "%s display name did not add one item" % definition.display_name)
 	var multi_word_inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	var multi_word_processor := DevConsoleCommandProcessor.new()
-	_setup_processor(multi_word_processor, multi_word_inventory, stats, pumpkin_patch)
+	_setup_processor(multi_word_processor, multi_word_inventory, _new_stats(), pumpkin_patch)
 	_expect_result(multi_word_processor.execute("spawn Copper Pickaxe"), DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN, "multi-word display name failed without a count")
 	_expect(multi_word_inventory.get_backpack_item_count(&"copper_pickaxe") == 1, "multi-word display name did not default to one item")
 
 	var alias_inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	var alias_processor := DevConsoleCommandProcessor.new()
-	_setup_processor(alias_processor, alias_inventory, stats, pumpkin_patch)
+	_setup_processor(alias_processor, alias_inventory, _new_stats(), pumpkin_patch)
 	var expected_aliases: Dictionary[String, StringName] = {
 		"torches": &"torch",
 	}
@@ -66,9 +66,9 @@ func _init() -> void:
 		_expect(alias_inventory.get_backpack_item_count(expected_aliases[alias]) == 1, "%s alias spawned the wrong item" % alias)
 
 	var split_stack_inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
-	split_stack_inventory.slots[InventoryModel.HOTBAR_SIZE] = InventoryStack.new(&"stone_block", 98)
+	InventoryTestFixture.restore_slot(split_stack_inventory, InventoryModel.HOTBAR_SIZE, InventoryStack.new(&"stone_block", 98))
 	var split_stack_processor := DevConsoleCommandProcessor.new()
-	_setup_processor(split_stack_processor, split_stack_inventory, stats, pumpkin_patch)
+	_setup_processor(split_stack_processor, split_stack_inventory, _new_stats(), pumpkin_patch)
 	_expect_result(split_stack_processor.execute("SPAWN STONE 3"), DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN, "case-insensitive spawn command failed")
 	_expect(split_stack_inventory.get_slot(InventoryModel.HOTBAR_SIZE).count == 99, "spawn did not fill the existing stack first")
 	_expect(split_stack_inventory.get_slot(InventoryModel.HOTBAR_SIZE + 1).count == 2, "spawn did not place overflow in a new stack")
@@ -95,11 +95,11 @@ func _init() -> void:
 	_expect(_structure_calls.size() == structure_call_count, "invalid structure command called a handler")
 
 	_expect_result(processor.execute("give_xp 99"), DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN, "give_xp command failed")
-	_expect(stats.level == 1 and stats.experience == 99, "give_xp did not add raw experience")
+	_expect(stats.get_level() == 1 and stats.get_experience() == 99, "give_xp did not add raw experience")
 	_expect_result(processor.execute("GIVE_XP 126"), DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN, "case-insensitive give_xp command failed")
-	_expect(stats.level == 3 and stats.experience == 0, "give_xp did not apply multi-level progression")
+	_expect(stats.get_level() == 3 and stats.get_experience() == 0, "give_xp did not apply multi-level progression")
 	_expect_result(processor.execute("give_xp +1"), DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN, "explicitly positive give_xp command failed")
-	_expect(stats.level == 3 and stats.experience == 1, "explicitly positive give_xp command changed progression incorrectly")
+	_expect(stats.get_level() == 3 and stats.get_experience() == 1, "explicitly positive give_xp command changed progression incorrectly")
 	stats.damage(75.0)
 	_expect_result(processor.execute("sethealth 42"), DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN, "sethealth command failed")
 	_expect(is_equal_approx(stats.current_hp, 42.0), "sethealth did not set integer health")
@@ -138,8 +138,8 @@ func _init() -> void:
 	_expect(maximum_grant_stats.snapshot_progression() == maximum_grant_progress, "oversized give_xp amount changed progression")
 
 	var before_invalid := inventory.to_dict()
-	var level_before_invalid := stats.level
-	var experience_before_invalid := stats.experience
+	var level_before_invalid := stats.get_level()
+	var experience_before_invalid := stats.get_experience()
 	var health_before_invalid := stats.current_hp
 	var ripple_strength_before_invalid := _ripple_strength
 	_expect_result(processor.execute("spawn unknown_item 1"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "unknown item command was accepted")
@@ -176,16 +176,16 @@ func _init() -> void:
 	_expect_result(processor.execute("spawn pumpkin_patch 1"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "pumpkin patch count argument was accepted")
 	_expect(pumpkin_patch.spawn_count == 1, "invalid pumpkin patch command invoked the coordinator")
 	_expect(inventory.to_dict() == before_invalid, "invalid commands changed the inventory")
-	_expect(stats.level == level_before_invalid and stats.experience == experience_before_invalid, "invalid commands changed player progression")
+	_expect(stats.get_level() == level_before_invalid and stats.get_experience() == experience_before_invalid, "invalid commands changed player progression")
 	_expect(is_equal_approx(stats.current_hp, health_before_invalid), "invalid commands changed player health")
 	_expect(is_equal_approx(_ripple_strength, ripple_strength_before_invalid), "invalid commands changed ripple strength")
 
 	var full_inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	for index in range(InventoryModel.HOTBAR_SIZE, InventoryModel.FILLABLE_SIZE):
-		full_inventory.slots[index] = InventoryStack.new(&"dirt_block", 99)
+		InventoryTestFixture.restore_slot(full_inventory, index, InventoryStack.new(&"dirt_block", 99))
 	var full_before := full_inventory.to_dict()
 	var full_processor := DevConsoleCommandProcessor.new()
-	_setup_processor(full_processor, full_inventory, stats, pumpkin_patch)
+	_setup_processor(full_processor, full_inventory, _new_stats(), pumpkin_patch)
 	_expect_result(full_processor.execute("spawn stone 1"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "spawn succeeded without backpack capacity")
 	_expect_result(full_processor.execute("spawn stone"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "default-count spawn succeeded without backpack capacity")
 	_expect_result(full_processor.execute("spawn copper_pickaxe 1"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "equipment spawn succeeded without backpack capacity")
@@ -205,8 +205,11 @@ func _expect(condition: bool, message: String) -> void:
 		_errors.append(message)
 
 func _setup_processor(processor: DevConsoleCommandProcessor, inventory: InventoryModel, stats: ActorStats, pumpkin_patch: PumpkinPatchCoordinator) -> void:
+	var inventory_loadout := InventoryTestFixture.create_loadout(inventory, stats)
+	_expect(inventory_loadout != null, "inventory loadout setup failed")
 	processor.setup(
 		inventory,
+		inventory_loadout,
 		stats,
 		pumpkin_patch,
 		Callable(self, "_handle_structure_command").bind(&"new"),
@@ -215,6 +218,9 @@ func _setup_processor(processor: DevConsoleCommandProcessor, inventory: Inventor
 		Callable(self, "_handle_structure_command").bind(&"exit"),
 		Callable(self, "_handle_ripple_strength"),
 	)
+
+func _new_stats() -> ActorStats:
+	return ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
 
 func _handle_structure_command(action: StringName) -> bool:
 	_structure_calls.append(action)

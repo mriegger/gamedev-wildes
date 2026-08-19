@@ -18,6 +18,7 @@ var editable_voxel_world: VoxelWorld = null
 var camera: Camera3D = null
 var motor: PlayerMotor = null
 var inventory_model: InventoryModel = null
+var inventory_loadout: InventoryLoadoutCoordinator = null
 var combat: MeleeCombatCoordinator = null
 var entity_runtime: EntityRuntime = null
 var harvest: HarvestCoordinator = null
@@ -60,10 +61,11 @@ var _primary_consumption_latched: bool = false
 var _primary_harvest_latched: bool = false
 var _melee_locked_facing_direction: Vector3 = Vector3.ZERO
 
-func setup(p_camera: Camera3D, p_motor: PlayerMotor, p_inventory: InventoryModel, p_input_buffer: InputBuffer, p_combat: MeleeCombatCoordinator, p_entity_runtime: EntityRuntime):
+func setup(p_camera: Camera3D, p_motor: PlayerMotor, p_inventory: InventoryModel, p_inventory_loadout: InventoryLoadoutCoordinator, p_input_buffer: InputBuffer, p_combat: MeleeCombatCoordinator, p_entity_runtime: EntityRuntime):
 	assert(p_camera != null)
 	assert(p_motor != null)
 	assert(p_inventory != null)
+	assert(p_inventory_loadout != null and p_inventory_loadout.inventory_model == p_inventory)
 	assert(p_input_buffer != null)
 	assert(p_combat != null)
 	assert(p_entity_runtime != null)
@@ -71,6 +73,7 @@ func setup(p_camera: Camera3D, p_motor: PlayerMotor, p_inventory: InventoryModel
 		assert(camera == p_camera)
 		assert(motor == p_motor)
 		assert(inventory_model == p_inventory)
+		assert(inventory_loadout == p_inventory_loadout)
 		assert(_input_buffer == p_input_buffer)
 		assert(combat == p_combat)
 		assert(entity_runtime == p_entity_runtime)
@@ -78,6 +81,7 @@ func setup(p_camera: Camera3D, p_motor: PlayerMotor, p_inventory: InventoryModel
 	camera = p_camera
 	motor = p_motor
 	inventory_model = p_inventory
+	inventory_loadout = p_inventory_loadout
 	_input_buffer = p_input_buffer
 	combat = p_combat
 	entity_runtime = p_entity_runtime
@@ -264,7 +268,7 @@ func _handle_item_actions(delta):
 			primary_use_pressed = false
 		else:
 			_primary_consumption_latched = false
-	if primary_use_just and item_consumption != null and item_consumption.has_consumable_at(inventory_model.selected_slot):
+	if primary_use_just and item_consumption != null and item_consumption.has_consumable_at(inventory_model.get_selected_slot()):
 		item_consumption.try_consume_selected()
 		_primary_consumption_latched = primary_use_pressed
 		primary_use_just = false
@@ -337,7 +341,7 @@ func _handle_item_actions(delta):
 	if primary_use_just and target_has and selected_tilling != null:
 		_commit_till(target_block, last_ray_normal, selected_tilling)
 
-	if _input_buffer.secondary_use_just and item_consumption != null and item_consumption.has_consumable_at(inventory_model.selected_slot):
+	if _input_buffer.secondary_use_just and item_consumption != null and item_consumption.has_consumable_at(inventory_model.get_selected_slot()):
 		_input_buffer.secondary_use_just = false
 		item_consumption.try_consume_selected()
 	elif (_input_buffer.secondary_use_just or _input_buffer.secondary_use_pressed) and secondary_use_timer <= 0.0:
@@ -472,8 +476,8 @@ func _can_mine_position(pos: Vector3i, action: MiningActionDefinition) -> bool:
 	var block_id := voxel_space.get_block_id_at(pos)
 	if block_id == BlockId.Type.AIR:
 		return false
-	if voxel_space.block_catalog.get_definition(block_id).container != null:
-		return chest_coordinator != null and chest_coordinator.can_pick_up_chest(pos, action)
+	if voxel_space.block_catalog.get_definition(block_id).container != null and (chest_coordinator == null or not chest_coordinator.can_break(pos)):
+		return false
 	return action.can_mine(voxel_space.block_catalog.get_definition(block_id))
 
 func _can_till_position(pos: Vector3i, face_normal: Vector3i, action: TillingActionDefinition) -> bool:
@@ -537,7 +541,7 @@ func _validate_placement(position: Vector3i, action: BlockPlacementActionDefinit
 		return false
 	if editable_voxel_world.is_edit_protected(position):
 		return false
-	if get_selected_placement_action() != action or not inventory_model.can_consume_selected():
+	if get_selected_placement_action() != action or not inventory_loadout.can_consume_selected():
 		return false
 	if voxel_space.get_block_id_at(position) != BlockId.Type.AIR:
 		return false
@@ -557,11 +561,6 @@ func _commit_mine(pos: Vector3i, action: MiningActionDefinition):
 	var preview_id = voxel_space.get_block_id_at(pos)
 	if preview_id == BlockId.Type.AIR:
 		return
-	if voxel_space.block_catalog.get_definition(preview_id).container != null:
-		if chest_coordinator != null and chest_coordinator.pick_up_chest(pos, action):
-			_handle_raycast()
-		return
-
 	var item_ids_to_collect: Array[StringName] = []
 	_append_block_drop(item_ids_to_collect, preview_id)
 	for torch_pos in editable_voxel_world.get_attached_torches(pos):
@@ -569,7 +568,7 @@ func _commit_mine(pos: Vector3i, action: MiningActionDefinition):
 		if tid != BlockId.Type.AIR:
 			_append_block_drop(item_ids_to_collect, tid)
 
-	if not inventory_model.can_add_batch(item_ids_to_collect):
+	if not inventory_loadout.can_add_batch(item_ids_to_collect):
 		return
 
 	var batch = editable_voxel_world.try_mine_block(pos)
@@ -581,7 +580,8 @@ func _commit_mine(pos: Vector3i, action: MiningActionDefinition):
 			var be = edit as BlockEdit
 			if be.is_success() and be.is_mine():
 				_append_block_drop(collected_item_ids, be.old_id)
-		inventory_model.add_batch(collected_item_ids)
+		var collected := inventory_loadout.add_batch(collected_item_ids)
+		assert(collected)
 	_handle_raycast()
 
 func _append_block_drop(item_ids: Array[StringName], block_id: int):
@@ -599,7 +599,7 @@ func _commit_place(pos: Vector3i, action: BlockPlacementActionDefinition):
 	var edit: BlockEdit = editable_voxel_world.try_place_block(pos, block_id, attach_dir)
 
 	if edit.is_success():
-		var consumed := inventory_model.consume_selected()
+		var consumed := inventory_loadout.consume_selected()
 		assert(consumed)
 		_handle_raycast()
 		block_placed.emit()

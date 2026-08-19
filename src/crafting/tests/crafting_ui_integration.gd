@@ -18,7 +18,7 @@ var _errors: Array[String] = []
 var _hud: HUD
 var _inventory: InventoryModel
 var _crafting: CraftingCoordinator
-var _inventory_stats: InventoryStatCoordinator
+var _inventory_loadout: InventoryLoadoutCoordinator
 var _stats: ActorStats
 var _item_proficiency: ItemProficiency
 var _recipe_catalog: CraftingRecipeCatalog
@@ -31,17 +31,17 @@ func _init() -> void:
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
 	_recipe_catalog = load("res://crafting/crafting_recipe_catalog.tres") as CraftingRecipeCatalog
 	_inventory = InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
-	_inventory.slots[0] = InventoryStack.new(&"copper", 20)
-	_inventory.slots[1] = InventoryStack.new(&"log_block", 4)
-	_inventory.slots[2] = InventoryStack.new(&"stone_block", 10)
-	_inventory.slots[InventoryModel.HOTBAR_SIZE] = InventoryStack.new(&"copper", 5)
-	_inventory.slots[InventoryModel.HOTBAR_SIZE + 1] = InventoryStack.new(&"log_block", 6)
+	InventoryTestFixture.restore_slot(_inventory, 0, InventoryStack.new(&"copper", 20))
+	InventoryTestFixture.restore_slot(_inventory, 1, InventoryStack.new(&"log_block", 4))
+	InventoryTestFixture.restore_slot(_inventory, 2, InventoryStack.new(&"stone_block", 10))
+	InventoryTestFixture.restore_slot(_inventory, InventoryModel.HOTBAR_SIZE, InventoryStack.new(&"copper", 5))
+	InventoryTestFixture.restore_slot(_inventory, InventoryModel.HOTBAR_SIZE + 1, InventoryStack.new(&"log_block", 6))
 	_stats = ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
 	_item_proficiency = ItemProficiency.new(item_catalog)
-	_inventory_stats = InventoryStatCoordinator.new()
-	_expect(_inventory_stats.setup(_inventory, _stats), "inventory stat setup failed")
+	_inventory_loadout = InventoryLoadoutCoordinator.new()
+	_expect(_inventory_loadout.setup(_inventory, _stats, _item_proficiency), "inventory loadout setup failed")
 	_crafting = CraftingCoordinator.new()
-	_crafting.setup(_inventory, _recipe_catalog, _inventory.equipment_instance_factory)
+	_crafting.setup(_inventory, _inventory_loadout, _recipe_catalog)
 	var packed := load("res://ui/hud/hud.tscn") as PackedScene
 	_hud = packed.instantiate() as HUD
 	root.add_child(_hud)
@@ -57,7 +57,7 @@ func _process(_delta: float) -> bool:
 	_frame += 1
 	if _phase == 0 and _frame == 2:
 		_camera_rig.setup(_camera_follow, _camera_input_buffer)
-		_hud.setup_with_camera(_inventory, _inventory_stats, _crafting, _recipe_catalog, _camera_rig, _stats, _item_proficiency, ChestCoordinator.new())
+		_hud.setup_with_camera(_inventory, _inventory_loadout, _crafting, _recipe_catalog, _camera_rig, _stats, _item_proficiency)
 		_hud.toggle_backpack()
 		_phase = 1
 	elif _phase == 1 and _frame == 35:

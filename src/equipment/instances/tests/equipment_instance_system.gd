@@ -99,11 +99,12 @@ func _test_failed_allocations(item_catalog: ItemCatalog) -> void:
 	_expect(factory.get_next_instance_id() == 50, "rejected factory creation consumed an ID")
 	var inventory := InventoryModel.new(item_catalog, factory, InventoryModel.HOTBAR_SIZE + 1)
 	for index in range(InventoryModel.HOTBAR_SIZE):
-		inventory.slots[index] = InventoryStack.new(&"dirt_block", 1)
+		InventoryTestFixture.restore_slot(inventory, index, InventoryStack.new(&"dirt_block", 1))
 	var swords: Array[StringName] = [&"copper_sword", &"copper_sword"]
-	_expect(not inventory.can_add_batch(swords), "over-capacity equipment simulation succeeded")
+	var loadout := InventoryTestFixture.create_loadout(inventory)
+	_expect(not loadout.can_add_batch(swords), "over-capacity equipment simulation succeeded")
 	_expect(factory.get_next_instance_id() == 50, "capacity simulation consumed an ID")
-	_expect(not inventory.add_batch(swords), "over-capacity equipment batch committed")
+	_expect(not loadout.add_batch(swords), "over-capacity equipment batch committed")
 	_expect(factory.get_next_instance_id() == 50, "failed equipment batch consumed an ID")
 	_expect(inventory.get_slot(InventoryModel.HOTBAR_SIZE) == null, "failed equipment batch changed inventory")
 	var first_valid := factory.create(&"copper_sword")
@@ -124,7 +125,7 @@ func _test_starter_and_crafting_identity(
 	var starter_sword := inventory.get_slot(3)
 	_expect(starter_sword != null and starter_sword.equipment_instance != null, "starter sword was not instanced")
 	var seen_ids: Dictionary = {}
-	for stack in inventory.slots:
+	for stack in InventoryTestFixture.get_slots(inventory):
 		if stack == null:
 			continue
 		if item_catalog.get_definition(stack.item_id).equipment_type == null:
@@ -136,13 +137,14 @@ func _test_starter_and_crafting_identity(
 		_expect(stack.equipment_instance.instance_id > 0, "starter equipment ID was not positive")
 		_expect(not seen_ids.has(stack.equipment_instance.instance_id), "starter equipment IDs were duplicated")
 		seen_ids[stack.equipment_instance.instance_id] = true
-	_expect(inventory.add_backpack_item(&"copper", 15), "copper crafting fixture could not be added")
-	_expect(inventory.add_backpack_item(&"log_block", 5), "wood crafting fixture could not be added")
+	var loadout := InventoryTestFixture.create_loadout(inventory)
+	_expect(loadout.add_backpack_item(&"copper", 15), "copper crafting fixture could not be added")
+	_expect(loadout.add_backpack_item(&"log_block", 5), "wood crafting fixture could not be added")
 	var crafting := CraftingCoordinator.new()
-	crafting.setup(inventory, recipe_catalog, factory)
+	crafting.setup(inventory, loadout, recipe_catalog)
 	_expect(crafting.craft(&"copper_sword"), "equipment recipe did not craft")
 	var sword_ids: Array[int] = []
-	for stack in inventory.slots:
+	for stack in InventoryTestFixture.get_slots(inventory):
 		if stack != null and stack.item_id == &"copper_sword" and stack.equipment_instance != null:
 			sword_ids.append(stack.equipment_instance.instance_id)
 	_expect(sword_ids.size() == 2, "starter and crafted swords were not both present")

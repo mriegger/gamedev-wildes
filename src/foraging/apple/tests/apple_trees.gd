@@ -5,6 +5,11 @@ var _failures: int = 0
 func _init() -> void:
 	var block_catalog := load("res://blocks/block_catalog.tres") as BlockCatalog
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
+	var state_validation := AppleTreeState.new()
+	_expect(not state_validation.collect(Vector3i(0, -1, 0), 0), "negative-height apple tree state was accepted")
+	_expect(not state_validation.restore({"version": NAN, "collected_slots": []}), "non-finite apple state version restored")
+	_expect(not state_validation.restore({"version": 1, "collected_slots": [[0, NAN, 0, 0]]}), "non-finite apple tree position restored")
+	_expect(state_validation.snapshot() == AppleTreeState.new().snapshot(), "invalid apple tree state changed the owner snapshot")
 	var world := VoxelWorld.new(20, 36, 5, 12.0, block_catalog)
 	var chunk_manager := ChunkManager.new()
 	chunk_manager.visible_chunks[Vector2i.ZERO] = true
@@ -94,21 +99,31 @@ func _init() -> void:
 			_expect(_count_children(restored_root, "FallenApple_") == 1, "fallen apple did not render without its original tree blocks")
 			restored_trees.free()
 		if not apple_trees._targets.is_empty():
-			var first_bounds := apple_trees.get_harvest_target_bounds(int(apple_trees._targets.keys()[0]))
-			var ray_target := apple_trees.find_harvest_target(first_bounds.get_center() + Vector3.UP, Vector3.DOWN, 2.0)
+			var harvest_source := apple_trees as HarvestSource
+			var first_bounds := harvest_source.get_harvest_target_bounds(int(apple_trees._targets.keys()[0]))
+			var ray_target := harvest_source.find_harvest_target(first_bounds.get_center() + Vector3.UP, Vector3.DOWN, 2.0)
 			_expect(not ray_target.is_empty(), "ground apple could not be selected by a ray")
 			var inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
-			var target_id := int(apple_trees._targets.keys()[0])
-			var item_ids := apple_trees.get_harvest_item_ids(target_id)
-			_expect(inventory.can_add_batch(item_ids), "empty inventory rejected an apple")
-			_expect(apple_trees.try_harvest_target(target_id), "ground apple could not be picked up")
-			_expect(inventory.add_batch(item_ids), "picked apple could not enter inventory")
-			_expect(inventory.get_inventory_item_count(&"apple") == 1, "pickup did not add one apple")
+			_expect(inventory.setup_empty(), "apple test inventory setup failed")
 			var stats := ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
+			var inventory_loadout := InventoryTestFixture.create_loadout(inventory, stats)
+			_expect(inventory_loadout != null, "apple test inventory loadout setup failed")
+			var target_id := int(apple_trees._targets.keys()[0])
+			var hud := (load("res://ui/hud/hud.tscn") as PackedScene).instantiate() as HUD
+			root.add_child(hud)
+			await process_frame
+			var prompt := InteractionPromptCoordinator.new()
+			prompt.setup(hud, Callable(self, "_is_interaction_blocked"))
+			var harvest := HarvestCoordinator.new()
+			var sources: Array[HarvestSource] = [apple_trees]
+			_expect(harvest.setup(sources, inventory, inventory_loadout, prompt), "ground apple harvest setup failed")
+			_target_harvest(harvest, harvest_source.get_harvest_target_bounds(target_id))
+			_expect(harvest.try_harvest_target(), "ground apple could not be picked up")
+			_expect(inventory.get_inventory_item_count(&"apple") == 1, "pickup did not add one apple")
 			var maximum_hp := stats.get_value(&"hp")
 			stats.damage(maximum_hp * 0.9)
 			var consumption_coordinator := ItemConsumptionCoordinator.new()
-			consumption_coordinator.setup(inventory, stats)
+			consumption_coordinator.setup(inventory, inventory_loadout, stats)
 			var apple_slot := _find_item_slot(inventory, &"apple")
 			_expect(consumption_coordinator.try_consume_at(apple_slot), "apple could not be consumed")
 			_expect(is_equal_approx(stats.current_hp, maximum_hp * 0.2), "apple consumption did not heal ten percent of maximum health")
@@ -119,12 +134,61 @@ func _init() -> void:
 			var before_invalid_restore := restored.snapshot()
 			_expect(not restored.restore({"version": 1, "collected_slots": [[0, 6, 0, 6]]}), "out-of-range apple slot restored")
 			_expect(restored.snapshot() == before_invalid_restore, "failed apple state restore changed collected slots")
+			hud.free()
 		var fallen_target_id := _find_fallen_target(apple_trees)
 		_expect(fallen_target_id >= 0, "fallen apple target could not be identified")
 		if fallen_target_id >= 0:
-			_expect(apple_trees.try_harvest_target(fallen_target_id), "fallen apple could not be picked up")
+			var fallen_bounds := apple_trees.get_harvest_target_bounds(fallen_target_id)
+			var fallen_node := (apple_trees._targets[fallen_target_id] as Dictionary)["node"] as Node3D
+			var hud := (load("res://ui/hud/hud.tscn") as PackedScene).instantiate() as HUD
+			root.add_child(hud)
+			await process_frame
+			var prompt := InteractionPromptCoordinator.new()
+			prompt.setup(hud, Callable(self, "_is_interaction_blocked"))
+			var full_inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
+			var full_slots: Dictionary = {}
+			var dirt_stack_size := item_catalog.get_definition(&"dirt_block").max_stack
+			for index in range(InventoryModel.FILLABLE_SIZE):
+				full_slots[index] = InventoryStack.new(&"dirt_block", dirt_stack_size)
+			_expect(InventoryTestFixture.restore_slots(full_inventory, full_slots), "full fallen-apple inventory fixture could not be restored")
+			var full_loadout := InventoryTestFixture.create_loadout(full_inventory)
+			var full_harvest := HarvestCoordinator.new()
+			var full_sources: Array[HarvestSource] = [apple_trees]
+			_expect(full_harvest.setup(full_sources, full_inventory, full_loadout, prompt), "full fallen-apple harvest setup failed")
+			_target_harvest(full_harvest, fallen_bounds)
+			var fallen_state_before := apple_trees.snapshot()
+			var fallen_index_before := apple_trees._fallen_by_chunk.duplicate(true)
+			var fallen_revision_before := apple_trees._revision
+			var full_inventory_before := full_inventory.to_dict()
+			var source_change_count: Array[int] = [0]
+			var full_inventory_change_count: Array[int] = [0]
+			apple_trees.state_changed.connect(func(): source_change_count[0] += 1)
+			full_inventory.inventory_changed.connect(func(): full_inventory_change_count[0] += 1)
+			_expect(full_harvest.has_target(), "full inventory hid the fallen apple target")
+			_expect(not full_harvest.can_harvest_target(), "full inventory reported fallen apple capacity")
+			_expect(not full_harvest.try_harvest_target(), "fallen apple harvest succeeded with a full inventory")
+			_expect(apple_trees.snapshot() == fallen_state_before, "failed fallen apple harvest changed persistent state")
+			_expect(apple_trees._fallen_by_chunk == fallen_index_before, "failed fallen apple harvest changed its chunk index")
+			_expect(apple_trees._revision == fallen_revision_before, "failed fallen apple harvest changed its revision")
+			_expect(apple_trees._targets.has(fallen_target_id) and (apple_trees._targets[fallen_target_id] as Dictionary)["node"] == fallen_node and not fallen_node.is_queued_for_deletion(), "failed fallen apple harvest removed its target node")
+			_expect(full_inventory.to_dict() == full_inventory_before, "failed fallen apple harvest changed inventory")
+			_expect(source_change_count[0] == 0 and full_inventory_change_count[0] == 0, "failed fallen apple harvest emitted owner notifications")
+			full_harvest.clear_target()
+			var collecting_inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
+			var collecting_loadout := InventoryTestFixture.create_loadout(collecting_inventory)
+			var collecting_harvest := HarvestCoordinator.new()
+			var collecting_sources: Array[HarvestSource] = [apple_trees]
+			_expect(collecting_harvest.setup(collecting_sources, collecting_inventory, collecting_loadout, prompt), "fallen apple collection setup failed")
+			var collecting_inventory_change_count: Array[int] = [0]
+			collecting_inventory.inventory_changed.connect(func(): collecting_inventory_change_count[0] += 1)
+			_target_harvest(collecting_harvest, fallen_bounds)
+			_expect(collecting_harvest.try_harvest_target(), "fallen apple could not be picked up")
+			_expect(collecting_inventory.get_inventory_item_count(&"apple") == 1, "fallen apple pickup did not commit its inventory reward")
 			_expect(apple_trees._state.get_fallen_apples().is_empty(), "picked fallen apple remained in persistent state")
 			_expect(not apple_trees._fallen_by_chunk.has(Vector2i.ZERO), "picked fallen apple remained in the chunk index")
+			_expect(apple_trees._revision == fallen_revision_before + 1, "fallen apple pickup did not advance its revision exactly once")
+			_expect(source_change_count[0] == 1 and collecting_inventory_change_count[0] == 1, "fallen apple pickup emitted the wrong owner notification counts")
+			hud.free()
 	var apple := item_catalog.get_definition(&"apple")
 	var consumption := apple.secondary_action as ConsumableActionDefinition
 	_expect(consumption != null and is_equal_approx(consumption.health_restore_fraction, 0.1), "apple did not restore ten percent of maximum health")
@@ -167,6 +231,13 @@ func _find_drop_leaf(coordinator: AppleTreeCoordinator) -> Vector3i:
 			if coordinator._should_drop_decorative_apple(tree_position, decorative_index):
 				return leaf
 	return Vector3i(-1, -1, -1)
+
+func _target_harvest(harvest: HarvestCoordinator, bounds: AABB) -> void:
+	var center := bounds.get_center()
+	harvest.update_target(center + Vector3.UP, Vector3.DOWN, 2.0, center, 2.0)
+
+func _is_interaction_blocked() -> bool:
+	return false
 
 func _count_children(parent: Node, prefix: String) -> int:
 	if parent == null:
@@ -218,7 +289,7 @@ func _count_apple_trees(coordinator: AppleTreeCoordinator, sample_count: int) ->
 	return count
 
 func _find_item_slot(inventory: InventoryModel, item_id: StringName) -> int:
-	for index in range(inventory.slots.size()):
+	for index in range(inventory.get_size()):
 		var stack := inventory.get_slot(index)
 		if stack != null and stack.item_id == item_id:
 			return index

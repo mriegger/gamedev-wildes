@@ -12,7 +12,7 @@ func is_collected(tree_position: Vector3i, slot_index: int) -> bool:
 	return _collected_slots.has(_slot_key(tree_position, slot_index))
 
 func collect(tree_position: Vector3i, slot_index: int) -> bool:
-	if slot_index < 0 or slot_index >= MAXIMUM_GROUND_APPLES:
+	if tree_position.y < 0 or slot_index < 0 or slot_index >= MAXIMUM_GROUND_APPLES:
 		return false
 	var key := _slot_key(tree_position, slot_index)
 	if _collected_slots.has(key):
@@ -31,6 +31,9 @@ func add_fallen_apple(tree_position: Vector3i, decorative_index: int, position: 
 
 func collect_fallen_apple(tree_position: Vector3i, decorative_index: int) -> bool:
 	return _fallen_apples.erase(_fallen_key(tree_position, decorative_index))
+
+func has_fallen_apple(tree_position: Vector3i, decorative_index: int) -> bool:
+	return _fallen_apples.has(_fallen_key(tree_position, decorative_index))
 
 func get_fallen_apples() -> Array[Dictionary]:
 	var keys := _fallen_apples.keys()
@@ -53,7 +56,7 @@ func restore(encoded: Variant) -> bool:
 	if not encoded is Dictionary:
 		return false
 	var raw_version = encoded.get("version", null)
-	if (not raw_version is int and not raw_version is float) or raw_version != int(raw_version):
+	if (not raw_version is int and not raw_version is float) or not is_finite(float(raw_version)) or raw_version != int(raw_version):
 		return false
 	var version := int(raw_version)
 	if version not in [1, SNAPSHOT_VERSION] or encoded.size() != (2 if version == 1 else 3):
@@ -67,7 +70,7 @@ func restore(encoded: Variant) -> bool:
 			return false
 		var values: Array[int] = []
 		for raw_value in raw_slot:
-			if not raw_value is int and not raw_value is float:
+			if (not raw_value is int and not raw_value is float) or not is_finite(float(raw_value)):
 				return false
 			var value := int(raw_value)
 			if raw_value != value:

@@ -59,9 +59,9 @@ func _refresh():
 	if _stats == null:
 		return
 	_syncing = true
-	level.set_value_no_signal(_stats.level)
+	level.set_value_no_signal(_stats.get_level())
 	experience.max_value = 999999999.0
-	experience.set_value_no_signal(_stats.experience)
+	experience.set_value_no_signal(_stats.get_experience())
 	current_hp.max_value = _stats.get_value(&"hp")
 	current_hp.set_value_no_signal(_stats.current_hp)
 	for stat_id in _base_controls:

@@ -15,6 +15,7 @@ func _ready() -> void:
 
 func setup(
 	inventory_model: InventoryModel,
+	inventory_loadout: InventoryLoadoutCoordinator,
 	actor_stats: ActorStats,
 	pumpkin_patch: PumpkinPatchCoordinator,
 	new_structure: Callable,
@@ -23,11 +24,12 @@ func setup(
 	exit_structure: Callable,
 	set_ripple_strength: Callable,
 ) -> void:
-	assert(inventory_model != null and actor_stats != null and pumpkin_patch != null)
+	assert(inventory_model != null and inventory_loadout != null and actor_stats != null and pumpkin_patch != null)
 	assert(_command_processor == null)
 	_command_processor = DevConsoleCommandProcessor.new()
 	_command_processor.setup(
 		inventory_model,
+		inventory_loadout,
 		actor_stats,
 		pumpkin_patch,
 		new_structure,

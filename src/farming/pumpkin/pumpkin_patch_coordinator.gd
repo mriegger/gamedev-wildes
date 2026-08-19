@@ -29,6 +29,7 @@ var _harvestable_generated_state_ids: Array[StringName] = []
 var _patch_root: Node3D
 var _random := RandomNumberGenerator.new()
 var _tile_target_bounds: Array[AABB] = []
+var _revision: int = 0
 
 func setup(p_voxel_world: VoxelWorld, p_player: Node3D, world_seed: int, saved_state: Variant) -> bool:
 	assert(p_voxel_world != null and p_player != null)
@@ -46,13 +47,17 @@ func setup(p_voxel_world: VoxelWorld, p_player: Node3D, world_seed: int, saved_s
 			return false
 	else:
 		return false
-	return _render_state()
+	if not _render_state():
+		return false
+	_revision += 1
+	return true
 
 func spawn_patch() -> bool:
 	if _voxel_world == null or _player == null:
 		return false
 	if not _generate_near(_player.global_position) or not _render_state():
 		return false
+	_revision += 1
 	state_changed.emit()
 	return true
 
@@ -76,11 +81,65 @@ func can_harvest_tile(tile_index: int) -> bool:
 	var definition := _definitions_by_id.get(_state.get_growth_state_id(tile_index), null) as PumpkinGrowthStateDefinition
 	return definition != null and definition.is_harvestable()
 
-func try_harvest_tile(tile_index: int) -> bool:
+func prepare_harvest_target(tile_index: int) -> PreparedHarvestChange:
+	if not can_harvest_tile(tile_index):
+		return null
+	var expected_state_id := _state.get_growth_state_id(tile_index)
+	var definition := _definitions_by_id[expected_state_id] as PumpkinGrowthStateDefinition
+	return PreparedPumpkinHarvestChange.new(
+		self,
+		_revision,
+		tile_index,
+		expected_state_id,
+		definition.harvest_result_state_id,
+		get_harvest_item_ids(tile_index),
+	)
+
+func can_commit_prepared_harvest(prepared: PreparedHarvestChange) -> bool:
+	var pumpkin_change := prepared as PreparedPumpkinHarvestChange
+	if (
+		pumpkin_change == null
+		or not pumpkin_change._is_for(self)
+		or not pumpkin_change._is_prepared()
+		or pumpkin_change._get_expected_revision() != _revision
+	):
+		return false
+	var tile_index := pumpkin_change._get_target_id()
 	if not can_harvest_tile(tile_index):
 		return false
-	var definition := _definitions_by_id[_state.get_growth_state_id(tile_index)] as PumpkinGrowthStateDefinition
-	if not _state.transition_growth_state(tile_index, definition.id, definition.harvest_result_state_id, _valid_state_ids):
+	var expected_state_id := pumpkin_change._get_expected_state_id()
+	if _state.get_growth_state_id(tile_index) != expected_state_id:
+		return false
+	var definition := _definitions_by_id[expected_state_id] as PumpkinGrowthStateDefinition
+	return (
+		definition.harvest_result_state_id == pumpkin_change._get_result_state_id()
+		and get_harvest_item_ids(tile_index) == pumpkin_change.get_harvest_item_ids()
+	)
+
+func _commit_prepared_harvest(
+	prepared: PreparedHarvestChange,
+	emit_signal: bool = true,
+) -> bool:
+	if not can_commit_prepared_harvest(prepared):
+		return false
+	var pumpkin_change := prepared as PreparedPumpkinHarvestChange
+	var transitioned := _state.transition_growth_state(
+		pumpkin_change._get_target_id(),
+		pumpkin_change._get_expected_state_id(),
+		pumpkin_change._get_result_state_id(),
+		_valid_state_ids,
+	)
+	assert(transitioned)
+	_revision += 1
+	var marked := pumpkin_change._mark_committed(self)
+	assert(marked)
+	if emit_signal:
+		var notified := _notify_prepared_harvest(pumpkin_change)
+		assert(notified)
+	return true
+
+func _notify_prepared_harvest(prepared: PreparedHarvestChange) -> bool:
+	if prepared == null or not prepared._mark_notified(self):
 		return false
 	var rendered := _render_state()
 	assert(rendered)
@@ -127,9 +186,6 @@ func get_harvest_item_ids(target_id: int) -> Array[StringName]:
 	for _index in range(definition.harvest_count):
 		item_ids.append(definition.harvest_item_id)
 	return item_ids
-
-func try_harvest_target(target_id: int) -> bool:
-	return try_harvest_tile(target_id)
 
 func get_harvest_prompt() -> String:
 	return "Left Click  Harvest Pumpkin"

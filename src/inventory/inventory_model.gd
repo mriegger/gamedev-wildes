@@ -24,13 +24,15 @@ const STARTER_ITEMS_BY_SLOT: Dictionary[int, StringName] = {
 	FILLABLE_SIZE - 1: &"test_totem",
 }
 
-var size: int = TOTAL_SIZE
+var _size: int = TOTAL_SIZE
 var item_catalog: ItemCatalog
 var equipment_instance_factory: EquipmentInstanceFactory
 
-var slots: Array[InventoryStack] = []
-var selected_slot: int = 0
-var starter_item_migration_version: int = 0
+var _slots: Array[InventoryStack] = []
+var _selected_slot: int = 0
+var _starter_item_migration_version: int = 0
+var _revision: int = 0
+var _runtime_bound: bool = false
 
 func _init(
 	p_item_catalog: ItemCatalog,
@@ -40,28 +42,258 @@ func _init(
 	assert(p_item_catalog != null)
 	assert(p_equipment_instance_factory != null)
 	assert(p_equipment_instance_factory.item_catalog == p_item_catalog)
+	assert(p_size >= HOTBAR_SIZE and p_size <= TOTAL_SIZE)
 	item_catalog = p_item_catalog
 	equipment_instance_factory = p_equipment_instance_factory
-	size = p_size
-	slots.resize(size)
-	slots.fill(null)
-	selected_slot = 0
+	_size = p_size
+	_slots.resize(_size)
+	_slots.fill(null)
+	_selected_slot = 0
 
 func get_slot(idx: int) -> InventoryStack:
-	if idx < 0 or idx >= size:
+	if idx < 0 or idx >= _size:
 		return null
-	return slots[idx]
+	return null if _slots[idx] == null else _slots[idx].copy()
 
-func add_stack(stack: InventoryStack) -> bool:
+func get_selected_slot() -> int:
+	return _selected_slot
+
+func get_size() -> int:
+	return _size
+
+func get_revision() -> int:
+	return _revision
+
+func get_starter_item_migration_version() -> int:
+	return _starter_item_migration_version
+
+func _can_bind_runtime() -> bool:
+	return not _runtime_bound
+
+func _bind_runtime() -> bool:
+	if not _can_bind_runtime():
+		return false
+	_runtime_bound = true
+	return true
+
+func has_item(item_id: StringName) -> bool:
+	if not item_catalog.has_definition(item_id):
+		return false
+	for stack in _slots:
+		if stack != null and stack.item_id == item_id:
+			return true
+	return false
+
+func prepare_add_stack(stack: InventoryStack) -> PreparedInventoryChange:
+	var simulated := _create_simulation()
+	if not simulated._apply_add_stack(stack):
+		return null
+	return _prepare_simulated_change(simulated)
+
+func prepare_remove_stack(source_index: int, count: int = -1) -> PreparedInventoryChange:
+	var simulated := _create_simulation()
+	var removed := simulated._apply_remove_stack(source_index, count)
+	if removed == null:
+		return null
+	return _prepare_simulated_change(simulated, removed)
+
+func prepare_select_slot(index: int) -> PreparedInventoryChange:
+	var simulated := _create_simulation()
+	if not simulated._apply_select_slot(index):
+		return null
+	return _prepare_simulated_change(simulated)
+
+func prepare_assign_slot_to_hotbar(source_index: int, hotbar_index: int) -> PreparedInventoryChange:
+	var simulated := _create_simulation()
+	if not simulated._apply_assign_slot_to_hotbar(source_index, hotbar_index):
+		return null
+	return _prepare_simulated_change(simulated)
+
+func prepare_move_hotbar_slot_to_backpack(hotbar_index: int) -> PreparedInventoryChange:
+	var simulated := _create_simulation()
+	if not simulated._apply_move_hotbar_slot_to_backpack(hotbar_index):
+		return null
+	return _prepare_simulated_change(simulated)
+
+func prepare_discard_stack(source_index: int, count: int) -> PreparedInventoryChange:
+	var simulated := _create_simulation()
+	if not simulated._apply_discard_stack(source_index, count):
+		return null
+	return _prepare_simulated_change(simulated)
+
+func prepare_ensure_item(item_id: StringName) -> PreparedInventoryChange:
+	if has_item(item_id):
+		return null
+	var simulated := _create_simulation()
+	if not simulated._apply_ensure_item(item_id):
+		return null
+	return _prepare_simulated_change(simulated)
+
+func prepare_starter_item_migration() -> PreparedInventoryChange:
+	if _starter_item_migration_version >= STARTER_ITEM_MIGRATION_VERSION:
+		return null
+	var simulated := _create_simulation()
+	if not simulated._apply_migrate_starter_items():
+		return null
+	return _prepare_simulated_change(simulated)
+
+func prepare_add_backpack_item(item_id: StringName, count: int) -> PreparedInventoryChange:
+	var simulated := _create_simulation()
+	if not simulated._apply_add_backpack_item(item_id, count):
+		return null
+	return _prepare_simulated_change(simulated)
+
+func prepare_inventory_exchange(
+	consumed: Dictionary[StringName, int],
+	granted: Dictionary[StringName, int],
+) -> PreparedInventoryChange:
+	var simulated := _create_simulation()
+	if not simulated._apply_exchange_inventory_items(consumed, granted, simulated.equipment_instance_factory):
+		return null
+	return _prepare_simulated_change(simulated)
+
+func prepare_add_batch(ids: Array[StringName]) -> PreparedInventoryChange:
+	var simulated := _create_simulation()
+	if not simulated._apply_add_batch(ids):
+		return null
+	return _prepare_simulated_change(simulated)
+
+func prepare_consume_selected() -> PreparedInventoryChange:
+	var simulated := _create_simulation()
+	if not simulated._apply_consume_selected():
+		return null
+	return _prepare_simulated_change(simulated)
+
+func prepare_handle_drop(source_index: int, destination_index: int, drag_count: int) -> PreparedInventoryChange:
+	var simulated := _create_simulation()
+	if not simulated._apply_handle_drop(source_index, destination_index, drag_count):
+		return null
+	return _prepare_simulated_change(simulated)
+
+func prepare_replace_stack_at(
+	index: int,
+	expected_stack: InventoryStack,
+	replacement_stack: InventoryStack,
+) -> PreparedInventoryChange:
+	var simulated := _create_simulation()
+	if not simulated._apply_replace_stack_at(index, expected_stack, replacement_stack):
+		return null
+	return _prepare_simulated_change(simulated, expected_stack)
+
+func prepare_socketed_rune(
+	gear_index: int,
+	expected_rune_ids: Array[StringName],
+	next_rune_ids: Array[StringName],
+	rune_source_index: int,
+	rune_id: StringName,
+) -> PreparedInventoryChange:
+	var simulated := _create_simulation()
+	if not simulated._apply_socketed_rune(
+		gear_index,
+		expected_rune_ids,
+		next_rune_ids,
+		rune_source_index,
+		rune_id,
+	):
+		return null
+	return _prepare_simulated_change(simulated)
+
+func prepare_unsocketed_rune(
+	gear_index: int,
+	expected_rune_ids: Array[StringName],
+	next_rune_ids: Array[StringName],
+	returned_rune_id: StringName,
+) -> PreparedInventoryChange:
+	var simulated := _create_simulation()
+	if not simulated._apply_unsocketed_rune(
+		gear_index,
+		expected_rune_ids,
+		next_rune_ids,
+		returned_rune_id,
+	):
+		return null
+	return _prepare_simulated_change(simulated)
+
+func can_commit_prepared_change(prepared: PreparedInventoryChange) -> bool:
+	return (
+		prepared != null
+		and prepared._is_for(self)
+		and prepared.get_expected_revision() == _revision
+		and prepared._get_expected_next_instance_id() == equipment_instance_factory.get_next_instance_id()
+		and prepared.get_size() == _size
+	)
+
+func _commit_prepared_change(prepared: PreparedInventoryChange, emit_signal: bool = true) -> void:
+	assert(can_commit_prepared_change(prepared))
+	var advanced := equipment_instance_factory.try_advance_next_instance_id(
+		prepared._get_expected_next_instance_id(),
+		prepared._get_next_instance_id(),
+	)
+	assert(advanced)
+	_slots = prepared._copy_committed_slots()
+	_selected_slot = prepared.get_selected_slot()
+	_starter_item_migration_version = prepared._get_starter_item_migration_version()
+	_revision += 1
+	if emit_signal:
+		inventory_changed.emit()
+
+func _emit_inventory_changed() -> void:
+	inventory_changed.emit()
+
+func _create_simulation() -> InventoryModel:
+	var simulated := InventoryModel.new(item_catalog, equipment_instance_factory.copy(), _size)
+	simulated._slots = _copy_slots()
+	simulated._selected_slot = _selected_slot
+	simulated._starter_item_migration_version = _starter_item_migration_version
+	simulated._revision = _revision
+	return simulated
+
+func _prepare_simulated_change(
+	simulated: InventoryModel,
+	result_stack: InventoryStack = null,
+) -> PreparedInventoryChange:
+	return PreparedInventoryChange.new(
+		self,
+		_revision,
+		equipment_instance_factory.get_next_instance_id(),
+		simulated.equipment_instance_factory.get_next_instance_id(),
+		simulated._slots,
+		simulated._selected_slot,
+		simulated._starter_item_migration_version,
+		result_stack,
+	)
+
+func _apply_add_stack(stack: InventoryStack) -> bool:
 	var simulated := _simulate_stack_add(stack)
 	if simulated.is_empty():
 		return false
-	slots = simulated
-	inventory_changed.emit()
+	_slots = simulated
 	return true
 
+func _can_remove_stack(source_index: int, count: int = -1) -> bool:
+	if source_index < 0 or source_index >= mini(_size, FILLABLE_SIZE):
+		return false
+	var stack := _slots[source_index]
+	if stack == null:
+		return false
+	var removed_count := stack.count if count == -1 else count
+	if removed_count < 1 or removed_count > stack.count:
+		return false
+	return not stack.has_instance_data() or removed_count == stack.count
+
+func _apply_remove_stack(source_index: int, count: int = -1) -> InventoryStack:
+	if not _can_remove_stack(source_index, count):
+		return null
+	var stack := _slots[source_index]
+	var removed_count := stack.count if count == -1 else count
+	var removed := InventoryStack.new(stack.item_id, removed_count, stack.equipment_instance)
+	stack.count -= removed_count
+	if stack.count == 0:
+		_slots[source_index] = null
+	return removed
+
 func get_selected_data() -> InventoryStack:
-	return get_slot(selected_slot)
+	return get_slot(_selected_slot)
 
 func get_selected_item_id():
 	var stack := get_selected_data()
@@ -80,44 +312,42 @@ func get_equipment_instance_copy(idx: int) -> EquipmentInstance:
 	var stack := get_slot(idx)
 	return null if stack == null or stack.equipment_instance == null else stack.equipment_instance.copy()
 
-func select_slot(idx: int) -> bool:
+func _apply_select_slot(idx: int) -> bool:
 	if not is_hotbar_index(idx):
 		return false
-	if idx == selected_slot:
-		return true
-	selected_slot = idx
-	inventory_changed.emit()
+	if idx == _selected_slot:
+		return false
+	_selected_slot = idx
 	return true
 
-func assign_slot_to_hotbar(source_idx: int, hotbar_idx: int) -> bool:
-	if source_idx < 0 or source_idx >= min(size, FILLABLE_SIZE):
+func _apply_assign_slot_to_hotbar(source_idx: int, hotbar_idx: int) -> bool:
+	if source_idx < 0 or source_idx >= min(_size, FILLABLE_SIZE):
 		return false
-	if not is_hotbar_index(hotbar_idx) or hotbar_idx >= size:
+	if not is_hotbar_index(hotbar_idx) or hotbar_idx >= _size:
 		return false
 	if source_idx == hotbar_idx:
 		return false
-	var source_stack := slots[source_idx]
+	var source_stack := _slots[source_idx]
 	if source_stack == null or not can_slot_accept_item_id(hotbar_idx, source_stack.item_id):
 		return false
-	var hotbar_stack := slots[hotbar_idx]
+	var hotbar_stack := _slots[hotbar_idx]
 	if hotbar_stack != null and not can_slot_accept_item_id(source_idx, hotbar_stack.item_id):
 		return false
-	slots[source_idx] = hotbar_stack
-	slots[hotbar_idx] = source_stack
-	inventory_changed.emit()
+	_slots[source_idx] = hotbar_stack
+	_slots[hotbar_idx] = source_stack
 	return true
 
-func move_hotbar_slot_to_backpack(hotbar_idx: int) -> bool:
-	if not is_hotbar_index(hotbar_idx) or hotbar_idx >= size:
+func _apply_move_hotbar_slot_to_backpack(hotbar_idx: int) -> bool:
+	if not is_hotbar_index(hotbar_idx) or hotbar_idx >= _size:
 		return false
-	var hotbar_stack := slots[hotbar_idx]
+	var hotbar_stack := _slots[hotbar_idx]
 	if hotbar_stack == null:
 		return false
 	var max_stack: int = item_catalog.get_definition(hotbar_stack.item_id).max_stack
-	var backpack_end: int = mini(size, FILLABLE_SIZE)
+	var backpack_end: int = mini(_size, FILLABLE_SIZE)
 	var available_capacity: int = 0
 	for backpack_idx in range(HOTBAR_SIZE, backpack_end):
-		var backpack_stack := slots[backpack_idx]
+		var backpack_stack := _slots[backpack_idx]
 		if backpack_stack == null:
 			available_capacity += max_stack
 		elif backpack_stack.item_id == hotbar_stack.item_id and not backpack_stack.has_instance_data() and not hotbar_stack.has_instance_data():
@@ -126,7 +356,7 @@ func move_hotbar_slot_to_backpack(hotbar_idx: int) -> bool:
 		return false
 	var remaining: int = hotbar_stack.count
 	for backpack_idx in range(HOTBAR_SIZE, backpack_end):
-		var backpack_stack := slots[backpack_idx]
+		var backpack_stack := _slots[backpack_idx]
 		if backpack_stack == null or backpack_stack.item_id != hotbar_stack.item_id or backpack_stack.has_instance_data() or hotbar_stack.has_instance_data():
 			continue
 		var moved := mini(remaining, max_stack - backpack_stack.count)
@@ -136,90 +366,86 @@ func move_hotbar_slot_to_backpack(hotbar_idx: int) -> bool:
 			break
 	if remaining > 0:
 		for backpack_idx in range(HOTBAR_SIZE, backpack_end):
-			if slots[backpack_idx] == null:
+			if _slots[backpack_idx] == null:
 				if remaining == hotbar_stack.count:
-					slots[backpack_idx] = hotbar_stack
+					_slots[backpack_idx] = hotbar_stack
 				else:
 					assert(not hotbar_stack.has_instance_data())
-					slots[backpack_idx] = InventoryStack.new(hotbar_stack.item_id, remaining)
+					_slots[backpack_idx] = InventoryStack.new(hotbar_stack.item_id, remaining)
 				remaining = 0
 				break
 	assert(remaining == 0)
-	slots[hotbar_idx] = null
-	inventory_changed.emit()
+	_slots[hotbar_idx] = null
 	return true
 
-func can_discard_stack(source_index: int, count: int) -> bool:
-	if source_index < 0 or source_index >= mini(size, TOTAL_SIZE):
+func _can_discard_stack(source_index: int, count: int) -> bool:
+	if source_index < 0 or source_index >= mini(_size, TOTAL_SIZE):
 		return false
-	var stack := slots[source_index]
+	var stack := _slots[source_index]
 	return stack != null and count > 0 and count <= stack.count
 
-func discard_stack(source_index: int, count: int) -> bool:
-	if not can_discard_stack(source_index, count):
+func _apply_discard_stack(source_index: int, count: int) -> bool:
+	if not _can_discard_stack(source_index, count):
 		return false
-	var stack := slots[source_index]
+	var stack := _slots[source_index]
 	stack.count -= count
 	if stack.count == 0:
-		slots[source_index] = null
-	inventory_changed.emit()
+		_slots[source_index] = null
 	return true
 
-func ensure_item(item_id: StringName) -> bool:
+func _apply_ensure_item(item_id: StringName) -> bool:
 	if not item_catalog.has_definition(item_id):
 		return false
-	for stack in slots:
+	for stack in _slots:
 		if stack != null and stack.item_id == item_id:
 			return true
-	for index in range(min(size, HOTBAR_SIZE)):
-		if slots[index] == null:
-			slots[index] = _create_stack(item_id, 1, equipment_instance_factory)
-			if slots[index] == null:
+	for index in range(min(_size, HOTBAR_SIZE)):
+		if _slots[index] == null:
+			_slots[index] = _create_stack(item_id, 1, equipment_instance_factory)
+			if _slots[index] == null:
 				return false
-			inventory_changed.emit()
 			return true
-	for index in range(HOTBAR_SIZE, min(size, FILLABLE_SIZE)):
-		if slots[index] == null:
-			slots[index] = slots[0]
-			slots[0] = _create_stack(item_id, 1, equipment_instance_factory)
-			if slots[0] == null:
+	for index in range(HOTBAR_SIZE, min(_size, FILLABLE_SIZE)):
+		if _slots[index] == null:
+			_slots[index] = _slots[0]
+			_slots[0] = _create_stack(item_id, 1, equipment_instance_factory)
+			if _slots[0] == null:
 				return false
-			inventory_changed.emit()
 			return true
 	return false
 
-func migrate_starter_items() -> bool:
-	if starter_item_migration_version >= STARTER_ITEM_MIGRATION_VERSION:
+func _apply_migrate_starter_items() -> bool:
+	if _starter_item_migration_version >= STARTER_ITEM_MIGRATION_VERSION:
 		return true
+	var expected_next_instance_id := equipment_instance_factory.get_next_instance_id()
 	var simulated_factory := equipment_instance_factory.copy()
-	var simulated := InventoryModel.new(item_catalog, simulated_factory, size)
-	simulated.slots = _copy_slots()
+	var simulated := InventoryModel.new(item_catalog, simulated_factory, _size)
+	simulated._slots = _copy_slots()
 	for starter_slot in STARTER_ITEMS_BY_SLOT:
 		var item_id: StringName = STARTER_ITEMS_BY_SLOT[starter_slot]
-		var item_ensured := simulated.ensure_item(item_id) if starter_slot < HOTBAR_SIZE else simulated.ensure_backpack_item(item_id)
+		var item_ensured := simulated._apply_ensure_item(item_id) if starter_slot < HOTBAR_SIZE else simulated._apply_ensure_backpack_item(item_id)
 		if not item_ensured:
 			return false
-	slots = simulated.slots
-	assert(equipment_instance_factory.try_advance_next_instance_id(
-		equipment_instance_factory.get_next_instance_id(),
+	if not equipment_instance_factory.try_advance_next_instance_id(
+		expected_next_instance_id,
 		simulated_factory.get_next_instance_id(),
-	))
-	starter_item_migration_version = STARTER_ITEM_MIGRATION_VERSION
-	inventory_changed.emit()
+	):
+		return false
+	_slots = simulated._slots
+	_starter_item_migration_version = STARTER_ITEM_MIGRATION_VERSION
 	return true
 
-func ensure_backpack_item(item_id: StringName) -> bool:
+func _apply_ensure_backpack_item(item_id: StringName) -> bool:
 	if not item_catalog.has_definition(item_id):
 		return false
-	for stack in slots:
+	for stack in _slots:
 		if stack != null and stack.item_id == item_id:
 			return true
-	for index in range(HOTBAR_SIZE, FILLABLE_SIZE):
-		if slots[index] == null:
-			slots[index] = _create_stack(item_id, 1, equipment_instance_factory)
-			if slots[index] == null:
+	for index in range(HOTBAR_SIZE, min(_size, FILLABLE_SIZE)):
+		if _slots[index] == null:
+			_slots[index] = _create_stack(item_id, 1, equipment_instance_factory)
+			if _slots[index] == null:
 				return false
-			inventory_changed.emit()
 			return true
 	return false
 
@@ -227,27 +453,28 @@ func get_backpack_item_count(item_id: StringName) -> int:
 	if not item_catalog.has_definition(item_id):
 		return 0
 	var total := 0
-	for index in range(HOTBAR_SIZE, min(size, FILLABLE_SIZE)):
-		var stack := slots[index]
+	for index in range(HOTBAR_SIZE, min(_size, FILLABLE_SIZE)):
+		var stack := _slots[index]
 		if stack != null and stack.item_id == item_id:
 			total += stack.count
 	return total
 
-func add_backpack_item(item_id: StringName, count: int) -> bool:
+func _apply_add_backpack_item(item_id: StringName, count: int) -> bool:
 	if count < 1 or not item_catalog.has_definition(item_id):
 		return false
+	var expected_next_instance_id := equipment_instance_factory.get_next_instance_id()
 	var simulated := _copy_slots()
 	var simulated_factory := equipment_instance_factory.copy()
 	var max_stack: int = item_catalog.get_definition(item_id).max_stack
 	var remaining := _grant_item_to_indices(simulated, item_id, count, max_stack, _get_backpack_indices(), simulated_factory)
 	if remaining > 0:
 		return false
-	slots = simulated
-	assert(equipment_instance_factory.try_advance_next_instance_id(
-		equipment_instance_factory.get_next_instance_id(),
+	if not equipment_instance_factory.try_advance_next_instance_id(
+		expected_next_instance_id,
 		simulated_factory.get_next_instance_id(),
-	))
-	inventory_changed.emit()
+	):
+		return false
+	_slots = simulated
 	return true
 
 func get_inventory_item_count(item_id: StringName) -> int:
@@ -255,35 +482,28 @@ func get_inventory_item_count(item_id: StringName) -> int:
 		return 0
 	var total := 0
 	for index in _get_inventory_indices():
-		var stack := slots[index]
+		var stack := _slots[index]
 		if stack != null and stack.item_id == item_id:
 			total += stack.count
 	return total
 
-func can_exchange_inventory_items(
+func _apply_exchange_inventory_items(
 	consumed: Dictionary[StringName, int],
 	granted: Dictionary[StringName, int],
 	creation_factory: EquipmentInstanceFactory,
 ) -> bool:
 	assert(creation_factory == equipment_instance_factory)
-	return not _simulate_inventory_exchange(consumed, granted, creation_factory.copy()).is_empty()
-
-func exchange_inventory_items(
-	consumed: Dictionary[StringName, int],
-	granted: Dictionary[StringName, int],
-	creation_factory: EquipmentInstanceFactory,
-) -> bool:
-	assert(creation_factory == equipment_instance_factory)
+	var expected_next_instance_id := creation_factory.get_next_instance_id()
 	var simulated_factory := creation_factory.copy()
 	var simulated := _simulate_inventory_exchange(consumed, granted, simulated_factory)
 	if simulated.is_empty():
 		return false
-	slots = simulated
-	assert(creation_factory.try_advance_next_instance_id(
-		creation_factory.get_next_instance_id(),
+	if not creation_factory.try_advance_next_instance_id(
+		expected_next_instance_id,
 		simulated_factory.get_next_instance_id(),
-	))
-	inventory_changed.emit()
+	):
+		return false
+	_slots = simulated
 	return true
 
 func _simulate_inventory_exchange(
@@ -332,13 +552,13 @@ func _get_inventory_indices() -> Array[int]:
 func _get_backpack_indices() -> Array[int]:
 	var indices: Array[int] = []
 	# Prefer the backpack so crafting does not disturb hotbar assignments unless needed.
-	for index in range(HOTBAR_SIZE, mini(size, FILLABLE_SIZE)):
+	for index in range(HOTBAR_SIZE, mini(_size, FILLABLE_SIZE)):
 		indices.append(index)
 	return indices
 
 func _get_hotbar_indices() -> Array[int]:
 	var indices: Array[int] = []
-	for index in range(mini(size, HOTBAR_SIZE)):
+	for index in range(mini(_size, HOTBAR_SIZE)):
 		indices.append(index)
 	return indices
 
@@ -349,13 +569,7 @@ func _simulate_stack_add(stack: InventoryStack) -> Array[InventoryStack]:
 	return simulated
 
 func _try_add_stack_to_slots(stack: InventoryStack, simulated: Array[InventoryStack]) -> bool:
-	if (
-		stack == null
-		or stack.count < 1
-		or not item_catalog.has_definition(stack.item_id)
-		or stack.count > item_catalog.get_definition(stack.item_id).max_stack
-		or not _is_valid_stack(stack)
-	):
+	if not _is_valid_incoming_stack(stack):
 		return false
 	if stack.has_instance_data():
 		for existing_stack in simulated:
@@ -388,6 +602,15 @@ func _try_add_stack_to_slots(stack: InventoryStack, simulated: Array[InventorySt
 			equipment_instance_factory,
 		)
 	return remaining == 0
+
+func _is_valid_incoming_stack(stack: InventoryStack) -> bool:
+	return (
+		stack != null
+		and stack.count >= 1
+		and item_catalog.has_definition(stack.item_id)
+		and stack.count <= item_catalog.get_definition(stack.item_id).max_stack
+		and _is_valid_stack(stack)
+	)
 
 func _grant_item_to_indices(
 	simulated: Array[InventoryStack],
@@ -422,11 +645,19 @@ func _grant_item_to_indices(
 
 func _copy_slots() -> Array[InventoryStack]:
 	var copied: Array[InventoryStack] = []
-	copied.resize(size)
-	for index in range(size):
-		if slots[index] != null:
-			copied[index] = slots[index].copy()
+	copied.resize(_size)
+	for index in range(_size):
+		if _slots[index] != null:
+			copied[index] = _slots[index].copy()
 	return copied
+
+func _get_stack_instance_id(stack: InventoryStack) -> int:
+	if stack == null or stack.equipment_instance == null:
+		return 0
+	return stack.equipment_instance.instance_id
+
+func _get_stack_fingerprint(stack: InventoryStack) -> String:
+	return "" if stack == null else JSON.stringify(stack.to_dict())
 
 func _create_stack(
 	item_id: StringName,
@@ -459,7 +690,7 @@ func _simulate_slots(ids: Array[StringName], simulated_factory: EquipmentInstanc
 		var max_stack := item_catalog.get_definition(item_id).max_stack
 		var added := false
 		var empty_idx := -1
-		for index in range(min(size, FILLABLE_SIZE)):
+		for index in range(min(_size, FILLABLE_SIZE)):
 			var stack := sim[index]
 			if stack == null:
 				if empty_idx == -1:
@@ -480,44 +711,39 @@ func _simulate_slots(ids: Array[StringName], simulated_factory: EquipmentInstanc
 		return []
 	return sim
 
-func can_add_batch(ids: Array[StringName]) -> bool:
+func _apply_add_batch(ids: Array[StringName]) -> bool:
 	if ids.is_empty():
 		return true
-	return not _simulate_slots(ids, equipment_instance_factory.copy()).is_empty()
-
-func add_batch(ids: Array[StringName]) -> bool:
-	if ids.is_empty():
-		return true
+	var expected_next_instance_id := equipment_instance_factory.get_next_instance_id()
 	var simulated_factory := equipment_instance_factory.copy()
 	var sim := _simulate_slots(ids, simulated_factory)
 	if sim.is_empty():
 		return false
-	slots = sim
-	assert(equipment_instance_factory.try_advance_next_instance_id(
-		equipment_instance_factory.get_next_instance_id(),
+	if not equipment_instance_factory.try_advance_next_instance_id(
+		expected_next_instance_id,
 		simulated_factory.get_next_instance_id(),
-	))
-	inventory_changed.emit()
+	):
+		return false
+	_slots = sim
 	return true
 
-func consume_selected() -> bool:
-	if not can_consume_selected():
+func _apply_consume_selected() -> bool:
+	if not _can_consume_selected():
 		return false
-	var stack := slots[selected_slot]
+	var stack := _slots[_selected_slot]
 	stack.count -= 1
 	if stack.count <= 0:
-		slots[selected_slot] = null
-	inventory_changed.emit()
+		_slots[_selected_slot] = null
 	return true
 
-func can_consume_selected() -> bool:
-	if not is_hotbar_index(selected_slot):
+func _can_consume_selected() -> bool:
+	if not is_hotbar_index(_selected_slot):
 		return false
 	var stack := get_selected_data()
 	return stack != null and stack.count > 0
 
 func is_hotbar_index(idx: int) -> bool:
-	return idx >= 0 and idx < HOTBAR_SIZE
+	return idx >= 0 and idx < min(_size, HOTBAR_SIZE)
 
 static func is_equipment_index(idx: int) -> bool:
 	return idx >= FILLABLE_SIZE and idx < TOTAL_SIZE
@@ -543,7 +769,7 @@ static func get_region_indices(region_name: String) -> Array:
 	return []
 
 func can_slot_accept_item_id(idx: int, item_id) -> bool:
-	if idx < 0 or idx >= size or not item_id is StringName or not item_catalog.has_definition(item_id):
+	if idx < 0 or idx >= _size or not item_id is StringName or not item_catalog.has_definition(item_id):
 		return false
 	if idx < FILLABLE_SIZE:
 		return true
@@ -552,12 +778,12 @@ func can_slot_accept_item_id(idx: int, item_id) -> bool:
 	var armor := item_catalog.get_definition(item_id) as ArmorDefinition
 	return armor != null and get_equipment_index(armor.armor_slot) == idx
 
-func can_handle_drop(src_idx: int, dst_idx: int, drag_count: int) -> bool:
-	if src_idx < 0 or src_idx >= size or dst_idx < 0 or dst_idx >= size:
+func _can_handle_drop(src_idx: int, dst_idx: int, drag_count: int) -> bool:
+	if src_idx < 0 or src_idx >= _size or dst_idx < 0 or dst_idx >= _size:
 		return false
 	if src_idx == dst_idx:
 		return false
-	var src := slots[src_idx]
+	var src := _slots[src_idx]
 	if src == null:
 		return false
 	if drag_count <= 0 or drag_count > src.count:
@@ -567,7 +793,7 @@ func can_handle_drop(src_idx: int, dst_idx: int, drag_count: int) -> bool:
 	var drag_item_id := src.item_id
 	if not can_slot_accept_item_id(dst_idx, drag_item_id):
 		return false
-	var dst := slots[dst_idx]
+	var dst := _slots[dst_idx]
 	if dst == null:
 		return true
 	if dst.item_id == drag_item_id:
@@ -576,203 +802,60 @@ func can_handle_drop(src_idx: int, dst_idx: int, drag_count: int) -> bool:
 		return dst.count < item_catalog.get_definition(drag_item_id).max_stack
 	return drag_count == src.count and can_slot_accept_item_id(src_idx, dst.item_id)
 
-func handle_drop(src_idx: int, dst_idx: int, drag_count: int) -> bool:
-	if not can_handle_drop(src_idx, dst_idx, drag_count):
+func _apply_handle_drop(src_idx: int, dst_idx: int, drag_count: int) -> bool:
+	if not _can_handle_drop(src_idx, dst_idx, drag_count):
 		return false
-	var src := slots[src_idx]
-	var dst := slots[dst_idx]
+	var src := _slots[src_idx]
+	var dst := _slots[dst_idx]
 	var drag_item_id := src.item_id
 	if dst == null:
 		if drag_count == src.count:
-			slots[dst_idx] = src
-			slots[src_idx] = null
+			_slots[dst_idx] = src
+			_slots[src_idx] = null
 		else:
 			assert(not src.has_instance_data())
-			slots[dst_idx] = InventoryStack.new(drag_item_id, drag_count)
+			_slots[dst_idx] = InventoryStack.new(drag_item_id, drag_count)
 			src.count -= drag_count
-		inventory_changed.emit()
 		return true
 	if dst.item_id == drag_item_id:
 		if src.has_instance_data() or dst.has_instance_data():
-			slots[src_idx] = dst
-			slots[dst_idx] = src
-			inventory_changed.emit()
+			_slots[src_idx] = dst
+			_slots[dst_idx] = src
 			return true
 		var max_stack := item_catalog.get_definition(drag_item_id).max_stack
 		var to_move: int = mini(drag_count, max_stack - dst.count)
 		dst.count += to_move
 		src.count -= to_move
 		if src.count <= 0:
-			slots[src_idx] = null
-		inventory_changed.emit()
+			_slots[src_idx] = null
 		return true
-	slots[src_idx] = dst
-	slots[dst_idx] = src
-	inventory_changed.emit()
+	_slots[src_idx] = dst
+	_slots[dst_idx] = src
 	return true
 
-func can_transfer_stack_to(destination: InventoryModel, src_idx: int, dst_idx: int, drag_count: int) -> bool:
-	if destination == self:
-		return can_handle_drop(src_idx, dst_idx, drag_count)
-	return not _simulate_transfer_to(destination, src_idx, dst_idx, drag_count).is_empty()
-
-func transfer_stack_to(destination: InventoryModel, src_idx: int, dst_idx: int, drag_count: int) -> bool:
-	if destination == self:
-		return handle_drop(src_idx, dst_idx, drag_count)
-	var simulated := _simulate_transfer_to(destination, src_idx, dst_idx, drag_count)
-	if simulated.is_empty():
-		return false
-	slots = simulated["source"]
-	destination.slots = simulated["destination"]
-	inventory_changed.emit()
-	destination.inventory_changed.emit()
-	return true
-
-func can_transfer_stack_to_indices(destination: InventoryModel, src_idx: int, destination_indices: Array[int]) -> bool:
-	return not _simulate_transfer_to_indices(destination, src_idx, destination_indices).is_empty()
-
-func transfer_stack_to_indices(destination: InventoryModel, src_idx: int, destination_indices: Array[int]) -> bool:
-	var simulated := _simulate_transfer_to_indices(destination, src_idx, destination_indices)
-	if simulated.is_empty():
-		return false
-	slots = simulated["source"]
-	destination.slots = simulated["destination"]
-	inventory_changed.emit()
-	destination.inventory_changed.emit()
-	return true
-
-func _simulate_transfer_to_indices(destination: InventoryModel, src_idx: int, destination_indices: Array[int]) -> Dictionary:
-	if (
-		destination == null
-		or destination == self
-		or item_catalog != destination.item_catalog
-		or equipment_instance_factory != destination.equipment_instance_factory
-	):
-		return {}
-	if src_idx < 0 or src_idx >= size or destination_indices.is_empty():
-		return {}
-	var source_stack := slots[src_idx]
-	if source_stack == null:
-		return {}
-	var unique_indices: Array[int] = []
-	for index in destination_indices:
-		if index < 0 or index >= destination.size or unique_indices.has(index):
-			return {}
-		if not destination.can_slot_accept_item_id(index, source_stack.item_id):
-			return {}
-		unique_indices.append(index)
-	var source_slots := _copy_slots()
-	var destination_slots := destination._copy_slots()
-	var remaining := source_stack.count
-	var max_stack := item_catalog.get_definition(source_stack.item_id).max_stack
-	if not source_stack.has_instance_data():
-		for index in unique_indices:
-			var destination_stack := destination_slots[index]
-			if destination_stack == null or destination_stack.item_id != source_stack.item_id:
-				continue
-			if destination_stack.has_instance_data() or destination_stack.count >= max_stack:
-				continue
-			var moved := mini(remaining, max_stack - destination_stack.count)
-			destination_stack.count += moved
-			remaining -= moved
-			if remaining == 0:
-				break
-	if remaining > 0:
-		for index in unique_indices:
-			if destination_slots[index] != null:
-				continue
-			if source_stack.has_instance_data():
-				if remaining != source_stack.count:
-					return {}
-				destination_slots[index] = source_stack.copy()
-				remaining = 0
-				break
-			var moved := mini(remaining, max_stack)
-			destination_slots[index] = InventoryStack.new(source_stack.item_id, moved)
-			remaining -= moved
-			if remaining == 0:
-				break
-	if remaining > 0:
-		return {}
-	source_slots[src_idx] = null
-	return {
-		"source": source_slots,
-		"destination": destination_slots,
-	}
-
-func _simulate_transfer_to(destination: InventoryModel, src_idx: int, dst_idx: int, drag_count: int) -> Dictionary:
-	if (
-		destination == null
-		or item_catalog != destination.item_catalog
-		or equipment_instance_factory != destination.equipment_instance_factory
-	):
-		return {}
-	if src_idx < 0 or src_idx >= size or dst_idx < 0 or dst_idx >= destination.size:
-		return {}
-	var source_stack := slots[src_idx]
-	if source_stack == null or drag_count <= 0 or drag_count > source_stack.count:
-		return {}
-	if source_stack.has_instance_data() and drag_count != source_stack.count:
-		return {}
-	if not destination.can_slot_accept_item_id(dst_idx, source_stack.item_id):
-		return {}
-	var destination_stack := destination.slots[dst_idx]
-	if destination_stack != null:
-		if destination_stack.item_id == source_stack.item_id:
-			if source_stack.has_instance_data() or destination_stack.has_instance_data():
-				if drag_count != source_stack.count or not can_slot_accept_item_id(src_idx, destination_stack.item_id):
-					return {}
-			elif destination_stack.count >= item_catalog.get_definition(source_stack.item_id).max_stack:
-				return {}
-		elif drag_count != source_stack.count or not can_slot_accept_item_id(src_idx, destination_stack.item_id):
-			return {}
-	var source_slots := _copy_slots()
-	var destination_slots := destination._copy_slots()
-	var simulated_source := source_slots[src_idx]
-	var simulated_destination := destination_slots[dst_idx]
-	if simulated_destination == null:
-		if drag_count == simulated_source.count:
-			destination_slots[dst_idx] = simulated_source
-			source_slots[src_idx] = null
-		else:
-			assert(not simulated_source.has_instance_data())
-			destination_slots[dst_idx] = InventoryStack.new(simulated_source.item_id, drag_count)
-			simulated_source.count -= drag_count
-	elif simulated_destination.item_id == simulated_source.item_id:
-		if simulated_source.has_instance_data() or simulated_destination.has_instance_data():
-			source_slots[src_idx] = simulated_destination
-			destination_slots[dst_idx] = simulated_source
-		else:
-			var max_stack := item_catalog.get_definition(simulated_source.item_id).max_stack
-			var moved := mini(drag_count, max_stack - simulated_destination.count)
-			simulated_destination.count += moved
-			simulated_source.count -= moved
-			if simulated_source.count == 0:
-				source_slots[src_idx] = null
-	else:
-		source_slots[src_idx] = simulated_destination
-		destination_slots[dst_idx] = simulated_source
-	return {
-		"source": source_slots,
-		"destination": destination_slots,
-	}
-
-func can_commit_socketed_rune(
-	gear_index: int,
-	expected_rune_ids: Array[StringName],
-	next_rune_ids: Array[StringName],
-	rune_source_index: int,
-	rune_id: StringName,
+func _apply_replace_stack_at(
+	index: int,
+	expected_stack: InventoryStack,
+	replacement_stack: InventoryStack,
 ) -> bool:
-	return not _simulate_socketed_rune(
-		gear_index,
-		expected_rune_ids,
-		next_rune_ids,
-		rune_source_index,
-		rune_id,
-	).is_empty()
+	if index < 0 or index >= _size:
+		return false
+	if _get_stack_fingerprint(_slots[index]) != _get_stack_fingerprint(expected_stack):
+		return false
+	if _get_stack_fingerprint(expected_stack) == _get_stack_fingerprint(replacement_stack):
+		return false
+	if replacement_stack != null:
+		if not _is_valid_incoming_stack(replacement_stack) or not can_slot_accept_item_id(index, replacement_stack.item_id):
+			return false
+		var replacement_instance_id := _get_stack_instance_id(replacement_stack)
+		if replacement_instance_id > 0:
+			for slot_index in range(_size):
+				if slot_index != index and _get_stack_instance_id(_slots[slot_index]) == replacement_instance_id:
+					return false
+	_slots[index] = null if replacement_stack == null else replacement_stack.copy()
+	return true
 
-func commit_socketed_rune(
+func _apply_socketed_rune(
 	gear_index: int,
 	expected_rune_ids: Array[StringName],
 	next_rune_ids: Array[StringName],
@@ -788,8 +871,7 @@ func commit_socketed_rune(
 	)
 	if simulated.is_empty():
 		return false
-	slots = simulated
-	inventory_changed.emit()
+	_slots = simulated
 	return true
 
 func _simulate_socketed_rune(
@@ -801,15 +883,15 @@ func _simulate_socketed_rune(
 ) -> Array[InventoryStack]:
 	if (
 		gear_index < 0
-		or gear_index >= size
+		or gear_index >= _size
 		or rune_source_index < 0
-		or rune_source_index >= min(size, FILLABLE_SIZE)
+		or rune_source_index >= min(_size, FILLABLE_SIZE)
 		or gear_index == rune_source_index
 		or rune_id.is_empty()
 	):
 		return []
-	var gear := slots[gear_index]
-	var rune_stack := slots[rune_source_index]
+	var gear := _slots[gear_index]
+	var rune_stack := _slots[rune_source_index]
 	if (
 		gear == null
 		or gear.count != 1
@@ -833,20 +915,7 @@ func _simulate_socketed_rune(
 		simulated[rune_source_index] = null
 	return simulated
 
-func can_commit_unsocketed_rune(
-	gear_index: int,
-	expected_rune_ids: Array[StringName],
-	next_rune_ids: Array[StringName],
-	returned_rune_id: StringName,
-) -> bool:
-	return not _simulate_unsocketed_rune(
-		gear_index,
-		expected_rune_ids,
-		next_rune_ids,
-		returned_rune_id,
-	).is_empty()
-
-func commit_unsocketed_rune(
+func _apply_unsocketed_rune(
 	gear_index: int,
 	expected_rune_ids: Array[StringName],
 	next_rune_ids: Array[StringName],
@@ -860,8 +929,7 @@ func commit_unsocketed_rune(
 	)
 	if simulated.is_empty():
 		return false
-	slots = simulated
-	inventory_changed.emit()
+	_slots = simulated
 	return true
 
 func _simulate_unsocketed_rune(
@@ -872,13 +940,13 @@ func _simulate_unsocketed_rune(
 ) -> Array[InventoryStack]:
 	if (
 		gear_index < 0
-		or gear_index >= size
+		or gear_index >= _size
 		or returned_rune_id.is_empty()
 		or not item_catalog.has_definition(returned_rune_id)
 		or not item_catalog.get_definition(returned_rune_id) is RuneDefinition
 	):
 		return []
-	var gear := slots[gear_index]
+	var gear := _slots[gear_index]
 	if (
 		gear == null
 		or gear.count != 1
@@ -909,7 +977,10 @@ func _simulate_unsocketed_rune(
 			_get_hotbar_indices(),
 			equipment_instance_factory,
 		)
-	return [] if remaining > 0 else simulated
+	if remaining > 0:
+		var failed: Array[InventoryStack] = []
+		return failed
+	return simulated
 
 func _is_single_socket_addition(
 	expected_rune_ids: Array[StringName],
@@ -954,58 +1025,28 @@ func to_dict() -> Dictionary:
 		var indices: Array = InventoryModel.get_region_indices(region_name)
 		var encoded: Array = []
 		for idx in indices:
-			var stack := slots[idx] if idx >= 0 and idx < slots.size() else null
+			var stack := _slots[idx] if idx >= 0 and idx < _slots.size() else null
 			encoded.append(null if stack == null else stack.to_dict())
 		regions_dict[region_name] = encoded
 	return {
-		"selected": selected_slot,
-		"starter_item_migration_version": starter_item_migration_version,
+		"selected": _selected_slot,
+		"starter_item_migration_version": _starter_item_migration_version,
 		"regions": regions_dict,
 	}
 
 func get_equipment_instance_ids() -> Array[int]:
 	var instance_ids: Array[int] = []
-	for stack in slots:
+	for stack in _slots:
 		if stack != null and stack.equipment_instance != null:
 			instance_ids.append(stack.equipment_instance.instance_id)
 	return instance_ids
 
-func encode_slots() -> Array:
-	var encoded: Array = []
-	for stack in slots:
-		encoded.append(null if stack == null else stack.to_dict())
-	return encoded
-
-func restore_slots(encoded: Array) -> bool:
-	if encoded.size() != size:
-		return false
-	var restored: Array[InventoryStack] = []
-	restored.resize(size)
-	restored.fill(null)
-	var restored_instance_ids: Dictionary = {}
-	for index in range(size):
-		var raw = encoded[index]
-		if raw == null:
-			continue
-		if not raw is Dictionary:
-			return false
-		var stack := InventoryStack.from_dict(raw)
-		if not _is_valid_stack(stack):
-			return false
-		if stack.equipment_instance != null:
-			var instance_id := stack.equipment_instance.instance_id
-			if restored_instance_ids.has(instance_id):
-				return false
-			restored_instance_ids[instance_id] = true
-		restored[index] = stack
-	slots = restored
-	inventory_changed.emit()
-	return true
-
 func from_dict(data: Dictionary) -> bool:
+	if _runtime_bound:
+		return false
 	var regions_dict = data.get("regions", {}) as Dictionary
 	var restored_slots: Array[InventoryStack] = []
-	restored_slots.resize(size)
+	restored_slots.resize(_size)
 	restored_slots.fill(null)
 	var restored_instance_ids: Dictionary = {}
 	for region in REGIONS:
@@ -1019,7 +1060,7 @@ func from_dict(data: Dictionary) -> bool:
 			var raw = (encoded as Array)[offset]
 			if raw == null:
 				continue
-			if idx >= size:
+			if idx >= _size:
 				return false
 			if (
 				not raw is Dictionary
@@ -1046,28 +1087,37 @@ func from_dict(data: Dictionary) -> bool:
 	var restored_migration_version := int(data.get("starter_item_migration_version", 0))
 	if restored_migration_version < 0 or restored_migration_version > STARTER_ITEM_MIGRATION_VERSION:
 		return false
-	slots = restored_slots
-	starter_item_migration_version = restored_migration_version
-	selected_slot = int(data.get("selected", 0))
-	if not is_hotbar_index(selected_slot):
-		selected_slot = 0
+	_slots = restored_slots
+	_starter_item_migration_version = restored_migration_version
+	_selected_slot = int(data.get("selected", 0))
+	if not is_hotbar_index(_selected_slot):
+		_selected_slot = 0
+	_revision += 1
 	inventory_changed.emit()
 	return true
 
-func setup_starter():
-	slots.fill(null)
+func setup_starter() -> bool:
+	if _runtime_bound or _size < FILLABLE_SIZE:
+		return false
+	_slots.fill(null)
 	for starter_slot in STARTER_ITEMS_BY_SLOT:
-		slots[starter_slot] = _create_stack(STARTER_ITEMS_BY_SLOT[starter_slot], 1, equipment_instance_factory)
-		assert(slots[starter_slot] != null)
-	slots[1] = InventoryStack.new(item_catalog.get_item_for_block(BlockId.Type.GRASS).id, 12)
-	slots[2] = InventoryStack.new(item_catalog.get_item_for_block(BlockId.Type.STONE).id, 8)
-	slots[6] = InventoryStack.new(item_catalog.get_item_for_block(BlockId.Type.TORCH).id, 16)
-	selected_slot = 0
-	starter_item_migration_version = STARTER_ITEM_MIGRATION_VERSION
+		_slots[starter_slot] = _create_stack(STARTER_ITEMS_BY_SLOT[starter_slot], 1, equipment_instance_factory)
+		assert(_slots[starter_slot] != null)
+	_slots[1] = InventoryStack.new(item_catalog.get_item_for_block(BlockId.Type.GRASS).id, 12)
+	_slots[2] = InventoryStack.new(item_catalog.get_item_for_block(BlockId.Type.STONE).id, 8)
+	_slots[6] = InventoryStack.new(item_catalog.get_item_for_block(BlockId.Type.TORCH).id, 16)
+	_selected_slot = 0
+	_starter_item_migration_version = STARTER_ITEM_MIGRATION_VERSION
+	_revision += 1
 	inventory_changed.emit()
+	return true
 
-func setup_empty():
-	slots.fill(null)
-	selected_slot = 0
-	starter_item_migration_version = STARTER_ITEM_MIGRATION_VERSION
+func setup_empty() -> bool:
+	if _runtime_bound:
+		return false
+	_slots.fill(null)
+	_selected_slot = 0
+	_starter_item_migration_version = STARTER_ITEM_MIGRATION_VERSION
+	_revision += 1
 	inventory_changed.emit()
+	return true

@@ -57,6 +57,9 @@ func _init() -> void:
 	var chest_item := item_catalog.get_item_for_block(BlockId.Type.CHEST)
 	_expect(chest.container != null and chest.container.rows == 3 and chest.container.columns == 5 and chest.container.get_slot_count() == 15, "canonical chest container dimensions changed")
 	_expect(chest.is_solid and chest.is_opaque and chest.is_raycast_solid, "chest physical properties invalid")
+	_expect(chest.is_breakable, "chest must be breakable")
+	_expect(chest.mining_tool_tag == &"pickaxe" and chest.minimum_mining_power == 1, "chest mining requirement changed")
+	_expect(chest.drop_item_id == &"chest", "chest drop item changed")
 	_expect(chest.top_texture.resource_path == "res://assets/textures/blocks/chest_top.png", "chest top texture changed")
 	_expect(chest.side_texture.resource_path == "res://assets/textures/blocks/chest_side.png", "chest side texture changed")
 	_expect(chest.bottom_texture == chest.top_texture, "chest bottom texture changed")
@@ -67,6 +70,8 @@ func _init() -> void:
 	_expect(chest_placement != null and chest_placement.block == chest, "chest placement mapping is not canonical")
 	_expect(texture_set.top_layers[BlockId.Type.CHEST] == -1 and texture_set.side_layers[BlockId.Type.CHEST] == -1 and texture_set.bottom_layers[BlockId.Type.CHEST] == -1, "separately rendered chest leaked into chunk textures")
 	_expect(not unarmed_mining.can_mine(chest), "unarmed mining can break the chest")
+	_expect(stone_pickaxe_mining.can_mine(chest), "stone pickaxe cannot break the chest")
+	_expect(copper_pickaxe_mining.can_mine(chest), "copper pickaxe cannot break the chest")
 	if _errors.is_empty():
 		print("BLOCK_CONTENT PASS")
 		quit(0)

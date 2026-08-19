@@ -22,7 +22,7 @@ func _gui_input(event: InputEvent) -> void:
 			if get_viewport().gui_is_dragging() or inventory_model == null:
 				return
 			if _backpack_open:
-				if inventory_model.move_hotbar_slot_to_backpack(slot_index):
+				if inventory_loadout_coordinator != null and inventory_loadout_coordinator.move_hotbar_slot_to_backpack(slot_index):
 					get_viewport().set_input_as_handled()
 					return
 			elif inventory_model.get_slot(slot_index) != null:

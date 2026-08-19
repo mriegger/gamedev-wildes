@@ -92,7 +92,11 @@ func _run() -> void:
 	cursor_interactor.target_crafting_station = anvil_block.crafting_station
 	targeting_view.interactor = cursor_interactor
 	_expect(targeting_view._should_show_interaction(), "empty-hand anvil interaction did not enable the pointing cursor")
-	cursor_inventory.slots[0] = InventoryStack.new(&"stone_pickaxe", 1)
+	InventoryTestFixture.restore_slot(cursor_inventory, 0, InventoryStack.new(
+		&"stone_pickaxe",
+		1,
+		cursor_inventory.equipment_instance_factory.create(&"stone_pickaxe"),
+	))
 	_expect(cursor_interactor.is_attempting_crafting_station_mining(), "pickaxe did not select anvil mining mode")
 	_expect(not targeting_view._should_show_interaction(), "pickaxe mining mode enabled the anvil interaction cursor")
 	renderer.set_placement_preview(Vector3i(6, 7, 8), true)
@@ -124,6 +128,8 @@ func _run() -> void:
 
 	var world := VoxelWorld.new(20, 36, 5, 12.0, block_catalog)
 	var inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
+	var inventory_loadout := InventoryTestFixture.create_loadout(inventory)
+	_expect(inventory_loadout != null, "inventory loadout setup failed")
 	var coordinator := AnvilCoordinator.new()
 	coordinator.setup(world)
 	var pickup_position := Vector3i(2, 20, 2)
@@ -145,7 +151,7 @@ func _run() -> void:
 		if not drop_item_id.is_empty():
 			collected_item_ids.append(drop_item_id)
 	_expect(collected_item_ids == [&"anvil", &"torch"], "anvil mining did not return both item drops")
-	_expect(inventory.add_batch(collected_item_ids), "anvil mining drops could not be added to inventory")
+	_expect(inventory_loadout.add_batch(collected_item_ids), "anvil mining drops could not be added to inventory")
 	_expect(world.get_block_id_at(pickup_position) == BlockId.Type.AIR, "picked-up anvil remained in the world")
 	_expect(world.get_block_id_at(torch_position) == BlockId.Type.AIR, "attached torch remained after mining the anvil")
 	_expect(inventory.get_inventory_item_count(&"anvil") == 1, "picked-up anvil was not returned to inventory")
@@ -153,7 +159,9 @@ func _run() -> void:
 
 	var full_inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	for index in range(InventoryModel.FILLABLE_SIZE):
-		full_inventory.slots[index] = InventoryStack.new(&"dirt_block", 99)
+		InventoryTestFixture.restore_slot(full_inventory, index, InventoryStack.new(&"dirt_block", 99))
+	var full_inventory_loadout := InventoryTestFixture.create_loadout(full_inventory)
+	_expect(full_inventory_loadout != null, "full inventory loadout setup failed")
 	_expect(world.try_place_block(pickup_position, BlockId.Type.ANVIL).is_success(), "capacity-test anvil could not be placed")
 	_expect(world.try_place_block(torch_position, BlockId.Type.TORCH, Vector3i.LEFT).is_success(), "capacity-test torch could not attach to the anvil")
 	var full_inventory_motor := (load("res://player/player.tscn") as PackedScene).instantiate() as PlayerMotor
@@ -164,6 +172,7 @@ func _run() -> void:
 	full_inventory_interactor.editable_voxel_world = world
 	full_inventory_interactor.motor = full_inventory_motor
 	full_inventory_interactor.inventory_model = full_inventory
+	full_inventory_interactor.inventory_loadout = full_inventory_loadout
 	full_inventory_interactor._commit_mine(pickup_position, pickaxe_action)
 	_expect(world.get_block_id_at(pickup_position) == BlockId.Type.ANVIL, "failed pickup changed the world")
 	_expect(world.get_block_id_at(torch_position) == BlockId.Type.TORCH, "failed pickup removed the attached torch")

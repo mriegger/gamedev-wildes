@@ -17,7 +17,7 @@ func _run():
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
 	var inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	inventory.setup_starter()
-	inventory.slots[0] = InventoryStack.new(&"stone_pickaxe", 1)
+	InventoryTestFixture.restore_slot(inventory, 0, InventoryStack.new(&"stone_pickaxe", 1))
 	player.held_item_view.setup(inventory)
 	player.animation_driver.setup(player, player.interactor)
 	panel.setup(player)

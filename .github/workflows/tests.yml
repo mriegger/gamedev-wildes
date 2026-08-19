@@ -74,8 +74,13 @@ jobs:
       - name: Run inventory fuzz tests
         run: |
           bash .github/scripts/run_godot_check.sh \
-            120 "ALL PASS" /tmp/inventory_fuzz.log -- \
+            300 "ALL PASS" /tmp/inventory_fuzz.log -- \
             godot --headless --path src --script res://tests/inventory_fuzz_runner.gd -- --seqs=20000 --ops=20
+      - name: Run inventory loadout atomicity tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "INVENTORY_LOADOUT_ATOMICITY PASS" /tmp/inventory_loadout_atomicity.log -- \
+            godot --headless --path src --script res://inventory/tests/inventory_loadout_atomicity.gd
       - name: Run model-free hotbar view tests
         run: |
           bash .github/scripts/run_godot_check.sh \
@@ -250,8 +255,8 @@ jobs:
       - name: Validate active rune effects
         run: |
           bash .github/scripts/run_godot_check.sh \
-            30 "RUNE_EFFECT_COORDINATOR PASS" /tmp/rune_effects.log -- \
-            godot --headless --path src --script res://items/runes/tests/rune_effect_coordinator.gd
+            30 "INVENTORY_LOADOUT_RUNE_EFFECTS PASS" /tmp/rune_effects.log -- \
+            godot --headless --path src --script res://items/runes/tests/inventory_loadout_rune_effects.gd
       - name: Validate rune socketing UI
         run: |
           bash .github/scripts/run_godot_check.sh \

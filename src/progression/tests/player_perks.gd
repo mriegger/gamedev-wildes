@@ -156,7 +156,7 @@ func _init() -> void:
 		"player_perks": {"allocations": {"health": 5}},
 	}
 	_expect(restored_game._restore_player_progression(), "game progression restore failed")
-	_expect(restored_game.player_stats.level == 6 and restored_game.player_stats.experience == 10, "game restore changed saved level progress")
+	_expect(restored_game.player_stats.get_level() == 6 and restored_game.player_stats.get_experience() == 10, "game restore changed saved level progress")
 	_expect(restored_game.player_perk_coordinator.get_rank(&"health") == 5, "game restore lost health ranks")
 	_expect(is_equal_approx(restored_game.player_stats.get_value(&"hp"), 150.0), "game restore did not apply perk maximum HP")
 	_expect(is_equal_approx(restored_game.player_stats.current_hp, 125.0), "game restore did not preserve saved current HP")

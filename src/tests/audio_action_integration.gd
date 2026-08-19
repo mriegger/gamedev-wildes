@@ -80,9 +80,12 @@ func _run():
 		_expect(stream != null, "equip audio stream is null")
 	var inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	inventory.setup_starter()
-	inventory.slots[0] = InventoryStack.new(&"stone_pickaxe", 1)
-	inventory.slots[1] = InventoryStack.new(&"copper_pickaxe", 1)
-	inventory.slots[2] = InventoryStack.new(&"copper_hoe", 1)
+	InventoryTestFixture.restore_slot(inventory, 0, InventoryStack.new(&"stone_pickaxe", 1))
+	InventoryTestFixture.restore_slot(inventory, 1, InventoryStack.new(&"copper_pickaxe", 1))
+	InventoryTestFixture.restore_slot(inventory, 2, InventoryStack.new(&"copper_hoe", 1))
+	var player_stats := ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
+	var inventory_loadout := InventoryTestFixture.create_loadout(inventory, player_stats)
+	_expect(inventory_loadout != null, "inventory loadout setup failed")
 	var combat := MeleeCombatCoordinator.new()
 	root.add_child(combat)
 
@@ -92,7 +95,7 @@ func _run():
 	var harvest := HarvestCoordinator.new()
 	action_audio.setup_harvesting(harvest)
 	var consumption := ItemConsumptionCoordinator.new()
-	consumption.setup(inventory, ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition))
+	consumption.setup(inventory, inventory_loadout, player_stats)
 	action_audio.setup_consumption(consumption)
 	await process_frame
 
@@ -208,35 +211,35 @@ func _run():
 	_expect(player_hit.pitch_scale >= 0.96 and player_hit.pitch_scale <= 1.04, "player hit pitch out of range %f" % player_hit.pitch_scale)
 	_expect(abs(player_hit.volume_db - (-11.0)) < 0.1, "player hit volume expected -11 got %f" % player_hit.volume_db)
 
-	_expect(inventory.select_slot(3), "sword selection failed")
+	_expect(inventory_loadout.select_slot(3), "sword selection failed")
 	_expect(sword_equip_profile.streams.has(equip.stream), "selecting the sword did not play a draw sound")
 	_expect(equip.pitch_scale >= sword_equip_profile.pitch_min and equip.pitch_scale <= sword_equip_profile.pitch_max, "sword equip pitch out of range %f" % equip.pitch_scale)
 	_expect(is_equal_approx(equip.volume_db, sword_equip_profile.volume_db), "sword equip volume was %f" % equip.volume_db)
 	var first_draw: AudioStream = equip.stream
 	equip.stop()
 	equip.stream = null
-	inventory.inventory_changed.emit()
+	_expect(inventory_loadout.select_slot(3), "same sword selection failed")
 	_expect(equip.stream == null, "unchanged sword selection replayed the draw sound")
-	_expect(inventory.select_slot(0), "pickaxe selection failed")
+	_expect(inventory_loadout.select_slot(0), "pickaxe selection failed")
 	_expect(equip.stream == null, "selecting the stone pickaxe played equip audio")
-	_expect(inventory.select_slot(1), "copper pickaxe selection failed")
+	_expect(inventory_loadout.select_slot(1), "copper pickaxe selection failed")
 	_expect(pickaxe_equip_profile.streams.has(equip.stream), "selecting the copper pickaxe did not play its equip sound")
 	_expect(equip.pitch_scale >= pickaxe_equip_profile.pitch_min and equip.pitch_scale <= pickaxe_equip_profile.pitch_max, "pickaxe equip pitch out of range %f" % equip.pitch_scale)
 	_expect(is_equal_approx(equip.volume_db, pickaxe_equip_profile.volume_db), "pickaxe equip volume was %f" % equip.volume_db)
 	var first_pickaxe_draw: AudioStream = equip.stream
 	equip.stop()
 	equip.stream = null
-	_expect(inventory.select_slot(2), "copper hoe selection failed")
+	_expect(inventory_loadout.select_slot(2), "copper hoe selection failed")
 	_expect(hoe_equip_profile.streams.has(equip.stream), "selecting the copper hoe did not play its equip sound")
 	_expect(equip.pitch_scale >= hoe_equip_profile.pitch_min and equip.pitch_scale <= hoe_equip_profile.pitch_max, "hoe equip pitch out of range %f" % equip.pitch_scale)
 	_expect(is_equal_approx(equip.volume_db, hoe_equip_profile.volume_db), "hoe equip volume was %f" % equip.volume_db)
 	equip.stop()
 	equip.stream = null
-	_expect(inventory.select_slot(3), "sword reselection failed")
+	_expect(inventory_loadout.select_slot(3), "sword reselection failed")
 	_expect(equip.stream != null and equip.stream != first_draw, "reselecting the sword did not play a different draw sound")
 	equip.stop()
 	equip.stream = null
-	_expect(inventory.select_slot(1), "copper pickaxe reselection failed")
+	_expect(inventory_loadout.select_slot(1), "copper pickaxe reselection failed")
 	_expect(equip.stream != null and equip.stream != first_pickaxe_draw, "reselecting the copper pickaxe did not play a different draw sound")
 
 	player.queue_free()

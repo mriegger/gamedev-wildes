@@ -22,6 +22,9 @@ func has_proficiency(item_id: StringName) -> bool:
 		and _item_catalog.get_definition(item_id).proficiency != null
 	)
 
+func is_for_catalog(item_catalog: ItemCatalog) -> bool:
+	return _item_catalog == item_catalog
+
 func add_experience(item_id: StringName, amount: float) -> int:
 	assert(has_proficiency(item_id))
 	assert(is_finite(amount) and amount >= 0.0)

@@ -25,15 +25,33 @@ func _run() -> void:
 	_expect(health_potion.consume_audio != null and health_potion.consume_audio.streams.size() == 1, "health potion consume audio is not configured")
 
 	var inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
-	inventory.slots[0] = InventoryStack.new(&"pumpkin", 2)
+	var backpack_index := InventoryModel.HOTBAR_SIZE
+	var defeated_potion_index := 3
+	_expect(inventory.setup_empty(), "test inventory setup failed")
+	_expect(
+		InventoryTestFixture.restore_slots(
+			inventory,
+			{
+				0: InventoryStack.new(&"pumpkin", 2),
+				1: InventoryStack.new(&"apple", 1),
+				2: InventoryStack.new(&"health_potion", 1),
+				defeated_potion_index: InventoryStack.new(&"health_potion", 1),
+				backpack_index: InventoryStack.new(&"health_potion", 1),
+			},
+		),
+		"test inventory contents could not be restored",
+	)
 	var stats := ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
+	var inventory_loadout := InventoryTestFixture.create_loadout(inventory, stats)
+	_expect(inventory_loadout != null, "inventory loadout setup failed")
 	var max_health := stats.get_value(&"hp")
 	var consumption := ItemConsumptionCoordinator.new()
-	consumption.setup(inventory, stats)
+	consumption.setup(inventory, inventory_loadout, stats)
 	consumption.item_consumed.connect(_on_item_consumed)
 	var input_buffer := InputBuffer.new()
 	var interactor := PlayerInteractor.new()
 	interactor.inventory_model = inventory
+	interactor.inventory_loadout = inventory_loadout
 	interactor._input_buffer = input_buffer
 	interactor.item_consumption = consumption
 	interactor.unarmed_primary_action = load("res://items/actions/definitions/unarmed_mining.tres") as MiningActionDefinition
@@ -83,26 +101,24 @@ func _run() -> void:
 	_expect(not interactor.is_mining, "held left-click started mining after consuming the last item")
 	input_buffer.primary_use_pressed = false
 	interactor._handle_item_actions(0.0)
-	inventory.slots[0] = InventoryStack.new(&"apple", 1)
+	_expect(inventory_loadout.select_slot(1), "apple selection failed")
 	input_buffer.primary_use_just = true
 	input_buffer.primary_use_pressed = true
 	interactor._handle_item_actions(0.0)
 	_expect(is_equal_approx(stats.current_hp, max_health * 0.55), "apple did not restore ten percent health")
-	_expect(inventory.get_slot(0) == null, "consumed apple left an empty stack")
+	_expect(inventory.get_slot(1) == null, "consumed apple left an empty stack")
 	_expect(_consumed_item_ids == [&"pumpkin", &"pumpkin", &"apple"], "apple consumption did not announce completion")
 	input_buffer.primary_use_pressed = false
 	interactor._handle_item_actions(0.0)
-	inventory.slots[0] = InventoryStack.new(&"health_potion", 1)
+	_expect(inventory_loadout.select_slot(2), "health potion selection failed")
 	input_buffer.primary_use_just = true
 	input_buffer.primary_use_pressed = true
 	interactor._handle_item_actions(0.0)
 	_expect(is_equal_approx(stats.current_hp, max_health), "selected health potion left-click did not restore full health")
-	_expect(inventory.get_slot(0) == null, "selected health potion left-click did not consume one item")
+	_expect(inventory.get_slot(2) == null, "selected health potion left-click did not consume one item")
 	_expect(_consumed_item_ids == [&"pumpkin", &"pumpkin", &"apple", &"health_potion"], "selected health potion consumption did not announce completion")
 	interactor.free()
 
-	var backpack_index := InventoryModel.HOTBAR_SIZE
-	inventory.slots[backpack_index] = InventoryStack.new(&"health_potion", 1)
 	stats.damage(25.0)
 	var inventory_slot := (load("res://inventory/ui/inventory_slot.tscn") as PackedScene).instantiate() as InventorySlot
 	root.add_child(inventory_slot)
@@ -118,11 +134,11 @@ func _run() -> void:
 	inventory_slot.queue_free()
 	await process_frame
 
-	inventory.slots[0] = InventoryStack.new(&"health_potion", 1)
+	_expect(inventory_loadout.select_slot(defeated_potion_index), "defeated-state potion selection failed")
 	stats.set_current_hp(0.0)
 	_expect(not consumption.can_consume_selected(), "defeated player could consume a health potion")
 	_expect(not consumption.try_consume_selected(), "defeated consumption succeeded")
-	_expect(inventory.get_slot(0).count == 1, "defeated consumption removed a health potion")
+	_expect(inventory.get_slot(defeated_potion_index).count == 1, "defeated consumption removed a health potion")
 
 	if _errors.is_empty():
 		print("ITEM_CONSUMPTION PASS")

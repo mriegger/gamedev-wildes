@@ -23,8 +23,11 @@ func _init() -> void:
 func _process(_delta: float) -> bool:
 	_frame += 1
 	if _phase == 0 and _frame == 2:
+		var inventory_loadout := InventoryTestFixture.create_loadout(_inventory, _stats)
+		_expect(inventory_loadout != null, "inventory loadout setup failed")
 		_console.setup(
 			_inventory,
+			inventory_loadout,
 			_stats,
 			_pumpkin_patch,
 			Callable(self, "_handle_structure_command").bind(&"new"),
@@ -53,7 +56,7 @@ func _process(_delta: float) -> bool:
 		var command_input := _console.get_command_input()
 		command_input.text = "give_xp 50"
 		command_input.text_submitted.emit(command_input.text)
-		_expect(_stats.level == 1 and _stats.experience == 50, "submitted give_xp command did not update progression")
+		_expect(_stats.get_level() == 1 and _stats.get_experience() == 50, "submitted give_xp command did not update progression")
 		_expect(_console.is_open(), "give_xp command closed the developer console")
 		_stats.damage(75.0)
 		command_input.text = "sethealth 40"

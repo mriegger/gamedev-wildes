@@ -47,9 +47,10 @@ func _run() -> void:
 	prompt_coordinator.setup(hud, Callable(self, "_is_interaction_blocked"))
 	prompt_coordinator.set_level_prompt("F  Enter Dungeon")
 	var inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
+	var inventory_loadout := InventoryTestFixture.create_loadout(inventory)
 	var harvest := HarvestCoordinator.new()
 	var harvest_sources: Array[HarvestSource] = [pumpkin_patch]
-	_expect(harvest.setup(harvest_sources, inventory, prompt_coordinator), "pumpkin harvest setup rejected valid content")
+	_expect(harvest.setup(harvest_sources, inventory, inventory_loadout, prompt_coordinator), "pumpkin harvest setup rejected valid content")
 	harvest.harvest_completed.connect(_on_harvest_completed)
 	var crop_index := _find_state_index(generated_snapshot, &"crop")
 	_expect(crop_index >= 0, "generated patch omitted a mature crop")
@@ -62,6 +63,7 @@ func _run() -> void:
 		var harvest_input := InputBuffer.new()
 		var harvest_interactor := PlayerInteractor.new()
 		harvest_interactor.inventory_model = inventory
+		harvest_interactor.inventory_loadout = inventory_loadout
 		harvest_interactor._input_buffer = harvest_input
 		harvest_interactor.harvest = harvest
 		harvest_input.primary_use_just = true
@@ -93,11 +95,14 @@ func _run() -> void:
 	root.add_child(full_patch)
 	_expect(full_patch.setup(voxel_world, player, 17391, generated_snapshot), "full-inventory harvest patch did not restore")
 	var full_inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
+	var full_slots: Dictionary = {}
 	for index in range(InventoryModel.FILLABLE_SIZE):
-		full_inventory.slots[index] = InventoryStack.new(&"dirt_block", 99)
+		full_slots[index] = InventoryStack.new(&"dirt_block", 99)
+	_expect(InventoryTestFixture.restore_slots(full_inventory, full_slots), "full inventory contents could not be restored")
+	var full_loadout := InventoryTestFixture.create_loadout(full_inventory)
 	var full_harvest := HarvestCoordinator.new()
 	var full_harvest_sources: Array[HarvestSource] = [full_patch]
-	_expect(full_harvest.setup(full_harvest_sources, full_inventory, prompt_coordinator), "full-inventory harvest setup failed")
+	_expect(full_harvest.setup(full_harvest_sources, full_inventory, full_loadout, prompt_coordinator), "full-inventory harvest setup failed")
 	full_harvest.harvest_completed.connect(_on_harvest_completed)
 	if crop_index >= 0:
 		var full_snapshot_before := full_patch.snapshot()
@@ -111,6 +116,13 @@ func _run() -> void:
 		_expect(full_patch.snapshot() == full_snapshot_before, "failed harvest changed persistent crop state")
 		_expect(full_inventory.to_dict() == full_inventory_before, "failed harvest partially changed inventory")
 	full_harvest.clear_target()
+	_run_atomic_harvest_regressions(
+		voxel_world,
+		player,
+		item_catalog,
+		generated_snapshot,
+		prompt_coordinator,
+	)
 
 	var encoded_snapshot = JSON.parse_string(JSON.stringify(generated_snapshot))
 	var restored_patch := _new_pumpkin_patch()
@@ -132,9 +144,11 @@ func _run() -> void:
 	var processor := DevConsoleCommandProcessor.new()
 	var actor_stats := ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
 	var structure_command := Callable(self, "_accept_structure_command")
-	var console_catalog := load("res://items/item_catalog.tres") as ItemCatalog
+	var console_inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
+	var console_loadout := InventoryTestFixture.create_loadout(console_inventory, actor_stats)
 	processor.setup(
-		InventoryModel.new(console_catalog, EquipmentInstanceFactory.new(console_catalog)),
+		console_inventory,
+		console_loadout,
 		actor_stats,
 		pumpkin_patch,
 		structure_command,
@@ -200,11 +214,157 @@ func _run() -> void:
 func _new_pumpkin_patch() -> PumpkinPatchCoordinator:
 	return (load("res://farming/pumpkin/pumpkin_patch_coordinator.tscn") as PackedScene).instantiate() as PumpkinPatchCoordinator
 
+func _run_atomic_harvest_regressions(
+	voxel_world: VoxelWorld,
+	player: Node3D,
+	item_catalog: ItemCatalog,
+	generated_snapshot: Dictionary,
+	prompt_coordinator: InteractionPromptCoordinator,
+) -> void:
+	var crop_indices: Array[int] = []
+	var state_ids := generated_snapshot.get("growth_state_ids", []) as Array
+	for index in range(state_ids.size()):
+		if state_ids[index] == "crop":
+			crop_indices.append(index)
+	_expect(crop_indices.size() >= 3, "atomic harvest regressions require three mature crops")
+	if crop_indices.size() < 3:
+		return
+
+	var direct_patch := _new_pumpkin_patch()
+	var foreign_patch := _new_pumpkin_patch()
+	root.add_child(direct_patch)
+	root.add_child(foreign_patch)
+	_expect(direct_patch.setup(voxel_world, player, 17391, generated_snapshot), "prepared harvest patch setup failed")
+	_expect(foreign_patch.setup(voxel_world, player, 17391, generated_snapshot), "foreign prepared harvest patch setup failed")
+	var direct_change := direct_patch.prepare_harvest_target(crop_indices[0])
+	_expect(direct_change != null, "valid pumpkin harvest did not prepare")
+	if direct_change != null:
+		_expect(not foreign_patch.can_commit_prepared_harvest(direct_change), "foreign pumpkin patch accepted a prepared harvest")
+		var direct_notifications: Array[bool] = []
+		direct_patch.state_changed.connect(func() -> void: direct_notifications.append(true))
+		_expect(direct_patch._commit_prepared_harvest(direct_change, false), "silent pumpkin harvest commit failed")
+		_expect(direct_notifications.is_empty(), "silent pumpkin harvest emitted state_changed")
+		_expect(_find_state_index_at(direct_patch.snapshot(), crop_indices[0]) == &"empty", "silent pumpkin harvest did not commit state")
+		var silent_holder := direct_patch.get_node("PumpkinPatch/State%02d" % (crop_indices[0] + 1)) as Node3D
+		_expect(silent_holder.get_child_count() == 1, "silent pumpkin harvest updated presentation before notification")
+		_expect(not direct_patch.can_commit_prepared_harvest(direct_change), "committed pumpkin harvest remained valid")
+		_expect(not direct_patch._commit_prepared_harvest(direct_change, false), "prepared pumpkin harvest committed twice")
+		_expect(direct_patch._notify_prepared_harvest(direct_change), "silent pumpkin harvest notification failed")
+		_expect(direct_notifications.size() == 1, "prepared pumpkin harvest did not notify exactly once")
+		var notified_holder := direct_patch.get_node("PumpkinPatch/State%02d" % (crop_indices[0] + 1)) as Node3D
+		_expect(notified_holder.get_child_count() == 0, "pumpkin harvest notification did not update presentation")
+		_expect(not direct_patch._notify_prepared_harvest(direct_change), "prepared pumpkin harvest notified twice")
+	direct_patch.free()
+	foreign_patch.free()
+
+	var stale_patch := _new_pumpkin_patch()
+	root.add_child(stale_patch)
+	_expect(stale_patch.setup(voxel_world, player, 17391, generated_snapshot), "stale harvest patch setup failed")
+	var stale_change := stale_patch.prepare_harvest_target(crop_indices[0])
+	_expect(stale_change != null, "stale pumpkin harvest did not prepare")
+	_expect(_commit_source_harvest(stale_patch, crop_indices[1]), "intervening pumpkin harvest failed")
+	var stale_snapshot := stale_patch.snapshot()
+	_expect(not stale_patch._commit_prepared_harvest(stale_change, false), "stale prepared pumpkin harvest committed")
+	_expect(stale_patch.snapshot() == stale_snapshot, "stale prepared pumpkin harvest changed patch state")
+	stale_patch.free()
+
+	var inventory_stale_patch := _new_pumpkin_patch()
+	root.add_child(inventory_stale_patch)
+	_expect(inventory_stale_patch.setup(voxel_world, player, 17391, generated_snapshot), "inventory-stale harvest patch setup failed")
+	var inventory_stale_inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
+	var inventory_stale_loadout := InventoryTestFixture.create_loadout(inventory_stale_inventory)
+	var inventory_stale_harvest := HarvestCoordinator.new()
+	var inventory_stale_sources: Array[HarvestSource] = [inventory_stale_patch]
+	_expect(inventory_stale_harvest.setup(
+		inventory_stale_sources,
+		inventory_stale_inventory,
+		inventory_stale_loadout,
+		prompt_coordinator,
+	), "inventory-stale harvest setup failed")
+	_target_tile(inventory_stale_harvest, inventory_stale_patch, crop_indices[0])
+	var inventory_stale_transaction := inventory_stale_harvest._prepare_target_harvest()
+	_expect(inventory_stale_transaction != null, "inventory-stale harvest transaction did not prepare")
+	_expect(inventory_stale_loadout.add_backpack_item(&"dirt_block", 1), "inventory-stale setup mutation failed")
+	var inventory_stale_snapshot := inventory_stale_patch.snapshot()
+	_expect(not inventory_stale_harvest._can_commit_prepared_harvest(inventory_stale_transaction), "harvest accepted a stale inventory revision")
+	_expect(inventory_stale_patch.snapshot() == inventory_stale_snapshot, "inventory-stale harvest partially changed patch state")
+	_expect(inventory_stale_inventory.get_inventory_item_count(&"pumpkin") == 0, "inventory-stale harvest partially granted a pumpkin")
+	_expect(inventory_stale_inventory.get_inventory_item_count(&"dirt_block") == 1, "inventory-stale harvest changed the intervening inventory mutation")
+	inventory_stale_patch.free()
+
+	var patch_stale_patch := _new_pumpkin_patch()
+	root.add_child(patch_stale_patch)
+	_expect(patch_stale_patch.setup(voxel_world, player, 17391, generated_snapshot), "patch-stale harvest patch setup failed")
+	var patch_stale_inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
+	var patch_stale_loadout := InventoryTestFixture.create_loadout(patch_stale_inventory)
+	var patch_stale_harvest := HarvestCoordinator.new()
+	var patch_stale_sources: Array[HarvestSource] = [patch_stale_patch]
+	_expect(patch_stale_harvest.setup(
+		patch_stale_sources,
+		patch_stale_inventory,
+		patch_stale_loadout,
+		prompt_coordinator,
+	), "patch-stale harvest setup failed")
+	_target_tile(patch_stale_harvest, patch_stale_patch, crop_indices[0])
+	var patch_stale_transaction := patch_stale_harvest._prepare_target_harvest()
+	_expect(patch_stale_transaction != null, "patch-stale harvest transaction did not prepare")
+	_expect(_commit_source_harvest(patch_stale_patch, crop_indices[1]), "patch-stale setup mutation failed")
+	var patch_stale_snapshot := patch_stale_patch.snapshot()
+	_expect(not patch_stale_harvest._can_commit_prepared_harvest(patch_stale_transaction), "harvest accepted a stale source revision")
+	_expect(patch_stale_patch.snapshot() == patch_stale_snapshot, "patch-stale harvest changed the intervening patch mutation")
+	_expect(_find_state_index_at(patch_stale_snapshot, crop_indices[0]) == &"crop", "patch-stale harvest consumed its reserved crop")
+	_expect(patch_stale_inventory.get_inventory_item_count(&"pumpkin") == 0, "patch-stale harvest partially granted a pumpkin")
+	patch_stale_patch.free()
+
+	var observed_patch := _new_pumpkin_patch()
+	root.add_child(observed_patch)
+	_expect(observed_patch.setup(voxel_world, player, 17391, generated_snapshot), "observed harvest patch setup failed")
+	var observed_inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
+	var observed_loadout := InventoryTestFixture.create_loadout(observed_inventory)
+	var observed_harvest := HarvestCoordinator.new()
+	var observed_sources: Array[HarvestSource] = [observed_patch]
+	_expect(observed_harvest.setup(
+		observed_sources,
+		observed_inventory,
+		observed_loadout,
+		prompt_coordinator,
+	), "observed harvest setup failed")
+	_target_tile(observed_harvest, observed_patch, crop_indices[0])
+	var observed_transaction := observed_harvest._prepare_target_harvest()
+	_expect(observed_transaction != null, "observed harvest transaction did not prepare")
+	_expect(observed_harvest._can_commit_prepared_harvest(observed_transaction), "observed harvest transaction was not committable")
+	var patch_observations: Array[bool] = []
+	var inventory_observations: Array[bool] = []
+	var reentrant_results: Array[bool] = []
+	observed_patch.state_changed.connect(func() -> void:
+		patch_observations.append(observed_inventory.get_inventory_item_count(&"pumpkin") == 1)
+		reentrant_results.append(observed_harvest.try_harvest_target())
+	)
+	observed_inventory.inventory_changed.connect(func() -> void:
+		inventory_observations.append(_find_state_index_at(observed_patch.snapshot(), crop_indices[0]) == &"empty")
+		reentrant_results.append(observed_harvest.try_harvest_target())
+	)
+	_expect(observed_harvest.try_harvest_target(), "observed pumpkin harvest transaction failed")
+	_expect(patch_observations == [true], "patch observer saw inventory before the harvest commit")
+	_expect(inventory_observations == [true], "inventory observer saw patch state before the harvest commit")
+	_expect(reentrant_results == [false, false], "harvest signal reentrancy committed the crop twice")
+	_expect(observed_inventory.get_inventory_item_count(&"pumpkin") == 1, "observed harvest granted the wrong pumpkin count")
+	_expect(not observed_harvest._can_commit_prepared_harvest(observed_transaction), "committed combined pumpkin harvest transaction remained valid")
+	_expect(patch_observations.size() == 1 and inventory_observations.size() == 1, "duplicate pumpkin harvest emitted another owner notification")
+	observed_patch.free()
+
+func _find_state_index_at(snapshot: Dictionary, tile_index: int) -> StringName:
+	return StringName((snapshot.get("growth_state_ids", []) as Array)[tile_index])
+
 func _find_state_index(snapshot: Dictionary, state_id: StringName) -> int:
 	return (snapshot.get("growth_state_ids", []) as Array).find(String(state_id))
 
 func _count_state(snapshot: Dictionary, state_id: StringName) -> int:
 	return (snapshot.get("growth_state_ids", []) as Array).count(String(state_id))
+
+func _commit_source_harvest(source: HarvestSource, target_id: int) -> bool:
+	var prepared := source.prepare_harvest_target(target_id)
+	return prepared != null and source._commit_prepared_harvest(prepared)
 
 func _target_tile(harvest: HarvestCoordinator, pumpkin_patch: PumpkinPatchCoordinator, tile_index: int) -> void:
 	var bounds := pumpkin_patch.get_tile_world_bounds(tile_index)

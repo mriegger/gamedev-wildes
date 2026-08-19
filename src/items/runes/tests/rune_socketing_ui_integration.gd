@@ -8,6 +8,7 @@ var _errors: Array[String] = []
 var _inventory: InventoryModel
 var _proficiency: ItemProficiency
 var _socketing: RuneSocketingCoordinator
+var _loadout: InventoryLoadoutCoordinator
 var _crafting: CraftingCoordinator
 var _recipe_catalog: CraftingRecipeCatalog
 var _panel: CraftingPanel
@@ -21,16 +22,17 @@ func _init() -> void:
 		affixes,
 		_rune_ids([&"basic_rune"]),
 	)
-	_inventory.slots[GEAR_INDEX] = InventoryStack.new(&"copper_sword", 1, instance)
-	_inventory.slots[RUNE_INDEX] = InventoryStack.new(&"basic_rune", 2)
-	_inventory.slots[2] = InventoryStack.new(&"stone_block", 10)
-	_inventory.slots[3] = InventoryStack.new(&"log_block", 5)
+	InventoryTestFixture.restore_slot(_inventory, GEAR_INDEX, InventoryStack.new(&"copper_sword", 1, instance))
+	InventoryTestFixture.restore_slot(_inventory, RUNE_INDEX, InventoryStack.new(&"basic_rune", 2))
+	InventoryTestFixture.restore_slot(_inventory, 2, InventoryStack.new(&"stone_block", 10))
+	InventoryTestFixture.restore_slot(_inventory, 3, InventoryStack.new(&"log_block", 5))
 	_proficiency = ItemProficiency.new(item_catalog)
+	_loadout = InventoryTestFixture.create_loadout(_inventory, null, _proficiency)
 	_socketing = RuneSocketingCoordinator.new()
-	_expect(_socketing.setup(_inventory, _proficiency), "socketing setup failed")
+	_expect(_socketing.setup(_inventory, _loadout, _proficiency), "socketing setup failed")
 	_recipe_catalog = load("res://crafting/crafting_recipe_catalog.tres") as CraftingRecipeCatalog
 	_crafting = CraftingCoordinator.new()
-	_crafting.setup(_inventory, _recipe_catalog, _inventory.equipment_instance_factory)
+	_crafting.setup(_inventory, _loadout, _recipe_catalog)
 	_panel = (load("res://crafting/presentation/crafting_panel.tscn") as PackedScene).instantiate() as CraftingPanel
 	root.add_child(_panel)
 

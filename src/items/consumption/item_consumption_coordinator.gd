@@ -4,38 +4,44 @@ class_name ItemConsumptionCoordinator
 signal item_consumed(item_id: StringName)
 
 var _inventory: InventoryModel
+var _loadout: InventoryLoadoutCoordinator
 var _stats: ActorStats
 
-func setup(inventory: InventoryModel, stats: ActorStats) -> void:
-	assert(inventory != null and stats != null)
-	assert(_inventory == null and _stats == null)
+func setup(
+	inventory: InventoryModel,
+	loadout: InventoryLoadoutCoordinator,
+	stats: ActorStats,
+) -> void:
+	assert(inventory != null and loadout != null and stats != null)
+	assert(_inventory == null and _loadout == null and _stats == null)
+	assert(loadout.inventory_model == inventory and loadout.actor_stats == stats)
 	_inventory = inventory
+	_loadout = loadout
 	_stats = stats
 
 func can_consume_selected() -> bool:
 	assert(_inventory != null)
-	return can_consume_at(_inventory.selected_slot)
+	return can_consume_at(_inventory.get_selected_slot())
 
 func can_consume_at(slot_index: int) -> bool:
-	assert(_inventory != null and _stats != null)
+	assert(_inventory != null and _loadout != null and _stats != null)
 	var action := _get_action_at(slot_index)
-	if action == null or not _inventory.can_discard_stack(slot_index, 1) or _stats.is_dead():
+	if action == null or _stats.is_dead():
 		return false
-	return _stats.current_hp < _stats.get_value(&"hp")
+	return _prepare_consumption(slot_index, action) != null
 
 func try_consume_selected() -> bool:
 	assert(_inventory != null)
-	return try_consume_at(_inventory.selected_slot)
+	return try_consume_at(_inventory.get_selected_slot())
 
 func try_consume_at(slot_index: int) -> bool:
-	if not can_consume_at(slot_index):
+	var action := _get_action_at(slot_index)
+	if action == null or _stats.is_dead():
 		return false
 	var item_id := _inventory.get_slot(slot_index).item_id
-	var action := _get_action_at(slot_index)
-	var consumed := _inventory.discard_stack(slot_index, 1)
-	assert(consumed)
-	var healed := _stats.heal(_stats.get_value(&"hp") * action.health_restore_fraction)
-	assert(healed > 0.0)
+	var prepared := _prepare_consumption(slot_index, action)
+	if prepared == null or not _loadout.commit_prepared_change(prepared):
+		return false
 	item_consumed.emit(item_id)
 	return true
 
@@ -48,3 +54,15 @@ func _get_action_at(slot_index: int) -> ConsumableActionDefinition:
 	if stack == null:
 		return null
 	return _inventory.item_catalog.get_definition(stack.item_id).secondary_action as ConsumableActionDefinition
+
+func _prepare_consumption(
+	slot_index: int,
+	action: ConsumableActionDefinition,
+) -> PreparedInventoryLoadoutChange:
+	var inventory_change := _inventory.prepare_discard_stack(slot_index, 1)
+	if inventory_change == null:
+		return null
+	return _loadout.prepare_inventory_change_with_health_restore(
+		inventory_change,
+		action.health_restore_fraction,
+	)

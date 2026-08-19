@@ -4,7 +4,7 @@ class_name InventorySlot
 var item_id = null
 var equipment_instance_fingerprint: String = ""
 var inventory_model: InventoryModel = null
-var inventory_stat_coordinator: InventoryStatCoordinator = null
+var inventory_loadout_coordinator: InventoryLoadoutCoordinator = null
 var item_proficiency: ItemProficiency = null
 var item_consumption: ItemConsumptionCoordinator = null
 var empty_label: String = ""
@@ -26,8 +26,8 @@ func _ready():
 func set_inventory(p_inv: InventoryModel):
 	inventory_model = p_inv
 
-func set_inventory_stat_coordinator(coordinator: InventoryStatCoordinator):
-	inventory_stat_coordinator = coordinator
+func set_inventory_loadout_coordinator(coordinator: InventoryLoadoutCoordinator):
+	inventory_loadout_coordinator = coordinator
 
 func set_item_proficiency(proficiency: ItemProficiency):
 	item_proficiency = proficiency
@@ -66,7 +66,7 @@ func set_empty_label(label: String):
 func set_item(p_item_id, count: int):
 	var next_instance_fingerprint := ""
 	if p_item_id != null and inventory_model != null:
-		var instance := _get_equipment_instance_copy()
+		var instance := _get_presented_equipment_instance()
 		next_instance_fingerprint = JSON.stringify(null if instance == null else instance.to_dict())
 	if item_id == p_item_id and item_count == count and equipment_instance_fingerprint == next_instance_fingerprint:
 		return
@@ -88,7 +88,7 @@ func _update_tooltip_text() -> void:
 		tooltip_text = ""
 	else:
 		tooltip_text = definition.display_name
-		var instance := _get_equipment_instance_copy()
+		var instance := _get_presented_equipment_instance()
 		if instance != null:
 			for affix in instance.affixes:
 				tooltip_text += " %s" % inventory_model.item_catalog.get_equipment_affix(affix.affix_id).display_name_suffix
@@ -104,7 +104,7 @@ func _make_custom_tooltip(_for_text: String) -> Object:
 		definition,
 		item_proficiency,
 		inventory_model.item_catalog,
-		_get_equipment_instance_copy(),
+		_get_presented_equipment_instance(),
 	)
 	return tooltip
 
@@ -181,9 +181,9 @@ func _gui_input(event):
 	if not event is InputEventMouseButton or event.button_index != MOUSE_BUTTON_LEFT:
 		return
 	if event.pressed:
-		if event.double_click and inventory_stat_coordinator != null:
+		if event.double_click and inventory_loadout_coordinator != null:
 			_quick_transfer_pending = false
-			var changed := inventory_stat_coordinator.try_unequip_armor(slot_index) if InventoryModel.is_equipment_index(slot_index) else inventory_stat_coordinator.try_equip_armor(slot_index)
+			var changed := inventory_loadout_coordinator.try_unequip_armor(slot_index) if InventoryModel.is_equipment_index(slot_index) else inventory_loadout_coordinator.try_equip_armor(slot_index)
 			if changed:
 				get_viewport().set_input_as_handled()
 			return
@@ -255,9 +255,9 @@ func _can_drop_data(_at_position, data) -> bool:
 		return inventory_transfer_coordinator.can_handle_drop(StringName(data["source_scope"]), src_idx, inventory_scope, slot_index, drag_count)
 	if data.has("source_scope"):
 		return false
-	if inventory_stat_coordinator == null:
+	if inventory_loadout_coordinator == null:
 		return false
-	return inventory_stat_coordinator.can_handle_drop(src_idx, slot_index, drag_count)
+	return inventory_loadout_coordinator.can_handle_drop(src_idx, slot_index, drag_count)
 
 func _drop_data(_at_position, data):
 	if data == null or not data is Dictionary:
@@ -270,16 +270,16 @@ func _drop_data(_at_position, data):
 		if data.has("source_scope"):
 			inventory_transfer_coordinator.handle_drop(StringName(data["source_scope"]), src_idx, inventory_scope, slot_index, drag_count)
 		return
-	if inventory_stat_coordinator == null:
+	if inventory_loadout_coordinator == null or data.has("source_scope"):
 		return
-	inventory_stat_coordinator.handle_drop(src_idx, slot_index, drag_count)
+	inventory_loadout_coordinator.handle_drop(src_idx, slot_index, drag_count)
 
 func _get_current_stack() -> InventoryStack:
 	if inventory_transfer_coordinator != null:
 		return inventory_transfer_coordinator.get_inventory_stack(inventory_scope, slot_index)
 	return inventory_model.get_slot(slot_index)
 
-func _get_equipment_instance_copy() -> EquipmentInstance:
+func _get_presented_equipment_instance() -> EquipmentInstance:
 	var stack := _get_current_stack()
 	return null if stack == null or stack.equipment_instance == null else stack.equipment_instance.copy()
 

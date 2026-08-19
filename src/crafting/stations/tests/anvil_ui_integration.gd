@@ -15,7 +15,7 @@ var _cauldron_catalog: CraftingRecipeCatalog
 var _general_catalog: CraftingRecipeCatalog
 var _camera_rig: CameraRig
 var _camera_follow: Node3D
-var _inventory_stats: InventoryStatCoordinator
+var _inventory_loadout: InventoryLoadoutCoordinator
 var _stats: ActorStats
 var _item_proficiency: ItemProficiency
 var _world: VoxelWorld
@@ -31,20 +31,22 @@ func _init() -> void:
 	_anvil_catalog = load("res://crafting/stations/anvil_recipe_catalog.tres") as CraftingRecipeCatalog
 	_cauldron_catalog = load("res://crafting/stations/cauldron_recipe_catalog.tres") as CraftingRecipeCatalog
 	_inventory = InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
-	_inventory.slots[0] = InventoryStack.new(&"copper", 20)
-	_inventory.slots[1] = InventoryStack.new(&"log_block", 5)
-	_inventory.slots[2] = InventoryStack.new(&"pumpkin", 2)
-	_inventory.slots[3] = InventoryStack.new(&"apple", 2)
+	InventoryTestFixture.restore_slots(_inventory, {
+		0: InventoryStack.new(&"copper", 20),
+		1: InventoryStack.new(&"log_block", 5),
+		2: InventoryStack.new(&"pumpkin", 2),
+		3: InventoryStack.new(&"apple", 2),
+	})
 	_stats = ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
 	_item_proficiency = ItemProficiency.new(item_catalog)
-	_inventory_stats = InventoryStatCoordinator.new()
-	_expect(_inventory_stats.setup(_inventory, _stats), "inventory stat setup failed")
+	_inventory_loadout = InventoryLoadoutCoordinator.new()
+	_expect(_inventory_loadout.setup(_inventory, _stats, _item_proficiency), "inventory loadout setup failed")
 	_general_crafting = CraftingCoordinator.new()
-	_general_crafting.setup(_inventory, _general_catalog, _inventory.equipment_instance_factory)
+	_general_crafting.setup(_inventory, _inventory_loadout, _general_catalog)
 	_anvil_crafting = CraftingCoordinator.new()
-	_anvil_crafting.setup(_inventory, _anvil_catalog, _inventory.equipment_instance_factory)
+	_anvil_crafting.setup(_inventory, _inventory_loadout, _anvil_catalog)
 	_cauldron_crafting = CraftingCoordinator.new()
-	_cauldron_crafting.setup(_inventory, _cauldron_catalog, _inventory.equipment_instance_factory)
+	_cauldron_crafting.setup(_inventory, _inventory_loadout, _cauldron_catalog)
 	_world = VoxelWorld.new(20, 36, 5, 12.0, block_catalog)
 	_expect(_world.try_place_block(_position, BlockId.Type.ANVIL).is_success(), "test anvil could not be placed")
 	_expect(_world.try_place_block(_cauldron_position, BlockId.Type.CAULDRON).is_success(), "test cauldron could not be placed")
@@ -65,7 +67,7 @@ func _process(_delta: float) -> bool:
 	_frame += 1
 	if _phase == 0 and _frame == 2:
 		_camera_rig.setup(_camera_follow, InputBuffer.new())
-		_hud.setup_with_camera(_inventory, _inventory_stats, _general_crafting, _general_catalog, _camera_rig, _stats, _item_proficiency)
+		_hud.setup_with_camera(_inventory, _inventory_loadout, _general_crafting, _general_catalog, _camera_rig, _stats, _item_proficiency)
 		_hud.setup_anvil(_anvil_coordinator, _station, _anvil_crafting, _anvil_catalog, _camera_rig)
 		_hud.setup_cauldron(_cauldron_coordinator, _cauldron_station, _cauldron_crafting, _cauldron_catalog, _camera_rig)
 		_hud.open_crafting_station(_position, _station)

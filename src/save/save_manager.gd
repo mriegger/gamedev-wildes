@@ -769,7 +769,7 @@ static func save_world_state(
 	equipment_instance_factory: EquipmentInstanceFactory,
 	player_perks: PlayerPerks,
 	item_proficiency: ItemProficiency,
-	chest_storage: ChestInventoryStore,
+	chest_storage: ChestStorage,
 	pumpkin_patch: Dictionary,
 	apple_trees: Dictionary,
 	extra_seconds: float,
@@ -780,7 +780,7 @@ static func save_world_state(
 	assert(equipment_instance_factory != null)
 	assert(inventory.equipment_instance_factory == equipment_instance_factory)
 	assert(chest_storage != null)
-	assert(chest_storage.equipment_instance_factory == equipment_instance_factory)
+	assert(chest_storage._uses_dependencies(inventory.item_catalog, equipment_instance_factory))
 	var equipment_instance_ids := inventory.get_equipment_instance_ids()
 	equipment_instance_ids.append_array(chest_storage.get_equipment_instance_ids())
 	if not equipment_instance_factory.can_restore_state(

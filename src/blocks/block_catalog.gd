@@ -44,8 +44,8 @@ func _rebuild_lookup() -> void:
 				_is_valid = false
 		if definition.container != null:
 			_is_valid = definition.container.validate(source) and _is_valid
-			if not definition.is_raycast_solid or definition.is_breakable:
-				push_error("[BlockCatalog] Container must be targetable and non-breakable at %s" % source)
+			if not definition.is_raycast_solid:
+				push_error("[BlockCatalog] Container must be targetable at %s" % source)
 				_is_valid = false
 	for id in range(BlockId.Type.COUNT):
 		if not BlockId.is_valid(id):

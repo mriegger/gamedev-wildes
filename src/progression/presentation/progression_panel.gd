@@ -115,10 +115,10 @@ func _refresh() -> void:
 	if _actor_stats == null or _perk_coordinator == null:
 		return
 	var required_experience := _actor_stats.get_experience_to_next_level()
-	level_label.text = "LEVEL %d" % _actor_stats.level
+	level_label.text = "LEVEL %d" % _actor_stats.get_level()
 	experience_bar.max_value = required_experience
-	experience_bar.value = _actor_stats.experience
-	experience_label.text = "XP %d / %d" % [_actor_stats.experience, required_experience]
+	experience_bar.value = _actor_stats.get_experience()
+	experience_label.text = "XP %d / %d" % [_actor_stats.get_experience(), required_experience]
 	available_points_label.text = "AVAILABLE POINTS: %d" % _perk_coordinator.get_unspent_point_count()
 	for definition in _perk_coordinator.get_definitions():
 		var row := get_perk_row(definition.id)

@@ -13,17 +13,18 @@ func _init() -> void:
 	_inventory = InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	var no_affixes: Array[EquipmentAffixDefinition] = []
 	var vicious: Array[EquipmentAffixDefinition] = [item_catalog.get_equipment_affix(&"vicious")]
-	_inventory.slots[0] = InventoryStack.new(&"basic_rune", 1)
-	_inventory.slots[1] = _equipment_stack(&"copper_sword", no_affixes, _rune_ids([&"basic_rune"]))
-	_inventory.slots[2] = _equipment_stack(&"copper_sword", no_affixes, _rune_ids([]))
-	_inventory.slots[3] = _equipment_stack(&"copper_helmet", no_affixes, _rune_ids([&"basic_rune"]))
-	_inventory.slots[4] = _equipment_stack(STACKING_WEAPON_ID, no_affixes, _rune_ids([&"basic_rune", &"basic_rune"]))
-	_inventory.slots[5] = _equipment_stack(&"copper_sword", vicious, _rune_ids([]))
+	InventoryTestFixture.restore_slot(_inventory, 0, InventoryStack.new(&"basic_rune", 1))
+	InventoryTestFixture.restore_slot(_inventory, 1, _equipment_stack(&"copper_sword", no_affixes, _rune_ids([&"basic_rune"])))
+	InventoryTestFixture.restore_slot(_inventory, 2, _equipment_stack(&"copper_sword", no_affixes, _rune_ids([])))
+	InventoryTestFixture.restore_slot(_inventory, 3, _equipment_stack(&"copper_helmet", no_affixes, _rune_ids([&"basic_rune"])))
+	InventoryTestFixture.restore_slot(_inventory, 4, _equipment_stack(STACKING_WEAPON_ID, no_affixes, _rune_ids([&"basic_rune", &"basic_rune"])))
+	InventoryTestFixture.restore_slot(_inventory, 5, _equipment_stack(&"copper_sword", vicious, _rune_ids([])))
 	_item_proficiency = ItemProficiency.new(item_catalog)
 	_expect(_item_proficiency.add_experience(&"copper_sword", 100.0) == 1, "sword proficiency fixture did not unlock")
 	_expect(_item_proficiency.add_experience(&"copper_helmet", 100.0) == 1, "helmet proficiency fixture did not unlock")
 	_expect(_item_proficiency.add_experience(STACKING_WEAPON_ID, 100.0) == 1, "stacking weapon fixture did not unlock")
-	_expect(RuneSocketingCoordinator.new().setup(_inventory, _item_proficiency), "tooltip socket fixture is invalid")
+	var loadout := InventoryTestFixture.create_loadout(_inventory, null, _item_proficiency)
+	_expect(RuneSocketingCoordinator.new().setup(_inventory, loadout, _item_proficiency), "tooltip socket fixture is invalid")
 	_slot = (load("res://inventory/ui/inventory_slot.tscn") as PackedScene).instantiate() as InventorySlot
 	_slot.set_inventory_styles(StyleBoxFlat.new(), StyleBoxFlat.new())
 	_slot.set_inventory(_inventory)
@@ -79,6 +80,7 @@ func _test_unsocketed_weapon_tooltip() -> void:
 	var tooltip := _create_slot_tooltip("unsocketed weapon")
 	if tooltip == null:
 		return
+	_expect(tooltip.stats_label.text.contains("Base Damage: 10"), "unsocketed weapon lost its base stats")
 	_expect(not tooltip.rune_stats_label.visible, "unsocketed copy inherited another copy's rune bonus")
 	_expect(tooltip.rune_stats_label.text.is_empty(), "unsocketed copy has rune bonus text")
 	tooltip.free()

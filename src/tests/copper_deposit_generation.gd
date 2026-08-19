@@ -47,7 +47,8 @@ func _test_save_omits_generated_copper(catalog: BlockCatalog) -> void:
 	var inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	var player_perks := PlayerPerks.new(load("res://progression/player_perk_rules.tres") as PlayerPerkRules)
 	_expect(player_perks.restore({"allocations": {"health": 1}}, 2), "test perk allocation was rejected")
-	var chest_storage := ChestInventoryStore.new(item_catalog, inventory.equipment_instance_factory)
+	var chest_slot_count := catalog.get_definition(BlockId.Type.CHEST).container.get_slot_count()
+	var chest_storage := ChestStorage.new(item_catalog, inventory.equipment_instance_factory, chest_slot_count)
 	var item_proficiency := ItemProficiency.new(item_catalog)
 	var save_data := {
 		"seed": 1337,

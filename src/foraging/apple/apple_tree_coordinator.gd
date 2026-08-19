@@ -49,6 +49,7 @@ var _decorations_by_leaf: Dictionary = {}
 var _new_fallen_sources: Dictionary = {}
 var _fallen_by_chunk: Dictionary = {}
 var _next_target_id: int = 1
+var _revision: int = 0
 
 func setup(voxel_world: VoxelWorld, chunk_manager: ChunkManager, world_seed: int, saved_state: Variant, item_catalog: ItemCatalog) -> bool:
 	assert(voxel_world != null and chunk_manager != null and item_catalog != null)
@@ -101,21 +102,78 @@ func get_harvest_item_ids(target_id: int) -> Array[StringName]:
 	assert(_targets.has(target_id))
 	return [definition.apple_item_id]
 
-func try_harvest_target(target_id: int) -> bool:
-	if not _targets.has(target_id):
-		return false
+func prepare_harvest_target(target_id: int) -> PreparedHarvestChange:
+	if not can_harvest_target(target_id):
+		return null
 	var record := _targets[target_id] as Dictionary
-	var tree_position := record["tree_position"] as Vector3i
-	var slot_index := int(record["slot_index"])
-	var decorative_index := int(record["decorative_index"])
-	var collected := _state.collect_fallen_apple(tree_position, decorative_index) if decorative_index >= 0 else _state.collect(tree_position, slot_index)
-	if not collected:
+	return PreparedAppleHarvestChange.new(
+		self,
+		_revision,
+		target_id,
+		record["tree_position"] as Vector3i,
+		int(record["slot_index"]),
+		int(record["decorative_index"]),
+		get_harvest_item_ids(target_id),
+	)
+
+func can_commit_prepared_harvest(prepared: PreparedHarvestChange) -> bool:
+	var apple_change := prepared as PreparedAppleHarvestChange
+	if (
+		apple_change == null
+		or not apple_change._is_for(self)
+		or not apple_change._is_prepared()
+		or apple_change._get_expected_revision() != _revision
+		or not _targets.has(apple_change._get_target_id())
+	):
 		return false
+	var record := _targets[apple_change._get_target_id()] as Dictionary
+	var tree_position := apple_change._get_tree_position()
+	var slot_index := apple_change._get_slot_index()
+	var decorative_index := apple_change._get_decorative_index()
+	return (
+		record["tree_position"] as Vector3i == tree_position
+		and int(record["slot_index"]) == slot_index
+		and int(record["decorative_index"]) == decorative_index
+		and (
+			_state.has_fallen_apple(tree_position, decorative_index)
+			if decorative_index >= 0
+			else not _state.is_collected(tree_position, slot_index)
+		)
+		and get_harvest_item_ids(apple_change._get_target_id()) == apple_change.get_harvest_item_ids()
+	)
+
+func _commit_prepared_harvest(
+	prepared: PreparedHarvestChange,
+	emit_signal: bool = true,
+) -> bool:
+	if not can_commit_prepared_harvest(prepared):
+		return false
+	var apple_change := prepared as PreparedAppleHarvestChange
+	var record := _targets[apple_change._get_target_id()] as Dictionary
+	var tree_position := apple_change._get_tree_position()
+	var decorative_index := apple_change._get_decorative_index()
+	var collected := (
+		_state.collect_fallen_apple(tree_position, decorative_index)
+		if decorative_index >= 0
+		else _state.collect(tree_position, apple_change._get_slot_index())
+	)
+	assert(collected)
 	if decorative_index >= 0:
 		_remove_fallen_from_index(record["chunk"] as Vector2i, tree_position, decorative_index)
 	var apple := record["node"] as Node3D
-	_targets.erase(target_id)
+	_targets.erase(apple_change._get_target_id())
 	apple.queue_free()
+	_revision += 1
+	var marked := apple_change._mark_committed(self)
+	assert(marked)
+	if emit_signal:
+		var notified := _notify_prepared_harvest(apple_change)
+		assert(notified)
+	return true
+
+func _notify_prepared_harvest(prepared: PreparedHarvestChange) -> bool:
+	if prepared == null or not prepared._mark_notified(self):
+		return false
 	state_changed.emit()
 	return true
 
@@ -333,6 +391,7 @@ func _try_drop_decorative_apple(leaf_position: Vector3i) -> Array[Vector2i]:
 			affected_coords[drop_coord] = true
 			if _chunk_manager.visible_chunks.has(drop_coord):
 				_new_fallen_sources[_fallen_key(tree_position, decorative_index)] = source_position
+			_revision += 1
 			state_changed.emit()
 			break
 	var coords: Array[Vector2i] = []

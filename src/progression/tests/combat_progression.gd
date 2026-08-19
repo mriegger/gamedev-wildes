@@ -11,12 +11,12 @@ func _init():
 	var inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	inventory.setup_starter()
 	var player_stats := ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
-	var inventory_stats := InventoryStatCoordinator.new()
-	_expect(inventory_stats.setup(inventory, player_stats), "inventory stat coordinator setup failed")
+	var item_proficiency := ItemProficiency.new(item_catalog)
+	var inventory_stats := InventoryLoadoutCoordinator.new()
+	_expect(inventory_stats.setup(inventory, player_stats, item_proficiency), "inventory stat coordinator setup failed")
 	for armor_id in [&"copper_helmet", &"copper_chest_plate", &"copper_pants", &"copper_shoes"]:
 		var source_index := _find_item(inventory, armor_id)
 		_expect(source_index >= 0 and inventory_stats.try_equip_armor(source_index), "failed to equip %s" % armor_id)
-	var item_proficiency := ItemProficiency.new(item_catalog)
 	var progression := CombatProgressionCoordinator.new()
 	progression.setup(player_stats, inventory, entity_catalog, item_proficiency)
 

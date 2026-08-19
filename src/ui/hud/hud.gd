@@ -17,13 +17,25 @@ var chest_coordinator: ChestCoordinator
 var cauldron_coordinator: CauldronCoordinator
 var _left_panel_camera_rig: CameraRig
 
-func setup_with_camera(p_inventory: InventoryModel, p_inventory_stat_coordinator: InventoryStatCoordinator, p_crafting_coordinator: CraftingCoordinator, p_recipe_catalog: CraftingRecipeCatalog, cam_rig: CameraRig, stats: ActorStats, item_proficiency: ItemProficiency, p_chest_coordinator: ChestCoordinator = null):
+func setup_with_camera(
+	p_inventory: InventoryModel,
+	p_inventory_loadout_coordinator: InventoryLoadoutCoordinator,
+	p_crafting_coordinator: CraftingCoordinator,
+	p_recipe_catalog: CraftingRecipeCatalog,
+	cam_rig: CameraRig,
+	stats: ActorStats,
+	item_proficiency: ItemProficiency,
+	p_chest_coordinator: ChestCoordinator = null,
+):
+	assert(p_inventory != null)
+	assert(p_inventory_loadout_coordinator != null and p_inventory_loadout_coordinator.inventory_model == p_inventory)
+	assert(stats != null and p_inventory_loadout_coordinator.actor_stats == stats)
 	chest_coordinator = p_chest_coordinator
 	_left_panel_camera_rig = cam_rig
-	hotbar.setup(p_inventory, p_inventory_stat_coordinator, item_proficiency)
+	hotbar.setup(p_inventory, p_inventory_loadout_coordinator, item_proficiency)
 	health_bar.setup(stats)
 	experience_bar.setup(stats)
-	side_panel.setup(p_inventory, p_inventory_stat_coordinator, item_proficiency, cam_rig, hotbar, CraftingPanel.PANEL_WIDTH)
+	side_panel.setup(p_inventory, p_inventory_loadout_coordinator, item_proficiency, cam_rig, hotbar, CraftingPanel.PANEL_WIDTH)
 	crafting_panel.setup(p_crafting_coordinator, p_recipe_catalog)
 	crafting_panel.progress_changed.connect(_on_left_panel_progress_changed)
 	if p_chest_coordinator != null:
@@ -199,6 +211,8 @@ func _on_cauldron_closed() -> void:
 	cauldron_panel.close()
 
 func open_container(position: Vector3i, definition: ContainerBlockDefinition):
+	if chest_coordinator == null:
+		return
 	if anvil_panel.is_open():
 		close_anvil(false)
 	if cauldron_panel.is_open():

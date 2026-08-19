@@ -53,31 +53,31 @@ func _init() -> void:
 
 	var selected_armor_inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	selected_armor_inventory.setup_starter()
-	var selected_armor_source := _find_item(selected_armor_inventory, &"copper_helmet")
-	_expect(selected_armor_inventory.handle_drop(selected_armor_source, 4, 1), "selected armor setup move failed")
-	_expect(selected_armor_inventory.select_slot(4), "selected armor hotbar selection failed")
 	var selected_armor_stats := ActorStats.new(stats_definition)
-	var selected_armor_coordinator := InventoryStatCoordinator.new()
-	_expect(selected_armor_coordinator.setup(selected_armor_inventory, selected_armor_stats), "selected armor coordinator setup failed")
+	var selected_armor_coordinator := InventoryLoadoutCoordinator.new()
+	_expect(selected_armor_coordinator.setup(selected_armor_inventory, selected_armor_stats, ItemProficiency.new(selected_armor_inventory.item_catalog)), "selected armor coordinator setup failed")
+	var selected_armor_source := _find_item(selected_armor_inventory, &"copper_helmet")
+	_expect(selected_armor_coordinator.handle_drop(selected_armor_source, 4, 1), "selected armor setup move failed")
+	_expect(selected_armor_coordinator.select_slot(4), "selected armor hotbar selection failed")
 	_expect(is_equal_approx(selected_armor_stats.get_value(&"defense"), 0.0), "selected armor applied equipped modifiers")
 	var selected_helmet_index := InventoryModel.get_equipment_index(ArmorDefinition.Slot.HEAD)
-	_expect(selected_armor_inventory.handle_drop(4, selected_helmet_index, 1), "direct equipment model move failed")
+	_expect(selected_armor_coordinator.handle_drop(4, selected_helmet_index, 1), "equipment move failed")
 	_expect(is_equal_approx(selected_armor_stats.get_value(&"defense"), 1.0), "direct equipment model move did not synchronize stats")
-	_expect(selected_armor_inventory.handle_drop(selected_helmet_index, 4, 1), "direct equipment model return failed")
+	_expect(selected_armor_coordinator.handle_drop(selected_helmet_index, 4, 1), "equipment return failed")
 	_expect(is_equal_approx(selected_armor_stats.get_value(&"defense"), 0.0), "direct equipment model return retained stats")
-	_expect(selected_armor_inventory.handle_drop(4, selected_helmet_index, 1), "discard equipment setup move failed")
-	_expect(selected_armor_inventory.discard_stack(selected_helmet_index, 1), "equipped armor discard failed")
+	_expect(selected_armor_coordinator.handle_drop(4, selected_helmet_index, 1), "discard equipment setup move failed")
+	_expect(selected_armor_coordinator.discard_stack(selected_helmet_index, 1), "equipped armor discard failed")
 	_expect(selected_armor_inventory.get_slot(selected_helmet_index) == null, "equipped armor discard retained its stack")
 	_expect(is_equal_approx(selected_armor_stats.get_value(&"defense"), 0.0), "equipped armor discard retained stats")
 
 	var selected_item_inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	selected_item_inventory.setup_starter()
-	var totem_source := _find_item(selected_item_inventory, &"test_totem")
-	_expect(selected_item_inventory.handle_drop(totem_source, 4, 1), "selected modifier item setup move failed")
-	_expect(selected_item_inventory.select_slot(4), "selected modifier item selection failed")
 	var selected_item_stats := ActorStats.new(stats_definition)
-	var selected_item_coordinator := InventoryStatCoordinator.new()
-	_expect(selected_item_coordinator.setup(selected_item_inventory, selected_item_stats), "selected modifier coordinator setup failed")
+	var selected_item_coordinator := InventoryLoadoutCoordinator.new()
+	_expect(selected_item_coordinator.setup(selected_item_inventory, selected_item_stats, ItemProficiency.new(selected_item_inventory.item_catalog)), "selected modifier coordinator setup failed")
+	var totem_source := _find_item(selected_item_inventory, &"test_totem")
+	_expect(selected_item_coordinator.handle_drop(totem_source, 4, 1), "selected modifier item setup move failed")
+	_expect(selected_item_coordinator.select_slot(4), "selected modifier item selection failed")
 	_expect(is_equal_approx(selected_item_stats.get_value(&"hp"), 200.0), "selected item maximum HP modifier missing")
 	_expect(selected_item_stats.set_current_hp(150.0), "selected item current HP setup failed")
 	var selected_item_helmet_source := _find_item(selected_item_inventory, &"copper_helmet")
@@ -92,22 +92,22 @@ func _init() -> void:
 	)
 	_expect(selected_restore_inventory.from_dict(selected_item_snapshot), "selected-item inventory restore failed")
 	var selected_restore_stats := ActorStats.new(stats_definition)
-	var selected_restore_coordinator := InventoryStatCoordinator.new()
-	_expect(selected_restore_coordinator.setup(selected_restore_inventory, selected_restore_stats), "selected-item restored coordinator setup failed")
+	var selected_restore_coordinator := InventoryLoadoutCoordinator.new()
+	_expect(selected_restore_coordinator.setup(selected_restore_inventory, selected_restore_stats, ItemProficiency.new(selected_restore_inventory.item_catalog)), "selected-item restored coordinator setup failed")
 	_expect(selected_restore_stats.restore_progression(selected_progression), "selected-item progression restore failed")
 	_expect(is_equal_approx(selected_restore_stats.current_hp, 150.0), "selected-item load order clamped restored HP")
-	_expect(selected_restore_inventory.select_slot(0), "selected modifier deactivation selection failed")
+	_expect(selected_restore_coordinator.select_slot(0), "selected modifier deactivation selection failed")
 	_expect(is_equal_approx(selected_restore_stats.get_value(&"hp"), 100.0), "selected modifier remained active after selection changed")
 	_expect(is_equal_approx(selected_restore_stats.current_hp, 100.0), "selected modifier removal did not clamp current HP")
-	_expect(selected_restore_inventory.select_slot(4), "selected modifier reactivation selection failed")
+	_expect(selected_restore_coordinator.select_slot(4), "selected modifier reactivation selection failed")
 	_expect(is_equal_approx(selected_restore_stats.get_value(&"hp"), 200.0), "selected modifier did not reactivate")
 	_expect(is_equal_approx(selected_restore_stats.current_hp, 100.0), "selected modifier reactivation healed current HP")
 
 	var inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	inventory.setup_starter()
 	var stats := ActorStats.new(stats_definition)
-	var coordinator := InventoryStatCoordinator.new()
-	_expect(coordinator.setup(inventory, stats), "equipment coordinator setup failed")
+	var coordinator := InventoryLoadoutCoordinator.new()
+	_expect(coordinator.setup(inventory, stats, ItemProficiency.new(inventory.item_catalog)), "equipment coordinator setup failed")
 	inventory.inventory_changed.connect(_on_inventory_changed)
 	var observed_defense: Array[float] = []
 	inventory.inventory_changed.connect(func(): observed_defense.append(stats.get_value(&"defense")))
@@ -144,20 +144,25 @@ func _init() -> void:
 	)
 	_expect(restored_inventory.from_dict(encoded), "equipped armor did not restore")
 	var restored_stats := ActorStats.new(stats_definition)
-	var restored_coordinator := InventoryStatCoordinator.new()
-	_expect(restored_coordinator.setup(restored_inventory, restored_stats), "restored equipment coordinator setup failed")
+	var restored_coordinator := InventoryLoadoutCoordinator.new()
+	_expect(restored_coordinator.setup(restored_inventory, restored_stats, ItemProficiency.new(restored_inventory.item_catalog)), "restored equipment coordinator setup failed")
 	_expect(is_equal_approx(restored_stats.get_value(&"defense"), 10.0), "restored armor defense mismatch")
 	_expect(restored_stats.has_modifier(&"armor_set_0"), "restored full-set modifier missing")
 
-	var restored_before_invalid := restored_inventory.to_dict()
 	var wrong_slot_save := encoded.duplicate(true)
-	wrong_slot_save["regions"]["equipment"][ArmorDefinition.Slot.HEAD] = {"item_id": "copper_chest_plate", "count": 1, "socketed_rune_ids": []}
-	_expect(not restored_inventory.from_dict(wrong_slot_save), "wrong-slot armor save restored")
-	_expect(restored_inventory.to_dict() == restored_before_invalid, "failed wrong-slot restore changed inventory")
+	wrong_slot_save["regions"]["equipment"][ArmorDefinition.Slot.HEAD] = (
+		encoded["regions"]["equipment"][ArmorDefinition.Slot.CHEST] as Dictionary
+	).duplicate(true)
+	var wrong_slot_inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog, inventory.equipment_instance_factory.get_next_instance_id()))
+	var wrong_slot_before := wrong_slot_inventory.to_dict()
+	_expect(not wrong_slot_inventory.from_dict(wrong_slot_save), "wrong-slot armor save restored")
+	_expect(wrong_slot_inventory.to_dict() == wrong_slot_before, "failed wrong-slot restore changed inventory")
 	var stacked_armor_save := encoded.duplicate(true)
 	stacked_armor_save["regions"]["equipment"][ArmorDefinition.Slot.HEAD]["count"] = 2
-	_expect(not restored_inventory.from_dict(stacked_armor_save), "stacked armor save restored")
-	_expect(restored_inventory.to_dict() == restored_before_invalid, "failed stacked restore changed inventory")
+	var stacked_armor_inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog, inventory.equipment_instance_factory.get_next_instance_id()))
+	var stacked_armor_before := stacked_armor_inventory.to_dict()
+	_expect(not stacked_armor_inventory.from_dict(stacked_armor_save), "stacked armor save restored")
+	_expect(stacked_armor_inventory.to_dict() == stacked_armor_before, "failed stacked restore changed inventory")
 
 	for armor_slot in range(ArmorDefinition.SLOT_COUNT):
 		var equipment_index := InventoryModel.get_equipment_index(armor_slot)
@@ -171,21 +176,66 @@ func _init() -> void:
 		_expect(not restored_stats.has_modifier(&"armor_set_0"), "full-set modifier remained after slot %d was unequipped" % armor_slot)
 
 	var blocked := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
-	blocked.setup_starter()
-	var blocked_stats := ActorStats.new(stats_definition)
-	var blocked_coordinator := InventoryStatCoordinator.new()
-	_expect(blocked_coordinator.setup(blocked, blocked_stats), "blocked equipment coordinator setup failed")
-	var blocked_helmet_source := _find_item(blocked, &"copper_helmet")
-	var helmet_index := InventoryModel.get_equipment_index(ArmorDefinition.Slot.HEAD)
-	_expect(blocked_coordinator.try_equip_armor(blocked_helmet_source), "blocked inventory helmet setup failed")
+	blocked.setup_empty()
 	var grass_id := item_catalog.get_item_for_block(BlockId.Type.GRASS).id
 	for index in range(InventoryModel.FILLABLE_SIZE):
-		if blocked.get_slot(index) == null:
-			blocked.slots[index] = InventoryStack.new(grass_id, 1)
+		InventoryTestFixture.restore_slot(blocked, index, InventoryStack.new(grass_id, 1))
+	var helmet_index := InventoryModel.get_equipment_index(ArmorDefinition.Slot.HEAD)
+	InventoryTestFixture.restore_slot(blocked, helmet_index, InventoryStack.new(
+		&"copper_helmet",
+		1,
+		blocked.equipment_instance_factory.create(&"copper_helmet"),
+	))
+	var blocked_stats := ActorStats.new(stats_definition)
+	var blocked_coordinator := InventoryLoadoutCoordinator.new()
+	_expect(blocked_coordinator.setup(blocked, blocked_stats, ItemProficiency.new(blocked.item_catalog)), "blocked equipment coordinator setup failed")
 	var blocked_before := blocked.to_dict()
 	_expect(not blocked_coordinator.try_unequip_armor(helmet_index), "full inventory accepted unequipped armor")
 	_expect(blocked.to_dict() == blocked_before, "failed unequip changed inventory")
 	_expect(is_equal_approx(blocked_stats.get_value(&"defense"), 1.0), "failed unequip removed armor defense")
+
+	var combined_definitions := _duplicate_item_definitions(item_catalog)
+	var combined_catalog := ItemCatalog.new()
+	combined_catalog.definitions = combined_definitions
+	var combined_set := (combined_catalog.get_definition(&"copper_helmet") as ArmorDefinition).armor_set.duplicate(true) as ArmorSetDefinition
+	for definition in combined_catalog.definitions:
+		var armor := definition as ArmorDefinition
+		if armor != null and armor.armor_set != null and armor.armor_set.id == combined_set.id:
+			armor.armor_set = combined_set
+	var set_hp_modifier := StatModifier.new()
+	set_hp_modifier.id = &"combined_set_hp"
+	set_hp_modifier.source_id = combined_set.id
+	set_hp_modifier.stat_id = &"hp"
+	set_hp_modifier.amount = -60.0
+	var set_hp_modifiers: Array[StatModifier] = [set_hp_modifier]
+	combined_set.full_set_modifiers = set_hp_modifiers
+	var combined_shoes := combined_catalog.get_definition(&"copper_shoes") as ArmorDefinition
+	var shoes_hp_modifier := StatModifier.new()
+	shoes_hp_modifier.id = &"combined_shoes_hp"
+	shoes_hp_modifier.source_id = combined_shoes.id
+	shoes_hp_modifier.stat_id = &"hp"
+	shoes_hp_modifier.amount = -60.0
+	var shoes_hp_modifiers: Array[StatModifier] = [shoes_hp_modifier]
+	combined_shoes.stat_modifiers = shoes_hp_modifiers
+	var combined_inventory := InventoryModel.new(combined_catalog, EquipmentInstanceFactory.new(combined_catalog))
+	combined_inventory.setup_starter()
+	var combined_stats := ActorStats.new(stats_definition)
+	var combined_coordinator := InventoryLoadoutCoordinator.new()
+	_expect(combined_coordinator.setup(combined_inventory, combined_stats, ItemProficiency.new(combined_inventory.item_catalog)), "combined replacement coordinator setup failed")
+	for armor_slot in range(ArmorDefinition.SLOT_COUNT - 1):
+		var source := _find_item(combined_inventory, ARMOR_IDS[armor_slot])
+		_expect(combined_coordinator.try_equip_armor(source), "combined replacement setup equip failed for slot %d" % armor_slot)
+	var combined_source := _find_item(combined_inventory, &"copper_shoes")
+	var combined_before := combined_inventory.to_dict()
+	_invalid_signal_count = 0
+	combined_inventory.inventory_changed.connect(_on_invalid_inventory_changed)
+	_expect(not combined_coordinator.try_equip_armor(combined_source), "invalid combined equipment and set modifiers equipped")
+	_expect(combined_inventory.to_dict() == combined_before, "invalid combined replacement changed inventory")
+	_expect(is_equal_approx(combined_stats.get_value(&"hp"), 100.0), "invalid combined replacement changed maximum HP")
+	_expect(is_equal_approx(combined_stats.current_hp, 100.0), "invalid combined replacement changed current HP")
+	_expect(not combined_stats.has_modifier(&"equipment_slot_3_0"), "invalid combined equipment modifier was applied")
+	_expect(not combined_stats.has_modifier(&"armor_set_0"), "invalid combined set modifier was applied")
+	_expect(_invalid_signal_count == 0, "invalid combined replacement emitted inventory change")
 
 	var invalid_set_definitions := _duplicate_item_definitions(item_catalog)
 	var invalid_set_catalog := ItemCatalog.new()
@@ -198,8 +248,8 @@ func _init() -> void:
 	var invalid_set_inventory := InventoryModel.new(invalid_set_catalog, EquipmentInstanceFactory.new(invalid_set_catalog))
 	invalid_set_inventory.setup_starter()
 	var invalid_set_stats := ActorStats.new(stats_definition)
-	var invalid_set_coordinator := InventoryStatCoordinator.new()
-	_expect(invalid_set_coordinator.setup(invalid_set_inventory, invalid_set_stats), "valid duplicated armor set setup failed")
+	var invalid_set_coordinator := InventoryLoadoutCoordinator.new()
+	_expect(invalid_set_coordinator.setup(invalid_set_inventory, invalid_set_stats, ItemProficiency.new(invalid_set_inventory.item_catalog)), "valid duplicated armor set setup failed")
 	invalid_set.full_set_modifiers[0].stat_id = &"unknown_stat"
 	for armor_slot in range(ArmorDefinition.SLOT_COUNT - 1):
 		var source := _find_item(invalid_set_inventory, ARMOR_IDS[armor_slot])
@@ -220,8 +270,8 @@ func _init() -> void:
 	var invalid_inventory := InventoryModel.new(invalid_catalog, EquipmentInstanceFactory.new(invalid_catalog))
 	invalid_inventory.setup_starter()
 	var invalid_stats := ActorStats.new(stats_definition)
-	var invalid_coordinator := InventoryStatCoordinator.new()
-	_expect(invalid_coordinator.setup(invalid_inventory, invalid_stats), "valid duplicated equipment setup failed")
+	var invalid_coordinator := InventoryLoadoutCoordinator.new()
+	_expect(invalid_coordinator.setup(invalid_inventory, invalid_stats, ItemProficiency.new(invalid_inventory.item_catalog)), "valid duplicated equipment setup failed")
 	var invalid_helmet := invalid_catalog.get_definition(&"copper_helmet") as ArmorDefinition
 	invalid_helmet.stat_modifiers[0].stat_id = &"unknown_stat"
 	var invalid_source := _find_item(invalid_inventory, &"copper_helmet")
@@ -246,17 +296,17 @@ func _init() -> void:
 		EquipmentInstanceFactory.new(item_catalog, legacy_source.equipment_instance_factory.get_next_instance_id()),
 	)
 	_expect(legacy.from_dict(legacy_encoded), "pre-armor inventory did not restore")
-	_expect(legacy.migrate_starter_items(), "pre-armor inventory migration failed")
+	_expect(InventoryTestFixture.create_loadout(legacy).migrate_starter_items(), "pre-armor inventory migration failed")
 	for armor_id in ARMOR_IDS:
 		_expect(_find_item(legacy, armor_id) >= 0, "migrated armor missing for %s" % armor_id)
 
 	var crowded := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	for index in range(InventoryModel.FILLABLE_SIZE):
-		crowded.slots[index] = InventoryStack.new(grass_id, 1)
-	crowded.slots[InventoryModel.FILLABLE_SIZE - 1] = null
-	crowded.slots[InventoryModel.FILLABLE_SIZE - 2] = null
+		InventoryTestFixture.restore_slot(crowded, index, InventoryStack.new(grass_id, 1))
+	InventoryTestFixture.restore_slot(crowded, InventoryModel.FILLABLE_SIZE - 1, null)
+	InventoryTestFixture.restore_slot(crowded, InventoryModel.FILLABLE_SIZE - 2, null)
 	var crowded_before := crowded.to_dict()
-	_expect(not crowded.migrate_starter_items(), "crowded inventory completed starter migration")
+	_expect(not InventoryTestFixture.create_loadout(crowded).migrate_starter_items(), "crowded inventory completed starter migration")
 	_expect(crowded.to_dict() == crowded_before, "failed starter migration partially changed inventory")
 
 	if _errors.is_empty():
@@ -268,7 +318,7 @@ func _init() -> void:
 		quit(1)
 
 func _find_item(inventory: InventoryModel, item_id: StringName) -> int:
-	for index in range(inventory.size):
+	for index in range(inventory.get_size()):
 		var stack := inventory.get_slot(index)
 		if stack != null and stack.item_id == item_id:
 			return index

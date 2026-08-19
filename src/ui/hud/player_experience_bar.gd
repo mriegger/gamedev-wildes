@@ -45,5 +45,5 @@ func _apply_layout():
 func _refresh():
 	var required_experience := _stats.get_experience_to_next_level()
 	progress_bar.max_value = required_experience
-	progress_bar.value = _stats.experience
-	value_label.text = "Level %d - %d / %d XP" % [_stats.level, _stats.experience, required_experience]
+	progress_bar.value = _stats.get_experience()
+	value_label.text = "Level %d - %d / %d XP" % [_stats.get_level(), _stats.get_experience(), required_experience]

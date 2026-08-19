@@ -24,29 +24,29 @@ func get_rank(perk_id: StringName) -> int:
 
 func get_earned_point_count() -> int:
 	assert(_player_perks != null and _actor_stats != null)
-	return _player_perks.get_earned_point_count(_actor_stats.level)
+	return _player_perks.get_earned_point_count(_actor_stats.get_level())
 
 func get_unspent_point_count() -> int:
 	assert(_player_perks != null and _actor_stats != null)
-	return _player_perks.get_unspent_point_count(_actor_stats.level)
+	return _player_perks.get_unspent_point_count(_actor_stats.get_level())
 
 func can_allocate(perk_id: StringName) -> bool:
 	assert(_player_perks != null and _actor_stats != null)
-	return _player_perks.can_allocate(perk_id, _actor_stats.level)
+	return _player_perks.can_allocate(perk_id, _actor_stats.get_level())
 
 func try_allocate(perk_id: StringName) -> bool:
 	assert(_player_perks != null and _actor_stats != null)
-	if not _player_perks.can_allocate(perk_id, _actor_stats.level):
+	if not _player_perks.can_allocate(perk_id, _actor_stats.get_level()):
 		return false
 	var projected := PlayerPerks.new(_player_perks.get_rules())
-	var projected_restored := projected.restore(_player_perks.snapshot(), _actor_stats.level)
+	var projected_restored := projected.restore(_player_perks.snapshot(), _actor_stats.get_level())
 	assert(projected_restored)
-	var projected_allocated := projected.try_allocate(perk_id, _actor_stats.level)
+	var projected_allocated := projected.try_allocate(perk_id, _actor_stats.get_level())
 	assert(projected_allocated)
 	var modifiers := _build_modifiers(projected)
 	if not _can_replace_modifiers(modifiers):
 		return false
-	var allocated := _player_perks.try_allocate(perk_id, _actor_stats.level)
+	var allocated := _player_perks.try_allocate(perk_id, _actor_stats.get_level())
 	assert(allocated)
 	var applied := _replace_modifiers(modifiers)
 	assert(applied)
@@ -59,12 +59,12 @@ func snapshot() -> Dictionary:
 func restore(saved_state: Dictionary) -> bool:
 	assert(_player_perks != null and _actor_stats != null)
 	var projected := PlayerPerks.new(_player_perks.get_rules())
-	if not projected.restore(saved_state, _actor_stats.level):
+	if not projected.restore(saved_state, _actor_stats.get_level()):
 		return false
 	var modifiers := _build_modifiers(projected)
 	if not _can_replace_modifiers(modifiers):
 		return false
-	var restored := _player_perks.restore(saved_state, _actor_stats.level)
+	var restored := _player_perks.restore(saved_state, _actor_stats.get_level())
 	assert(restored)
 	var applied := _replace_modifiers(modifiers)
 	assert(applied)

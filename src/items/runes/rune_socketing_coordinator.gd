@@ -9,16 +9,23 @@ enum SlotState {
 }
 
 var _inventory_model: InventoryModel
+var _inventory_loadout: InventoryLoadoutCoordinator
 var _item_proficiency: ItemProficiency
 
-func setup(p_inventory_model: InventoryModel, p_item_proficiency: ItemProficiency) -> bool:
+func setup(
+	p_inventory_model: InventoryModel,
+	p_inventory_loadout: InventoryLoadoutCoordinator,
+	p_item_proficiency: ItemProficiency,
+) -> bool:
 	assert(p_inventory_model != null)
+	assert(p_inventory_loadout != null and p_inventory_loadout.inventory_model == p_inventory_model)
 	assert(p_item_proficiency != null)
-	if _inventory_model != null or _item_proficiency != null:
+	if _inventory_model != null or _inventory_loadout != null or _item_proficiency != null:
 		return false
-	if not _validate_existing_loadouts(p_inventory_model):
+	if not p_inventory_loadout.uses_item_proficiency(p_item_proficiency) or not _validate_existing_loadouts(p_inventory_model):
 		return false
 	_inventory_model = p_inventory_model
+	_inventory_loadout = p_inventory_loadout
 	_item_proficiency = p_item_proficiency
 	return true
 
@@ -66,7 +73,7 @@ func try_socket(gear_index: int, slot_index: int, rune_source_index: int) -> boo
 	var expected_rune_ids: Array[StringName] = prepared["expected_rune_ids"]
 	var next_rune_ids: Array[StringName] = prepared["next_rune_ids"]
 	var rune_id: StringName = prepared["rune_id"]
-	return _inventory_model.commit_socketed_rune(
+	return _inventory_loadout.socket_rune(
 		gear_index,
 		expected_rune_ids,
 		next_rune_ids,
@@ -84,7 +91,7 @@ func try_unsocket(gear_index: int, slot_index: int) -> bool:
 	var expected_rune_ids: Array[StringName] = prepared["expected_rune_ids"]
 	var next_rune_ids: Array[StringName] = prepared["next_rune_ids"]
 	var rune_id: StringName = prepared["rune_id"]
-	return _inventory_model.commit_unsocketed_rune(
+	return _inventory_loadout.unsocket_rune(
 		gear_index,
 		expected_rune_ids,
 		next_rune_ids,
@@ -116,7 +123,7 @@ func _prepare_socket(gear_index: int, slot_index: int, rune_source_index: int) -
 	_trim_trailing_empty_slots(next_rune_ids)
 	if (
 		not _is_valid_loadout(_inventory_model, _item_proficiency, gear_index, next_rune_ids)
-		or not _inventory_model.can_commit_socketed_rune(
+		or not _inventory_loadout.can_socket_rune(
 			gear_index,
 			current_rune_ids,
 			next_rune_ids,
@@ -141,7 +148,7 @@ func _prepare_unsocket(gear_index: int, slot_index: int) -> Dictionary:
 	var next_rune_ids := current_rune_ids.duplicate()
 	next_rune_ids[slot_index] = &""
 	_trim_trailing_empty_slots(next_rune_ids)
-	if not _inventory_model.can_commit_unsocketed_rune(
+	if not _inventory_loadout.can_unsocket_rune(
 		gear_index,
 		current_rune_ids,
 		next_rune_ids,
@@ -155,7 +162,7 @@ func _prepare_unsocket(gear_index: int, slot_index: int) -> Dictionary:
 	}
 
 func _validate_existing_loadouts(p_inventory_model: InventoryModel) -> bool:
-	for gear_index in range(p_inventory_model.size):
+	for gear_index in range(p_inventory_model.get_size()):
 		if p_inventory_model.get_slot(gear_index) == null:
 			continue
 		var rune_ids := p_inventory_model.get_socketed_rune_ids(gear_index)
@@ -184,23 +191,7 @@ func _is_valid_loadout(
 	var gear := _get_gear_definition(p_inventory_model, p_item_proficiency, gear_index)
 	if gear == null:
 		return false
-	var total_slot_count := gear.proficiency.slot_unlock_levels.size()
-	if rune_ids.size() > total_slot_count or (not rune_ids.is_empty() and rune_ids.back().is_empty()):
-		return false
-	var unlocked_slot_count := mini(
-		total_slot_count,
-		p_item_proficiency.get_unlocked_slot_count(gear.id),
-	)
-	for slot_index in range(rune_ids.size()):
-		var rune_id := rune_ids[slot_index]
-		if rune_id.is_empty():
-			continue
-		if slot_index >= unlocked_slot_count or not p_inventory_model.item_catalog.has_definition(rune_id):
-			return false
-		var rune := p_inventory_model.item_catalog.get_definition(rune_id) as RuneDefinition
-		if rune == null or not rune.is_compatible_with(gear):
-			return false
-	return true
+	return p_inventory_model.item_catalog.is_valid_socket_loadout(gear.id, rune_ids)
 
 func _get_gear_definition(
 	p_inventory_model: InventoryModel,

@@ -531,14 +531,14 @@ func _verify_item_block_round_trip() -> bool:
 	var grass_batch: Array[StringName] = []
 	grass_batch.resize(12)
 	grass_batch.fill(grass_item.id)
-	if not inventory.add_batch(grass_batch):
+	if not _game.inventory_loadout_coordinator.add_batch(grass_batch):
 		_fail("round-trip fixture could not add grass items")
 		return false
 	var key_one := InputEventKey.new()
 	key_one.keycode = KEY_1
 	key_one.pressed = true
 	root.push_input(key_one, true)
-	if inventory.selected_slot != 0:
+	if inventory.get_selected_slot() != 0:
 		_fail("hotbar key input did not select slot 0")
 		return false
 	var before: InventoryStack = inventory.get_slot(0)
@@ -582,7 +582,7 @@ func _verify_item_block_round_trip() -> bool:
 	key_two.keycode = KEY_2
 	key_two.pressed = true
 	root.push_input(key_two, true)
-	if inventory.selected_slot != 1 or inventory.get_slot(1) != null:
+	if inventory.get_selected_slot() != 1 or inventory.get_slot(1) != null:
 		_fail("hotbar key input did not select the empty second slot")
 		return false
 	_item_round_trip_verified = true
@@ -947,7 +947,7 @@ func _verify_player_defeat_flow() -> bool:
 	if not session.is_saving_suspended():
 		_fail("player defeat did not suspend saving synchronously")
 		return false
-	if _game.player_stats.level != 2 or _game.player_stats.experience != 1:
+	if _game.player_stats.get_level() != 2 or _game.player_stats.get_experience() != 1:
 		_fail("player defeat changed progression")
 		return false
 	session._process(1.0)
@@ -983,12 +983,12 @@ func _verify_player_defeat_flow() -> bool:
 	if _game._death_screen != death_screen:
 		_fail("duplicate player defeat created another death screen")
 		return false
-	var selected_slot_before := _game.inventory_model.selected_slot
+	var selected_slot_before := _game.inventory_model.get_selected_slot()
 	var blocked_number_key := InputEventKey.new()
 	blocked_number_key.pressed = true
 	blocked_number_key.keycode = KEY_1
 	_game.hud.hotbar._unhandled_key_input(blocked_number_key)
-	if _game.inventory_model.selected_slot != selected_slot_before:
+	if _game.inventory_model.get_selected_slot() != selected_slot_before:
 		_fail("defeated hotbar processed a number-key selection")
 		return false
 	_game.input_buffer.clear_gameplay()

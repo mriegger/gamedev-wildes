@@ -2,7 +2,7 @@ extends Panel
 
 @onready var _placeholder_icon: Label = $Center/PlaceholderIcon as Label
 
-var inventory_model: InventoryModel
+var inventory_loadout_coordinator: InventoryLoadoutCoordinator
 var _normal_style: StyleBoxFlat
 var _active_style: StyleBoxFlat
 
@@ -14,20 +14,20 @@ func _ready() -> void:
 	_placeholder_icon.add_theme_font_override("font", WildesStyle.BOLD_FONT)
 	_apply_drop_state(false)
 
-func setup(p_inventory_model: InventoryModel) -> void:
-	assert(p_inventory_model != null)
-	inventory_model = p_inventory_model
+func setup(p_inventory_loadout_coordinator: InventoryLoadoutCoordinator) -> void:
+	assert(p_inventory_loadout_coordinator != null)
+	inventory_loadout_coordinator = p_inventory_loadout_coordinator
 
 func _can_drop_data(_at_position: Vector2, data: Variant) -> bool:
 	var parsed := _parse_drag_data(data)
-	var can_discard := inventory_model != null and inventory_model.can_discard_stack(parsed.x, parsed.y)
+	var can_discard := inventory_loadout_coordinator != null and inventory_loadout_coordinator.can_discard_stack(parsed.x, parsed.y)
 	_apply_drop_state(can_discard)
 	return can_discard
 
 func _drop_data(_at_position: Vector2, data: Variant) -> void:
 	var parsed := _parse_drag_data(data)
-	if inventory_model != null:
-		inventory_model.discard_stack(parsed.x, parsed.y)
+	if inventory_loadout_coordinator != null:
+		inventory_loadout_coordinator.discard_stack(parsed.x, parsed.y)
 	_apply_drop_state(false)
 
 func _parse_drag_data(data: Variant) -> Vector2i:

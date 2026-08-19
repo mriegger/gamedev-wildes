@@ -8,6 +8,7 @@ const GRASS_SLOT: int = 1
 var _failures: int = 0
 var _world: VoxelWorld
 var _inventory: InventoryModel
+var _inventory_loadout: InventoryLoadoutCoordinator
 var _player: PlayerMotor
 var _camera: Camera3D
 var _interactor: PlayerInteractor
@@ -96,7 +97,10 @@ func _run() -> void:
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
 	_inventory = InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	_inventory.setup_starter()
-	_inventory.select_slot(GRASS_SLOT)
+	var player_stats := ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
+	_inventory_loadout = InventoryTestFixture.create_loadout(_inventory, player_stats)
+	_expect(_inventory_loadout != null, "inventory loadout setup failed")
+	_inventory_loadout.select_slot(GRASS_SLOT)
 	_input_buffer = InputBuffer.new()
 
 	_player = (load("res://player/player.tscn") as PackedScene).instantiate() as PlayerMotor
@@ -116,9 +120,16 @@ func _run() -> void:
 	_interactor.set_physics_process(false)
 	_player.animation_driver.set_process(false)
 	_coordinator.setup(_make_one_zombie_catalog(), _world, 1337, _always_ready)
-	var player_stats := ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
 	_combat.setup(_world, _player, player_stats, _coordinator.get_runtime())
-	_interactor.setup(_camera, _player, _inventory, _input_buffer, _combat, _coordinator.get_runtime())
+	_interactor.setup(
+		_camera,
+		_player,
+		_inventory,
+		_inventory_loadout,
+		_input_buffer,
+		_combat,
+		_coordinator.get_runtime(),
+	)
 	_interactor.bind_space(_world, _world)
 	_interactor.block_placed.connect(_on_block_placed)
 	_world.block_edit_committed.connect(_on_block_edit)
@@ -198,10 +209,10 @@ func _run() -> void:
 	_expect_unchanged(out_of_reach, reach_snapshot, "out-of-reach validation")
 
 	var selected_snapshot := _snapshot(target_c)
-	_inventory.select_slot(0)
+	_inventory_loadout.select_slot(0)
 	_interactor._commit_place(target_c, grass_action)
 	_expect_unchanged(target_c, selected_snapshot, "selected-item-changed validation")
-	_inventory.select_slot(GRASS_SLOT)
+	_inventory_loadout.select_slot(GRASS_SLOT)
 
 	var stale_action_snapshot := _snapshot(target_c)
 	_interactor._commit_place(target_c, null)

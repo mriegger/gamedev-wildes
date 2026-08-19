@@ -16,7 +16,19 @@ func can_harvest_target(_target_id: int) -> bool:
 func get_harvest_item_ids(_target_id: int) -> Array[StringName]:
 	return []
 
-func try_harvest_target(_target_id: int) -> bool:
+func prepare_harvest_target(_target_id: int) -> PreparedHarvestChange:
+	return null
+
+func can_commit_prepared_harvest(_prepared: PreparedHarvestChange) -> bool:
+	return false
+
+func _commit_prepared_harvest(
+	_prepared: PreparedHarvestChange,
+	_emit_signal: bool = true,
+) -> bool:
+	return false
+
+func _notify_prepared_harvest(_prepared: PreparedHarvestChange) -> bool:
 	return false
 
 func get_harvest_prompt() -> String:

@@ -10,6 +10,7 @@ var _voxel_world: VoxelWorld
 var _world_entity_coordinator: WorldEntityCoordinator
 var _combat: MeleeCombatCoordinator
 var _hotbar: InventoryHotbar
+var _inventory_loadout: InventoryLoadoutCoordinator
 var _stone_pos := Vector3i(1, 0, 0)
 var _grass_pos := Vector3i(2, 0, 0)
 var _copper_pos := Vector3i(3, 0, 0)
@@ -60,7 +61,8 @@ func _run():
 	_expect(BlockId.get_display_name(BlockId.Type.CHEST) == "Chest", "chest block display name is incorrect")
 	_expect(not BlockId.is_chunk_cube(BlockId.Type.CHEST), "chest is still baked into the chunk cube mesh")
 	_expect(chest_block.is_solid and chest_block.is_opaque and chest_block.is_raycast_solid, "chest is not a solid targetable block")
-	_expect(not chest_block.is_breakable and chest_block.drop_item_id.is_empty(), "chest is still configured as mineable")
+	_expect(chest_block.is_breakable and chest_block.drop_item_id == &"chest", "chest does not use normal block drops")
+	_expect(chest_block.mining_tool_tag == &"pickaxe" and chest_block.minimum_mining_power == 1, "chest mining requirements are invalid")
 	_expect(chest_block.container != null and chest_block.container.rows == 3 and chest_block.container.columns == 5, "chest container dimensions are invalid")
 	_expect(chest_placement != null and chest_placement.block == chest_block, "chest item does not place the canonical chest block")
 	_expect(item_catalog.get_item_for_block(BlockId.Type.CHEST) == chest_item, "chest reverse block mapping is incorrect")
@@ -199,8 +201,8 @@ func _run():
 	_expect(stone.drop_item_id == &"stone_block", "stone drop item changed")
 	_expect(unarmed_action.can_mine(stone), "unarmed action cannot mine stone")
 	_expect(not unarmed_action.can_mine(chest_block), "unarmed action can mine a chest")
-	_expect(not pickaxe_action.can_mine(chest_block), "stone pickaxe can mine a chest")
-	_expect(not copper_pickaxe_action.can_mine(chest_block), "copper pickaxe can mine a chest")
+	_expect(pickaxe_action.can_mine(chest_block), "stone pickaxe cannot mine a chest")
+	_expect(copper_pickaxe_action.can_mine(chest_block), "copper pickaxe cannot mine a chest")
 	_expect(copper.mining_tool_tag == &"pickaxe" and copper.minimum_mining_power == 1, "copper mining requirement changed")
 	_expect(not unarmed_action.can_mine(copper), "unarmed action can mine copper")
 	_expect(pickaxe_action.can_mine(copper), "stone pickaxe cannot mine copper")
@@ -224,13 +226,13 @@ func _run():
 	var test_totem_slot := InventoryModel.FILLABLE_SIZE - 1
 	_expect(_inventory.get_slot(test_totem_slot) is InventoryStack and _inventory.get_slot(test_totem_slot).item_id == &"test_totem", "test totem is not in the starter backpack")
 	var encoded := _inventory.to_dict()
-	var encoded_next_instance_id := _inventory.equipment_instance_factory.get_next_instance_id()
-	var restored := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog, encoded_next_instance_id))
+	var restored_next_instance_id := _inventory.equipment_instance_factory.get_next_instance_id()
+	var restored := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog, restored_next_instance_id))
 	_expect(restored.from_dict(encoded), "typed inventory did not restore")
 	_expect(restored.get_slot(0) == null, "restored new inventory gained a copper pickaxe")
 	_expect(restored.get_slot(3) is InventoryStack and restored.get_slot(3).item_id == &"copper_sword", "restored sword missing")
 	_expect(restored.get_slot(test_totem_slot) is InventoryStack and restored.get_slot(test_totem_slot).item_id == &"test_totem", "restored test totem missing")
-	_expect(restored.starter_item_migration_version == InventoryModel.STARTER_ITEM_MIGRATION_VERSION, "starter item migration version did not restore")
+	_expect(restored.get_starter_item_migration_version() == InventoryModel.STARTER_ITEM_MIGRATION_VERSION, "starter item migration version did not restore")
 	var existing_pickaxe_encoded := encoded.duplicate(true)
 	existing_pickaxe_encoded["regions"]["hotbar"][0] = {
 		"item_id": "copper_pickaxe",
@@ -238,59 +240,70 @@ func _run():
 		"equipment_instance": null,
 	}
 	existing_pickaxe_encoded.erase("starter_item_migration_version")
-	var existing_pickaxe_save := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog, encoded_next_instance_id))
+	var existing_pickaxe_save := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog, restored_next_instance_id))
 	_expect(existing_pickaxe_save.from_dict(existing_pickaxe_encoded), "existing copper pickaxe save did not restore")
-	_expect(existing_pickaxe_save.migrate_starter_items(), "existing copper pickaxe save did not migrate")
+	_expect(InventoryTestFixture.create_loadout(existing_pickaxe_save).migrate_starter_items(), "existing copper pickaxe save did not migrate")
 	_expect(existing_pickaxe_save.get_slot(0) != null and existing_pickaxe_save.get_slot(0).item_id == &"copper_pickaxe", "existing copper pickaxe was not preserved")
 	var legacy_encoded := encoded.duplicate(true)
 	legacy_encoded["regions"]["hotbar"][3] = null
 	legacy_encoded.erase("starter_item_migration_version")
-	var legacy := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog, encoded_next_instance_id))
+	var legacy := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog, restored_next_instance_id))
 	_expect(legacy.from_dict(legacy_encoded), "legacy inventory did not restore")
-	_expect(legacy.migrate_starter_items(), "legacy inventory could not receive starter items")
+	var legacy_loadout := InventoryTestFixture.create_loadout(legacy)
+	_expect(legacy_loadout != null and legacy_loadout.migrate_starter_items(), "legacy inventory could not receive starter items")
 	_expect(legacy.get_inventory_item_count(&"copper_pickaxe") == 0, "legacy migration granted a copper pickaxe")
 	_expect(legacy.get_inventory_item_count(&"copper_sword") == 1, "legacy migration did not restore the sword")
 	var restore_game := Game.new()
 	restore_game.item_catalog = item_catalog
-	restore_game.inventory_model = InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog, encoded_next_instance_id))
+	restore_game.inventory_model = InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog, restored_next_instance_id))
 	restore_game._save_data = {"inventory": legacy_encoded}
 	restore_game._restore_inventory()
 	_expect(restore_game.inventory_model.get_inventory_item_count(&"copper_pickaxe") == 0, "game restore granted a copper pickaxe")
-	_expect(restore_game.inventory_model.get_inventory_item_count(&"copper_sword") == 1, "game restore did not execute sword migration")
+	_expect(restore_game.inventory_model.get_inventory_item_count(&"copper_sword") == 0, "inventory restore executed runtime migration")
+	var restore_loadout := InventoryTestFixture.create_loadout(restore_game.inventory_model)
+	_expect(restore_loadout != null and restore_loadout.migrate_starter_items(), "restored game inventory could not execute runtime migration")
+	_expect(restore_game.inventory_model.get_inventory_item_count(&"copper_sword") == 1, "runtime migration did not restore the sword")
 	restore_game.free()
 	var new_game := Game.new()
 	new_game.item_catalog = item_catalog
 	new_game.inventory_model = InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	new_game._save_data = {"inventory": null}
 	new_game._restore_inventory()
-	for index in range(new_game.inventory_model.size):
+	for index in range(new_game.inventory_model.get_size()):
 		_expect(new_game.inventory_model.get_slot(index) == null, "new world inventory contains an item in slot %d" % index)
-	_expect(new_game.inventory_model.starter_item_migration_version == InventoryModel.STARTER_ITEM_MIGRATION_VERSION, "new world inventory can receive legacy starter items after reload")
-	var reloaded_new_world := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
+	_expect(new_game.inventory_model.get_starter_item_migration_version() == InventoryModel.STARTER_ITEM_MIGRATION_VERSION, "new world inventory can receive legacy starter items after reload")
+	var reloaded_new_world := InventoryModel.new(
+		item_catalog,
+		EquipmentInstanceFactory.new(item_catalog, new_game.inventory_model.equipment_instance_factory.get_next_instance_id()),
+	)
 	_expect(reloaded_new_world.from_dict(new_game.inventory_model.to_dict()), "new world inventory did not survive save serialization")
-	_expect(reloaded_new_world.migrate_starter_items(), "new world inventory migration state did not survive reload")
-	for index in range(reloaded_new_world.size):
+	_expect(InventoryTestFixture.create_loadout(reloaded_new_world).migrate_starter_items(), "new world inventory migration state did not survive reload")
+	for index in range(reloaded_new_world.get_size()):
 		_expect(reloaded_new_world.get_slot(index) == null, "reloaded new world gained an item in slot %d" % index)
 	new_game.free()
-	for index in range(legacy.size):
-		if legacy.slots[index] != null and legacy.slots[index].item_id == &"copper_sword":
-			legacy.slots[index] = null
+	for index in range(legacy.get_size()):
+		if legacy.get_slot(index) != null and legacy.get_slot(index).item_id == &"copper_sword":
+			_expect(legacy_loadout.discard_stack(index, 1), "completed starter sword could not be discarded")
 			break
-	_expect(legacy.migrate_starter_items(), "completed starter migration did not remain complete")
+	_expect(legacy_loadout.migrate_starter_items(), "completed starter migration did not remain complete")
 	_expect(legacy.get_inventory_item_count(&"copper_sword") == 0, "completed starter migration re-granted a removed sword")
 	var crowded := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	var grass_id := item_catalog.get_item_for_block(BlockId.Type.GRASS).id
 	for index in range(InventoryModel.HOTBAR_SIZE):
-		crowded.slots[index] = InventoryStack.new(grass_id, index + 1)
-	_expect(crowded.ensure_item(&"copper_pickaxe"), "full hotbar could not receive a pickaxe")
+		InventoryTestFixture.restore_slot(crowded, index, InventoryStack.new(grass_id, index + 1))
+	_expect(InventoryTestFixture.create_loadout(crowded).ensure_item(&"copper_pickaxe"), "full hotbar could not receive a pickaxe")
 	_expect(crowded.get_slot(0).item_id == &"copper_pickaxe" and crowded.get_slot(InventoryModel.HOTBAR_SIZE).count == 1, "adding a pickaxe lost its displaced stack")
 	var full := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	for index in range(InventoryModel.FILLABLE_SIZE):
-		full.slots[index] = InventoryStack.new(grass_id, 1)
-	_expect(not full.migrate_starter_items(), "full inventory unexpectedly accepted starter items")
+		InventoryTestFixture.restore_slot(full, index, InventoryStack.new(grass_id, 1))
+	_expect(not InventoryTestFixture.create_loadout(full).migrate_starter_items(), "full inventory unexpectedly accepted starter items")
 	for index in range(InventoryModel.FILLABLE_SIZE, InventoryModel.TOTAL_SIZE):
-		_expect(full.slots[index] == null, "starter migration used reserved equipment slot %d" % index)
-	_inventory.slots[0] = InventoryStack.new(&"stone_pickaxe", 1)
+		_expect(full.get_slot(index) == null, "starter migration used reserved equipment slot %d" % index)
+	InventoryTestFixture.restore_slot(_inventory, 0, InventoryStack.new(
+		&"stone_pickaxe",
+		1,
+		_inventory.equipment_instance_factory.create(&"stone_pickaxe"),
+	))
 
 	_voxel_world = VoxelWorld.new(20, 36, 5, 12.0, block_catalog)
 	_voxel_world.restore_block_edits({
@@ -303,14 +316,11 @@ func _run():
 		_covered_dirt_pos + Vector3i.UP: BlockId.Type.DIRT,
 		_nonsoil_pos: BlockId.Type.SAND,
 	}, {})
-	var chest_position := Vector3i(4, 20, 0)
+	var chest_position := Vector3i(4, 0, 0)
 	var chest_place_edit := _voxel_world.try_place_block(chest_position, BlockId.Type.CHEST)
 	_expect(chest_place_edit.is_success() and chest_place_edit.new_id == BlockId.Type.CHEST, "voxel world rejected chest placement")
 	_expect(_voxel_world.get_block_id_at(chest_position) == BlockId.Type.CHEST, "placed chest is missing from the voxel world")
 	_expect(_voxel_world.snapshot_block_edits()["placed"].get(chest_position, BlockId.Type.AIR) == BlockId.Type.CHEST, "placed chest was not persisted as a world edit")
-	var chest_mine_edits := _voxel_world.try_mine_block(chest_position)
-	_expect(chest_mine_edits.size() == 1 and chest_mine_edits[0].result == BlockEdit.Result.FAIL_NOT_BREAKABLE, "placed chest accepted a mine operation")
-	_expect(_voxel_world.get_block_id_at(chest_position) == BlockId.Type.CHEST, "failed chest mining removed the block")
 	_player = (load("res://player/player.tscn") as PackedScene).instantiate() as PlayerMotor
 	root.add_child(_player)
 	_player.global_position = Vector3.ZERO
@@ -328,21 +338,49 @@ func _run():
 	_combat = MeleeCombatCoordinator.new()
 	root.add_child(_combat)
 	var player_stats := ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
-	var inventory_stat_coordinator := InventoryStatCoordinator.new()
-	_expect(inventory_stat_coordinator.setup(_inventory, player_stats), "inventory stat coordinator setup failed")
+	var item_proficiency := ItemProficiency.new(item_catalog)
+	_inventory_loadout = InventoryLoadoutCoordinator.new()
+	_expect(_inventory_loadout.setup(_inventory, player_stats, item_proficiency), "inventory loadout setup failed")
 	_combat.setup(_voxel_world, _player, player_stats, _world_entity_coordinator.get_runtime())
-	_interactor.setup(_camera, _player, _inventory, _input_buffer, _combat, _world_entity_coordinator.get_runtime())
-	_player._inventory_model = _inventory
-	_interactor.bind_space(_voxel_world, _voxel_world)
+	var movement_camera_rig := (load("res://player/camera/camera_rig.tscn") as PackedScene).instantiate() as CameraRig
+	root.add_child(movement_camera_rig)
+	movement_camera_rig.camera = _camera
+	movement_camera_rig.camera.size = CameraRig.DEFAULT_ORTHO_SIZE
+	movement_camera_rig.setup(_player, _input_buffer)
+	_player.setup(
+		movement_camera_rig,
+		_inventory,
+		_inventory_loadout,
+		_input_buffer,
+		player_stats,
+		_combat,
+		_world_entity_coordinator.get_runtime(),
+	)
+	_player.bind_space(_voxel_world, root, Vector3.ZERO, _voxel_world)
+	var chest_storage := ChestStorage.new(
+		item_catalog,
+		_inventory.equipment_instance_factory,
+		chest_block.container.get_slot_count(),
+	)
+	_expect(chest_storage.create_chest(chest_position), "placed chest storage could not be created")
+	var chest_coordinator := ChestCoordinator.new()
+	_expect(chest_coordinator.setup(chest_storage, _inventory, _inventory_loadout, _voxel_world, chest_block), "chest coordinator setup failed")
+	_voxel_world.block_edit_committed.connect(chest_coordinator.handle_block_edit)
+	_interactor.set_chest_coordinator(chest_coordinator)
 	_interactor.melee_attack_started.connect(_on_melee_attack_started)
 	_interactor.soil_tilled.connect(_on_soil_tilled)
 	_player.set_physics_process(false)
 	_interactor.set_physics_process(false)
-	_player.animation_driver.setup(_player, _interactor)
 	_player.animation_driver.set_process(false)
-	_player.held_item_view.setup(_inventory)
-	_inventory.slots[0] = InventoryStack.new(&"copper_hammer", 1)
-	_inventory.inventory_changed.emit()
+	_expect(_inventory_loadout.discard_stack(0, 1), "stone pickaxe could not be replaced for the hammer presentation test")
+	_expect(_inventory_loadout.add_stack(InventoryStack.new(
+		&"copper_hammer",
+		1,
+		_inventory.equipment_instance_factory.create(&"copper_hammer"),
+	)), "hammer could not be added for the presentation test")
+	var hammer_source := _find_inventory_item(&"copper_hammer")
+	_expect(hammer_source >= 0 and (hammer_source == 0 or _inventory_loadout.assign_slot_to_hotbar(hammer_source, 0)), "hammer could not be moved to the selected slot")
+	_expect(_inventory.get_slot(0) != null and _inventory.get_slot(0).item_id == &"copper_hammer", "hammer did not occupy the selected slot")
 	_player.animation_driver.animator._placing = true
 	_player.animation_driver.animator._place_elapsed = 0.05
 	_player.animation_driver.animator._mining_active = true
@@ -357,36 +395,39 @@ func _run():
 	_player.animation_driver.animator.cancel_attack()
 	_player.animation_driver._active_attack_action = null
 	_player.animation_driver.animator.set_held_melee_action(null)
-	_inventory.slots[0] = InventoryStack.new(&"stone_pickaxe", 1)
-	_inventory.inventory_changed.emit()
+	_expect(_inventory_loadout.discard_stack(0, 1), "hammer could not be removed after the presentation test")
+	_expect(_inventory_loadout.add_stack(InventoryStack.new(
+		&"stone_pickaxe",
+		1,
+		_inventory.equipment_instance_factory.create(&"stone_pickaxe"),
+	)), "stone pickaxe could not be restored after the hammer presentation test")
+	var restored_pickaxe_source := _find_inventory_item(&"stone_pickaxe")
+	_expect(restored_pickaxe_source >= 0 and (restored_pickaxe_source == 0 or _inventory_loadout.assign_slot_to_hotbar(restored_pickaxe_source, 0)), "stone pickaxe could not be moved back to the selected slot")
+	_expect(_inventory.get_slot(0) != null and _inventory.get_slot(0).item_id == &"stone_pickaxe", "stone pickaxe did not return to the selected slot")
 	_player.held_item_view.set_attack_pose(0.0, 0.0, null)
-	var shake_camera_rig := (load("res://player/camera/camera_rig.tscn") as PackedScene).instantiate() as CameraRig
-	root.add_child(shake_camera_rig)
-	await process_frame
-	shake_camera_rig.set_process(false)
 	var shockwave := _player.get_node("HammerShockwave") as HammerShockwaveView
-	shockwave.setup(_interactor, shake_camera_rig)
+	movement_camera_rig._camera_rest_position = _camera.position
 	var shockwave_position := Vector3(2.0, 0.04, 3.0)
-	var camera_rest_position := shake_camera_rig.camera.position
+	var camera_rest_position := movement_camera_rig.camera.position
 	_interactor.melee_attack_impacted.emit(hammer_action, shockwave_position)
 	_expect(shockwave.visible and shockwave.global_position.is_equal_approx(shockwave_position), "hammer impact did not show its shockwave at the contact point")
-	_expect(is_zero_approx(shake_camera_rig._impact_shake_elapsed), "hammer impact did not start the camera shake")
-	shake_camera_rig._update_impact_shake(0.02)
-	_expect(not shake_camera_rig.camera.position.is_equal_approx(camera_rest_position), "hammer camera shake did not offset the camera")
-	_expect(shake_camera_rig.camera.position.distance_to(camera_rest_position) <= CameraRig.IMPACT_SHAKE_STRENGTH, "hammer camera shake was not subtle")
-	var default_zoom_shake_distance := shake_camera_rig.camera.position.distance_to(camera_rest_position)
-	shake_camera_rig.camera.size = shake_camera_rig.min_ortho_size
-	shake_camera_rig.play_impact_shake()
-	shake_camera_rig._update_impact_shake(0.02)
-	var zoomed_in_shake_distance := shake_camera_rig.camera.position.distance_to(camera_rest_position)
-	shake_camera_rig.camera.size = shake_camera_rig.max_ortho_size
-	shake_camera_rig.play_impact_shake()
-	shake_camera_rig._update_impact_shake(0.02)
-	var zoomed_out_shake_distance := shake_camera_rig.camera.position.distance_to(camera_rest_position)
+	_expect(is_zero_approx(movement_camera_rig._impact_shake_elapsed), "hammer impact did not start the camera shake")
+	movement_camera_rig._update_impact_shake(0.02)
+	_expect(not movement_camera_rig.camera.position.is_equal_approx(camera_rest_position), "hammer camera shake did not offset the camera")
+	_expect(movement_camera_rig.camera.position.distance_to(camera_rest_position) <= CameraRig.IMPACT_SHAKE_STRENGTH, "hammer camera shake was not subtle")
+	var default_zoom_shake_distance := movement_camera_rig.camera.position.distance_to(camera_rest_position)
+	movement_camera_rig.camera.size = movement_camera_rig.min_ortho_size
+	movement_camera_rig.play_impact_shake()
+	movement_camera_rig._update_impact_shake(0.02)
+	var zoomed_in_shake_distance := movement_camera_rig.camera.position.distance_to(camera_rest_position)
+	movement_camera_rig.camera.size = movement_camera_rig.max_ortho_size
+	movement_camera_rig.play_impact_shake()
+	movement_camera_rig._update_impact_shake(0.02)
+	var zoomed_out_shake_distance := movement_camera_rig.camera.position.distance_to(camera_rest_position)
 	_expect(zoomed_in_shake_distance > default_zoom_shake_distance and default_zoom_shake_distance > zoomed_out_shake_distance, "hammer camera shake did not scale with orthographic zoom")
-	_expect(absf(zoomed_in_shake_distance / default_zoom_shake_distance - sqrt(CameraRig.DEFAULT_ORTHO_SIZE / shake_camera_rig.min_ortho_size)) < 0.001, "fully zoomed-in hammer shake used the wrong softened scale")
-	_expect(absf(zoomed_out_shake_distance / default_zoom_shake_distance - sqrt(CameraRig.DEFAULT_ORTHO_SIZE / shake_camera_rig.max_ortho_size)) < 0.001, "fully zoomed-out hammer shake used the wrong softened scale")
-	shake_camera_rig.camera.size = CameraRig.DEFAULT_ORTHO_SIZE
+	_expect(absf(zoomed_in_shake_distance / default_zoom_shake_distance - sqrt(CameraRig.DEFAULT_ORTHO_SIZE / movement_camera_rig.min_ortho_size)) < 0.001, "fully zoomed-in hammer shake used the wrong softened scale")
+	_expect(absf(zoomed_out_shake_distance / default_zoom_shake_distance - sqrt(CameraRig.DEFAULT_ORTHO_SIZE / movement_camera_rig.max_ortho_size)) < 0.001, "fully zoomed-out hammer shake used the wrong softened scale")
+	movement_camera_rig.camera.size = CameraRig.DEFAULT_ORTHO_SIZE
 	_expect(shockwave._mesh_instance != null and shockwave._mesh_instance.mesh is ImmediateMesh, "hammer shockwave does not use a procedural ring")
 	var initial_shockwave_scale := shockwave.scale.x
 	shockwave._process(HammerShockwaveView.DURATION_SECONDS * 0.1)
@@ -397,11 +438,11 @@ func _run():
 	_expect(is_equal_approx(shockwave._inner_radius_ratio, HammerShockwaveView.FINAL_INNER_RADIUS_RATIO) and shockwave._material.albedo_color.a > 0.0 and shockwave.visible, "hammer shockwave inner edge did not reach the outer edge before fading")
 	shockwave._process(HammerShockwaveView.DURATION_SECONDS * 0.1)
 	_expect(not shockwave.visible, "hammer shockwave did not finish")
-	shake_camera_rig._update_impact_shake(CameraRig.IMPACT_SHAKE_DURATION)
-	_expect(shake_camera_rig.camera.position.is_equal_approx(camera_rest_position), "hammer camera shake did not restore the camera")
+	movement_camera_rig._update_impact_shake(CameraRig.IMPACT_SHAKE_DURATION)
+	_expect(movement_camera_rig.camera.position.is_equal_approx(camera_rest_position), "hammer camera shake did not restore the camera")
 	_hotbar = (load("res://inventory/ui/inventory_hotbar.tscn") as PackedScene).instantiate() as InventoryHotbar
 	root.add_child(_hotbar)
-	_hotbar.setup(_inventory, inventory_stat_coordinator, ItemProficiency.new(item_catalog))
+	_hotbar.setup(_inventory, _inventory_loadout, item_proficiency)
 	await process_frame
 	_expect(_player.held_item_view.held_node is PixelExtrudedItem, "pickaxe held scene missing")
 	_expect(is_equal_approx(_player.held_item_view.rotation.x, PI * 0.25), "held-item socket does not pitch items downward")
@@ -423,10 +464,24 @@ func _run():
 	_expect(pickaxe_winding_valid, "pickaxe triangle winding does not face its supplied normals")
 	var one_pixel_pickaxe := PixelItemMeshBuilder.build(held_pickaxe.texture, held_pickaxe.grip_pixel, held_pickaxe.max_dimension, 1.0)
 	_expect(is_equal_approx(held_pickaxe.mesh_instance.mesh.get_aabb().size.z, one_pixel_pickaxe.get_aabb().size.z * 2.0), "pickaxe mesh is not two pixels thick")
+	var chest_count_before := _inventory.get_inventory_item_count(&"chest")
+	_prepare_target(chest_position, pickaxe_action)
+	_expect(_interactor.can_primary_target, "stone pickaxe cannot target an empty chest")
+	_push_primary(true)
+	await process_frame
+	_input_buffer.poll()
+	_interactor._handle_item_actions(0.0)
+	_interactor._handle_item_actions(chest_block.mine_duration + 0.01)
+	_expect(_voxel_world.get_block_id_at(chest_position) == BlockId.Type.AIR, "stone pickaxe did not mine the empty chest")
+	_expect(_inventory.get_inventory_item_count(&"chest") == chest_count_before + 1, "mined chest did not enter inventory")
+	_expect(not chest_storage.has_chest(chest_position), "mined chest retained storage state")
+	_push_primary(false)
+	await process_frame
+	_input_buffer.poll()
 
 	_push_hotbar_key(KEY_4)
 	await process_frame
-	_expect(_inventory.selected_slot == 3, "sword hotbar selection failed")
+	_expect(_inventory.get_selected_slot() == 3, "sword hotbar selection failed")
 	_expect(_player.held_item_view.held_node is PixelExtrudedItem, "sword held scene missing")
 	var held_sword := _player.held_item_view.held_node as PixelExtrudedItem
 	_expect(held_sword.texture == sword.icon, "sword held texture changed")
@@ -434,11 +489,6 @@ func _run():
 	var one_pixel_sword := PixelItemMeshBuilder.build(held_sword.texture, held_sword.grip_pixel, held_sword.max_dimension, 1.0)
 	_expect(is_equal_approx(held_sword.mesh_instance.mesh.get_aabb().size.z, one_pixel_sword.get_aabb().size.z), "sword mesh thickness changed")
 	_expect(_interactor.get_selected_primary_action() == sword_action, "sword melee action was not selected")
-	var movement_camera_rig := CameraRig.new()
-	movement_camera_rig.camera = _camera
-	_player.camera_rig = movement_camera_rig
-	_player._input_buffer = _input_buffer
-	_player.voxel_space = _voxel_world
 	_player.model_root.rotation.y = 0.0
 	_input_buffer.move_dir = Vector2.RIGHT
 	_player._handle_movement(0.0)
@@ -644,7 +694,7 @@ func _run():
 
 	_push_hotbar_key(KEY_2)
 	await process_frame
-	_expect(_inventory.selected_slot == 1, "grass hotbar selection failed")
+	_expect(_inventory.get_selected_slot() == 1, "grass hotbar selection failed")
 	_expect(_player.held_item_view.held_node == null, "held pickaxe did not clear")
 	var unarmed := _interactor.get_selected_primary_action() as MiningActionDefinition
 	_expect(unarmed != null and unarmed.can_mine(stone), "unarmed mining cannot mine stone")
@@ -664,7 +714,7 @@ func _run():
 
 	_push_hotbar_key(KEY_1)
 	await process_frame
-	_expect(_inventory.selected_slot == 0, "pickaxe hotbar selection failed")
+	_expect(_inventory.get_selected_slot() == 0, "pickaxe hotbar selection failed")
 	_expect(_player.held_item_view.held_node is PixelExtrudedItem, "pickaxe did not reappear")
 	_prepare_target(_copper_pos, pickaxe_action)
 	_expect(_interactor.can_primary_target, "stone pickaxe cannot target copper")
@@ -695,7 +745,13 @@ func _run():
 	await process_frame
 	_input_buffer.poll()
 
-	_inventory.slots[0] = InventoryStack.new(&"copper_hoe", 1)
+	var selected_stack := _inventory.get_slot(0)
+	if selected_stack != null:
+		_expect(_inventory_loadout.discard_stack(0, selected_stack.count), "selected tool could not be cleared")
+	var hoe_batch: Array[StringName] = [&"copper_hoe"]
+	_expect(_inventory_loadout.add_batch(hoe_batch), "copper hoe could not be added")
+	var hoe_source := _find_inventory_item(&"copper_hoe")
+	_expect(hoe_source >= 0 and (hoe_source == 0 or _inventory_loadout.assign_slot_to_hotbar(hoe_source, 0)), "copper hoe could not be assigned to the selected slot")
 	_push_hotbar_key(KEY_1)
 	await process_frame
 	_expect(_interactor.get_selected_primary_action() == tilling_action, "copper hoe tilling action was not selected")
@@ -748,9 +804,9 @@ func _run():
 	_combat.queue_free()
 	_world_entity_coordinator.queue_free()
 	_hotbar.queue_free()
-	shake_camera_rig.queue_free()
 	await process_frame
 	await process_frame
+	await create_timer(0.1).timeout
 	var orphan_count := int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
 	_expect(orphan_count == 0, "orphan count ended at %d" % orphan_count)
 	if _errors.is_empty():
@@ -791,6 +847,13 @@ func _push_primary(pressed: bool):
 func _on_melee_attack_started(_action: MeleeAttackActionDefinition, direction: int):
 	_melee_attack_directions.append(direction)
 	_melee_attack_facings.append(_player.model_root.global_transform.basis * Vector3.BACK)
+
+func _find_inventory_item(item_id: StringName) -> int:
+	for index in range(_inventory.get_size()):
+		var stack := _inventory.get_slot(index)
+		if stack != null and stack.item_id == item_id:
+			return index
+	return -1
 
 func _expect(condition: bool, message: String):
 	if not condition:

@@ -10,7 +10,6 @@ class_name ChestPanel
 var coordinator: ChestCoordinator
 var player_inventory: InventoryModel
 var item_proficiency: ItemProficiency
-var _active_chest_inventory: InventoryModel
 var _chest_slots: Array[InventorySlot] = []
 var _slot_normal_style: StyleBoxFlat
 var _slot_empty_style: StyleBoxFlat
@@ -40,6 +39,7 @@ func setup(p_coordinator: ChestCoordinator, p_player_inventory: InventoryModel, 
 	item_proficiency = p_item_proficiency
 	coordinator.opened.connect(_on_opened)
 	coordinator.closed.connect(_on_closed)
+	coordinator.contents_changed.connect(_on_contents_changed)
 	player_inventory.inventory_changed.connect(_refresh_move_all_state)
 
 func _build_chest_slots(definition: ContainerBlockDefinition):
@@ -64,23 +64,20 @@ func _create_slot(index: int, scope: StringName) -> InventorySlot:
 	return slot
 
 func _on_opened(_position: Vector3i, definition: ContainerBlockDefinition):
-	if _active_chest_inventory != null and _active_chest_inventory.inventory_changed.is_connected(_refresh):
-		_active_chest_inventory.inventory_changed.disconnect(_refresh)
-	_active_chest_inventory = coordinator.active_inventory
-	_active_chest_inventory.inventory_changed.connect(_refresh)
 	_build_chest_slots(definition)
 	visible = true
 	_update_layout()
 	_refresh()
 
 func _on_closed():
-	if _active_chest_inventory != null and _active_chest_inventory.inventory_changed.is_connected(_refresh):
-		_active_chest_inventory.inventory_changed.disconnect(_refresh)
-	_active_chest_inventory = null
 	visible = false
 	_move_all_button.disabled = true
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_cancel_drag_if_needed()
+
+func _on_contents_changed(position: Vector3i) -> void:
+	if coordinator != null and coordinator.get_active_position() == position:
+		_refresh()
 
 func _refresh():
 	if not visible or coordinator == null:

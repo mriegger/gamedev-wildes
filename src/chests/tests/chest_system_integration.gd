@@ -12,141 +12,187 @@ func _run():
 	_expect(block_catalog.validate(), "block catalog invalid")
 	_expect(item_catalog.validate(block_catalog), "item catalog invalid")
 
-	var chest_definition := block_catalog.get_definition(BlockId.Type.CHEST)
-	var container := chest_definition.container
+	var chest_block := block_catalog.get_definition(BlockId.Type.CHEST)
+	var container := chest_block.container
 	_expect(container != null and container.rows == 3 and container.columns == 5, "chest is not a 3x5 container")
 	_expect(BlockId.is_ao_solid(BlockId.Type.CHEST), "separately rendered chest does not occlude ambient light")
-	_expect(not chest_definition.is_breakable, "chest block is breakable")
+	_expect(chest_block.is_breakable and chest_block.mining_tool_tag == &"pickaxe" and chest_block.minimum_mining_power == 1, "chest mining metadata is invalid")
 	var unarmed := load("res://items/actions/definitions/unarmed_mining.tres") as MiningActionDefinition
 	var stone_pickaxe := item_catalog.get_definition(&"stone_pickaxe").primary_action as MiningActionDefinition
 	var copper_pickaxe := item_catalog.get_definition(&"copper_pickaxe").primary_action as MiningActionDefinition
-	_expect(not unarmed.can_mine(chest_definition), "hands can mine the chest")
-	_expect(not stone_pickaxe.can_mine(chest_definition), "stone pickaxe can mine the chest")
-	_expect(not copper_pickaxe.can_mine(chest_definition), "copper pickaxe can mine the chest")
+	_expect(not unarmed.can_mine(chest_block), "hands can mine the chest")
+	_expect(stone_pickaxe.can_mine(chest_block), "stone pickaxe cannot mine the chest")
+	_expect(copper_pickaxe.can_mine(chest_block), "copper pickaxe cannot mine the chest")
 
 	var world := VoxelWorld.new(16, 32, 5, 8.0, block_catalog)
 	var chest_position := Vector3i(2, 10, 3)
 	var second_chest_position := Vector3i(5, 10, 3)
+	var pickup_position := Vector3i(8, 10, 3)
+	var attached_torch_position := pickup_position + Vector3i(1, 0, 0)
 	_expect(world.try_place_block(chest_position, BlockId.Type.CHEST).is_success(), "chest placement failed")
 	_expect(world.try_place_block(second_chest_position, BlockId.Type.CHEST).is_success(), "second chest placement failed")
-	var mine_result := world.try_mine_block(chest_position)
-	_expect(mine_result.size() == 1 and mine_result[0].result == BlockEdit.Result.FAIL_NOT_BREAKABLE, "voxel model mined the chest")
-	_expect(world.get_block_id_at(chest_position) == BlockId.Type.CHEST, "failed mining removed the chest")
+	_expect(world.try_place_block(pickup_position, BlockId.Type.CHEST).is_success(), "pickup chest placement failed")
+	_expect(world.try_place_block(attached_torch_position, BlockId.Type.TORCH, Vector3i(-1, 0, 0)).is_success(), "pickup chest torch placement failed")
 
 	var player_inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	player_inventory.setup_empty()
 	var backpack_a := InventoryModel.HOTBAR_SIZE
 	var backpack_b := backpack_a + 1
 	var backpack_c := backpack_a + 2
-	player_inventory.slots[backpack_a] = InventoryStack.new(&"log_block", 10)
-	player_inventory.slots[backpack_b] = InventoryStack.new(&"stone_block", 4)
-	player_inventory.slots[0] = InventoryStack.new(&"torch", 8)
-	var storage := ChestInventoryStore.new(item_catalog, player_inventory.equipment_instance_factory)
+	var backpack_d := backpack_a + 3
+	var backpack_e := backpack_a + 4
+	_expect(InventoryTestFixture.restore_slot(player_inventory, backpack_a, InventoryStack.new(&"log_block", 10)), "log fixture failed")
+	_expect(InventoryTestFixture.restore_slot(player_inventory, backpack_b, InventoryStack.new(&"stone_block", 4)), "stone fixture failed")
+	_expect(InventoryTestFixture.restore_slot(player_inventory, backpack_e, InventoryStack.new(&"grass_block", 1)), "reentrancy fixture failed")
+	_expect(InventoryTestFixture.restore_slot(player_inventory, 0, InventoryStack.new(&"torch", 8)), "torch fixture failed")
+	var vicious := item_catalog.get_equipment_affix(&"vicious")
+	var variant_affixes: Array[EquipmentAffixDefinition] = [vicious]
+	var variant_runes: Array[StringName] = [&"basic_rune"]
+	var variant := player_inventory.equipment_instance_factory.create(&"copper_sword", variant_affixes, variant_runes)
+	_expect(variant != null, "variant sword fixture failed")
+	_expect(InventoryTestFixture.restore_slot(player_inventory, backpack_d, InventoryStack.new(&"copper_sword", 1, variant)), "variant sword restore failed")
+	var player_stats := ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
+	var player_loadout := InventoryTestFixture.create_loadout(player_inventory, player_stats)
+	_expect(player_loadout != null, "player loadout setup failed")
+	var storage := ChestStorage.new(item_catalog, player_inventory.equipment_instance_factory, container.get_slot_count())
+	_expect(storage.create_chest(chest_position), "first chest storage creation failed")
+	_expect(storage.create_chest(second_chest_position), "second chest storage creation failed")
+	_expect(storage.create_chest(pickup_position), "pickup chest storage creation failed")
+	_expect(storage.add_stack(chest_position, InventoryStack.new(&"sand_block", 3), 1), "swap fixture storage failed")
+	_expect(storage.add_stack(second_chest_position, InventoryStack.new(&"leaves_block", 5), 0), "second chest fixture storage failed")
+	_expect(storage.add_stack(pickup_position, InventoryStack.new(&"log_block", 1), 0), "pickup fixture storage failed")
 	var coordinator := ChestCoordinator.new()
-	coordinator.setup(world, player_inventory, storage)
+	_expect(coordinator.setup(storage, player_inventory, player_loadout, world, chest_block), "coordinator setup failed")
+	world.block_edit_committed.connect(coordinator.handle_block_edit)
+	var bound_snapshot := storage.snapshot()
+	var bound_revision := storage.get_revision()
+	_expect(storage.prepare_add_stack(chest_position, InventoryStack.new(&"dirt_block", 1), 3) != null, "bound storage rejected canonical add preparation")
+	_expect(storage.prepare_remove_stack(chest_position, 1) != null, "bound storage rejected canonical remove preparation")
+	_expect(not storage.add_stack(chest_position, InventoryStack.new(&"dirt_block", 1), 3), "bound storage allowed direct add mutation")
+	_expect(storage.remove_stack(chest_position, 1) == null, "bound storage allowed direct remove mutation")
+	_expect(storage.snapshot() == bound_snapshot and storage.get_revision() == bound_revision, "bound direct mutation guards changed storage")
 	_expect(coordinator.try_open(chest_position, container), "coordinator rejected a valid chest")
-	_expect(coordinator.active_inventory != null and coordinator.active_inventory.size == 15, "active chest does not have 15 slots")
+	_expect(coordinator.get_active_position() == chest_position and storage.get_slot_count() == 15, "active chest does not have 15 slots")
 	_expect(not coordinator.quick_transfer(ChestCoordinator.PLAYER_SCOPE, 0), "quick transfer moved a hotbar item")
+	var inventory_observations: Array[bool] = []
+	var contents_observations: Array[bool] = []
+	var reentrant_results: Array[bool] = []
+	var inventory_observer := func():
+		inventory_observations.append(player_inventory.get_slot(backpack_b) == null and storage.get_slot(chest_position, 0) != null)
+		reentrant_results.append(coordinator.quick_transfer(ChestCoordinator.PLAYER_SCOPE, backpack_e))
+	var contents_observer := func(position: Vector3i):
+		if position == chest_position:
+			contents_observations.append(player_inventory.get_slot(backpack_b) == null and storage.get_slot(chest_position, 0) != null)
+	player_inventory.inventory_changed.connect(inventory_observer)
+	coordinator.contents_changed.connect(contents_observer)
 	_expect(coordinator.quick_transfer(ChestCoordinator.PLAYER_SCOPE, backpack_b), "backpack click did not move its stack to the chest")
+	player_inventory.inventory_changed.disconnect(inventory_observer)
+	coordinator.contents_changed.disconnect(contents_observer)
+	_expect(inventory_observations == [true] and contents_observations == [true], "cross-owner observers saw a partially committed transfer")
+	_expect(reentrant_results == [false] and player_inventory.get_slot(backpack_e).count == 1, "cross-owner notification allowed a reentrant chest mutation")
 	_expect(player_inventory.get_slot(backpack_b) == null, "backpack click retained its source stack")
-	_expect(coordinator.active_inventory.get_slot(0).item_id == &"stone_block" and coordinator.active_inventory.get_slot(0).count == 4, "backpack click moved the wrong stack")
+	_expect(storage.get_slot(chest_position, 0).item_id == &"stone_block" and storage.get_slot(chest_position, 0).count == 4, "backpack click moved the wrong stack")
 	_expect(coordinator.quick_transfer(ChestCoordinator.CHEST_SCOPE, 0), "chest click did not move its stack to the backpack")
-	_expect(coordinator.active_inventory.get_slot(0) == null, "chest click retained its source stack")
+	_expect(storage.get_slot(chest_position, 0) == null, "chest click retained its source stack")
 	_expect(player_inventory.get_slot(backpack_b).item_id == &"stone_block" and player_inventory.get_slot(backpack_b).count == 4, "chest click moved the wrong stack")
 	_expect(coordinator.can_handle_drop(ChestCoordinator.PLAYER_SCOPE, 0, ChestCoordinator.CHEST_SCOPE, 2, 3), "hotbar item was rejected as a chest transfer source")
 	_expect(coordinator.handle_drop(ChestCoordinator.PLAYER_SCOPE, 0, ChestCoordinator.CHEST_SCOPE, 2, 3), "partial hotbar-to-chest transfer failed")
 	_expect(player_inventory.get_slot(0).count == 5, "hotbar retained the wrong remainder")
-	_expect(coordinator.active_inventory.get_slot(2).item_id == &"torch" and coordinator.active_inventory.get_slot(2).count == 3, "chest received the wrong hotbar stack")
+	_expect(storage.get_slot(chest_position, 2).item_id == &"torch" and storage.get_slot(chest_position, 2).count == 3, "chest received the wrong hotbar stack")
 	_expect(coordinator.handle_drop(ChestCoordinator.CHEST_SCOPE, 2, ChestCoordinator.PLAYER_SCOPE, 1, 2), "chest-to-hotbar transfer failed")
-	_expect(coordinator.active_inventory.get_slot(2).count == 1, "chest retained the wrong hotbar-transfer remainder")
+	_expect(storage.get_slot(chest_position, 2).count == 1, "chest retained the wrong hotbar-transfer remainder")
 	_expect(player_inventory.get_slot(1).item_id == &"torch" and player_inventory.get_slot(1).count == 2, "hotbar received the wrong chest stack")
 
 	_expect(coordinator.handle_drop(ChestCoordinator.PLAYER_SCOPE, backpack_a, ChestCoordinator.CHEST_SCOPE, 0, 4), "partial backpack-to-chest transfer failed")
 	_expect(player_inventory.get_slot(backpack_a).count == 6, "partial transfer removed the wrong backpack count")
-	_expect(coordinator.active_inventory.get_slot(0).item_id == &"log_block" and coordinator.active_inventory.get_slot(0).count == 4, "partial transfer stored the wrong chest stack")
+	_expect(storage.get_slot(chest_position, 0).item_id == &"log_block" and storage.get_slot(chest_position, 0).count == 4, "partial transfer stored the wrong chest stack")
 	_expect(coordinator.handle_drop(ChestCoordinator.CHEST_SCOPE, 0, ChestCoordinator.PLAYER_SCOPE, backpack_c, 2), "partial chest-to-backpack transfer failed")
-	_expect(coordinator.active_inventory.get_slot(0).count == 2, "chest retained the wrong remainder")
+	_expect(storage.get_slot(chest_position, 0).count == 2, "chest retained the wrong remainder")
 	_expect(player_inventory.get_slot(backpack_c).item_id == &"log_block" and player_inventory.get_slot(backpack_c).count == 2, "backpack received the wrong partial stack")
 
-	coordinator.active_inventory.slots[1] = InventoryStack.new(&"sand_block", 3)
 	_expect(coordinator.handle_drop(ChestCoordinator.PLAYER_SCOPE, backpack_b, ChestCoordinator.CHEST_SCOPE, 1, 4), "backpack/chest swap failed")
 	_expect(player_inventory.get_slot(backpack_b).item_id == &"sand_block", "swap did not return the chest item to the backpack")
-	_expect(coordinator.active_inventory.get_slot(1).item_id == &"stone_block", "swap did not move the backpack item into the chest")
-	var first_chest_inventory := coordinator.active_inventory
+	_expect(storage.get_slot(chest_position, 1).item_id == &"stone_block", "swap did not move the backpack item into the chest")
+	var variant_fingerprint := variant.to_dict()
+	_expect(coordinator.handle_drop(ChestCoordinator.PLAYER_SCOPE, backpack_d, ChestCoordinator.CHEST_SCOPE, 4, 1), "variant sword did not move into chest storage")
+	_expect(storage.get_slot(chest_position, 4).equipment_instance.to_dict() == variant_fingerprint, "variant sword changed while entering chest storage")
+	_expect(coordinator.handle_drop(ChestCoordinator.CHEST_SCOPE, 4, ChestCoordinator.PLAYER_SCOPE, backpack_d, 1), "variant sword did not return to the backpack")
+	_expect(player_inventory.get_slot(backpack_d).equipment_instance.to_dict() == variant_fingerprint, "variant sword changed while leaving chest storage")
+	_expect(coordinator.handle_drop(ChestCoordinator.PLAYER_SCOPE, backpack_d, ChestCoordinator.CHEST_SCOPE, 4, 1), "variant sword did not return to chest storage")
 	coordinator.close()
 	_expect(coordinator.try_open(second_chest_position, container), "coordinator rejected the second chest")
-	_expect(coordinator.active_inventory != first_chest_inventory, "two world chests share one inventory model")
-	_expect(coordinator.active_inventory.encode_slots().all(func(stack): return stack == null), "new second chest inherited the first chest's contents")
-	coordinator.active_inventory.slots[0] = InventoryStack.new(&"leaves_block", 5)
+	_expect(storage.get_slot(second_chest_position, 0).item_id == &"leaves_block", "second chest lost its position-linked contents")
 	coordinator.close()
 	_expect(coordinator.try_open(chest_position, container), "coordinator could not reopen the first chest")
-	_expect(coordinator.active_inventory == first_chest_inventory, "reopened chest did not recover its position-linked inventory")
-	_expect(coordinator.active_inventory.get_slot(1).item_id == &"stone_block", "opening another chest changed the first chest")
-	_expect(storage.get_inventory(second_chest_position).get_slot(0).item_id == &"leaves_block", "first chest changed the second chest")
+	_expect(storage.get_slot(chest_position, 1).item_id == &"stone_block", "opening another chest changed the first chest")
+	_expect(storage.get_slot(second_chest_position, 0).item_id == &"leaves_block", "first chest changed the second chest")
 
-	var encoded: Variant = JSON.parse_string(JSON.stringify(SaveManager.serialize_vector3i_dict(storage.snapshot())))
-	var decoded = SaveManager.decode_chest_state({"chests": encoded}) if encoded is Dictionary else null
-	var restored_storage := ChestInventoryStore.new(item_catalog, player_inventory.equipment_instance_factory)
-	_expect(decoded is Dictionary and restored_storage.restore(decoded), "chest storage JSON round trip failed")
-	var oversized_storage := ChestInventoryStore.new(item_catalog, player_inventory.equipment_instance_factory)
+	_expect(coordinator.try_open(pickup_position, container), "pickup chest did not open")
+	_expect(not coordinator.can_break(pickup_position), "non-empty chest was breakable")
+	_expect(coordinator.quick_transfer(ChestCoordinator.CHEST_SCOPE, 0), "pickup chest contents could not be removed")
+	_expect(coordinator.can_break(pickup_position), "empty chest remained blocked")
+	var pickup_edits := world.try_mine_block(pickup_position)
+	_expect(not pickup_edits.is_empty() and pickup_edits[0].is_success(), "empty chest mining failed")
+	_expect(not coordinator.is_open() and world.get_block_id_at(pickup_position) == BlockId.Type.AIR, "mined chest remained open or in the world")
+	_expect(world.get_block_id_at(attached_torch_position) == BlockId.Type.AIR, "mined chest left its attached torch behind")
+	_expect(not storage.has_chest(pickup_position), "mined chest retained storage state")
+	var lifecycle_position := Vector3i(11, 10, 3)
+	_expect(world.try_place_block(lifecycle_position, BlockId.Type.CHEST).is_success(), "runtime chest placement failed")
+	_expect(storage.has_chest(lifecycle_position) and storage.is_chest_empty(lifecycle_position), "runtime chest placement did not create storage")
+	var lifecycle_edits := world.try_mine_block(lifecycle_position)
+	_expect(not lifecycle_edits.is_empty() and lifecycle_edits[0].is_success(), "runtime chest mining returned no edit")
+	_expect(not storage.has_chest(lifecycle_position), "runtime chest mining retained storage")
+
+	var storage_snapshot := storage.snapshot()
+	var restored_storage := ChestStorage.new(item_catalog, player_inventory.equipment_instance_factory, container.get_slot_count())
+	_expect(restored_storage.restore(storage_snapshot), "chest storage snapshot round trip failed")
+	var oversized_storage := ChestStorage.new(item_catalog, EquipmentInstanceFactory.new(item_catalog), container.get_slot_count())
 	var oversized_slots: Array = []
-	oversized_slots.resize(ContainerBlockDefinition.MAX_SLOT_COUNT + 1)
-	_expect(not oversized_storage.restore({Vector3i.ZERO: oversized_slots}), "oversized chest save was accepted")
-	var restored_inventory := restored_storage.get_inventory(chest_position)
-	_expect(restored_inventory != null and restored_inventory.size == 15, "restored chest has the wrong size")
-	_expect(restored_inventory.get_slot(0).item_id == &"log_block" and restored_inventory.get_slot(0).count == 2, "restored chest changed a partial stack")
-	_expect(restored_inventory.get_slot(1).item_id == &"stone_block" and restored_inventory.get_slot(1).count == 4, "restored chest changed a swapped stack")
-	var restored_second_inventory := restored_storage.get_inventory(second_chest_position)
-	_expect(restored_second_inventory != null and restored_second_inventory != restored_inventory, "restored world chests share one inventory model")
-	_expect(restored_second_inventory.get_slot(0).item_id == &"leaves_block" and restored_second_inventory.get_slot(0).count == 5, "restored second chest lost its position-linked contents")
+	oversized_slots.resize(container.get_slot_count() + 1)
+	_expect(not oversized_storage.restore({chest_position: oversized_slots}), "oversized chest save was accepted")
+	_expect(restored_storage.get_slot(chest_position, 0).item_id == &"log_block" and restored_storage.get_slot(chest_position, 0).count == 2, "restored chest changed a partial stack")
+	_expect(restored_storage.get_slot(chest_position, 1).item_id == &"stone_block" and restored_storage.get_slot(chest_position, 1).count == 4, "restored chest changed a swapped stack")
+	_expect(restored_storage.get_slot(chest_position, 4).equipment_instance.to_dict() == variant_fingerprint, "restored chest changed variant equipment")
+	_expect(restored_storage.get_slot(second_chest_position, 0).item_id == &"leaves_block" and restored_storage.get_slot(second_chest_position, 0).count == 5, "restored second chest lost its position-linked contents")
+
 	var full_player_inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
+	full_player_inventory.setup_empty()
 	for index in range(InventoryModel.HOTBAR_SIZE, InventoryModel.FILLABLE_SIZE):
-		full_player_inventory.slots[index] = InventoryStack.new(&"sand_block", item_catalog.get_definition(&"sand_block").max_stack)
-	var full_storage := ChestInventoryStore.new(item_catalog, full_player_inventory.equipment_instance_factory)
+		InventoryTestFixture.restore_slot(full_player_inventory, index, InventoryStack.new(&"sand_block", item_catalog.get_definition(&"sand_block").max_stack))
+	var full_loadout := InventoryTestFixture.create_loadout(full_player_inventory)
+	var full_storage := ChestStorage.new(item_catalog, full_player_inventory.equipment_instance_factory, container.get_slot_count())
+	_expect(full_storage.create_chest(second_chest_position), "full-backpack chest storage creation failed")
+	_expect(full_storage.add_stack(second_chest_position, InventoryStack.new(&"log_block", 3), 0), "full-backpack chest fixture failed")
 	var full_coordinator := ChestCoordinator.new()
-	full_coordinator.setup(world, full_player_inventory, full_storage)
+	_expect(full_coordinator.setup(full_storage, full_player_inventory, full_loadout, world, chest_block), "full-backpack coordinator setup failed")
 	_expect(full_coordinator.try_open(second_chest_position, container), "full-backpack coordinator could not open a chest")
-	full_coordinator.active_inventory.slots[0] = InventoryStack.new(&"log_block", 3)
 	_expect(not full_coordinator.quick_transfer(ChestCoordinator.CHEST_SCOPE, 0), "chest click moved an item into a full backpack")
 	_expect(not full_coordinator.move_all_to_backpack(), "move-all changed a full backpack")
-	_expect(full_coordinator.active_inventory.get_slot(0).count == 3, "full backpack transfer changed the chest stack")
-	var pickup_position := Vector3i(8, 10, 3)
-	var attached_torch_position := pickup_position + Vector3i(1, 0, 0)
-	_expect(world.try_place_block(pickup_position, BlockId.Type.CHEST).is_success(), "pickup chest placement failed")
-	_expect(world.try_place_block(attached_torch_position, BlockId.Type.TORCH, Vector3i(-1, 0, 0)).is_success(), "pickup chest torch placement failed")
-	var pickup_inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
-	var pickup_storage := ChestInventoryStore.new(item_catalog, pickup_inventory.equipment_instance_factory)
-	var pickup_coordinator := ChestCoordinator.new()
-	var stone_pickaxe_action := item_catalog.get_definition(&"stone_pickaxe").primary_action as MiningActionDefinition
-	pickup_coordinator.setup(world, pickup_inventory, pickup_storage)
-	_expect(pickup_coordinator.try_open(pickup_position, container), "pickup chest did not open")
-	pickup_coordinator.active_inventory.slots[0] = InventoryStack.new(&"log_block", 1)
-	_expect(not pickup_coordinator.can_pick_up_chest(pickup_position, stone_pickaxe_action), "non-empty chest was mineable")
-	_expect(not pickup_coordinator.pick_up_chest(pickup_position, stone_pickaxe_action), "non-empty chest was picked up")
-	pickup_coordinator.active_inventory.slots[0] = null
-	_expect(not pickup_coordinator.can_pick_up_chest(pickup_position, unarmed), "empty chest was mineable without a pickaxe")
-	_expect(pickup_coordinator.can_pick_up_chest(pickup_position, stone_pickaxe_action), "empty chest could not be mined with a pickaxe")
-	_expect(pickup_coordinator.pick_up_chest(pickup_position, stone_pickaxe_action), "empty chest pickup failed")
-	_expect(not pickup_coordinator.is_open() and world.get_block_id_at(pickup_position) == BlockId.Type.AIR, "picked-up chest remained open or in the world")
-	_expect(pickup_inventory.get_inventory_item_count(&"chest") == 1, "picked-up chest was not added to player inventory")
-	_expect(world.get_block_id_at(attached_torch_position) == BlockId.Type.AIR and pickup_inventory.get_inventory_item_count(&"torch") == 1, "picked-up chest left its attached torch behind")
-	_expect(pickup_storage.get_inventory(pickup_position) == null, "picked-up chest retained stored inventory data")
+	_expect(full_storage.get_slot(second_chest_position, 0).count == 3, "full backpack transfer changed the chest stack")
 
 	var input := InputBuffer.new()
-	var interaction_inventory := InventoryModel.new(item_catalog, restored_storage.equipment_instance_factory)
-	var interaction_sword := interaction_inventory.equipment_instance_factory.create(&"copper_sword")
-	interaction_inventory.slots[0] = InventoryStack.new(&"copper_sword", 1, interaction_sword)
+	var interaction_factory := EquipmentInstanceFactory.new(item_catalog, player_inventory.equipment_instance_factory.get_next_instance_id())
+	var interaction_inventory := InventoryModel.new(item_catalog, interaction_factory)
+	interaction_inventory.setup_empty()
+	var interaction_sword := interaction_factory.create(&"copper_sword")
+	var interaction_pickaxe := interaction_factory.create(&"stone_pickaxe")
+	_expect(InventoryTestFixture.restore_slot(interaction_inventory, 0, InventoryStack.new(&"copper_sword", 1, interaction_sword)), "interaction sword fixture failed")
+	_expect(InventoryTestFixture.restore_slot(interaction_inventory, 1, InventoryStack.new(&"stone_pickaxe", 1, interaction_pickaxe)), "interaction pickaxe fixture failed")
+	var interaction_loadout := InventoryTestFixture.create_loadout(interaction_inventory)
+	var interaction_storage := ChestStorage.new(item_catalog, interaction_factory, container.get_slot_count())
+	_expect(interaction_storage.restore(storage_snapshot), "interaction chest restore failed")
+	var interaction_chest_coordinator := ChestCoordinator.new()
+	_expect(interaction_chest_coordinator.setup(interaction_storage, interaction_inventory, interaction_loadout, world, chest_block), "interaction chest setup failed")
 	var interactor := PlayerInteractor.new()
 	interactor.inventory_model = interaction_inventory
+	interactor.inventory_loadout = interaction_loadout
 	interactor._input_buffer = input
 	interactor.voxel_space = world
 	interactor.editable_voxel_world = null
 	_expect(interactor._get_target_container(chest_position) == null, "read-only voxel space exposed an overworld chest interaction")
 	interactor.editable_voxel_world = world
-	var interaction_chest_coordinator := ChestCoordinator.new()
-	interaction_chest_coordinator.setup(world, interaction_inventory, restored_storage)
-	interactor.set_chest_coordinator(interaction_chest_coordinator)
 	_expect(interactor._get_target_container(chest_position) == container, "editable overworld did not expose its chest interaction")
+	_expect(not interactor._can_mine_position(chest_position, stone_pickaxe), "non-empty chest passed the player mining validator")
 	interactor.target_has = true
 	interactor.target_block = chest_position
 	interactor.target_container = container
@@ -156,7 +202,7 @@ func _run():
 	interactor._handle_item_actions(0.0)
 	_expect(_open_requests == 1, "left click did not request the chest UI")
 	_expect(interactor.melee_attack_queue == 0 and not interactor.is_mining, "chest click also started an item action")
-	interaction_inventory.slots[0] = InventoryStack.new(&"stone_pickaxe", 1)
+	_expect(interaction_loadout.select_slot(1), "interaction pickaxe selection failed")
 	input.primary_use_just = true
 	interactor._handle_item_actions(0.0)
 	_expect(_open_requests == 1, "pickaxe click opened a non-empty chest instead of attempting to mine it")
@@ -189,7 +235,7 @@ func _run():
 	chest_renderer._process(1.0)
 	_expect(not targeting._should_show_interaction(), "pickaxe chest target also shows its interaction hover")
 	_expect(not targeting._interaction_cursor_active, "pickaxe chest target enabled the interaction cursor")
-	interaction_inventory.slots[0] = InventoryStack.new(&"copper_sword", 1, interaction_sword)
+	_expect(interaction_loadout.select_slot(0), "interaction sword selection failed")
 	_expect(targeting._should_show_interaction(), "in-range chest does not expose its hover presentation without a pickaxe")
 	targeting._update_interaction_visuals(1.0)
 	chest_renderer._process(1.0)
@@ -254,18 +300,15 @@ func _run():
 	chest_renderer.queue_free()
 	await process_frame
 
-	var stats := ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
-	var inventory_stats := InventoryStatCoordinator.new()
-	_expect(inventory_stats.setup(player_inventory, stats), "inventory stat coordinator setup failed")
 	var recipe_catalog := load("res://crafting/crafting_recipe_catalog.tres") as CraftingRecipeCatalog
 	var crafting := CraftingCoordinator.new()
-	crafting.setup(player_inventory, recipe_catalog, player_inventory.equipment_instance_factory)
+	crafting.setup(player_inventory, player_loadout, recipe_catalog)
 	var hud := (load("res://ui/hud/hud.tscn") as PackedScene).instantiate() as HUD
 	get_root().add_child(hud)
 	await process_frame
 	var ui_coordinator := ChestCoordinator.new()
-	ui_coordinator.setup(world, player_inventory, restored_storage)
-	hud.setup_with_camera(player_inventory, inventory_stats, crafting, recipe_catalog, null, stats, ItemProficiency.new(item_catalog), ui_coordinator)
+	_expect(ui_coordinator.setup(restored_storage, player_inventory, player_loadout, world, chest_block), "UI chest coordinator setup failed")
+	hud.setup_with_camera(player_inventory, player_loadout, crafting, recipe_catalog, null, player_stats, ItemProficiency.new(item_catalog), ui_coordinator)
 	hud.open_container(chest_position, container)
 	_expect(hud.chest_panel.is_open(), "chest panel did not open")
 	_expect(hud.side_panel.is_open(), "opening a chest did not open the right-side backpack")
@@ -281,16 +324,17 @@ func _run():
 	_expect(move_all_icon.texture.resource_path == "res://assets/images/icons/button/move_to_backpack.png", "move-all button uses the wrong icon")
 	_expect(move_all_icon.custom_minimum_size == Vector2(16, 16), "move-all button icon is too large")
 	_expect(hud.chest_panel._chest_grid.columns == 5, "chest panel does not use five columns")
+	var variant_chest_slot := hud.chest_panel.get_chest_slots()[4]
+	var presented_variant: EquipmentInstance = variant_chest_slot._get_presented_equipment_instance()
+	_expect(presented_variant != null and presented_variant.to_dict() == variant_fingerprint, "chest slot presentation lost variant equipment data")
 	var saved_backpack_slots: Array[InventoryStack] = []
 	for index in range(InventoryModel.HOTBAR_SIZE, InventoryModel.FILLABLE_SIZE):
-		saved_backpack_slots.append(null if player_inventory.slots[index] == null else player_inventory.slots[index].copy())
+		saved_backpack_slots.append(player_inventory.get_slot(index))
 	for index in range(InventoryModel.HOTBAR_SIZE, InventoryModel.FILLABLE_SIZE):
-		player_inventory.slots[index] = InventoryStack.new(&"sand_block", item_catalog.get_definition(&"sand_block").max_stack)
-	player_inventory.inventory_changed.emit()
+		_expect(_replace_inventory_slot(player_loadout, player_inventory, index, InventoryStack.new(&"sand_block", item_catalog.get_definition(&"sand_block").max_stack)), "full-backpack UI fixture failed at %d" % index)
 	_expect(hud.chest_panel._move_all_button.disabled, "move-all stayed enabled for a full backpack")
 	for offset in range(saved_backpack_slots.size()):
-		player_inventory.slots[InventoryModel.HOTBAR_SIZE + offset] = saved_backpack_slots[offset]
-	player_inventory.inventory_changed.emit()
+		_expect(_replace_inventory_slot(player_loadout, player_inventory, InventoryModel.HOTBAR_SIZE + offset, saved_backpack_slots[offset]), "backpack UI fixture restore failed at %d" % offset)
 	_expect(not hud.chest_panel._move_all_button.disabled, "move-all did not re-enable when backpack space became available")
 	_expect(hud.side_panel._equipment_button.is_disabled(), "equipment tab remains available while chest storage is open")
 	var chest_slot := hud.chest_panel.get_chest_slots()[0]
@@ -311,11 +355,11 @@ func _run():
 		if hovered == backpack_slot:
 			backpack_receives_pointer = true
 			break
-		hovered = hovered.get_parent() as Control
+			hovered = hovered.get_parent() as Control
 	_expect(backpack_receives_pointer, "chest overlay intercepts pointer routing over the backpack")
 	var quick_backpack_slot := hud.side_panel.get_inventory_slots()[10]
-	player_inventory.slots[quick_backpack_slot.slot_index] = InventoryStack.new(&"grass_block", 2)
-	player_inventory.inventory_changed.emit()
+	var grass_count_before := player_inventory.get_backpack_item_count(&"grass_block")
+	_expect(_replace_inventory_slot(player_loadout, player_inventory, quick_backpack_slot.slot_index, InventoryStack.new(&"grass_block", 2)), "quick-transfer UI fixture failed")
 	var interrupted_press := InputEventMouseButton.new()
 	interrupted_press.button_index = MOUSE_BUTTON_LEFT
 	interrupted_press.pressed = true
@@ -330,10 +374,10 @@ func _run():
 	_click_slot(quick_backpack_slot)
 	_expect(player_inventory.get_slot(quick_backpack_slot.slot_index) == null, "clicking a backpack item did not clear its slot")
 	var quick_chest_slot := hud.chest_panel.get_chest_slots()[3]
-	_expect(restored_inventory.get_slot(quick_chest_slot.slot_index).item_id == &"grass_block", "clicking a backpack item did not add it to the chest")
+	_expect(restored_storage.get_slot(chest_position, quick_chest_slot.slot_index).item_id == &"grass_block", "clicking a backpack item did not add it to the chest")
 	_click_slot(quick_chest_slot)
-	_expect(restored_inventory.get_slot(quick_chest_slot.slot_index) == null, "clicking a chest item did not clear its slot")
-	_expect(player_inventory.get_backpack_item_count(&"grass_block") == 2, "clicking a chest item did not add it to the backpack")
+	_expect(restored_storage.get_slot(chest_position, quick_chest_slot.slot_index) == null, "clicking a chest item did not clear its slot")
+	_expect(player_inventory.get_backpack_item_count(&"grass_block") == grass_count_before + 2, "clicking a chest item did not add it to the backpack")
 	var ui_drag := {
 		"source_scope": ChestCoordinator.CHEST_SCOPE,
 		"source_index": chest_slot.slot_index,
@@ -343,7 +387,7 @@ func _run():
 	_expect(drag_backpack_slot._can_drop_data(Vector2.ZERO, ui_drag), "backpack UI rejected a chest drag")
 	_expect(not hud.side_panel._trash_target._can_drop_data(Vector2.ZERO, ui_drag), "trash target accepted a chest drag as a player item")
 	drag_backpack_slot._drop_data(Vector2.ZERO, ui_drag)
-	_expect(restored_inventory.get_slot(0).count == 1, "UI drag did not remove one chest item")
+	_expect(restored_storage.get_slot(chest_position, 0).count == 1, "UI drag did not remove one chest item")
 	_expect(player_inventory.get_slot(drag_backpack_slot.slot_index).item_id == &"log_block", "UI drag did not add the item to the backpack")
 	var chest_torch_slot := hud.chest_panel.get_chest_slots()[2]
 	var hotbar_slot := hud.hotbar.slot_nodes[1]
@@ -354,7 +398,7 @@ func _run():
 	}
 	_expect(hotbar_slot._can_drop_data(Vector2.ZERO, chest_to_hotbar_drag), "hotbar UI rejected a chest drag")
 	hotbar_slot._drop_data(Vector2.ZERO, chest_to_hotbar_drag)
-	_expect(restored_inventory.get_slot(2) == null, "chest-to-hotbar UI drag retained the chest stack")
+	_expect(restored_storage.get_slot(chest_position, 2) == null, "chest-to-hotbar UI drag retained the chest stack")
 	_expect(player_inventory.get_slot(1).item_id == &"torch" and player_inventory.get_slot(1).count == 3, "chest-to-hotbar UI drag produced the wrong stack")
 	var empty_chest_slot := hud.chest_panel.get_chest_slots()[3]
 	var hotbar_to_chest_drag := {
@@ -365,15 +409,15 @@ func _run():
 	_expect(empty_chest_slot._can_drop_data(Vector2.ZERO, hotbar_to_chest_drag), "chest UI rejected a hotbar drag")
 	empty_chest_slot._drop_data(Vector2.ZERO, hotbar_to_chest_drag)
 	_expect(player_inventory.get_slot(1).count == 1, "hotbar-to-chest UI drag retained the wrong hotbar remainder")
-	_expect(restored_inventory.get_slot(3).item_id == &"torch" and restored_inventory.get_slot(3).count == 2, "hotbar-to-chest UI drag produced the wrong chest stack")
+	_expect(restored_storage.get_slot(chest_position, 3).item_id == &"torch" and restored_storage.get_slot(chest_position, 3).count == 2, "hotbar-to-chest UI drag produced the wrong chest stack")
 	var chest_counts: Dictionary[StringName, int] = {}
-	for stack in restored_inventory.slots:
+	for stack in restored_storage.get_slots(chest_position):
 		if stack != null:
 			chest_counts[stack.item_id] = chest_counts.get(stack.item_id, 0) + stack.count
 	for item_id in chest_counts:
 		chest_counts[item_id] = player_inventory.get_inventory_item_count(item_id) + chest_counts[item_id]
 	hud.chest_panel._move_all_button.pressed.emit()
-	_expect(restored_inventory.slots.all(func(stack): return stack == null), "move-all retained items in the chest")
+	_expect(restored_storage.is_chest_empty(chest_position), "move-all retained items in the chest")
 	for item_id in chest_counts:
 		_expect(player_inventory.get_inventory_item_count(item_id) == chest_counts[item_id], "move-all lost %s items" % item_id)
 	_expect(hud.chest_panel._move_all_button.disabled, "move-all button stayed enabled for an empty chest")
@@ -414,6 +458,21 @@ func _click_slot(slot: InventorySlot):
 	release.button_index = MOUSE_BUTTON_LEFT
 	release.pressed = false
 	slot._gui_input(release)
+
+func _replace_inventory_slot(
+	loadout: InventoryLoadoutCoordinator,
+	inventory: InventoryModel,
+	index: int,
+	replacement: InventoryStack,
+) -> bool:
+	var current := inventory.get_slot(index)
+	if current == null and replacement == null:
+		return true
+	if current != null and replacement != null and current.to_dict() == replacement.to_dict():
+		return true
+	var inventory_change := inventory.prepare_replace_stack_at(index, current, replacement)
+	var loadout_change := loadout.prepare_inventory_change(inventory_change)
+	return loadout_change != null and loadout.commit_prepared_change(loadout_change)
 
 func _test_split_chest_textures():
 	var body_side := (load("res://assets/textures/blocks/chest_body_side.png") as Texture2D).get_image()

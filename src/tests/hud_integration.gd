@@ -16,7 +16,7 @@ var _inv: InventoryModel = null
 var _item_catalog: ItemCatalog = null
 var _stats: ActorStats = null
 var _item_proficiency: ItemProficiency = null
-var _inventory_stat_coordinator: InventoryStatCoordinator = null
+var _inventory_loadout_coordinator: InventoryLoadoutCoordinator = null
 var _crafting_coordinator: CraftingCoordinator = null
 var _crafting_recipe_catalog: CraftingRecipeCatalog = null
 var _errors: Array[String] = []
@@ -47,12 +47,12 @@ func _init() -> void:
 	_item_proficiency = ItemProficiency.new(_item_catalog)
 	if not _stats.set_progression(1, 0):
 		_fail("player progression setup failed")
-	_inventory_stat_coordinator = InventoryStatCoordinator.new()
-	if not _inventory_stat_coordinator.setup(_inv, _stats):
+	_inventory_loadout_coordinator = InventoryLoadoutCoordinator.new()
+	if not _inventory_loadout_coordinator.setup(_inv, _stats, _item_proficiency):
 		_fail("equipment coordinator setup failed")
 	_crafting_recipe_catalog = load("res://crafting/crafting_recipe_catalog.tres") as CraftingRecipeCatalog
 	_crafting_coordinator = CraftingCoordinator.new()
-	_crafting_coordinator.setup(_inv, _crafting_recipe_catalog, _inv.equipment_instance_factory)
+	_crafting_coordinator.setup(_inv, _inventory_loadout_coordinator, _crafting_recipe_catalog)
 	_unhandled_wheel_probe = UnhandledWheelProbe.new()
 	root.add_child(_unhandled_wheel_probe)
 	_orphan_before = int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
@@ -70,7 +70,7 @@ func _process(_delta: float) -> bool:
 			_fail("hud instantiate null")
 			return false
 		root.add_child(_hud)
-		_hud.setup_with_camera(_inv, _inventory_stat_coordinator, _crafting_coordinator, _crafting_recipe_catalog, null, _stats, _item_proficiency, ChestCoordinator.new())
+		_hud.setup_with_camera(_inv, _inventory_loadout_coordinator, _crafting_coordinator, _crafting_recipe_catalog, null, _stats, _item_proficiency)
 		print("[hud_integration] hud added orphan=%d" % int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT)))
 		_phase = 1
 	elif _phase == 1 and _frame == 4:
@@ -559,7 +559,7 @@ func _get_drag_preview_count() -> int:
 
 func _totals(inv: InventoryModel) -> Dictionary:
 	var d: Dictionary = {}
-	for s in inv.slots:
+	for s in InventoryTestFixture.get_slots(inv):
 		if s != null:
 			d[s.item_id] = d.get(s.item_id, 0) + s.count
 	return d
@@ -682,7 +682,7 @@ func _check_split_drag_result() -> void:
 	if inv_node.item_id != torch_id or inv_node.item_count != 8:
 		_fail("adjustable drag: inventory node mismatch")
 		return
-	for i in range(_inv.size):
+	for i in range(_inv.get_size()):
 		var s = _inv.get_slot(i)
 		if s != null:
 			var max_stack := _item_catalog.get_definition(s.item_id).max_stack
@@ -724,7 +724,7 @@ func _check_number_assignment() -> void:
 	if backpack_node.item_id != &"copper_sword" or backpack_node.item_count != 1:
 		_fail("number assignment: backpack visuals not refreshed")
 		return
-	if _inv.selected_slot != 0:
+	if _inv.get_selected_slot() != 0:
 		_fail("number assignment: selected hotbar slot changed")
 		return
 	print("[hud_integration] number assignment ok")
@@ -761,7 +761,7 @@ func _check_hotbar_reassignment_restored() -> void:
 	if _inv.get_slot(4) != null:
 		_fail("hotbar reassignment: temporary destination was not cleared")
 		return
-	if _inv.selected_slot != 0:
+	if _inv.get_selected_slot() != 0:
 		_fail("hotbar reassignment: selected hotbar slot changed")
 		return
 	_hud.side_panel._switch_to_tab_id("equipment")
@@ -812,8 +812,9 @@ func _fill_backpack_and_start_hotbar_click() -> void:
 	var max_stack: int = _item_catalog.get_definition(stone_id).max_stack
 	for backpack_idx in range(InventoryModel.HOTBAR_SIZE, InventoryModel.FILLABLE_SIZE):
 		if _inv.get_slot(backpack_idx) == null:
-			_inv.slots[backpack_idx] = InventoryStack.new(stone_id, max_stack)
-	_inv.inventory_changed.emit()
+			if not _inventory_loadout_coordinator.add_backpack_item(stone_id, max_stack):
+				_fail("hotbar click: could not fill backpack")
+				return
 	_start_hotbar_click()
 
 func _check_hotbar_press_and_release() -> void:
@@ -844,8 +845,10 @@ func _check_full_backpack_click_result() -> void:
 			_fail("full backpack click: hotbar item moved to backpack slot %d" % backpack_idx)
 			return
 	print("[hud_integration] full backpack click rejected")
-	_inv.slots[_hotbar_click_destination_index] = null
-	_inv.inventory_changed.emit()
+	var destination_stack := _inv.get_slot(_hotbar_click_destination_index)
+	if destination_stack == null or not _inventory_loadout_coordinator.discard_stack(_hotbar_click_destination_index, destination_stack.count):
+		_fail("hotbar click: could not reopen backpack destination")
+		return
 	_start_hotbar_click()
 
 func _check_hotbar_click_result() -> void:
@@ -1009,7 +1012,7 @@ func _push_left_click(control: Control) -> void:
 	root.push_input(release, true)
 
 func _find_item_index(item_id: StringName) -> int:
-	for index in range(_inv.size):
+	for index in range(_inv.get_size()):
 		var stack := _inv.get_slot(index)
 		if stack != null and stack.item_id == item_id:
 			return index
@@ -1031,7 +1034,7 @@ func _start_closed_hotbar_click() -> void:
 	root.push_input(press, true)
 
 func _check_closed_hotbar_press_and_release() -> void:
-	if _inv.selected_slot != 0:
+	if _inv.get_selected_slot() != 0:
 		_fail("closed hotbar click: slot activated before mouse release")
 		return
 	var hotbar_center := _hud.hotbar.slot_nodes[2].get_global_rect().get_center()
@@ -1043,7 +1046,7 @@ func _check_closed_hotbar_press_and_release() -> void:
 	root.push_input(release, true)
 
 func _check_closed_hotbar_click_result() -> void:
-	if _inv.selected_slot != 2:
+	if _inv.get_selected_slot() != 2:
 		_fail("closed hotbar click: slot 3 was not activated")
 		return
 	var hotbar_stack := _inv.get_slot(2)

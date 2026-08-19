@@ -56,19 +56,18 @@ var player_stats: ActorStats
 var player_perks: PlayerPerks
 var player_perk_coordinator: PlayerPerkCoordinator
 var item_proficiency: ItemProficiency
-var inventory_stat_coordinator: InventoryStatCoordinator
+var inventory_loadout_coordinator: InventoryLoadoutCoordinator
 var crafting_coordinator: CraftingCoordinator
 var anvil_crafting_coordinator: CraftingCoordinator
 var cauldron_crafting_coordinator: CraftingCoordinator
 var combat_progression_coordinator: CombatProgressionCoordinator
 var rune_socketing_coordinator: RuneSocketingCoordinator
-var rune_effect_coordinator: RuneEffectCoordinator
 var interaction_prompt_coordinator: InteractionPromptCoordinator
 var anvil_coordinator: AnvilCoordinator
 var cauldron_coordinator: CauldronCoordinator
 var harvest_coordinator: HarvestCoordinator
 var item_consumption_coordinator: ItemConsumptionCoordinator
-var chest_storage: ChestInventoryStore
+var chest_storage: ChestStorage
 var chest_coordinator: ChestCoordinator
 var input_buffer: InputBuffer = InputBuffer.new()
 var settings: GameSettings
@@ -135,18 +134,12 @@ func _ready():
 	equipment_instance_factory = EquipmentInstanceFactory.new(item_catalog, next_instance_id)
 	inventory_model = InventoryModel.new(item_catalog, equipment_instance_factory)
 	player_stats = ActorStats.new(player_stats_definition)
-	dev_console.setup(
-		inventory_model,
-		player_stats,
-		pumpkin_patch,
-		Callable(self, "_request_new_structure"),
-		Callable(self, "_request_import_structure"),
-		Callable(self, "_request_export_structure"),
-		Callable(self, "_request_exit_structure"),
-		Callable(world, "try_set_water_ripple_strength")
-	)
 	player_perks = PlayerPerks.new(player_perk_rules)
-	chest_storage = ChestInventoryStore.new(item_catalog, equipment_instance_factory)
+	chest_storage = ChestStorage.new(
+		item_catalog,
+		equipment_instance_factory,
+		SaveManager.PERSISTED_CHEST_SLOT_COUNT,
+	)
 	item_proficiency = ItemProficiency.new(item_catalog)
 	if not _restore_inventory():
 		_fail_session_start("This world could not be loaded because its saved inventory is invalid or references unavailable content. The save was not changed.")
@@ -157,24 +150,33 @@ func _ready():
 	if not _restore_item_proficiency():
 		_fail_session_start("This world could not be loaded because its saved item proficiency is invalid or references unavailable content. The save was not changed.")
 		return
+	inventory_loadout_coordinator = InventoryLoadoutCoordinator.new()
+	if not inventory_loadout_coordinator.setup(inventory_model, player_stats, item_proficiency):
+		_fail_session_start("This world could not be loaded because its saved equipment or rune modifiers are invalid. The save was not changed.")
+		return
+	if not inventory_loadout_coordinator.migrate_starter_items():
+		push_warning("[Game] Starter item migration deferred because inventory is full")
 	rune_socketing_coordinator = RuneSocketingCoordinator.new()
-	if not rune_socketing_coordinator.setup(inventory_model, item_proficiency):
+	if not rune_socketing_coordinator.setup(inventory_model, inventory_loadout_coordinator, item_proficiency):
 		_fail_session_start("This world could not be loaded because its saved rune socket state is invalid. The save was not changed.")
 		return
-	inventory_stat_coordinator = InventoryStatCoordinator.new()
-	if not inventory_stat_coordinator.setup(inventory_model, player_stats):
-		_fail_session_start("This world could not be loaded because its saved equipment modifiers are invalid. The save was not changed.")
-		return
-	rune_effect_coordinator = RuneEffectCoordinator.new()
-	if not rune_effect_coordinator.setup(inventory_model, player_stats):
-		_fail_session_start("This world could not be loaded because its saved rune modifiers are invalid. The save was not changed.")
-		return
 	crafting_coordinator = CraftingCoordinator.new()
-	crafting_coordinator.setup(inventory_model, crafting_recipe_catalog, equipment_instance_factory)
+	crafting_coordinator.setup(inventory_model, inventory_loadout_coordinator, crafting_recipe_catalog)
 	anvil_crafting_coordinator = CraftingCoordinator.new()
-	anvil_crafting_coordinator.setup(inventory_model, anvil_recipe_catalog, equipment_instance_factory)
+	anvil_crafting_coordinator.setup(inventory_model, inventory_loadout_coordinator, anvil_recipe_catalog)
 	cauldron_crafting_coordinator = CraftingCoordinator.new()
-	cauldron_crafting_coordinator.setup(inventory_model, cauldron_recipe_catalog, equipment_instance_factory)
+	cauldron_crafting_coordinator.setup(inventory_model, inventory_loadout_coordinator, cauldron_recipe_catalog)
+	dev_console.setup(
+		inventory_model,
+		inventory_loadout_coordinator,
+		player_stats,
+		pumpkin_patch,
+		Callable(self, "_request_new_structure"),
+		Callable(self, "_request_import_structure"),
+		Callable(self, "_request_export_structure"),
+		Callable(self, "_request_exit_structure"),
+		Callable(world, "try_set_water_ripple_strength"),
+	)
 	if not _restore_player_progression():
 		_fail_session_start("This world could not be loaded because its saved player progression is invalid. The save was not changed.")
 		return
@@ -211,14 +213,19 @@ func _restore_inventory() -> bool:
 		return true
 	if not saved_inventory is Dictionary or not inventory_model.from_dict(saved_inventory):
 		return false
-	if not inventory_model.migrate_starter_items():
-		push_warning("[Game] Starter item migration deferred because inventory is full")
 	return true
 
 func _restore_chest_inventories() -> bool:
 	var saved_chests = SaveManager.decode_chest_state(_save_data)
 	if not saved_chests is Dictionary or not chest_storage.restore(saved_chests):
 		return false
+	for position in saved_chests:
+		if int(_world_state.placed_blocks.get(position, BlockId.Type.AIR)) != BlockId.Type.CHEST:
+			return false
+	for position in _world_state.placed_blocks:
+		if int(_world_state.placed_blocks[position]) == BlockId.Type.CHEST and not chest_storage.has_chest(position):
+			if not chest_storage.create_chest(position):
+				return false
 	var equipment_instance_ids := inventory_model.get_equipment_instance_ids()
 	equipment_instance_ids.append_array(chest_storage.get_equipment_instance_ids())
 	return equipment_instance_factory.can_restore_state(
@@ -264,10 +271,10 @@ func _setup_gameplay() -> bool:
 	melee_combat.melee_outcome_committed.connect(_on_melee_outcome_committed)
 	combat_hit_particles.setup(melee_combat, combat_hit_particle_catalog)
 	enemy_combat_feedback.setup(melee_combat, camera_rig.camera)
-	player.setup(camera_rig, inventory_model, input_buffer, player_stats, melee_combat, world_entities)
+	player.setup(camera_rig, inventory_model, inventory_loadout_coordinator, input_buffer, player_stats, melee_combat, world_entities)
 	player.water_step_committed.connect(world.play_water_ripple)
 	item_consumption_coordinator = ItemConsumptionCoordinator.new()
-	item_consumption_coordinator.setup(inventory_model, player_stats)
+	item_consumption_coordinator.setup(inventory_model, inventory_loadout_coordinator, player_stats)
 	player.setup_consumption(item_consumption_coordinator)
 	_bind_entity_context(world.voxel_model, world_entities)
 	anvil_coordinator = AnvilCoordinator.new()
@@ -276,7 +283,17 @@ func _setup_gameplay() -> bool:
 	cauldron_coordinator.setup(world.voxel_model)
 	player.interactor.crafting_station_open_requested.connect(_on_crafting_station_open_requested)
 	chest_coordinator = ChestCoordinator.new()
-	chest_coordinator.setup(world.voxel_model, inventory_model, chest_storage)
+	var chest_block := block_catalog.get_definition(BlockId.Type.CHEST)
+	if not chest_coordinator.setup(
+		chest_storage,
+		inventory_model,
+		inventory_loadout_coordinator,
+		world.voxel_model,
+		chest_block,
+	):
+		_fail_session_start("Chest runtime setup failed. The save was not changed.")
+		return false
+	world.voxel_model.block_edit_committed.connect(chest_coordinator.handle_block_edit)
 	player.interactor.set_chest_coordinator(chest_coordinator)
 	player.interactor.container_open_requested.connect(_on_container_open_requested)
 	player_stats.health_depleted.connect(_on_player_defeated)
@@ -299,14 +316,14 @@ func _setup_gameplay() -> bool:
 		return false
 	harvest_coordinator = HarvestCoordinator.new()
 	var harvest_sources: Array[HarvestSource] = [pumpkin_patch, apple_trees]
-	if not harvest_coordinator.setup(harvest_sources, inventory_model, interaction_prompt_coordinator):
+	if not harvest_coordinator.setup(harvest_sources, inventory_model, inventory_loadout_coordinator, interaction_prompt_coordinator):
 		_fail_session_start("Harvest content validation failed. The save was not changed.")
 		return false
 	player.setup_harvesting(harvest_coordinator)
 	camera_rig.reset_panel_obstruction()
 	game_environment.sky_color_changed.connect(world.update_water_tint)
 	game_environment.start_clock()
-	hud.setup_with_camera(inventory_model, inventory_stat_coordinator, crafting_coordinator, crafting_recipe_catalog, camera_rig, player_stats, item_proficiency, chest_coordinator)
+	hud.setup_with_camera(inventory_model, inventory_loadout_coordinator, crafting_coordinator, crafting_recipe_catalog, camera_rig, player_stats, item_proficiency, chest_coordinator)
 	var anvil_station := block_catalog.get_definition(BlockId.Type.ANVIL).crafting_station
 	hud.setup_anvil(anvil_coordinator, anvil_station, anvil_crafting_coordinator, anvil_recipe_catalog, camera_rig)
 	var cauldron_station := block_catalog.get_definition(BlockId.Type.CAULDRON).crafting_station

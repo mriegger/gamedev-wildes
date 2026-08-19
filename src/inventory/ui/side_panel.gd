@@ -24,6 +24,7 @@ const TAB_TITLES: Dictionary = {
 
 var hotbar: InventoryHotbar = null
 var inventory_model: InventoryModel = null
+var _inventory_loadout_coordinator: InventoryLoadoutCoordinator = null
 var camera_rig: CameraRig = null
 
 var _progress: float = 0.0
@@ -64,17 +65,18 @@ func _ready():
 	_update_hotbar_position(_progress)
 	set_process(false)
 
-func setup(inv: InventoryModel, inventory_stat_coordinator: InventoryStatCoordinator, item_proficiency: ItemProficiency, cam_rig: CameraRig, hb: InventoryHotbar, left_panel_width: float):
+func setup(inv: InventoryModel, inventory_loadout_coordinator: InventoryLoadoutCoordinator, item_proficiency: ItemProficiency, cam_rig: CameraRig, hb: InventoryHotbar, left_panel_width: float):
 	inventory_model = inv
+	_inventory_loadout_coordinator = inventory_loadout_coordinator
 	camera_rig = cam_rig
 	hotbar = hb
-	_trash_target.setup(inv)
+	_trash_target.setup(inventory_loadout_coordinator)
 	if camera_rig:
 		camera_rig.set_panel_obstruction_widths(left_panel_width, PANEL_WIDTH)
 	for id in _slot_groups.keys():
 		for slot in _slot_groups[id] as Array:
 			slot.set_inventory(inv)
-			slot.set_inventory_stat_coordinator(inventory_stat_coordinator)
+			slot.set_inventory_loadout_coordinator(inventory_loadout_coordinator)
 			slot.set_item_proficiency(item_proficiency)
 	inventory_model.inventory_changed.connect(_on_inventory_changed)
 	_inventory_dirty = true
@@ -104,7 +106,7 @@ func _unhandled_key_input(event: InputEvent):
 	var hovered_slot := _get_hovered_assignable_slot()
 	if hovered_slot == null:
 		return
-	inventory_model.assign_slot_to_hotbar(hovered_slot.slot_index, hotbar_index)
+	_inventory_loadout_coordinator.assign_slot_to_hotbar(hovered_slot.slot_index, hotbar_index)
 	get_viewport().set_input_as_handled()
 
 func _get_hotbar_index(event: InputEventKey) -> int:
