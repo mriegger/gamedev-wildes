@@ -3,7 +3,7 @@ class_name SaveManager
 
 const SAVE_DIR: String = "user://saves"
 const SLOT_COUNT: int = 3
-const CURRENT_SAVE_VERSION: int = 9
+const CURRENT_SAVE_VERSION: int = 10
 const MINIMUM_MIGRATABLE_SAVE_VERSION: int = 4
 const VERSION_SEVEN_BASE_EXPERIENCE_TO_LEVEL: int = 100
 const VERSION_SEVEN_EXPERIENCE_GROWTH: float = 1.25
@@ -79,6 +79,7 @@ static func create_new_world(slot_id: int, seed_value: int, world_name: String) 
 		"placed_blocks": {},
 		"removed_blocks": {},
 		"torch_attachments": {},
+		"emplacements": {},
 		"player_position": null,
 		"player_stats": null,
 		"player_perks": {"allocations": {}},
@@ -155,6 +156,7 @@ static func decode_world_state(data: Dictionary) -> WorldState:
 	var placed_raw = data.get("placed_blocks", {})
 	var removed_raw = data.get("removed_blocks", {})
 	var torch_raw = data.get("torch_attachments", {})
+	var emplacements_raw = data.get("emplacements", {})
 	var position = Vector3.ZERO
 	var position_data = data.get("player_position", null)
 	if position_data is Array and position_data.size() == 3:
@@ -166,6 +168,7 @@ static func decode_world_state(data: Dictionary) -> WorldState:
 		_deserialize_block_ids(placed_raw) if placed_raw is Dictionary else {},
 		_deserialize_removed_blocks(removed_raw) if removed_raw is Dictionary else {},
 		_deserialize_torch_attachments(torch_raw) if torch_raw is Dictionary else {},
+		_deserialize_block_ids(emplacements_raw) if emplacements_raw is Dictionary else {},
 		position
 	)
 
@@ -186,6 +189,8 @@ static func load_slot(slot_id: int) -> Dictionary:
 		info["removed_blocks"] = {}
 	if not info.has("torch_attachments"):
 		info["torch_attachments"] = {}
+	if not info.has("emplacements"):
+		info["emplacements"] = {}
 	info.erase("copper_blocks")
 	info.erase("generated_copper_chunks")
 	if not info.has("time_of_day"):
@@ -231,6 +236,9 @@ static func _migrate_save_data(data: Dictionary) -> bool:
 			8:
 				migrated["apple_trees"] = AppleTreeState.new().snapshot()
 				version = 9
+			9:
+				migrated["emplacements"] = {}
+				version = 10
 			_:
 				return false
 		migrated["version"] = version
@@ -333,6 +341,7 @@ static func save_world_state(slot_id: int, current_data: Dictionary, voxel_model
 	updated["placed_blocks"] = serialize_vector3i_dict(block_edits["placed"])
 	updated["removed_blocks"] = serialize_vector3i_dict(block_edits["removed"])
 	updated["torch_attachments"] = serialize_vector3i_dict(voxel_model.torch_attachments)
+	updated["emplacements"] = serialize_vector3i_dict(voxel_model.snapshot_emplacements())
 	updated.erase("copper_blocks")
 	updated.erase("generated_copper_chunks")
 	var p = persisted_player_position

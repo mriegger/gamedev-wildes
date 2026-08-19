@@ -225,8 +225,11 @@ func _handle_raycast():
 		can_primary_target = _can_till_position(best_hit, best_normal, selected_primary as TillingActionDefinition)
 
 	if editable_voxel_world != null and not editable_voxel_world.is_edit_protected(best_place) and voxel_space.get_block_at(best_place) == null:
-		if not _placement_collides_player(best_place) and not _placement_collides_entity(best_place):
-			placement_has = true
+		placement_has = true
+		var placement_action := get_selected_placement_action()
+		if placement_action != null and placement_action.block.emplacement != null:
+			can_place_target = motor_pos.distance_squared_to(Vector3(best_place.x + 0.5, best_place.y + 0.5, best_place.z + 0.5)) <= reach_squared and _can_place_emplacement_geometry(best_place, placement_action.block)
+		elif not _placement_collides_player(best_place) and not _placement_collides_entity(best_place):
 			can_place_target = motor_pos.distance_squared_to(Vector3(best_place.x + 0.5, best_place.y + 0.5, best_place.z + 0.5)) <= reach_squared
 	else:
 		placement_has = false
@@ -251,6 +254,15 @@ func _placement_collides_player(p: Vector3i) -> bool:
 func _placement_collides_entity(position: Vector3i) -> bool:
 	var block_bounds := AABB(Vector3(position), Vector3.ONE)
 	return entity_runtime.has_entity_overlap(block_bounds)
+
+func _can_place_emplacement_geometry(anchor: Vector3i, block: BlockDefinition) -> bool:
+	if block.emplacement == null or not editable_voxel_world.can_place_emplacement(anchor, block.id):
+		return false
+	for offset in block.emplacement.occupied_offsets:
+		var cell := anchor + offset
+		if _placement_collides_player(cell) or _placement_collides_entity(cell):
+			return false
+	return true
 
 func _handle_item_actions(delta):
 	melee_chain_input_timer = max(0.0, melee_chain_input_timer - delta)
@@ -544,6 +556,8 @@ func _validate_placement(position: Vector3i, action: BlockPlacementActionDefinit
 	var center := Vector3(position) + Vector3(0.5, 0.5, 0.5)
 	if motor.global_position.distance_squared_to(center) > reach * reach:
 		return false
+	if action.block.emplacement != null:
+		return _can_place_emplacement_geometry(position, action.block)
 	return not _placement_collides_player(position) and not _placement_collides_entity(position)
 
 func _commit_mine(pos: Vector3i, action: MiningActionDefinition):
@@ -568,6 +582,10 @@ func _commit_mine(pos: Vector3i, action: MiningActionDefinition):
 		var tid = voxel_space.get_block_id_at(torch_pos)
 		if tid != BlockId.Type.AIR:
 			_append_block_drop(item_ids_to_collect, tid)
+	for emplacement_anchor in editable_voxel_world.get_supported_emplacements(pos):
+		var dependent_id := voxel_space.get_block_id_at(emplacement_anchor)
+		if dependent_id != BlockId.Type.AIR:
+			_append_block_drop(item_ids_to_collect, dependent_id)
 
 	if not inventory_model.can_add_batch(item_ids_to_collect):
 		return
@@ -596,7 +614,11 @@ func _commit_place(pos: Vector3i, action: BlockPlacementActionDefinition):
 	var block_id := int(action.block.id)
 
 	var attach_dir = -last_ray_normal if block_id == BlockId.Type.TORCH else Vector3i.ZERO
-	var edit: BlockEdit = editable_voxel_world.try_place_block(pos, block_id, attach_dir)
+	var edit: BlockEdit
+	if action.block.emplacement != null:
+		edit = editable_voxel_world.try_place_emplacement(pos, block_id)
+	else:
+		edit = editable_voxel_world.try_place_block(pos, block_id, attach_dir)
 
 	if edit.is_success():
 		var consumed := inventory_model.consume_selected()

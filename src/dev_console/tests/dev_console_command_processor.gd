@@ -40,6 +40,8 @@ func _init() -> void:
 	_expect(inventory.get_slot(InventoryModel.HOTBAR_SIZE).count == 16, "spawn without a count did not default to one")
 	_expect(processor.execute("spawn pumpkin 1"), "pumpkin spawn command failed")
 	_expect(inventory.get_inventory_item_count(&"pumpkin") == 1, "pumpkin spawn did not add one inventory item")
+	_expect_result(processor.execute("spawn campfire"), DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN, "campfire spawn command failed")
+	_expect(inventory.get_backpack_item_count(&"campfire") == 1, "campfire spawn did not add one campfire item")
 
 	for definition in item_catalog.definitions:
 		var definition_inventory := InventoryModel.new(item_catalog)

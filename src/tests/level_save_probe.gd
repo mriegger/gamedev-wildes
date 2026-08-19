@@ -7,15 +7,22 @@ func _init() -> void:
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
 	var player_stats_definition := load("res://player/player_stats.tres") as CombatStatsDefinition
 	var player_perk_rules := load("res://progression/player_perk_rules.tres") as PlayerPerkRules
-	_expect(SaveManager.CURRENT_SAVE_VERSION == 9, "save version changed")
+	_expect(SaveManager.CURRENT_SAVE_VERSION == 10, "save version changed")
 	_expect(block_catalog != null and block_catalog.validate(), "block catalog invalid")
 	_expect(item_catalog != null and item_catalog.validate(block_catalog), "item catalog invalid")
 	_expect(player_stats_definition != null and player_stats_definition.validate(), "player stats definition invalid")
 	_expect(player_perk_rules != null and player_perk_rules.validate(player_stats_definition), "player perk rules invalid")
+	var version_nine_data := {"version": 9}
+	_expect(SaveManager._migrate_save_data(version_nine_data) and version_nine_data.get("emplacements", null) == {}, "version nine save did not migrate emplacements")
 	if block_catalog == null or item_catalog == null or player_stats_definition == null or player_perk_rules == null:
 		_finish("")
 		return
 	var voxel_world := VoxelWorld.new(20, 36, 5, 12.0, block_catalog)
+	var campfire_anchor := Vector3i(2, 21, 2)
+	var campfire_definition := block_catalog.get_definition(BlockId.Type.CAMPFIRE)
+	for offset in campfire_definition.emplacement.support_offsets:
+		_expect(voxel_world.try_place_block(campfire_anchor + offset, BlockId.Type.STONE).is_success(), "campfire save support placement failed")
+	_expect(voxel_world.try_place_emplacement(campfire_anchor, BlockId.Type.CAMPFIRE).is_success(), "campfire save placement failed")
 	var inventory := InventoryModel.new(item_catalog)
 	inventory.setup_starter()
 	var chest_storage := ChestInventoryStore.new(item_catalog)
@@ -57,6 +64,7 @@ func _init() -> void:
 		_expect(current_data.get("item_proficiency", {}) == item_proficiency.snapshot(), "current_data item proficiency differs")
 		_expect(current_data.get("pumpkin_patch", {}) == pumpkin_patch, "current_data pumpkin patch differs")
 		_expect(current_data.get("apple_trees", {}) == AppleTreeState.new().snapshot(), "current_data apple tree state differs")
+		_expect(current_data.get("emplacements", {}).get("2,21,2", -1) == BlockId.Type.CAMPFIRE, "current_data campfire emplacement differs")
 		_expect(is_equal_approx(float(current_data.get("playtime_seconds", -1.0)), 2.5), "playtime changed")
 		_expect(is_equal_approx(float(current_data.get("time_of_day", -1.0)), 3.5), "time wrapping changed")
 		var loaded := SaveManager.load_slot(slot_id)
@@ -65,6 +73,7 @@ func _init() -> void:
 		var decoded := SaveManager.decode_world_state(loaded)
 		_expect(decoded.seed == 1337, "decoded seed changed")
 		_expect(decoded.player_position.is_equal_approx(doorway_anchor), "decoded persisted position differs")
+		_expect(decoded.emplacements.get(campfire_anchor, BlockId.Type.AIR) == BlockId.Type.CAMPFIRE, "decoded campfire emplacement differs")
 		var restored_inventory := InventoryModel.new(item_catalog)
 		var loaded_inventory: Variant = loaded.get("inventory", null)
 		_expect(loaded_inventory is Dictionary and restored_inventory.from_dict(loaded_inventory as Dictionary), "loaded inventory did not decode")

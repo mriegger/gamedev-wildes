@@ -55,6 +55,7 @@ func _run() -> void:
 		_expect(not general_catalog.has_definition(recipe_id), "%s leaked into general crafting" % recipe_id)
 		_expect(anvil_catalog.has_definition(recipe_id), "%s is missing from anvil crafting" % recipe_id)
 	await _test_cauldron(block_catalog, item_catalog, general_catalog, cauldron_catalog)
+	await _test_campfire(block_catalog, item_catalog, general_catalog)
 
 	var renderer := AnvilRenderer.new()
 	root.add_child(renderer)
@@ -185,6 +186,49 @@ func _run() -> void:
 	await process_frame
 	_finish()
 
+func _test_campfire(block_catalog: BlockCatalog, item_catalog: ItemCatalog, general_catalog: CraftingRecipeCatalog) -> void:
+	var audio_profile := load("res://campfires/campfire_audio_profile.tres") as CampfireAudioProfile
+	_expect(audio_profile != null and audio_profile.validate(), "campfire audio profile is invalid")
+	var item := item_catalog.get_definition(&"campfire")
+	var placement := item.secondary_action as BlockPlacementActionDefinition
+	var definition := block_catalog.get_definition(BlockId.Type.CAMPFIRE)
+	_expect(item_catalog.get_item_for_block(BlockId.Type.CAMPFIRE) == item and placement != null and placement.block == definition, "campfire item mapping is invalid")
+	_expect(item.icon.resource_path == "res://assets/textures/items/campfire.png" and item.icon.get_size() == Vector2(16, 16), "campfire inventory icon is invalid")
+	_expect(general_catalog.get_definition(&"campfire").get_ingredient_counts() == {&"stone_block": 12, &"log_block": 2}, "campfire recipe is invalid")
+	var renderer := CampfireRenderer.new()
+	root.add_child(renderer)
+	renderer.setup(block_catalog, audio_profile)
+	var anchor := Vector3i(3, 4, 5)
+	var rendered := renderer.spawn_campfire(anchor)
+	var light := rendered.get_node_or_null(^"FireLight") as OmniLight3D
+	var audio := rendered.get_node_or_null(^"FireAudio") as AudioStreamPlayer3D
+	var effect := rendered.get_node_or_null(^"FireEffect") as FireEffectPresentation
+	_expect(rendered.position == Vector3(anchor), "campfire renderer used the wrong anchor")
+	_expect(rendered.get_node_or_null(^"Stone00") is MeshInstance3D and rendered.get_node_or_null(^"LogA") is MeshInstance3D, "campfire stone ring or logs are missing")
+	_expect(effect != null and effect.get_node_or_null(^"Fire") is GPUParticles3D and effect.get_node_or_null(^"Smoke") is GPUParticles3D, "campfire fire or smoke is missing")
+	_expect(light != null and is_equal_approx(light.omni_range, definition.light_range) and light.shadow_enabled, "campfire light or shadow is invalid")
+	_expect(audio != null and audio.bus == &"Ambient" and audio.stream is AudioStreamOggVorbis and (audio.stream as AudioStreamOggVorbis).loop, "campfire positional loop is invalid")
+	var second_anchor := Vector3i(12, 4, 5)
+	renderer.spawn_campfire(second_anchor)
+	var player := Node3D.new()
+	root.add_child(player)
+	player.global_position = Vector3(anchor)
+	renderer.set_player_ref(player)
+	renderer.update_shadow_culling(CampfireRenderer.SHADOW_UPDATE_INTERVAL)
+	var shadow_count := 0
+	for campfire_light in renderer.campfire_lights.values():
+		if (campfire_light as OmniLight3D).shadow_enabled:
+			shadow_count += 1
+	_expect(shadow_count == CampfireRenderer.MAX_SHADOW_CAMPFIRES and light.shadow_enabled, "campfire shadow budget did not select the nearest fire")
+	renderer.set_placement_preview(Vector3i(5, 4, 5), true)
+	_expect(renderer._placement_preview != null and renderer._placement_preview.visible, "campfire placement preview was not shown")
+	renderer.set_placement_preview(null, false)
+	_expect(not renderer._placement_preview.visible, "campfire placement preview did not hide")
+	renderer.clear()
+	player.queue_free()
+	renderer.queue_free()
+	await process_frame
+
 func _test_cauldron(block_catalog: BlockCatalog, item_catalog: ItemCatalog, general_catalog: CraftingRecipeCatalog, cauldron_catalog: CraftingRecipeCatalog) -> void:
 	var cauldron_block := block_catalog.get_definition(BlockId.Type.CAULDRON)
 	var cauldron_item := item_catalog.get_definition(&"cauldron")
@@ -233,14 +277,14 @@ func _test_cauldron(block_catalog: BlockCatalog, item_catalog: ItemCatalog, gene
 	var position := Vector3i(3, 4, 5)
 	var rendered := renderer.spawn_cauldron(position)
 	_expect(rendered != null and rendered.position == Vector3(position), "cauldron renderer placed the model incorrectly")
-	_expect(rendered.get_child_count() == 15, "cauldron model does not contain the expected tripod, campfire, and smoke parts")
+	_expect(rendered.get_child_count() == 14, "cauldron model does not contain the expected tripod and fire parts")
 	var body := rendered.get_node_or_null("Body") as MeshInstance3D
 	var liquid := rendered.get_node_or_null("Liquid") as MeshInstance3D
 	var support_left := rendered.get_node_or_null("SupportLeft") as MeshInstance3D
 	var firewood_left := rendered.get_node_or_null("FirewoodLeft") as MeshInstance3D
 	var firewood_right := rendered.get_node_or_null("FirewoodRight") as MeshInstance3D
-	var fire := rendered.get_node_or_null("Fire") as GPUParticles3D
-	var smoke := rendered.get_node_or_null("Smoke") as GPUParticles3D
+	var fire := rendered.get_node_or_null("FireEffect/Fire") as GPUParticles3D
+	var smoke := rendered.get_node_or_null("FireEffect/Smoke") as GPUParticles3D
 	var fire_light := rendered.get_node_or_null("FireLight") as OmniLight3D
 	_expect(body != null and body.mesh is CylinderMesh and (body.mesh as CylinderMesh).radial_segments == 8, "cauldron body is not low-poly")
 	_expect(liquid != null and liquid.mesh is CylinderMesh, "cauldron liquid surface is missing")

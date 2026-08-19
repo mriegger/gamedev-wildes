@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="CampfireAudioProfile" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://campfires/campfire_audio_profile.gd" id="1_profile"]
+[ext_resource type="AudioStream" path="res://assets/audio/environment/campfire/fireplace_5_CC0.ogg" id="2_loop"]
+
+[resource]
+script = ExtResource("1_profile")
+loop_stream = ExtResource("2_loop")
+volume_db = -10.0
+unit_size = 7.0
+max_distance = 32.0

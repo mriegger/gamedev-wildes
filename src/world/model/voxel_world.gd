@@ -33,6 +33,9 @@ var _removed_edits_by_chunk: Dictionary = {}
 var cell_revisions: Dictionary = {}
 var _highest_cache: Dictionary = {}
 var torch_attachments: Dictionary = {}
+var _emplacement_block_by_anchor: Dictionary = {}
+var _emplacement_anchor_by_cell: Dictionary = {}
+var _emplacement_anchors_by_support_cell: Dictionary = {}
 var _protected_edit_cells: Dictionary = {}
 
 func _init(p_chunk_size: int, p_max_build_y: int, p_water_level: int, p_spawn_search_radius: float, p_block_catalog: BlockCatalog):
@@ -51,6 +54,27 @@ func restore_block_edits(p_placed_blocks: Dictionary, p_removed_blocks: Dictiona
 	_rebuild_edit_index(_placed_blocks, _placed_edits_by_chunk)
 	_rebuild_edit_index(_removed_blocks, _removed_edits_by_chunk)
 
+func restore_emplacements(emplacements: Dictionary) -> bool:
+	_clear_emplacements()
+	for anchor in emplacements:
+		if not anchor is Vector3i:
+			_clear_emplacements()
+			return false
+		var block_id := int(emplacements[anchor])
+		if not can_place_emplacement(anchor, block_id):
+			_clear_emplacements()
+			return false
+		_index_emplacement(anchor, block_id)
+	return true
+
+func _clear_emplacements() -> void:
+	_emplacement_block_by_anchor.clear()
+	_emplacement_anchor_by_cell.clear()
+	_emplacement_anchors_by_support_cell.clear()
+
+func snapshot_emplacements() -> Dictionary:
+	return _emplacement_block_by_anchor.duplicate()
+
 func snapshot_block_edits() -> Dictionary:
 	return {
 		"placed": _placed_blocks.duplicate(),
@@ -66,10 +90,10 @@ func get_terrain_height(x: int, z: int) -> int:
 	return int(height_map_dict.get(Vector2i(x, z), -1))
 
 func get_block_edit_count() -> int:
-	return _placed_blocks.size() + _removed_blocks.size()
+	return _placed_blocks.size() + _removed_blocks.size() + _emplacement_block_by_anchor.size()
 
 func has_persisted_edit(position: Vector3i) -> bool:
-	return _placed_blocks.has(position) or _removed_blocks.has(position) or torch_attachments.has(position)
+	return _placed_blocks.has(position) or _removed_blocks.has(position) or torch_attachments.has(position) or _emplacement_anchor_by_cell.has(position)
 
 func protect_edit_cells(cells: Array[Vector3i]) -> void:
 	for cell in cells:
@@ -255,6 +279,9 @@ func apply_copper_chunk_for_coord(coord: Vector2i, copper_data: Dictionary):
 	generated_copper_chunks[coord] = true
 
 func get_block_at(p: Vector3i):
+	if _emplacement_anchor_by_cell.has(p):
+		var anchor := _emplacement_anchor_by_cell[p] as Vector3i
+		return _emplacement_block_by_anchor[anchor]
 	if _placed_blocks.has(p):
 		return _placed_blocks[p]
 	if _removed_blocks.has(p):
@@ -286,6 +313,10 @@ func is_solid(p: Vector3i) -> bool:
 	var bt = get_block_at(p)
 	if bt == null:
 		return false
+	if _emplacement_anchor_by_cell.has(p):
+		var anchor := _emplacement_anchor_by_cell[p] as Vector3i
+		var definition := block_catalog.get_definition(int(_emplacement_block_by_anchor[anchor]))
+		return definition.emplacement.is_solid_offset(p - anchor)
 	return block_catalog.is_solid(bt)
 
 func is_opaque(p: Vector3i) -> bool:
@@ -328,8 +359,7 @@ func get_highest_solid_y(x: int, z: int) -> int:
 		return _highest_cache[key]
 	for y in range(max_build_y - 1, -1, -1):
 		var p = Vector3i(x, y, z)
-		var bt = get_block_at(p)
-		if bt != null and block_catalog.is_solid(bt):
+		if is_solid(p):
 			_highest_cache[key] = y
 			return y
 	_highest_cache[key] = -1
@@ -367,13 +397,80 @@ func get_attached_torches(support_pos: Vector3i) -> Array[Vector3i]:
 			attached.append(torch_pos)
 	return attached
 
+func can_place_emplacement(anchor: Vector3i, block_id: int) -> bool:
+	if not BlockId.is_valid(block_id):
+		return false
+	var definition := block_catalog.get_definition(block_id)
+	if definition.emplacement == null:
+		return false
+	for offset in definition.emplacement.occupied_offsets:
+		var cell := anchor + offset
+		if cell.y < 0 or cell.y >= max_build_y or is_edit_protected(cell) or is_occupied(cell):
+			return false
+	for offset in definition.emplacement.support_offsets:
+		var support_cell := anchor + offset
+		if support_cell.y < 0 or support_cell.y >= max_build_y or not is_solid(support_cell):
+			return false
+	return true
+
+func try_place_emplacement(anchor: Vector3i, block_id: int) -> BlockEdit:
+	if not can_place_emplacement(anchor, block_id):
+		return BlockEdit.fail(anchor, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_NO_SUPPORT, "Emplacement requires a clear supported footprint")
+	_index_emplacement(anchor, block_id)
+	var revision := 0
+	var definition := block_catalog.get_definition(block_id)
+	for offset in definition.emplacement.occupied_offsets:
+		var cell := anchor + offset
+		_invalidate_highest_cache(cell.x, cell.z)
+		var cell_revision := _increment_revision(cell)
+		if cell == anchor:
+			revision = cell_revision
+	var edit := BlockEdit.success_place(anchor, block_id, revision, Vector3i.ZERO)
+	block_edit_committed.emit(edit)
+	return edit
+
+func get_emplacement_anchor(position: Vector3i) -> Variant:
+	return _emplacement_anchor_by_cell.get(position, null)
+
+func get_emplacement_cells(anchor: Vector3i) -> Array[Vector3i]:
+	var cells: Array[Vector3i] = []
+	if not _emplacement_block_by_anchor.has(anchor):
+		return cells
+	var definition := block_catalog.get_definition(int(_emplacement_block_by_anchor[anchor]))
+	for offset in definition.emplacement.occupied_offsets:
+		cells.append(anchor + offset)
+	return cells
+
+func get_supported_emplacements(support_position: Vector3i) -> Array[Vector3i]:
+	var anchors: Array[Vector3i] = []
+	var indexed := _emplacement_anchors_by_support_cell.get(support_position, {}) as Dictionary
+	for anchor in indexed:
+		anchors.append(anchor as Vector3i)
+	anchors.sort_custom(_vector3i_less)
+	return anchors
+
+func get_emplacements_for_chunk(cx: int, cz: int) -> Dictionary:
+	var result: Dictionary = {}
+	for anchor in _emplacement_block_by_anchor:
+		if floori(float(anchor.x) / chunk_size) == cx and floori(float(anchor.z) / chunk_size) == cz:
+			result[anchor] = _emplacement_block_by_anchor[anchor]
+	return result
+
 func try_mine_block(p: Vector3i) -> Array:
+	var emplacement_anchor: Variant = get_emplacement_anchor(p)
+	if emplacement_anchor is Vector3i:
+		return _try_mine_emplacement(emplacement_anchor)
 	if is_edit_protected(p):
 		return [BlockEdit.fail(p, BlockEdit.Operation.MINE, BlockEdit.Result.FAIL_PROTECTED)]
 	var attached_torches := get_attached_torches(p)
+	var supported_emplacements := get_supported_emplacements(p)
 	for torch_position in attached_torches:
 		if is_edit_protected(torch_position):
 			return [BlockEdit.fail(p, BlockEdit.Operation.MINE, BlockEdit.Result.FAIL_PROTECTED)]
+	for anchor in supported_emplacements:
+		for cell in get_emplacement_cells(anchor):
+			if is_edit_protected(cell):
+				return [BlockEdit.fail(p, BlockEdit.Operation.MINE, BlockEdit.Result.FAIL_PROTECTED)]
 	if not is_breakable(p):
 		return [BlockEdit.fail(p, BlockEdit.Operation.MINE, BlockEdit.Result.FAIL_NOT_BREAKABLE)]
 	var old_id = get_block_id_at(p)
@@ -408,7 +505,54 @@ func try_mine_block(p: Vector3i) -> Array:
 	block_edit_committed.emit(edit)
 	var batch: Array[BlockEdit] = [edit]
 	batch.append_array(_remove_attached_torches(attached_torches))
+	for anchor in supported_emplacements:
+		batch.append(_remove_emplacement(anchor))
 	return batch
+
+func _try_mine_emplacement(anchor: Vector3i) -> Array:
+	for cell in get_emplacement_cells(anchor):
+		if is_edit_protected(cell):
+			return [BlockEdit.fail(anchor, BlockEdit.Operation.MINE, BlockEdit.Result.FAIL_PROTECTED)]
+	return [_remove_emplacement(anchor)]
+
+func _remove_emplacement(anchor: Vector3i) -> BlockEdit:
+	var block_id := int(_emplacement_block_by_anchor[anchor])
+	var definition := block_catalog.get_definition(block_id)
+	var occupied_cells: Array[Vector3i] = []
+	for offset in definition.emplacement.occupied_offsets:
+		occupied_cells.append(anchor + offset)
+	for offset in definition.emplacement.support_offsets:
+		var support_cell := anchor + offset
+		var indexed := _emplacement_anchors_by_support_cell.get(support_cell, {}) as Dictionary
+		indexed.erase(anchor)
+		if indexed.is_empty():
+			_emplacement_anchors_by_support_cell.erase(support_cell)
+	for cell in occupied_cells:
+		_emplacement_anchor_by_cell.erase(cell)
+		_invalidate_highest_cache(cell.x, cell.z)
+		_increment_revision(cell)
+	_emplacement_block_by_anchor.erase(anchor)
+	var edit := BlockEdit.success_mine(anchor, block_id, get_revision(anchor))
+	block_edit_committed.emit(edit)
+	return edit
+
+func _index_emplacement(anchor: Vector3i, block_id: int) -> void:
+	_emplacement_block_by_anchor[anchor] = block_id
+	var definition := block_catalog.get_definition(block_id)
+	for offset in definition.emplacement.occupied_offsets:
+		_emplacement_anchor_by_cell[anchor + offset] = anchor
+	for offset in definition.emplacement.support_offsets:
+		var support_cell := anchor + offset
+		if not _emplacement_anchors_by_support_cell.has(support_cell):
+			_emplacement_anchors_by_support_cell[support_cell] = {}
+		(_emplacement_anchors_by_support_cell[support_cell] as Dictionary)[anchor] = true
+
+func _vector3i_less(left: Vector3i, right: Vector3i) -> bool:
+	if left.x != right.x:
+		return left.x < right.x
+	if left.y != right.y:
+		return left.y < right.y
+	return left.z < right.z
 
 func try_pick_up_placed_block(p: Vector3i, expected_block_id: int) -> Array[BlockEdit]:
 	if is_edit_protected(p):
@@ -450,6 +594,8 @@ func try_place_block(p: Vector3i, block_type: int, attach_dir: Vector3i = Vector
 		return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_INVALID_POS, "AIR not placeable")
 	if not BlockId.is_valid(block_type):
 		return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_INVALID_POS, "Invalid block id")
+	if block_catalog.get_definition(block_type).emplacement != null:
+		return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_INVALID_POS, "Emplacement requires atomic placement")
 	if p.y < 0 or p.y >= max_build_y:
 		return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_Y_OUT_OF_RANGE)
 	if is_occupied(p):
@@ -465,6 +611,9 @@ func try_place_block(p: Vector3i, block_type: int, attach_dir: Vector3i = Vector
 		if support_pos.y < 0 or support_pos.y >= max_build_y:
 			return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_NO_TORCH_SUPPORT, "Support Y out of bounds")
 		ensure_region_generated(support_pos.x -1, support_pos.z -1, 3, 3)
+		var support_id := get_block_id_at(support_pos)
+		if support_id != BlockId.Type.AIR and block_catalog.get_definition(support_id).emplacement != null:
+			return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_NO_TORCH_SUPPORT)
 		if not is_opaque(support_pos) and not is_solid(support_pos):
 			return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_NO_TORCH_SUPPORT)
 	if _removed_blocks.has(p):
@@ -479,10 +628,14 @@ func try_place_block(p: Vector3i, block_type: int, attach_dir: Vector3i = Vector
 	return edit
 
 func try_replace_block(p: Vector3i, expected_old_id: int, new_id: int) -> BlockEdit:
+	if _emplacement_anchor_by_cell.has(p):
+		return BlockEdit.fail(p, BlockEdit.Operation.REPLACE, BlockEdit.Result.FAIL_INVALID_POS, "Emplacement cells cannot be replaced individually")
 	if not BlockId.is_valid(expected_old_id) or expected_old_id == BlockId.Type.AIR:
 		return BlockEdit.fail(p, BlockEdit.Operation.REPLACE, BlockEdit.Result.FAIL_INVALID_POS, "Invalid expected block id")
 	if not BlockId.is_valid(new_id) or new_id == BlockId.Type.AIR:
 		return BlockEdit.fail(p, BlockEdit.Operation.REPLACE, BlockEdit.Result.FAIL_INVALID_POS, "Invalid replacement block id")
+	if block_catalog.get_definition(new_id).emplacement != null:
+		return BlockEdit.fail(p, BlockEdit.Operation.REPLACE, BlockEdit.Result.FAIL_INVALID_POS, "Emplacement requires atomic placement")
 	if p.y < 0 or p.y >= max_build_y:
 		return BlockEdit.fail(p, BlockEdit.Operation.REPLACE, BlockEdit.Result.FAIL_Y_OUT_OF_RANGE)
 	if get_block_id_at(p) != expected_old_id:

@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="BlockDefinition" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://blocks/block_definition.gd" id="1_definition"]
+[ext_resource type="Texture2D" path="res://assets/textures/blocks/stone.png" id="2_stone"]
+[ext_resource type="Resource" path="res://campfires/campfire_emplacement.tres" id="3_emplacement"]
+
+[resource]
+script = ExtResource("1_definition")
+id = 19
+is_solid = false
+is_opaque = false
+is_raycast_solid = true
+is_breakable = true
+is_replaceable = false
+mine_duration = 0.9
+mining_tool_tag = &"pickaxe"
+minimum_mining_power = 1
+drop_item_id = &"campfire"
+top_texture = ExtResource("2_stone")
+side_texture = ExtResource("2_stone")
+bottom_texture = ExtResource("2_stone")
+emissive_enabled = true
+emissive_color = Color(1, 0.38, 0.08, 1)
+emissive_energy = 2.1
+emplacement = ExtResource("3_emplacement")
+light_range = 12.0
+light_color = Color(1, 0.52, 0.22, 1)

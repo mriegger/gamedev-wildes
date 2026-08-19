@@ -6,6 +6,7 @@ signal generation_progress(stage: String, percent: float, details: String)
 @export var config: WorldConfig
 @export var water_profile: WaterProfile
 @export var block_catalog: BlockCatalog
+@export var campfire_audio_profile: CampfireAudioProfile
 @export var terrain_shader: Shader
 @export var water_shader: Shader
 
@@ -15,6 +16,7 @@ signal generation_progress(stage: String, percent: float, details: String)
 @onready var anvil_renderer: AnvilRenderer = $Anvils
 @onready var chest_renderer: ChestRenderer = $Chests
 @onready var cauldron_renderer: CauldronRenderer = $Cauldrons
+@onready var campfire_renderer: CampfireRenderer = $Campfires
 
 var terrain_material: ShaderMaterial
 var water_block_material: ShaderMaterial
@@ -75,6 +77,7 @@ func _create_world_model(generation: Dictionary):
 	voxel_model.apply_tree_chunk(generation)
 	voxel_model.restore_block_edits(_start_state.placed_blocks, _start_state.removed_blocks)
 	voxel_model.torch_attachments = _start_state.torch_attachments.duplicate()
+	assert(voxel_model.restore_emplacements(_start_state.emplacements))
 	for pos in _start_state.removed_blocks:
 		voxel_model.tree_block_fast.erase(pos)
 	voxel_model.block_edit_committed.connect(_on_block_edit_committed)
@@ -87,6 +90,7 @@ func _setup_systems():
 	anvil_renderer.setup()
 	chest_renderer.setup(block_catalog)
 	cauldron_renderer.setup()
+	campfire_renderer.setup(block_catalog, campfire_audio_profile)
 	chunk_manager = ChunkManager.new()
 	chunk_manager.setup(config, voxel_model, chunk_scheduler, chunk_renderer)
 	chunk_manager.chunk_loaded.connect(_on_chunk_loaded)
@@ -139,18 +143,21 @@ func _process(delta: float):
 	chunk_manager.poll_completed()
 	voxel_model.prune_terrain_cache(2)
 	torch_renderer.update_shadow_culling(delta)
+	campfire_renderer.update_shadow_culling(delta)
 
 func _on_chunk_loaded(coord: Vector2i):
 	torch_renderer.load_torches_for_chunk(coord.x, coord.y, config.chunk_size, voxel_model.torch_attachments)
 	anvil_renderer.load_anvils_for_chunk(coord.x, coord.y, config.chunk_size, voxel_model)
 	chest_renderer.load_chests_for_chunk(coord.x, coord.y, config.chunk_size, voxel_model)
 	cauldron_renderer.load_cauldrons_for_chunk(coord.x, coord.y, config.chunk_size, voxel_model)
+	campfire_renderer.load_campfires_for_chunk(coord.x, coord.y, voxel_model)
 
 func _on_chunk_unloaded(coord: Vector2i):
 	torch_renderer.unload_torches_in_chunk(coord.x, coord.y, config.chunk_size)
 	anvil_renderer.unload_anvils_in_chunk(coord.x, coord.y, config.chunk_size)
 	chest_renderer.unload_chests_in_chunk(coord.x, coord.y, config.chunk_size)
 	cauldron_renderer.unload_cauldrons_in_chunk(coord.x, coord.y, config.chunk_size)
+	campfire_renderer.unload_campfires_in_chunk(coord.x, coord.y, config.chunk_size)
 
 func _on_block_edit_committed(edit: BlockEdit):
 	var edit_chunk := ChunkCoord.world_to_chunk_vec3i(edit.pos, config.chunk_size)
@@ -179,12 +186,18 @@ func _on_block_edit_committed(edit: BlockEdit):
 		if chunk_manager.visible_chunks.has(edit_chunk):
 			cauldron_renderer.spawn_cauldron(edit.pos)
 		chunk_manager.queue_rebuild_for_world_pos(edit.pos)
+	elif edit.is_mine() and edit.old_id == BlockId.Type.CAMPFIRE:
+		campfire_renderer.remove_campfire(edit.pos)
+	elif edit.new_id == BlockId.Type.CAMPFIRE:
+		if chunk_manager.visible_chunks.has(edit_chunk):
+			campfire_renderer.spawn_campfire(edit.pos)
 	else:
 		chunk_manager.queue_rebuild_for_world_pos(edit.pos)
 
 func set_player_ref(player: Node3D):
 	_player_ref = player
 	torch_renderer.set_player_ref(player)
+	campfire_renderer.set_player_ref(player)
 
 func is_position_streamed(position: Vector3) -> bool:
 	if chunk_manager == null:
@@ -239,4 +252,5 @@ func is_suspended() -> bool:
 func shutdown():
 	set_process(false)
 	_water_ripples.clear()
+	campfire_renderer.clear()
 	chunk_manager.shutdown()
