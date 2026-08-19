@@ -38,7 +38,41 @@ func _run() -> void:
 	else:
 		_expect(false, "generated snapshot omitted its origin")
 	_validate_patch_presentation(pumpkin_patch)
-	_expect(voxel_world.get_block_edit_count() == 0, "pumpkin patch generation changed authoritative terrain")
+	_validate_cleared_foliage_footprint(voxel_world, generated_snapshot, "empty generation")
+
+	var dense_foliage_world := _flat_world(block_catalog, BlockId.Type.GRASS)
+	_fill_with_foliage(dense_foliage_world)
+	var dense_foliage_patch := _new_pumpkin_patch()
+	root.add_child(dense_foliage_patch)
+	_expect(dense_foliage_patch.setup(dense_foliage_world, player, 17391, null), "dense foliage prevented new pumpkin patch placement")
+	_validate_cleared_foliage_footprint(dense_foliage_world, dense_foliage_patch.snapshot(), "generated")
+	var restored_foliage_world := _flat_world(block_catalog, BlockId.Type.GRASS)
+	_fill_with_foliage(restored_foliage_world)
+	var restored_foliage_patch := _new_pumpkin_patch()
+	root.add_child(restored_foliage_patch)
+	_expect(restored_foliage_patch.setup(restored_foliage_world, player, 17391, generated_snapshot), "saved pumpkin patch did not clear regenerated foliage")
+	_validate_cleared_foliage_footprint(restored_foliage_world, restored_foliage_patch.snapshot(), "restored")
+	var deferred_foliage_world := _flat_world(block_catalog, BlockId.Type.GRASS)
+	var deferred_foliage_patch := _new_pumpkin_patch()
+	root.add_child(deferred_foliage_patch)
+	_expect(deferred_foliage_patch.setup(deferred_foliage_world, player, 17391, generated_snapshot), "unloaded saved patch did not reserve its footprint")
+	_validate_cleared_foliage_footprint(deferred_foliage_world, deferred_foliage_patch.snapshot(), "deferred")
+	_fill_snapshot_footprint_with_foliage(deferred_foliage_world, deferred_foliage_patch.snapshot())
+	_validate_cleared_foliage_footprint(deferred_foliage_world, deferred_foliage_patch.snapshot(), "streamed")
+	var saved_origin := generated_snapshot.get("origin", []) as Array
+	if saved_origin.size() == 3:
+		var occupied_world := _flat_world(block_catalog, BlockId.Type.GRASS)
+		var occupied_position := Vector3i(int(saved_origin[0]), int(saved_origin[1]) + 1, int(saved_origin[2]))
+		_expect(VoxelWorldTestFixture.commit_place(occupied_world, occupied_position, BlockId.Type.STONE) != null, "saved-patch fixture could not place a player block")
+		var occupied_patch := _new_pumpkin_patch()
+		root.add_child(occupied_patch)
+		_expect(occupied_patch.setup(occupied_world, player, 17391, generated_snapshot), "saved patch rejected a player-built footprint block")
+		_expect(occupied_world.get_block_id_at(occupied_position) == BlockId.Type.STONE, "saved patch cleared a player-built footprint block")
+		_expect(occupied_world.is_foliage_clearance_reserved(occupied_position), "saved patch omitted clearance beneath the player block")
+		var occupied_edits := occupied_world.snapshot_block_edits()
+		_expect((occupied_edits["placed"] as Dictionary).has(occupied_position), "saved patch lost the player block edit")
+		_expect(not (occupied_edits["removed"] as Dictionary).has(occupied_position), "saved patch persisted a removal beneath the player block")
+		occupied_patch.queue_free()
 
 	var hud := (load("res://ui/hud/hud.tscn") as PackedScene).instantiate() as HUD
 	root.add_child(hud)
@@ -199,6 +233,9 @@ func _run() -> void:
 	stone_patch.queue_free()
 	migrated_patch.queue_free()
 	full_patch.queue_free()
+	dense_foliage_patch.queue_free()
+	restored_foliage_patch.queue_free()
+	deferred_foliage_patch.queue_free()
 	hud.queue_free()
 	player.queue_free()
 	await process_frame
@@ -423,6 +460,55 @@ func _flat_world(block_catalog: BlockCatalog, surface_block_id: int) -> VoxelWor
 			voxel_world.height_map_dict[key] = 0
 			voxel_world.type_map_dict[key] = surface_block_id
 	return voxel_world
+
+func _fill_with_foliage(voxel_world: VoxelWorld) -> void:
+	var chunks: Dictionary = {}
+	for x in range(-50, 51):
+		for z in range(-50, 51):
+			var position := Vector3i(x, 1, z)
+			var coord := ChunkCoord.world_to_chunk_vec3i(position, voxel_world.chunk_size)
+			if not chunks.has(coord):
+				chunks[coord] = {}
+			(chunks[coord] as Dictionary)[position] = BlockId.Type.SHORT_GRASS
+	for coord in chunks:
+		voxel_world.apply_foliage_chunk_for_coord(coord, {"foliage_block_fast": chunks[coord]})
+
+func _fill_snapshot_footprint_with_foliage(voxel_world: VoxelWorld, snapshot: Dictionary) -> void:
+	var encoded_origin := snapshot.get("origin", []) as Array
+	_expect(encoded_origin.size() == 3, "deferred foliage patch omitted its origin")
+	if encoded_origin.size() != 3:
+		return
+	var origin := Vector3i(int(encoded_origin[0]), int(encoded_origin[1]), int(encoded_origin[2]))
+	var chunks: Dictionary = {}
+	for x_offset in range(PumpkinPatchCoordinator.PATCH_WIDTH):
+		for z_offset in range(PumpkinPatchCoordinator.PATCH_DEPTH):
+			var position := origin + Vector3i(x_offset, 1, z_offset)
+			var coord := ChunkCoord.world_to_chunk_vec3i(position, voxel_world.chunk_size)
+			if not chunks.has(coord):
+				chunks[coord] = {}
+			(chunks[coord] as Dictionary)[position] = BlockId.Type.SHORT_GRASS
+	for coord in chunks:
+		voxel_world.apply_foliage_chunk_for_coord(coord, {"foliage_block_fast": chunks[coord]})
+
+func _validate_cleared_foliage_footprint(voxel_world: VoxelWorld, snapshot: Dictionary, label: String) -> void:
+	var encoded_origin := snapshot.get("origin", []) as Array
+	_expect(encoded_origin.size() == 3, "%s clearance patch omitted its origin" % label)
+	if encoded_origin.size() != 3:
+		return
+	var origin := Vector3i(int(encoded_origin[0]), int(encoded_origin[1]), int(encoded_origin[2]))
+	var removed := voxel_world.snapshot_block_edits()["removed"] as Dictionary
+	var reserved_count := 0
+	var persisted_count := 0
+	for x_offset in range(PumpkinPatchCoordinator.PATCH_WIDTH):
+		for z_offset in range(PumpkinPatchCoordinator.PATCH_DEPTH):
+			var position := origin + Vector3i(x_offset, 1, z_offset)
+			if voxel_world.is_foliage_clearance_reserved(position):
+				reserved_count += 1
+			_expect(voxel_world.get_block_id_at(position) == BlockId.Type.AIR, "%s pumpkin footprint lost its clearance" % label)
+			if removed.has(position):
+				persisted_count += 1
+	_expect(reserved_count == PumpkinPatchState.TILE_COUNT, "%s pumpkin footprint reserved %d cells" % [label, reserved_count])
+	_expect(persisted_count == 0, "%s pumpkin footprint fabricated %d block removals" % [label, persisted_count])
 
 func _calculate_bounds(root_node: Node3D) -> AABB:
 	var mesh_bounds: Array[AABB] = []

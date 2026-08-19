@@ -21,6 +21,7 @@ class_name Biome
 
 @export_group("Vegetation")
 @export_range(0.0, 0.1) var tree_density: float = 0.01
+@export_range(0.0, 1.0, 0.01) var foliage_density: float = 0.0
 
 # Fixed indices for PackedFloat32Array params: 0=continentalness, 1=erosion, 2=peaks_valleys, 3=temperature, 4=humidity
 const IDX_CONTINENTALNESS: int = 0
@@ -28,6 +29,12 @@ const IDX_EROSION: int = 1
 const IDX_PEAKS_VALLEYS: int = 2
 const IDX_TEMPERATURE: int = 3
 const IDX_HUMIDITY: int = 4
+
+func validate(source: String) -> bool:
+	if foliage_density < 0.0 or foliage_density > 1.0:
+		push_error("[Biome] Foliage density must be 0..1 at %s" % source)
+		return false
+	return true
 
 func distance_squared_to(params: PackedFloat32Array) -> float:
 	var d: float = 0.0

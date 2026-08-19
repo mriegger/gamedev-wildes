@@ -18,3 +18,4 @@ max_peaks_valleys = 0.25
 surface_block = 1
 shore_block = 3
 tree_density = 0.012
+foliage_density = 0.38

@@ -14,6 +14,8 @@ func validate() -> bool:
 			push_error("[BiomeLibrary] Null biome")
 			valid = false
 			continue
+		if not biome.validate(biome.resource_path):
+			valid = false
 		if biome.biome_id.is_empty():
 			push_error("[BiomeLibrary] Biome has an empty id")
 			valid = false

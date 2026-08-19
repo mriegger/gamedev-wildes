@@ -8,7 +8,8 @@ func _init() -> void:
 func _run() -> void:
 	var config := (load("res://world/settings/world_config.tres") as WorldConfig).runtime_copy_for_seed(1337)
 	var catalog := load("res://blocks/block_catalog.tres") as BlockCatalog
-	var generator := TerrainGenerator.new(config)
+	var foliage_catalog := load("res://foliage/foliage_catalog.tres") as FoliageCatalog
+	var generator := TerrainGenerator.new(config, FoliageGenerator.new(foliage_catalog, config.seed_value))
 	var initial_generation := generator.generate_all()
 	var initial_trees := initial_generation["tree_block_fast"] as Dictionary
 	_expect(initial_trees.is_empty(), "startup terrain generated a tree layout outside the chunk pipeline")

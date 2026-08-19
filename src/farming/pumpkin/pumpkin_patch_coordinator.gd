@@ -45,6 +45,8 @@ func setup(p_voxel_world: VoxelWorld, p_player: Node3D, world_seed: int, saved_s
 	elif saved_state is Dictionary:
 		if not _state.restore(saved_state, _valid_state_ids):
 			return false
+		if not _sync_state_foliage_clearance():
+			return false
 	else:
 		return false
 	if not _render_state():
@@ -235,7 +237,11 @@ func _generate_near(target_position: Vector3) -> bool:
 	var quarter_turns := PackedInt32Array()
 	for index in range(PumpkinPatchState.TILE_COUNT):
 		quarter_turns.append(_random.randi_range(0, 3))
-	return _state.replace(origin, state_ids, quarter_turns, _valid_state_ids)
+	if not _voxel_world.can_replace_foliage_clearance(_get_patch_clearance_cells(origin)):
+		return false
+	if not _state.replace(origin, state_ids, quarter_turns, _valid_state_ids):
+		return false
+	return _sync_state_foliage_clearance()
 
 func _find_patch_origins(target_position: Vector3) -> Array[Vector3i]:
 	var target_cell := Vector3i(floori(target_position.x), 0, floori(target_position.z))
@@ -249,7 +255,9 @@ func _find_patch_origins(target_position: Vector3) -> Array[Vector3i]:
 				continue
 			var surface_y := _get_patch_surface_y(origin.x, origin.z)
 			if surface_y >= 0:
-				origins.append(Vector3i(origin.x, surface_y, origin.z))
+				var patch_origin := Vector3i(origin.x, surface_y, origin.z)
+				if _voxel_world.can_replace_foliage_clearance(_get_patch_clearance_cells(patch_origin)):
+					origins.append(patch_origin)
 	return origins
 
 func _get_patch_surface_y(origin_x: int, origin_z: int) -> int:
@@ -264,10 +272,24 @@ func _get_patch_surface_y(origin_x: int, origin_z: int) -> int:
 			var position := Vector3i(x, column_y, z)
 			if _voxel_world.get_block_id_at(position) not in VALID_SURFACE_BLOCKS:
 				return -1
-			if _voxel_world.get_block_id_at(position + Vector3i.UP) != BlockId.Type.AIR:
+			var clearance_id := _voxel_world.get_block_id_at(position + Vector3i.UP)
+			if clearance_id != BlockId.Type.AIR and not BlockId.is_foliage(clearance_id):
 				return -1
 			surface_y = column_y
 	return surface_y
+
+func _get_patch_clearance_cells(origin: Vector3i) -> Array[Vector3i]:
+	var cells: Array[Vector3i] = []
+	for x_offset in range(PATCH_WIDTH):
+		for z_offset in range(PATCH_DEPTH):
+			cells.append(origin + Vector3i(x_offset, 1, z_offset))
+	return cells
+
+func _sync_state_foliage_clearance() -> bool:
+	var cells: Array[Vector3i] = []
+	if _state.is_present():
+		cells = _get_patch_clearance_cells(_state.get_origin())
+	return _voxel_world.try_replace_foliage_clearance(cells)
 
 func _render_state() -> bool:
 	if _patch_root != null:

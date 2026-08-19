@@ -111,6 +111,15 @@ func queue_rebuild_for_world_pos(pos: Vector3i):
 	if (pos.z + 1) % _config.chunk_size == 0:
 		_queue_rebuild(coord + Vector2i(0, 1))
 
+func refresh_foliage(coord: Vector2i, cells: PackedInt32Array) -> void:
+	_renderer.invalidate_cache(coord)
+	if _requested_meshes.has(coord) or _rebuilding_meshes.has(coord):
+		_queue_rebuild(coord)
+		return
+	if not visible_chunks.has(coord):
+		return
+	_renderer.apply_foliage_cells(coord, cells)
+
 func shutdown():
 	_voxel_model.terrain_chunk_evicted.disconnect(_on_terrain_evicted)
 	_clear_tracking()

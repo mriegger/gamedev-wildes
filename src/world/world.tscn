@@ -5,6 +5,7 @@
 [ext_resource type="Resource" path="res://world/materials/water_profile.tres" id="4_water_profile"]
 [ext_resource type="Shader" path="res://world/materials/terrain.gdshader" id="5_terrain_shader"]
 [ext_resource type="Shader" path="res://world/materials/water.gdshader" id="6_water_shader"]
+[ext_resource type="Shader" path="res://foliage/presentation/foliage.gdshader" id="7_foliage_shader"]
 [ext_resource type="Script" path="res://world/chunks/chunk_renderer.gd" id="7_chunk_renderer"]
 [ext_resource type="Script" path="res://world/chunks/chunk_build_scheduler.gd" id="8_chunk_scheduler"]
 [ext_resource type="Script" path="res://blocks/presentation/torch_renderer.gd" id="9_torch_renderer"]
@@ -20,6 +21,7 @@ config = ExtResource("2_config")
 water_profile = ExtResource("4_water_profile")
 campfire_audio_profile = ExtResource("14_campfire_audio")
 terrain_shader = ExtResource("5_terrain_shader")
+foliage_shader = ExtResource("7_foliage_shader")
 water_shader = ExtResource("6_water_shader")
 
 [node name="ChunkRenderer" type="Node3D" parent="."]

@@ -231,6 +231,9 @@ func _handle_raycast():
 	var best_hit := hit.target_cell
 	var best_place := hit.placement_cell
 	var best_normal := hit.face_normal
+	var targeted_block_id := voxel_space.get_block_id_at(best_hit)
+	if BlockId.is_foliage(targeted_block_id) and voxel_space.block_catalog.get_definition(targeted_block_id).is_replaceable:
+		best_place = best_hit
 
 	target_block = best_hit
 	target_has = true
@@ -248,20 +251,19 @@ func _handle_raycast():
 	elif selected_primary is TillingActionDefinition:
 		can_primary_target = _can_till_position(best_hit, best_normal, selected_primary as TillingActionDefinition)
 
-	if editable_voxel_world != null and not editable_voxel_world.is_edit_protected(best_place) and voxel_space.get_block_at(best_place) == null:
-		var placement_action := get_selected_placement_action()
-		if placement_action != null and placement_action.block.emplacement != null:
-			placement_has = true
-			can_place_target = motor_pos.distance_squared_to(Vector3(best_place.x + 0.5, best_place.y + 0.5, best_place.z + 0.5)) <= reach_squared and _can_place_emplacement_geometry(best_place, placement_action.block)
-		elif not _placement_collides_player(best_place) and not _placement_collides_entity(best_place):
-			placement_has = true
-			can_place_target = motor_pos.distance_squared_to(Vector3(best_place.x + 0.5, best_place.y + 0.5, best_place.z + 0.5)) <= reach_squared
+	var placement_action := get_selected_placement_action()
+	if editable_voxel_world != null and placement_action != null:
+		if placement_action.block.emplacement != null:
+			if not editable_voxel_world.is_edit_protected(best_place) and voxel_space.get_block_at(best_place) == null:
+				placement_has = true
+				can_place_target = motor_pos.distance_squared_to(Vector3(best_place.x + 0.5, best_place.y + 0.5, best_place.z + 0.5)) <= reach_squared and _can_place_emplacement_geometry(best_place, placement_action.block)
 		else:
-			placement_has = false
-			can_place_target = false
-	else:
-		placement_has = false
-		can_place_target = false
+			var placement_block_id := int(placement_action.block.id)
+			var placement_attach_dir := _get_placement_attach_dir(placement_block_id)
+			if editable_voxel_world.can_place_block(best_place, placement_block_id, placement_attach_dir) and not _placement_collides_player(best_place) and not _placement_collides_entity(best_place):
+				placement_has = true
+				can_place_target = motor_pos.distance_squared_to(Vector3(best_place.x + 0.5, best_place.y + 0.5, best_place.z + 0.5)) <= reach_squared
+
 func _placement_collides_player(p: Vector3i) -> bool:
 	if motor == null:
 		return false
@@ -615,11 +617,11 @@ func _can_place(action: BlockPlacementActionDefinition) -> bool:
 func _validate_placement(position: Vector3i, action: BlockPlacementActionDefinition) -> bool:
 	if action == null or voxel_space == null or editable_voxel_world == null or inventory_model == null or motor == null:
 		return false
-	if editable_voxel_world.is_edit_protected(position):
-		return false
 	if get_selected_placement_action() != action or not inventory_loadout.can_consume_selected():
 		return false
-	if voxel_space.get_block_id_at(position) != BlockId.Type.AIR:
+	var block_id := int(action.block.id)
+	var attach_dir := _get_placement_attach_dir(block_id)
+	if action.block.emplacement == null and not editable_voxel_world.can_place_block(position, block_id, attach_dir):
 		return false
 	var center := Vector3(position) + Vector3(0.5, 0.5, 0.5)
 	if motor.global_position.distance_squared_to(center) > reach * reach:
@@ -649,7 +651,7 @@ func _commit_place(pos: Vector3i, action: BlockPlacementActionDefinition):
 
 	var block_id := int(action.block.id)
 
-	var attach_dir = -last_ray_normal if block_id == BlockId.Type.TORCH else Vector3i.ZERO
+	var attach_dir := _get_placement_attach_dir(block_id)
 	var edit := action_executors.placement.try_place(
 		pos,
 		attach_dir,
@@ -659,6 +661,9 @@ func _commit_place(pos: Vector3i, action: BlockPlacementActionDefinition):
 	if edit.is_success():
 		_handle_raycast()
 		block_placed.emit()
+
+func _get_placement_attach_dir(block_id: int) -> Vector3i:
+	return -last_ray_normal if block_id == BlockId.Type.TORCH else Vector3i.ZERO
 
 func get_selected_block_id():
 	var action := get_selected_placement_action()

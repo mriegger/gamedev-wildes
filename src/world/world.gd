@@ -7,7 +7,9 @@ signal generation_progress(stage: String, percent: float, details: String)
 @export var water_profile: WaterProfile
 @export var block_catalog: BlockCatalog
 @export var campfire_audio_profile: CampfireAudioProfile
+@export var foliage_catalog: FoliageCatalog
 @export var terrain_shader: Shader
+@export var foliage_shader: Shader
 @export var water_shader: Shader
 
 @onready var chunk_renderer: ChunkRenderer = $ChunkRenderer
@@ -20,10 +22,13 @@ signal generation_progress(stage: String, percent: float, details: String)
 
 var terrain_material: ShaderMaterial
 var water_block_material: ShaderMaterial
+var foliage_material: ShaderMaterial
 var terrain_generator: TerrainGenerator
 var voxel_model: VoxelWorld
 var block_texture_set: BlockTextureSet
+var foliage_texture_set: FoliageTextureSet
 var chunk_mesher: ChunkMesher
+var foliage_mesher: FoliageMesher
 var chunk_manager: ChunkManager
 var _settings: GameSettings
 var _water_ripples := WaterRipplePresentation.new()
@@ -45,13 +50,16 @@ func initialize_world_async() -> void:
 	config = config.runtime_copy_for_seed(_start_state.seed)
 	var config_valid := config.validate()
 	var block_catalog_valid := block_catalog.validate()
+	var foliage_catalog_valid := foliage_catalog.validate(block_catalog)
 	assert(config_valid)
 	assert(block_catalog_valid)
+	assert(foliage_catalog_valid)
 
 	generation_progress.emit("config", 0.05, "Preparing config (seed %d)" % config.seed_value)
 	await get_tree().process_frame
 	generation_progress.emit("terrain", 0.1, "Generating terrain")
-	terrain_generator = TerrainGenerator.new(config)
+	var foliage_generator := FoliageGenerator.new(foliage_catalog, config.seed_value)
+	terrain_generator = TerrainGenerator.new(config, foliage_generator)
 	var generation := terrain_generator.generate_all()
 	generation_progress.emit("terrain", 0.3, "Terrain prepared")
 	await get_tree().process_frame
@@ -68,7 +76,6 @@ func initialize_world_async() -> void:
 	generation_progress.emit("chunks", 0.55, "Generating chunks")
 	await _generate_initial_chunks()
 	generation_progress.emit("done", 1.0, "%d chunks ready" % chunk_manager.visible_chunks.size())
-	set_process(true)
 
 func _create_world_model(generation: Dictionary):
 	voxel_model = VoxelWorld.new(config.chunk_size, config.max_build_y, config.water_level, config.meadow_radius, block_catalog)
@@ -81,11 +88,13 @@ func _create_world_model(generation: Dictionary):
 	for pos in _start_state.removed_blocks:
 		voxel_model.tree_block_fast.erase(pos)
 	voxel_model.block_edit_committed.connect(_on_block_edit_committed)
+	voxel_model.foliage_clearance_changed.connect(_on_foliage_clearance_changed)
 
 func _setup_systems():
 	chunk_mesher = ChunkMesher.new(config.chunk_size, config.max_build_y, config.seed_value, config.enable_ao, block_texture_set)
-	chunk_scheduler.setup(chunk_mesher, terrain_generator, voxel_model, config.chunk_size, config.max_build_y)
-	chunk_renderer.setup(chunk_mesher, terrain_material, water_block_material, voxel_model, _settings.get_shadow_chunk_radius())
+	foliage_mesher = FoliageMesher.new(foliage_texture_set, config.seed_value)
+	chunk_scheduler.setup(chunk_mesher, foliage_mesher, terrain_generator, voxel_model, config.chunk_size, config.max_build_y)
+	chunk_renderer.setup(chunk_mesher, foliage_mesher, terrain_material, water_block_material, foliage_material, voxel_model, _settings.get_shadow_chunk_radius())
 	torch_renderer.setup(block_catalog, _settings.torch_shadow_count, 0.0)
 	anvil_renderer.setup()
 	chest_renderer.setup(block_catalog)
@@ -113,9 +122,13 @@ func _get_initial_position() -> Vector3:
 
 func _prepare_materials():
 	block_texture_set = BlockTextureSet.new(block_catalog)
+	foliage_texture_set = FoliageTextureSet.new(foliage_catalog)
 	terrain_material = ShaderMaterial.new()
 	terrain_material.shader = terrain_shader
 	terrain_material.set_shader_parameter("terrain_textures", block_texture_set.texture_array)
+	foliage_material = ShaderMaterial.new()
+	foliage_material.shader = foliage_shader
+	foliage_material.set_shader_parameter("foliage_textures", foliage_texture_set.texture_array)
 
 	water_block_material = ShaderMaterial.new()
 	water_block_material.shader = water_shader
@@ -191,13 +204,29 @@ func _on_block_edit_committed(edit: BlockEdit):
 	elif edit.new_id == BlockId.Type.CAMPFIRE:
 		if chunk_manager.visible_chunks.has(edit_chunk):
 			campfire_renderer.spawn_campfire(edit.pos)
+	elif _is_foliage_only_edit(edit):
+		chunk_manager.refresh_foliage(edit_chunk, voxel_model.get_visible_foliage_cells_for_chunk(edit_chunk))
 	else:
 		chunk_manager.queue_rebuild_for_world_pos(edit.pos)
 
+func _on_foliage_clearance_changed(cells: Array[Vector3i]) -> void:
+	var changed_chunks: Dictionary = {}
+	for position in cells:
+		changed_chunks[ChunkCoord.world_to_chunk_vec3i(position, config.chunk_size)] = true
+	for coord in changed_chunks:
+		chunk_manager.refresh_foliage(coord, voxel_model.get_visible_foliage_cells_for_chunk(coord))
+
+func _is_foliage_only_edit(edit: BlockEdit) -> bool:
+	var old_is_foliage := BlockId.is_foliage(edit.old_id)
+	var new_is_foliage := BlockId.is_foliage(edit.new_id)
+	return (old_is_foliage or new_is_foliage) and (old_is_foliage or edit.old_id == BlockId.Type.AIR) and (new_is_foliage or edit.new_id == BlockId.Type.AIR)
+
 func set_player_ref(player: Node3D):
+	assert(player != null and chunk_manager != null)
 	_player_ref = player
 	torch_renderer.set_player_ref(player)
 	campfire_renderer.set_player_ref(player)
+	set_process(true)
 
 func is_position_streamed(position: Vector3) -> bool:
 	if chunk_manager == null:

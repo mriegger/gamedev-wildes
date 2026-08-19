@@ -40,7 +40,7 @@ func _init():
 			"seed": SEED,
 			"region": {"x0": REGION_X0, "x1": REGION_X1, "z0": REGION_Z0, "z1": REGION_Z1, "y0": REGION_Y0, "y1": REGION_Y1},
 			"digest": digest,
-			"description": "SHA256 over deterministic base-terrain and tree block IDs (voxel_world.get_block_id_at) for fixed region, seed 1337 with jittered WorldConfig. Seeded post-terrain copper deposits are covered separately and intentionally excluded. Any noise/spline/biome/lake/river change that reshapes existing worlds must update this digest.",
+			"description": "SHA256 over deterministic base-terrain, tree, and foliage block IDs (voxel_world.get_block_id_at) for fixed region, seed 1337 with jittered WorldConfig. Seeded post-terrain copper deposits are covered separately and intentionally excluded. Any noise/spline/biome/lake/river/foliage change that reshapes existing worlds must update this digest.",
 			"generated_by": "src/tests/world_golden_hash.gd --update"
 		}
 		var json_str = JSON.stringify(out, "\t")
@@ -76,7 +76,8 @@ func _init():
 func _compute_hash() -> String:
 	var config = _load_config()
 	var block_catalog = load("res://blocks/block_catalog.tres") as BlockCatalog
-	var gen = TerrainGenerator.new(config)
+	var foliage_catalog = load("res://foliage/foliage_catalog.tres") as FoliageCatalog
+	var gen = TerrainGenerator.new(config, FoliageGenerator.new(foliage_catalog, config.seed_value))
 	gen.setup_noises()
 	var voxel = VoxelWorld.new(config.chunk_size, config.max_build_y, config.water_level, config.meadow_radius, block_catalog)
 	voxel.set_generator_ref(gen)
@@ -91,6 +92,7 @@ func _compute_hash() -> String:
 			var payload = gen.build_cache_with_generation(origin_x, origin_z, config.chunk_size, config.max_build_y, {}, {}, {}, false)
 			voxel.apply_chunk_gen(payload)
 			voxel.apply_tree_chunk(payload)
+			voxel.apply_foliage_chunk_for_coord(Vector2i(cx, cz), payload)
 	for x in range(REGION_X0, REGION_X1):
 		for z in range(REGION_Z0, REGION_Z1):
 			voxel.ensure_column_generated(x, z)

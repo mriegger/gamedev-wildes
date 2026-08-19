@@ -2,6 +2,7 @@ extends VoxelSpace
 class_name VoxelWorld
 
 signal block_edit_committed(edit: BlockEdit)
+signal foliage_clearance_changed(cells: Array[Vector3i])
 signal terrain_chunk_evicted(coord: Vector2i)
 
 const MAXIMUM_TRANSACTION_MUTATION_HISTORY: int = 256
@@ -23,6 +24,9 @@ var generated_terrain_chunks: Dictionary = {}
 var copper_block_fast: Dictionary = {}
 var copper_chunks_fast: Dictionary = {}
 var generated_copper_chunks: Dictionary = {}
+var foliage_block_fast: Dictionary = {}
+var foliage_chunks_fast: Dictionary = {}
+var generated_foliage_chunks: Dictionary = {}
 
 var _terrain_chunk_lru: Dictionary = {}
 var max_terrain_cache_chunks: int = 257
@@ -32,6 +36,8 @@ var _placed_blocks: Dictionary = {}
 var _removed_blocks: Dictionary = {}
 var _placed_edits_by_chunk: Dictionary = {}
 var _removed_edits_by_chunk: Dictionary = {}
+var _foliage_clearance_cells: Dictionary = {}
+var _foliage_clearance_by_chunk: Dictionary = {}
 var cell_revisions: Dictionary = {}
 var _highest_cache: Dictionary = {}
 var torch_attachments: Dictionary = {}
@@ -97,6 +103,27 @@ func get_tree_blocks_for_chunk(coord: Vector2i) -> Dictionary:
 	if not tree_chunks_fast.has(coord):
 		return {}
 	return (tree_chunks_fast[coord] as Dictionary).duplicate()
+
+func get_foliage_blocks_for_chunk(coord: Vector2i) -> Dictionary:
+	if not foliage_chunks_fast.has(coord):
+		return {}
+	return (foliage_chunks_fast[coord] as Dictionary).duplicate()
+
+func get_visible_foliage_cells_for_chunk(coord: Vector2i) -> PackedInt32Array:
+	var candidates: Dictionary = {}
+	if foliage_chunks_fast.has(coord):
+		for position in foliage_chunks_fast[coord]:
+			candidates[position] = true
+	if _placed_edits_by_chunk.has(coord):
+		for position in _placed_edits_by_chunk[coord]:
+			if BlockId.is_foliage(int(_placed_blocks[position])):
+				candidates[position] = true
+	var visible_foliage: Dictionary = {}
+	for position in candidates:
+		var block_id := get_block_id_at(position)
+		if BlockId.is_foliage(block_id):
+			visible_foliage[position] = block_id
+	return FoliageCellSnapshot.pack(visible_foliage, coord.x * chunk_size, coord.y * chunk_size, chunk_size, chunk_size, max_build_y)
 
 func get_terrain_height(x: int, z: int) -> int:
 	return int(height_map_dict.get(Vector2i(x, z), -1))
@@ -194,6 +221,12 @@ func prune_terrain_cache(max_to_evict: int) -> int:
 				copper_block_fast.erase(copper_pos)
 			copper_chunks_fast.erase(coord)
 		generated_copper_chunks.erase(coord)
+		if foliage_chunks_fast.has(coord):
+			var chunk_foliage := foliage_chunks_fast[coord] as Dictionary
+			for foliage_pos in chunk_foliage:
+				foliage_block_fast.erase(foliage_pos)
+			foliage_chunks_fast.erase(coord)
+		generated_foliage_chunks.erase(coord)
 		evicted.append(coord)
 
 	for coord in evicted:
@@ -290,6 +323,22 @@ func apply_copper_chunk_for_coord(coord: Vector2i, copper_data: Dictionary):
 		copper_chunks_fast[coord] = chunk_copper
 	generated_copper_chunks[coord] = true
 
+func apply_foliage_chunk_for_coord(coord: Vector2i, foliage_data: Dictionary) -> void:
+	if foliage_chunks_fast.has(coord):
+		var previous_foliage := foliage_chunks_fast[coord] as Dictionary
+		for position in previous_foliage:
+			foliage_block_fast.erase(position)
+		foliage_chunks_fast.erase(coord)
+	var fast := foliage_data.get("foliage_block_fast", {}) as Dictionary
+	var chunk_foliage: Dictionary = {}
+	for position in fast:
+		if position is Vector3i:
+			foliage_block_fast[position] = fast[position]
+			chunk_foliage[position] = fast[position]
+	if not chunk_foliage.is_empty():
+		foliage_chunks_fast[coord] = chunk_foliage
+	generated_foliage_chunks[coord] = true
+
 func get_block_at(p: Vector3i):
 	if _emplacement_anchor_by_cell.has(p):
 		return _emplacement_block_by_anchor[_emplacement_anchor_by_cell[p]]
@@ -301,6 +350,10 @@ func get_block_at(p: Vector3i):
 		return tree_block_fast[p]
 	if copper_block_fast.has(p):
 		return copper_block_fast[p]
+	if foliage_block_fast.has(p):
+		if _foliage_clearance_cells.has(p):
+			return null
+		return foliage_block_fast[p]
 	var key = Vector2i(p.x, p.z)
 	if not height_map_dict.has(key):
 		return null
@@ -434,6 +487,77 @@ func get_emplacements_for_chunk(cx: int, cz: int) -> Dictionary:
 func can_place_emplacement(anchor: Vector3i, block_id: int) -> bool:
 	return _evaluate_place_emplacement(anchor, block_id) is PreparedVoxelWorldChange
 
+func _get_unreplaced_generated_foliage_id(p: Vector3i) -> int:
+	if _placed_blocks.has(p) or _removed_blocks.has(p):
+		return BlockId.Type.AIR
+	return int(foliage_block_fast.get(p, BlockId.Type.AIR))
+
+func _effective_mined_block_id(p: Vector3i) -> int:
+	var block_id := get_block_id_at(p)
+	if block_id == BlockId.Type.AIR:
+		var generated_foliage_id := _get_unreplaced_generated_foliage_id(p)
+		if BlockId.is_foliage(generated_foliage_id):
+			return generated_foliage_id
+	return block_id
+
+func _get_foliage_above(support_pos: Vector3i) -> Variant:
+	var foliage_pos := support_pos + Vector3i.UP
+	var foliage_id := get_block_id_at(foliage_pos)
+	return foliage_pos if BlockId.is_foliage(foliage_id) or BlockId.is_foliage(_get_unreplaced_generated_foliage_id(foliage_pos)) else null
+
+func _erase_foliage_block(p: Vector3i) -> void:
+	if not foliage_block_fast.has(p):
+		return
+	foliage_block_fast.erase(p)
+	var coord := ChunkCoord.world_to_chunk_vec3i(p, chunk_size)
+	if not foliage_chunks_fast.has(coord):
+		return
+	var chunk_foliage := foliage_chunks_fast[coord] as Dictionary
+	chunk_foliage.erase(p)
+	if chunk_foliage.is_empty():
+		foliage_chunks_fast.erase(coord)
+
+func _foliage_clearance_is_valid(cells: Array[Vector3i]) -> bool:
+	var unique_cells: Dictionary = {}
+	for position in cells:
+		if position.y < 0 or position.y >= max_build_y or unique_cells.has(position) or is_edit_protected(position):
+			return false
+		unique_cells[position] = true
+	return true
+
+func can_replace_foliage_clearance(cells: Array[Vector3i]) -> bool:
+	return _foliage_clearance_is_valid(cells)
+
+func try_replace_foliage_clearance(cells: Array[Vector3i]) -> bool:
+	if not _foliage_clearance_is_valid(cells):
+		return false
+	var next_cells: Dictionary = {}
+	for position in cells:
+		next_cells[position] = true
+	var changed_cells: Array[Vector3i] = []
+	for position_value in _foliage_clearance_cells.keys():
+		var position := position_value as Vector3i
+		if next_cells.has(position):
+			continue
+		_erase_indexed_edit(_foliage_clearance_cells, _foliage_clearance_by_chunk, position)
+		changed_cells.append(position)
+	for position_value in next_cells:
+		var position := position_value as Vector3i
+		if _foliage_clearance_cells.has(position):
+			continue
+		_put_indexed_edit(_foliage_clearance_cells, _foliage_clearance_by_chunk, position, true)
+		changed_cells.append(position)
+	if changed_cells.is_empty():
+		return true
+	for position in changed_cells:
+		_increment_revision(position)
+		_record_transaction_mutation(position)
+	foliage_clearance_changed.emit(changed_cells)
+	return true
+
+func is_foliage_clearance_reserved(position: Vector3i) -> bool:
+	return _foliage_clearance_cells.has(position)
+
 func prepare_mine_block(p: Vector3i) -> PreparedVoxelWorldChange:
 	var evaluated: Variant = _evaluate_mine_block(p)
 	return evaluated as PreparedVoxelWorldChange
@@ -449,6 +573,9 @@ func prepare_place_block(
 func prepare_place_emplacement(anchor: Vector3i, block_id: int) -> PreparedVoxelWorldChange:
 	var evaluated: Variant = _evaluate_place_emplacement(anchor, block_id)
 	return evaluated as PreparedVoxelWorldChange
+
+func can_place_block(p: Vector3i, block_type: int, attach_dir: Vector3i = Vector3i.ZERO) -> bool:
+	return _evaluate_place_block(p, block_type, attach_dir) is PreparedVoxelWorldChange
 
 func prepare_replace_block(
 	p: Vector3i,
@@ -511,7 +638,8 @@ func _evaluate_mine_block(p: Vector3i) -> Variant:
 		return _evaluate_mine_emplacement(emplacement_anchor)
 	if is_edit_protected(p):
 		return BlockEdit.fail(p, BlockEdit.Operation.MINE, BlockEdit.Result.FAIL_PROTECTED)
-	for torch_position in get_attached_torches(p):
+	var attached_torches := get_attached_torches(p)
+	for torch_position in attached_torches:
 		if is_edit_protected(torch_position):
 			return BlockEdit.fail(p, BlockEdit.Operation.MINE, BlockEdit.Result.FAIL_PROTECTED)
 	var supported_emplacements := get_supported_emplacements(p)
@@ -519,9 +647,11 @@ func _evaluate_mine_block(p: Vector3i) -> Variant:
 		for cell in get_emplacement_cells(anchor):
 			if is_edit_protected(cell):
 				return BlockEdit.fail(p, BlockEdit.Operation.MINE, BlockEdit.Result.FAIL_PROTECTED)
+	var foliage_above: Variant = _get_foliage_above(p)
+	if foliage_above != null and is_edit_protected(foliage_above as Vector3i):
+		return BlockEdit.fail(p, BlockEdit.Operation.MINE, BlockEdit.Result.FAIL_PROTECTED)
 	if not is_breakable(p):
 		return BlockEdit.fail(p, BlockEdit.Operation.MINE, BlockEdit.Result.FAIL_NOT_BREAKABLE)
-	var attached_torches := get_attached_torches(p)
 	var expected_revisions: Dictionary = {p: get_revision(p)}
 	var expected_contents: Dictionary = {p: _snapshot_transaction_cell(p)}
 	for attach_dir in TorchPlacement.CARDINAL_DIRECTIONS:
@@ -532,21 +662,29 @@ func _evaluate_mine_block(p: Vector3i) -> Variant:
 		for cell in get_emplacement_cells(anchor):
 			expected_revisions[cell] = get_revision(cell)
 			expected_contents[cell] = _snapshot_transaction_cell(cell)
-	var edits: Array[BlockEdit] = [BlockEdit.success_mine(p, get_block_id_at(p), get_revision(p) + 1)]
+	var foliage_position := p + Vector3i.UP
+	expected_revisions[foliage_position] = get_revision(foliage_position)
+	expected_contents[foliage_position] = _snapshot_transaction_cell(foliage_position)
+	var cascade_positions: Array[Vector3i] = []
+	var edits: Array[BlockEdit] = [BlockEdit.success_mine(p, _effective_mined_block_id(p), get_revision(p) + 1)]
+	if foliage_above != null:
+		var foliage_cell := foliage_above as Vector3i
+		cascade_positions.append(foliage_cell)
+		edits.append(BlockEdit.success_mine(foliage_cell, _effective_mined_block_id(foliage_cell), get_revision(foliage_cell) + 1))
 	for torch_position in attached_torches:
+		cascade_positions.append(torch_position)
 		edits.append(BlockEdit.success_mine(
 			torch_position,
 			int(_placed_blocks.get(torch_position, BlockId.Type.TORCH)),
 			get_revision(torch_position) + 1,
 		))
 	for anchor in supported_emplacements:
+		cascade_positions.append(anchor)
 		edits.append(BlockEdit.success_mine(
 			anchor,
 			int(_emplacement_block_by_anchor[anchor]),
 			get_revision(anchor) + 1,
 		))
-	var cascade_positions := attached_torches.duplicate()
-	cascade_positions.append_array(supported_emplacements)
 	return PreparedVoxelWorldChange.new(
 		self,
 		expected_revisions,
@@ -595,20 +733,19 @@ func _evaluate_place_block(p: Vector3i, block_type: int, attach_dir: Vector3i) -
 		return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_INVALID_POS, "Emplacement requires atomic placement")
 	if p.y < 0 or p.y >= max_build_y:
 		return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_Y_OUT_OF_RANGE)
-	if is_occupied(p):
-		var existing_id = get_block_id_at(p)
-		if not block_catalog.get_definition(existing_id).is_replaceable:
-			return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_OCCUPIED)
+	var existing_id := get_block_id_at(p)
+	if is_occupied(p) and not block_catalog.get_definition(existing_id).is_replaceable:
+		return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_OCCUPIED)
 	var expected_revisions: Dictionary = {p: get_revision(p)}
 	if block_type == BlockId.Type.TORCH:
 		if attach_dir == Vector3i.ZERO:
 			return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_NO_SUPPORT, "Torch requires attach_dir")
 		if attach_dir not in TorchPlacement.CARDINAL_DIRECTIONS:
 			return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_NO_SUPPORT, "Torch attach_dir must be cardinal")
-		var support_pos = p + attach_dir
+		var support_pos := p + attach_dir
 		if support_pos.y < 0 or support_pos.y >= max_build_y:
 			return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_NO_TORCH_SUPPORT, "Support Y out of bounds")
-		ensure_region_generated(support_pos.x -1, support_pos.z -1, 3, 3)
+		ensure_region_generated(support_pos.x - 1, support_pos.z - 1, 3, 3)
 		var support_id := get_block_id_at(support_pos)
 		if support_id != BlockId.Type.AIR and block_catalog.get_definition(support_id).emplacement != null:
 			return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_NO_TORCH_SUPPORT)
@@ -618,7 +755,7 @@ func _evaluate_place_block(p: Vector3i, block_type: int, attach_dir: Vector3i) -
 	var expected_contents: Dictionary = {p: _snapshot_transaction_cell(p)}
 	if block_type == BlockId.Type.TORCH:
 		expected_contents[p + attach_dir] = _snapshot_transaction_cell(p + attach_dir)
-	var edit := BlockEdit.success_place(p, block_type, get_revision(p) + 1, attach_dir)
+	var edit := BlockEdit.success_place(p, existing_id, block_type, get_revision(p) + 1, attach_dir)
 	return PreparedVoxelWorldChange.new(
 		self,
 		expected_revisions,
@@ -696,14 +833,23 @@ func _apply_prepared_mine(prepared: PreparedVoxelWorldChange) -> void:
 	var p := prepared._get_position()
 	if _emplacement_block_by_anchor.has(p):
 		_remove_emplacement_state(p)
-		return
-	var was_placed = _placed_blocks.has(p)
-	var surviving_after := false
+	else:
+		_apply_prepared_mined_cell(p)
+	for position in prepared._get_cascade_positions():
+		if _emplacement_block_by_anchor.has(position):
+			_remove_emplacement_state(position)
+		else:
+			_apply_prepared_mined_cell(position)
+
+func _apply_prepared_mined_cell(p: Vector3i) -> void:
+	var old_id := _effective_mined_block_id(p)
+	var was_placed := _placed_blocks.has(p)
+	var surviving_after := _removed_blocks.has(p)
 	if was_placed:
 		_erase_indexed_edit(_placed_blocks, _placed_edits_by_chunk, p)
-		var col_key = Vector2i(p.x, p.z)
-		var h = height_map_dict.get(col_key, -1) as int
-		if h != -1 and p.y <= h:
+		var column_key := Vector2i(p.x, p.z)
+		var terrain_height := height_map_dict.get(column_key, -1) as int
+		if terrain_height != -1 and p.y <= terrain_height:
 			_put_indexed_edit(_removed_blocks, _removed_edits_by_chunk, p, true)
 			surviving_after = true
 	else:
@@ -711,9 +857,11 @@ func _apply_prepared_mine(prepared: PreparedVoxelWorldChange) -> void:
 		surviving_after = true
 		if tree_block_fast.has(p):
 			tree_block_fast.erase(p)
-			var cc = Vector2i(int(floor(float(p.x) / float(chunk_size))), int(floor(float(p.z) / float(chunk_size))))
-			if tree_chunks_fast.has(cc):
-				tree_chunks_fast[cc].erase(p)
+			var tree_coord := ChunkCoord.world_to_chunk_vec3i(p, chunk_size)
+			if tree_chunks_fast.has(tree_coord):
+				(tree_chunks_fast[tree_coord] as Dictionary).erase(p)
+		if BlockId.is_foliage(old_id):
+			_erase_foliage_block(p)
 	if torch_attachments.has(p):
 		torch_attachments.erase(p)
 	_invalidate_highest_cache(p.x, p.z)
@@ -722,15 +870,6 @@ func _apply_prepared_mine(prepared: PreparedVoxelWorldChange) -> void:
 	else:
 		cell_revisions.erase(p)
 	_record_transaction_mutation(p)
-	for cascade_position in prepared._get_cascade_positions():
-		if _emplacement_block_by_anchor.has(cascade_position):
-			_remove_emplacement_state(cascade_position)
-		else:
-			_erase_indexed_edit(_placed_blocks, _placed_edits_by_chunk, cascade_position)
-			torch_attachments.erase(cascade_position)
-			_invalidate_highest_cache(cascade_position.x, cascade_position.z)
-			cell_revisions.erase(cascade_position)
-			_record_transaction_mutation(cascade_position)
 
 func _apply_prepared_place(prepared: PreparedVoxelWorldChange) -> void:
 	var p := prepared._get_position()
@@ -742,8 +881,15 @@ func _apply_prepared_place(prepared: PreparedVoxelWorldChange) -> void:
 			_increment_revision(cell)
 			_record_transaction_mutation(cell)
 		return
-	if _removed_blocks.has(p):
-		_erase_indexed_edit(_removed_blocks, _removed_edits_by_chunk, p)
+	var replaced_id := get_block_id_at(p)
+	var generated_foliage_id := _get_unreplaced_generated_foliage_id(p)
+	if BlockId.is_foliage(replaced_id) or BlockId.is_foliage(generated_foliage_id):
+		_put_indexed_edit(_removed_blocks, _removed_edits_by_chunk, p, true)
+		_erase_foliage_block(p)
+	elif _removed_blocks.has(p):
+		var terrain_height := height_map_dict.get(Vector2i(p.x, p.z), -1) as int
+		if terrain_height == -1 or p.y <= terrain_height:
+			_erase_indexed_edit(_removed_blocks, _removed_edits_by_chunk, p)
 	_put_indexed_edit(_placed_blocks, _placed_edits_by_chunk, p, block_type)
 	if block_type == BlockId.Type.TORCH:
 		torch_attachments[p] = prepared._get_attach_dir()
@@ -841,6 +987,9 @@ func _snapshot_transaction_cell(position: Vector3i) -> Dictionary:
 		"tree_block": tree_block_fast.get(position, null),
 		"has_copper_block": copper_block_fast.has(position),
 		"copper_block": copper_block_fast.get(position, null),
+		"has_foliage_block": foliage_block_fast.has(position),
+		"foliage_block": foliage_block_fast.get(position, null),
+		"has_foliage_clearance": _foliage_clearance_cells.has(position),
 		"torch_attachment": torch_attachments.get(position, Vector3i.ZERO),
 		"emplacement_anchor": emplacement_anchor,
 		"emplacement_block": _emplacement_block_by_anchor.get(emplacement_anchor, null),
@@ -887,7 +1036,9 @@ func snapshot_edits_for_chunk(origin_x: int, origin_z: int) -> Dictionary:
 	var max_coord := ChunkCoord.world_to_chunk_vec3i(Vector3i(ox_max, 0, oz_max), chunk_size)
 	var placed_snap: Dictionary = {}
 	var removed_snap: Dictionary = {}
+	var foliage_clearance_snap: Dictionary = {}
 	_copy_indexed_edits(_placed_edits_by_chunk, placed_snap, min_coord, max_coord, ox_min, ox_max, oz_min, oz_max)
+	_copy_indexed_edits(_foliage_clearance_by_chunk, foliage_clearance_snap, min_coord, max_coord, ox_min, ox_max, oz_min, oz_max)
 	_copy_indexed_edits(_removed_edits_by_chunk, removed_snap, min_coord, max_coord, ox_min, ox_max, oz_min, oz_max)
 	var tree_snap: Dictionary = {}
 	var copper_snap: Dictionary = {}
@@ -905,7 +1056,7 @@ func snapshot_edits_for_chunk(origin_x: int, origin_z: int) -> Dictionary:
 				for pos in copper_dict:
 					if pos is Vector3i and pos.x >= ox_min and pos.x <= ox_max and pos.z >= oz_min and pos.z <= oz_max:
 						copper_snap[pos] = copper_dict[pos]
-	return {"placed": placed_snap, "removed": removed_snap, "trees": tree_snap, "copper": copper_snap}
+	return {"placed": placed_snap, "removed": removed_snap, "foliage_clearance": foliage_clearance_snap, "trees": tree_snap, "copper": copper_snap}
 
 func _copy_indexed_edits(index: Dictionary, target: Dictionary, min_coord: Vector2i, max_coord: Vector2i, min_x: int, max_x: int, min_z: int, max_z: int) -> void:
 	for cx in range(min_coord.x, max_coord.x + 1):

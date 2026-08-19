@@ -94,6 +94,7 @@ func _run() -> void:
 	config.copper_deposit_chance_per_chunk = 1.0
 	config.copper_surface_exposure_chance = 1.0
 	var catalog := load("res://blocks/block_catalog.tres") as BlockCatalog
+	var foliage_catalog := load("res://foliage/foliage_catalog.tres") as FoliageCatalog
 	_expect(config.validate(), "test world config did not validate")
 	_expect(catalog.validate(), "block catalog did not validate")
 	var copper_definition := catalog.get_definition(BlockId.Type.COPPER)
@@ -102,12 +103,12 @@ func _run() -> void:
 	_expect(copper_definition.minimum_mining_power == 1, "copper mining power is not one")
 	_test_save_omits_generated_copper(catalog)
 
-	var generator := TerrainGenerator.new(config)
+	var generator := TerrainGenerator.new(config, FoliageGenerator.new(foliage_catalog, config.seed_value))
 	generator.setup_noises()
 	var matching_config := default_config.runtime_copy_for_seed(1337)
 	matching_config.copper_deposit_chance_per_chunk = 1.0
 	matching_config.copper_surface_exposure_chance = 1.0
-	var matching_generator := TerrainGenerator.new(matching_config)
+	var matching_generator := TerrainGenerator.new(matching_config, FoliageGenerator.new(foliage_catalog, matching_config.seed_value))
 	matching_generator.setup_noises()
 	var checked_deposits := 0
 	var origin_deposit: Dictionary = {}
@@ -195,7 +196,7 @@ func _run() -> void:
 	var different_config := default_config.runtime_copy_for_seed(7331)
 	different_config.copper_deposit_chance_per_chunk = 1.0
 	different_config.copper_surface_exposure_chance = 1.0
-	var different_generator := TerrainGenerator.new(different_config)
+	var different_generator := TerrainGenerator.new(different_config, FoliageGenerator.new(foliage_catalog, different_config.seed_value))
 	different_generator.setup_noises()
 	var different_seed_deposit := different_generator.build_cache_with_generation(0, 0, different_config.chunk_size, different_config.max_build_y, {}, {}, {}, false, {}, true)["copper_block_fast"] as Dictionary
 	_expect(different_seed_deposit != origin_deposit, "different world seeds generated the same origin deposit")

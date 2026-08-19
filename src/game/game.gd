@@ -14,6 +14,7 @@ signal main_menu_requested
 @export var player_stats_debug_panel_scene: PackedScene
 @export var player_death_screen_scene: PackedScene
 @export var block_catalog: BlockCatalog
+@export var foliage_catalog: FoliageCatalog
 @export var item_catalog: ItemCatalog
 @export var crafting_recipe_catalog: CraftingRecipeCatalog
 @export var anvil_recipe_catalog: CraftingRecipeCatalog
@@ -110,6 +111,7 @@ func _ready():
 		_fail_session_start("This world could not be loaded because its saved world state is invalid or references unavailable blocks. The save was not changed.")
 		return
 	var block_catalog_valid := block_catalog.validate()
+	var foliage_catalog_valid := foliage_catalog.validate(block_catalog)
 	var item_catalog_valid := item_catalog.validate(block_catalog)
 	var chest_block: BlockDefinition = null
 	if block_catalog_valid:
@@ -131,7 +133,7 @@ func _ready():
 	var level_catalog_valid := level_catalog.validate()
 	var level_encounter_catalog_valid := level_catalog_valid and entity_catalog_valid and LevelEncounterCatalogValidator.validate(level_catalog, entity_catalog)
 	var level_entrance_valid := level_catalog_valid and level_entrance_definition != null and level_entrance_definition.validate(level_catalog)
-	if not block_catalog_valid or not item_catalog_valid or not chest_content_valid or not crafting_catalog_valid or not anvil_catalog_valid or not cauldron_catalog_valid or not entity_catalog_valid or not loot_catalog_valid or not damage_type_catalog_valid or not combat_particle_catalog_valid or not player_stats_valid or not player_perks_valid or not level_catalog_valid or not level_encounter_catalog_valid or not level_entrance_valid:
+	if not block_catalog_valid or not foliage_catalog_valid or not item_catalog_valid or not chest_content_valid or not crafting_catalog_valid or not anvil_catalog_valid or not cauldron_catalog_valid or not entity_catalog_valid or not loot_catalog_valid or not damage_type_catalog_valid or not combat_particle_catalog_valid or not player_stats_valid or not player_perks_valid or not level_catalog_valid or not level_encounter_catalog_valid or not level_entrance_valid:
 		_fail_session_start("Game content validation failed. The save was not changed.")
 		return
 	var structure_file_store := StructureFileStore.new(ProjectSettings.globalize_path("res://../").simplify_path())
@@ -144,6 +146,7 @@ func _ready():
 	game_environment.setup(float(_save_data.get("time_of_day", 6.0)), settings.get_shadow_distance())
 	game_environment.apply_settings(settings)
 	world.block_catalog = block_catalog
+	world.foliage_catalog = foliage_catalog
 	world.configure_settings(settings)
 	var encoded_next_instance_id = _save_data.get("next_equipment_instance_id", null)
 	if typeof(encoded_next_instance_id) != TYPE_INT or int(encoded_next_instance_id) < 1:

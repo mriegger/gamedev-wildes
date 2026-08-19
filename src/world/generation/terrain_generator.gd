@@ -2,6 +2,7 @@ extends RefCounted
 class_name TerrainGenerator
 
 var config: WorldConfig
+var _foliage_generator: FoliageGenerator
 
 var noise_continentalness: FastNoiseLite
 var noise_erosion: FastNoiseLite
@@ -30,8 +31,10 @@ const COPPER_GROWTH_DIRECTIONS: Array[Vector3i] = [
 	Vector3i.BACK,
 ]
 
-func _init(p_config: WorldConfig):
+func _init(p_config: WorldConfig, p_foliage_generator: FoliageGenerator):
+	assert(p_foliage_generator != null)
 	config = p_config
+	_foliage_generator = p_foliage_generator
 	_thread_lake_caches.clear()
 	_lake_grid_mutex = Mutex.new()
 	_noise_mutex = Mutex.new()
@@ -556,7 +559,9 @@ func build_cache_with_generation(
 	existing_tree_snap: Dictionary,
 	terrain_only: bool = false,
 	existing_copper_snap: Dictionary = {},
-	generate_copper: bool = false
+	generate_copper: bool = false,
+	foliage_clearance_snap: Dictionary = {},
+	include_decorations: bool = true
 ) -> Dictionary:
 	if noise_continentalness == null:
 		setup_noises()
@@ -655,6 +660,8 @@ func build_cache_with_generation(
 
 	for x in range(origin_x, origin_x + cs):
 		for z in range(origin_z, origin_z + cs):
+			if not include_decorations:
+				continue
 			var key = Vector2i(x, z)
 			var h = height_dict[key] as int
 			if h <= config.water_level + 2:
@@ -717,6 +724,25 @@ func build_cache_with_generation(
 			if not out_tree_fast.has(top) and not existing_tree_snap.has(top):
 				out_tree_fast[top] = BlockId.Type.LEAVES
 
+	var out_foliage_fast: Dictionary = {}
+	for x in range(origin_x, origin_x + cs):
+		for z in range(origin_z, origin_z + cs):
+			if not include_decorations:
+				continue
+			var key := Vector2i(x, z)
+			var h := height_dict[key] as int
+			var candidate := Vector3i(x, h + 1, z)
+			if type_dict[key] != BlockId.Type.GRASS:
+				continue
+			if h < config.water_level or candidate.y >= size_y:
+				continue
+			if existing_tree_snap.has(candidate) or out_tree_fast.has(candidate):
+				continue
+			var biome := biome_dict[key] as Biome
+			var foliage_block_id := _foliage_generator.select_block_id(x, z, biome.foliage_density)
+			if foliage_block_id != BlockId.Type.AIR:
+				out_foliage_fast[candidate] = foliage_block_id
+
 	var cache_dict = null
 	var out_copper_fast: Dictionary = {}
 	if not terrain_only:
@@ -751,7 +777,12 @@ func build_cache_with_generation(
 							cache[column_offset + ly * cache_z + lz] = BlockId.Type.WATER
 		if generate_copper:
 			out_copper_fast = _generate_copper_deposit(origin_x, origin_z, cs, size_y, cache_z, height_dict, cache)
-		var overlays: Array[Dictionary] = [existing_copper_snap, out_copper_fast, existing_tree_snap, out_tree_fast]
+		var visible_foliage: Dictionary = {}
+		for position in out_foliage_fast:
+			if foliage_clearance_snap.has(position):
+				continue
+			visible_foliage[position] = out_foliage_fast[position]
+		var overlays: Array[Dictionary] = [existing_copper_snap, out_copper_fast, existing_tree_snap, out_tree_fast, visible_foliage]
 		for overlay in overlays:
 			for position in overlay:
 				if not position is Vector3i:
@@ -777,6 +808,25 @@ func build_cache_with_generation(
 				var lz = p.z - origin_z + 1
 				if lx >= 0 and lx < cache_x and p.y >= 0 and p.y < size_y and lz >= 0 and lz < cache_z:
 					cache[lx * size_y * cache_z + p.y * cache_z + lz] = placed_snap[position]
+		var foliage_candidates: Dictionary = {}
+		for position in visible_foliage:
+			if position is Vector3i:
+				foliage_candidates[position] = true
+		for position in placed_snap:
+			if position is Vector3i and BlockId.is_foliage(int(placed_snap[position])):
+				foliage_candidates[position] = true
+		var resolved_foliage: Dictionary = {}
+		for position in foliage_candidates:
+			var p := position as Vector3i
+			var lx := p.x - origin_x + 1
+			var lz := p.z - origin_z + 1
+			if lx < 0 or lx >= cache_x or p.y < 0 or p.y >= size_y or lz < 0 or lz >= cache_z:
+				continue
+			var block_id: int = cache[lx * size_y * cache_z + p.y * cache_z + lz]
+			if not BlockId.is_foliage(block_id):
+				continue
+			resolved_foliage[p] = block_id
+		var foliage_cells := FoliageCellSnapshot.pack(resolved_foliage, origin_x, origin_z, cs, cs, size_y)
 		cache_dict = {
 			"cache": cache,
 			"origin_x": origin_x,
@@ -786,6 +836,7 @@ func build_cache_with_generation(
 			"size_y": size_y,
 			"cache_x": cache_x,
 			"cache_z": cache_z,
+			"foliage_cells": foliage_cells,
 		}
 
 	var result = {
@@ -794,6 +845,7 @@ func build_cache_with_generation(
 		"type": type_dict,
 		"tree_block_fast": out_tree_fast,
 		"copper_block_fast": out_copper_fast,
+		"foliage_block_fast": out_foliage_fast,
 		"positions": tree_positions,
 	}
 	return result
@@ -802,12 +854,13 @@ func generate_all() -> Dictionary:
 	setup_noises()
 	var init_radius = int(config.meadow_radius + 20)
 	var size = init_radius * 2
-	var payload = build_cache_with_generation(-init_radius, -init_radius, size, config.max_build_y, {}, {}, {}, true)
+	var payload = build_cache_with_generation(-init_radius, -init_radius, size, config.max_build_y, {}, {}, {}, true, {}, false, {}, false)
 	# Tree placement is seeded by chunk origin. Applying trees from this larger
 	# startup region would conflict with the layouts produced by chunk builds.
 	return {
 		"height": payload.get("height", {}),
 		"type": payload.get("type", {}),
 		"tree_block_fast": {},
+		"foliage_block_fast": {},
 		"positions": [],
 	}

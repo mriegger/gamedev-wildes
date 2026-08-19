@@ -4,6 +4,7 @@ class_name ChunkBuildScheduler
 const WORKER_COUNT: int = 2
 
 var _mesher: ChunkMesher
+var _foliage_mesher: FoliageMesher
 var _terrain_generator: TerrainGenerator
 var _voxel_model: VoxelWorld
 var _chunk_size: int
@@ -30,8 +31,9 @@ var _resume_available := Semaphore.new()
 var _suspended: bool = false
 var _resume_waiter_count: int = 0
 
-func setup(p_mesher: ChunkMesher, p_terrain_generator: TerrainGenerator, p_voxel_model: VoxelWorld, p_chunk_size: int, p_max_build_y: int):
+func setup(p_mesher: ChunkMesher, p_foliage_mesher: FoliageMesher, p_terrain_generator: TerrainGenerator, p_voxel_model: VoxelWorld, p_chunk_size: int, p_max_build_y: int):
 	_mesher = p_mesher
+	_foliage_mesher = p_foliage_mesher
 	_terrain_generator = p_terrain_generator
 	_voxel_model = p_voxel_model
 	_chunk_size = p_chunk_size
@@ -158,6 +160,7 @@ func _create_job(coord: Vector2i, generation: int, terrain_only: bool) -> ChunkB
 		terrain_only,
 		edits.get("placed", {}) as Dictionary,
 		edits.get("removed", {}) as Dictionary,
+		edits.get("foliage_clearance", {}) as Dictionary,
 		edits.get("trees", {}) as Dictionary,
 		edits.get("copper", {}) as Dictionary,
 		not terrain_only and not _voxel_model.generated_copper_chunks.has(coord)
@@ -241,19 +244,22 @@ func _build(job: ChunkBuildJob) -> ChunkBuildResult:
 		job.tree_blocks,
 		job.terrain_only,
 		job.copper_blocks,
-		job.generate_copper
+		job.generate_copper,
+		job.foliage_clearance
 	)
 	if job.generation != 0 and not _is_current(job.coord, job.generation):
 		return null
 	var terrain_data: Variant = null
 	var water_data: Variant = null
+	var foliage_data: Variant = null
 	if not job.terrain_only:
 		var cache := payload["cache_dict"] as Dictionary
+		foliage_data = _foliage_mesher.build_mesh_data(cache["foliage_cells"] as PackedInt32Array)
 		payload.erase("cache_dict")
 		var mesh_data := _mesher.build_combined_mesh_data(cache)
 		terrain_data = mesh_data["terrain"]
 		water_data = mesh_data["water"]
-	return ChunkBuildResult.new(job.coord, job.generation, job.terrain_only, payload, terrain_data, water_data)
+	return ChunkBuildResult.new(job.coord, job.generation, job.terrain_only, payload, terrain_data, water_data, foliage_data)
 
 func _is_current(coord: Vector2i, generation: int) -> bool:
 	_state_mutex.lock()
