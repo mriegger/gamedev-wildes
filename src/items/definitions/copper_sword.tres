@@ -13,6 +13,7 @@
 script = ExtResource("1_definition")
 id = &"copper_sword"
 display_name = "Copper Sword"
+description = "A close-range weapon for cutting down enemies. Pointy end goes in the other guy."
 icon = ExtResource("2_icon")
 max_stack = 1
 primary_action = ExtResource("3_action")

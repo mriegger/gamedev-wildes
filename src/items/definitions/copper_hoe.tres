@@ -10,6 +10,7 @@
 script = ExtResource("1_definition")
 id = &"copper_hoe"
 display_name = "Copper Hoe"
+description = "A farming tool that turns grass and dirt into farmland."
 icon = ExtResource("2_icon")
 max_stack = 1
 primary_action = ExtResource("4_tilling")

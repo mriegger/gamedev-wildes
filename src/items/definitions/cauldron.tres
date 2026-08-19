@@ -14,6 +14,7 @@ block = ExtResource("3_block")
 script = ExtResource("1_definition")
 id = &"cauldron"
 display_name = "Cauldron"
+description = "A crafting station used to prepare food and brew potions."
 icon = ExtResource("2_icon")
 max_stack = 1
 primary_action = ExtResource("4_mining")

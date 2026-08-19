@@ -180,6 +180,13 @@ func _check_open_state() -> void:
 	var output_icon := output_icon_frame.get_node("Icon") as TextureRect
 	_expect(output_icon_frame.custom_minimum_size == Vector2(64, 64) and output_icon.custom_minimum_size == Vector2(32, 32), "output icon does not match inventory padding")
 	_expect(output_icon.texture_filter == CanvasItem.TEXTURE_FILTER_NEAREST, "output icon does not use nearest filtering")
+	var description := _hud.crafting_panel.get_node("Margin/Content/Body/Details/Description") as Label
+	var ingredients_heading := _hud.crafting_panel.get_node("Margin/Content/Body/Details/IngredientsHeading") as Label
+	_expect(description.text == _recipe_catalog.get_definition(&"torch_bundle").output_item.description, "selected recipe description was not displayed")
+	_expect(description.get_index() < ingredients_heading.get_index(), "recipe description is not above the ingredients")
+	_hud.crafting_panel.select_recipe(&"chest")
+	_expect(description.text == _recipe_catalog.get_definition(&"chest").output_item.description, "recipe selection did not refresh the description")
+	_hud.crafting_panel.select_recipe(&"torch_bundle")
 	var ingredient_list := _hud.crafting_panel.get_node("Margin/Content/Body/Details/IngredientList") as VBoxContainer
 	_expect(ingredient_list.get_child_count() == 2, "selected recipe ingredients were not displayed")
 	var ingredient_row := ingredient_list.get_child(0) as HBoxContainer

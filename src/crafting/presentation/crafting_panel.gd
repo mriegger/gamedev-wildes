@@ -29,6 +29,7 @@ const PROGRESSION_WORKSPACE_ID: StringName = &"progression"
 @onready var _output_icon: TextureRect = $Margin/Content/Body/Details/Output/IconFrame/Icon as TextureRect
 @onready var _output_name: Label = $Margin/Content/Body/Details/Output/Text/Name as Label
 @onready var _output_count: Label = $Margin/Content/Body/Details/Output/Text/Count as Label
+@onready var _output_description: Label = $Margin/Content/Body/Details/Description as Label
 @onready var _ingredient_list: VBoxContainer = $Margin/Content/Body/Details/IngredientList as VBoxContainer
 @onready var _craft_button: Control = $Margin/Content/Body/Details/CraftButton as Control
 @onready var _crafting_sound_player: AudioStreamPlayer = $CraftingSoundPlayer as AudioStreamPlayer
@@ -277,6 +278,7 @@ func _refresh_details() -> void:
 	_output_icon.texture = recipe.output_item.icon
 	_output_name.text = recipe.output_item.display_name
 	_output_count.text = "Creates ×%d" % recipe.output_count
+	_output_description.text = recipe.output_item.description
 	for child in _ingredient_list.get_children():
 		child.free()
 	for ingredient in recipe.ingredients:

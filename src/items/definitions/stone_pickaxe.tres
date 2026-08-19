@@ -9,6 +9,7 @@
 script = ExtResource("1_definition")
 id = &"stone_pickaxe"
 display_name = "Stone Pickaxe"
+description = "A basic pickaxe that can mine stone and copper."
 icon = ExtResource("2_icon")
 max_stack = 1
 primary_action = ExtResource("3_action")

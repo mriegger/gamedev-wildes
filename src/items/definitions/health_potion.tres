@@ -9,6 +9,7 @@
 script = ExtResource("1_definition")
 id = &"health_potion"
 display_name = "Health Potion"
+description = "A restorative potion that completely refills your health."
 icon = ExtResource("2_icon")
 max_stack = 20
 secondary_action = ExtResource("3_consumption")

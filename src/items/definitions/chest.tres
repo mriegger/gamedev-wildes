@@ -14,6 +14,7 @@ block = ExtResource("3_block")
 script = ExtResource("1_definition")
 id = &"chest"
 display_name = "Chest"
+description = "Stores items safely in the world."
 icon = ExtResource("2_icon")
 max_stack = 99
 primary_action = ExtResource("4_mining")

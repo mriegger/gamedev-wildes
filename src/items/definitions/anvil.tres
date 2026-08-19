@@ -14,6 +14,7 @@ block = ExtResource("3_block")
 script = ExtResource("1_definition")
 id = &"anvil"
 display_name = "Anvil"
+description = "A crafting station used to forge metal equipment."
 icon = ExtResource("2_icon")
 max_stack = 1
 primary_action = ExtResource("4_mining")

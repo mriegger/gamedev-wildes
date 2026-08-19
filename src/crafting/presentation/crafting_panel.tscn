@@ -164,6 +164,14 @@ mouse_filter = 2
 theme_override_colors/font_color = Color(0.74, 0.76, 0.78, 1)
 theme_override_font_sizes/font_size = 12
 
+[node name="Description" type="Label" parent="Margin/Content/Body/Details"]
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.78, 0.8, 0.82, 1)
+theme_override_font_sizes/font_size = 13
+autowrap_mode = 2
+
 [node name="IngredientsHeading" type="Label" parent="Margin/Content/Body/Details"]
 layout_mode = 2
 mouse_filter = 2

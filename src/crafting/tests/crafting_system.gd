@@ -14,6 +14,10 @@ func _init() -> void:
 	_expect(recipe_catalog.validate(item_catalog), "crafting catalog invalid")
 	_expect(anvil_recipe_catalog.validate(item_catalog), "anvil crafting catalog invalid")
 	_expect(cauldron_recipe_catalog.validate(item_catalog), "cauldron crafting catalog invalid")
+	var recipe_catalogs: Array[CraftingRecipeCatalog] = [recipe_catalog, anvil_recipe_catalog, cauldron_recipe_catalog]
+	for catalog in recipe_catalogs:
+		for recipe in catalog.definitions:
+			_expect(not recipe.output_item.description.strip_edges().is_empty(), "%s description is missing" % recipe.output_item.id)
 	var expected_recipe_ids: Array[StringName] = [
 		&"torch_bundle",
 		&"chest",

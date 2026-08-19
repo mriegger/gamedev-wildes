@@ -19,6 +19,7 @@ amount = 100.0
 script = ExtResource("1_definition")
 id = &"basic_rune"
 display_name = "Basic Rune"
+description = "A socketable rune that greatly increases maximum health."
 icon = ExtResource("2_icon")
 max_stack = 99
 rarity = ExtResource("3_rarity")

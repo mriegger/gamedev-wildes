@@ -182,9 +182,10 @@ to play.
 It contains the seven recipes that do not require a workstation. A placed anvil opens its own panel
 with the eight copper tool, weapon, and armor recipes. A placed cauldron opens a food-and-potion
 panel; its initial recipe combines two pumpkins and two apples into one health potion. All catalogs
-use materials from the backpack and hotbar and craft immediately when the enabled Craft button is
-pressed, playing one success sound. Apples and pumpkins each restore 10% of maximum health, while
-health potions restore health completely.
+show a short description of the selected output above its ingredients, use materials from the
+backpack and hotbar, and craft immediately when the enabled Craft button is pressed, playing one
+success sound. Apples and pumpkins each restore 10% of maximum health, while health potions restore
+health completely.
 
 **Developer console.** Press `/` to open a command line at the bottom of the screen. The
 `spawn <item> [count]` command adds any catalog item directly to the backpack for testing, with the

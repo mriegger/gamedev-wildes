@@ -516,7 +516,9 @@ Crafting recipes reference canonical item definitions. The general catalog owns 
 from the `Tab` menu, the anvil catalog exclusively owns copper equipment, and the cauldron catalog
 owns food and potion recipes. `CraftingCoordinator` asks `InventoryModel` to validate and commit
 ingredient removal and output insertion across the backpack and hotbar as one immediate
-transaction. Reusable `CraftingPanel` instances present all three catalogs without mutating
+transaction. Craftable item definitions own the short descriptions presented above their recipe
+ingredients, and recipe validation rejects outputs without one. Reusable `CraftingPanel` instances
+present all three catalogs without mutating
 inventory slots and play one sound only after a transaction succeeds. The HUD combines the open
 panels' animation progress so only one camera-obstruction value is written during transitions.
 

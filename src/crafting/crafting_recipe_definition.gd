@@ -17,6 +17,9 @@ func validate(item_catalog: ItemCatalog, source: String) -> bool:
 	elif not item_catalog.has_definition(output_item.id) or item_catalog.get_definition(output_item.id) != output_item:
 		push_error("[CraftingRecipeDefinition] Non-canonical output %s at %s" % [output_item.id, source])
 		valid = false
+	elif output_item.description.strip_edges().is_empty():
+		push_error("[CraftingRecipeDefinition] Missing output description for %s at %s" % [output_item.id, source])
+		valid = false
 	if output_count < 1:
 		push_error("[CraftingRecipeDefinition] Invalid output count at %s" % source)
 		valid = false
