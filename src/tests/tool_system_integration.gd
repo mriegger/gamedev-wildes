@@ -131,7 +131,7 @@ func _run():
 	_expect(sword.secondary_action == null, "sword unexpectedly has a secondary action")
 	var sword_action := sword.primary_action as MeleeAttackActionDefinition
 	_expect(is_equal_approx(sword_action.attack_profile.duration, 0.48), "sword attack duration changed")
-	_expect(is_equal_approx(sword_action.attack_profile.base_damage, 10.0) and sword_action.attack_profile.base_damage_variance == 2, "sword base damage spread is not 8-12")
+	_expect(is_equal_approx(sword_action.attack_profile.base_damage, 10.0) and sword_action.attack_profile.base_damage_random_reduction == 2, "sword base damage spread is not 8-10")
 	_expect(is_equal_approx(sword_action.chain_input_window, 0.26), "sword chain input window changed")
 	var hammer := item_catalog.get_definition(&"copper_hammer")
 	_expect(hammer.max_stack == 1, "copper hammer stack limit is not one")
@@ -159,8 +159,8 @@ func _run():
 	_expect(hammer_profile.duration >= sword_action.attack_profile.duration * 2.0, "copper hammer attack is not at least twice as slow as the sword")
 	_expect(is_equal_approx(hammer_profile.reach, 4.0) and is_equal_approx(hammer_profile.sweep_degrees, 360.0), "copper hammer does not use a four-block radial attack")
 	_expect(is_equal_approx(hammer_action.impact_effect_radius, hammer_profile.reach), "hammer shockwave radius does not match its damage and knockback radius")
-	_expect(is_equal_approx(hammer_profile.base_damage, sword_action.attack_profile.base_damage) and is_equal_approx(hammer_profile.damage_multiplier, 1.0), "copper hammer base damage does not match the sword")
-	_expect(is_equal_approx(hammer_profile.radial_damage_center_multiplier, 1.5) and is_equal_approx(hammer_profile.radial_damage_edge_multiplier, 0.5), "copper hammer radial damage falloff is misconfigured")
+	_expect(is_equal_approx(hammer_profile.base_damage, 15.0) and is_equal_approx(hammer_profile.damage_multiplier, 1.0), "copper hammer base damage is not fifteen")
+	_expect(is_equal_approx(hammer_profile.radial_damage_center_multiplier, 1.0) and is_equal_approx(hammer_profile.radial_damage_edge_multiplier, 1.0 / 3.0), "copper hammer radial damage falloff is misconfigured")
 	_expect(hammer_profile.acquire_targets_on_contact and is_equal_approx(hammer_profile.knockback_speed, 8.0) and is_equal_approx(hammer_profile.impact_origin_forward_offset, 1.445), "copper hammer impact behavior is incomplete")
 	_expect(hammer.rarity == sword.rarity and hammer.proficiency == sword.proficiency, "copper hammer does not use canonical weapon progression")
 	var hammer_held := hammer.held_scene.instantiate() as Node3D

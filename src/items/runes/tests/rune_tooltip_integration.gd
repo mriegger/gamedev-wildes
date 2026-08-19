@@ -57,8 +57,8 @@ func _test_rune_tooltip() -> void:
 	_expect(tooltip.rarity_label.text == "Common", "rune tooltip rarity changed")
 	_expect(not tooltip.proficiency_level_label.visible, "rune tooltip shows a proficiency level")
 	_expect(not tooltip.proficiency_experience_label.visible, "rune tooltip shows proficiency experience")
-	_expect(tooltip.stats_label.text.contains("Compatible: Weapons, All Armor"), "rune tooltip compatibility is missing")
-	_expect(tooltip.stats_label.text.contains("HP: +100"), "rune tooltip socket stat is missing")
+	_expect(tooltip.stats_label.get_parsed_text().contains("Compatible: Weapons, All Armor"), "rune tooltip compatibility is missing")
+	_expect(tooltip.stats_label.get_parsed_text().contains("HP: +100"), "rune tooltip socket stat is missing")
 	_expect(not tooltip.rune_stats_label.visible, "unsocketed rune item shows installed bonuses")
 	tooltip.free()
 
@@ -68,7 +68,8 @@ func _test_socketed_weapon_tooltip() -> void:
 	var tooltip := _create_slot_tooltip("socketed weapon")
 	if tooltip == null:
 		return
-	_expect(tooltip.stats_label.text.contains("Base Damage: 10"), "socketed weapon lost its base stats")
+	_expect(tooltip.stats_label.get_parsed_text().contains("Slash: 10 (8–10)"), "socketed weapon lost its damage stats")
+	_expect(tooltip.stats_label.get_parsed_text().contains("Knockback: 0"), "socketed weapon lost its knockback stat")
 	_expect(tooltip.rune_stats_label.visible, "socketed weapon rune bonus is hidden")
 	_expect(tooltip.rune_stats_label.text == "(+100 HP)", "socketed weapon rune bonus is incorrect")
 	_expect(tooltip.rune_stats_label.get_theme_color("font_color") == ItemTooltip.RUNE_BONUS_COLOR, "socketed weapon rune bonus is not red")
@@ -80,7 +81,7 @@ func _test_unsocketed_weapon_tooltip() -> void:
 	var tooltip := _create_slot_tooltip("unsocketed weapon")
 	if tooltip == null:
 		return
-	_expect(tooltip.stats_label.text.contains("Base Damage: 10"), "unsocketed weapon lost its base stats")
+	_expect(tooltip.stats_label.get_parsed_text().contains("Slash: 10 (8–10)"), "unsocketed weapon lost its damage stats")
 	_expect(not tooltip.rune_stats_label.visible, "unsocketed copy inherited another copy's rune bonus")
 	_expect(tooltip.rune_stats_label.text.is_empty(), "unsocketed copy has rune bonus text")
 	tooltip.free()
@@ -91,8 +92,8 @@ func _test_socketed_armor_tooltip() -> void:
 	var tooltip := _create_slot_tooltip("socketed armor")
 	if tooltip == null:
 		return
-	_expect(tooltip.stats_label.text.contains("Slot: Head"), "socketed armor lost its slot stat")
-	_expect(tooltip.stats_label.text.contains("Defense: +1"), "socketed armor lost its defense stat")
+	_expect(tooltip.stats_label.get_parsed_text().contains("Slot: Head"), "socketed armor lost its slot stat")
+	_expect(tooltip.stats_label.get_parsed_text().contains("Defense: +1"), "socketed armor lost its defense stat")
 	_expect(tooltip.rune_stats_label.text == "(+100 HP)", "socketed armor rune bonus is incorrect")
 	tooltip.free()
 
@@ -102,7 +103,7 @@ func _test_duplicate_rune_aggregation() -> void:
 	var tooltip := _create_slot_tooltip("stacked-rune weapon")
 	if tooltip == null:
 		return
-	_expect(tooltip.stats_label.text.contains("Base Damage: 15"), "weapon tooltip ignored its damage multiplier")
+	_expect(tooltip.stats_label.get_parsed_text().contains("Slash: 15 (12–15)"), "weapon tooltip ignored its damage multiplier")
 	_expect(tooltip.rune_stats_label.text == "(+200 HP)", "duplicate rune bonuses were not aggregated")
 	_expect(tooltip.rune_stats_label.get_theme_color("font_color") == ItemTooltip.RUNE_BONUS_COLOR, "aggregated rune bonus is not red")
 	tooltip.free()
@@ -115,7 +116,7 @@ func _test_affixed_weapon_tooltip() -> void:
 		return
 	_expect(_slot.tooltip_text == "Copper Sword of Viciousness", "affixed inventory slot lost its suffix")
 	_expect(tooltip.item_name_label.text == "Copper Sword of Viciousness", "affixed tooltip name lost its suffix")
-	_expect(tooltip.stats_label.text.contains("Strength: +2"), "affixed tooltip stat is missing")
+	_expect(tooltip.stats_label.get_parsed_text().contains("Strength: +2"), "affixed tooltip stat is missing")
 	tooltip.free()
 
 func _build_catalog() -> ItemCatalog:

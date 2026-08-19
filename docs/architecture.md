@@ -110,7 +110,8 @@ validation, so support, body collision, and centered-feet requirements cannot di
 `MeleeCombatCoordinator` validates cursor targeting, range, sweep arc, voxel visibility, target
 existence, and contact timing before changing health. `Game` injects a validated `DamageTypeCatalog`
 that registers the canonical slash, blunt, and pierce definitions accepted by combat.
-`MeleeAttackProfile` owns base damage, a damage multiplier, a canonical damage type, an optional
+`MeleeAttackProfile` owns maximum base damage, optional random reduction below that base, radial
+falloff, a damage multiplier, a canonical damage type, an optional
 sweep angle, optional knockback, and whether targets lock at attack start or are acquired at contact.
 Selecting a melee weapon makes the player presentation smoothly
 track the cursor independently of camera-relative movement whenever the player is not sprinting;
@@ -203,9 +204,11 @@ through one custom `ItemTooltip`. `Game` passes `ItemProficiency` through `HUD`,
 `InventoryHotbar`, and `SidePanel` into each inventory-bound slot. `HotbarView` and
 `ItemSlotView` own only reusable presentation and selection intent, while a visible tooltip queries
 current progress without owning it.
-Weapon rows read the item's melee attack profile, while armor rows read its slot and stat
-modifiers, so presentation does not own or duplicate gear state. During a left-button drag, the
-source slot owns the adjustable drag count and consumes wheel input before gameplay camera handling.
+`ItemStatFormatter` derives shared weapon rows from the item's melee attack profile for both hover
+tooltips and crafting details, including maximum and ranged damage, the canonical damage type, and
+knockback. Armor rows read the slot and stat modifiers directly. Numeric values use the shared
+`CombatPresentationPalette` weakness color, so presentation does not own or duplicate gear state. During
+a left-button drag, the source slot owns the adjustable drag count and consumes wheel input before gameplay camera handling.
 `InventoryModel` remains the authority for partial moves and discards, while the source and
 drag-preview visuals show the pending split without mutating inventory until a drop succeeds.
 
@@ -518,7 +521,7 @@ owns food and potion recipes. `CraftingCoordinator` asks `InventoryModel` to val
 ingredient removal and output insertion across the backpack and hotbar as one immediate
 transaction. Craftable item definitions own the short descriptions presented above their recipe
 ingredients, and recipe validation rejects outputs without one. Reusable `CraftingPanel` instances
-present all three catalogs without mutating
+present all three catalogs and shared weapon stats without mutating
 inventory slots and play one sound only after a transaction succeeds. The HUD combines the open
 panels' animation progress so only one camera-obstruction value is written during transitions.
 

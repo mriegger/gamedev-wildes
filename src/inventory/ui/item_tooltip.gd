@@ -15,7 +15,7 @@ var _displayed_experience: float = -1.0
 @onready var rarity_label: Label = $Margin/Content/Header/Identity/Rarity
 @onready var proficiency_level_label: Label = $Margin/Content/ProficiencyLevel
 @onready var proficiency_experience_label: Label = $Margin/Content/ProficiencyExperience
-@onready var stats_label: Label = $Margin/Content/Stats
+@onready var stats_label: RichTextLabel = $Margin/Content/Stats
 @onready var rune_stats_label: Label = $Margin/Content/RuneStats
 
 func setup(
@@ -100,19 +100,9 @@ func _get_stat_lines() -> Array[String]:
 	var rune := _item_definition as RuneDefinition
 	if rune != null:
 		lines.append(_get_rune_compatibility_line(rune))
-		lines.append_array(_get_modifier_stat_lines(rune.socket_modifiers))
+		lines.append_array(ItemStatFormatter.get_modifier_stat_lines(rune.socket_modifiers))
 		return lines
-	var armor := _item_definition as ArmorDefinition
-	if armor != null:
-		lines.append("Slot: %s" % ArmorDefinition.get_slot_label(armor.armor_slot))
-	var melee_action := _item_definition.primary_action as MeleeAttackActionDefinition
-	if melee_action != null:
-		var profile := melee_action.attack_profile
-		lines.append("Base Damage: %s" % _format_number(profile.base_damage * profile.damage_multiplier))
-		lines.append("Reach: %s" % _format_number(profile.reach))
-		lines.append("Cooldown: %ss" % _format_number(profile.cooldown))
-		lines.append("Sweep: %s°" % _format_number(profile.sweep_degrees))
-	lines.append_array(_get_modifier_stat_lines(_item_definition.stat_modifiers))
+	lines.append_array(ItemStatFormatter.get_item_stat_lines(_item_definition))
 	if _equipment_instance != null:
 		var affix_modifiers: Array[StatModifier] = []
 		for affix in _equipment_instance.affixes:
@@ -122,20 +112,7 @@ func _get_stat_lines() -> Array[String]:
 				modifier.operation = stat_roll.operation
 				modifier.amount = stat_roll.amount
 				affix_modifiers.append(modifier)
-		lines.append_array(_get_modifier_stat_lines(affix_modifiers))
-	return lines
-
-func _get_modifier_stat_lines(modifiers: Array[StatModifier]) -> Array[String]:
-	var lines: Array[String] = []
-	for modifier in modifiers:
-		if modifier == null:
-			continue
-		var stat_name := _get_stat_display_name(modifier.stat_id)
-		if modifier.operation == StatModifier.Operation.ADD:
-			var sign := "+" if modifier.amount >= 0.0 else ""
-			lines.append("%s: %s%s" % [stat_name, sign, _format_number(modifier.amount)])
-		else:
-			lines.append("%s: x%s" % [stat_name, _format_number(modifier.amount)])
+		lines.append_array(ItemStatFormatter.get_modifier_stat_lines(affix_modifiers))
 	return lines
 
 func _get_socketed_rune_stat_lines() -> Array[String]:

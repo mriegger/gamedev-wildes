@@ -12,5 +12,5 @@ contact_time = 0.24
 cooldown = 0.48
 reach = 2.5
 base_damage = 10.0
-base_damage_variance = 2
+base_damage_random_reduction = 2
 sweep_degrees = 120.0

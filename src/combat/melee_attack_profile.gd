@@ -8,7 +8,7 @@ class_name MeleeAttackProfile
 @export_range(0.0, 10.0, 0.01, "or_greater") var cooldown: float = 0.48
 @export_range(0.01, 32.0, 0.01, "or_greater") var reach: float = 2.5
 @export_range(0.01, 999999.0, 0.01, "or_greater") var base_damage: float = 1.0
-@export_range(0, 999999, 1, "or_greater") var base_damage_variance: int = 0
+@export_range(0, 999999, 1, "or_greater") var base_damage_random_reduction: int = 0
 @export_range(0.01, 10.0, 0.01, "or_greater") var damage_multiplier: float = 1.0
 @export_range(0.01, 10.0, 0.01, "or_greater") var radial_damage_center_multiplier: float = 1.0
 @export_range(0.01, 10.0, 0.01, "or_greater") var radial_damage_edge_multiplier: float = 1.0
@@ -40,8 +40,8 @@ func validate(source: String) -> bool:
 	if not is_finite(base_damage) or base_damage <= 0.0:
 		push_error("[MeleeAttackProfile] Invalid base damage at %s" % source)
 		valid = false
-	if not is_valid_base_damage_variance(base_damage, base_damage_variance):
-		push_error("[MeleeAttackProfile] Invalid base damage variance at %s" % source)
+	if not is_valid_base_damage_random_reduction(base_damage, base_damage_random_reduction):
+		push_error("[MeleeAttackProfile] Invalid base damage random reduction at %s" % source)
 		valid = false
 	if not is_finite(damage_multiplier) or damage_multiplier <= 0.0:
 		push_error("[MeleeAttackProfile] Invalid damage multiplier at %s" % source)
@@ -66,8 +66,8 @@ func validate(source: String) -> bool:
 static func is_valid_sweep_degrees(value: float) -> bool:
 	return is_finite(value) and value >= 0.0 and value <= 360.0
 
-static func is_valid_base_damage_variance(configured_base_damage: float, variance: int) -> bool:
-	return is_finite(configured_base_damage) and configured_base_damage > 0.0 and variance >= 0 and float(variance) < configured_base_damage
+static func is_valid_base_damage_random_reduction(configured_base_damage: float, reduction: int) -> bool:
+	return is_finite(configured_base_damage) and configured_base_damage > 0.0 and reduction >= 0 and float(reduction) < configured_base_damage
 
 func requires_planar_aim() -> bool:
 	return sweep_degrees > 0.0 and sweep_degrees < 360.0
@@ -84,9 +84,19 @@ func calculate_damage_from_base(rolled_base_damage: float, attacker_strength: fl
 func roll_damage(rng: RandomNumberGenerator, attacker_strength: float, target_defense: float) -> float:
 	assert(rng != null)
 	var rolled_base_damage := base_damage
-	if base_damage_variance > 0:
-		rolled_base_damage += float(rng.randi_range(-base_damage_variance, base_damage_variance))
+	if base_damage_random_reduction > 0:
+		rolled_base_damage -= float(rng.randi_range(0, base_damage_random_reduction))
 	return calculate_damage_from_base(rolled_base_damage, attacker_strength, target_defense)
+
+func get_authored_damage_range() -> Vector2:
+	var minimum_roll := (base_damage - float(base_damage_random_reduction)) * damage_multiplier
+	var maximum_roll := base_damage * damage_multiplier
+	var minimum_radial_multiplier := minf(radial_damage_center_multiplier, radial_damage_edge_multiplier)
+	var maximum_radial_multiplier := maxf(radial_damage_center_multiplier, radial_damage_edge_multiplier)
+	return Vector2(
+		maxf(1.0, minimum_roll * minimum_radial_multiplier),
+		maxf(1.0, maximum_roll * maximum_radial_multiplier),
+	)
 
 func calculate_damage_at_distance(attacker_strength: float, target_defense: float, distance_from_center: float) -> float:
 	return _apply_radial_damage(calculate_damage(attacker_strength, target_defense), distance_from_center)

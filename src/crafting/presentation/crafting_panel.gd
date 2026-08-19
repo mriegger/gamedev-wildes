@@ -31,6 +31,8 @@ const PROGRESSION_WORKSPACE_ID: StringName = &"progression"
 @onready var _output_count: Label = $Margin/Content/Body/Details/Output/Text/Count as Label
 @onready var _output_description: Label = $Margin/Content/Body/Details/Description as Label
 @onready var _ingredient_list: VBoxContainer = $Margin/Content/Body/Details/IngredientList as VBoxContainer
+@onready var _stats_heading: Label = $Margin/Content/Body/Details/StatsHeading as Label
+@onready var _stats_label: RichTextLabel = $Margin/Content/Body/Details/Stats as RichTextLabel
 @onready var _craft_button: Control = $Margin/Content/Body/Details/CraftButton as Control
 @onready var _crafting_sound_player: AudioStreamPlayer = $CraftingSoundPlayer as AudioStreamPlayer
 
@@ -301,6 +303,10 @@ func _refresh_details() -> void:
 		label.add_theme_color_override("font_color", Color(0.72, 0.92, 0.76) if available >= ingredient.count else Color(0.92, 0.58, 0.52))
 		row.add_child(label)
 		_ingredient_list.add_child(row)
+	var stat_lines := ItemStatFormatter.get_item_stat_lines(recipe.output_item)
+	_stats_heading.visible = not stat_lines.is_empty()
+	_stats_label.visible = not stat_lines.is_empty()
+	_stats_label.text = "\n".join(stat_lines)
 	_refresh_craft_button()
 
 func _refresh_craft_button() -> void:

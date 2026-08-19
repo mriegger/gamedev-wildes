@@ -77,7 +77,7 @@ func _test_workspace_and_slot_states() -> void:
 	if gear_tooltip != null:
 		root.add_child(gear_tooltip)
 		_expect(gear_tooltip.item_name_label.text == "Copper Sword of Viciousness", "affixed gear workspace tooltip lost its suffix")
-		_expect(gear_tooltip.stats_label.text.contains("Strength: +2"), "affixed gear workspace tooltip lost its stat")
+		_expect(gear_tooltip.stats_label.get_parsed_text().contains("Strength: +2"), "affixed gear workspace tooltip lost its stat")
 		gear_tooltip.free()
 	var click := InputEventMouseButton.new()
 	click.button_index = MOUSE_BUTTON_RIGHT
@@ -102,7 +102,7 @@ func _test_socket_and_unsocket() -> void:
 	_expect(rune_tooltip != null, "filled rune slot did not create a tooltip")
 	if rune_tooltip != null:
 		root.add_child(rune_tooltip)
-		_expect(rune_tooltip.stats_label.text.contains("HP: +100"), "filled rune tooltip did not show its stat")
+		_expect(rune_tooltip.stats_label.get_parsed_text().contains("HP: +100"), "filled rune tooltip did not show its stat")
 		rune_tooltip.free()
 	var gear_slot := rune_panel.get_gear_slot()
 	var gear_tooltip := gear_slot._make_custom_tooltip(gear_slot.tooltip_text) as ItemTooltip

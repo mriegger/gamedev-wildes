@@ -190,8 +190,9 @@ func _run() -> void:
 	_expect(configured_sword_profile.id == &"copper_sword_melee", "copper sword attack ID changed")
 	_expect(zombie_profile.id == &"zombie_melee", "zombie attack ID changed")
 	_expect(skeleton_profile.id == &"skeleton_melee", "skeleton attack ID changed")
-	_expect(is_equal_approx(configured_sword_profile.base_damage, 10.0) and configured_sword_profile.base_damage_variance == 2, "copper sword damage spread is not 8-12")
-	_expect(is_equal_approx(hammer_profile.damage_multiplier, 1.0), "copper hammer base damage multiplier changed")
+	_expect(is_equal_approx(configured_sword_profile.base_damage, 10.0) and configured_sword_profile.base_damage_random_reduction == 2, "copper sword damage spread is not 8-10")
+	_expect(is_equal_approx(hammer_profile.base_damage, 15.0) and is_equal_approx(hammer_profile.damage_multiplier, 1.0), "copper hammer base damage changed")
+	_expect(is_equal_approx(hammer_profile.radial_damage_center_multiplier, 1.0) and is_equal_approx(hammer_profile.radial_damage_edge_multiplier, 1.0 / 3.0), "copper hammer distance scaling changed")
 	_expect(is_equal_approx(hammer_profile.reach, 4.0) and is_equal_approx(hammer_profile.sweep_degrees, 360.0), "copper hammer radius changed")
 	_expect(hammer_profile.acquire_targets_on_contact and hammer_profile.knockback_speed > 0.0, "copper hammer impact behavior changed")
 	_expect(is_equal_approx(zombie_profile.base_damage, 15.0), "zombie base damage changed")
@@ -204,27 +205,25 @@ func _run() -> void:
 	_expect(not MeleeAttackProfile.is_valid_sweep_degrees(-0.1), "negative sweep validation was accepted")
 	_expect(not MeleeAttackProfile.is_valid_sweep_degrees(360.1), "over-full-circle sweep validation was accepted")
 	_expect(not MeleeAttackProfile.is_valid_sweep_degrees(INF), "non-finite sweep validation was accepted")
-	_expect(MeleeAttackProfile.is_valid_base_damage_variance(10.0, 2), "copper sword damage variance validation was rejected")
-	_expect(not MeleeAttackProfile.is_valid_base_damage_variance(10.0, 10), "damage variance accepted a non-positive minimum roll")
-	_expect(not MeleeAttackProfile.is_valid_base_damage_variance(10.0, -1), "negative damage variance was accepted")
+	_expect(MeleeAttackProfile.is_valid_base_damage_random_reduction(10.0, 2), "copper sword damage reduction validation was rejected")
+	_expect(not MeleeAttackProfile.is_valid_base_damage_random_reduction(10.0, 10), "damage reduction accepted a non-positive minimum roll")
+	_expect(not MeleeAttackProfile.is_valid_base_damage_random_reduction(10.0, -1), "negative damage reduction was accepted")
 	var damage_roll_rng := RandomNumberGenerator.new()
 	damage_roll_rng.seed = 73421
 	var observed_base_damage: Dictionary[float, bool] = {}
 	for _roll_index in range(100):
 		var rolled_damage := configured_sword_profile.roll_damage(damage_roll_rng, 0.0, 0.0)
-		_expect(rolled_damage >= 8.0 and rolled_damage <= 12.0 and is_equal_approx(rolled_damage, roundf(rolled_damage)), "copper sword rolled damage outside its integer 8-12 spread")
+		_expect(rolled_damage >= 8.0 and rolled_damage <= 10.0 and is_equal_approx(rolled_damage, roundf(rolled_damage)), "copper sword rolled damage outside its integer 8-10 spread")
 		observed_base_damage[rolled_damage] = true
-	_expect(observed_base_damage.has(8.0) and observed_base_damage.has(12.0), "copper sword damage rolls did not include both configured endpoints")
+	_expect(observed_base_damage.has(8.0) and observed_base_damage.has(10.0), "copper sword damage rolls did not include both configured endpoints")
 	var sword_profile := configured_sword_profile
 	var full_circle_profile := sword_profile.duplicate(true) as MeleeAttackProfile
 	full_circle_profile.sweep_degrees = 360.0
 	_expect(not full_circle_profile.requires_planar_aim(), "full-circle sweep required a planar aim")
 	_expect(sword_profile.requires_planar_aim(), "directional sword sweep did not require a planar aim")
 	_expect(is_equal_approx(sword_profile.calculate_damage(10.0, 4.0), 16.0), "sword damage formula is incorrect")
-	var configured_sword_damage := sword_profile.calculate_damage(10.0, 4.0)
-	_expect(is_equal_approx(hammer_profile.calculate_damage_at_distance(10.0, 4.0, 0.0), configured_sword_damage * 1.5), "hammer center damage is not 1.5 times sword damage")
-	_expect(is_equal_approx(hammer_profile.calculate_damage_at_distance(10.0, 4.0, hammer_profile.reach * 0.5), configured_sword_damage), "hammer midpoint damage does not match sword damage")
-	_expect(is_equal_approx(hammer_profile.calculate_damage_at_distance(10.0, 4.0, hammer_profile.reach), configured_sword_damage * 0.5), "hammer edge damage is not half of sword damage")
+	_expect(is_equal_approx(hammer_profile.calculate_damage_at_distance(10.0, 4.0, 0.0), 21.0), "hammer center damage did not use its maximum base damage")
+	_expect(is_equal_approx(hammer_profile.calculate_damage_at_distance(10.0, 4.0, hammer_profile.reach), 7.0), "hammer edge damage did not use one-third distance scaling")
 	_expect(is_equal_approx(zombie_profile.calculate_damage(5.0, 4.0), 16.0), "zombie damage formula is incorrect")
 	_expect(is_equal_approx(skeleton_profile.calculate_damage(5.0, 0.0), 10.0), "skeleton unarmored damage formula is incorrect")
 	_expect(is_equal_approx(sword_profile.calculate_damage(0.0, 100.0), 1.0), "damage did not clamp to its minimum")
@@ -241,7 +240,7 @@ func _run() -> void:
 
 	var world := _make_flat_world()
 	await _test_randomized_sword_damage(world, configured_sword_profile)
-	sword_profile.base_damage_variance = 0
+	sword_profile.base_damage_random_reduction = 0
 	await _test_damage_affinities(world, sword_profile, hammer_profile, zombie_definition, skeleton_definition)
 	zombie_definition.damage_affinities.clear()
 	var coordinator := WorldEntityCoordinator.new()
@@ -335,19 +334,19 @@ func _run() -> void:
 		_expect(first_damage_number.outline_modulate.a < EnemyDamageNumber3DType.OUTLINE_COLOR.a, "damage number outline remained opaque while its text faded")
 		enemy_feedback._process(EnemyDamageNumber3DType.DURATION_SECONDS * 0.5)
 		_expect(not first_damage_number.is_active() and not first_damage_number.visible, "damage number did not finish its animation")
-		first_damage_number.play(Vector3.ZERO, 12.6, EnemyCombatFeedbackType.WEAK_DAMAGE_COLOR)
+		first_damage_number.play(Vector3.ZERO, 12.6, CombatPresentationPalette.WEAK_DAMAGE_COLOR)
 		_expect(first_damage_number.text == "13", "fractional damage number was not rounded to the nearest integer")
-		_expect(first_damage_number.modulate.is_equal_approx(EnemyCombatFeedbackType.WEAK_DAMAGE_COLOR), "weakness damage number is not yellow-gold")
+		_expect(first_damage_number.modulate.is_equal_approx(CombatPresentationPalette.WEAK_DAMAGE_COLOR), "weakness damage number is not yellow-gold")
 		first_damage_number.advance(EnemyDamageNumber3DType.DURATION_SECONDS * 0.5, true)
-		_expect(is_equal_approx(first_damage_number.modulate.r, EnemyCombatFeedbackType.WEAK_DAMAGE_COLOR.r) and first_damage_number.modulate.a < 1.0, "weakness damage number lost its color while fading")
+		_expect(is_equal_approx(first_damage_number.modulate.r, CombatPresentationPalette.WEAK_DAMAGE_COLOR.r) and first_damage_number.modulate.a < 1.0, "weakness damage number lost its color while fading")
 		first_damage_number.reset()
-		first_damage_number.play(Vector3.ZERO, 10.0, EnemyCombatFeedbackType.RESISTANT_DAMAGE_COLOR)
-		_expect(first_damage_number.modulate.is_equal_approx(EnemyCombatFeedbackType.RESISTANT_DAMAGE_COLOR), "resistance damage number is not dark grey")
+		first_damage_number.play(Vector3.ZERO, 10.0, CombatPresentationPalette.RESISTANT_DAMAGE_COLOR)
+		_expect(first_damage_number.modulate.is_equal_approx(CombatPresentationPalette.RESISTANT_DAMAGE_COLOR), "resistance damage number is not dark grey")
 		_expect(maxf(first_damage_number.modulate.r, maxf(first_damage_number.modulate.g, first_damage_number.modulate.b)) < 0.5, "resistance damage number is too light")
 		first_damage_number.reset()
 	_expect(EnemyCombatFeedbackType.get_damage_color(DamageAffinityDefinition.Response.NEUTRAL).is_equal_approx(Color.WHITE), "neutral damage response mapped to the wrong number color")
-	_expect(EnemyCombatFeedbackType.get_damage_color(DamageAffinityDefinition.Response.WEAK).is_equal_approx(EnemyCombatFeedbackType.WEAK_DAMAGE_COLOR), "weak damage response mapped to the wrong number color")
-	_expect(EnemyCombatFeedbackType.get_damage_color(DamageAffinityDefinition.Response.RESISTANT).is_equal_approx(EnemyCombatFeedbackType.RESISTANT_DAMAGE_COLOR), "resistant damage response mapped to the wrong number color")
+	_expect(EnemyCombatFeedbackType.get_damage_color(DamageAffinityDefinition.Response.WEAK).is_equal_approx(CombatPresentationPalette.WEAK_DAMAGE_COLOR), "weak damage response mapped to the wrong number color")
+	_expect(EnemyCombatFeedbackType.get_damage_color(DamageAffinityDefinition.Response.RESISTANT).is_equal_approx(CombatPresentationPalette.RESISTANT_DAMAGE_COLOR), "resistant damage response mapped to the wrong number color")
 	camera.size = EnemyCombatFeedbackType.MAX_DAMAGE_NUMBER_CAMERA_SIZE + 1.0
 	enemy_feedback._on_melee_outcome_committed(_outcomes[-1])
 	_expect(enemy_feedback._damage_numbers.all(func(number): return not number.is_active()), "zoomed-out combat showed an unreadable damage number")
@@ -846,7 +845,7 @@ func _test_randomized_sword_damage(world: VoxelWorld, sword_profile: MeleeAttack
 	for index in range(actors.size()):
 		var outcome := _outcomes[outcome_count_before + index]
 		_expect(is_equal_approx(outcome.applied_damage, expected_damage[index]), "sword enemy damage did not use its independent contact-time roll")
-		_expect(outcome.applied_damage >= 21.0 and outcome.applied_damage <= 27.0, "slash-weak zombie damage left the expected 21-27 range")
+		_expect(outcome.applied_damage >= 21.0 and outcome.applied_damage <= 24.0, "slash-weak zombie damage left the expected 21-24 range")
 		_expect(outcome.damage_response == DamageAffinityDefinition.Response.WEAK, "slash-weak zombie outcome lost its damage response")
 		_expect(is_equal_approx(coordinator.get_runtime().get_current_hp(actors[index].runtime_id), 80.0 - expected_damage[index]), "random sword damage changed the wrong enemy HP")
 	await _cleanup(combat, coordinator, player, fixture["camera"] as Camera3D)

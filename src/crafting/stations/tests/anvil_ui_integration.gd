@@ -81,6 +81,26 @@ func _process(_delta: float) -> bool:
 		var recipe_list := _hud.anvil_panel.get_node("Margin/Content/Body/Recipes/RecipeScroll/RecipeList") as VBoxContainer
 		_expect(recipe_list.get_child_count() == 8, "anvil panel did not show all eight metal recipes")
 		_expect(_hud.anvil_panel.get_selected_recipe_id() == &"copper_pickaxe", "anvil did not select the first metal recipe")
+		var stats_heading := _hud.anvil_panel.get_node("Margin/Content/Body/Details/StatsHeading") as Label
+		var stats_label := _hud.anvil_panel.get_node("Margin/Content/Body/Details/Stats") as RichTextLabel
+		_expect(stats_label.has_theme_font_override(&"bold_font") and stats_label.size_flags_vertical == Control.SIZE_SHRINK_CENTER and stats_label.get_theme_font_size(&"bold_font_size") == 13 and stats_label.get_theme_constant(&"line_separation") == 3, "crafting stats no longer use the compact card layout")
+		_expect(not stats_heading.visible and not stats_label.visible, "non-weapon recipe displayed weapon stats")
+		_hud.anvil_panel.select_recipe(&"copper_sword")
+		_expect(stats_heading.visible and stats_label.visible, "sword recipe did not display weapon stats")
+		for expected_stat in ["Slash: 10 (8–10)", "Reach: 2.5", "Cooldown: 0.48s", "Sweep: 120°", "Knockback: 0"]:
+			_expect(stats_label.get_parsed_text().contains(expected_stat), "sword recipe stats are missing %s" % expected_stat)
+		_expect(not stats_label.get_parsed_text().contains("Base Damage"), "sword recipe still labels damage as base damage")
+		_expect(stats_label.text.contains(CombatPresentationPalette.WEAK_DAMAGE_COLOR.to_html(false)), "sword recipe numbers are not yellow-gold")
+		_expect(stats_label.text.contains("[b][color=#%s]0.48s[/color][/b]" % CombatPresentationPalette.WEAK_DAMAGE_COLOR.to_html(false)), "sword recipe cooldown number and unit are not highlighted and bold")
+		_expect(stats_label.text.contains("[b][color=#%s]120°[/color][/b]" % CombatPresentationPalette.WEAK_DAMAGE_COLOR.to_html(false)), "sword recipe sweep number and unit are not highlighted and bold")
+		_hud.anvil_panel.select_recipe(&"copper_hammer")
+		for expected_stat in ["Blunt: 15 (5–15)", "Reach: 4", "Cooldown: 1.65s", "Sweep: 360°", "Knockback: 8"]:
+			_expect(stats_label.get_parsed_text().contains(expected_stat), "hammer recipe stats are missing %s" % expected_stat)
+		_hud.anvil_panel.select_recipe(&"copper_helmet")
+		_expect(stats_heading.visible and stats_label.visible, "armor recipe did not display item stats")
+		_expect(stats_label.get_parsed_text().contains("Slot: Head") and stats_label.get_parsed_text().contains("Defense: +1"), "helmet recipe stats are incomplete")
+		_expect(stats_label.text.contains(CombatPresentationPalette.WEAK_DAMAGE_COLOR.to_html(false)), "helmet recipe defense is not yellow-gold")
+		_hud.anvil_panel.select_recipe(&"copper_pickaxe")
 		_expect(_hud.anvil_panel.get_craft_button().is_craft_enabled(), "available anvil recipe was disabled")
 		_hud.anvil_panel.get_craft_button().pressed.emit()
 		_expect(_inventory.get_inventory_item_count(&"copper_pickaxe") == 1, "anvil did not craft the copper pickaxe")

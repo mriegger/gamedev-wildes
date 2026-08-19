@@ -895,9 +895,22 @@ func _check_hotbar_gear_tooltips() -> void:
 		_fail("sword tooltip rarity color is incorrect")
 	if tooltip.proficiency_level_label.text != "Proficiency Level 0 / 1" or tooltip.proficiency_experience_label.text != "Proficiency XP: 0 / 100":
 		_fail("sword tooltip initial proficiency is incorrect")
-	for expected_stat in ["Base Damage: 10", "Reach: 2.5", "Cooldown: 0.48s", "Sweep: 120°"]:
-		if not tooltip.stats_label.text.contains(expected_stat):
+	var parsed_stats := tooltip.stats_label.get_parsed_text()
+	for expected_stat in ["Slash: 10 (8–10)", "Reach: 2.5", "Cooldown: 0.48s", "Sweep: 120°", "Knockback: 0"]:
+		if not parsed_stats.contains(expected_stat):
 			_fail("sword tooltip is missing %s" % expected_stat)
+	if parsed_stats.contains("Base Damage"):
+		_fail("sword tooltip still labels damage as base damage")
+	if not tooltip.stats_label.text.contains(CombatPresentationPalette.WEAK_DAMAGE_COLOR.to_html(false)):
+		_fail("sword tooltip numbers are not yellow-gold")
+	if not tooltip.stats_label.text.contains("[b][color=#%s]0.48s[/color][/b]" % CombatPresentationPalette.WEAK_DAMAGE_COLOR.to_html(false)):
+		_fail("sword tooltip cooldown number and unit are not highlighted and bold")
+	if not tooltip.stats_label.text.contains("[b][color=#%s]120°[/color][/b]" % CombatPresentationPalette.WEAK_DAMAGE_COLOR.to_html(false)):
+		_fail("sword tooltip sweep number and unit are not highlighted and bold")
+	if not tooltip.stats_label.has_theme_font_override(&"bold_font") or tooltip.stats_label.size_flags_vertical != Control.SIZE_SHRINK_CENTER or tooltip.stats_label.get_theme_font_size(&"bold_font_size") != 12 or tooltip.stats_label.get_theme_constant(&"line_separation") != 3:
+		_fail("sword tooltip stat sizing no longer matches the compact card layout")
+	if tooltip.stats_label.autowrap_mode != TextServer.AUTOWRAP_OFF or tooltip.get_combined_minimum_size().y > 300.0:
+		_fail("sword tooltip stats expanded beyond their content height")
 	if _item_proficiency.add_experience(&"copper_sword", 100.0) != 1:
 		_fail("sword tooltip test could not reach maximum proficiency")
 		tooltip.free()
@@ -925,8 +938,11 @@ func _check_helmet_tooltip(slot: InventorySlot, context: String) -> void:
 		_fail("%s helmet tooltip identity is incorrect" % context)
 	if tooltip.proficiency_level_label.text != "Proficiency Level 0 / 1" or tooltip.proficiency_experience_label.text != "Proficiency XP: 0 / 100":
 		_fail("%s helmet tooltip proficiency is incorrect" % context)
-	if not tooltip.stats_label.text.contains("Slot: Head") or not tooltip.stats_label.text.contains("Defense: +1"):
+	var parsed_stats := tooltip.stats_label.get_parsed_text()
+	if not parsed_stats.contains("Slot: Head") or not parsed_stats.contains("Defense: +1"):
 		_fail("%s helmet tooltip stats are incorrect" % context)
+	if not tooltip.stats_label.text.contains(CombatPresentationPalette.WEAK_DAMAGE_COLOR.to_html(false)):
+		_fail("%s helmet stat number is not yellow-gold" % context)
 	tooltip.free()
 
 func _create_gear_tooltip(slot: InventorySlot, context: String) -> ItemTooltip:

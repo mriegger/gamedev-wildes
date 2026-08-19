@@ -89,11 +89,19 @@ theme_override_fonts/font = ExtResource("2_bold")
 theme_override_font_sizes/font_size = 11
 text = "STATS"
 
-[node name="Stats" type="Label" parent="Margin/Content"]
+[node name="Stats" type="RichTextLabel" parent="Margin/Content"]
 layout_mode = 2
+size_flags_vertical = 4
 mouse_filter = 2
-theme_override_colors/font_color = Color(0.86, 0.87, 0.89, 1)
-theme_override_font_sizes/font_size = 12
+theme_override_colors/default_color = Color(0.86, 0.87, 0.89, 1)
+theme_override_fonts/bold_font = ExtResource("2_bold")
+theme_override_font_sizes/normal_font_size = 12
+theme_override_font_sizes/bold_font_size = 12
+theme_override_constants/line_separation = 3
+bbcode_enabled = true
+fit_content = true
+scroll_active = false
+autowrap_mode = 0
 
 [node name="RuneStats" type="Label" parent="Margin/Content"]
 visible = false

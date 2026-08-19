@@ -145,13 +145,13 @@ the chest with the crafting menu while keeping the backpack open.
 and wood. Item actions are data-driven: the hoe tills exposed grass and dirt, stone and copper
 pickaxes can mine copper, and the sword uses click-triggered, alternating melee swings with a fading
 radial scan tracing its 120-degree attack area in front of the player. Its base damage rolls from 8
-to 12 independently for each enemy hit. Combat registers slash, blunt, and pierce damage types;
+to 10 independently for each enemy hit. Combat registers slash, blunt, and pierce damage types;
 enemies are neutral by default. Zombies take 1.5 times damage from slash, while Skeletons take half
 damage from slash and 1.5 times damage from blunt. Stone Golems take half damage from slash and
 pierce while remaining neutral to blunt. The copper hammer uses a slower
 two-handed overhead slam that damages and knocks back enemies within about
 four blocks of the hammer's ground contact while an expanding white ring marks that area. Its
-damage falls linearly from 1.5 times sword damage at the center to half sword damage at the edge.
+authored damage falls linearly from 15 at the impact center to 5 at the edge before combat stats.
 Damaged enemies show a small black-and-red health bar above their model. Successful hits also show
 damage numbers that rise and fade above each affected enemy; the numbers remain legible at the
 default camera zoom, render over health bars and world geometry, and are hidden once the camera is
@@ -182,10 +182,13 @@ to play.
 It contains the seven recipes that do not require a workstation. A placed anvil opens its own panel
 with the eight copper tool, weapon, and armor recipes. A placed cauldron opens a food-and-potion
 panel; its initial recipe combines two pumpkins and two apples into one health potion. All catalogs
-show a short description of the selected output above its ingredients, use materials from the
-backpack and hotbar, and craft immediately when the enabled Craft button is pressed, playing one
-success sound. Apples and pumpkins each restore 10% of maximum health, while health potions restore
-health completely.
+show a short description of the selected output above its ingredients. Weapon and armor recipes
+also show their item stats below the ingredients, with numeric values in the same yellow-gold used
+for weakness damage. Weapon stats include damage type, maximum damage and its authored range,
+reach, cooldown, sweep, and knockback. Catalogs
+use materials from the backpack and hotbar and craft immediately when the enabled Craft button is
+pressed, playing one success sound. Apples and pumpkins each restore 10% of maximum health, while
+health potions restore health completely.
 
 **Developer console.** Press `/` to open a command line at the bottom of the screen. The
 `spawn <item> [count]` command adds any catalog item directly to the backpack for testing, with the
