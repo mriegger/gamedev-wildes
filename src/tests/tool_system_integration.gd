@@ -814,6 +814,28 @@ func _run():
 
 	var blue_flower_count := _inventory.get_inventory_item_count(&"blue_wildflower")
 	_prepare_target(_flower_pos, unarmed)
+	var flower_bounds := _voxel_world.get_interaction_bounds(_flower_pos)
+	_expect(_interactor.get_target_block_bounds() == flower_bounds, "interactor did not expose the flower interaction bounds")
+	_interactor.is_mining = true
+	_interactor.mine_target = _flower_pos
+	_interactor.mine_action = unarmed
+	_interactor.last_ray_normal = Vector3i.UP
+	var expected_impact := flower_bounds.get_center() + Vector3.UP * (flower_bounds.size.y * 0.5 + 0.06)
+	_expect(_interactor.get_mining_impact_position().is_equal_approx(expected_impact), "flower mining impact ignored its interaction bounds")
+	_interactor.pointer_over_ui = false
+	if _interactor.harvest != null:
+		_interactor.harvest.clear_target()
+	_player.targeting_view._update_selection_visuals()
+	_expect(_player.targeting_view.selection_box.visible, "flower interaction bounds did not show a selection outline")
+	_expect(_player.targeting_view.interactor == _interactor, "targeting view did not retain the player interactor")
+	_expect(_player.targeting_view.selection_box.is_inside_tree(), "targeting selection outline was outside the tree")
+	_expect(_interactor.is_editing_enabled() and _interactor.is_mining and _interactor.target_has, "flower outline fixture did not establish an active edit target")
+	_expect(_interactor.get_selected_primary_action() is MiningActionDefinition, "flower outline fixture did not select mining")
+	_expect(_player.targeting_view._should_show_mining_outline(true), "targeting view rejected the active mining outline")
+	_expect(_player.targeting_view.selection_box.global_position.is_equal_approx(flower_bounds.get_center()), "flower selection outline was not centered on its interaction bounds")
+	_expect(_player.targeting_view.selection_box.scale.is_equal_approx(flower_bounds.size / 1.025), "flower selection outline kept full-block dimensions")
+	_expect(_player.targeting_view.breaking_block.visible and _player.targeting_view.breaking_block.scale.is_equal_approx(flower_bounds.size / 1.01), "flower breaking visual kept full-block dimensions")
+	_interactor._reset_mining()
 	_interactor._commit_mine(_flower_pos, _inventory.create_selected_item_source())
 	_expect(_voxel_world.get_block_id_at(_flower_pos) == BlockId.Type.AIR, "flower block was not mined")
 	_expect(_inventory.get_inventory_item_count(&"blue_wildflower") == blue_flower_count + 1, "mined flower did not enter inventory")

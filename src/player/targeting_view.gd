@@ -176,7 +176,8 @@ func _create_contact_shadow():
 	add_child(contact_shadow)
 
 func _texture_for_block(block_id: int) -> Texture2D:
-	return block_catalog.get_definition(block_id).side_texture
+	var definition := block_catalog.get_definition(block_id)
+	return definition.sprite_texture if definition.sprite_texture != null else definition.side_texture
 
 func _update_selection_visuals(_delta: float = 0.0):
 	if interactor == null or voxel_space == null:
@@ -229,12 +230,14 @@ func _update_selection_visuals(_delta: float = 0.0):
 			return
 		selection_box.visible = true
 		var target_bounds := _get_mining_target_bounds()
-		var center := target_bounds.get_center()
-		var base_scale := target_bounds.size / 1.025
-		selection_box.global_position = center
-		selection_box.scale = base_scale
+		var selection_scale := target_bounds.size / 1.025
+		var breaking_scale := target_bounds.size / 1.01
+		var target_center := target_bounds.get_center()
+		if selection_box.global_position != target_center:
+			selection_box.global_position = target_center
 		if breaking_block and breaking_block.is_inside_tree():
-			breaking_block.global_position = center
+			if breaking_block.global_position != target_center:
+				breaking_block.global_position = target_center
 
 		var pulse = 0.85 + 0.15 * sin(Time.get_ticks_msec() / 1000.0 * 1.8 * TAU)
 		var col: Color
@@ -247,26 +250,26 @@ func _update_selection_visuals(_delta: float = 0.0):
 		if interactor.is_mining and interactor.can_primary_target:
 			if breaking_block:
 				breaking_block.visible = true
-				var bt = voxel_space.get_block_at(interactor.target_block)
-				if bt != null:
-					var texture := _texture_for_block(bt)
-					var bmat = breaking_block.material_override
-					if bmat is StandardMaterial3D and bmat.albedo_texture != texture:
-						bmat.albedo_texture = texture
+				var texture := _texture_for_block(interactor.get_target_block_id())
+				var bmat = breaking_block.material_override
+				if bmat is StandardMaterial3D and bmat.albedo_texture != texture:
+					bmat.albedo_texture = texture
 				var progress = clamp(interactor.mine_timer / interactor.get_mine_duration(), 0.0, 1.0)
 				var s = 1.0 + 0.12 * sin(progress * PI)
-				var mining_scale = base_scale * s
-				if breaking_block.scale != mining_scale:
-					breaking_block.scale = mining_scale
-				if selection_box.scale != mining_scale:
-					selection_box.scale = mining_scale
+				var mining_scale := Vector3(s, s, s)
+				var mining_breaking_scale := breaking_scale * mining_scale
+				var mining_selection_scale := selection_scale * mining_scale
+				if breaking_block.scale != mining_breaking_scale:
+					breaking_block.scale = mining_breaking_scale
+				if selection_box.scale != mining_selection_scale:
+					selection_box.scale = mining_selection_scale
 		else:
 			if breaking_block:
 				breaking_block.visible = false
-				if breaking_block.scale != Vector3.ONE:
-					breaking_block.scale = Vector3.ONE
-			if selection_box.scale != base_scale:
-				selection_box.scale = base_scale
+				if breaking_block.scale != breaking_scale:
+				breaking_block.scale = breaking_scale
+			if selection_box.scale != selection_scale:
+				selection_box.scale = selection_scale
 	else:
 		if selection_box and selection_box.is_inside_tree():
 			selection_box.visible = false
@@ -348,7 +351,7 @@ func _get_mining_target_bounds() -> AABB:
 		var anchor: Variant = (voxel_space as VoxelWorld).get_emplacement_anchor(interactor.target_block)
 		if anchor is Vector3i:
 			return AABB(Vector3(anchor) + Vector3(-1.0, 0.0, -1.0), Vector3(3.0, 1.0, 3.0))
-	return AABB(Vector3(interactor.target_block), Vector3.ONE)
+	return interactor.get_target_block_bounds()
 
 func _should_show_mining_outline(has_target_action: bool) -> bool:
 	if not has_target_action or not interactor.target_has:

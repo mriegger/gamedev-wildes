@@ -23,6 +23,13 @@ func is_raycast_solid(position: Vector3i) -> bool:
 	var block: Variant = get_block_at(position)
 	return block != null and block_catalog.is_raycast_solid(block as int)
 
+func get_interaction_bounds(position: Vector3i) -> AABB:
+	var block: Variant = get_block_at(position)
+	if block == null or block_catalog == null:
+		return AABB(Vector3(position), Vector3.ONE)
+	var local_bounds := block_catalog.get_interaction_bounds(block as int)
+	return AABB(Vector3(position) + local_bounds.position, local_bounds.size)
+
 func get_highest_top(_x: int, _z: int) -> float:
 	return NO_SURFACE_Y
 

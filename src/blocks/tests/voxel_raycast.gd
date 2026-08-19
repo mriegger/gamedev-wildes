@@ -5,9 +5,13 @@ class TestVoxelSpace:
 
 	var _solid_cells: Dictionary = {}
 	var _blocked_faces: Dictionary = {}
+	var _interaction_bounds: Dictionary = {}
 
 	func add_solid(cell: Vector3i) -> void:
 		_solid_cells[cell] = true
+
+	func set_interaction_bounds(cell: Vector3i, bounds: AABB) -> void:
+		_interaction_bounds[cell] = bounds
 
 	func block_face(cell: Vector3i, normal: Vector3i) -> void:
 		var faces := _blocked_faces.get(cell, []) as Array
@@ -16,6 +20,9 @@ class TestVoxelSpace:
 
 	func is_raycast_solid(position: Vector3i) -> bool:
 		return _solid_cells.has(position)
+
+	func get_interaction_bounds(position: Vector3i) -> AABB:
+		return _interaction_bounds.get(position, AABB(Vector3(position), Vector3.ONE)) as AABB
 
 	func is_face_targetable(block_position: Vector3i, face_normal: Vector3i) -> bool:
 		if not is_raycast_solid(block_position):
@@ -31,6 +38,7 @@ func _init() -> void:
 	_test_starting_inside_solid()
 	_test_untargetable_face()
 	_test_exact_reach()
+	_test_custom_bounds()
 	_test_zero_direction()
 	if _errors.is_empty():
 		print("VOXEL_RAYCAST PASS")
@@ -96,6 +104,8 @@ func _test_axes() -> void:
 			test_case["normal"] as Vector3i,
 			String(test_case["label"])
 		)
+		if hit != null:
+			_expect(hit.interaction_bounds == AABB(Vector3(test_case["target"] as Vector3i), Vector3.ONE), "%s ray omitted its full-cell interaction bounds" % String(test_case["label"]))
 
 func _test_diagonal_tie_order() -> void:
 	var space := TestVoxelSpace.new()
@@ -128,6 +138,26 @@ func _test_exact_reach() -> void:
 	_expect(short_hit == null, "ray shorter than the exact boundary reached its target")
 	var copied_hit := VoxelRaycast.cast(space, Vector3(0.5, 0.5, 0.5), Vector3.RIGHT, 5.5)
 	_expect(copied_hit != exact_hit, "raycasts reused mutable hit state")
+
+func _test_custom_bounds() -> void:
+	var space := TestVoxelSpace.new()
+	var foliage_cell := Vector3i(2, 0, 0)
+	var fallback_cell := Vector3i(4, 0, 0)
+	space.add_solid(foliage_cell)
+	space.set_interaction_bounds(foliage_cell, AABB(Vector3(2.375, 0.0, 0.375), Vector3(0.25, 0.75, 0.25)))
+	space.add_solid(fallback_cell)
+	var centered_hit := VoxelRaycast.cast(space, Vector3(0.5, 0.5, 0.5), Vector3.RIGHT, 5.0)
+	_expect_hit(centered_hit, foliage_cell, foliage_cell + Vector3i.LEFT, Vector3i.LEFT, "custom bounds center")
+	if centered_hit != null:
+		_expect(centered_hit.interaction_bounds == AABB(Vector3(2.375, 0.0, 0.375), Vector3(0.25, 0.75, 0.25)), "custom bounds were not retained on the ray hit")
+		_expect(is_equal_approx(centered_hit.ray_distance, 1.875), "custom bounds reported the cell boundary instead of the shape boundary")
+	var width_miss := VoxelRaycast.cast(space, Vector3(0.5, 0.5, 0.2), Vector3.RIGHT, 5.0)
+	_expect_hit(width_miss, fallback_cell, fallback_cell + Vector3i.LEFT, Vector3i.LEFT, "custom bounds width miss")
+	var height_miss := VoxelRaycast.cast(space, Vector3(0.5, 0.9, 0.5), Vector3.RIGHT, 5.0)
+	_expect_hit(height_miss, fallback_cell, fallback_cell + Vector3i.LEFT, Vector3i.LEFT, "custom bounds height miss")
+	var top_hit := VoxelRaycast.cast(space, Vector3(2.5, 2.0, 0.5), Vector3.DOWN, 3.0)
+	_expect_hit(top_hit, foliage_cell, foliage_cell + Vector3i.UP, Vector3i.UP, "custom bounds top")
+	_expect(is_equal_approx(top_hit.ray_distance, 1.25), "custom bounds top distance was incorrect")
 
 func _test_zero_direction() -> void:
 	var space := TestVoxelSpace.new()

@@ -61,6 +61,10 @@ var _melee_attack_command: PreparedPlayerMeleeAttack
 var _primary_consumption_latched: bool = false
 var _primary_harvest_latched: bool = false
 var _melee_locked_facing_direction: Vector3 = Vector3.ZERO
+var _target_block_id: int = BlockId.Type.AIR
+var _target_block_bounds := AABB()
+var _target_cache_position := Vector3i(-999, -999, -999)
+var _target_cache_revision: int = -1
 
 func setup(
 	p_camera: Camera3D,
@@ -155,6 +159,8 @@ func _clear_active_state():
 	can_interact_target = false
 	_primary_consumption_latched = false
 	_primary_harvest_latched = false
+	_target_cache_position = Vector3i(-999, -999, -999)
+	_target_cache_revision = -1
 	if harvest != null:
 		harvest.clear_target()
 	_reset_mining()
@@ -237,13 +243,14 @@ func _handle_raycast():
 
 	target_block = best_hit
 	target_has = true
+	_set_target_cache(best_hit, targeted_block_id, hit.interaction_bounds)
 	last_ray_normal = best_normal
 	placement_block = best_place
 
 	var motor_pos = motor.global_position
 	var reach_squared = reach * reach
 	var selected_primary := get_selected_primary_action()
-	target_crafting_station = _get_target_crafting_station(best_hit)
+	target_crafting_station = _get_target_crafting_station(targeted_block_id)
 	target_container = _get_target_container(best_hit)
 	can_interact_target = (target_crafting_station != null or target_container != null) and motor_pos.distance_squared_to(Vector3(best_hit) + Vector3(0.5, 0.5, 0.5)) <= reach_squared
 	if selected_primary is MiningActionDefinition:
@@ -545,12 +552,13 @@ func _can_mine_position(pos: Vector3i, action: MiningActionDefinition) -> bool:
 		return false
 	if editable_voxel_world.is_edit_protected(pos):
 		return false
-	var center := Vector3(pos) + Vector3(0.5, 0.5, 0.5)
+	var bounds := get_target_block_bounds() if target_has and target_block == pos else voxel_space.get_interaction_bounds(pos)
+	var center := bounds.get_center()
 	if motor.global_position.distance_squared_to(center) > reach * reach:
 		return false
 	if _block_break_validator.is_valid() and not bool(_block_break_validator.call(pos)):
 		return false
-	var block_id := voxel_space.get_block_id_at(pos)
+	var block_id := get_target_block_id() if target_has and target_block == pos else voxel_space.get_block_id_at(pos)
 	if block_id == BlockId.Type.AIR:
 		return false
 	return action.can_mine(voxel_space.block_catalog.get_definition(block_id))
@@ -587,7 +595,7 @@ func _commit_till(
 
 func get_mine_duration() -> float:
 	assert(is_mining and mine_action != null)
-	var block_id := voxel_space.get_block_id_at(mine_target)
+	var block_id := get_target_block_id() if target_has and target_block == mine_target else voxel_space.get_block_id_at(mine_target)
 	var block := voxel_space.block_catalog.get_definition(block_id)
 	if block.container != null:
 		var pickaxe_stat := mine_action.get_tool_stat(&"pickaxe")
@@ -600,7 +608,32 @@ func has_mining_impact_target() -> bool:
 
 func get_mining_impact_position() -> Vector3:
 	assert(has_mining_impact_target())
-	return Vector3(mine_target) + Vector3(0.5, 0.5, 0.5) + Vector3(last_ray_normal) * 0.56
+	var bounds := get_target_block_bounds()
+	var normal := Vector3(last_ray_normal)
+	var face_offset := Vector3(normal.x * bounds.size.x, normal.y * bounds.size.y, normal.z * bounds.size.z) * 0.5
+	return bounds.get_center() + face_offset + normal * 0.06
+
+func get_target_block_bounds() -> AABB:
+	assert(target_has and voxel_space != null)
+	_ensure_target_cache()
+	return _target_block_bounds
+
+func get_target_block_id() -> int:
+	assert(target_has and voxel_space != null)
+	_ensure_target_cache()
+	return _target_block_id
+
+func _set_target_cache(position: Vector3i, block_id: int, bounds: AABB) -> void:
+	_target_cache_position = position
+	_target_block_id = block_id
+	_target_block_bounds = bounds
+	_target_cache_revision = editable_voxel_world.get_revision(position) if editable_voxel_world != null else -1
+
+func _ensure_target_cache() -> void:
+	var revision := editable_voxel_world.get_revision(target_block) if editable_voxel_world != null else -1
+	if _target_cache_position == target_block and _target_cache_revision == revision:
+		return
+	_set_target_cache(target_block, voxel_space.get_block_id_at(target_block), voxel_space.get_interaction_bounds(target_block))
 
 func get_mining_impact_normal() -> Vector3i:
 	assert(has_mining_impact_target())
@@ -608,7 +641,7 @@ func get_mining_impact_normal() -> Vector3i:
 
 func get_mining_impact_block_id() -> int:
 	assert(has_mining_impact_target())
-	return voxel_space.get_block_id_at(mine_target)
+	return get_target_block_id()
 
 func _can_place(action: BlockPlacementActionDefinition) -> bool:
 	if not placement_has or not can_place_target:
@@ -706,10 +739,10 @@ func is_attempting_crafting_station_mining() -> bool:
 	var action := get_selected_primary_action() as MiningActionDefinition
 	return has_crafting_station_target() and action != null and action.get_tool_stat(&"pickaxe") != null
 
-func _get_target_crafting_station(position: Vector3i) -> CraftingStationBlockDefinition:
+func _get_target_crafting_station(block_id: int) -> CraftingStationBlockDefinition:
 	if editable_voxel_world == null:
 		return null
-	return voxel_space.block_catalog.get_definition(voxel_space.get_block_id_at(position)).crafting_station
+	return voxel_space.block_catalog.get_definition(block_id).crafting_station
 
 func _try_open_target_crafting_station() -> bool:
 	if not has_crafting_station_target() or not can_interact_target:

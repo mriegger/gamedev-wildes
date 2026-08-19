@@ -416,8 +416,8 @@ func is_raycast_solid(p: Vector3i) -> bool:
 		return false
 	return block_catalog.is_raycast_solid(bt)
 
-func is_face_targetable(block_position: Vector3i, _face_normal: Vector3i) -> bool:
-	return is_raycast_solid(block_position)
+func is_face_targetable(_block_position: Vector3i, _face_normal: Vector3i) -> bool:
+	return true
 
 func get_revision(p: Vector3i) -> int:
 	return cell_revisions.get(p, 0)
