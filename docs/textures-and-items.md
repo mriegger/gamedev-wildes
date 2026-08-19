@@ -180,7 +180,7 @@ together.
 
 Held items reference a scene through `ItemDefinition.held_scene`. Pixel-art tools can use `PixelExtrudedItem` to turn a square transparent texture into a shaded one-draw-call silhouette mesh with real depth. Custom modeled items can provide any other `Node3D` scene through the same field.
 
-Melee definitions own their idle and attack transforms, animation style, two-handed stance, and optional impact-effect radius. This lets the copper sword retain its one-handed alternating sweep while the copper hammer holds a custom modeled handle in both hands, raises it overhead, and drives it into a procedural shockwave without adding weapon-specific branches to inventory selection. Switching away from a melee item cancels its presentation before the newly selected tool is rendered.
+Melee definitions own their idle and attack transforms, animation style, two-handed stance, and optional impact-effect radius. The copper sword's one-handed alternating swing renders a procedural radial scan from the player to its profile's full sweep and reach, while the copper hammer holds a custom modeled handle in both hands, raises it overhead, and drives it into a procedural shockwave without adding weapon-specific branches to inventory selection. Switching away from a melee item cancels its presentation before the newly selected tool is rendered.
 
 ## Special blocks
 

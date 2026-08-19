@@ -270,7 +270,7 @@ func _run():
 	var max_attack_leg_brace := 0.0
 	var min_attack_arm_pitch := 0.0
 	var min_attack_height := INF
-	animator.play_attack(attack_action.attack_profile.duration, -1)
+	animator.play_attack(attack_action.attack_profile.duration, -1, attack_action.animation_style, attack_action.get_sweep_contact_progress())
 	for frame in range(29):
 		_advance(animator, 1)
 		if frame == 5:
@@ -293,7 +293,7 @@ func _run():
 	_expect(not animator._attacking, "sword attack one-shot did not end")
 	var return_windup_sweep := 0.0
 	var return_strike_sweep := 0.0
-	animator.play_attack(attack_action.attack_profile.duration, 1)
+	animator.play_attack(attack_action.attack_profile.duration, 1, attack_action.animation_style, attack_action.get_sweep_contact_progress())
 	for frame in range(29):
 		_advance(animator, 1)
 		if frame == 5:
@@ -305,7 +305,7 @@ func _run():
 	_expect(not animator._attacking, "reversed sword attack one-shot did not end")
 	_advance(animator, 2)
 	_expect(abs(animator.body_action.rotation.x) < 0.001, "sword attack body lean did not recover")
-	animator.play_attack(attack_action.attack_profile.duration, -1)
+	animator.play_attack(attack_action.attack_profile.duration, -1, attack_action.animation_style, attack_action.get_sweep_contact_progress())
 	_advance(animator, 5)
 	animator.cancel_attack()
 	_advance(animator, 1)

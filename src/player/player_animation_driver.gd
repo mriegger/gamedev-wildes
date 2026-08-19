@@ -67,7 +67,7 @@ func set_preview_state(state: StringName):
 		_attack_preview_direction = -1
 		_motor.held_item_view.show_preview_item(_attack_preview_item)
 		_prepare_attack_idle_reference(_attack_preview_action)
-		animator.play_attack(_attack_preview_action.attack_profile.duration, _attack_preview_direction, _attack_preview_action.animation_style)
+		animator.play_attack(_attack_preview_action.attack_profile.duration, _attack_preview_direction, _attack_preview_action.animation_style, _attack_preview_action.get_sweep_contact_progress())
 	else:
 		animator.set_held_melee_action(null)
 
@@ -80,7 +80,7 @@ func set_attack_preview_progress(progress: float):
 	_attack_preview_elapsed = clampf(progress, 0.0, 1.0) * _attack_preview_action.attack_profile.duration
 	animator.prepare_attack_preview()
 	_prepare_attack_idle_reference(_attack_preview_action)
-	animator.play_attack(_attack_preview_action.attack_profile.duration, _attack_preview_direction, _attack_preview_action.animation_style)
+	animator.play_attack(_attack_preview_action.attack_profile.duration, _attack_preview_direction, _attack_preview_action.animation_style, _attack_preview_action.get_sweep_contact_progress())
 	_advance_presented_animation(_attack_preview_elapsed, _attack_preview_action)
 	_apply_held_item_attack_pose(_attack_preview_action)
 
@@ -189,7 +189,7 @@ func _advance_attack_preview(delta: float):
 			_attack_preview_elapsed = 0.0
 			_attack_preview_direction *= -1
 			_prepare_attack_idle_reference(_attack_preview_action)
-			animator.play_attack(_attack_preview_action.attack_profile.duration, _attack_preview_direction, _attack_preview_action.animation_style)
+			animator.play_attack(_attack_preview_action.attack_profile.duration, _attack_preview_direction, _attack_preview_action.animation_style, _attack_preview_action.get_sweep_contact_progress())
 
 func _advance_presented_animation(delta: float, action: MeleeAttackActionDefinition) -> void:
 	if (
@@ -217,4 +217,4 @@ func _on_block_placed():
 func _on_melee_attack_started(action: MeleeAttackActionDefinition, direction: int):
 	_active_attack_action = action
 	_prepare_attack_idle_reference(action)
-	animator.play_attack(action.attack_profile.duration, direction, action.animation_style)
+	animator.play_attack(action.attack_profile.duration, direction, action.animation_style, action.get_sweep_contact_progress())

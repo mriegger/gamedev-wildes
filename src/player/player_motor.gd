@@ -21,6 +21,7 @@ signal water_step_committed(position: Vector3, planar_velocity: Vector2)
 @onready var _footsteps: PlayerFootsteps = $Footsteps as PlayerFootsteps
 @onready var _action_audio: PlayerActionAudio = $ActionAudio as PlayerActionAudio
 @onready var _hammer_shockwave: HammerShockwaveView = $HammerShockwave as HammerShockwaveView
+@onready var _sword_swing_arc: SwordSwingArcView = $SwordSwingArc as SwordSwingArcView
 @onready var armor_view: PlayerArmorView = $ModelRoot/PlayerVisual/ArmorView as PlayerArmorView
 @onready var stat_modifier_clock: StatModifierClock = $StatModifierClock as StatModifierClock
 
@@ -96,6 +97,7 @@ func setup(
 	_footsteps.step_committed.connect(_on_step_committed)
 	_action_audio.setup(animation_driver, interactor, p_inventory, p_combat)
 	_hammer_shockwave.setup(interactor, p_camera_rig)
+	_sword_swing_arc.setup(interactor, self)
 	armor_view.setup(p_inventory)
 	_is_setup = true
 

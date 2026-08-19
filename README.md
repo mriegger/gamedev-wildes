@@ -140,8 +140,9 @@ the chest with the crafting menu while keeping the backpack open.
 
 **Tools.** New worlds start with an empty inventory, while the first pickaxe is crafted from stone
 and wood. Item actions are data-driven: the hoe tills exposed grass and dirt, stone and copper
-pickaxes can mine copper, and the sword uses click-triggered, alternating melee swings. The copper
-hammer uses a slower two-handed overhead slam that damages and knocks back enemies within about
+pickaxes can mine copper, and the sword uses click-triggered, alternating melee swings with a fading
+radial scan tracing its 120-degree attack area in front of the player. The copper hammer uses a slower
+two-handed overhead slam that damages and knocks back enemies within about
 four blocks of the hammer's ground contact while an expanding white ring marks that area. Its
 damage falls linearly from 1.5 times sword damage at the center to half sword damage at the edge.
 Damaged enemies show a small black-and-red health bar above their model. Successful hits also show

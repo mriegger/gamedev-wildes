@@ -54,6 +54,7 @@ var _attack_elapsed: float = 0.0
 var _attack_duration: float = 0.0
 var _attack_direction: int = -1
 var _attack_animation_style: int = MeleeAttackActionDefinition.AnimationStyle.SWEEP
+var _attack_contact_progress: float = 0.52
 var _attacking: bool = false
 var _held_melee_action: MeleeAttackActionDefinition
 var attack_pose_weight: float = 0.0
@@ -158,16 +159,18 @@ func prepare_held_idle_reference(action: MeleeAttackActionDefinition) -> void:
 	_held_melee_action = action
 	_update_actions(0.0)
 
-func play_attack(duration: float, direction: int, animation_style: int = MeleeAttackActionDefinition.AnimationStyle.SWEEP):
+func play_attack(duration: float, direction: int, animation_style: int = MeleeAttackActionDefinition.AnimationStyle.SWEEP, contact_progress: float = 0.52):
 	assert(duration > 0.0)
 	assert(direction == -1 or direction == 1)
 	assert(animation_style >= MeleeAttackActionDefinition.AnimationStyle.SWEEP and animation_style <= MeleeAttackActionDefinition.AnimationStyle.OVERHEAD_SLAM)
+	assert(animation_style != MeleeAttackActionDefinition.AnimationStyle.SWEEP or (contact_progress > MeleeAttackActionDefinition.SWEEP_WINDUP_END and contact_progress < MeleeAttackActionDefinition.SWEEP_RECOVERY_START))
 	_placing = false
 	_attacking = true
 	_attack_elapsed = 0.0
 	_attack_duration = duration
 	_attack_direction = direction
 	_attack_animation_style = animation_style
+	_attack_contact_progress = contact_progress
 
 func cancel_attack():
 	_attacking = false
@@ -626,13 +629,15 @@ func _place_swing_degrees(progress: float) -> float:
 	return lerp(-75.0, 0.0, _pose_ease((progress - 0.62) / 0.38))
 
 func _attack_sweep_degrees(progress: float) -> float:
-	if progress < 0.22:
-		return lerp(0.0, -profile.attack_windup_degrees, _pose_ease(progress / 0.22))
-	if progress < 0.52:
-		return lerp(-profile.attack_windup_degrees, profile.attack_follow_through_degrees, _pose_ease((progress - 0.22) / 0.30))
-	if progress < 0.68:
+	if progress < MeleeAttackActionDefinition.SWEEP_WINDUP_END:
+		return lerp(0.0, -profile.attack_windup_degrees, _pose_ease(progress / MeleeAttackActionDefinition.SWEEP_WINDUP_END))
+	if progress < _attack_contact_progress:
+		var strike_progress := (progress - MeleeAttackActionDefinition.SWEEP_WINDUP_END) / (_attack_contact_progress - MeleeAttackActionDefinition.SWEEP_WINDUP_END)
+		return lerp(-profile.attack_windup_degrees, profile.attack_follow_through_degrees, _pose_ease(strike_progress))
+	if progress < MeleeAttackActionDefinition.SWEEP_RECOVERY_START:
 		return profile.attack_follow_through_degrees
-	return lerp(profile.attack_follow_through_degrees, 0.0, _pose_ease((progress - 0.68) / 0.32))
+	var recovery_progress := (progress - MeleeAttackActionDefinition.SWEEP_RECOVERY_START) / (1.0 - MeleeAttackActionDefinition.SWEEP_RECOVERY_START)
+	return lerp(profile.attack_follow_through_degrees, 0.0, _pose_ease(recovery_progress))
 
 func _overhead_slam_arm_pitch_degrees(progress: float) -> float:
 	if progress < HAMMER_WINDUP_END:

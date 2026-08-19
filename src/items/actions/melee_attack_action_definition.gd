@@ -6,6 +6,9 @@ enum AnimationStyle {
 	OVERHEAD_SLAM,
 }
 
+const SWEEP_WINDUP_END: float = 0.22
+const SWEEP_RECOVERY_START: float = 0.68
+
 @export var attack_profile: MeleeAttackProfile
 @export_range(0.05, 1.0, 0.01) var chain_input_window: float = 0.26
 @export var animation_style: AnimationStyle = AnimationStyle.SWEEP
@@ -33,6 +36,11 @@ func validate(source: String) -> bool:
 	if animation_style < AnimationStyle.SWEEP or animation_style > AnimationStyle.OVERHEAD_SLAM:
 		push_error("[MeleeAttackActionDefinition] Invalid animation style at %s" % source)
 		return false
+	if animation_style == AnimationStyle.SWEEP:
+		var contact_progress := get_sweep_contact_progress()
+		if contact_progress <= SWEEP_WINDUP_END or contact_progress >= SWEEP_RECOVERY_START:
+			push_error("[MeleeAttackActionDefinition] Sweep contact must follow windup and precede recovery at %s" % source)
+			return false
 	if (
 		not two_handed_left_arm_rotation_degrees.is_finite()
 		or not two_handed_right_arm_rotation_degrees.is_finite()
@@ -51,3 +59,11 @@ func validate(source: String) -> bool:
 		push_error("[MeleeAttackActionDefinition] Invalid impact audio volume at %s" % source)
 		return false
 	return true
+
+func get_sweep_contact_progress() -> float:
+	assert(attack_profile != null and attack_profile.duration > 0.0)
+	return clampf(attack_profile.contact_time / attack_profile.duration, 0.0, 1.0)
+
+func get_sweep_trace_progress(action_progress: float) -> float:
+	var contact_progress := get_sweep_contact_progress()
+	return clampf((action_progress - SWEEP_WINDUP_END) / (contact_progress - SWEEP_WINDUP_END), 0.0, 1.0)

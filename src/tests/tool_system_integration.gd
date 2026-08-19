@@ -434,6 +434,56 @@ func _run():
 	_expect(not shockwave.visible, "hammer shockwave did not finish")
 	movement_camera_rig._update_impact_shake(CameraRig.IMPACT_SHAKE_DURATION)
 	_expect(movement_camera_rig.camera.position.is_equal_approx(camera_rest_position), "hammer camera shake did not restore the camera")
+	var sword_arc := _player.get_node("SwordSwingArc") as SwordSwingArcView
+	_expect(_interactor.melee_attack_started.is_connected(sword_arc._on_melee_attack_started), "sword arc is not wired to live melee attacks")
+	_interactor.melee_attack_action = sword_action
+	sword_arc.play(sword_action, -1)
+	_expect(not sword_arc.visible and sword_arc._active_action == sword_action, "sword arc appeared before the authored windup completed")
+	_expect(is_equal_approx(sword_arc._reach, sword_action.attack_profile.reach) and is_equal_approx(sword_arc._sweep_radians, deg_to_rad(sword_action.attack_profile.sweep_degrees)), "sword arc does not use the combat profile geometry")
+	var arc_origin_before_move := sword_arc.global_position
+	_player.global_position.x += 0.25
+	sword_arc._process(sword_action.attack_profile.duration * MeleeAttackActionDefinition.SWEEP_WINDUP_END)
+	_expect(not sword_arc.visible, "sword arc rendered during the windup")
+	var sword_contact_progress := sword_action.get_sweep_contact_progress()
+	var half_strike_duration := sword_action.attack_profile.duration * (sword_contact_progress - MeleeAttackActionDefinition.SWEEP_WINDUP_END) * 0.5
+	sword_arc._process(half_strike_duration)
+	_expect(is_zero_approx(sword_arc._leading_angle) and sword_arc._lagging_angle > sword_arc._leading_angle and sword_arc.visible, "left-to-right sword scan did not cross forward in the sword's direction")
+	_expect(sword_arc._leading_progress > sword_arc._lagging_progress and is_zero_approx(sword_arc._lagging_progress), "sword scan's trailing edge started before the leading edge completed")
+	_expect(is_equal_approx(sword_arc.global_position.x, arc_origin_before_move.x + 0.25), "sword arc did not follow the moving player's attack origin")
+	_expect(is_equal_approx(sword_arc.global_position.y, _player.global_position.y + _player.player_height * SwordSwingArcView.HEIGHT_RATIO), "sword scan is not positioned just below the held sword")
+	_expect(is_equal_approx(SwordSwingArcView.PEAK_ALPHA, 0.56), "sword scan opacity changed")
+	var sword_arc_arrays := sword_arc._mesh.surface_get_arrays(0)
+	var sword_arc_vertices := sword_arc_arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array
+	var sword_arc_colors := sword_arc_arrays[Mesh.ARRAY_COLOR] as PackedColorArray
+	var sword_arc_outer_radius := 0.0
+	var sword_arc_inner_radius := INF
+	for vertex in sword_arc_vertices:
+		var vertex_radius := Vector2(vertex.x, vertex.z).length()
+		sword_arc_outer_radius = maxf(sword_arc_outer_radius, vertex_radius)
+		sword_arc_inner_radius = minf(sword_arc_inner_radius, vertex_radius)
+	_expect(absf(sword_arc_outer_radius - sword_action.attack_profile.reach) < 0.001, "sword arc outer edge does not match melee reach")
+	_expect(is_zero_approx(sword_arc_inner_radius), "sword scan does not extend from the player to maximum melee reach")
+	_expect(not sword_arc_colors.is_empty() and sword_arc_colors[0].a < sword_arc_colors[sword_arc_colors.size() - 1].a, "sword arc does not fade behind its moving edge")
+	sword_arc._process(half_strike_duration)
+	_expect(sword_arc.visible and is_equal_approx(sword_arc._leading_progress, 1.0) and is_zero_approx(sword_arc._lagging_progress), "sword scan's trailing edge started before the leading edge reached the damage contact frame")
+	var contact_arc_alpha := (sword_arc._mesh.surface_get_arrays(0)[Mesh.ARRAY_COLOR] as PackedColorArray)[-1].a
+	var half_recovery_duration := sword_action.attack_profile.duration * (1.0 - sword_contact_progress) * 0.5
+	sword_arc._process(half_recovery_duration)
+	var recovery_arc_colors := sword_arc._mesh.surface_get_arrays(0)[Mesh.ARRAY_COLOR] as PackedColorArray
+	_expect(sword_arc.visible and is_equal_approx(sword_arc._leading_progress, 1.0) and is_equal_approx(sword_arc._lagging_progress, 0.5), "sword scan's trailing edge did not clear across the completed sector")
+	_expect(recovery_arc_colors[recovery_arc_colors.size() - 1].a < contact_arc_alpha, "sword scan did not fade while its trailing edge caught up")
+	sword_arc._process(half_recovery_duration)
+	_expect(not sword_arc.visible and sword_arc._active_action == null, "sword scan did not converge and finish with the attack")
+	sword_arc.play(sword_action, 1)
+	sword_arc._process(sword_action.attack_profile.duration * (MeleeAttackActionDefinition.SWEEP_WINDUP_END + (sword_contact_progress - MeleeAttackActionDefinition.SWEEP_WINDUP_END) * 0.25))
+	_expect(sword_arc._leading_angle > sword_arc._lagging_angle, "right-to-left sword scan did not reverse its direction")
+	_interactor.melee_attack_action = null
+	sword_arc._process(0.01)
+	_expect(not sword_arc.visible, "canceling a sword attack left its arc visible")
+	sword_arc.play(hammer_action, -1)
+	_expect(not sword_arc.visible, "overhead hammer attack incorrectly showed a sword arc")
+	_player.global_position.x -= 0.25
+	_interactor.cancel_actions()
 	_hotbar = (load("res://inventory/ui/inventory_hotbar.tscn") as PackedScene).instantiate() as InventoryHotbar
 	root.add_child(_hotbar)
 	_hotbar.setup(_inventory, _inventory_loadout, item_proficiency)
