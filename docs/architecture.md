@@ -66,19 +66,24 @@ active state; despawn and shutdown do not emit defeat. `Game` consumes the playe
 validation, so support, body collision, and centered-feet requirements cannot diverge.
 
 `MeleeCombatCoordinator` validates cursor targeting, range, sweep arc, voxel visibility, target
-existence, and contact timing before changing health. `MeleeAttackProfile` owns base damage and an
-optional sweep angle. Selecting a melee weapon makes the player presentation smoothly track the
-cursor independently of camera-relative movement whenever the player is not sprinting; sprinting
-restores movement-owned facing. Player swings snap to the current cursor ray, lock that facing for
-the attack duration even while sprinting, lock sorted spatial-index candidates from the same ray,
-then independently revalidate every locked target at contact; a zero-degree sweep
+existence, and contact timing before changing health. `MeleeAttackProfile` owns base damage, a
+damage multiplier, an optional sweep angle, optional knockback, and whether targets lock at attack
+start or are acquired at contact. Selecting a melee weapon makes the player presentation smoothly
+track the cursor independently of camera-relative movement whenever the player is not sprinting;
+sprinting restores movement-owned facing. Directional player swings snap to the current cursor ray,
+lock that facing for the attack duration even while sprinting, lock sorted spatial-index candidates
+from the same ray, then independently revalidate every locked target at contact. The copper hammer
+instead queries its full-circle four-block area at the slam frame, so enemies are affected according
+to their positions at impact. A zero-degree sweep
 retains exact single-target ray selection, while a full-circle sweep is independent of planar cursor
 aim. The profile calculates
-`max(1, base damage + attacker strength - target defense)`. Each successful physical hit applies
-that damage through the target state owner, then produces an immutable `MeleeOutcome` containing
-the contact, exact applied damage, source item ID, and lethal result. Rejected contacts change no
-health and produce no outcome. `Game` explicitly connects completed outcomes to entity reactions,
-progression, and presentation without making combat own those policies.
+`max(1, (base damage + attacker strength - target defense) × damage multiplier)`. Each successful
+physical hit applies that damage through the target state owner, optionally adds a decaying planar
+knockback velocity, then produces an immutable `MeleeOutcome` containing the contact, exact applied
+damage, source item ID, and lethal result. The player interactor separately emits the AoE's ground
+origin for presentation; the hammer consumes it with a procedural expanding and fading ring. Rejected
+contacts change no health and produce no outcome. `Game` explicitly connects completed outcomes to
+entity reactions, progression, and presentation without making combat own those policies.
 
 `ActorStats` owns the player's level and current-level experience. `CombatProgressionCoordinator`
 awards the reward authored on an `EntityDefinition` exactly once for a player-caused defeat.

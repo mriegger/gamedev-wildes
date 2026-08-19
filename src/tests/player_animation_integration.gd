@@ -468,7 +468,10 @@ func _run():
 	_expect(maximum_hammer_lean > deg_to_rad(20.0), "hammer slam did not lean into the impact")
 	_expect(minimum_hammer_height < hammer_rest_height - 0.1, "hammer slam did not crouch at impact")
 	_expect(maximum_hammer_head_height > 1.8, "hammer head did not rise above the player height=%.2f" % maximum_hammer_head_height)
-	_expect(absf(impact_striking_face_height - 0.04) < 0.03, "hammer striking face did not meet the ground plane face=%.3f" % impact_striking_face_height)
+	_expect(absf(impact_striking_face_height - 0.04) < 0.03, "hammer striking face did not meet the shockwave plane face=%.3f" % impact_striking_face_height)
+	var impact_head_offset: Vector3 = impact_hammer_head_position - animator.global_position
+	impact_head_offset.y = 0.0
+	_expect(absf(impact_head_offset.length() - hammer_action.attack_profile.impact_origin_forward_offset) < 0.02, "hammer combat origin does not match the rendered head contact offset rendered=%.3f configured=%.3f" % [impact_head_offset.length(), hammer_action.attack_profile.impact_origin_forward_offset])
 	_expect(recovery_midpoint_hammer_head_height > impact_hammer_head_height + 0.25, "hammer recovery did not lift the head clear of the ground impact=%.2f midpoint=%.2f" % [impact_hammer_head_height, recovery_midpoint_hammer_head_height])
 	_expect(recovery_midpoint_hand_distance > 0.2, "hammer hands did not separate during the direct return distance=%.2f" % recovery_midpoint_hand_distance)
 	_expect(is_zero_approx(recovery_midpoint_alignment_weight) and abs(recovery_midpoint_pose_weight - 0.5) < 0.08, "hammer recovery did not linearly interpolate the authored local pose")

@@ -138,8 +138,11 @@ the chest with the crafting menu while keeping the backpack open.
 
 **Tools.** New worlds start with an empty inventory, while the first pickaxe is crafted from stone
 and wood. Item actions are data-driven: the hoe tills exposed grass and dirt, stone and copper
-pickaxes can mine copper, and the sword uses click-triggered, alternating melee swings. Held tools
-use either runtime-extruded pixel art or authored 3D scenes.
+pickaxes can mine copper, and the sword uses click-triggered, alternating melee swings. The copper
+hammer uses a slower two-handed overhead slam that damages and knocks back enemies within about
+four blocks of the hammer's ground contact while an expanding white ring marks that area. Its
+damage falls linearly from 1.5 times sword damage at the center to half sword damage at the edge.
+Held tools use either runtime-extruded pixel art or authored 3D scenes.
 
 **Lighting.** Per-vertex ambient occlusion is baked into chunk meshes. A directional sun plus a
 fill light drive real-time shadows, and a keyframed day/night profile interpolates sky, ambient,

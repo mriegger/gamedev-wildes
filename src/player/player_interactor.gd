@@ -5,6 +5,7 @@ signal block_placed
 signal crafting_station_open_requested(position: Vector3i, definition: CraftingStationBlockDefinition)
 signal container_open_requested(position: Vector3i, definition: ContainerBlockDefinition)
 signal melee_attack_started(action: MeleeAttackActionDefinition, direction: int)
+signal melee_attack_impacted(action: MeleeAttackActionDefinition, position: Vector3)
 signal melee_terrain_hit(position: Vector3i)
 signal soil_tilled
 
@@ -51,6 +52,7 @@ var next_melee_attack_direction: int = -1
 var secondary_use_timer: float = 0.0
 var _melee_target_runtime_ids: Array[int] = []
 var _melee_contact_pending: bool = false
+var _melee_impact_pending: bool = false
 var _melee_ray_origin: Vector3
 var _melee_ray_direction: Vector3
 var _melee_source_item_id: StringName = &""
@@ -354,6 +356,7 @@ func _reset_mining():
 
 func _reset_melee_chain():
 	_melee_contact_pending = false
+	_melee_impact_pending = false
 	_melee_target_runtime_ids.clear()
 	_melee_source_item_id = &""
 	_melee_locked_facing_direction = Vector3.ZERO
@@ -381,15 +384,19 @@ func _start_melee_attack():
 	_melee_locked_facing_direction = Vector3(
 		sin(motor.model_root.rotation.y), 0.0, cos(motor.model_root.rotation.y)
 	)
-	_melee_target_runtime_ids = combat.acquire_player_targets(_melee_ray_origin, _melee_ray_direction, profile)
-	_melee_contact_pending = not _melee_target_runtime_ids.is_empty()
+	if profile.acquire_targets_on_contact:
+		_melee_target_runtime_ids.clear()
+	else:
+		_melee_target_runtime_ids = combat.acquire_player_targets(_melee_ray_origin, _melee_ray_direction, profile)
+	_melee_contact_pending = profile.acquire_targets_on_contact or not _melee_target_runtime_ids.is_empty()
+	_melee_impact_pending = true
 	var attack_direction := next_melee_attack_direction
 	next_melee_attack_direction = -next_melee_attack_direction
 	melee_attack_started.emit(melee_attack_action, attack_direction)
-	if target_has and voxel_space != null and voxel_space.is_solid(target_block):
+	if not profile.acquire_targets_on_contact and target_has and voxel_space != null and voxel_space.is_solid(target_block):
 		melee_terrain_hit.emit(target_block)
-	if _melee_contact_pending and is_zero_approx(profile.contact_time):
-		_commit_melee_contacts()
+	if is_zero_approx(profile.contact_time):
+		_commit_melee_impact()
 
 func _advance_melee_attack(delta: float):
 	if melee_attack_action == null or melee_attack_timer <= 0.0:
@@ -398,8 +405,8 @@ func _advance_melee_attack(delta: float):
 	var previous_elapsed := melee_attack_elapsed
 	melee_attack_elapsed = minf(melee_attack_elapsed + delta, profile.duration)
 	melee_attack_timer = maxf(melee_attack_timer - delta, 0.0)
-	if _melee_contact_pending and previous_elapsed < profile.contact_time and melee_attack_elapsed >= profile.contact_time:
-		_commit_melee_contacts()
+	if (_melee_impact_pending or _melee_contact_pending) and previous_elapsed < profile.contact_time and melee_attack_elapsed >= profile.contact_time:
+		_commit_melee_impact()
 
 func _update_melee_facing(delta: float):
 	if pointer_over_ui or not get_selected_primary_action() is MeleeAttackActionDefinition:
@@ -428,11 +435,31 @@ func _get_cursor_planar_direction(ray_origin: Vector3, ray_direction: Vector3) -
 		return Vector3.ZERO
 	return cursor_direction.normalized()
 
-func _commit_melee_contacts():
-	var target_runtime_ids := _melee_target_runtime_ids
+func _commit_melee_impact():
+	_melee_impact_pending = false
+	var impact_position := _get_melee_impact_position(melee_attack_action.attack_profile)
+	if _melee_contact_pending:
+		_commit_melee_contacts(impact_position)
+	melee_attack_impacted.emit(melee_attack_action, impact_position)
+
+func _commit_melee_contacts(impact_position: Vector3):
+	var profile := melee_attack_action.attack_profile
+	var combat_origin := impact_position if profile.impact_origin_forward_offset > 0.0 else Vector3.INF
+	var target_runtime_ids := combat.acquire_player_targets(_melee_ray_origin, _melee_ray_direction, profile, combat_origin) if profile.acquire_targets_on_contact else _melee_target_runtime_ids
 	_melee_contact_pending = false
-	_melee_target_runtime_ids = []
-	combat.try_commit_player_contacts(target_runtime_ids, _melee_ray_origin, _melee_ray_direction, melee_attack_action.attack_profile, _melee_source_item_id)
+	combat.try_commit_player_contacts(target_runtime_ids, _melee_ray_origin, _melee_ray_direction, profile, _melee_source_item_id, combat_origin)
+	_melee_target_runtime_ids.clear()
+
+func _get_melee_impact_position(profile: MeleeAttackProfile) -> Vector3:
+	var forward := _melee_locked_facing_direction
+	if forward.is_zero_approx():
+		forward = motor.model_root.global_transform.basis.z
+	forward.y = 0.0
+	if forward.is_zero_approx():
+		forward = Vector3.BACK
+	else:
+		forward = forward.normalized()
+	return motor.global_position + forward * profile.impact_origin_forward_offset + Vector3.UP * 0.04
 
 func _can_mine_position(pos: Vector3i, action: MiningActionDefinition) -> bool:
 	if action == null or voxel_space == null or editable_voxel_world == null or motor == null:

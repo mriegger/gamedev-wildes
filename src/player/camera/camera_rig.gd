@@ -9,6 +9,11 @@ class_name CameraRig
 @export var pitch_deg: float = -45.0
 @export var orbit_distance: float = 70.0
 
+const IMPACT_SHAKE_DURATION: float = 0.18
+const IMPACT_SHAKE_STRENGTH: float = 0.128
+const IMPACT_SHAKE_FREQUENCY: float = 78.0
+const DEFAULT_ORTHO_SIZE: float = 42.0
+
 @onready var pitch: Node3D = $Pitch
 @onready var camera: Camera3D = $Pitch/Camera3D
 
@@ -24,6 +29,9 @@ var _left_panel_progress: float = 0.0
 var _right_panel_progress: float = 0.0
 var _left_panel_width: float = 0.0
 var _right_panel_width: float = 380.0
+var _camera_rest_position: Vector3 = Vector3.ZERO
+var _impact_shake_elapsed: float = IMPACT_SHAKE_DURATION
+var _impact_shake_strength: float = 0.0
 
 func set_left_panel_obstruction_progress(progress: float):
 	_left_panel_progress = clamp(progress, 0.0, 1.0)
@@ -85,7 +93,8 @@ func _ready():
 	if camera:
 		camera.projection = Camera3D.PROJECTION_ORTHOGONAL
 		camera.transform.origin = Vector3(0, 0, orbit_distance)
-		camera.size = 42.0
+		_camera_rest_position = camera.position
+		camera.size = DEFAULT_ORTHO_SIZE
 		camera.near = 0.1
 		camera.far = 1000.0
 		camera.current = true
@@ -132,6 +141,24 @@ func _process(delta):
 		_zoom(-zoom_speed * delta)
 	if ib.zoom_out_pressed:
 		_zoom(zoom_speed * delta)
+	_update_impact_shake(delta)
+
+func play_impact_shake(strength: float = IMPACT_SHAKE_STRENGTH) -> void:
+	if camera == null or not is_finite(strength) or strength <= 0.0:
+		return
+	_impact_shake_elapsed = 0.0
+	_impact_shake_strength = strength
+
+func _update_impact_shake(delta: float) -> void:
+	if _impact_shake_elapsed >= IMPACT_SHAKE_DURATION:
+		camera.position = _camera_rest_position
+		return
+	_impact_shake_elapsed = minf(_impact_shake_elapsed + delta, IMPACT_SHAKE_DURATION)
+	var progress := _impact_shake_elapsed / IMPACT_SHAKE_DURATION
+	var envelope := pow(1.0 - progress, 2.0)
+	var phase := _impact_shake_elapsed * IMPACT_SHAKE_FREQUENCY
+	var zoom_scale := sqrt(DEFAULT_ORTHO_SIZE / maxf(camera.size, 0.001))
+	camera.position = _camera_rest_position + Vector3(sin(phase), cos(phase * 1.37), 0.0) * _impact_shake_strength * zoom_scale * envelope
 
 func _zoom(amount: float):
 	if camera == null:

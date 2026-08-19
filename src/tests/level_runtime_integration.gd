@@ -377,6 +377,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 		player.interactor.melee_attack_timer = 1.0
 		player.interactor.melee_attack_queue = 1
 		player.interactor._melee_contact_pending = true
+		player.interactor._melee_impact_pending = true
 		player.interactor._melee_target_runtime_ids.assign([999999])
 		await game._enter_level()
 		var runtime := game._level_runtime
@@ -393,7 +394,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 		_expect(dungeon_entity_runtime != world_entity_runtime and not dungeon_entity_runtime.is_suspended(), "level entry did not activate a dedicated entity runtime in cycle %d" % cycle)
 		_expect(game._active_entity_runtime == dungeon_entity_runtime and player.interactor.entity_runtime == dungeon_entity_runtime, "level entry did not rebind player entity queries in cycle %d" % cycle)
 		_expect(combat._entity_runtime == dungeon_entity_runtime and combat._voxel_space == runtime.get_voxel_space(), "level entry did not rebind combat in cycle %d" % cycle)
-		_expect(player.interactor.melee_attack_timer == 0.0 and player.interactor.melee_attack_queue == 0 and not player.interactor._melee_contact_pending and player.interactor._melee_target_runtime_ids.is_empty(), "level entry retained a pending overworld attack in cycle %d" % cycle)
+		_expect(player.interactor.melee_attack_timer == 0.0 and player.interactor.melee_attack_queue == 0 and not player.interactor._melee_contact_pending and not player.interactor._melee_impact_pending and player.interactor._melee_target_runtime_ids.is_empty(), "level entry retained a pending overworld attack in cycle %d" % cycle)
 		_expect(player.voxel_space == runtime.get_voxel_space(), "player is not bound to LevelState in cycle %d" % cycle)
 		_expect(player.interactor.voxel_space == runtime.get_voxel_space(), "interactor is not bound to LevelState in cycle %d" % cycle)
 		_expect(not player.interactor.is_editing_enabled() and player.interactor.editable_voxel_world == null, "level binding retained edit authority in cycle %d" % cycle)

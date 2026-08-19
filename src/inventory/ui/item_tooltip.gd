@@ -105,7 +105,7 @@ func _get_stat_lines() -> Array[String]:
 	var melee_action := _item_definition.primary_action as MeleeAttackActionDefinition
 	if melee_action != null:
 		var profile := melee_action.attack_profile
-		lines.append("Base Damage: %s" % _format_number(profile.base_damage))
+		lines.append("Base Damage: %s" % _format_number(profile.base_damage * profile.damage_multiplier))
 		lines.append("Reach: %s" % _format_number(profile.reach))
 		lines.append("Cooldown: %ss" % _format_number(profile.cooldown))
 		lines.append("Sweep: %s°" % _format_number(profile.sweep_degrees))

@@ -18,3 +18,4 @@ held_position_offset = Vector3(0, 0.08, 0.04)
 held_rotation_degrees = Vector3(-15.944, -89.474, -152.891)
 compensate_attack_arm_pitch = false
 align_overhead_striking_face = true
+impact_effect_radius = 4.0

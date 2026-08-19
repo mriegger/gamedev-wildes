@@ -19,6 +19,7 @@ enum AnimationStyle {
 @export var held_rotation_degrees: Vector3
 @export var compensate_attack_arm_pitch: bool = true
 @export var align_overhead_striking_face: bool = false
+@export_range(0.0, 32.0, 0.01, "or_greater") var impact_effect_radius: float = 0.0
 
 func validate(source: String) -> bool:
 	if attack_profile == null or not attack_profile.validate(source):
@@ -40,5 +41,8 @@ func validate(source: String) -> bool:
 		or not held_rotation_degrees.is_finite()
 	):
 		push_error("[MeleeAttackActionDefinition] Invalid held-item attack transform at %s" % source)
+		return false
+	if not is_finite(impact_effect_radius) or impact_effect_radius < 0.0:
+		push_error("[MeleeAttackActionDefinition] Invalid impact effect radius at %s" % source)
 		return false
 	return true

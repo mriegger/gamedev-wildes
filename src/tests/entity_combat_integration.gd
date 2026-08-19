@@ -133,12 +133,17 @@ func _on_player_defeated() -> void:
 
 func _run() -> void:
 	var sword_profile := load("res://combat/profiles/copper_sword_melee.tres") as MeleeAttackProfile
+	var hammer_profile := load("res://combat/profiles/copper_hammer_melee.tres") as MeleeAttackProfile
 	var zombie_profile := load("res://combat/profiles/zombie_melee.tres") as MeleeAttackProfile
 	_expect(sword_profile != null and sword_profile.validate(sword_profile.resource_path), "copper sword profile is invalid")
+	_expect(hammer_profile != null and hammer_profile.validate(hammer_profile.resource_path), "copper hammer profile is invalid")
 	_expect(zombie_profile != null and zombie_profile.validate(zombie_profile.resource_path), "zombie profile is invalid")
 	_expect(sword_profile.id == &"copper_sword_melee", "copper sword attack ID changed")
 	_expect(zombie_profile.id == &"zombie_melee", "zombie attack ID changed")
 	_expect(is_equal_approx(sword_profile.base_damage, 10.0), "copper sword base damage changed")
+	_expect(is_equal_approx(hammer_profile.damage_multiplier, 1.0), "copper hammer base damage multiplier changed")
+	_expect(is_equal_approx(hammer_profile.reach, 4.0) and is_equal_approx(hammer_profile.sweep_degrees, 360.0), "copper hammer radius changed")
+	_expect(hammer_profile.acquire_targets_on_contact and hammer_profile.knockback_speed > 0.0, "copper hammer impact behavior changed")
 	_expect(is_equal_approx(zombie_profile.base_damage, 15.0), "zombie base damage changed")
 	_expect(is_equal_approx(sword_profile.sweep_degrees, 120.0), "copper sword sweep changed")
 	_expect(is_zero_approx(zombie_profile.sweep_degrees), "zombie attack became a sweep")
@@ -152,6 +157,10 @@ func _run() -> void:
 	_expect(not full_circle_profile.requires_planar_aim(), "full-circle sweep required a planar aim")
 	_expect(sword_profile.requires_planar_aim(), "directional sword sweep did not require a planar aim")
 	_expect(is_equal_approx(sword_profile.calculate_damage(10.0, 4.0), 16.0), "sword damage formula is incorrect")
+	var configured_sword_damage := sword_profile.calculate_damage(10.0, 4.0)
+	_expect(is_equal_approx(hammer_profile.calculate_damage_at_distance(10.0, 4.0, 0.0), configured_sword_damage * 1.5), "hammer center damage is not 1.5 times sword damage")
+	_expect(is_equal_approx(hammer_profile.calculate_damage_at_distance(10.0, 4.0, hammer_profile.reach * 0.5), configured_sword_damage), "hammer midpoint damage does not match sword damage")
+	_expect(is_equal_approx(hammer_profile.calculate_damage_at_distance(10.0, 4.0, hammer_profile.reach), configured_sword_damage * 0.5), "hammer edge damage is not half of sword damage")
 	_expect(is_equal_approx(zombie_profile.calculate_damage(5.0, 4.0), 16.0), "zombie damage formula is incorrect")
 	_expect(is_equal_approx(sword_profile.calculate_damage(0.0, 100.0), 1.0), "damage did not clamp to its minimum")
 	_expect(sword_profile.cooldown >= sword_profile.duration, "sword cooldown is shorter than its attack")
@@ -281,6 +290,7 @@ func _run() -> void:
 	player.interactor.melee_attack_elapsed = 0.0
 	player.interactor._melee_target_runtime_ids = [target_id]
 	player.interactor._melee_contact_pending = true
+	player.interactor._melee_impact_pending = true
 	player.interactor._melee_source_item_id = &"copper_sword"
 	player.interactor._melee_ray_origin = ray_origin
 	player.interactor._melee_ray_direction = ray_direction
@@ -430,6 +440,7 @@ func _run() -> void:
 	await _test_independent_contact_revalidation(world, sword_profile)
 	await _test_uncapped_mixed_damage(world, sword_profile)
 	await _test_multi_target_interactor_timing(world, sword_profile)
+	await _test_hammer_slam(world, hammer_profile)
 	await _test_player_death_screen()
 	var orphan_count := int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
 	_expect(orphan_count == 0, "orphan count ended at %d" % orphan_count)
@@ -855,6 +866,7 @@ func _test_multi_target_interactor_timing(world: VoxelWorld, sword_profile: Mele
 	player.interactor.melee_attack_elapsed = 0.0
 	player.interactor._melee_target_runtime_ids = locked_ids
 	player.interactor._melee_contact_pending = true
+	player.interactor._melee_impact_pending = true
 	player.interactor._melee_source_item_id = &"copper_sword"
 	player.interactor._melee_ray_origin = ray[0]
 	player.interactor._melee_ray_direction = ray[1]
@@ -874,15 +886,89 @@ func _test_multi_target_interactor_timing(world: VoxelWorld, sword_profile: Mele
 	player.interactor.melee_attack_elapsed = 0.0
 	player.interactor._melee_target_runtime_ids = locked_ids
 	player.interactor._melee_contact_pending = true
+	player.interactor._melee_impact_pending = true
 	player.interactor._melee_source_item_id = &"copper_sword"
 	player.interactor._melee_ray_origin = ray[0]
 	player.interactor._melee_ray_direction = ray[1]
 	player.interactor.cancel_actions()
-	_expect(not player.interactor._melee_contact_pending and player.interactor._melee_target_runtime_ids.is_empty(), "action cancellation retained locked sweep targets")
+	_expect(not player.interactor._melee_contact_pending and not player.interactor._melee_impact_pending and player.interactor._melee_target_runtime_ids.is_empty(), "action cancellation retained locked sweep targets")
 	player.interactor._advance_melee_attack(sword_profile.duration)
 	_expect(_contacts.size() == contact_count_before + 2, "canceled sweep emitted pending contacts")
 	for actor in actors:
 		_expect(is_equal_approx(coordinator.get_runtime().get_current_hp(actor.runtime_id), 64.0), "canceled sweep changed target HP")
+	await _cleanup(combat, coordinator, player, camera)
+
+func _test_hammer_slam(world: VoxelWorld, hammer_profile: MeleeAttackProfile) -> void:
+	var fixture := _make_combat_fixture(world, 3, 0, 4404)
+	var coordinator := fixture["coordinator"] as WorldEntityCoordinator
+	var combat := fixture["combat"] as MeleeCombatCoordinator
+	var player := fixture["player"] as PlayerMotor
+	var camera := fixture["camera"] as Camera3D
+	var actors := _get_sorted_actors(coordinator)
+	_expect(actors.size() == 3, "hammer fixture did not spawn three zombies")
+	if actors.size() != 3:
+		await _cleanup(combat, coordinator, player, camera)
+		return
+	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
+	var inventory := InventoryModel.new(item_catalog)
+	inventory.slots[0] = InventoryStack.new(&"copper_hammer", 1)
+	var input_buffer := InputBuffer.new()
+	player.interactor.setup(camera, player, inventory, input_buffer, combat, coordinator.get_runtime())
+	player.interactor.bind_space(world, world)
+	var hammer_action := item_catalog.get_definition(&"copper_hammer").primary_action as MeleeAttackActionDefinition
+	player.interactor.melee_attack_action = hammer_action
+	player.interactor._start_melee_attack()
+	var locked_hammer_yaw := player.model_root.rotation.y
+	_expect(player.interactor._melee_target_runtime_ids.is_empty(), "hammer attack locked targets before contact")
+	var expected_impact := player.interactor._get_melee_impact_position(hammer_profile)
+	var player_center := player.global_position + Vector3.UP * (player.player_height * 0.5)
+	var impact_forward := expected_impact - player.global_position
+	impact_forward.y = 0.0
+	_expect(is_equal_approx(impact_forward.length(), hammer_profile.impact_origin_forward_offset), "hammer impact origin does not match its ground-contact offset")
+	_expect(impact_forward.normalized().dot(player.model_root.global_transform.basis.z.normalized()) > 0.999, "hammer impact origin is not in front of the player")
+	_place_at_angle(actors[0], expected_impact, -120.0, 0.0)
+	_place_at_angle(actors[1], expected_impact, 0.0, 5.0)
+	_place_at_angle(actors[2], player_center, 180.0, 3.4)
+	coordinator.tick(0.0, player.global_position, 20.0)
+	var impacts: Array[Vector3] = []
+	player.interactor.melee_attack_impacted.connect(func(action: MeleeAttackActionDefinition, position: Vector3):
+		if action == hammer_action:
+			impacts.append(position)
+	)
+	_place_at_angle(actors[1], expected_impact, 0.0, 3.0)
+	coordinator.tick(0.0, player.global_position, 20.0)
+	var contact_count_before := _contacts.size()
+	player.interactor._advance_melee_attack(hammer_profile.contact_time - 0.01)
+	_expect(_contacts.size() == contact_count_before and impacts.is_empty(), "hammer slam resolved before contact time")
+	player.is_sprinting = true
+	player.model_root.rotation.y = wrapf(locked_hammer_yaw + 0.75, -PI, PI)
+	player.interactor._advance_melee_attack(0.02)
+	_expect(_contacts.size() == contact_count_before + 2, "hammer slam did not hit every enemy in its contact-time radius")
+	player.interactor._update_melee_facing(0.0)
+	_expect(is_equal_approx(player.model_root.rotation.y, locked_hammer_yaw), "sprinting overrode the locked hammer facing")
+	player.is_sprinting = false
+	var first_target_center := actors[0].get_world_bounds().get_center()
+	var first_radial_offset := first_target_center - expected_impact
+	first_radial_offset.y = 0.0
+	var second_target_center := actors[1].get_world_bounds().get_center()
+	var second_radial_offset := second_target_center - expected_impact
+	second_radial_offset.y = 0.0
+	var first_expected_damage := hammer_profile.calculate_damage_at_distance(10.0, 4.0, first_radial_offset.length())
+	var second_expected_damage := hammer_profile.calculate_damage_at_distance(10.0, 4.0, second_radial_offset.length())
+	_expect(is_equal_approx(coordinator.get_runtime().get_current_hp(actors[0].runtime_id), 80.0 - first_expected_damage), "hammer slam applied incorrect distance-scaled damage to the first in-range enemy")
+	_expect(is_equal_approx(coordinator.get_runtime().get_current_hp(actors[1].runtime_id), 80.0 - second_expected_damage), "hammer slam applied incorrect distance-scaled damage to the enemy that entered before contact")
+	_expect(is_equal_approx(coordinator.get_runtime().get_current_hp(actors[2].runtime_id), 80.0), "hammer slam hit an enemy outside the contact-time radius")
+	_expect(is_equal_approx(actors[0].knockback_velocity.length(), hammer_profile.knockback_speed), "hammer slam did not knock back the first enemy")
+	_expect(is_equal_approx(actors[1].knockback_velocity.length(), hammer_profile.knockback_speed), "hammer slam did not knock back the second enemy")
+	_expect(actors[2].knockback_velocity.is_zero_approx(), "hammer slam knocked back an out-of-range enemy")
+	_expect(impacts.size() == 1 and impacts[0].is_finite(), "hammer slam did not emit one visual impact")
+	if impacts.size() == 1:
+		_expect(impacts[0].is_equal_approx(expected_impact), "hammer shockwave did not use the ground-contact combat origin")
+	var first_distance_before_knockback := actors[0].global_position.distance_to(expected_impact)
+	coordinator.tick(0.1, player.global_position, 20.0)
+	_expect(actors[0].global_position.distance_to(expected_impact) > first_distance_before_knockback, "hammer knockback did not push the enemy away from the ground contact")
+	player.interactor._advance_melee_attack(hammer_profile.duration)
+	_expect(_contacts.size() == contact_count_before + 2 and impacts.size() == 1, "hammer slam repeated its impact")
 	await _cleanup(combat, coordinator, player, camera)
 
 func _cleanup(combat: MeleeCombatCoordinator, coordinator: WorldEntityCoordinator, player: PlayerMotor, camera: Camera3D) -> void:

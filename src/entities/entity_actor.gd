@@ -16,6 +16,7 @@ var voxel_space: VoxelSpace
 var velocity: Vector3 = Vector3.ZERO
 var on_ground: bool = true
 var max_speed: float = 1.0
+var knockback_velocity: Vector3 = Vector3.ZERO
 var animation_driver: EntityAnimationDriver
 var visual_fader: EntityVisualFader
 var death_poof: EntityDeathPoof
@@ -94,6 +95,7 @@ func begin_death_retirement():
 	assert(animation_driver != null and visual_fader != null and death_poof != null)
 	vocalizations.stop_vocalizations()
 	velocity = Vector3.ZERO
+	knockback_velocity = Vector3.ZERO
 	_death_retirement = true
 	_death_fade_started = false
 	set_process(false)
@@ -154,6 +156,8 @@ func limit_planar_velocity(desired_velocity: Vector3, speed_limit: float) -> Vec
 	return desired_velocity
 
 func advance_voxel_motion(delta: float, desired_velocity: Vector3, gravity: float):
+	desired_velocity += knockback_velocity
+	knockback_velocity = knockback_velocity.move_toward(Vector3.ZERO, 8.0 * delta)
 	velocity.x = desired_velocity.x
 	velocity.z = desired_velocity.z
 	if not on_ground:
@@ -165,6 +169,15 @@ func advance_voxel_motion(delta: float, desired_velocity: Vector3, gravity: floa
 	on_ground = velocity.y <= 0.0 and ground_y != VoxelSpace.NO_SURFACE_Y and absf(ground_y - global_position.y) < 0.12
 	if on_ground:
 		velocity.y = 0.0
+
+func apply_knockback(direction: Vector3, speed: float) -> bool:
+	if not direction.is_finite() or not is_finite(speed) or speed <= 0.0:
+		return false
+	var planar_direction := Vector3(direction.x, 0.0, direction.z)
+	if planar_direction.is_zero_approx():
+		return false
+	knockback_velocity = planar_direction.normalized() * speed
+	return true
 
 func get_world_bounds() -> AABB:
 	assert(definition != null)
