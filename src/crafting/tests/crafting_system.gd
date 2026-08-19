@@ -37,6 +37,7 @@ func _init() -> void:
 		&"copper_pickaxe": {&"copper": 10, &"log_block": 5},
 		&"copper_hoe": {&"copper": 10, &"log_block": 5},
 		&"copper_sword": {&"copper": 15, &"log_block": 5},
+		&"copper_hammer": {&"copper": 15, &"log_block": 5},
 		&"copper_helmet": {&"copper": 5},
 		&"copper_chest_plate": {&"copper": 5},
 		&"copper_pants": {&"copper": 5},
@@ -45,7 +46,7 @@ func _init() -> void:
 	for recipe_id in expected_copper_recipes:
 		_expect(not recipe_catalog.has_definition(recipe_id), "%s leaked into general crafting" % recipe_id)
 		_expect(anvil_recipe_catalog.get_definition(recipe_id).get_ingredient_counts() == expected_copper_recipes[recipe_id], "%s ingredients mismatch" % recipe_id)
-	_expect(anvil_recipe_catalog.definitions.size() == expected_copper_recipes.size(), "anvil catalog does not contain seven copper recipes")
+	_expect(anvil_recipe_catalog.definitions.size() == expected_copper_recipes.size(), "anvil catalog does not contain every copper recipe")
 	_expect(not anvil_recipe_catalog.has_definition(&"stone_pickaxe") and not anvil_recipe_catalog.has_definition(&"torch_bundle"), "non-metal recipe leaked into anvil crafting")
 	_expect(recipe_catalog.get_definition(&"stone_pickaxe").get_ingredient_counts() == {&"stone_block": 10, &"log_block": 5}, "stone pickaxe ingredients mismatch")
 	_expect(recipe_catalog.get_definition(&"chest").get_ingredient_counts() == {&"log_block": 5}, "chest ingredients mismatch")

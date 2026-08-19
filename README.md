@@ -152,7 +152,7 @@ to play.
 
 **Crafting.** Opening crafting with `Tab` reveals the general recipe panel alongside the backpack.
 It contains the six recipes that do not require a workstation. A placed anvil opens its own panel
-with the seven copper tool, weapon, and armor recipes. A placed cauldron opens a food-and-potion
+with the eight copper tool, weapon, and armor recipes. A placed cauldron opens a food-and-potion
 panel; its initial recipe combines two pumpkins and two apples into one health potion. All catalogs
 use materials from the backpack and hotbar and craft immediately when the enabled Craft button is
 pressed, playing one success sound. Apples and pumpkins each restore 10% of maximum health, while

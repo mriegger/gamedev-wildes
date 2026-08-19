@@ -77,7 +77,7 @@ func _process(_delta: float) -> bool:
 		_expect(_hud.anvil_panel.get_node("Margin/Content/Title").text == _station.display_name.to_upper(), "anvil panel does not use the station display name")
 		_expect(not (_hud.anvil_panel.get_node("Margin/Content/WorkspaceTabs") as Control).visible, "anvil panel exposed general crafting workspaces")
 		var recipe_list := _hud.anvil_panel.get_node("Margin/Content/Body/Recipes/RecipeScroll/RecipeList") as VBoxContainer
-		_expect(recipe_list.get_child_count() == 7, "anvil panel did not show seven metal recipes")
+		_expect(recipe_list.get_child_count() == 8, "anvil panel did not show all eight metal recipes")
 		_expect(_hud.anvil_panel.get_selected_recipe_id() == &"copper_pickaxe", "anvil did not select the first metal recipe")
 		_expect(_hud.anvil_panel.get_craft_button().is_craft_enabled(), "available anvil recipe was disabled")
 		_hud.anvil_panel.get_craft_button().pressed.emit()

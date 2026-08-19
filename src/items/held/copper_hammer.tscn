@@ -1,0 +1,49 @@
+[gd_scene load_steps=7 format=3]
+
+[sub_resource type="StandardMaterial3D" id="Material_wood"]
+albedo_color = Color(0.48, 0.27, 0.12, 1)
+roughness = 0.92
+
+[sub_resource type="StandardMaterial3D" id="Material_copper"]
+albedo_color = Color(0.68, 0.31, 0.16, 1)
+metallic = 0.35
+roughness = 0.62
+
+[sub_resource type="StandardMaterial3D" id="Material_copper_dark"]
+albedo_color = Color(0.42, 0.17, 0.09, 1)
+metallic = 0.28
+roughness = 0.7
+
+[sub_resource type="CylinderMesh" id="Cylinder_handle"]
+material = SubResource("Material_wood")
+top_radius = 0.045
+bottom_radius = 0.055
+height = 1.15
+radial_segments = 6
+rings = 1
+
+[sub_resource type="BoxMesh" id="Box_head"]
+material = SubResource("Material_copper")
+size = Vector3(0.72, 0.28, 0.34)
+
+[sub_resource type="BoxMesh" id="Box_band"]
+material = SubResource("Material_copper_dark")
+size = Vector3(0.09, 0.32, 0.38)
+
+[node name="CopperHammer" type="Node3D"]
+
+[node name="Handle" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.575, 0)
+mesh = SubResource("Cylinder_handle")
+
+[node name="Head" type="MeshInstance3D" parent="."]
+position = Vector3(0, 1.15, 0)
+mesh = SubResource("Box_head")
+
+[node name="LeftBand" type="MeshInstance3D" parent="."]
+position = Vector3(-0.265, 1.15, 0)
+mesh = SubResource("Box_band")
+
+[node name="RightBand" type="MeshInstance3D" parent="."]
+position = Vector3(0.265, 1.15, 0)
+mesh = SubResource("Box_band")

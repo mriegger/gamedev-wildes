@@ -51,7 +51,7 @@ func _run() -> void:
 	_expect(partial_alpha_pixels == 0, "anvil inventory icon contains anti-aliased pixels")
 	_expect(general_catalog.has_definition(&"anvil"), "anvil is not craftable from general crafting")
 	_expect(general_catalog.get_definition(&"anvil").get_ingredient_counts() == {&"copper": 10}, "anvil recipe does not require ten copper")
-	for recipe_id in [&"copper_pickaxe", &"copper_hoe", &"copper_sword", &"copper_helmet", &"copper_chest_plate", &"copper_pants", &"copper_shoes"]:
+	for recipe_id in [&"copper_pickaxe", &"copper_hoe", &"copper_sword", &"copper_hammer", &"copper_helmet", &"copper_chest_plate", &"copper_pants", &"copper_shoes"]:
 		_expect(not general_catalog.has_definition(recipe_id), "%s leaked into general crafting" % recipe_id)
 		_expect(anvil_catalog.has_definition(recipe_id), "%s is missing from anvil crafting" % recipe_id)
 	await _test_cauldron(block_catalog, item_catalog, general_catalog, cauldron_catalog)

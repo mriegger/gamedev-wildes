@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="MeleeAttackProfile" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://combat/melee_attack_profile.gd" id="1_profile"]
+
+[resource]
+script = ExtResource("1_profile")
+id = &"copper_hammer_melee"
+duration = 1.5
+contact_time = 0.885
+cooldown = 1.65
+reach = 4.0
+base_damage = 10.0
+sweep_degrees = 360.0
