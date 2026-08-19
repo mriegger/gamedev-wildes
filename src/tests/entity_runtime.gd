@@ -5,7 +5,7 @@ const FEET_Y: float = 2.0
 const TEST_RADIUS: int = 8
 
 var _failures: int = 0
-var _defeated: Array[Dictionary] = []
+var _defeated: Array[EntityDefeat] = []
 
 func _init() -> void:
 	call_deferred("_run")
@@ -28,8 +28,8 @@ func _make_world() -> VoxelWorld:
 func _request(definition_id: StringName, x: float, seed: int) -> EntitySpawnRequest:
 	return EntitySpawnRequest.new(definition_id, Vector3(x, FEET_Y, 0.5), seed)
 
-func _on_entity_defeated(runtime_id: int, definition_id: StringName) -> void:
-	_defeated.append({"runtime_id": runtime_id, "definition_id": definition_id})
+func _on_entity_defeated(defeat: EntityDefeat) -> void:
+	_defeated.append(defeat)
 
 func _run() -> void:
 	var runtime := EntityRuntime.new()

@@ -16,6 +16,9 @@ func _init() -> void:
 	_expect(BlockId.Type.STONE_BRICKS == 12, "stone bricks stable ID changed")
 	_expect(BlockId.Type.TERRACOTTA_BRICKS == 13, "terracotta bricks stable ID changed")
 	_expect(BlockId.Type.WOOD_PLANKS == 14, "wood planks stable ID changed")
+	_expect(BlockId.Type.ANVIL == 16, "anvil stable ID changed")
+	_expect(BlockId.Type.CHEST == 17, "chest stable ID changed")
+	_expect(BlockId.Type.CAULDRON == 18, "cauldron stable ID changed")
 	var expected: Dictionary = {
 		BlockId.Type.COBBLESTONE: [&"cobblestone_block", "Cobblestone", "cobblestone.png", true],
 		BlockId.Type.MOSSY_STONE_BRICKS: [&"mossy_stone_bricks_block", "Mossy Stone Bricks", "mossy_stone_bricks.png", true],
@@ -50,6 +53,20 @@ func _init() -> void:
 		_expect(unarmed_mining.can_mine(block) != requires_copper_pickaxe, "unarmed mining rule invalid for %s" % item_id)
 		_expect(stone_pickaxe_mining.can_mine(block) != requires_copper_pickaxe, "stone pickaxe mining rule invalid for %s" % item_id)
 		_expect(copper_pickaxe_mining.can_mine(block), "copper pickaxe cannot mine %s" % item_id)
+	var chest := block_catalog.get_definition(BlockId.Type.CHEST)
+	var chest_item := item_catalog.get_item_for_block(BlockId.Type.CHEST)
+	_expect(chest.container != null and chest.container.rows == 3 and chest.container.columns == 5 and chest.container.get_slot_count() == 15, "canonical chest container dimensions changed")
+	_expect(chest.is_solid and chest.is_opaque and chest.is_raycast_solid, "chest physical properties invalid")
+	_expect(chest.top_texture.resource_path == "res://assets/textures/blocks/chest_top.png", "chest top texture changed")
+	_expect(chest.side_texture.resource_path == "res://assets/textures/blocks/chest_side.png", "chest side texture changed")
+	_expect(chest.bottom_texture == chest.top_texture, "chest bottom texture changed")
+	_expect(chest.top_texture.get_size() == Vector2(16, 16) and chest.side_texture.get_size() == Vector2(16, 16), "chest texture dimensions invalid")
+	_expect(chest_item.id == &"chest" and chest_item.display_name == "Chest", "chest item identity changed")
+	_expect(chest_item.icon.resource_path == "res://assets/textures/blocks/chest_front.png", "chest item icon changed")
+	var chest_placement := chest_item.secondary_action as BlockPlacementActionDefinition
+	_expect(chest_placement != null and chest_placement.block == chest, "chest placement mapping is not canonical")
+	_expect(texture_set.top_layers[BlockId.Type.CHEST] == -1 and texture_set.side_layers[BlockId.Type.CHEST] == -1 and texture_set.bottom_layers[BlockId.Type.CHEST] == -1, "separately rendered chest leaked into chunk textures")
+	_expect(not unarmed_mining.can_mine(chest), "unarmed mining can break the chest")
 	if _errors.is_empty():
 		print("BLOCK_CONTENT PASS")
 		quit(0)

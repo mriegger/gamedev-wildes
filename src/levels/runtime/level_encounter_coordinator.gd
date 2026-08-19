@@ -166,10 +166,10 @@ func _cancel_spawn_batch(runtime_ids: Array[int]) -> void:
 	for runtime_id in runtime_ids:
 		assert(_entity_runtime.try_despawn(runtime_id))
 
-func _on_entity_defeated(runtime_id: int, entity_id: StringName) -> void:
-	var expected_opened_seal_ids := _state.get_defeat_opened_seal_ids(runtime_id, entity_id)
+func _on_entity_defeated(defeat: EntityDefeat) -> void:
+	var expected_opened_seal_ids := _state.get_defeat_opened_seal_ids(defeat.runtime_id, defeat.definition_id)
 	assert(_level_state.can_open_seals(expected_opened_seal_ids))
-	var transition := _state.record_defeat(runtime_id, entity_id)
+	var transition := _state.record_defeat(defeat.runtime_id, defeat.definition_id)
 	if transition != null:
 		assert(transition.opened_seal_ids == expected_opened_seal_ids)
 		_refill_not_before_physics_frame_by_room[transition.room_id] = Engine.get_physics_frames() + 1

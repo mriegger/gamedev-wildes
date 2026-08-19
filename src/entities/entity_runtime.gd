@@ -4,7 +4,7 @@ class_name EntityRuntime
 const EntitySpawnGeometryType := preload("res://entities/entity_spawn_geometry.gd")
 
 signal entity_melee_contact_reached(source_runtime_id: int, profile: MeleeAttackProfile)
-signal entity_defeated(runtime_id: int, definition_id: StringName)
+signal entity_defeated(defeat: EntityDefeat)
 
 const SPATIAL_CELL_SIZE: float = 4.0
 const SEPARATION_RADIUS: float = 1.2
@@ -153,10 +153,13 @@ func _retire_defeated(runtime_id: int) -> void:
 	var actor := _remove_active_actor(runtime_id)
 	if actor == null:
 		return
-	var definition_id := actor.definition.id
+	var defeat := EntityDefeat.new(
+		runtime_id,
+		actor.definition.id,
+	)
 	_retain_retiring_actor(runtime_id, actor)
 	actor.begin_death_retirement()
-	entity_defeated.emit(runtime_id, definition_id)
+	entity_defeated.emit(defeat)
 
 func _prepare_initial_actors() -> void:
 	for definition in _catalog.definitions:

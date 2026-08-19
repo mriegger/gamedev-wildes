@@ -22,6 +22,7 @@ func _test_cell_contract() -> void:
 	_expect(StructureCell.is_generic_valid(BlockId.Type.STONE), "generic structure rejected a cube block")
 	_expect(not StructureCell.is_generic_valid(BlockId.Type.TORCH), "generic dense cells accepted a torch")
 	_expect(not StructureCell.is_generic_valid(BlockId.Type.WATER), "generic dense cells accepted water")
+	_expect(not StructureCell.is_generic_valid(BlockId.Type.CHEST), "generic dense cells accepted chest storage")
 	var size := Vector3i(3, 2, 4)
 	var seen: Dictionary = {}
 	for y in size.y:
