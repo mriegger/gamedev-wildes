@@ -658,7 +658,7 @@ func _test_untargetable_bird(world: VoxelWorld, sword_profile: MeleeAttackProfil
 	coordinator.setup(_make_one_bird_catalog(), world, 6201, _always_ready)
 	var player_stats := ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
 	combat.setup(world, player, player_stats, coordinator.get_runtime())
-	coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, player.global_position, 12.0)
+	coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT), 12.0)
 	var bird := coordinator.get_runtime().get_active_actors()[0] as BirdActor if coordinator.get_runtime().get_active_count() == 1 else null
 	_expect(bird != null, "untargetable bird fixture did not spawn")
 	if bird == null:
@@ -1017,14 +1017,15 @@ func _test_hammer_slam(world: VoxelWorld, hammer_profile: MeleeAttackProfile) ->
 	_place_at_angle(actors[0], expected_impact, -120.0, 0.0)
 	_place_at_angle(actors[1], expected_impact, 0.0, 5.0)
 	_place_at_angle(actors[2], player_center, 180.0, 3.4)
-	coordinator.tick(0.0, player.global_position, 20.0)
+	var observation := EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT)
+	coordinator.tick(0.0, observation, 20.0)
 	var impacts: Array[Vector3] = []
 	player.interactor.melee_attack_impacted.connect(func(action: MeleeAttackActionDefinition, position: Vector3):
 		if action == hammer_action:
 			impacts.append(position)
 	)
 	_place_at_angle(actors[1], expected_impact, 0.0, 3.0)
-	coordinator.tick(0.0, player.global_position, 20.0)
+	coordinator.tick(0.0, observation, 20.0)
 	var contact_count_before := _contacts.size()
 	player.interactor._advance_melee_attack(hammer_profile.contact_time - 0.01)
 	_expect(_contacts.size() == contact_count_before and impacts.is_empty(), "hammer slam resolved before contact time")
@@ -1053,7 +1054,7 @@ func _test_hammer_slam(world: VoxelWorld, hammer_profile: MeleeAttackProfile) ->
 	if impacts.size() == 1:
 		_expect(impacts[0].is_equal_approx(expected_impact), "hammer shockwave did not use the ground-contact combat origin")
 	var first_distance_before_knockback := actors[0].global_position.distance_to(expected_impact)
-	coordinator.tick(0.1, player.global_position, 20.0)
+	coordinator.tick(0.1, observation, 20.0)
 	_expect(actors[0].global_position.distance_to(expected_impact) > first_distance_before_knockback, "hammer knockback did not push the enemy away from the ground contact")
 	player.interactor._advance_melee_attack(hammer_profile.duration)
 	_expect(_contacts.size() == contact_count_before + 2 and impacts.size() == 1, "hammer slam repeated its impact")

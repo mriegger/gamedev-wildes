@@ -46,7 +46,7 @@ static func color_variant_for_seed(seed_value: int) -> BirdAnimationDriver.Color
 	rng.seed = seed_value ^ 0x4b1d5eed
 	return rng.randi_range(BirdAnimationDriver.ColorVariant.CROW, BirdAnimationDriver.ColorVariant.BLUEBIRD) as BirdAnimationDriver.ColorVariant
 
-func tick(delta: float, _player_position: Vector3, separation_velocity: Vector3, navigation_search_budget: NavigationSearchBudget):
+func tick(delta: float, _observation: EntityTargetObservation, separation_velocity: Vector3, navigation_search_budget: NavigationSearchBudget):
 	assert(brain != null and voxel_space != null)
 	var previous_state := brain.state
 	var rejected_ground_contact := on_ground and not _has_approved_ground_contact() and brain.state != BirdBrain.State.CRUISE

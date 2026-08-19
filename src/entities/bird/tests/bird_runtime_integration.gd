@@ -50,6 +50,7 @@ func _run() -> void:
 	root.add_child(runtime)
 	var catalog := load("res://entities/entity_catalog.tres") as EntityCatalog
 	runtime.setup(catalog, world, WorldEntityCoordinator.MAX_TOTAL_ACTIVE, WorldEntityCoordinator.MAX_RETIRING_VISUALS, EntityNavigationLimits.new(24, 256, 1))
+	var observation := EntityTargetObservation.create(Vector3.ZERO, Vector3.ZERO, Vector3.FORWARD, Vector3.RIGHT)
 	var requests: Array[EntitySpawnRequest] = [EntitySpawnRequest.new(&"bird", aerial_position, 7171)]
 	var runtime_ids := runtime.try_spawn_batch(requests)
 	_expect(runtime_ids == [1], "bird did not spawn through EntityRuntime")
@@ -76,7 +77,7 @@ func _run() -> void:
 		if bird == null:
 			break
 		visited[bird.brain.state] = true
-		runtime.tick(FRAME_DELTA, Vector3.ZERO)
+		runtime.tick(FRAME_DELTA, observation)
 		bird.animation_driver.advance(FRAME_DELTA)
 		if bird.brain.state in [BirdBrain.State.GROUNDED_IDLE, BirdBrain.State.GROUNDED_WALK]:
 			var animation := bird.animation_driver as BirdAnimationDriver
@@ -118,7 +119,7 @@ func _run() -> void:
 		var canopy_animation := canopy_bird.animation_driver as BirdAnimationDriver
 		canopy_animation.advance(0.05)
 		_expect(canopy_animation._beak_mesh.scale.y > 1.0, "duck call did not animate the beak")
-		canopy_bird.tick(FRAME_DELTA, Vector3.ZERO, Vector3.RIGHT, NavigationSearchBudget.new(1))
+		canopy_bird.tick(FRAME_DELTA, observation, Vector3.RIGHT, NavigationSearchBudget.new(1))
 		_expect(not canopy_bird.vocalizations.is_processing() and not canopy_bird.vocalizations.playing, "moving idle duck continued its call")
 		canopy_bird.global_position = Vector3(0.5, FEET_Y, 0.5)
 		canopy_bird.velocity = Vector3.ZERO
@@ -135,7 +136,7 @@ func _run() -> void:
 		canopy_bird.on_ground = true
 		canopy_bird.brain.state = BirdBrain.State.DESCEND
 		canopy_bird._update_vocalizations()
-		canopy_bird.tick(FRAME_DELTA, Vector3.ZERO, Vector3.ZERO, NavigationSearchBudget.new(1))
+		canopy_bird.tick(FRAME_DELTA, observation, Vector3.ZERO, NavigationSearchBudget.new(1))
 		_expect(canopy_bird.brain.state == BirdBrain.State.CRUISE, "bird accepted leaves as a landing surface")
 		_expect(not canopy_bird.vocalizations.is_processing(), "bird vocalized after landing on leaves")
 
