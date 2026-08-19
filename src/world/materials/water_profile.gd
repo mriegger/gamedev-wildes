@@ -16,7 +16,7 @@ class_name WaterProfile
 @export_range(0.1, 3.0, 0.01) var ripple_duration: float = 1.1
 @export_range(0.1, 4.0, 0.01) var ripple_speed: float = 1.35
 @export_range(0.05, 1.0, 0.01) var ripple_width: float = 0.28
-@export_range(0.0, 1.0, 0.01) var ripple_strength: float = 0.405
+@export_range(0.0, 1.0, 0.01) var ripple_strength: float = 0.55
 @export_range(0.0, 1.0, 0.01) var ripple_directionality: float = 0.65
 
 @export_group("Refraction")

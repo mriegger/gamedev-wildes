@@ -18,7 +18,7 @@ uniform vec4 ripple_motions[8];
 uniform float ripple_duration = 1.1;
 uniform float ripple_speed = 1.35;
 uniform float ripple_width = 0.28;
-uniform float ripple_strength = 0.405;
+uniform float ripple_strength = 0.55;
 uniform float ripple_directionality = 0.65;
 
 uniform sampler2D screen_texture : hint_screen_texture, filter_linear_mipmap;
