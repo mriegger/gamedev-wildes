@@ -134,6 +134,7 @@ func try_spawn_batch(requests: Array[EntitySpawnRequest]) -> Array[int]:
 		_stats_by_runtime_id[runtime_id] = stats
 		actor.visible = true
 		actor.global_position = request.feet_position
+		actor.bind_stats(stats, definition.body_height)
 		actor.setup(runtime_id, definition, _voxel_space, request.behavior_seed, _navigation_limits)
 		actor.melee_contact_reached.connect(_on_actor_melee_contact_reached)
 		_spatial_index.upsert(runtime_id, actor.global_position, actor.get_world_bounds())
