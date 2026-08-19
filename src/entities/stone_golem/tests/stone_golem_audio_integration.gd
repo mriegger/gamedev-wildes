@@ -139,6 +139,8 @@ func _run() -> void:
 	runtime.shutdown()
 	runtime.queue_free()
 
+	await create_timer(1.4).timeout
+	audio.stop_audio()
 	actor.free()
 	despawning_actor.free()
 	await process_frame
