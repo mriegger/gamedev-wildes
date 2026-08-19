@@ -6,6 +6,11 @@ enum SpawnPhase {
 	NIGHT,
 }
 
+enum SpawnPlacement {
+	GROUNDED,
+	AERIAL,
+}
+
 @export var id: StringName
 @export var actor_scene: PackedScene
 @export var behavior: EntityBehaviorDefinition
@@ -16,6 +21,11 @@ enum SpawnPhase {
 @export var ambient_spawn_phase: SpawnPhase = SpawnPhase.NIGHT
 @export_range(1, 64, 1) var ambient_max_active: int = 1
 @export var ambient_spawn_floor_ids: Array[int] = []
+@export var spawn_placement: SpawnPlacement = SpawnPlacement.GROUNDED
+@export_range(1, 32, 1) var ambient_aerial_altitude_min_blocks: int = 8
+@export_range(1, 32, 1) var ambient_aerial_altitude_max_blocks: int = 14
+@export var ambient_despawn_outside_spawn_phase: bool = false
+@export var combat_targetable: bool = true
 
 func validate(source: String) -> bool:
 	var valid := true
@@ -47,6 +57,12 @@ func validate(source: String) -> bool:
 		valid = false
 	if ambient_max_active < 1:
 		push_error("[EntityDefinition] Invalid active cap for %s at %s" % [id, source])
+		valid = false
+	if spawn_placement == SpawnPlacement.AERIAL and (ambient_aerial_altitude_min_blocks < 1 or ambient_aerial_altitude_min_blocks > ambient_aerial_altitude_max_blocks):
+		push_error("[EntityDefinition] Invalid aerial altitude range for %s at %s" % [id, source])
+		valid = false
+	if not combat_targetable and experience_reward != 0:
+		push_error("[EntityDefinition] Non-targetable entity %s rewards experience at %s" % [id, source])
 		valid = false
 	if ambient_spawn_floor_ids.is_empty():
 		push_error("[EntityDefinition] Missing spawn floors for %s at %s" % [id, source])

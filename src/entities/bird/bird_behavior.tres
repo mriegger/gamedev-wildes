@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="BirdBehaviorDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://entities/bird/bird_behavior_definition.gd" id="1_behavior"]
+
+[resource]
+script = ExtResource("1_behavior")
+flight_speed = 5.0
+flight_acceleration = 12.0
+landing_speed = 3.0
+takeoff_speed = 6.5
+grounded_walk_speed = 1.0
+gravity = 25.0
+jump_velocity = 5.0
+repath_seconds = 0.5
+grounded_wander_radius = 4.0
+landing_search_radius = 28.0
+cruise_altitude_min_blocks = 9
+cruise_altitude_max_blocks = 14
+landing_approach_distance = 3.0
+landed_idle_min_seconds = 1.5
+landed_idle_max_seconds = 3.0
+grounded_walk_seconds = 2.5
+walks_before_takeoff = 2
+landing_retry_seconds = 1.0

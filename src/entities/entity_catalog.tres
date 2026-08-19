@@ -4,8 +4,9 @@
 [ext_resource type="Script" path="res://entities/entity_definition.gd" id="2_definition"]
 [ext_resource type="Resource" path="res://entities/definitions/zombie.tres" id="3_zombie"]
 [ext_resource type="Resource" path="res://entities/definitions/sheep.tres" id="4_sheep"]
-[ext_resource type="Resource" path="res://entities/definitions/skeleton.tres" id="5_skeleton"]
+[ext_resource type="Resource" path="res://entities/definitions/bird.tres" id="5_bird"]
+[ext_resource type="Resource" path="res://entities/definitions/skeleton.tres" id="6_skeleton"]
 
 [resource]
 script = ExtResource("1_catalog")
-definitions = Array[ExtResource("2_definition")]([ExtResource("3_zombie"), ExtResource("4_sheep"), ExtResource("5_skeleton")])
+definitions = Array[ExtResource("2_definition")]([ExtResource("3_zombie"), ExtResource("4_sheep"), ExtResource("5_bird"), ExtResource("6_skeleton")])

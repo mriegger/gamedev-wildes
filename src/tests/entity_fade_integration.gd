@@ -77,7 +77,7 @@ func _expect_opacity(
 		_expect(is_equal_approx(geometries[index].transparency, expected), "%s geometry %d had transparency %.3f instead of %.3f" % [context, index, geometries[index].transparency, expected])
 
 func _test_species_visual_fades(catalog: EntityCatalog, world: VoxelWorld) -> void:
-	var definition_ids: Array[StringName] = [&"zombie", &"sheep"]
+	var definition_ids: Array[StringName] = [&"zombie", &"sheep", &"bird"]
 	for index in range(definition_ids.size()):
 		var definition := catalog.get_definition(definition_ids[index])
 		var actor := definition.actor_scene.instantiate() as EntityActor
@@ -270,10 +270,10 @@ func _test_retiring_bound_and_population_independence(catalog: EntityCatalog, wo
 	for _spawn in range(6):
 		coordinator._spawn_elapsed = WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS
 		coordinator.tick(0.0, player_position, 20.0)
-	for _spawn in range(6):
+	for _spawn in range(10):
 		coordinator._spawn_elapsed = WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS
 		coordinator.tick(0.0, player_position, 12.0)
-	_expect(coordinator.get_runtime().get_active_count() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "retiring-cap setup did not reach twelve active entities")
+	_expect(coordinator.get_runtime().get_active_count() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "retiring-cap setup did not reach the active entity limit")
 	var actors := coordinator.get_runtime().get_active_actors()
 	actors.sort_custom(func(left: EntityActor, right: EntityActor) -> bool: return left.runtime_id < right.runtime_id)
 	var first_retired_actor := actors[1]

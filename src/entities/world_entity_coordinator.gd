@@ -6,7 +6,7 @@ const SPAWN_ATTEMPTS: int = 4
 const MIN_SPAWN_DISTANCE: float = 18.0
 const MAX_SPAWN_DISTANCE: float = 36.0
 const DESPAWN_DISTANCE: float = 56.0
-const MAX_TOTAL_ACTIVE: int = 12
+const MAX_TOTAL_ACTIVE: int = 16
 const MAX_RETIRING_VISUALS: int = 12
 const MAX_NAVIGATION_SEARCH_RADIUS: int = 32
 const MAX_NAVIGATION_SEARCH_NODES: int = 512
@@ -51,7 +51,9 @@ func setup(p_catalog: EntityCatalog, p_voxel_world: VoxelWorld, world_seed: int,
 func tick(delta: float, player_position: Vector3, time_of_day: float) -> void:
 	assert(_catalog != null and _voxel_world != null and _runtime != null)
 	assert(not _suspended)
+	var is_day := DayNightProfile.is_day_time(time_of_day)
 	_despawn_distant(player_position)
+	_despawn_outside_phase(is_day)
 	_runtime.tick(delta, player_position)
 	_spawn_elapsed += delta
 	if _spawn_elapsed < SPAWN_INTERVAL_SECONDS:
@@ -59,7 +61,6 @@ func tick(delta: float, player_position: Vector3, time_of_day: float) -> void:
 	_spawn_elapsed = fmod(_spawn_elapsed, SPAWN_INTERVAL_SECONDS)
 	if _runtime.get_active_count() >= MAX_TOTAL_ACTIVE:
 		return
-	var is_day := DayNightProfile.is_day_time(time_of_day)
 	var definition_count := _catalog.definitions.size()
 	for offset in range(definition_count):
 		var definition_index := (_ambient_definition_cursor + offset) % definition_count
@@ -81,10 +82,10 @@ func _try_spawn(definition: EntityDefinition, player_position: Vector3) -> bool:
 		var candidate_position := Vector3(float(x) + 0.5, player_position.y, float(z) + 0.5)
 		if not bool(_position_ready.call(candidate_position)):
 			continue
-		var feet_y := _find_spawn_y(definition, x, z)
-		if feet_y == VoxelSpace.NO_SURFACE_Y:
+		var spawn_candidate: Variant = _find_spawn_position(definition, x, z)
+		if not spawn_candidate is Vector3:
 			continue
-		var spawn_position := Vector3(float(x) + 0.5, feet_y, float(z) + 0.5)
+		var spawn_position := spawn_candidate as Vector3
 		var horizontal_offset := Vector2(spawn_position.x - player_position.x, spawn_position.z - player_position.z)
 		var horizontal_distance_squared := horizontal_offset.length_squared()
 		if horizontal_distance_squared < MIN_SPAWN_DISTANCE * MIN_SPAWN_DISTANCE or horizontal_distance_squared > MAX_SPAWN_DISTANCE * MAX_SPAWN_DISTANCE:
@@ -95,22 +96,28 @@ func _try_spawn(definition: EntityDefinition, player_position: Vector3) -> bool:
 		return not _runtime.try_spawn_batch(requests).is_empty()
 	return false
 
-func _find_spawn_y(definition: EntityDefinition, x: int, z: int) -> float:
+func _find_spawn_position(definition: EntityDefinition, x: int, z: int) -> Variant:
 	var surface_y := _voxel_world.get_terrain_surface_y(x, z)
 	if surface_y == VoxelSpace.NO_SURFACE_Y:
-		return VoxelSpace.NO_SURFACE_Y
+		return null
 	var floor_y := int(surface_y)
 	var floor_id := _voxel_world.get_block_id_at(Vector3i(x, floor_y, z))
-	if definition.can_spawn_ambiently_on(floor_id) and _has_clearance(definition, x, floor_y + 1, z):
-		return float(floor_y + 1)
-	return VoxelSpace.NO_SURFACE_Y
+	if not definition.can_spawn_ambiently_on(floor_id):
+		return null
+	var feet_y := floor_y + 1
+	if definition.spawn_placement == EntityDefinition.SpawnPlacement.AERIAL:
+		feet_y += _rng.randi_range(definition.ambient_aerial_altitude_min_blocks, definition.ambient_aerial_altitude_max_blocks)
+	var candidate := Vector3(float(x) + 0.5, float(feet_y), float(z) + 0.5)
+	return candidate if EntitySpawnGeometry.can_spawn(_voxel_world, definition, candidate) else null
 
-func _has_clearance(definition: EntityDefinition, x: int, feet_y: int, z: int) -> bool:
-	var required_height := ceili(definition.body_height)
-	for y in range(feet_y, feet_y + required_height):
-		if _voxel_world.is_solid(Vector3i(x, y, z)):
-			return false
-	return true
+func _despawn_outside_phase(is_day: bool) -> void:
+	var to_remove: Array[int] = []
+	for actor in _runtime.get_active_actors():
+		var definition := actor.definition
+		if definition.ambient_despawn_outside_spawn_phase and is_day != (definition.ambient_spawn_phase == EntityDefinition.SpawnPhase.DAY):
+			to_remove.append(actor.runtime_id)
+	for runtime_id in to_remove:
+		_runtime.try_despawn(runtime_id)
 
 func _despawn_distant(player_position: Vector3) -> void:
 	var max_distance_squared := DESPAWN_DISTANCE * DESPAWN_DISTANCE

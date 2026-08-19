@@ -6,6 +6,7 @@ class_name EntityVocalizations
 var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 var _remaining_seconds: float = 0.0
 var _last_stream_index: int = -1
+var _vocalizations_enabled: bool = true
 
 
 func _ready():
@@ -16,10 +17,21 @@ func setup(seed_value: int):
 	assert(profile != null and profile.validate())
 	stop()
 	stream = null
-	_rng.seed = seed_value ^ profile.rng_salt
 	_last_stream_index = -1
+	_vocalizations_enabled = true
+	_rng.seed = seed_value ^ profile.rng_salt
 	_remaining_seconds = _rng.randf_range(profile.initial_delay_min_seconds, profile.initial_delay_max_seconds)
 	set_process(true)
+
+
+func set_vocalizations_enabled(enabled: bool):
+	if _vocalizations_enabled == enabled:
+		return
+	_vocalizations_enabled = enabled
+	set_process(enabled)
+	if not enabled:
+		stop()
+		stream = null
 
 
 func _process(delta: float):

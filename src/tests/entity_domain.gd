@@ -31,6 +31,7 @@ func _run():
 	_expect(catalog.validate(), "entity catalog failed validation")
 	_expect(catalog.has_definition(&"zombie"), "zombie definition is missing")
 	_expect(catalog.has_definition(&"sheep"), "sheep definition is missing")
+	_expect(catalog.has_definition(&"bird"), "bird definition is missing")
 	_expect(catalog.has_definition(&"skeleton"), "Skeleton definition is missing")
 	var zombie := catalog.get_definition(&"zombie")
 	_expect(zombie.id == &"zombie", "zombie ID changed")
@@ -64,6 +65,13 @@ func _run():
 	_expect(is_equal_approx(second_zombie_stats.current_hp, 80.0), "zombie runtime stats share mutable HP")
 	_expect(zombie.is_actor_compatible(), "zombie actor rejected its behavior definition")
 	_expect(sheep.is_actor_compatible(), "sheep actor rejected its behavior definition")
+	var bird := catalog.get_definition(&"bird")
+	_expect(bird.is_actor_compatible(), "bird actor rejected its behavior definition")
+	_expect(bird.ambient_spawn_phase == EntityDefinition.SpawnPhase.DAY, "bird is not day-spawned")
+	_expect(bird.ambient_max_active == 4, "bird population cap is not four")
+	_expect(bird.spawn_placement == EntityDefinition.SpawnPlacement.AERIAL, "bird is not aerially placed")
+	_expect(bird.ambient_despawn_outside_spawn_phase, "bird does not retire at night")
+	_expect(not bird.combat_targetable and bird.experience_reward == 0, "bird participates in combat progression")
 	_expect(skeleton.is_actor_compatible(), "Skeleton actor rejected its behavior definition")
 	var mismatched_definition := zombie.duplicate(true) as EntityDefinition
 	mismatched_definition.behavior = sheep.behavior
