@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="CraftingRecipeCatalog" load_steps=8 format=3]
+[gd_resource type="Resource" script_class="CraftingRecipeCatalog" load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://crafting/crafting_recipe_catalog.gd" id="1_catalog"]
 [ext_resource type="Script" path="res://crafting/crafting_recipe_definition.gd" id="2_definition"]
@@ -8,7 +8,9 @@
 [ext_resource type="Resource" path="res://crafting/recipes/chest.tres" id="13_chest"]
 [ext_resource type="Resource" path="res://crafting/recipes/cauldron.tres" id="14_cauldron"]
 [ext_resource type="Resource" path="res://crafting/recipes/campfire.tres" id="15_campfire"]
+[ext_resource type="Resource" path="res://crafting/recipes/bow.tres" id="16_bow"]
+[ext_resource type="Resource" path="res://crafting/recipes/stone_arrow_bundle.tres" id="17_stone_arrows"]
 
 [resource]
 script = ExtResource("1_catalog")
-definitions = Array[ExtResource("2_definition")]([ExtResource("7_torches"), ExtResource("13_chest"), ExtResource("12_anvil"), ExtResource("14_cauldron"), ExtResource("15_campfire"), ExtResource("10_stone_pickaxe")])
+definitions = Array[ExtResource("2_definition")]([ExtResource("7_torches"), ExtResource("13_chest"), ExtResource("12_anvil"), ExtResource("14_cauldron"), ExtResource("15_campfire"), ExtResource("10_stone_pickaxe"), ExtResource("16_bow"), ExtResource("17_stone_arrows")])

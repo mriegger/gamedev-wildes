@@ -54,6 +54,7 @@ func _run() -> void:
 	for recipe_id in [&"copper_pickaxe", &"copper_hoe", &"copper_sword", &"copper_hammer", &"copper_helmet", &"copper_chest_plate", &"copper_pants", &"copper_shoes"]:
 		_expect(not general_catalog.has_definition(recipe_id), "%s leaked into general crafting" % recipe_id)
 		_expect(anvil_catalog.has_definition(recipe_id), "%s is missing from anvil crafting" % recipe_id)
+	_expect(not general_catalog.has_definition(&"copper_arrow_bundle") and anvil_catalog.has_definition(&"copper_arrow_bundle"), "copper arrow recipe is not exclusive to anvil crafting")
 	await _test_cauldron(block_catalog, item_catalog, general_catalog, cauldron_catalog)
 	await _test_campfire(block_catalog, item_catalog, general_catalog)
 

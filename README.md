@@ -207,11 +207,11 @@ immediate defense-aware damage and repeating it every half second while stacking
 to a 60% reduction. Each successful grounded jump dislodges one attached slime.
 
 **Crafting.** Opening crafting with `Tab` reveals the general recipe panel alongside the backpack.
-It contains the six recipes that do not require a workstation. Iron Pickaxe is initially a
+It contains the eight recipes that do not require a workstation. Iron Pickaxe is initially a
 guaranteed stone-dungeon reward and later appears in that dungeon's repeat pool rather than a
 crafting recipe. Basic Rune currently has no normal
 production acquisition. A placed anvil opens its own panel with the eight copper tool, weapon, and
-armor recipes. A placed cauldron opens a food-and-potion panel; its initial recipe combines two
+armor recipes plus copper arrows. A placed cauldron opens a food-and-potion panel; its initial recipe combines two
 pumpkins and two apples into one health potion. All catalogs
 show a short description of the selected output above its ingredients. Stat-bearing recipes show
 their item stats below the ingredients, with numeric values in the same yellow-gold used
