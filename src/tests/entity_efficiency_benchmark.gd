@@ -1,6 +1,7 @@
 extends SceneTree
 
 const PerformanceSampleStats = preload("res://tests/performance_sample_stats.gd")
+const PerformanceEntityTarget = preload("res://tests/performance_entity_target.gd")
 
 const WORLD_SEED: int = 1337
 const FLAT_HEIGHT: int = 6
@@ -51,12 +52,12 @@ func _spawn_population(coordinator: WorldEntityCoordinator, player_position: Vec
 		var before_count := coordinator.get_runtime().get_active_count()
 		coordinator._spawn_elapsed = WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS - FRAME_DELTA
 		var spawn_started := Time.get_ticks_usec()
-		coordinator.tick(FRAME_DELTA, player_position, time_of_day)
+		coordinator.tick(FRAME_DELTA, PerformanceEntityTarget.create(player_position), time_of_day)
 		spawn_samples.append(Time.get_ticks_usec() - spawn_started)
 		_expect(coordinator.get_runtime().get_active_count() == before_count + 1, "spawn cycle %d did not add one actor" % cycle)
 		var prepared_before := coordinator.get_runtime()._prepared_actor_count()
 		var preparation_started := Time.get_ticks_usec()
-		coordinator.tick(FRAME_DELTA, player_position, time_of_day)
+		coordinator.tick(FRAME_DELTA, PerformanceEntityTarget.create(player_position), time_of_day)
 		var preparation_usec := Time.get_ticks_usec() - preparation_started
 		if coordinator.get_runtime()._prepared_actor_count() > prepared_before:
 			preparation_samples.append(preparation_usec)
@@ -125,7 +126,7 @@ func _player_position(frame_index: int) -> Vector3:
 	return Vector3(0.5 + cos(angle) * 3.0, FEET_Y, 0.5 + sin(angle) * 3.0)
 
 func _advance_entity_frame(coordinator: WorldEntityCoordinator, actors: Array[EntityActor], frame_index: int) -> int:
-	coordinator.tick(FRAME_DELTA, _player_position(frame_index), NIGHT_TIME)
+	coordinator.tick(FRAME_DELTA, PerformanceEntityTarget.create(_player_position(frame_index)), NIGHT_TIME)
 	for actor in actors:
 		actor.animation_driver.advance(FRAME_DELTA)
 	return WorldEntityCoordinator.MAX_NAVIGATION_SEARCHES_PER_TICK - coordinator.get_runtime()._navigation_search_budget._remaining_searches

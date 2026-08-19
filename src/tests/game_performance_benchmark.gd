@@ -1,6 +1,7 @@
 extends SceneTree
 
 const PerformanceSampleStats = preload("res://tests/performance_sample_stats.gd")
+const PerformanceEntityTarget = preload("res://tests/performance_entity_target.gd")
 
 const WORLD_SEED: int = 1337
 const TARGET_FPS: int = 120
@@ -162,8 +163,8 @@ func _force_steady_population(game: Game, player_position: Vector3) -> int:
 	while coordinator.get_runtime().get_active_count() < WorldEntityCoordinator.MAX_TOTAL_ACTIVE and attempts < POPULATION_ATTEMPT_LIMIT:
 		var time_of_day := DAY_TIME if attempts % 2 == 0 else NIGHT_TIME
 		coordinator._spawn_elapsed = WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS - FRAME_DELTA
-		coordinator.tick(FRAME_DELTA, player_position, time_of_day)
-		coordinator.tick(FRAME_DELTA, player_position, time_of_day)
+		coordinator.tick(FRAME_DELTA, PerformanceEntityTarget.create(player_position), time_of_day)
+		coordinator.tick(FRAME_DELTA, PerformanceEntityTarget.create(player_position), time_of_day)
 		attempts += 1
 	return attempts
 

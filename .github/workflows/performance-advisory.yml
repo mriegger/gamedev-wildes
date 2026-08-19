@@ -127,6 +127,7 @@ jobs:
           set +e
           files=(
             src/tests/performance_sample_stats.gd
+            src/tests/performance_entity_target.gd
             src/tests/entity_efficiency_benchmark.gd
             src/tests/game_performance_benchmark.gd
           )
