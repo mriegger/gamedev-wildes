@@ -182,6 +182,5 @@ func _run():
 	player = null
 	voxel_world = null
 	block_catalog = null
-	for _frame_index in range(10):
-		await process_frame
+	await create_timer(0.25).timeout
 	call_deferred("_finish", "AUDIO_FOOTSTEPS")
