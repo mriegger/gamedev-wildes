@@ -129,7 +129,7 @@ func _run():
 	_finish()
 
 func _emit_outcome(combat: MeleeCombatCoordinator, contact: MeleeContact):
-	combat.melee_outcome_committed.emit(MeleeOutcome.new(contact, &"copper_sword", 1.0, false))
+	combat.melee_outcome_committed.emit(MeleeOutcome.new(contact, &"copper_sword", 1.0, false, DamageAffinityDefinition.Response.NEUTRAL))
 
 func _finish():
 	var orphan_after := int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))

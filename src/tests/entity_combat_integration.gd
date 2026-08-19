@@ -327,15 +327,27 @@ func _run() -> void:
 		var first_damage_number := active_damage_numbers[0] as EnemyDamageNumber3DType
 		var start_height := first_damage_number.global_position.y
 		_expect(first_damage_number.text == "16" and first_damage_number.visible, "default-zoom damage number is not visible and legible")
+		_expect(first_damage_number.modulate.is_equal_approx(Color.WHITE), "neutral damage number is not white")
 		_expect(first_damage_number.font_size == 24 and first_damage_number.outline_size == 4, "damage number typography changed")
+		_expect(first_damage_number.no_depth_test and first_damage_number.render_priority == 2, "damage number does not render over health bars and world geometry")
 		enemy_feedback._process(EnemyDamageNumber3DType.DURATION_SECONDS * 0.5)
 		_expect(first_damage_number.global_position.y > start_height and first_damage_number.modulate.a < 1.0, "damage number did not float upward and fade")
 		_expect(first_damage_number.outline_modulate.a < EnemyDamageNumber3DType.OUTLINE_COLOR.a, "damage number outline remained opaque while its text faded")
 		enemy_feedback._process(EnemyDamageNumber3DType.DURATION_SECONDS * 0.5)
 		_expect(not first_damage_number.is_active() and not first_damage_number.visible, "damage number did not finish its animation")
-		first_damage_number.play(Vector3.ZERO, 12.6)
+		first_damage_number.play(Vector3.ZERO, 12.6, EnemyCombatFeedbackType.WEAK_DAMAGE_COLOR)
 		_expect(first_damage_number.text == "13", "fractional damage number was not rounded to the nearest integer")
+		_expect(first_damage_number.modulate.is_equal_approx(EnemyCombatFeedbackType.WEAK_DAMAGE_COLOR), "weakness damage number is not yellow-gold")
+		first_damage_number.advance(EnemyDamageNumber3DType.DURATION_SECONDS * 0.5, true)
+		_expect(is_equal_approx(first_damage_number.modulate.r, EnemyCombatFeedbackType.WEAK_DAMAGE_COLOR.r) and first_damage_number.modulate.a < 1.0, "weakness damage number lost its color while fading")
 		first_damage_number.reset()
+		first_damage_number.play(Vector3.ZERO, 10.0, EnemyCombatFeedbackType.RESISTANT_DAMAGE_COLOR)
+		_expect(first_damage_number.modulate.is_equal_approx(EnemyCombatFeedbackType.RESISTANT_DAMAGE_COLOR), "resistance damage number is not dark grey")
+		_expect(maxf(first_damage_number.modulate.r, maxf(first_damage_number.modulate.g, first_damage_number.modulate.b)) < 0.5, "resistance damage number is too light")
+		first_damage_number.reset()
+	_expect(EnemyCombatFeedbackType.get_damage_color(DamageAffinityDefinition.Response.NEUTRAL).is_equal_approx(Color.WHITE), "neutral damage response mapped to the wrong number color")
+	_expect(EnemyCombatFeedbackType.get_damage_color(DamageAffinityDefinition.Response.WEAK).is_equal_approx(EnemyCombatFeedbackType.WEAK_DAMAGE_COLOR), "weak damage response mapped to the wrong number color")
+	_expect(EnemyCombatFeedbackType.get_damage_color(DamageAffinityDefinition.Response.RESISTANT).is_equal_approx(EnemyCombatFeedbackType.RESISTANT_DAMAGE_COLOR), "resistant damage response mapped to the wrong number color")
 	camera.size = EnemyCombatFeedbackType.MAX_DAMAGE_NUMBER_CAMERA_SIZE + 1.0
 	enemy_feedback._on_melee_outcome_committed(_outcomes[-1])
 	_expect(enemy_feedback._damage_numbers.all(func(number): return not number.is_active()), "zoomed-out combat showed an unreadable damage number")
@@ -835,6 +847,7 @@ func _test_randomized_sword_damage(world: VoxelWorld, sword_profile: MeleeAttack
 		var outcome := _outcomes[outcome_count_before + index]
 		_expect(is_equal_approx(outcome.applied_damage, expected_damage[index]), "sword enemy damage did not use its independent contact-time roll")
 		_expect(outcome.applied_damage >= 21.0 and outcome.applied_damage <= 27.0, "slash-weak zombie damage left the expected 21-27 range")
+		_expect(outcome.damage_response == DamageAffinityDefinition.Response.WEAK, "slash-weak zombie outcome lost its damage response")
 		_expect(is_equal_approx(coordinator.get_runtime().get_current_hp(actors[index].runtime_id), 80.0 - expected_damage[index]), "random sword damage changed the wrong enemy HP")
 	await _cleanup(combat, coordinator, player, fixture["camera"] as Camera3D)
 
@@ -871,6 +884,7 @@ func _test_damage_affinities(world: VoxelWorld, sword_profile: MeleeAttackProfil
 	_expect(_outcomes.size() == outcome_count_before + 1, "neutral hammer damage did not emit one outcome")
 	if _outcomes.size() == outcome_count_before + 1:
 		var outcome: MeleeOutcome = _outcomes.back()
+		_expect(outcome.damage_response == DamageAffinityDefinition.Response.NEUTRAL, "blunt-neutral zombie outcome gained a damage response")
 		_expect(is_equal_approx(outcome.applied_damage, expected_damage), "neutral blunt damage applied an affinity multiplier")
 	await _cleanup(combat, coordinator, player, fixture["camera"] as Camera3D)
 
@@ -897,6 +911,7 @@ func _test_damage_affinities(world: VoxelWorld, sword_profile: MeleeAttackProfil
 	_expect(_outcomes.size() == outcome_count_before + 1, "Skeleton blunt weakness did not emit one outcome")
 	if _outcomes.size() == outcome_count_before + 1:
 		var hammer_outcome: MeleeOutcome = _outcomes.back()
+		_expect(hammer_outcome.damage_response == DamageAffinityDefinition.Response.WEAK, "blunt-weak Skeleton outcome lost its damage response")
 		_expect(is_equal_approx(hammer_outcome.applied_damage, expected_damage), "Skeleton blunt weakness did not apply its 1.5 damage multiplier")
 	locked_ids = combat.acquire_player_targets(ray[0], ray[1], sword_profile)
 	_expect(locked_ids == _active_ids(actors), "sword did not lock the slash-resistant Skeleton")
@@ -906,6 +921,7 @@ func _test_damage_affinities(world: VoxelWorld, sword_profile: MeleeAttackProfil
 	_expect(_outcomes.size() == outcome_count_before + 1, "Skeleton slash resistance did not emit one outcome")
 	if _outcomes.size() == outcome_count_before + 1:
 		var sword_outcome: MeleeOutcome = _outcomes.back()
+		_expect(sword_outcome.damage_response == DamageAffinityDefinition.Response.RESISTANT, "slash-resistant Skeleton outcome lost its damage response")
 		_expect(is_equal_approx(sword_outcome.applied_damage, expected_damage), "Skeleton slash resistance did not apply its 0.5 damage multiplier")
 	await _cleanup(combat, coordinator, player, fixture["camera"] as Camera3D)
 

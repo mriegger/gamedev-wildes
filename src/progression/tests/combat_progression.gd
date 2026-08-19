@@ -64,7 +64,7 @@ func _outcome(
 		Vector3.ONE,
 		Vector3.RIGHT,
 	)
-	return MeleeOutcome.new(contact, source_item_id, damage, defeated)
+	return MeleeOutcome.new(contact, source_item_id, damage, defeated, DamageAffinityDefinition.Response.NEUTRAL)
 
 func _find_item(inventory: InventoryModel, item_id: StringName) -> int:
 	for index in range(InventoryModel.FILLABLE_SIZE):

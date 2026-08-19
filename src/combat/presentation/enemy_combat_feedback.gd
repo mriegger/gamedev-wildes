@@ -6,6 +6,8 @@ const EnemyDamageNumber3DType := preload("res://combat/presentation/enemy_damage
 const DAMAGE_NUMBER_POOL_SIZE: int = 24
 const DAMAGE_NUMBER_HEIGHT_OFFSET: float = 0.45
 const MAX_DAMAGE_NUMBER_CAMERA_SIZE: float = 52.0
+const WEAK_DAMAGE_COLOR: Color = Color(1.0, 0.78, 0.16, 1.0)
+const RESISTANT_DAMAGE_COLOR: Color = Color(0.38, 0.4, 0.42, 1.0)
 
 var _combat: MeleeCombatCoordinator
 var _runtime: EntityRuntime
@@ -50,8 +52,18 @@ func _on_melee_outcome_committed(outcome: MeleeOutcome) -> void:
 	var damage_number := _damage_numbers[_next_damage_number]
 	_next_damage_number = (_next_damage_number + 1) % _damage_numbers.size()
 	var position := actor.global_position + Vector3.UP * (actor.definition.body_height + DAMAGE_NUMBER_HEIGHT_OFFSET)
-	damage_number.play(position, outcome.applied_damage)
+	damage_number.play(position, outcome.applied_damage, get_damage_color(outcome.damage_response))
 	set_process(true)
+
+static func get_damage_color(response: int) -> Color:
+	assert(DamageAffinityDefinition.is_valid_response(response))
+	match response:
+		DamageAffinityDefinition.Response.WEAK:
+			return WEAK_DAMAGE_COLOR
+		DamageAffinityDefinition.Response.RESISTANT:
+			return RESISTANT_DAMAGE_COLOR
+		_:
+			return Color.WHITE
 
 func _process(delta: float) -> void:
 	var active := false

@@ -127,11 +127,14 @@ Combat applies the response multiplier after the profile calculation: 1.5 for we
 and 1.0 for neutral. Each successful
 physical hit applies that damage through the target state owner, optionally adds a decaying planar
 knockback velocity, then produces an immutable `MeleeOutcome` containing the contact, exact applied
-damage, source item ID, and lethal result. The player interactor separately emits the AoE's ground
+damage, source item ID, affinity response, and lethal result. The player interactor separately emits the AoE's ground
 origin for presentation; the hammer consumes it with a procedural expanding and fading ring.
 `EnemyCombatFeedback` consumes committed player outcomes through a bounded pool of billboarded
 damage labels, resolves active or retiring actors through `EntityRuntime`, and suppresses labels
-beyond its authored camera-size threshold. Rejected contacts change no health and produce no outcome.
+beyond its authored camera-size threshold. Labels bypass depth testing with an explicit render
+priority so they remain above health bars and world geometry. Neutral labels remain white,
+weaknesses render yellow-gold, and resistances render dark grey. Rejected contacts change no health
+and produce no outcome.
 `Game` explicitly connects completed outcomes to entity reactions, progression, and presentation
 without making combat own those policies.
 

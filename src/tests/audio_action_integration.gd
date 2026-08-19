@@ -197,7 +197,7 @@ func _run():
 
 	var sword_action := item_catalog.get_definition(&"copper_sword").primary_action as MeleeAttackActionDefinition
 	var player_contact := MeleeContact.new(MeleeCombatCoordinator.PLAYER_RUNTIME_ID, &"player", 1, &"zombie", sword_action.attack_profile.id, Vector3.ONE, Vector3.RIGHT)
-	combat.melee_outcome_committed.emit(MeleeOutcome.new(player_contact, &"copper_sword", 1.0, false))
+	combat.melee_outcome_committed.emit(MeleeOutcome.new(player_contact, &"copper_sword", 1.0, false, DamageAffinityDefinition.Response.NEUTRAL))
 	await process_frame
 	_expect(action_audio._creature_hit_streams.has(creature_hit.stream), "confirmed player contact did not select a creature hit sound")
 	_expect(creature_hit.pitch_scale >= 0.94 and creature_hit.pitch_scale <= 1.06, "creature hit pitch out of range %f" % creature_hit.pitch_scale)
@@ -205,7 +205,7 @@ func _run():
 	creature_hit.stop()
 	creature_hit.stream = null
 	var entity_contact := MeleeContact.new(1, &"zombie", 0, &"player", &"zombie_melee", Vector3.ONE, Vector3.LEFT)
-	combat.melee_outcome_committed.emit(MeleeOutcome.new(entity_contact, &"", 1.0, false))
+	combat.melee_outcome_committed.emit(MeleeOutcome.new(entity_contact, &"", 1.0, false, DamageAffinityDefinition.Response.NEUTRAL))
 	_expect(creature_hit.stream == null, "non-player contact played the player's creature hit sound")
 	_expect(action_audio._player_hit_streams.has(player_hit.stream), "confirmed enemy contact did not select a player hit sound")
 	_expect(player_hit.pitch_scale >= 0.96 and player_hit.pitch_scale <= 1.04, "player hit pitch out of range %f" % player_hit.pitch_scale)

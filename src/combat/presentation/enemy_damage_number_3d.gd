@@ -9,12 +9,14 @@ const OUTLINE_COLOR: Color = Color(0.02, 0.02, 0.025, 0.95)
 var _active: bool = false
 var _elapsed: float = 0.0
 var _start_position: Vector3 = Vector3.ZERO
+var _base_color: Color = Color.WHITE
 
 func _init() -> void:
 	billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	double_sided = true
 	fixed_size = false
-	no_depth_test = false
+	no_depth_test = true
+	render_priority = 2
 	shaded = false
 	font_size = 24
 	outline_size = 4
@@ -25,15 +27,17 @@ func _init() -> void:
 	vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	visible = false
 
-func play(world_position: Vector3, damage: float) -> void:
+func play(world_position: Vector3, damage: float, color: Color) -> void:
 	assert(world_position.is_finite())
 	assert(is_finite(damage) and damage > 0.0)
+	assert(is_finite(color.r) and is_finite(color.g) and is_finite(color.b) and is_finite(color.a))
 	_active = true
 	_elapsed = 0.0
 	_start_position = world_position
+	_base_color = color
 	global_position = world_position
 	text = _format_damage(damage)
-	modulate = Color.WHITE
+	modulate = _base_color
 	outline_modulate = OUTLINE_COLOR
 	visible = true
 
@@ -45,7 +49,7 @@ func advance(delta: float, zoom_visible: bool) -> bool:
 	var progress := _elapsed / DURATION_SECONDS
 	var alpha := 1.0 - smoothstep(0.0, 1.0, progress)
 	global_position = _start_position + Vector3.UP * (RISE_DISTANCE * progress)
-	modulate = Color(1.0, 1.0, 1.0, alpha)
+	modulate = Color(_base_color.r, _base_color.g, _base_color.b, _base_color.a * alpha)
 	outline_modulate = Color(OUTLINE_COLOR.r, OUTLINE_COLOR.g, OUTLINE_COLOR.b, OUTLINE_COLOR.a * alpha)
 	visible = zoom_visible and _elapsed < DURATION_SECONDS
 	if _elapsed >= DURATION_SECONDS:
@@ -58,6 +62,9 @@ func is_active() -> bool:
 func reset() -> void:
 	_active = false
 	_elapsed = 0.0
+	_base_color = Color.WHITE
+	modulate = Color.WHITE
+	outline_modulate = OUTLINE_COLOR
 	visible = false
 
 func _format_damage(damage: float) -> String:

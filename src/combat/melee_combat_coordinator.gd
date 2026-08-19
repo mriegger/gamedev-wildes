@@ -346,7 +346,7 @@ func _commit_contact(contact: MeleeContactType, profile: MeleeAttackProfileType,
 		)
 		applied_damage = _player_stats.damage(damage)
 		target_defeated = _player_stats.is_dead()
-	melee_outcome_committed.emit(MeleeOutcomeType.new(contact, source_item_id, applied_damage, target_defeated))
+	melee_outcome_committed.emit(MeleeOutcomeType.new(contact, source_item_id, applied_damage, target_defeated, damage_response))
 	return true
 
 func _is_valid_player_geometry(
