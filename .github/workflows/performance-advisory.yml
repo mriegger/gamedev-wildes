@@ -1,0 +1,264 @@
+name: Performance Advisory
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      baseline_ref:
+        description: Baseline commit, tag, or branch
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  performance-advisory:
+    name: Non-blocking performance advisory
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    continue-on-error: true
+    steps:
+      - name: Prepare advisory outputs
+        continue-on-error: true
+        run: |
+          set +e
+          mkdir -p /tmp/performance-advisory
+          : > /tmp/performance-advisory/workflow-issues.md
+
+      - name: Checkout candidate revision
+        id: candidate_checkout
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Resolve baseline revision
+        id: revisions
+        if: always()
+        continue-on-error: true
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          DISPATCH_BASELINE_REF: ${{ inputs.baseline_ref }}
+          PULL_REQUEST_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set +e
+          baseline_ref=""
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            baseline_ref="$PULL_REQUEST_BASE_SHA"
+          elif [ "$GITHUB_EVENT_NAME" = push ]; then
+            if [ -n "$PUSH_BEFORE_SHA" ] && [[ ! "$PUSH_BEFORE_SHA" =~ ^0+$ ]]; then
+              baseline_ref="$PUSH_BEFORE_SHA"
+            else
+              baseline_ref="$(git rev-parse HEAD^ 2>/dev/null || true)"
+            fi
+          elif [ -n "$DISPATCH_BASELINE_REF" ]; then
+            baseline_ref="$DISPATCH_BASELINE_REF"
+          else
+            baseline_ref="$(git rev-parse HEAD^ 2>/dev/null || true)"
+          fi
+          if [ -z "$baseline_ref" ]; then
+            baseline_ref="$DEFAULT_BRANCH"
+          fi
+          printf 'base_ref=%s\n' "$baseline_ref" >> "$GITHUB_OUTPUT"
+          printf 'base_repository=%s\n' "$GITHUB_REPOSITORY" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout baseline revision
+        id: baseline_checkout
+        if: always()
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.revisions.outputs.base_repository }}
+          ref: ${{ steps.revisions.outputs.base_ref }}
+          path: baseline
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Record checkout availability
+        if: always()
+        continue-on-error: true
+        env:
+          BASELINE_OUTCOME: ${{ steps.baseline_checkout.outcome }}
+          CANDIDATE_OUTCOME: ${{ steps.candidate_checkout.outcome }}
+        run: |
+          set +e
+          if [ "$CANDIDATE_OUTCOME" != success ]; then
+            message="Candidate checkout failed; telemetry unavailable"
+            printf '::warning title=Performance telemetry unavailable::%s\n' "$message"
+            printf -- '- **Performance telemetry unavailable:** %s\n' "$message" >> /tmp/performance-advisory/workflow-issues.md
+          fi
+          if [ "$BASELINE_OUTCOME" != success ]; then
+            message="Baseline checkout failed; relative telemetry unavailable"
+            printf '::warning title=Performance telemetry unavailable::%s\n' "$message"
+            printf -- '- **Performance telemetry unavailable:** %s\n' "$message" >> /tmp/performance-advisory/workflow-issues.md
+          fi
+
+      - name: Validate performance comparator
+        if: always()
+        continue-on-error: true
+        run: |
+          set +e
+          python3 -B -m unittest discover -s .github/scripts/tests -p 'test_*.py' \
+            > /tmp/performance-advisory/comparator-tests.log 2>&1
+          test_status=$?
+          cat /tmp/performance-advisory/comparator-tests.log
+          if [ "$test_status" -ne 0 ]; then
+            message="Performance comparator tests failed; telemetry may be unreliable"
+            printf '::warning title=Performance telemetry unavailable::%s\n' "$message"
+            printf -- '- **Performance telemetry unavailable:** %s\n' "$message" >> /tmp/performance-advisory/workflow-issues.md
+          fi
+
+      - name: Overlay candidate benchmark harness onto baseline
+        id: overlay
+        if: always()
+        continue-on-error: true
+        run: |
+          set +e
+          files=(
+            src/tests/performance_sample_stats.gd
+            src/tests/entity_efficiency_benchmark.gd
+            src/tests/game_performance_benchmark.gd
+          )
+          for file in "${files[@]}"; do
+            if [ -f "$file" ] && [ -d baseline/src/tests ]; then
+              cp "$file" "baseline/$file"
+            else
+              message="Could not overlay $file onto the baseline; relative telemetry may be unavailable"
+              printf '::warning title=Performance telemetry unavailable::%s\n' "$message"
+              printf -- '- **Performance telemetry unavailable:** %s\n' "$message" >> /tmp/performance-advisory/workflow-issues.md
+            fi
+          done
+
+      - name: Import candidate project
+        id: candidate_import
+        if: always()
+        continue-on-error: true
+        uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+          project-dir: src
+
+      - name: Preserve candidate import telemetry
+        if: always()
+        continue-on-error: true
+        env:
+          IMPORT_OUTCOME: ${{ steps.candidate_import.outcome }}
+        run: |
+          set +e
+          if [ -f /tmp/godot-import-initial.log ]; then
+            cp /tmp/godot-import-initial.log /tmp/performance-advisory/candidate-import-initial.log
+          fi
+          if [ -f /tmp/godot-import-validation.log ]; then
+            cp /tmp/godot-import-validation.log /tmp/performance-advisory/candidate-import-validation.log
+          fi
+          if [ "$IMPORT_OUTCOME" != success ]; then
+            message="Candidate import failed; candidate telemetry may be unavailable"
+            printf '::warning title=Performance telemetry unavailable::%s\n' "$message"
+            printf -- '- **Performance telemetry unavailable:** %s\n' "$message" >> /tmp/performance-advisory/workflow-issues.md
+          fi
+          : > /tmp/godot-import-initial.log
+          : > /tmp/godot-import-validation.log
+
+      - name: Import baseline project
+        id: baseline_import
+        if: always()
+        continue-on-error: true
+        uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+          project-dir: baseline/src
+
+      - name: Preserve baseline import telemetry
+        if: always()
+        continue-on-error: true
+        env:
+          IMPORT_OUTCOME: ${{ steps.baseline_import.outcome }}
+        run: |
+          set +e
+          if [ -f /tmp/godot-import-initial.log ]; then
+            cp /tmp/godot-import-initial.log /tmp/performance-advisory/baseline-import-initial.log
+          fi
+          if [ -f /tmp/godot-import-validation.log ]; then
+            cp /tmp/godot-import-validation.log /tmp/performance-advisory/baseline-import-validation.log
+          fi
+          if [ "$IMPORT_OUTCOME" != success ]; then
+            message="Baseline import failed; relative telemetry may be unavailable"
+            printf '::warning title=Performance telemetry unavailable::%s\n' "$message"
+            printf -- '- **Performance telemetry unavailable:** %s\n' "$message" >> /tmp/performance-advisory/workflow-issues.md
+          fi
+
+      - name: Collect balanced performance telemetry
+        if: always()
+        continue-on-error: true
+        run: |
+          set +e
+          if [ -f .github/scripts/run_performance_advisory.sh ]; then
+            bash .github/scripts/run_performance_advisory.sh baseline/src src /tmp/performance-advisory
+          else
+            message="Performance runner was unavailable in the candidate checkout"
+            printf '::warning title=Performance telemetry unavailable::%s\n' "$message"
+            printf -- '- **Performance telemetry unavailable:** %s\n' "$message" >> /tmp/performance-advisory/workflow-issues.md
+          fi
+          exit 0
+
+      - name: Compare performance telemetry
+        if: always()
+        continue-on-error: true
+        run: |
+          set +e
+          python3 .github/scripts/compare_performance.py \
+            --base-dir /tmp/performance-advisory/base \
+            --candidate-dir /tmp/performance-advisory/candidate \
+            --output-json /tmp/performance-advisory/comparison.json \
+            --summary /tmp/performance-advisory/summary.md
+          comparator_status=$?
+          if [ "$comparator_status" -ne 0 ]; then
+            message="Performance comparison exited with status $comparator_status; telemetry unavailable"
+            printf '::warning title=Performance telemetry unavailable::%s\n' "$message"
+            printf -- '- **Performance telemetry unavailable:** %s\n' "$message" >> /tmp/performance-advisory/workflow-issues.md
+          fi
+          if [ ! -s /tmp/performance-advisory/comparison.json ]; then
+            printf '{"status":"telemetry unavailable"}\n' > /tmp/performance-advisory/comparison.json
+          fi
+          if [ ! -s /tmp/performance-advisory/summary.md ]; then
+            printf '# Performance Advisory\n\nPerformance telemetry unavailable. This advisory is non-blocking.\n' > /tmp/performance-advisory/summary.md
+          fi
+          exit 0
+
+      - name: Publish advisory summary
+        if: always()
+        continue-on-error: true
+        run: |
+          set +e
+          if [ ! -s /tmp/performance-advisory/summary.md ]; then
+            printf '# Performance Advisory\n\nPerformance telemetry unavailable. This advisory is non-blocking.\n' > /tmp/performance-advisory/summary.md
+          fi
+          for issue_file in /tmp/performance-advisory/workflow-issues.md /tmp/performance-advisory/collection-issues.md; do
+            if [ -s "$issue_file" ]; then
+              printf '\n## Telemetry issues\n\n' >> /tmp/performance-advisory/summary.md
+              cat "$issue_file" >> /tmp/performance-advisory/summary.md
+            fi
+          done
+          cat /tmp/performance-advisory/summary.md >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+
+      - name: Upload advisory telemetry
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-advisory-${{ github.run_id }}-${{ github.run_attempt }}
+          path: /tmp/performance-advisory
+          if-no-files-found: warn
+          retention-days: 30

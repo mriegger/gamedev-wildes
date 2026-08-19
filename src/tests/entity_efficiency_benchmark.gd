@@ -1,5 +1,7 @@
 extends SceneTree
 
+const PerformanceSampleStats = preload("res://tests/performance_sample_stats.gd")
+
 const WORLD_SEED: int = 1337
 const FLAT_HEIGHT: int = 6
 const FEET_Y: float = float(FLAT_HEIGHT + 1)
@@ -38,26 +40,6 @@ func _position_ready(_position: Vector3) -> bool:
 func _consume_melee_contact(_source_runtime_id: int, _profile: MeleeAttackProfile) -> void:
 	pass
 
-func _summarize(samples_usec: Array[int]) -> Dictionary:
-	assert(not samples_usec.is_empty())
-	var sorted_samples: Array[int] = samples_usec.duplicate()
-	sorted_samples.sort()
-	var total_usec: int = 0
-	for sample_usec in sorted_samples:
-		total_usec += sample_usec
-	return {
-		"sample_count": sorted_samples.size(),
-		"mean_ms": float(total_usec) / float(sorted_samples.size()) / 1000.0,
-		"p50_ms": _percentile_ms(sorted_samples, 0.50),
-		"p95_ms": _percentile_ms(sorted_samples, 0.95),
-		"p99_ms": _percentile_ms(sorted_samples, 0.99),
-		"max_ms": float(sorted_samples.back()) / 1000.0,
-	}
-
-func _percentile_ms(sorted_samples: Array[int], percentile: float) -> float:
-	var index := clampi(ceili(percentile * float(sorted_samples.size())) - 1, 0, sorted_samples.size() - 1)
-	return float(sorted_samples[index]) / 1000.0
-
 func _spawn_population(coordinator: WorldEntityCoordinator, player_position: Vector3) -> Dictionary:
 	var spawn_samples: Array[int] = []
 	var preparation_samples: Array[int] = []
@@ -76,10 +58,10 @@ func _spawn_population(coordinator: WorldEntityCoordinator, player_position: Vec
 		if coordinator.get_runtime()._prepared_actor_count() > prepared_before:
 			preparation_samples.append(preparation_usec)
 	_expect(spawn_samples.size() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "spawn benchmark did not collect twelve samples")
-	_expect(not preparation_samples.is_empty(), "spawn benchmark did not observe actor preparation")
+	_expect(preparation_samples.size() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "spawn benchmark did not collect twelve preparation samples")
 	return {
-		"spawn_frame": _summarize(spawn_samples),
-		"preparation_frame": _summarize(preparation_samples),
+		"spawn_frame": PerformanceSampleStats.summarize(spawn_samples),
+		"preparation_frame": PerformanceSampleStats.summarize(preparation_samples),
 	}
 
 func _sorted_actors(coordinator: WorldEntityCoordinator) -> Array[EntityActor]:
@@ -138,7 +120,7 @@ func _benchmark_entity_frames(coordinator: WorldEntityCoordinator, actors: Array
 	_expect(max_navigation_searches <= WorldEntityCoordinator.MAX_NAVIGATION_SEARCHES_PER_TICK, "entity frame exceeded its navigation search budget")
 	_expect(frames_with_navigation_search > 0, "timed entity frames performed no navigation searches")
 	_expect(coordinator.get_runtime().get_active_count() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "entity frame benchmark did not retain twelve actors")
-	var result := _summarize(samples)
+	var result := PerformanceSampleStats.summarize(samples)
 	result["max_navigation_searches_per_frame"] = max_navigation_searches
 	result["frames_with_navigation_search"] = frames_with_navigation_search
 	return result
@@ -178,7 +160,7 @@ func _benchmark_bounded_pathfinding() -> Dictionary:
 		exhausted_budget = exhausted_budget and result.visited_nodes == WorldEntityCoordinator.MAX_NAVIGATION_SEARCH_NODES
 	_expect(bounded, "bounded path benchmark exceeded its deterministic search contract")
 	_expect(exhausted_budget, "bounded path benchmark did not exercise the full node budget")
-	var summary := _summarize(samples)
+	var summary := PerformanceSampleStats.summarize(samples)
 	summary["max_search_nodes"] = WorldEntityCoordinator.MAX_NAVIGATION_SEARCH_NODES
 	return summary
 
@@ -225,7 +207,8 @@ func _run() -> void:
 	var orphan_after := int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
 	_expect(orphan_after == orphan_before, "benchmark changed orphan count from %d to %d" % [orphan_before, orphan_after])
 	var report := {
-		"schema_version": 1,
+		"schema_version": 2,
+		"benchmark_id": "entity_efficiency",
 		"environment": {
 			"godot": str(Engine.get_version_info().get("string", "unknown")),
 			"os": OS.get_name(),

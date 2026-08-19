@@ -6,6 +6,10 @@ inputs:
     description: Godot version
     required: false
     default: "4.7"
+  project-dir:
+    description: Godot project directory
+    required: false
+    default: src
 
 runs:
   using: composite
@@ -42,5 +46,5 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        timeout 180 bash .github/scripts/import_godot_project.sh \
-          godot src /tmp/godot-import-initial.log /tmp/godot-import-validation.log
+        timeout 180 bash "$GITHUB_ACTION_PATH/../../scripts/import_godot_project.sh" \
+          godot "${{ inputs.project-dir }}" /tmp/godot-import-initial.log /tmp/godot-import-validation.log
