@@ -48,6 +48,8 @@ var _targets: Dictionary = {}
 var _decorations_by_leaf: Dictionary = {}
 var _new_fallen_sources: Dictionary = {}
 var _fallen_by_chunk: Dictionary = {}
+var _retained_by_chunk: Dictionary = {}
+var _rendered_tree_records_by_chunk: Dictionary = {}
 var _next_target_id: int = 1
 var _revision: int = 0
 
@@ -59,7 +61,11 @@ func setup(voxel_world: VoxelWorld, chunk_manager: ChunkManager, world_seed: int
 	_world_seed = world_seed
 	if definition == null or not definition.validate(item_catalog) or not _state.restore(saved_state) or not _prepare_model_bounds() or not _prepare_foliage_mesh():
 		return false
+	for tree_position in _state.get_retained_trees():
+		if not _is_apple_tree(tree_position):
+			return false
 	_rebuild_fallen_index()
+	_rebuild_retained_index()
 	_chunk_manager.chunk_loaded.connect(_on_chunk_loaded)
 	_chunk_manager.chunk_unloaded.connect(_on_chunk_unloaded)
 	_voxel_world.block_edit_committed.connect(_on_block_edit_committed)
@@ -228,6 +234,8 @@ func _on_chunk_unloaded(coord: Vector2i) -> void:
 func _on_block_edit_committed(edit: BlockEdit) -> void:
 	var coord := ChunkCoord.world_to_chunk_vec3i(edit.pos, _voxel_world.chunk_size)
 	var rerender_coords: Dictionary = {coord: true}
+	if edit.is_mine() and edit.old_id in [BlockId.Type.LOG, BlockId.Type.LEAVES]:
+		_retain_edited_trees(edit.pos, coord)
 	if edit.is_mine() and edit.old_id == BlockId.Type.LEAVES:
 		for affected_coord in _try_drop_decorative_apple(edit.pos):
 			rerender_coords[affected_coord] = true
@@ -238,21 +246,34 @@ func _on_block_edit_committed(edit: BlockEdit) -> void:
 func _render_chunk(coord: Vector2i) -> void:
 	_unload_chunk(coord)
 	var tree_blocks := _get_nearby_tree_blocks(coord)
-	if tree_blocks.is_empty() and not _fallen_by_chunk.has(coord):
+	if tree_blocks.is_empty() and not _fallen_by_chunk.has(coord) and not _retained_by_chunk.has(coord):
 		return
 	var root := Node3D.new()
 	root.name = "AppleTrees_%d_%d" % [coord.x, coord.y]
 	add_child(root)
 	_chunk_roots[coord] = root
+	var tree_positions: Dictionary = {}
 	for tree_position in _find_tree_positions(tree_blocks):
-		if ChunkCoord.world_to_chunk_vec3i(tree_position, _voxel_world.chunk_size) == coord and _is_apple_tree(tree_position):
-			_render_apple_tree(root, coord, tree_position, tree_blocks)
+		if ChunkCoord.world_to_chunk_vec3i(tree_position, _voxel_world.chunk_size) == coord:
+			tree_positions[tree_position] = true
+	for tree_position in _retained_by_chunk.get(coord, []) as Array:
+		tree_positions[tree_position] = true
+	var sorted_tree_positions: Array = tree_positions.keys()
+	sorted_tree_positions.sort()
+	var rendered_records: Array = []
+	for tree_position in sorted_tree_positions:
+		if _is_apple_tree(tree_position):
+			var top_log_y := _get_top_log_y(tree_position, tree_blocks)
+			_render_apple_tree(root, coord, tree_position, top_log_y, tree_blocks)
+			rendered_records.append({"tree_position": tree_position, "top_log_y": top_log_y})
+	if not rendered_records.is_empty():
+		_rendered_tree_records_by_chunk[coord] = rendered_records
 	_render_fallen_apples(root, coord)
 	if root.get_child_count() == 0:
 		_chunk_roots.erase(coord)
 		root.queue_free()
 
-func _render_apple_tree(root: Node3D, coord: Vector2i, tree_position: Vector3i, tree_blocks: Dictionary) -> void:
+func _render_apple_tree(root: Node3D, coord: Vector2i, tree_position: Vector3i, top_log_y: int, tree_blocks: Dictionary) -> void:
 	var random := RandomNumberGenerator.new()
 	random.seed = _stable_seed(tree_position, 17)
 	var ground_offsets := GROUND_OFFSETS.duplicate()
@@ -268,7 +289,6 @@ func _render_apple_tree(root: Node3D, coord: Vector2i, tree_position: Vector3i, 
 			ground_height = tree_position.y - 1
 		apple_position.y = float(ground_height + 1)
 		_spawn_ground_apple(root, coord, tree_position, slot_index, apple_position)
-	var top_log_y := _get_top_log_y(tree_position, tree_blocks)
 	_spawn_foliage(root, tree_position, top_log_y, tree_blocks)
 	var decorative_offsets := DECORATIVE_OFFSETS.duplicate()
 	_shuffle(decorative_offsets, random)
@@ -394,6 +414,36 @@ func _rebuild_fallen_index() -> void:
 		var coord := ChunkCoord.world_to_chunk(position, _voxel_world.chunk_size)
 		_add_fallen_to_index(coord, record["tree_position"] as Vector3i, int(record["decorative_index"]), position)
 
+func _rebuild_retained_index() -> void:
+	_retained_by_chunk.clear()
+	for tree_position in _state.get_retained_trees():
+		_add_retained_to_index(tree_position)
+
+func _add_retained_to_index(tree_position: Vector3i) -> void:
+	var coord := ChunkCoord.world_to_chunk_vec3i(tree_position, _voxel_world.chunk_size)
+	if not _retained_by_chunk.has(coord):
+		_retained_by_chunk[coord] = []
+	(_retained_by_chunk[coord] as Array).append(tree_position)
+
+func _retain_edited_trees(position: Vector3i, coord: Vector2i) -> void:
+	var retained := false
+	for x_offset in range(-1, 2):
+		for z_offset in range(-1, 2):
+			for record in _rendered_tree_records_by_chunk.get(coord + Vector2i(x_offset, z_offset), []) as Array:
+				var tree_position := (record as Dictionary)["tree_position"] as Vector3i
+				var top_log_y := int((record as Dictionary)["top_log_y"])
+				if not _tree_contains_block(tree_position, top_log_y, position) or not _state.retain_tree(tree_position):
+					continue
+				_add_retained_to_index(tree_position)
+				retained = true
+	if retained:
+		state_changed.emit()
+
+func _tree_contains_block(tree_position: Vector3i, top_log_y: int, position: Vector3i) -> bool:
+	if position.x == tree_position.x and position.z == tree_position.z and position.y >= tree_position.y and position.y <= top_log_y:
+		return true
+	return absi(position.x - tree_position.x) <= 1 and absi(position.z - tree_position.z) <= 1 and position.y >= top_log_y + 1 and position.y <= top_log_y + 3
+
 func _add_fallen_to_index(coord: Vector2i, tree_position: Vector3i, decorative_index: int, position: Vector3) -> void:
 	if not _fallen_by_chunk.has(coord):
 		_fallen_by_chunk[coord] = []
@@ -503,6 +553,7 @@ func _calculate_holder_bounds(holder: Node3D) -> AABB:
 	return combined
 
 func _unload_chunk(coord: Vector2i) -> void:
+	_rendered_tree_records_by_chunk.erase(coord)
 	if _chunk_roots.has(coord):
 		(_chunk_roots[coord] as Node3D).queue_free()
 		_chunk_roots.erase(coord)

@@ -110,7 +110,10 @@ func _init() -> void:
 			_expect(restored_fallen.snapshot() == fallen_snapshot, "fallen apple state changed during save round trip")
 			var legacy_state := AppleTreeState.new()
 			_expect(legacy_state.restore({"version": 1, "collected_slots": []}), "version one apple state did not migrate")
-			_expect(legacy_state.snapshot() == {"version": 2, "collected_slots": [], "fallen_apples": []}, "version one apple state migration was incorrect")
+			_expect(legacy_state.snapshot() == {"version": 3, "collected_slots": [], "fallen_apples": [], "retained_trees": []}, "version one apple state migration was incorrect")
+			var version_two_state := AppleTreeState.new()
+			_expect(version_two_state.restore({"version": 2, "collected_slots": [], "fallen_apples": []}), "version two apple state did not migrate")
+			_expect(version_two_state.snapshot() == legacy_state.snapshot(), "version two apple state migration was incorrect")
 			var empty_world := VoxelWorld.new(20, 36, 5, 12.0, block_catalog)
 			var restored_chunks := ChunkManager.new()
 			restored_chunks.visible_chunks[Vector2i.ZERO] = true
@@ -215,6 +218,7 @@ func _init() -> void:
 	var consumption := apple.secondary_action as ConsumableActionDefinition
 	_expect(consumption != null and is_equal_approx(consumption.health_restore_fraction, 0.1), "apple did not restore ten percent of maximum health")
 	_expect(apple.consume_audio != null and apple.consume_audio.streams.size() == 1, "apple munch audio was not configured")
+	await _test_retained_tree_identity(block_catalog, item_catalog, apple_position)
 	apple_trees.free()
 	await process_frame
 	if _failures == 0:
@@ -330,6 +334,39 @@ func _find_item_slot(inventory: InventoryModel, item_id: StringName) -> int:
 		if stack != null and stack.item_id == item_id:
 			return index
 	return -1
+
+func _test_retained_tree_identity(block_catalog: BlockCatalog, item_catalog: ItemCatalog, tree_position: Vector3i) -> void:
+	var world := VoxelWorld.new(20, 36, 5, 12.0, block_catalog)
+	var chunk_manager := ChunkManager.new()
+	chunk_manager.visible_chunks[Vector2i.ZERO] = true
+	_populate_tree(world, tree_position)
+	var trees := (load("res://foraging/apple/apple_tree_coordinator.tscn") as PackedScene).instantiate() as AppleTreeCoordinator
+	root.add_child(trees)
+	_expect(trees.setup(world, chunk_manager, 872341, null, item_catalog), "retained apple tree setup failed")
+	for y in range(tree_position.y, tree_position.y + 4):
+		_expect(VoxelWorldTestFixture.commit_mine(world, Vector3i(tree_position.x, y, tree_position.z)) != null, "retained apple tree trunk block could not be mined")
+	var leaves: Array[Vector3i] = []
+	for raw_position in world.get_tree_blocks_for_chunk(Vector2i.ZERO):
+		var position := raw_position as Vector3i
+		if world.get_block_id_at(position) == BlockId.Type.LEAVES:
+			leaves.append(position)
+	leaves.sort()
+	for index in range(3):
+		_expect(VoxelWorldTestFixture.commit_mine(world, leaves[index]) != null, "retained apple tree leaf could not be mined")
+	var chunk_root := trees._chunk_roots.get(Vector2i.ZERO) as Node3D
+	_expect(_count_children(chunk_root, "AppleFoliage_") == 6, "damaged apple tree surviving leaves lost their foliage tint")
+	_expect(trees._state.has_retained_tree(tree_position), "damaged apple tree identity was not retained")
+	var snapshot := trees.snapshot()
+	trees.free()
+	await process_frame
+	var restored_chunks := ChunkManager.new()
+	restored_chunks.visible_chunks[Vector2i.ZERO] = true
+	var restored := (load("res://foraging/apple/apple_tree_coordinator.tscn") as PackedScene).instantiate() as AppleTreeCoordinator
+	root.add_child(restored)
+	_expect(restored.setup(world, restored_chunks, 872341, snapshot, item_catalog), "retained apple tree state did not restore")
+	var restored_root := restored._chunk_roots.get(Vector2i.ZERO) as Node3D
+	_expect(_count_children(restored_root, "AppleFoliage_") == 6, "restored damaged apple tree surviving leaves lost their foliage tint")
+	restored.free()
 
 func _expect(condition: bool, message: String) -> void:
 	if not condition:
