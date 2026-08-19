@@ -107,6 +107,11 @@ func _run():
 	_expect(birds.playing, "birds did not start during daytime")
 	_expect(night.volume_db <= -79.0, "night ambience should mute at noon")
 	_expect(not night.playing, "night ambience started during daytime")
+	amb.set_volume(0.0)
+	_expect(not birds.playing, "zero ambient volume retained daytime playback")
+	_expect(not night.playing, "zero ambient volume retained nighttime playback")
+	amb.set_volume(1.0)
+	_expect(birds.playing, "restored ambient volume did not resume daytime playback")
 
 	clock.set_time_of_day(2.0)
 	_expect(is_equal_approx(amb._day_factor, 0.0), "night day_factor not 0")

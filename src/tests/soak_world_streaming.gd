@@ -69,6 +69,7 @@ func _process(_delta: float) -> bool:
 			return false
 		var settings := GameSettings.new()
 		settings.torch_shadow_count = 1
+		settings.ambient_volume = 0.0
 		_game.configure_session(_test_save_slot_id, _make_saved_world(), settings)
 		_game.session_ready.connect(_on_session_ready)
 		root.add_child(_game)
@@ -1121,6 +1122,7 @@ func _verify_dead_window_close_save() -> bool:
 	var close_game := packed.instantiate() as Game
 	var settings := GameSettings.new()
 	settings.torch_shadow_count = 1
+	settings.ambient_volume = 0.0
 	var defeated_save := _make_saved_world()
 	defeated_save["player_stats"] = {
 		"level": 1,

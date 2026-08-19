@@ -60,6 +60,8 @@ func _exit_tree():
 func set_volume(volume: float):
 	_ambient_volume = clampf(volume, 0.0, 1.0)
 	_apply_volumes()
+	if _running:
+		_sync_playback()
 
 
 func set_birds_enabled(enabled: bool):
@@ -91,12 +93,13 @@ func _apply_volumes():
 
 
 func _sync_playback():
-	if _birds_enabled and _day_factor > 0.01:
+	var audible := _ambient_volume > 0.001
+	if audible and _birds_enabled and _day_factor > 0.01:
 		if not _birds_player.playing:
 			_birds_player.play()
 	else:
 		_birds_player.stop()
-	if _night_factor > 0.01:
+	if audible and _night_factor > 0.01:
 		if not _night_player.playing:
 			_night_player.play()
 	else:
