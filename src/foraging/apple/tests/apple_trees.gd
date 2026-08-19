@@ -66,11 +66,19 @@ func _init() -> void:
 		_expect(_count_children(chunk_root, "DecorativeApple_") == decorative_count, "mining the base log removed canopy apples")
 		var drop_leaf := _find_drop_leaf(apple_trees)
 		_expect(drop_leaf.y >= 0, "deterministic apple tree had no eligible decorative drop")
-		var removed_decorations := (apple_trees._decorations_by_leaf.get(drop_leaf, []) as Array).size()
+		var drop_sources := (apple_trees._decorations_by_leaf.get(drop_leaf, []) as Array).duplicate(true)
+		var removed_decorations := drop_sources.size()
 		_expect(VoxelWorldTestFixture.commit_mine(world, drop_leaf) != null, "apple-bearing leaf could not be mined")
 		chunk_root = apple_trees._chunk_roots[Vector2i.ZERO] as Node3D
 		var fallen := apple_trees._state.get_fallen_apples()
 		_expect(fallen.size() == 1, "mining an apple-bearing leaf did not create one fallen apple")
+		if not fallen.is_empty():
+			var fallen_record := fallen[0] as Dictionary
+			var fallen_position := fallen_record["position"] as Vector3
+			var source_position := _find_decorative_source(drop_sources, int(fallen_record["decorative_index"]))
+			_expect(source_position != Vector3.INF, "fallen apple source position could not be identified")
+			_expect(is_equal_approx(fallen_position.x, source_position.x) and is_equal_approx(fallen_position.z, source_position.z), "fallen apple moved sideways instead of dropping vertically")
+			_expect(fallen_position.y < source_position.y, "fallen apple did not land below its canopy position")
 		_expect(_count_children(chunk_root, "DecorativeApple_") == decorative_count - removed_decorations, "mined leaf did not remove its decorative apples")
 		_expect(_count_children(chunk_root, "FallenApple_") == 1, "fallen apple presentation was not created")
 		_expect(apple_trees._targets.size() == ground_count + 1, "fallen apple did not become a harvest target")
@@ -231,6 +239,12 @@ func _find_drop_leaf(coordinator: AppleTreeCoordinator) -> Vector3i:
 			if coordinator._should_drop_decorative_apple(tree_position, decorative_index):
 				return leaf
 	return Vector3i(-1, -1, -1)
+
+func _find_decorative_source(records: Array, decorative_index: int) -> Vector3:
+	for record in records:
+		if int((record as Dictionary)["decorative_index"]) == decorative_index:
+			return (record as Dictionary)["position"] as Vector3
+	return Vector3.INF
 
 func _target_harvest(harvest: HarvestCoordinator, bounds: AABB) -> void:
 	var center := bounds.get_center()

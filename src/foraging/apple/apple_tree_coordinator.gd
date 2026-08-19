@@ -384,7 +384,7 @@ func _try_drop_decorative_apple(leaf_position: Vector3i) -> Array[Vector2i]:
 		if not _should_drop_decorative_apple(tree_position, decorative_index):
 			continue
 		var source_position := record["position"] as Vector3
-		var drop_position := _get_drop_position(tree_position, decorative_index, source_position)
+		var drop_position := _get_drop_position(tree_position, source_position)
 		if _state.add_fallen_apple(tree_position, decorative_index, drop_position):
 			var drop_coord := ChunkCoord.world_to_chunk(drop_position, _voxel_world.chunk_size)
 			_add_fallen_to_index(drop_coord, tree_position, decorative_index, drop_position)
@@ -427,18 +427,11 @@ func _remove_fallen_from_index(coord: Vector2i, tree_position: Vector3i, decorat
 func _should_drop_decorative_apple(tree_position: Vector3i, decorative_index: int) -> bool:
 	return _stable_seed(tree_position, 1000 + decorative_index) % 100 < DECORATIVE_DROP_PERCENT
 
-func _get_drop_position(tree_position: Vector3i, decorative_index: int, source_position: Vector3) -> Vector3:
-	var center := Vector2(tree_position.x + 0.5, tree_position.z + 0.5)
-	var outward := Vector2(source_position.x, source_position.z) - center
-	if outward.is_zero_approx():
-		var angle := float(_stable_seed(tree_position, 2000 + decorative_index) % 360) * PI / 180.0
-		outward = Vector2(cos(angle), sin(angle))
-	outward = outward.normalized()
-	var planar_position := center + outward * 1.15
-	var ground_height := _voxel_world.get_terrain_height(floori(planar_position.x), floori(planar_position.y))
+func _get_drop_position(tree_position: Vector3i, source_position: Vector3) -> Vector3:
+	var ground_height := _voxel_world.get_terrain_height(floori(source_position.x), floori(source_position.z))
 	if ground_height < 0:
 		ground_height = tree_position.y - 1
-	return Vector3(planar_position.x, float(ground_height + 1), planar_position.y)
+	return Vector3(source_position.x, float(ground_height + 1), source_position.z)
 
 func _get_supporting_leaf(tree_position: Vector3i, top_log_y: int, offset: Vector3) -> Vector3i:
 	return Vector3i(tree_position.x + clampi(roundi(offset.x), -1, 1), top_log_y + 1, tree_position.z + clampi(roundi(offset.z), -1, 1))
