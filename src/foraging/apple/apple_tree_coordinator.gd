@@ -3,7 +3,7 @@ class_name AppleTreeCoordinator
 
 signal state_changed
 
-const DECORATIVE_DROP_PERCENT: int = 20
+const DECORATIVE_DROP_PERCENT: int = 50
 const GROUND_OFFSETS: Array[Vector2] = [
 	Vector2(0.78, 0.18),
 	Vector2(-0.72, 0.28),

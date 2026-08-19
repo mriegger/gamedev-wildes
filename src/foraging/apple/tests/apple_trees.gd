@@ -16,6 +16,7 @@ func _init() -> void:
 	var apple_trees := (load("res://foraging/apple/apple_tree_coordinator.tscn") as PackedScene).instantiate() as AppleTreeCoordinator
 	root.add_child(apple_trees)
 	_expect(apple_trees.definition.apple_scene.resource_path == "res://assets/models/foraging/apple/apple.glb", "apple trees did not use the Kenney Food Kit model")
+	_expect(AppleTreeCoordinator.DECORATIVE_DROP_PERCENT == 50, "decorative apple drop chance was not fifty percent")
 	_expect(apple_trees.definition.fall_impact_streams.size() == 4, "fallen apples did not configure four light impact sounds")
 	for index in range(apple_trees.definition.fall_impact_streams.size()):
 		var expected_path := "res://assets/audio/sfx/tools/impactGeneric_light_%03d.ogg" % (index + 1)
@@ -68,7 +69,8 @@ func _init() -> void:
 		_expect(drop_leaf.y >= 0, "deterministic apple tree had no eligible decorative drop")
 		var drop_sources := (apple_trees._decorations_by_leaf.get(drop_leaf, []) as Array).duplicate(true)
 		var removed_decorations := drop_sources.size()
-		var expected_drop_source := _find_eligible_decorative_source(apple_trees, drop_sources)
+		var expected_drop_record := _find_eligible_decorative_record(apple_trees, drop_sources)
+		var expected_drop_source := expected_drop_record["position"] as Vector3
 		var tree_center := Vector2(apple_position.x + 0.5, apple_position.z + 0.5)
 		var source_planar := Vector2(expected_drop_source.x, expected_drop_source.z)
 		var support_sample := source_planar.move_toward(tree_center, apple_trees.definition.ground_apple_size * 0.5)
@@ -249,14 +251,22 @@ func _find_apple_tree_position(definition: AppleTreeDefinition, seed_value: int)
 func _find_drop_leaf(coordinator: AppleTreeCoordinator) -> Vector3i:
 	var leaves := coordinator._decorations_by_leaf.keys()
 	leaves.sort()
+	var fallback := Vector3i(-1, -1, -1)
 	for raw_leaf in leaves:
 		var leaf := raw_leaf as Vector3i
-		for record in coordinator._decorations_by_leaf[leaf] as Array:
-			var tree_position := (record as Dictionary)["tree_position"] as Vector3i
-			var decorative_index := int((record as Dictionary)["decorative_index"])
-			if coordinator._should_drop_decorative_apple(tree_position, decorative_index):
-				return leaf
-	return Vector3i(-1, -1, -1)
+		var record := _find_eligible_decorative_record(coordinator, coordinator._decorations_by_leaf[leaf] as Array)
+		if record.is_empty():
+			continue
+		if fallback.y < 0:
+			fallback = leaf
+		var tree_position := record["tree_position"] as Vector3i
+		var source_position := record["position"] as Vector3
+		var tree_center := Vector2(tree_position.x + 0.5, tree_position.z + 0.5)
+		var source_planar := Vector2(source_position.x, source_position.z)
+		var support_sample := source_planar.move_toward(tree_center, coordinator.definition.ground_apple_size * 0.5)
+		if Vector2i(floori(source_planar.x), floori(source_planar.y)) != Vector2i(floori(support_sample.x), floori(support_sample.y)):
+			return leaf
+	return fallback
 
 func _find_decorative_source(records: Array, decorative_index: int) -> Vector3:
 	for record in records:
@@ -264,13 +274,15 @@ func _find_decorative_source(records: Array, decorative_index: int) -> Vector3:
 			return (record as Dictionary)["position"] as Vector3
 	return Vector3.INF
 
-func _find_eligible_decorative_source(coordinator: AppleTreeCoordinator, records: Array) -> Vector3:
-	for record in records:
+func _find_eligible_decorative_record(coordinator: AppleTreeCoordinator, records: Array) -> Dictionary:
+	var sorted_records := records.duplicate()
+	sorted_records.sort_custom(func(first: Dictionary, second: Dictionary): return int(first["decorative_index"]) < int(second["decorative_index"]))
+	for record in sorted_records:
 		var tree_position := (record as Dictionary)["tree_position"] as Vector3i
 		var decorative_index := int((record as Dictionary)["decorative_index"])
 		if coordinator._should_drop_decorative_apple(tree_position, decorative_index):
-			return (record as Dictionary)["position"] as Vector3
-	return Vector3.INF
+			return record as Dictionary
+	return {}
 
 func _target_harvest(harvest: HarvestCoordinator, bounds: AABB) -> void:
 	var center := bounds.get_center()
