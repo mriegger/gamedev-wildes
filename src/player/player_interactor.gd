@@ -275,19 +275,7 @@ func _handle_raycast():
 func _placement_collides_player(p: Vector3i) -> bool:
 	if motor == null:
 		return false
-	var pw = motor.player_width
-	var ph = motor.player_height
-	var min_a = Vector3(motor.global_position.x - pw * 0.5, motor.global_position.y, motor.global_position.z - pw * 0.5)
-	var max_a = Vector3(motor.global_position.x + pw * 0.5, motor.global_position.y + ph, motor.global_position.z + pw * 0.5)
-	var bmin = Vector3(float(p.x), float(p.y), float(p.z))
-	var bmax = bmin + Vector3(1, 1, 1)
-	if max_a.x <= bmin.x or min_a.x >= bmax.x:
-		return false
-	if max_a.y <= bmin.y or min_a.y >= bmax.y:
-		return false
-	if max_a.z <= bmin.z or min_a.z >= bmax.z:
-		return false
-	return true
+	return motor.get_world_bounds().intersects(AABB(Vector3(p), Vector3.ONE))
 
 func _placement_collides_entity(position: Vector3i) -> bool:
 	var block_bounds := AABB(Vector3(position), Vector3.ONE)
@@ -508,7 +496,7 @@ func _update_melee_facing(delta: float):
 	motor.turn_toward_direction(cursor_direction, delta)
 
 func _get_cursor_planar_direction(ray_origin: Vector3, ray_direction: Vector3) -> Vector3:
-	var player_center := motor.global_position + Vector3.UP * (motor.player_height * 0.5)
+	var player_center := motor.get_world_bounds().get_center()
 	var cursor_position: Variant = Plane(Vector3.UP, player_center.y).intersects_ray(ray_origin, ray_direction)
 	if not cursor_position is Vector3:
 		return Vector3.ZERO

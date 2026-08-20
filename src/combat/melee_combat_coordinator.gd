@@ -248,7 +248,7 @@ func try_commit_entity_contact(source_runtime_id: int, profile: MeleeAttackProfi
 	var hit_direction := target_origin - source_origin
 	if hit_direction.is_zero_approx() or not VoxelLineOfSightType.has_clear_path(_voxel_space, source_origin, target_origin):
 		return false
-	var hit: Variant = _get_player_bounds().intersects_ray(source_origin, hit_direction.normalized())
+	var hit: Variant = _player.get_world_bounds().intersects_ray(source_origin, hit_direction.normalized())
 	if not hit is Vector3:
 		return false
 	var contact := MeleeContactType.new(
@@ -411,15 +411,8 @@ func _get_planar_aim(ray_origin: Vector3, ray_direction: Vector3, player_origin:
 		return Vector3.ZERO
 	return planar_aim.normalized()
 
-func _get_player_bounds() -> AABB:
-	var half_width := _player.player_width * 0.5
-	return AABB(
-		_player.global_position + Vector3(-half_width, 0.0, -half_width),
-		Vector3(_player.player_width, _player.player_height, _player.player_width),
-	)
-
 func _get_player_center() -> Vector3:
-	return _get_bounds_center(_get_player_bounds())
+	return _get_bounds_center(_player.get_world_bounds())
 
 func _get_bounds_center(bounds: AABB) -> Vector3:
 	return bounds.position + bounds.size * 0.5

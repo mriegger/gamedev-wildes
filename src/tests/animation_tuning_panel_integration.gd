@@ -42,14 +42,67 @@ func _run():
 	_expect(attack_action.held_position_offset.is_equal_approx(Vector3(0.0, 0.1125, 0.0)), "exported attack item position was not adopted as the default")
 	_expect(attack_action.held_rotation_degrees.is_equal_approx(Vector3(0.0, -113.6, 0.0)), "exported attack item rotation was not adopted as the default")
 	var input_buffer = InputBuffer.new()
+	var camera_rig := (load("res://player/camera/camera_rig.tscn") as PackedScene).instantiate() as CameraRig
+	root.add_child(camera_rig)
+	await process_frame
+	var player_stats := ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
 	player._input_buffer = input_buffer
+	player.camera_rig = camera_rig
+	player.stats = player_stats
 	var block_catalog := load("res://blocks/block_catalog.tres") as BlockCatalog
 	player.voxel_space = VoxelWorld.new(16, 32, 5, 8.0, block_catalog)
+	_expect(player_stats.set_base_value(&"movement_speed_multiplier", 0.5), "movement speed multiplier could not be changed")
+	input_buffer.move_dir = Vector2.RIGHT
+	player._handle_movement(0.0)
+	_expect(is_equal_approx(Vector2(player.velocity.x, player.velocity.z).length(), player.move_speed * 0.5), "walk did not apply the movement speed multiplier")
+	_expect(is_equal_approx(player.get_effective_move_speed(), player.move_speed * 0.5), "effective walk speed query ignored the movement speed multiplier")
+	_expect(is_equal_approx(player.get_locomotion_speed_ratio(), 0.5), "walk locomotion ratio ignored the movement speed multiplier")
+	input_buffer.sprint_pressed = true
+	player._handle_movement(0.0)
+	_expect(is_equal_approx(Vector2(player.velocity.x, player.velocity.z).length(), player.sprint_speed * 0.5), "sprint did not apply the movement speed multiplier")
+	_expect(is_equal_approx(player.get_effective_sprint_speed(), player.sprint_speed * 0.5), "effective sprint speed query ignored the movement speed multiplier")
+	_expect(is_equal_approx(player.get_locomotion_speed_ratio(), 0.5), "sprint locomotion ratio ignored the movement speed multiplier")
+	player.velocity = Vector3(player.sprint_speed * 1.5, 0.0, 0.0)
+	_expect(is_equal_approx(player.get_locomotion_speed_ratio(), 1.0), "locomotion cycle ratio exceeded the authored gait range")
+	_expect(player_stats.set_base_value(&"movement_speed_multiplier", 1.0), "movement speed multiplier could not be restored")
+	input_buffer.move_dir = Vector2.ZERO
+	input_buffer.sprint_pressed = false
+	player.velocity = Vector3.ZERO
+	var jump_commits := [0]
+	player.jump_committed.connect(func(): jump_commits[0] += 1)
 	player.on_ground = true
 	input_buffer.jump_just = true
 	for _frame in range(12):
 		player._handle_movement(1.0 / 60.0)
 	_expect(player.velocity.y <= 0.0 and player._jump_windup_remaining <= 0.0 and not player._jump_ready, "jump windup launched after grounding was lost")
+	_expect(jump_commits[0] == 0, "lost grounding emitted a committed jump")
+	var grounded_world := VoxelWorld.new(16, 32, 5, 8.0, block_catalog)
+	grounded_world.restore_block_edits({Vector3i.ZERO: BlockId.Type.DIRT}, {})
+	player.voxel_space = grounded_world
+	player.global_position = Vector3(0.5, 1.0, 0.5)
+	player.on_ground = true
+	player.velocity = Vector3.ZERO
+	input_buffer.jump_just = true
+	for _frame in range(12):
+		player._handle_movement(1.0 / 60.0)
+	_expect(jump_commits[0] == 1 and player.velocity.y > 0.0 and not player.on_ground, "grounded jump did not emit exactly one committed launch")
+	input_buffer.jump_just = true
+	player._handle_movement(1.0 / 60.0)
+	_expect(jump_commits[0] == 1, "airborne jump input emitted a committed jump")
+	player.global_position = Vector3(0.5, 1.0, 0.5)
+	player.velocity = Vector3.ZERO
+	player.on_ground = true
+	player._jump_windup_remaining = 0.0
+	player._jump_ready = false
+	var configured_jump_velocity: float = player.jump_velocity
+	player.jump_velocity = 0.0
+	input_buffer.jump_just = true
+	for _frame in range(12):
+		player._handle_movement(1.0 / 60.0)
+	_expect(jump_commits[0] == 1 and player.on_ground, "zero-velocity jump attempt emitted a committed launch")
+	player.jump_velocity = configured_jump_velocity
+	input_buffer.clear_gameplay()
+	player.voxel_space = null
 	player.velocity = Vector3.ZERO
 	var default_bob = profile.sprint_bob_height
 	var default_gait_direction_response = profile.gait_direction_response
@@ -218,6 +271,7 @@ func _run():
 	_expect(not panel.visible, "panel did not close")
 	_expect(player.animation_driver._preview_state == PlayerAnimationDriver.PREVIEW_LIVE, "closing panel did not restore live preview")
 	panel.queue_free()
+	camera_rig.queue_free()
 	player.queue_free()
 	await process_frame
 	await process_frame

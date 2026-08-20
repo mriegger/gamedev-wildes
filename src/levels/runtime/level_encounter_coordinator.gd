@@ -121,7 +121,7 @@ func _build_spawn_batch(room_id: int, entity_ids: Array[StringName], ignore_tran
 	var used_cells: Dictionary = {}
 	var player_bounds := AABB()
 	if not ignore_transient_occupancy:
-		player_bounds = _player_bounds()
+		player_bounds = _player.get_world_bounds()
 	var spawn_index := _state.get_spawned_enemy_count(room_id)
 	var spawn_cells := _spawn_cells_by_room[room_id] as Array[Vector3i]
 	for entity_offset in entity_ids.size():
@@ -195,10 +195,3 @@ func _shuffle_spawn_cells(source: Array[Vector3i], room_id: int) -> Array[Vector
 		cells[index] = cells[swap_index]
 		cells[swap_index] = value
 	return cells
-
-func _player_bounds() -> AABB:
-	var half_width := _player.player_width * 0.5
-	return AABB(
-		_player.global_position + Vector3(-half_width, 0.0, -half_width),
-		Vector3(_player.player_width, _player.player_height, _player.player_width)
-	)

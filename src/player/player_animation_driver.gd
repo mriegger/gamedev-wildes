@@ -101,8 +101,7 @@ func _process(delta: float):
 	var model_basis = _motor.model_root.global_transform.basis.orthonormalized()
 	var local_velocity = model_basis.inverse() * _motor.velocity
 	var planar_speed = Vector2(_motor.velocity.x, _motor.velocity.z).length()
-	var target_speed = _motor.sprint_speed if _motor.is_sprinting else _motor.move_speed
-	var speed_ratio = clamp(planar_speed / max(target_speed, 0.001), 0.0, 1.0)
+	var speed_ratio = _motor.get_locomotion_speed_ratio()
 	var sprinting = _motor.is_sprinting and planar_speed > 0.1
 	var current_yaw = _motor.model_root.rotation.y
 	var turn_rate = wrapf(current_yaw - _previous_yaw, -PI, PI) / max(delta, 0.0001)

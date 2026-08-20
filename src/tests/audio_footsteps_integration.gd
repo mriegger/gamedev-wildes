@@ -193,13 +193,28 @@ func _run():
 	footsteps._process(0.02)
 	_expect(is_equal_approx(footsteps._step_timer, 0.0), "walk did not trigger at profile contact interval")
 
+	player.velocity = Vector3(player.move_speed * 0.5, 0, 0)
+	footsteps._step_timer = 0.0
+	var slowed_walk_interval = walk_interval * 2.0
+	footsteps._process(slowed_walk_interval - 0.01)
+	_expect(footsteps._step_timer > 0.0, "slowed walk triggered before its speed-adjusted contact interval")
+	footsteps._process(0.02)
+	_expect(is_equal_approx(footsteps._step_timer, 0.0), "slowed walk did not trigger at its speed-adjusted contact interval")
+
 	player.is_sprinting = true
+	player.velocity = Vector3(player.sprint_speed, 0, 0)
 	footsteps._step_timer = 0.0
 	var sprint_interval = profile.sprint_cycle_seconds * 0.5
 	footsteps._process(sprint_interval - 0.01)
 	_expect(footsteps._step_timer > 0.0, "sprint triggered before profile contact interval")
 	footsteps._process(0.02)
 	_expect(is_equal_approx(footsteps._step_timer, 0.0), "sprint did not trigger at profile contact interval")
+	player.velocity = Vector3(player.sprint_speed * 1.5, 0, 0)
+	footsteps._step_timer = 0.0
+	footsteps._process(sprint_interval - 0.01)
+	_expect(footsteps._step_timer > 0.0, "boosted sprint footsteps outran the capped animation gait")
+	footsteps._process(0.02)
+	_expect(is_equal_approx(footsteps._step_timer, 0.0), "boosted sprint footsteps diverged from the capped animation gait")
 
 	var before_count = _count_nodes(root)
 	player.velocity = Vector3(5.5, 0, 0)

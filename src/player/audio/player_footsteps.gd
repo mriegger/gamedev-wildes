@@ -54,7 +54,7 @@ func _process(delta: float):
 		_step_timer = 0.0
 		return
 	var cycle_seconds = _profile.sprint_cycle_seconds if _motor.is_sprinting else _profile.walk_cycle_seconds
-	var interval = cycle_seconds * 0.5
+	var interval = cycle_seconds * 0.5 / _motor.get_locomotion_speed_ratio()
 	_step_timer += delta
 	if _step_timer >= interval:
 		_step_timer = 0.0

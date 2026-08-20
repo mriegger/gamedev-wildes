@@ -4,10 +4,11 @@ class_name PlayerMotor
 const _TURN_RESPONSE: float = 10.0
 
 signal water_step_committed(position: Vector3, planar_velocity: Vector2)
+signal jump_committed
 
 @export_range(0.01, 30.0, 0.01) var move_speed: float = 5.5
 @export_range(0.01, 30.0, 0.01) var sprint_speed: float = 8.0
-@export_range(0.0, 30.0, 0.01) var jump_velocity: float = 9.0
+@export_range(0.01, 30.0, 0.01) var jump_velocity: float = 9.0
 @export_range(0.01, 1.0, 0.001) var jump_windup_seconds: float = 0.11
 @export_range(0.0, 100.0, 0.01) var gravity: float = 30.0
 @export_range(0.1, 5.0, 0.01) var player_width: float = 0.6
@@ -17,6 +18,12 @@ signal water_step_committed(position: Vector3, planar_velocity: Vector2)
 @onready var targeting_view: TargetingView = $TargetingView as TargetingView
 @onready var animation_driver: PlayerAnimationDriver = $AnimationDriver as PlayerAnimationDriver
 @onready var model_root: Node3D = $ModelRoot as Node3D
+@onready var slime_attachment_anchors: Array[Marker3D] = [
+	$ModelRoot/SlimeAttachmentAnchors/Left as Marker3D,
+	$ModelRoot/SlimeAttachmentAnchors/Right as Marker3D,
+	$ModelRoot/SlimeAttachmentAnchors/Back as Marker3D,
+	$ModelRoot/SlimeAttachmentAnchors/Front as Marker3D,
+]
 @onready var held_item_view: HeldItemView = $ModelRoot/PlayerVisual/RigRoot/BodySecondary/BodyAction/TorsoBase/RightShoulder/RightArmBase/RightArmAction/RightHandSocket as HeldItemView
 @onready var _footsteps: PlayerFootsteps = $Footsteps as PlayerFootsteps
 @onready var _action_audio: PlayerActionAudio = $ActionAudio as PlayerActionAudio
@@ -61,6 +68,7 @@ func setup(
 	assert(p_action_executors != null)
 	assert(p_input_buffer != null)
 	assert(p_stats != null)
+	assert(p_stats.has_stat(&"movement_speed_multiplier"))
 	assert(p_inventory_loadout.actor_stats == p_stats)
 	assert(p_combat != null)
 	assert(p_entity_runtime != null)
@@ -210,6 +218,34 @@ func get_water_surface_position() -> Vector3:
 		surface_cell += Vector3i.UP
 	return Vector3(global_position.x, surface_cell.y + VoxelSpace.WATER_SURFACE_HEIGHT, global_position.z)
 
+func get_world_bounds() -> AABB:
+	var half_width := player_width * 0.5
+	return AABB(
+		global_position + Vector3(-half_width, 0.0, -half_width),
+		Vector3(player_width, player_height, player_width),
+	)
+
+func get_slime_attachment_anchor_count() -> int:
+	return slime_attachment_anchors.size()
+
+func get_slime_attachment_anchor_position(slot_index: int) -> Vector3:
+	assert(slot_index >= 0 and slot_index < slime_attachment_anchors.size())
+	return slime_attachment_anchors[slot_index].global_position
+
+func get_movement_speed_multiplier() -> float:
+	assert(stats != null and stats.has_stat(&"movement_speed_multiplier"))
+	return stats.get_value(&"movement_speed_multiplier")
+
+func get_effective_move_speed() -> float:
+	return move_speed * get_movement_speed_multiplier()
+
+func get_effective_sprint_speed() -> float:
+	return sprint_speed * get_movement_speed_multiplier()
+
+func get_locomotion_speed_ratio() -> float:
+	var configured_speed := sprint_speed if is_sprinting else move_speed
+	return clampf(Vector2(velocity.x, velocity.z).length() / configured_speed, 0.0, 1.0)
+
 func _on_step_committed(surface_block_id: int) -> void:
 	if surface_block_id == BlockId.Type.WATER and is_in_water():
 		water_step_committed.emit(get_water_surface_position(), Vector2(velocity.x, velocity.z))
@@ -248,7 +284,7 @@ func _handle_movement(delta):
 		else:
 			cam_right = cam_right.normalized()
 		move_vec = (cam_right * input_dir.x + cam_forward * input_dir.y)
-		move_vec = move_vec.normalized() * (sprint_speed if is_sprinting else move_speed)
+		move_vec = move_vec.normalized() * (get_effective_sprint_speed() if is_sprinting else get_effective_move_speed())
 		if move_vec.length() > 0.1:
 			_turn_toward_movement(move_vec, delta)
 
@@ -279,9 +315,10 @@ func _handle_movement(delta):
 	else:
 		on_ground = false
 	if launch_ready:
-		if on_ground:
+		if on_ground and is_finite(jump_velocity) and jump_velocity > 0.0:
 			velocity.y = jump_velocity
 			on_ground = false
+			jump_committed.emit()
 		jump_anticipation = 0.0
 
 	if global_position.y < -10:
