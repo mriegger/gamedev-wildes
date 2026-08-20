@@ -447,6 +447,35 @@ jobs:
             30 "ENTITY_DOMAIN PASS" /tmp/entity_domain.log -- \
             godot --headless --path src --script res://tests/entity_domain.gd
 
+  slime-system:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run slime behavior tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "SLIME_BEHAVIOR PASS" /tmp/slime_behavior.log -- \
+            godot --headless --path src --script res://entities/slime/tests/slime_behavior.gd
+      - name: Run slime splitting integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            45 "SLIME_SPLIT_INTEGRATION PASS" /tmp/slime_split_integration.log -- \
+            godot --headless --path src --script res://entities/slime/tests/slime_split_integration.gd
+      - name: Run slime ambient integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            45 "SLIME_AMBIENT_INTEGRATION PASS" /tmp/slime_ambient_integration.log -- \
+            godot --headless --path src --script res://entities/slime/tests/slime_ambient_integration.gd
+      - name: Run slime attachment integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            45 "SLIME_ATTACHMENT_INTEGRATION PASS" /tmp/slime_attachment_integration.log -- \
+            godot --headless --path src --script res://entities/slime/tests/slime_attachment_integration.gd
+
   bird-behavior:
     runs-on: ubuntu-latest
     timeout-minutes: 10

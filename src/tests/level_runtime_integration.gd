@@ -249,6 +249,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	var session := GameSession.new()
 	var coordinator := LevelInteractionCoordinator.new()
 	var entities := WorldEntityCoordinator.new()
+	var slime_attachments := SlimeAttachmentCoordinator.new()
 	var loot := OverworldLootCoordinator.new()
 	var combat := MeleeCombatCoordinator.new()
 	var combat_hit_particles := (load("res://combat/particles/combat_hit_particles.tscn") as PackedScene).instantiate() as CombatHitParticles
@@ -269,6 +270,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	session.name = "GameSession"
 	coordinator.name = "LevelInteractionCoordinator"
 	entities.name = "WorldEntities"
+	slime_attachments.name = "SlimeAttachments"
 	loot.name = "OverworldLoot"
 	combat.name = "MeleeCombat"
 	combat_hit_particles.name = "CombatHitParticles"
@@ -282,6 +284,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	game.add_child(camera_rig)
 	game.add_child(environment)
 	game.add_child(entities)
+	game.add_child(slime_attachments)
 	game.add_child(loot)
 	game.add_child(combat)
 	game.add_child(combat_hit_particles)
@@ -370,6 +373,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 		combat,
 		entities.get_runtime(),
 	)
+	slime_attachments.setup(player, game.player_stats)
 	_expect(game.inventory_loadout_coordinator.select_slot(3), "transition test could not select the starter sword")
 	loot.setup(
 		game.entity_catalog,
@@ -417,6 +421,8 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	var stats_identity := game.player_stats
 	var preserved_yaw := 315.0
 	var preserved_zoom := 31.5
+	var transition_slime: SlimeActor
+	var expected_transition_knockback := Vector3.ZERO
 	camera_rig.target_yaw_deg = preserved_yaw
 	camera_rig.current_yaw_deg = preserved_yaw
 	camera_rig.rotation_degrees.y = preserved_yaw
@@ -429,7 +435,18 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 		doorway_anchor = Vector3(0.5 + float(cycle), world_spawn.y, 0.5)
 		player.global_position = doorway_anchor
 		game._location_state.update_world_position(doorway_anchor)
+		if cycle == 0:
+			var transition_slime_ids := world_entity_runtime.try_spawn_batch([
+				EntitySpawnRequest.new(&"slime_small", doorway_anchor, 7301),
+			])
+			_expect(transition_slime_ids.size() == 1, "level transition slime fixture did not spawn")
+			if transition_slime_ids.size() == 1:
+				transition_slime = world_entity_runtime.get_actor(transition_slime_ids[0]) as SlimeActor
+				slime_attachments._physics_process(0.0)
+				_expect(transition_slime != null and transition_slime.is_attached(), "level transition slime fixture did not attach")
 		await _run_structure_designer_cycle(game, false, cycle)
+		if cycle == 0 and transition_slime != null:
+			_expect(transition_slime.is_attached(), "structure designer suspension lost the attached slime")
 		player.interactor.melee_attack_timer = 1.0
 		player.interactor.melee_attack_queue = 1
 		player.interactor._melee_contact_pending = true
@@ -444,6 +461,13 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 		var runtime := game._level_runtime
 		var dungeon_entity_runtime := runtime.get_entity_runtime()
 		_expect(runtime != null and is_instance_valid(runtime), "Game did not retain an active runtime in cycle %d" % cycle)
+		if cycle == 0 and transition_slime != null:
+			expected_transition_knockback = transition_slime.global_position - doorway_anchor
+			expected_transition_knockback.y = 0.0
+			expected_transition_knockback = expected_transition_knockback.normalized() * SlimeAttachmentCoordinator.DETACH_KNOCKBACK_SPEED
+			_expect(not transition_slime.is_attached() and slime_attachments.get_attached_count() == 0, "level entry retained the overworld slime attachment")
+			_expect(transition_slime.knockback_velocity.is_equal_approx(expected_transition_knockback), "level entry slime knockback was %s instead of pre-transition %s" % [transition_slime.knockback_velocity, expected_transition_knockback])
+			_expect(is_equal_approx(game.player_stats.get_value(&"movement_speed_multiplier"), 1.0), "level entry retained the overworld slime slow")
 		_expect(game._location_state.is_in_level(), "Game location did not enter level in cycle %d" % cycle)
 		_expect(game._get_persisted_position().is_equal_approx(doorway_anchor), "indoor persisted position differs from doorway anchor in cycle %d" % cycle)
 		_expect(world.is_suspended() and manager._suspended and world.chunk_scheduler._suspended, "Game did not suspend world streaming in cycle %d" % cycle)

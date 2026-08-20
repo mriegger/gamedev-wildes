@@ -36,6 +36,7 @@ signal main_menu_requested
 @onready var camera_rig: CameraRig = $CameraRig as CameraRig
 @onready var game_environment: GameEnvironment = $Environment as GameEnvironment
 @onready var world_entity_coordinator: WorldEntityCoordinator = $WorldEntities as WorldEntityCoordinator
+@onready var slime_attachment_coordinator: SlimeAttachmentCoordinator = $SlimeAttachments as SlimeAttachmentCoordinator
 @onready var overworld_loot: OverworldLootCoordinator = $OverworldLoot as OverworldLootCoordinator
 @onready var melee_combat: MeleeCombatCoordinator = $MeleeCombat as MeleeCombatCoordinator
 @onready var combat_hit_particles: CombatHitParticles = $CombatHitParticles as CombatHitParticles
@@ -381,6 +382,7 @@ func _setup_gameplay() -> bool:
 		_try_interact_with_block,
 		_can_break_block,
 	)
+	slime_attachment_coordinator.setup(player, player_stats)
 	player.water_step_committed.connect(world.play_water_ripple)
 	world_entities.water_surface_motion_committed.connect(world.play_water_ripple)
 	overworld_loot.setup(
@@ -455,6 +457,7 @@ func _on_player_defeated():
 	if _death_screen != null and is_instance_valid(_death_screen):
 		return
 	game_session.suspend_saving()
+	slime_attachment_coordinator.clear_attachments()
 	player.enter_defeated_state()
 	if _location_state != null and _location_state.is_in_level() and _level_runtime != null:
 		_level_runtime.suspend_simulation()
@@ -608,6 +611,7 @@ func _enter_level():
 	input_buffer.clear_gameplay()
 	await _fade_to(1.0)
 	player.unbind_space()
+	_unbind_entity_context()
 	_location_state.enter_level(return_position)
 	world.suspend()
 	world_entity_coordinator.suspend()
@@ -631,6 +635,7 @@ func _exit_level(restore_from_defeat: bool = false):
 	level_interaction.clear_target()
 	player.set_physics_process(false)
 	input_buffer.clear_gameplay()
+	_unbind_entity_context()
 	_level_runtime.suspend_simulation()
 	await _fade_to(1.0)
 	player.unbind_space()
@@ -1006,6 +1011,7 @@ func _bind_entity_context(space: VoxelSpace, runtime: EntityRuntime) -> void:
 	assert(space != null and runtime != null)
 	_unbind_entity_context()
 	player.bind_entity_runtime(runtime)
+	slime_attachment_coordinator.bind_runtime(runtime)
 	melee_combat.bind_context(space, runtime)
 	enemy_combat_feedback.bind_runtime(runtime)
 	runtime.entity_melee_contact_reached.connect(melee_combat.try_commit_entity_contact)
@@ -1016,6 +1022,7 @@ func _bind_entity_context(space: VoxelSpace, runtime: EntityRuntime) -> void:
 func _unbind_entity_context() -> void:
 	if _active_entity_runtime == null:
 		return
+	slime_attachment_coordinator.unbind_runtime()
 	if _active_entity_runtime.entity_melee_contact_reached.is_connected(melee_combat.try_commit_entity_contact):
 		_active_entity_runtime.entity_melee_contact_reached.disconnect(melee_combat.try_commit_entity_contact)
 	if _active_entity_runtime.entity_radial_contact_reached.is_connected(melee_combat.try_commit_entity_radial_contact):

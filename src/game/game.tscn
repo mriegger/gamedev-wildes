@@ -1,4 +1,4 @@
-[gd_scene load_steps=42 format=3 uid="uid://b22g4me0x1f3h"]
+[gd_scene load_steps=43 format=3 uid="uid://b22g4me0x1f3h"]
 
 [ext_resource type="Script" path="res://game/game.gd" id="1_game"]
 [ext_resource type="PackedScene" path="res://world/world.tscn" id="2_world"]
@@ -41,6 +41,7 @@
 [ext_resource type="PackedScene" path="res://loot/presentation/loot_drop_view.tscn" id="39_loot_drop"]
 [ext_resource type="Resource" path="res://combat/damage/damage_type_catalog.tres" id="40_damage_types"]
 [ext_resource type="Resource" path="res://foliage/foliage_catalog.tres" id="41_foliage_catalog"]
+[ext_resource type="Script" path="res://entities/slime/slime_attachment_coordinator.gd" id="42_slime_attachments"]
 
 [node name="Game" type="Node3D"]
 script = ExtResource("1_game")
@@ -76,6 +77,9 @@ loot_drop_scene = ExtResource("39_loot_drop")
 
 [node name="WorldEntities" type="Node3D" parent="."]
 script = ExtResource("14_entities")
+
+[node name="SlimeAttachments" type="Node" parent="."]
+script = ExtResource("42_slime_attachments")
 
 [node name="OverworldLoot" type="Node3D" parent="."]
 script = ExtResource("38_loot_coordinator")

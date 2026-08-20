@@ -178,6 +178,12 @@ fallback values keep GL Compatibility usable at reduced fidelity, without volume
 06:00–19:00; sunrise and sundown get their own warm color keys, and nights stay bright enough
 to play.
 
+**Slimes.** Large blocky slimes spawn only in the overworld at night and split deterministically
+into medium, then small, descendants when defeated. Children jump outward from nearby clear space
+and have brief hit immunity after splitting. Up to four can attach to the player at once, dealing
+immediate defense-aware damage and repeating it every half second while stacking movement slows up
+to a 60% reduction. Each successful grounded jump dislodges one attached slime.
+
 **Crafting.** Opening crafting with `Tab` reveals the general recipe panel alongside the backpack.
 It contains the seven recipes that do not require a workstation. A placed anvil opens its own panel
 with the eight copper tool, weapon, and armor recipes. A placed cauldron opens a food-and-potion
