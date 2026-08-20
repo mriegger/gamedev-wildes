@@ -76,7 +76,7 @@ func _run():
 	_expect(skeleton.experience_reward == 10, "Skeleton experience reward is not 10")
 	var watcher := catalog.get_definition(&"watcher")
 	_expect(watcher.ambient_spawn_phase == EntityDefinition.SpawnPhase.NIGHT, "Watcher is not night-spawned")
-	_expect(is_equal_approx(watcher.ambient_spawn_weight, 1000.0), "Watcher ambient testing weight is not one thousand")
+	_expect(is_equal_approx(watcher.ambient_spawn_weight, 10.0), "Watcher ambient weight is not ten")
 	_expect(watcher.ambient_max_active == 0, "Watcher has a species cap")
 	_expect(not watcher.ambient_despawn_outside_spawn_phase, "Watcher retires at dawn")
 	var stone_golem := catalog.get_definition(&"stone_golem")

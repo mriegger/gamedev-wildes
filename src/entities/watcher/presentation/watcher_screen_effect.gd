@@ -9,7 +9,6 @@ const GLITCH_SHIFT_POWER: float = 0.01
 const GLITCH_RATE: float = 1.0
 const GLITCH_SPEED: float = 5.0
 const GLITCH_BAND_COUNT: float = 30.5
-const GLITCH_COLOR_SEPARATION: float = 0.0
 const NOISE_AMOUNT: float = 0.2
 const NOISE_SPEED: float = 1.0
 
@@ -127,7 +126,6 @@ func _apply_static_shader_parameters() -> void:
 	_shader_material.set_shader_parameter(&"shake_rate", GLITCH_RATE)
 	_shader_material.set_shader_parameter(&"shake_speed", GLITCH_SPEED)
 	_shader_material.set_shader_parameter(&"shake_block_size", GLITCH_BAND_COUNT)
-	_shader_material.set_shader_parameter(&"shake_color_rate", GLITCH_COLOR_SEPARATION)
 	_shader_material.set_shader_parameter(&"noise_amount", NOISE_AMOUNT)
 	_shader_material.set_shader_parameter(&"noise_speed", NOISE_SPEED)
 

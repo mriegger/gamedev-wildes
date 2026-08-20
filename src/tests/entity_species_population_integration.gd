@@ -98,7 +98,7 @@ func _assert_catalog(catalog: EntityCatalog) -> void:
 	_expect(slime_large.ambient_spawn_enabled and slime_large.ambient_spawn_phase == EntityDefinition.SpawnPhase.NIGHT and slime_large.ambient_max_active == 1, "large slime ambient policy changed")
 	_expect(not slime_medium.ambient_spawn_enabled and not slime_small.ambient_spawn_enabled, "split descendants became ambient species")
 	_expect(watcher.ambient_spawn_enabled and watcher.ambient_spawn_phase == EntityDefinition.SpawnPhase.NIGHT, "Watcher ambient phase changed")
-	_expect(is_equal_approx(watcher.ambient_spawn_weight, 1000.0) and watcher.ambient_max_active == 0, "Watcher testing weight or population policy changed")
+	_expect(is_equal_approx(watcher.ambient_spawn_weight, 10.0) and watcher.ambient_max_active == 0, "Watcher ambient weight or population policy changed")
 	_expect(stone_golem.ambient_spawn_phase == EntityDefinition.SpawnPhase.NIGHT and stone_golem.ambient_max_active == 2, "Stone Golem ambient policy changed")
 	_expect(stone_golem.ambient_spawn_floor_ids == zombie.ambient_spawn_floor_ids, "Stone Golem spawn floors differ from Zombie spawn floors")
 	_expect(is_equal_approx(stone_golem.body_width, 1.2) and is_equal_approx(stone_golem.body_height, 2.4), "Stone Golem body dimensions changed")

@@ -69,7 +69,7 @@ func _test_weighted_selection_and_floors() -> void:
 		_expect(main_catalog.has_definition(&"slime_large") and main_catalog.has_definition(&"slime_medium") and main_catalog.has_definition(&"slime_small"), "main catalog lost slime lineage definitions")
 	var watcher := catalog.get_definition(&"watcher")
 	_expect(watcher.ambient_spawn_phase == EntityDefinition.SpawnPhase.NIGHT, "Watcher is not night-only ambient content")
-	_expect(is_equal_approx(watcher.ambient_spawn_weight, 1000.0), "Watcher ambient testing weight is not one thousand")
+	_expect(is_equal_approx(watcher.ambient_spawn_weight, 10.0), "Watcher ambient weight is not ten")
 	_expect(watcher.ambient_max_active == 0, "Watcher retained a species-specific ambient quota")
 	for common_id in [&"zombie", &"skeleton", &"slime_large"]:
 		_expect(is_equal_approx(catalog.get_definition(common_id).ambient_spawn_weight, 100.0), "%s ambient weight is not one hundred" % common_id)
@@ -95,7 +95,7 @@ func _test_weighted_selection_and_floors() -> void:
 		counts[first_choice.id] = int(counts.get(first_choice.id, 0)) + 1
 	_expect(int(counts[&"watcher"]) > 0, "seeded weighted selection never selected Watcher")
 	for common_id in [&"zombie", &"skeleton", &"slime_large"]:
-		_expect(int(counts[&"watcher"]) > int(counts[common_id]) * 4, "Watcher testing weight did not dominate %s" % common_id)
+		_expect(int(counts[common_id]) > int(counts[&"watcher"]) * 4, "Watcher was not materially less common than %s" % common_id)
 	_expect(first._select_ambient_definition(true) == null, "night-only catalog selected an ambient entity during the day")
 	first.free()
 	second.free()

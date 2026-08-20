@@ -61,7 +61,6 @@ func _run() -> void:
 		_expect(is_equal_approx(float(shader_material.get_shader_parameter(&"shake_rate")), 1.0), "Watcher glitch rate changed")
 		_expect(is_equal_approx(float(shader_material.get_shader_parameter(&"shake_speed")), 5.0), "Watcher glitch speed changed")
 		_expect(is_equal_approx(float(shader_material.get_shader_parameter(&"shake_block_size")), 30.5), "Watcher glitch band size changed")
-		_expect(is_zero_approx(float(shader_material.get_shader_parameter(&"shake_color_rate"))), "Watcher glitch retained color separation")
 		_expect(is_equal_approx(float(shader_material.get_shader_parameter(&"noise_amount")), 0.2), "Watcher noise amount changed")
 		_expect(is_equal_approx(float(shader_material.get_shader_parameter(&"noise_speed")), 1.0), "Watcher noise speed changed")
 	_expect(is_zero_approx(effect.get_intensity()), "Watcher screen effect started with intensity")

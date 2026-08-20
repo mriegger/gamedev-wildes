@@ -13,7 +13,6 @@ uniform float shake_power = 0.01;
 uniform float shake_rate : hint_range(0.0, 1.0) = 1.0;
 uniform float shake_speed = 5.0;
 uniform float shake_block_size = 30.5;
-uniform float shake_color_rate : hint_range(0.0, 1.0) = 0.0;
 uniform float noise_amount : hint_range(0.0, 1.0, 0.01) = 0.2;
 uniform float noise_speed : hint_range(0.1, 5.0, 0.1) = 1.0;
 
@@ -34,17 +33,9 @@ void fragment() {
 		random((trunc(SCREEN_UV.y * shake_block_size) / shake_block_size) - TIME) - 0.5
 	) * shake_power * glitch_strength;
 	fixed_uv = clamp(fixed_uv, half_texel, vec2(1.0) - half_texel);
-	vec2 positive_uv = clamp(fixed_uv + vec2(shake_color_rate * glitch_strength, 0.0), half_texel, vec2(1.0) - half_texel);
-	vec2 negative_uv = clamp(fixed_uv - vec2(shake_color_rate * glitch_strength, 0.0), half_texel, vec2(1.0) - half_texel);
 	vec3 center_color = textureLod(screen_texture, fixed_uv, 0.0).rgb;
-	vec3 positive_color = textureLod(screen_texture, positive_uv, 0.0).rgb;
-	vec3 negative_color = textureLod(screen_texture, negative_uv, 0.0).rgb;
 	vec3 luminance_weights = vec3(0.2126, 0.7152, 0.0722);
-	vec3 split_grayscale = vec3(
-		dot(positive_color, luminance_weights),
-		dot(center_color, luminance_weights),
-		dot(negative_color, luminance_weights)
-	);
+	vec3 grayscale_color = vec3(dot(center_color, luminance_weights));
 	vec2 aperture_delta_pixels = (fixed_uv - aperture_center) * viewport_size;
 	vec2 ground_delta = vec2(
 		dot(pixel_to_ground_x, aperture_delta_pixels),
@@ -58,7 +49,7 @@ void fragment() {
 	);
 	float visibility = mix(0.025, 1.0, aperture);
 	vec3 original_color = textureLod(screen_texture, clamp(SCREEN_UV, half_texel, vec2(1.0) - half_texel), 0.0).rgb;
-	vec3 affected_color = split_grayscale * visibility;
+	vec3 affected_color = grayscale_color * visibility;
 	vec3 composited_color = mix(original_color, affected_color, intensity);
 	vec2 noise_pixel = floor(UV * viewport_size);
 	float noise_frame = mod(floor(TIME * noise_speed * 24.0), 4093.0);

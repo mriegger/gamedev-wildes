@@ -35,7 +35,7 @@ func _test_definition() -> void:
 	_expect(is_equal_approx(definition.body_width, 0.6) and is_equal_approx(definition.body_height, 2.7), "watcher body dimensions changed")
 	_expect(definition.experience_reward == 25 and definition.loot_pool == null, "watcher reward configuration changed")
 	_expect(definition.ambient_spawn_phase == EntityDefinition.SpawnPhase.NIGHT, "watcher is not night-spawned")
-	_expect(is_equal_approx(definition.ambient_spawn_weight, 1000.0) and definition.ambient_max_active == 0, "watcher ambient testing weight changed")
+	_expect(is_equal_approx(definition.ambient_spawn_weight, 10.0) and definition.ambient_max_active == 0, "watcher ambient weight changed")
 	_expect(definition.ambient_spawn_floor_ids == [BlockId.Type.GRASS, BlockId.Type.DIRT, BlockId.Type.SAND, BlockId.Type.STONE], "watcher spawn floors changed")
 	_expect(not definition.ambient_despawn_outside_spawn_phase, "watcher despawns at dawn")
 	_expect(behavior != null and behavior.validate(behavior.resource_path), "watcher behavior is invalid")
