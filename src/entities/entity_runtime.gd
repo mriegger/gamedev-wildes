@@ -718,6 +718,31 @@ func get_active_runtime_ids_overlapping(bounds: AABB) -> Array[int]:
 	assert(bounds.size.x > 0.0 and bounds.size.y > 0.0 and bounds.size.z > 0.0)
 	return _spatial_index.query_overlapping(bounds)
 
+func get_nearest_combat_target_ray_hit(ray_origin: Vector3, ray_direction: Vector3, maximum_distance: float) -> Variant:
+	assert(ray_origin.is_finite() and ray_direction.is_finite() and not ray_direction.is_zero_approx())
+	assert(is_finite(maximum_distance) and maximum_distance > 0.0)
+	if _suspended:
+		return null
+	var direction := ray_direction.normalized()
+	var nearest_hit: Variant = null
+	var nearest_distance := maximum_distance + 1.0
+	var nearest_runtime_id := 0
+	for runtime_id in _spatial_index.query_ray(ray_origin, direction, maximum_distance):
+		var actor := get_actor(runtime_id)
+		if actor == null or actor.definition == null or not actor.definition.combat_targetable:
+			continue
+		var hit: Variant = actor.get_world_bounds().intersects_ray(ray_origin, direction)
+		if not hit is Vector3:
+			continue
+		var distance := ((hit as Vector3) - ray_origin).dot(direction)
+		if distance < 0.0 or distance > maximum_distance:
+			continue
+		if distance < nearest_distance or (is_equal_approx(distance, nearest_distance) and runtime_id < nearest_runtime_id):
+			nearest_hit = hit
+			nearest_distance = distance
+			nearest_runtime_id = runtime_id
+	return nearest_hit
+
 func record_melee_outcome(outcome: MeleeOutcome) -> void:
 	var target := get_actor(outcome.contact.target_runtime_id)
 	if target != null:

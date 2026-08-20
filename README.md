@@ -185,7 +185,7 @@ Holding primary use with the bow quickly raises it in front of the player, nocks
 stone or copper arrow, and draws the string over 1.5 seconds before holding at maximum draw. A
 black-and-yellow bar above the player shows the draw progress, while a white trajectory line updates
 from the bow to the predicted first impact and fades near its endpoint. The bow aims at the first
-terrain or object surface under the cursor, solves a reachable ballistic angle dynamically, and caps unreachable shots at
+creature, terrain, or object surface under the cursor, solves a reachable ballistic angle dynamically, and caps unreachable shots at
 45 degrees. Right-clicking cancels the draw immediately without consuming its arrow; primary use must be released before drawing again. Releasing consumes the nocked arrow and fires it at a speed proportional to the draw. Arrows follow that gravity-driven arc, turn along
 their flight direction, and stick into the first enemy or solid block they hit for one second before
 fading away, with a short white trail following behind each arrow in flight. The bow chooses the first

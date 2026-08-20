@@ -149,8 +149,9 @@ draw-scaled speed, evaluates its ballistic position under gravity, and sweeps fi
 against the entity spatial index and voxel raycast solids. `ArrowTrajectoryView` requests the same
 prediction while the bow is drawn and renders it from the nocked arrow to the first predicted contact,
 so presentation and the fired projectile share trajectory and collision rules. `PlayerInteractor`
-resolves the first voxel surface under the cursor, falling back to the player's ground plane, and owns
-the current aim target; the bow action solves the reachable ballistic angle or raises toward its 45-degree cap, and both presentation and firing consume
+owns the current aim target by choosing the nearest combat-target bounds or voxel surface under the
+cursor, falling back to the player's ground plane. `EntityRuntime` bounds creature checks with a
+spatial-index ray traversal capped at that world-surface distance. The bow action solves the reachable ballistic angle or raises toward its 45-degree cap, and both presentation and firing consume
 that authoritative transform. Secondary use cancels an active draw without committing ammunition and
 requires primary use to be released before another draw begins. The arrow aligns its shaft to current
 velocity while `ArrowTrailView` retains only a short recent window of flight positions, then embeds at

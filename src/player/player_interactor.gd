@@ -572,9 +572,20 @@ func _update_bow_aim_target() -> void:
 
 func _get_bow_cursor_target(ray_origin: Vector3, ray_direction: Vector3) -> Variant:
 	var voxel_hit := VoxelRaycast.cast(voxel_space, ray_origin, ray_direction, BOW_AIM_RAY_DISTANCE)
+	var ground_hit: Variant = Plane(Vector3.UP, motor.global_position.y).intersects_ray(ray_origin, ray_direction)
+	var nearest_surface_distance := BOW_AIM_RAY_DISTANCE
+	if voxel_hit != null:
+		nearest_surface_distance = minf(nearest_surface_distance, voxel_hit.ray_distance)
+	if ground_hit is Vector3:
+		nearest_surface_distance = minf(nearest_surface_distance, ray_origin.distance_to(ground_hit as Vector3))
+	var entity_hit: Variant = null
+	if entity_runtime != null:
+		entity_hit = entity_runtime.get_nearest_combat_target_ray_hit(ray_origin, ray_direction, nearest_surface_distance)
+	if entity_hit is Vector3 and (voxel_hit == null or ray_origin.distance_to(entity_hit as Vector3) < voxel_hit.ray_distance):
+		return entity_hit
 	if voxel_hit != null:
 		return ray_origin + ray_direction * voxel_hit.ray_distance
-	return Plane(Vector3.UP, motor.global_position.y).intersects_ray(ray_origin, ray_direction)
+	return ground_hit
 
 func _start_melee_attack():
 	var mouse_position := get_viewport().get_mouse_position()

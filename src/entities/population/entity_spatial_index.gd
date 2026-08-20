@@ -84,6 +84,53 @@ func query_overlapping(bounds: AABB) -> Array[int]:
 	result.sort()
 	return result
 
+func query_ray(origin: Vector3, direction: Vector3, maximum_distance: float) -> Array[int]:
+	assert(origin.is_finite() and direction.is_finite() and not direction.is_zero_approx())
+	assert(is_finite(maximum_distance) and maximum_distance > 0.0)
+	var ray_direction := direction.normalized()
+	var cell := _cell_at(origin)
+	var step := Vector3i(
+		1 if ray_direction.x > 0.0 else -1 if ray_direction.x < 0.0 else 0,
+		1 if ray_direction.y > 0.0 else -1 if ray_direction.y < 0.0 else 0,
+		1 if ray_direction.z > 0.0 else -1 if ray_direction.z < 0.0 else 0,
+	)
+	var next_boundary := Vector3(
+		float(cell.x + 1) * _cell_size if step.x > 0 else float(cell.x) * _cell_size,
+		float(cell.y + 1) * _cell_size if step.y > 0 else float(cell.y) * _cell_size,
+		float(cell.z + 1) * _cell_size if step.z > 0 else float(cell.z) * _cell_size,
+	)
+	var t_max := Vector3(
+		(next_boundary.x - origin.x) / ray_direction.x if step.x != 0 else INF,
+		(next_boundary.y - origin.y) / ray_direction.y if step.y != 0 else INF,
+		(next_boundary.z - origin.z) / ray_direction.z if step.z != 0 else INF,
+	)
+	var t_delta := Vector3(
+		_cell_size / absf(ray_direction.x) if step.x != 0 else INF,
+		_cell_size / absf(ray_direction.y) if step.y != 0 else INF,
+		_cell_size / absf(ray_direction.z) if step.z != 0 else INF,
+	)
+	var candidates: Dictionary = {}
+	_collect_cell_candidates(cell, candidates)
+	while true:
+		var next_distance := minf(t_max.x, minf(t_max.y, t_max.z))
+		if next_distance > maximum_distance:
+			break
+		if t_max.x <= t_max.y and t_max.x <= t_max.z:
+			cell.x += step.x
+			t_max.x += t_delta.x
+		elif t_max.y <= t_max.z:
+			cell.y += step.y
+			t_max.y += t_delta.y
+		else:
+			cell.z += step.z
+			t_max.z += t_delta.z
+		_collect_cell_candidates(cell, candidates)
+	var result: Array[int] = []
+	for runtime_id in candidates:
+		result.append(runtime_id as int)
+	result.sort()
+	return result
+
 func get_entry_count() -> int:
 	return _entries.size()
 
@@ -133,3 +180,9 @@ func _collect_candidates(min_cell: Vector3i, max_cell: Vector3i) -> Dictionary:
 				for runtime_id in bucket:
 					candidates[runtime_id] = true
 	return candidates
+
+func _collect_cell_candidates(cell: Vector3i, candidates: Dictionary) -> void:
+	if not _cells.has(cell):
+		return
+	for runtime_id in _cells[cell]:
+		candidates[runtime_id] = true

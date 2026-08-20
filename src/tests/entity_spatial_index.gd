@@ -29,6 +29,8 @@ func _test_insert_update_and_queries() -> void:
 	_expect(index.get_cell_count() == 2, "shared-cell insert created stale cells")
 	_expect(index.query_nearby(Vector3.ZERO, 2.0) == [3, 20], "nearby query was not exact and sorted")
 	_expect(index.query_overlapping(AABB(Vector3.ZERO, Vector3(2.0, 2.0, 1.0))) == [3, 20], "overlap query was not exact and sorted")
+	_expect(index.query_ray(Vector3(-1.0, 0.75, 0.5), Vector3.RIGHT, 7.0) == [3, 11, 20], "ray query did not return sorted candidates along its traversed cells")
+	_expect(index.query_ray(Vector3(-1.0, 0.75, 0.5), Vector3.RIGHT, 3.0) == [3, 20], "ray query included candidates beyond its maximum distance")
 	var original_entry := index._entries[20] as EntitySpatialIndex.Entry
 	var original_bucket := index._cells[Vector3i.ZERO] as Dictionary
 	var same_cell_position := Vector3(0.75, 0.0, 0.5)

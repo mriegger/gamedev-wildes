@@ -155,6 +155,12 @@ func _run():
 	coordinator.setup(catalog, _make_world(), 1337, _always_ready)
 	coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, EntityTargetObservation.create(Vector3.ZERO, Vector3.ZERO, Vector3.FORWARD, Vector3.RIGHT), 20.0)
 	_expect(coordinator.get_runtime().get_active_count() == 1, "night tick did not spawn one entity")
+	var ray_target := coordinator.get_runtime().get_active_actors()[0]
+	var ray_target_bounds := ray_target.get_world_bounds()
+	var ray_target_center := ray_target_bounds.get_center()
+	var ray_origin := ray_target_center + Vector3(0.0, 0.0, 10.0)
+	var ray_hit: Variant = coordinator.get_runtime().get_nearest_combat_target_ray_hit(ray_origin, ray_target_center - ray_origin, 20.0)
+	_expect(ray_hit is Vector3 and ray_target_bounds.grow(0.0001).has_point(ray_hit as Vector3), "combat-target ray query missed the creature under the cursor")
 	coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, EntityTargetObservation.create(Vector3.ZERO, Vector3.ZERO, Vector3.FORWARD, Vector3.RIGHT), 12.0)
 	_expect(coordinator.get_runtime().get_active_count() == 2, "day tick did not retain the zombie and spawn one sheep")
 	coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, EntityTargetObservation.create(Vector3.ZERO, Vector3.ZERO, Vector3.FORWARD, Vector3.RIGHT), 20.0)

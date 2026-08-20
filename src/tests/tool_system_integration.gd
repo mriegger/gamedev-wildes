@@ -1,5 +1,11 @@
 extends SceneTree
 
+class BowAimEntityRuntime extends EntityRuntime:
+	var ray_hit: Variant = null
+
+	func get_nearest_combat_target_ray_hit(_ray_origin: Vector3, _ray_direction: Vector3, _maximum_distance: float) -> Variant:
+		return ray_hit
+
 var _errors: Array[String] = []
 var _player: PlayerMotor
 var _camera: Camera3D
@@ -625,8 +631,18 @@ func _run():
 	_arrow_trajectory.setup(_interactor, _projectiles)
 	_arrow_trajectory.set_process(false)
 	_player.bind_space(_voxel_world, root, Vector3.ZERO, _voxel_world)
-	var elevated_cursor_target: Variant = _interactor._get_bow_cursor_target(Vector3(1.5, 10.0, 0.5), Vector3.DOWN)
+	var actual_entity_runtime := _interactor.entity_runtime
+	var aim_runtime := BowAimEntityRuntime.new()
+	_interactor.bind_entity_runtime(aim_runtime)
+	var cursor_test_ray_origin := Vector3(1.5, 10.0, 0.5)
+	aim_runtime.ray_hit = Vector3(1.5, 2.0, 0.5)
+	var creature_cursor_target: Variant = _interactor._get_bow_cursor_target(cursor_test_ray_origin, Vector3.DOWN)
+	_expect(creature_cursor_target is Vector3 and (creature_cursor_target as Vector3).is_equal_approx(aim_runtime.ray_hit as Vector3), "bow cursor aim ignored a creature in front of terrain")
+	aim_runtime.ray_hit = Vector3(1.5, 0.5, 0.5)
+	var elevated_cursor_target: Variant = _interactor._get_bow_cursor_target(cursor_test_ray_origin, Vector3.DOWN)
 	_expect(elevated_cursor_target is Vector3 and (elevated_cursor_target as Vector3).distance_to(Vector3(1.5, 1.0, 0.5)) < 0.001, "bow cursor aim ignored an elevated voxel surface")
+	_interactor.bind_entity_runtime(actual_entity_runtime)
+	aim_runtime.free()
 	_interactor.melee_attack_started.connect(_on_melee_attack_started)
 	_interactor.soil_tilled.connect(_on_soil_tilled)
 	_player.set_physics_process(false)
