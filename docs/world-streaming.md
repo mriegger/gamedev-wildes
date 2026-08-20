@@ -42,6 +42,10 @@ Finite dungeons do not reuse ambient spawning or streaming rules. Each `LevelRun
 dedicated `EntityRuntime` over `LevelState`; its active bound is derived from the generated room
 tree's weighted antichain capacity, while retiring presentation remains capped at 64 actors.
 Concurrent room encounters feed it validated atomic batches and bounded navigation work. Entering
-a dungeon suspends the overworld coordinator without destroying its runtime. Leaving restores and
-resumes the same overworld instance before queuing the dungeon runtime for deletion; death suspends
-it immediately and follows that restore-then-retire order during the return flow.
+a dungeon suspends the overworld coordinator without destroying its runtime. Passive chest rooms
+create no local encounter, but they remain part of the same finite voxel and navigation space, so
+enemies from active rooms may enter them. Leaving restores and resumes the same overworld instance
+before queuing the dungeon runtime for deletion; death suspends it immediately and follows that
+restore-then-retire order during the return flow. Teardown discards generated chest contents and
+uncommitted first-clear escrow. Repeat loot is committed directly to player inventory and therefore
+survives death, quit, or an incomplete exit.

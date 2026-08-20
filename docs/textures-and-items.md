@@ -97,8 +97,11 @@ rolls.
 Create a `RuneDefinition` under `src/items/runes/definitions`, assign a stable item ID, icon, stack
 size, canonical rarity, compatible equipment types, and socket-only stat modifiers. Armor-compatible
 runes must also declare the supported head, chest, legs, or feet slots. Register the resource in
-`src/items/item_catalog.tres`; acquisition remains separate content, such as a crafting recipe or
-loot entry.
+`src/items/item_catalog.tres`; acquisition remains separate content, such as a crafting recipe,
+enemy loot entry, or dungeon one-time reward. Progression-gated items must be excluded from
+unrelated production acquisition paths. Basic Rune, for example, is guaranteed by the stone
+dungeon's first-clear reward and is absent from general crafting and zombie loot. See
+[Dungeon chest authoring and rewards](dungeon-chest-authoring.md) for that content wiring.
 
 Socketed rune IDs belong to the physical `EquipmentInstance`. Their array index is the physical
 socket index, so fixed loot runes preserve authored order and an empty interior ID preserves an empty
@@ -123,7 +126,7 @@ The current `src/loot/pools/zombie.tres` contains:
 - a separate 17% exclusive-group gate with weights 10 plain Copper Sword, 4 rolled-and-runed
   Copper Sword, and 3 Stout Copper Helmet
 - one or two equal-weight Vicious/Nimble affixes on the rolled sword, selected without replacement
-- one rune slot on that sword, independently selected from equal-weight Basic Rune and Power Rune
+- one rune slot on that sword containing Power Rune
 
 The gear weights apply only after the 17% group gate succeeds. Copper and gear rolls are independent,
 so a defeat may produce neither, either one, or both.
@@ -162,8 +165,10 @@ oldest equipment entry is evicted so a new validated batch cannot permanently de
 
 Streaming controls drop views, not gameplay state. An unloaded drop reappears when its position is
 ready again. Material pickup can fill available inventory space partially while leaving the remainder
-under the same world entry ID. Equipment pickup is all-or-none. Save version thirteen persists entry
-IDs, positions, remaining material lifetimes, complete stacks, and the next world-entry ID.
+under the same world entry ID. Equipment pickup is all-or-none. World loot was introduced in save
+version thirteen; current version-fifteen saves persist entry IDs, positions, remaining material
+lifetimes, complete stacks, and the next world-entry ID alongside block emplacements and dungeon
+progress.
 
 ## Add a mining tool
 

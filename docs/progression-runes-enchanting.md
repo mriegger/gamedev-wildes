@@ -191,7 +191,11 @@ A rune is typed item content with:
 - one or more additive or multiplicative stat modifiers.
 
 The Basic Rune is Common, stacks to 99, fits every current melee weapon and armor slot, and grants
-`+100 HP`. It has a dedicated icon and a recipe that costs 32 Sand.
+`+100 HP`. Its normal acquisition is the stone dungeon's one-time chest reward. The reward enters
+the inventory only after the complete designated chest is taken and the player exits alive. Death,
+quit, or abandon discards the attempt escrow and leaves the reward available on the next attempt.
+Basic Rune is not in general crafting or ordinary production loot; developer spawning remains a
+debug-only bypass.
 
 Rune slots belong to a physical gear copy, while the proficiency that unlocks them is shared by
 item type. Socketing requires compatible gear, a compatible rune, and an unlocked empty slot. It
@@ -217,9 +221,10 @@ Runes should become the main source of reversible, build-defining effects. Numer
 the first supported effect, but future runes may add unique triggered behavior. A new behavior
 family must include a typed definition, validation, executor, and real gameplay caller together.
 
-Actual weapon-only, armor-only, armor-piece-specific, and higher-rarity rune content remains to be
-authored. Future ranged or magic weapon families will also need explicit compatibility and
-activation support.
+Power Rune already supplies the current weapon-only case. Additional armor-only,
+armor-piece-specific, and higher-rarity rune content remains to be authored. Future ranged or magic
+weapon families will also need explicit compatibility and activation support. Broader acquisition
+rules remain open, but Basic Rune's first-clear source is settled.
 
 Socketing does not consume player XP. Its progression gate remains item proficiency.
 

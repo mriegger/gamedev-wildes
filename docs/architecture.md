@@ -214,11 +214,12 @@ a left-button drag, the source slot owns the adjustable drag count and consumes 
 `InventoryModel` remains the authority for partial moves and discards, while the source and
 drag-preview visuals show the pending split without mutating inventory until a drop succeeds.
 
-`ChestStorage` owns persistent slot arrays keyed by placed chest position. Its slot count comes from
-the canonical chest block's `ContainerBlockDefinition`, so layout, runtime storage, and persistence
-share one definition. `ChestCoordinator` binds that owner to `InventoryModel` and
-`InventoryLoadoutCoordinator`; cross-scope moves prepare exact expected and replacement stacks in
-both owners, validate both revisions, commit both silently, and notify only after both commits.
+`ChestStorage` owns slot arrays keyed by chest position. Its slot count comes from the canonical
+chest block's `ContainerBlockDefinition`, so layout, runtime storage, and persistence share one
+definition. The overworld instance is persistent. `ChestCoordinator` binds that owner to
+`InventoryModel` and `InventoryLoadoutCoordinator`; cross-scope moves prepare exact expected and
+replacement stacks in both owners, validate both revisions, commit both silently, and notify only
+after both commits.
 Click transfer, drag/drop, and move-all reuse those command paths without exposing mutable slots.
 While a chest is open, `ChestPanel` presents its centered 3×5 grid, while the existing right-side
 `SidePanel` and bottom `InventoryHotbar` present player storage.
@@ -230,6 +231,15 @@ to that renderer for a translucent preview of the same split model. Mining uses 
 world-and-inventory transaction. `Game` supplies `ChestCoordinator.can_break()` as the focused
 validator, so only empty chests can commit; the completed block edit then removes their empty
 position-keyed storage.
+
+Each `LevelRuntime` instead composes an attempt-owned `ChestStorage` through
+`DungeonChestCoordinator`. Generated dungeon chests are take-only and are not save-state owners.
+Repeat rewards use the normal prepared inventory transfer and record repeat-loot collection for
+repeat-mode runs. An unclaimed first-clear chest transfers into coordinator-owned escrow after
+validating exact inventory capacity. `DungeonRunCompletionTransaction` validates the
+escrow claim, inventory/loadout projection, and `DungeonProgressState` change before silently
+committing all three and then notifying observers. Runtime teardown discards uncommitted escrow and
+remaining generated chest contents.
 
 ## Equipment instances, runes, and loot
 
@@ -259,9 +269,10 @@ same instance values.
 
 `RuneDefinition` is typed item content with rarity, equipment-type and armor-slot compatibility,
 and socket-only stat modifiers. The Basic Rune is Common, works on every weapon and armor slot, and
-adds one hundred maximum HP. The weapon-only Power Rune adds one Strength. A gear instance's
-`socketed_rune_ids` array preserves physical slot order, permits empty interior slots, and omits
-trailing empty slots.
+adds one hundred maximum HP. Its production acquisition is the stone dungeon's secured first-clear
+reward, not general crafting or ordinary enemy loot. The weapon-only Power Rune adds one Strength.
+A gear instance's `socketed_rune_ids` array preserves physical slot order, permits empty interior
+slots, and omits trailing empty slots.
 
 `RuneSocketingCoordinator` combines the target item's `ProficiencyDefinition`, shared
 `ItemProficiency`, and rune compatibility into command and query APIs without owning inventory.
@@ -285,7 +296,7 @@ gameplay starts.
 
 The current zombie pool independently rolls a 75% chance for 1–3 Copper. It separately has a 17%
 chance to choose exactly one gear result with weights 10 plain Copper Sword, 4 Copper Sword with
-one or two random Vicious/Nimble affixes plus one random Basic/Power Rune, and 3 Copper Helmet with
+one or two random Vicious/Nimble affixes plus one Power Rune, and 3 Copper Helmet with
 the fixed Stout affix. The rolled sword is not a separate variant or item ID: it is another
 `copper_sword` instance whose per-copy data records the result.
 
@@ -338,25 +349,31 @@ accumulating. Respawn, Main Menu, and window close restore a living player at wo
 saving resumes; exit paths then use the normal final-save and shutdown flow so zero HP is never
 persisted. Loading a historical zero-HP snapshot restores full health at world spawn before gameplay
 begins and immediately replaces the stored snapshot with that living state.
-Save version thirteen stores the shared equipment allocator and persistent `WorldLootState` alongside
-inventory, item proficiency, player perks, pumpkin and apple harvest state, and canonical chest
-slots keyed by stable block position. Version-four saves gain empty item proficiency; version five
-adds rune-slot arrays; version six adds empty pumpkin state; version seven translates current-level
-XP to the linear curve and adds empty perks and legacy chest inventories; and version eight adds
-empty apple state. The version-nine-to-ten migration converts legacy chest inventory snapshots to
-canonical 15-slot chest arrays and normalizes legacy equipment variant fields. Version ten converts
-each equipment stack into a concrete `EquipmentInstance`, assigns globally unique IDs, captures
-rune slots, converts known legacy variants into exact affix rolls, and records the
-next allocator ID when migrating to version eleven. The version-eleven-to-twelve migration validates
-and removes retired durability fields from equipment instances. Version twelve adds an empty
-world-loot snapshot when migrating to version thirteen. The chain operates on a copy and commits
-only after every region is valid, preserving the original payload on failure.
+Save version fifteen stores the shared equipment allocator, persistent `WorldLootState`, block
+emplacements, and `DungeonProgressState` alongside inventory, item proficiency, player perks,
+pumpkin and apple harvest state, and canonical overworld chest slots keyed by stable block position. Dungeon progress
+snapshot version one stores each stable instance's next attempt index, completion count, and sorted
+claimed reward IDs. Version-four saves gain empty item proficiency; version five adds rune-slot
+arrays; version six adds empty pumpkin state; version seven translates current-level XP to the linear
+curve and adds empty perks and legacy chest inventories; and version eight adds empty apple state.
+The version-nine-to-ten migration converts legacy chest inventory snapshots to canonical 15-slot
+chest arrays and normalizes legacy equipment variant fields. Version ten converts each equipment
+stack into a concrete `EquipmentInstance`, assigns globally unique IDs, captures rune slots,
+converts known legacy variants into exact affix rolls, and records the next allocator ID when
+migrating to version eleven. The version-eleven-to-twelve migration validates and removes retired
+durability fields from equipment instances. Version twelve adds an empty world-loot snapshot when
+migrating to version thirteen, version thirteen adds empty block emplacements when migrating to
+version fourteen, and version fourteen adds empty dungeon progress when migrating to version
+fifteen. The chain operates on a copy and commits only after every region is valid,
+preserving the original payload on failure.
 `Game` restores inventory, proficiency, player stats, chest contents, the shared equipment allocator,
-and world loot before enabling `GameSession`. Save validation requires equipment instance IDs to be
-unique across backpack, hotbar, equipped slots, every chest, and world loot, and requires every ID to
-precede the saved allocator value. Any invalid or retired content aborts startup, returns to world
-selection, and leaves the caller-owned payload and save file unchanged. Loot creation, pickup,
-expiration, and merge events queue the same debounced save path as world and chest changes.
+world loot, and dungeon progress before enabling `GameSession`. Save validation requires equipment
+instance IDs to be unique across backpack, hotbar, equipped slots, every persisted overworld chest,
+and world loot, and requires every ID to precede the saved allocator value. Any invalid or retired
+content aborts startup, returns to world selection, and leaves the caller-owned payload and save file
+unchanged. Loot creation, pickup, expiration, merge, dungeon-attempt, and dungeon-completion events
+queue the same debounced save path as world and chest changes; a completed dungeon also requests an
+immediate save.
 
 Ambient overworld populations are transient and bounded by each definition's authored cap and a
 sixteen-entity total. The five stable species are capped at six Sheep, six Zombies, four Birds,
@@ -376,31 +393,46 @@ player overlap, and active-entity overlap immediately before committing.
 `VoxelSpace` is the read-only query boundary shared by the streamed `VoxelWorld` and finite
 `LevelState`. Player setup is one-time; `Game` atomically rebinds movement, collision, targeting,
 and edit capabilities when the active space changes. Dungeon levels never become save-state
-owners: version-thirteen saves receive an explicit overworld position while retaining player-owned
-inventory, equipment instances, progression, chest contents, and overworld loot.
+owners: version-fifteen saves receive an explicit overworld position while retaining player-owned
+inventory, equipment instances, progression, overworld chest contents, and overworld loot. `Game`
+owns persistent `DungeonProgressState`; `LevelRuntime` owns only the transient generated layout,
+encounter state, dungeon chest contents, and first-clear escrow for one attempt.
 
 Dungeon content is selected through stable typed resources. `LevelEntranceDefinition` maps a
-doorway ID to a level ID and owns its current doorway presentation. `LevelDefinition` selects its
-entry module, hallway module pool, exact typed room requirements, and `LevelPresentationDefinition`;
-`LevelCatalog` resolves the stable IDs. Each room requirement owns a stable room type, an exact
-count, a module pool, and one `LevelRoomEncounterDefinition`, so variants share count and behavior
-without teaching generation their individual IDs. Encounter groups use unique stable entity IDs.
+doorway ID to a level ID and owns its current doorway presentation; its entrance ID is also the
+current stable dungeon-instance ID for claims and completion history. `LevelDefinition` selects its
+entry module, hallway module pool, exact typed room requirements, `LevelPresentationDefinition`, and
+optional `LevelOneTimeChestRewardDefinition`; `LevelCatalog` resolves the stable IDs. Each room
+requirement owns a stable room type, an exact count, a module pool, and either one
+`LevelRoomEncounterDefinition` or one repeat `LootBundleDefinition`, so variants share count and
+behavior without teaching generation their individual IDs. A loot-bearing room module must have
+one valid chest marker, while an encounter room must have enemy spawn zones. Encounter groups use
+unique stable entity IDs.
 `LevelEncounterCatalogValidator` proves every entity exists
 and every referenced room module has at least one spawn position that fits that entity. Generated
 torch placements remain presentation-owned, while `LevelState` contains finite voxel-space truth,
 bounds, entry/return geometry, and a dynamic authored-fill overlay without rewriting base cells.
+`LevelGenerator` transforms each authored chest marker into one `LevelChestPlacement` with its room
+requirement's canonical repeat bundle. `LevelLootCatalogValidator` validates unique reward IDs,
+canonical bundles, item content, equipment variants, and the 15-slot chest bound. Bundle resolution
+includes every fixed entry and then chooses weighted candidates without replacement. A seeded target
+stack count is selected inclusively between `max(1, fixed_entries.size())` and the authored
+`max_rewards`. See [Dungeon chest authoring and rewards](dungeon-chest-authoring.md) for the content
+contract.
 
 Generation retains immutable `LevelConnection` records with stable placement IDs, socket IDs,
 directions, and aperture cells without consuming additional random values. `LevelEncounterTopology`
 collapses hallway chains into the room tree. Node-independent `LevelEncounterState` owns `LOCKED`,
 `READY`, `ACTIVE`, and `CLEARED` room state, deterministic enemy order, assigned runtime IDs,
 pending queues, and monotonic branch seals. Root rooms begin ready; child branches remain
-undiscovered until their parent clears. Every ready room can activate independently once the
-player's complete body is inside room air and clear of its incoming aperture. Initial and per-room
-refill batches validate before state commit, occupied positions remain pending, and a defeat cannot
-refill its originating wave until a later physics frame. Each room permits at most 20 active
-encounter enemies and continuously refills that capacity until its configured group clears. Enemies
-retain their originating room ownership while roaming, so concurrent waves progress independently.
+undiscovered until their parent clears. Every ready encounter room can activate independently once
+the player's complete body is inside room air and clear of its incoming aperture. Initial and
+per-room refill batches validate before state commit, occupied positions remain pending, and a
+defeat cannot refill its originating wave until a later physics frame. Each encounter room permits
+at most 20 active enemies and continuously refills that capacity until its configured group clears.
+Enemies retain their originating room ownership while roaming, so concurrent waves progress
+independently. Passive chest rooms create neither encounter state nor a local seal, but roaming
+enemies share their navigation space and can enter them.
 
 Each `LevelRuntime` owns a dedicated `EntityRuntime`. Its active capacity is the sum of the root
 room capacities, where each subtree contributes the greater of its room weight or the sum of its
@@ -416,8 +448,18 @@ discovered side retains its authored textured seal until clearance opens collisi
 fades the seal out over 0.35 seconds, and fades the newly discovered partition and torches in over
 the same interval. Seals never close, and discovered retreat paths stay open while concurrent room
 waves continue. The encounter HUD aggregates active-wave, active-enemy, and pending-enemy counts.
-Level exit destroys the runtime; dungeon death suspends it immediately and destroys it while
-restoring the overworld, so the next entry starts fresh.
+
+`Game` starts a persisted attempt before setting up and activating `LevelRuntime`. Repeat chest
+seeds include that attempt index, while the one-time seed uses only stable layout, instance, and
+reward identity so a failed first clear preserves both the designated chest and its contents. First
+completion requires
+the complete one-time escrow and an alive return-door exit. After the claim, or in a level without a
+one-time reward, taking any repeat reward and exiting alive completes the run. Enemy clearance is
+not currently an input. Full inventory capacity blocks first-clear transfer or exit without
+discarding state. Death suspends and destroys the runtime without claiming escrow; repeat loot
+already committed to inventory remains player-owned. Ordinary incomplete exit, quit, and window
+close also destroy attempt-owned chest state. Level exit restores the overworld before retiring the
+runtime, so the next entry starts fresh.
 
 Content directories organize ownership without becoming runtime registries. Each destination
 dungeon keeps its catalog, entrance, definition, presentation, and modules together under
@@ -429,21 +471,24 @@ mistaken for registered content. The live stone recipe places one master room, t
 three chest rooms, five ordinary hallways, and the two-ended entry path for 13 modules inside its
 96×16×96 bound. Hallways must connect at both ends; rooms seal every unused doorway with its
 socket's authored fill block. Stone master rooms configure 40 zombies over local feet cells
-`(4,1,4)`–`(34,1,34)`, normal rooms configure 25 over `(3,1,3)`–`(17,1,17)`, and chest rooms
-configure 6 over `(3,1,2)`–`(5,1,6)`.
+`(4,1,4)`–`(34,1,34)` and normal rooms configure 25 over `(3,1,3)`–`(17,1,17)`. Each passive
+chest-room copy transforms its authored marker into one chest and has no encounter or spawn zones.
+One deterministic chest carries the unclaimed Basic Rune first-clear bundle; the others, and every
+chest after that claim, use the stone repeat bundle.
 
 ## Structure authoring
 
 `StructureDraft` is the Node-independent mutable owner for a generic structure or Level Module
 construction session. Its commands commit block and supported wall-torch changes atomically, while
 copied snapshots keep the chunk renderer and presentation from mutating draft collections. Imported
-module weight, sockets, torches, paired markers, and enemy spawn zones are copied into the draft.
+module weight, sockets, torches, paired markers, enemy spawn zones, and chest marker are copied into
+the draft.
 Indexed required-air and floor reference counts reject ordinary edits that would invalidate
 overlapping sockets or markers without scanning all metadata, while a cell relevance index limits
 spawn-zone validation to affected rectangles. Module-only commands validate complete VOID,
-connection, paired-marker, enemy-zone, and precise positive-weight changes before committing. Cell
-and torch deltas remain localized, connection removal never refills its aperture, and torch support
-removal reports only the attached torches. Imported definitions have an immutable type, ID,
+connection, paired-marker, enemy-zone, chest-marker, and precise positive-weight changes before
+committing. Cell and torch deltas remain localized, connection removal never refills its aperture,
+and torch support removal reports only the attached torches. Imported definitions have an immutable type, ID,
 dimensions, and source binding; successful exports are the only operation that changes a draft's
 binding or clears its dirty state.
 
@@ -452,8 +497,9 @@ dense canonical cube cells, and typed supported wall torches. Dense cells use
 `x + size.x * (z + size.z * y)` indexing and reject `VOID`, non-cube blocks, unsupported torches,
 and empty structures. Level Modules retain their independent dimensions, cells including `VOID`,
 weight, ordered sockets with per-socket unused fill blocks, ordered torches, and paired markers.
-They also persist ordered enemy spawn zones and require physical format version one; unversioned or
-obsolete resources are invalid. `LevelDefinition` independently requires format version two.
+They also persist ordered enemy spawn zones and an optional chest marker and require physical format
+version two; unversioned or obsolete resources are invalid. `LevelDefinition` independently
+requires format version four.
 `StructureResourceAdapter` converts both formats without changing their persisted contracts.
 `StructureFileStore` scans only direct
 `.tres` files in the globalized repository root and bypasses the resource cache during discovery,
@@ -464,9 +510,9 @@ leave the prior file and draft state unchanged.
 Hall and room membership is not duplicated on the module resource. `LevelDefinition` classifies
 module IDs through its hallway pool and typed room requirements, while paired markers identify the
 entry module. Adding a visual variant extends a requirement's module pool; adding a room class such
-as small or boss adds another typed requirement with its own encounter. The designer's simple
-connection mode authors at most one doorway per cardinal side while the persisted module format
-and generator continue to support existing advanced multi-door resources.
+as small or boss adds another typed requirement with its own encounter or chest loot bundle. The
+designer's simple connection mode authors at most one doorway per cardinal side while the persisted
+module format and generator continue to support existing advanced multi-door resources.
 
 Each socket persists its stable ID, boundary seed, facing, and unused-fill block ID. AIR means the
 connection remains required, while a solid cube records the material generation uses to seal the
@@ -489,6 +535,12 @@ Module Tools displays each zone's candidate count, removal action, and colored i
 Runtime cross-catalog validation applies the exact entity body geometry before a module can be used
 by an encounter.
 
+The optional chest marker targets one supported empty cell with empty headroom and at least one
+adjacent supported two-cell standing space. It cannot overlap a socket aperture, torch, entry marker,
+or enemy spawn zone. Module Tools captures it from the centered world target and renders a copied
+metadata overlay. Catalog validation pairs a marked module only with a room requirement that owns a
+chest loot bundle and no encounter.
+
 `Game` constructs and injects the dual-format file store while composing the console, authoring
 workflow, dialogs, and dedicated first-person runtime. It
 snapshots and suspends the active overworld or dungeon presentation without changing
@@ -497,7 +549,8 @@ same inventory and exact lifecycle state on exit. Designer cells render in bound
 the deterministic voxel raycast is shared with player interaction, while designer movement and
 creative selection remain independent from combat and finite inventory state. New and imported
 generic structures and Level Modules use the same runtime. Level Module tools release the cursor,
-capture the current centered target, and stage spawn and return markers before one atomic commit.
+capture the current centered target, stage spawn and return markers before one atomic commit, and
+set or clear the chest marker through its own validated command.
 Colored metadata overlays present copied socket and marker state; ordinary edits rebuild only
 affected chunks and torch nodes, while metadata commits alone refresh the panel and overlays.
 Torches continue through the normal first-person palette rather than a second metadata workflow.
@@ -506,7 +559,7 @@ Repository-root Level Module exports remain authoring artifacts until they are e
 the appropriate level content and catalog. Runtime generation does not scan the repository root,
 consume drafts, or register exported modules automatically.
 
-Each future content family, such as containers or room rewards, adds its typed authored definition,
+Each future content family, such as traps or dungeon objectives, adds its typed authored definition,
 transformed placement, state owner, runtime coordinator, and real caller together. Generic marker
 payloads, module graphs, and persistent placement IDs wait until a feature
 actually consumes them.

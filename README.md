@@ -6,8 +6,9 @@ a nine-slot hotbar, and build with them. The loop is explore → mine → build,
 streams in around you as you walk, under a running day/night cycle.
 
 Worlds are saved to three local slots and persist your seed, edits, inventory, equipment instances,
-progression, chest contents, uncollected overworld loot, harvest state, position, and world time.
-Copper deposits regenerate deterministically from the world seed.
+progression, dungeon attempts/completions/reward claims, chest contents, uncollected overworld loot,
+harvest state, position, and world time. Copper deposits regenerate deterministically from the
+world seed.
 
 ## Controls
 
@@ -49,7 +50,9 @@ Room modules also expose an Enemy Spawn Zones section. `Add Zone` returns to fir
 left-click the first floor corner, aim at the opposite corner to review its usable-cell count, then
 left-click that second corner to commit. Right-click or `Esc` cancels. Colored floor overlays show
 candidates with solid support, body clearance, and three-cell doorway clearance; each saved row can
-be removed from Module Tools.
+be removed from Module Tools. To author a chest room, aim at the supported empty cell where the
+chest should stand and use Chest Marker → Set from target. A module can contain one chest marker;
+the marker also requires empty headroom and an accessible adjacent standing cell.
 
 The animation tuner is a compact right-side debug-build panel. Its Movement, Animation, Parts,
 and Attack tabs update the live player immediately, while preview modes let you hold idle, walk,
@@ -79,20 +82,33 @@ materials are configured through typed level resources rather than hardcoded dun
 destination dungeon owns its catalog, entrance, definition, presentation, and modules under
 `levels/content/dungeons/<family>`. Directories organize each self-contained family but never
 register content through filesystem scans. A room requirement maps a stable room type, count,
-module pool, and encounter, so additional variants can join an existing type and new types such as
-small or boss rooms can be added without a dungeon-specific generator branch.
-Master rooms configure 40 zombies, normal rooms 25, and chest rooms 6. A room encounter activates
-only after the player is fully inside. Every ready room can run a wave concurrently, and each wave
-permits at most 20 active enemies from its originating room while larger groups refill authored
-spawn positions on later physics ticks. Discovered retreat paths stay open, so enemies can roam
-between rooms while their wave ownership remains unchanged. The shared dungeon runtime derives its
-active capacity from the generated room tree's weighted antichain bound instead of imposing a fixed
-wave count. Undiscovered rooms and hallways are not rendered, including their torches, lights, and
-shadows. A discovered branch's authored textured wall-fill seal stays visible until its parent room
-clears; collision opens immediately, the seal fades out over 0.35 seconds, and the branch and its
-torches fade in over the same interval. Opened seals never close. The HUD aggregates wave, active,
-and pending counts. Leaving or dying discards that run, restores the exact overworld anchor and
-player-owned inventory, and creates fresh encounter state on re-entry.
+module pool, and either an encounter or chest loot bundle, so additional variants can join an
+existing type and new types such as small or boss rooms can be added without a dungeon-specific
+generator branch.
+
+Master rooms configure 40 zombies and normal rooms 25. Chest rooms are passive: each generated room
+contains one take-only chest, creates no local enemy wave, and does not seal its branch. Enemies from
+other rooms can still enter and attack. On the stone dungeon's first clear, one deterministic chest
+contains the guaranteed Basic Rune while the other chests use the repeat pool; after that reward is
+claimed, every chest uses repeat loot. First-clear items remain in attempt escrow until the complete
+chest is taken and the player exits alive. Death, quit, or an incomplete exit discards that escrow.
+Repeat loot transfers immediately and survives death. A full inventory leaves the reward unchanged
+and displays `Inventory full — drop items first`; the return door rechecks capacity before securing
+the first-clear reward. Enemy clearance is not currently required for completion. See
+[Dungeon chest authoring and rewards](docs/dungeon-chest-authoring.md) for the full authoring and
+completion rules.
+
+An encounter activates only after the player is fully inside its combat room. Every ready encounter
+room can run a wave concurrently, and each wave permits at most 20 active enemies from its
+originating room while larger groups refill authored spawn positions on later physics ticks.
+Discovered retreat paths stay open, so enemies can roam between rooms while their wave ownership
+remains unchanged. The shared dungeon runtime derives its active capacity from the generated room
+tree's weighted antichain bound instead of imposing a fixed wave count. Undiscovered rooms and
+hallways are not rendered, including their torches, lights, and shadows. A discovered combat
+branch's authored textured wall-fill seal stays visible until its parent room clears; collision
+opens immediately, the seal fades out over 0.35 seconds, and the branch and its torches fade in over
+the same interval. Opened seals never close. The HUD aggregates wave, active, and pending counts.
+Leaving or dying restores the exact overworld anchor and creates fresh encounter state on re-entry.
 
 **Structure construction workspace.** `dev structure new` opens a document type, length, width, and
 height dialog, then enters an isolated first-person workspace for a generic structure or Level
@@ -110,10 +126,10 @@ Torches remain normal first-person palette placements instead of panel metadata.
 must still be added explicitly to the appropriate level content and catalog; repository-root files
 are not consumed or registered by generation automatically. Spawn zones persist horizontal floor
 rectangles; blocked decorative cells are ignored, but every zone must retain at least one
-supported, body-clear candidate away from doorways. Current Level Module resources require their
-physical format version. Module
-resources remain geometry-focused, while `LevelDefinition` assigns them to its entry, hallway, and
-typed room-requirement pools. Connection openings are derived from authored boundary geometry, so
+supported, body-clear candidate away from doorways. Current Level Module resources require physical
+format version two, while `LevelDefinition` uses format version four. Module resources remain
+geometry-focused, while `LevelDefinition` assigns them to its entry, hallway, and typed
+room-requirement pools. Connection openings are derived from authored boundary geometry, so
 hallways can use any enclosed opening size supported by the module bounds.
 
 **Blocks.** Grass, dirt, sand, stone, wood, leaves, cobblestone, mossy stone bricks, stone bricks,
@@ -124,22 +140,22 @@ Seeded copper deposits generate after the surrounding terrain as connected 5–3
 of each deposit stays underground, while some deposits expose up to three blocks at the surface.
 Stone and the other common blocks are hand-minable. Copper requires a stone or copper pickaxe,
 while the masonry blocks require a copper pickaxe. Torches are placeable blocks that you can walk
-through — each is an omni light with a 9-block radius. Chests are crafted from wood, placed in the
-overworld, and open a 15-slot storage panel. A chest must be empty before it can be mined.
+through — each is an omni light with a 9-block radius. Overworld chests are crafted from wood,
+placed by the player, persist 15 storage slots, and must be empty before they can be mined. Generated
+dungeon chests use the same panel but are take-only and last only for the current attempt.
 Permanent campfires are atomic 3×3 emplacements crafted from twelve stone and two wood. They require
 a clear, fully supported footprint, stay lit without fuel, cast the nearest bounded campfire shadow,
 and return one campfire item when any footprint cell is mined.
 Overworld torch shadows are configurable for the nearest 0, 1, 2, or 4 lights and default to the
-nearest one. Chests are solid 1×1 placeable blocks rendered as separate body and lid meshes with
-dedicated chest textures. They cannot be mined by hand, and only empty chests can be mined with a
-pickaxe.
-Hovering a reachable chest brightens it and hinges its lid open slightly. Left-clicking opens
-that chest's own persistent 3×5 storage in the center while the backpack opens from the right.
-Items can be dragged between the chest, backpack, and hotbar. Clicking a backpack or chest item
-transfers its stack to the other inventory, and the chest's Take all button transfers every stack
-that fits into the backpack. An empty chest can be mined with a pickaxe to return it to the player
-inventory; a chest containing items cannot be mined. `P` or `Esc` closes both panels; `Tab` replaces
-the chest with the crafting menu while keeping the backpack open.
+nearest one. Overworld chests are solid 1×1 placeable blocks rendered as separate body and lid
+meshes with dedicated chest textures. They cannot be mined by hand, and only empty overworld chests
+can be mined with a pickaxe.
+Hovering a reachable chest brightens it and hinges its lid open slightly. Left-clicking opens its
+3×5 storage in the center while the backpack opens from the right. Overworld chests allow transfers
+in both directions and persist their contents; dungeon chests allow only taking items. Clicking a
+chest item transfers its stack to inventory, and Take all transfers every stack that fits. Mining
+an empty overworld chest returns it to the player inventory. `P` or `Esc` closes both panels; `Tab`
+replaces the chest with the crafting menu while keeping the backpack open.
 
 **Tools.** New worlds start with an empty inventory, while the first pickaxe is crafted from stone
 and wood. Item actions are data-driven: the hoe tills exposed grass and dirt, stone and copper
@@ -161,11 +177,11 @@ Held tools use either runtime-extruded pixel art or authored 3D scenes.
 
 **Loot.** Overworld enemies roll deterministic per-species loot pools when defeated. A zombie
 independently has a 75% chance to drop 1–3 Copper and a 17% chance to select one gear reward weighted
-10 plain Copper Sword, 4 affixed-and-runed Copper Sword, and 3 Stout Copper Helmet. Each physical
-weapon or armor copy has its own stable instance ID, rolled affixes, and ordered rune
-slots even when two copies share the same item definition. Material drops merge nearby and expire
-after five minutes; equipment does not time-expire. The bounded world-loot state survives chunk
-streaming, transitions, and save/load. A full backpack leaves the drop in the world; at the hard
+10 plain Copper Sword, 4 Vicious/Nimble-affixed Copper Sword socketed with a Power Rune, and 3 Stout
+Copper Helmet. Each physical weapon or armor copy has its own stable instance ID, rolled affixes,
+and ordered rune slots even when two copies share the same item definition. Material drops merge
+nearby and expire after five minutes; equipment does not time-expire. The bounded world-loot state
+survives chunk streaming, transitions, and save/load. A full backpack leaves the drop in the world; at the hard
 128-entry cap, admitting a new batch evicts the nearest-expiring material first, then the oldest
 equipment entry only when every retained entry is equipment.
 
@@ -185,8 +201,9 @@ immediate defense-aware damage and repeating it every half second while stacking
 to a 60% reduction. Each successful grounded jump dislodges one attached slime.
 
 **Crafting.** Opening crafting with `Tab` reveals the general recipe panel alongside the backpack.
-It contains the seven recipes that do not require a workstation. A placed anvil opens its own panel
-with the eight copper tool, weapon, and armor recipes. A placed cauldron opens a food-and-potion
+It contains the six recipes that do not require a workstation. Basic Rune is a secured first-clear
+reward from the stone dungeon rather than a general crafting recipe. A placed anvil opens its own
+panel with the eight copper tool, weapon, and armor recipes. A placed cauldron opens a food-and-potion
 panel; its initial recipe combines two pumpkins and two apples into one health potion. All catalogs
 show a short description of the selected output above its ingredients. Stat-bearing recipes show
 their item stats below the ingredients, with numeric values in the same yellow-gold used
@@ -201,7 +218,8 @@ health potions restore health completely.
 commands remain available for the current game session; use `Up` and `Down` to browse them without
 losing an unfinished command. The
 `spawn <item> [count]` command adds any catalog item directly to the backpack for testing, with the
-count defaulting to one when omitted. `sethealth <number>` sets current health to a non-negative
+count defaulting to one when omitted. This intentionally allows debug-only progression bypasses such
+as `spawn basic_rune`. `sethealth <number>` sets current health to a non-negative
 value, clamping values above the player's current maximum. Item IDs and display names are accepted;
 equipment IDs remain material-qualified, such as `copper_pickaxe` and `copper_sword`. Structure construction uses
 `dev structure new`, `dev structure import`, `dev structure export`, and `dev structure exit`. Press `/` again or
@@ -229,9 +247,12 @@ the game. The pause menu exposes persistent frame-rate, 3D resolution,
 anti-aliasing, fog, sun-shadow, shadow-range, overworld and dungeon torch-shadow, and
 ambient-audio settings. Dungeon shadows default to the nearest six authored torches and fade
 between active casters. Saves live in `user://saves/` and autosave every 30 seconds, plus shortly
-after any block edit, chest-content change, or persistent world-loot change. Saving inside a dungeon
-records its overworld return position because
-dungeon layouts are recreated on entry.
+after any block edit, persistent overworld chest-content change, or persistent world-loot change.
+Saving inside a dungeon records its overworld return position because dungeon layouts are
+recreated on entry. Dungeon attempt indices, completion counts, and claimed first-clear reward IDs
+are saved independently from
+the transient layout and chest contents. Dungeon progress changes use the same debounced save path,
+and a successful completion requests an immediate save.
 
 ## Project Structure
 
