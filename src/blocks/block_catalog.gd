@@ -7,11 +7,15 @@ class_name BlockCatalog
 		_rebuild_lookup()
 
 var _definitions_by_id: Array[BlockDefinition] = []
+var _interaction_bounds_by_id: Array[AABB] = []
 var _is_valid: bool = false
 
 func _rebuild_lookup() -> void:
 	_definitions_by_id.clear()
 	_definitions_by_id.resize(BlockId.Type.COUNT)
+	_interaction_bounds_by_id.clear()
+	_interaction_bounds_by_id.resize(BlockId.Type.COUNT)
+	_interaction_bounds_by_id.fill(AABB(Vector3.ZERO, Vector3.ONE))
 	_is_valid = true
 	for definition in definitions:
 		if definition == null:
@@ -29,7 +33,9 @@ func _rebuild_lookup() -> void:
 			continue
 		_definitions_by_id[definition.id] = definition
 		if definition.interaction_bounds != null:
-			if not definition.interaction_bounds.validate(definition.sprite_texture, source):
+			if definition.interaction_bounds.validate(definition.sprite_texture, source):
+				_interaction_bounds_by_id[definition.id] = definition.interaction_bounds.resolve(definition.sprite_texture)
+			else:
 				_is_valid = false
 		if definition.is_breakable and definition.mine_duration <= 0.0:
 			push_error("[BlockCatalog] Invalid mine duration for %s" % BlockId.get_display_name(definition.id))
@@ -77,7 +83,7 @@ func _validate_face_texture(texture: Texture2D, face: String, definition: BlockD
 		_is_valid = false
 
 func _ensure_lookup() -> void:
-	if _definitions_by_id.size() != BlockId.Type.COUNT:
+	if _definitions_by_id.size() != BlockId.Type.COUNT or _interaction_bounds_by_id.size() != BlockId.Type.COUNT:
 		_rebuild_lookup()
 
 func validate() -> bool:
@@ -98,6 +104,11 @@ func is_opaque(id: int) -> bool:
 
 func is_raycast_solid(id: int) -> bool:
 	return id != BlockId.Type.AIR and get_definition(id).is_raycast_solid
+
+func get_interaction_bounds(id: int) -> AABB:
+	_ensure_lookup()
+	assert(BlockId.is_valid(id))
+	return _interaction_bounds_by_id[id]
 
 func is_breakable(id: int) -> bool:
 	return id != BlockId.Type.AIR and get_definition(id).is_breakable
