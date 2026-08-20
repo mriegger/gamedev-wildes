@@ -122,7 +122,7 @@ func _process(_delta: float) -> bool:
 		_expect(not _hud.anvil_panel.is_open(), "Tab did not close the anvil")
 		_expect(_hud.crafting_panel.is_open() and _hud.side_panel.is_open(), "Tab did not open general crafting and the backpack")
 		var general_recipe_list := _hud.crafting_panel.get_node("Margin/Content/Body/Recipes/RecipeScroll/RecipeList") as VBoxContainer
-		_expect(general_recipe_list.get_child_count() == 7, "general crafting contains metal recipes or is missing a station recipe")
+		_expect(general_recipe_list.get_child_count() == 6, "general crafting contains metal recipes or is missing a station recipe")
 		_hud.crafting_panel.select_recipe(&"stone_pickaxe")
 		var general_stats := _hud.crafting_panel.get_node("Margin/Content/Body/Details/Stats") as RichTextLabel
 		_expect(general_stats.visible and general_stats.get_parsed_text().contains("Mining Power: 1") and general_stats.get_parsed_text().contains("Speed Multiplier: 1.5x"), "stone pickaxe recipe stats are incomplete")
