@@ -84,7 +84,8 @@ func _create_world_model(generation: Dictionary):
 	voxel_model.apply_tree_chunk(generation)
 	voxel_model.restore_block_edits(_start_state.placed_blocks, _start_state.removed_blocks)
 	voxel_model.torch_attachments = _start_state.torch_attachments.duplicate()
-	assert(voxel_model.restore_emplacements(_start_state.emplacements))
+	var emplacements_restored := voxel_model.restore_emplacements(_start_state.emplacements)
+	assert(emplacements_restored)
 	for pos in _start_state.removed_blocks:
 		voxel_model.tree_block_fast.erase(pos)
 	voxel_model.block_edit_committed.connect(_on_block_edit_committed)

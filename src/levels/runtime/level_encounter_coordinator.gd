@@ -164,7 +164,8 @@ func _build_spawn_batch(room_id: int, entity_ids: Array[StringName], ignore_tran
 
 func _cancel_spawn_batch(runtime_ids: Array[int]) -> void:
 	for runtime_id in runtime_ids:
-		assert(_entity_runtime.try_despawn(runtime_id))
+		var despawned := _entity_runtime.try_despawn(runtime_id)
+		assert(despawned)
 
 func _on_entity_defeated(defeat: EntityDefeat) -> void:
 	var expected_opened_seal_ids := _state.get_defeat_opened_seal_ids(defeat.runtime_id, defeat.definition_id)

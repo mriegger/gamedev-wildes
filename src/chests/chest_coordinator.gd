@@ -41,7 +41,8 @@ func setup(
 		)
 	):
 		return false
-	assert(p_storage._bind_runtime())
+	var storage_bound := p_storage._bind_runtime()
+	assert(storage_bound)
 	_storage = p_storage
 	_inventory_model = p_inventory_model
 	_inventory_loadout = p_inventory_loadout

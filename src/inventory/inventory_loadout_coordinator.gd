@@ -33,8 +33,10 @@ func setup(
 		return false
 	if _prepare_stat_projection(p_inventory_model, p_inventory_model, p_actor_stats, true, false) == null:
 		return false
-	assert(p_inventory_model._bind_runtime())
-	assert(p_actor_stats._bind_loadout(reserved_source_instance_ids))
+	var inventory_bound := p_inventory_model._bind_runtime()
+	assert(inventory_bound)
+	var loadout_bound := p_actor_stats._bind_loadout(reserved_source_instance_ids)
+	assert(loadout_bound)
 	var stat_change := _prepare_stat_projection(p_inventory_model, p_inventory_model, p_actor_stats, true)
 	assert(stat_change != null)
 	p_actor_stats._commit_prepared_loadout_modifier_change(stat_change)

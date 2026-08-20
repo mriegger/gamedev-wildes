@@ -278,4 +278,5 @@ func _finish_open_seal(instance: MeshInstance3D) -> void:
 
 func _set_room_torch_strength(room_id: int, strength: float) -> void:
 	for cell in _room_torch_cells[room_id] as Array[Vector3i]:
-		assert(_torch_renderer.set_torch_reveal_strength(cell, strength))
+		var strength_set := _torch_renderer.set_torch_reveal_strength(cell, strength)
+		assert(strength_set)

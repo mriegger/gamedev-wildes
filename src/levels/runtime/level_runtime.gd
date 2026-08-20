@@ -64,14 +64,15 @@ func setup(
 	_encounter_coordinator = LevelEncounterCoordinator.new()
 	_encounter_coordinator.name = "EncounterCoordinator"
 	add_child(_encounter_coordinator)
-	assert(_encounter_coordinator.setup(
+	var encounters_ready := _encounter_coordinator.setup(
 		_topology,
 		_encounter_state,
 		_state,
 		_entity_runtime,
 		entity_catalog,
 		layout.seed_value,
-	))
+	)
+	assert(encounters_ready)
 	_encounter_coordinator.seals_opened.connect(_on_seals_opened)
 	_encounter_coordinator.encounter_summary_changed.connect(_encounter_hud.show_summary)
 	_encounter_coordinator.room_cleared.connect(_on_room_cleared)
@@ -81,7 +82,7 @@ func setup(
 	for torch in layout.torches:
 		torch_attachments[torch.cell] = LevelSocketDefinition.vector_for(torch.wall_direction)
 	_torch_renderer.spawn_torches(torch_attachments)
-	assert(_geometry_renderer.setup(
+	var geometry_ready := _geometry_renderer.setup(
 		layout,
 		_state,
 		_topology,
@@ -90,7 +91,8 @@ func setup(
 		texture_set,
 		presentation.terrain_shader,
 		_torch_renderer,
-	))
+	)
+	assert(geometry_ready)
 	_return_point.position = _state.get_return_door_position()
 	_setup_return_door(block_catalog, presentation.return_door_block_id)
 	suspend_simulation()

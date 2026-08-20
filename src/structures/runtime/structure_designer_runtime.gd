@@ -47,7 +47,8 @@ func setup(
 	_draft = draft
 	_space = StructureDesignerSpace.new(_draft, block_catalog)
 	_toolbelt = CreativeToolbelt.new()
-	assert(_toolbelt.setup(item_catalog))
+	var toolbelt_ready := _toolbelt.setup(item_catalog)
+	assert(toolbelt_ready)
 	_controller.setup(_space)
 	_controller.pitch.rotation_degrees.x = -25.0
 	_chunk_renderer.setup(_draft, texture_set, terrain_shader)
