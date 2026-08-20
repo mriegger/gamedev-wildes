@@ -476,6 +476,40 @@ jobs:
             45 "SLIME_ATTACHMENT_INTEGRATION PASS" /tmp/slime_attachment_integration.log -- \
             godot --headless --path src --script res://entities/slime/tests/slime_attachment_integration.gd
 
+  watcher-system:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run Watcher behavior tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "WATCHER_BEHAVIOR PASS" /tmp/watcher_behavior.log -- \
+            godot --headless --path src --script res://entities/watcher/tests/watcher_behavior.gd
+      - name: Run Watcher teleport search tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "WATCHER_TELEPORT_SEARCH PASS" /tmp/watcher_teleport_search.log -- \
+            godot --headless --path src --script res://entities/watcher/tests/watcher_teleport_search.gd
+      - name: Run Watcher encounter integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            45 "WATCHER_ENCOUNTER_COORDINATOR PASS" /tmp/watcher_encounter.log -- \
+            godot --headless --path src --script res://entities/watcher/tests/watcher_encounter_coordinator.gd
+      - name: Run Watcher screen effect tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            45 "WATCHER_SCREEN_EFFECT PASS" /tmp/watcher_screen_effect.log -- \
+            godot --headless --path src --script res://entities/watcher/tests/watcher_screen_effect.gd
+      - name: Run Watcher ambient integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            45 "WATCHER_AMBIENT_INTEGRATION PASS" /tmp/watcher_ambient.log -- \
+            godot --headless --path src --script res://entities/watcher/tests/watcher_ambient_integration.gd
+
   bird-behavior:
     runs-on: ubuntu-latest
     timeout-minutes: 10

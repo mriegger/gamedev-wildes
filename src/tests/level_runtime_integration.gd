@@ -16,6 +16,7 @@ class TransitionGame:
 	extends Game
 
 	var level_was_suspended_at_fade_start: bool = false
+	var entity_context_was_bound_at_fade_start: bool = false
 
 	func _ready() -> void:
 		set_process(false)
@@ -29,6 +30,7 @@ class TransitionGame:
 				and _level_runtime.get_entity_runtime().is_suspended() \
 				and _level_runtime._geometry_renderer.process_mode == Node.PROCESS_MODE_DISABLED \
 				and _level_runtime._encounter_hud.process_mode == Node.PROCESS_MODE_DISABLED
+			entity_context_was_bound_at_fade_start = _active_entity_runtime == _level_runtime.get_entity_runtime()
 		_fade.visible = not is_zero_approx(alpha)
 		_fade.color = Color(0.0, 0.0, 0.0, alpha)
 		await get_tree().process_frame
@@ -250,6 +252,8 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	var coordinator := LevelInteractionCoordinator.new()
 	var entities := WorldEntityCoordinator.new()
 	var slime_attachments := SlimeAttachmentCoordinator.new()
+	var watcher_encounter := WatcherEncounterCoordinator.new()
+	var watcher_effect := (load("res://entities/watcher/presentation/watcher_screen_effect.tscn") as PackedScene).instantiate() as WatcherScreenEffect
 	var loot := OverworldLootCoordinator.new()
 	var combat := MeleeCombatCoordinator.new()
 	var combat_hit_particles := (load("res://combat/particles/combat_hit_particles.tscn") as PackedScene).instantiate() as CombatHitParticles
@@ -271,6 +275,8 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	coordinator.name = "LevelInteractionCoordinator"
 	entities.name = "WorldEntities"
 	slime_attachments.name = "SlimeAttachments"
+	watcher_encounter.name = "WatcherEncounter"
+	watcher_effect.name = "WatcherScreenEffect"
 	loot.name = "OverworldLoot"
 	combat.name = "MeleeCombat"
 	combat_hit_particles.name = "CombatHitParticles"
@@ -285,10 +291,12 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	game.add_child(environment)
 	game.add_child(entities)
 	game.add_child(slime_attachments)
+	game.add_child(watcher_encounter)
 	game.add_child(loot)
 	game.add_child(combat)
 	game.add_child(combat_hit_particles)
 	game.add_child(enemy_combat_feedback)
+	game.add_child(watcher_effect)
 	game.add_child(hud)
 	game.add_child(dev_console)
 	game.add_child(structure_workflow)
@@ -319,6 +327,8 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	await process_frame
 	_expect(game.world == world and game.player == player and game.camera_rig == camera_rig, "Game onready dependencies were not wired")
 	_expect(game.enemy_combat_feedback == enemy_combat_feedback, "Game combat feedback dependency was not wired")
+	_expect(game.watcher_encounter == watcher_encounter and game.watcher_screen_effect == watcher_effect, "Game Watcher dependencies were not wired")
+	_expect(watcher_effect.layer == 0 and hud.layer == 1, "Game did not layer the Watcher world effect beneath the HUD")
 	_expect(game.game_environment == environment and game.level_interaction == coordinator and game.dev_console == dev_console and game.pumpkin_patch == pumpkin_patch and game.apple_trees == apple_trees, "Game transition dependencies were not wired")
 	_expect(game.overworld_loot == loot, "Game overworld loot dependency was not wired")
 	_expect(game.structure_designer_workflow == structure_workflow and game.structure_designer_dialogs == structure_dialogs, "Game structure designer dependencies were not wired")
@@ -356,6 +366,8 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	dev_console.open_state_changed.connect(game._on_dev_console_open_state_changed)
 	structure_dialogs.open_state_changed.connect(game._on_structure_dialog_open_state_changed)
 	camera_rig.setup(player, game.input_buffer)
+	watcher_effect.setup(player, camera_rig.camera)
+	watcher_encounter.setup(player, watcher_effect)
 	entities.setup(game.entity_catalog, voxel_world, 1337, _position_ready)
 	combat.setup(voxel_world, player, game.player_stats, game.inventory_model, entities.get_runtime(), game.damage_type_catalog)
 	enemy_combat_feedback.setup(combat, camera_rig.camera)
@@ -398,12 +410,42 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 		)
 	_expect(game.world_loot_state.get_entry_count() > 0, "Game-owned loot state did not receive composed entity defeats")
 	_expect(loot.get_child_count() == game.world_loot_state.get_entry_count(), "Game-composed loot views did not follow state")
-	game._bind_entity_context(voxel_world, entities.get_runtime())
+	game._bind_entity_context(voxel_world, entities.get_runtime(), _position_ready)
 	var world_entity_runtime := entities.get_runtime()
+	var runtime_outcome_index := -1
+	var watcher_outcome_index := -1
+	var outcome_connections := combat.melee_outcome_committed.get_connections()
+	for connection_index in range(outcome_connections.size()):
+		var callable := outcome_connections[connection_index]["callable"] as Callable
+		if callable == Callable(world_entity_runtime, "record_melee_outcome"):
+			runtime_outcome_index = connection_index
+		elif callable == Callable(watcher_encounter, "record_melee_outcome"):
+			watcher_outcome_index = connection_index
+	_expect(runtime_outcome_index >= 0 and watcher_outcome_index > runtime_outcome_index, "Watcher encounter routing did not follow runtime hit presentation")
+	_expect(watcher_encounter._runtime == world_entity_runtime and watcher_encounter._voxel_space == voxel_world, "Watcher encounter did not bind the overworld context")
 	var world_spawn := voxel_world.get_spawn_position()
 	var doorway_anchor := world_spawn
 	player.global_position = doorway_anchor
 	player.bind_space(voxel_world, world, world_spawn, voxel_world)
+	var persistent_watcher_ids := world_entity_runtime.try_spawn_batch([
+		EntitySpawnRequest.new(&"watcher", Vector3(10.5, world_spawn.y, 10.5), 7441),
+	])
+	_expect(persistent_watcher_ids.size() == 1, "persistent Watcher transition fixture did not spawn")
+	var persistent_watcher: WatcherActor = null
+	if persistent_watcher_ids.size() == 1:
+		persistent_watcher = world_entity_runtime.get_actor(persistent_watcher_ids[0]) as WatcherActor
+		var watcher_contact := MeleeContact.new(
+			MeleeCombatCoordinator.PLAYER_RUNTIME_ID,
+			MeleeCombatCoordinator.PLAYER_DEFINITION_ID,
+			persistent_watcher.runtime_id,
+			&"watcher",
+			&"watcher_transition_test",
+			persistent_watcher.global_position,
+			Vector3.RIGHT,
+		)
+		watcher_encounter.record_melee_outcome(MeleeOutcome.new(watcher_contact, &"", 1.0, false))
+		_expect(persistent_watcher.is_aggressive(), "persistent Watcher fixture was not provoked")
+		_expect(watcher_encounter.get_tracked_count() == 1 and watcher_effect.visible, "persistent Watcher fixture did not activate its encounter")
 	game._location_state = GameplayLocationState.new(doorway_anchor)
 	structure_workflow.setup(structure_dialogs, StructureFileStore.new(ProjectSettings.globalize_path("res://../").simplify_path()))
 	var prompt_coordinator := InteractionPromptCoordinator.new()
@@ -480,6 +522,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 		_expect(dungeon_entity_runtime != world_entity_runtime and not dungeon_entity_runtime.is_suspended(), "level entry did not activate a dedicated entity runtime in cycle %d" % cycle)
 		_expect(game._active_entity_runtime == dungeon_entity_runtime and player.interactor.entity_runtime == dungeon_entity_runtime, "level entry did not rebind player entity queries in cycle %d" % cycle)
 		_expect(combat._entity_runtime == dungeon_entity_runtime and combat._voxel_space == runtime.get_voxel_space(), "level entry did not rebind combat in cycle %d" % cycle)
+		_expect(watcher_encounter._runtime == dungeon_entity_runtime and watcher_encounter._voxel_space == runtime.get_voxel_space(), "level entry did not rebind Watcher encounters in cycle %d" % cycle)
 		_expect(player.interactor.melee_attack_timer == 0.0 and player.interactor.melee_attack_queue == 0 and not player.interactor._melee_contact_pending and not player.interactor._melee_impact_pending and player.interactor._melee_attack_command == null, "level entry retained a pending overworld attack in cycle %d" % cycle)
 		_expect(player.voxel_space == runtime.get_voxel_space(), "player is not bound to LevelState in cycle %d" % cycle)
 		_expect(player.interactor.voxel_space == runtime.get_voxel_space(), "interactor is not bound to LevelState in cycle %d" % cycle)
@@ -496,8 +539,10 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 		player.global_position += Vector3(2.0, 0.0, 1.0)
 		_expect(game._get_persisted_position().is_equal_approx(doorway_anchor), "level-local movement changed persisted anchor in cycle %d" % cycle)
 		game.level_was_suspended_at_fade_start = false
+		game.entity_context_was_bound_at_fade_start = false
 		await game._exit_level()
 		_expect(game.level_was_suspended_at_fade_start, "level exit began fading before dungeon simulation suspended in cycle %d" % cycle)
+		_expect(game.entity_context_was_bound_at_fade_start, "level exit hid its Watcher context before the transition was opaque in cycle %d" % cycle)
 		_expect(not game._location_state.is_in_level(), "Game location remained in level after cycle %d" % cycle)
 		_expect(player.global_position.is_equal_approx(doorway_anchor), "Game restored %s instead of exact anchor %s in cycle %d" % [player.global_position, doorway_anchor, cycle])
 		_expect(player.voxel_space == voxel_world and player.interactor.voxel_space == voxel_world, "player world binding was not restored in cycle %d" % cycle)
@@ -508,6 +553,9 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 		_expect(loot.is_physics_processing() and loot.visible, "Game did not resume overworld loot in cycle %d" % cycle)
 		_expect(game._active_entity_runtime == world_entity_runtime and player.interactor.entity_runtime == world_entity_runtime, "level exit did not restore player entity queries in cycle %d" % cycle)
 		_expect(combat._entity_runtime == world_entity_runtime and combat._voxel_space == voxel_world, "level exit did not restore overworld combat in cycle %d" % cycle)
+		_expect(watcher_encounter._runtime == world_entity_runtime and watcher_encounter._voxel_space == voxel_world, "level exit did not restore overworld Watcher encounters in cycle %d" % cycle)
+		if persistent_watcher != null:
+			_expect(persistent_watcher.is_aggressive() and watcher_encounter.get_tracked_count() == 1 and watcher_effect.visible, "level transition lost the permanent overworld Watcher encounter in cycle %d" % cycle)
 		_expect(world.visible and entrance.visible, "overworld presentation remained hidden after cycle %d" % cycle)
 		_expect(environment._world_environment.environment != null and environment._sun.visible and environment._sun_fill.visible, "outdoor environment was not restored after cycle %d" % cycle)
 		_expect(game._level_runtime == null and not is_instance_valid(runtime), "level runtime survived cycle %d teardown" % cycle)
@@ -526,12 +574,17 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	var first_attempt_state := defeated_runtime._encounter_state
 	game.player_stats.damage(game.player_stats.current_hp)
 	game._on_player_defeated()
+	if persistent_watcher != null:
+		_expect(not persistent_watcher.is_aggressive(), "dungeon player defeat did not immediately calm the suspended overworld Watcher")
 	_expect(defeated_runtime.get_entity_runtime().is_suspended() and not defeated_runtime.is_processing() and not defeated_runtime.is_physics_processing(), "dungeon defeat left encounter simulation active")
 	_expect(defeated_runtime._geometry_renderer.process_mode == Node.PROCESS_MODE_DISABLED and defeated_runtime._encounter_hud.process_mode == Node.PROCESS_MODE_DISABLED, "dungeon defeat left encounter presentation timers active")
 	var completed_screen := game._death_screen
 	game._death_screen = null
 	completed_screen.queue_free()
 	await game._exit_level(true)
+	if persistent_watcher != null:
+		_expect(not persistent_watcher.is_aggressive(), "dungeon player defeat did not calm the surviving overworld Watcher")
+		_expect(watcher_encounter.get_tracked_count() == 0 and not watcher_effect.visible, "dungeon player defeat restored an overworld Watcher effect")
 	_expect(not player.is_defeated() and not game.player_stats.is_dead(), "dungeon defeat did not restore player health")
 	_expect(player.global_position.is_equal_approx(defeat_anchor), "dungeon defeat did not restore the exact overworld position")
 	_expect(game.inventory_model == inventory_identity and game.player_stats == stats_identity, "dungeon defeat replaced player-owned state")
@@ -613,6 +666,7 @@ func _run_structure_designer_cycle(game: TransitionGame, in_level: bool, cycle: 
 		game.game_session.suspend_saving()
 	else:
 		game.game_session.resume_saving()
+	var watcher_effect_was_visible := game.watcher_screen_effect.visible
 	var orphan_baseline := int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
 	var draft := StructureDraft.create_generic(Vector3i(5, 4, 5))
 	_expect(draft != null, "structure draft creation failed for %s" % label)
@@ -637,6 +691,7 @@ func _run_structure_designer_cycle(game: TransitionGame, in_level: bool, cycle: 
 	_expect(camera_rig.process_mode == Node.PROCESS_MODE_DISABLED and not camera_rig.visible and not camera_rig.camera.current, "designer entry left the gameplay camera active for %s" % label)
 	_expect(hud.process_mode == Node.PROCESS_MODE_DISABLED and not hud.visible, "designer entry left the gameplay HUD active for %s" % label)
 	_expect(level_interaction.process_mode == Node.PROCESS_MODE_DISABLED, "designer entry left gameplay interaction active for %s" % label)
+	_expect(not game.watcher_screen_effect.visible and not game.watcher_screen_effect.is_processing(), "designer entry retained the Watcher screen effect for %s" % label)
 	if designer_runtime != null:
 		var designer_controller := designer_runtime.get_node("StructureDesignerController") as StructureDesignerController
 		_expect(designer_runtime.visible and designer_runtime.is_processing(), "designer runtime was inactive for %s" % label)
@@ -675,6 +730,7 @@ func _run_structure_designer_cycle(game: TransitionGame, in_level: bool, cycle: 
 	_expect(is_equal_approx(camera_rig.current_yaw_deg, camera_yaw) and is_equal_approx(camera_rig.target_yaw_deg, camera_target_yaw) and is_equal_approx(camera_rig.camera.size, camera_size), "designer exit changed the gameplay camera transform for %s" % label)
 	_expect(hud.process_mode == hud_process_mode and hud.visible == hud_visible and hud.hotbar._selection_input_enabled == hotbar_input_enabled, "designer exit did not restore the HUD and hotbar input for %s" % label)
 	_expect(level_interaction.process_mode == level_interaction_process_mode, "designer exit did not restore gameplay interaction for %s" % label)
+	_expect(game.watcher_screen_effect.visible == watcher_effect_was_visible, "designer exit did not restore the prior Watcher effect state for %s" % label)
 	_expect(world.is_suspended() == world_suspended and world.visible == world_visible, "designer exit did not restore the world for %s" % label)
 	_expect(entities.is_suspended() == entities_suspended and entities.visible == entities_visible, "designer exit did not restore entities for %s" % label)
 	_expect(game.overworld_loot.is_physics_processing() == loot_processing and game.overworld_loot.visible == loot_visible, "designer exit did not restore overworld loot for %s" % label)

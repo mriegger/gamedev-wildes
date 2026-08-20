@@ -37,6 +37,8 @@ signal main_menu_requested
 @onready var game_environment: GameEnvironment = $Environment as GameEnvironment
 @onready var world_entity_coordinator: WorldEntityCoordinator = $WorldEntities as WorldEntityCoordinator
 @onready var slime_attachment_coordinator: SlimeAttachmentCoordinator = $SlimeAttachments as SlimeAttachmentCoordinator
+@onready var watcher_encounter: WatcherEncounterCoordinator = $WatcherEncounter as WatcherEncounterCoordinator
+@onready var watcher_screen_effect: WatcherScreenEffect = $WatcherScreenEffect as WatcherScreenEffect
 @onready var overworld_loot: OverworldLootCoordinator = $OverworldLoot as OverworldLootCoordinator
 @onready var melee_combat: MeleeCombatCoordinator = $MeleeCombat as MeleeCombatCoordinator
 @onready var combat_hit_particles: CombatHitParticles = $CombatHitParticles as CombatHitParticles
@@ -348,6 +350,8 @@ static func _get_chest_state_error(
 
 func _setup_gameplay() -> bool:
 	camera_rig.setup(player, input_buffer)
+	watcher_screen_effect.setup(player, camera_rig.camera)
+	watcher_encounter.setup(player, watcher_screen_effect)
 	world_entity_coordinator.setup(entity_catalog, world.voxel_model, world.config.seed_value, world.is_position_streamed)
 	var world_entities := world_entity_coordinator.get_runtime()
 	melee_combat.setup(world.voxel_model, player, player_stats, inventory_model, world_entities, damage_type_catalog)
@@ -400,7 +404,7 @@ func _setup_gameplay() -> bool:
 	item_consumption_coordinator = ItemConsumptionCoordinator.new()
 	item_consumption_coordinator.setup(inventory_model, inventory_loadout_coordinator, player_stats)
 	player.setup_consumption(item_consumption_coordinator)
-	_bind_entity_context(world.voxel_model, world_entities)
+	_bind_entity_context(world.voxel_model, world_entities, world.is_position_streamed)
 	anvil_coordinator = AnvilCoordinator.new()
 	anvil_coordinator.setup(world.voxel_model)
 	cauldron_coordinator = CauldronCoordinator.new()
@@ -458,6 +462,11 @@ func _on_player_defeated():
 		return
 	game_session.suspend_saving()
 	slime_attachment_coordinator.clear_attachments()
+	var watcher_runtimes: Array[EntityRuntime] = [_active_entity_runtime]
+	var overworld_runtime := world_entity_coordinator.get_runtime()
+	if overworld_runtime != _active_entity_runtime:
+		watcher_runtimes.append(overworld_runtime)
+	watcher_encounter.reset_for_player_defeat(watcher_runtimes)
 	player.enter_defeated_state()
 	if _location_state != null and _location_state.is_in_level() and _level_runtime != null:
 		_level_runtime.suspend_simulation()
@@ -622,7 +631,11 @@ func _enter_level():
 	_level_runtime.activate()
 	var level_spawn := _level_runtime.get_spawn_position()
 	player.global_position = level_spawn
-	_bind_entity_context(_level_runtime.get_voxel_space(), _level_runtime.get_entity_runtime())
+	_bind_entity_context(
+		_level_runtime.get_voxel_space(),
+		_level_runtime.get_entity_runtime(),
+		_is_active_level_position_ready,
+	)
 	player.bind_space(_level_runtime.get_voxel_space(), _level_runtime, level_spawn)
 	_reset_camera_position()
 	level_interaction.set_target(_level_runtime.get_return_door_position(), level_entrance_definition.return_prompt)
@@ -635,22 +648,22 @@ func _exit_level(restore_from_defeat: bool = false):
 	level_interaction.clear_target()
 	player.set_physics_process(false)
 	input_buffer.clear_gameplay()
-	_unbind_entity_context()
 	_level_runtime.suspend_simulation()
 	await _fade_to(1.0)
+	_unbind_entity_context()
 	player.unbind_space()
 	_level_runtime.deactivate()
 	player.global_position = _location_state.get_persisted_position()
 	var world_spawn := world.voxel_model.get_spawn_position()
-	_bind_entity_context(world.voxel_model, world_entity_coordinator.get_runtime())
+	world.resume()
+	world_entity_coordinator.resume()
+	overworld_loot.resume()
+	_bind_entity_context(world.voxel_model, world_entity_coordinator.get_runtime(), world.is_position_streamed)
 	player.bind_space(world.voxel_model, world, world_spawn, world.voxel_model)
 	_location_state.return_to_world()
 	if restore_from_defeat:
 		_restore_player_from_defeat(player.global_position)
 	game_environment.set_outdoor_presentation_enabled(true)
-	world.resume()
-	world_entity_coordinator.resume()
-	overworld_loot.resume()
 	_level_entrance.visible = true
 	_reset_camera_position()
 	_level_runtime.queue_free()
@@ -832,6 +845,7 @@ func _enter_structure_designer(draft: StructureDraft) -> void:
 	if in_level:
 		_level_runtime.suspend_simulation()
 	await _fade_to(1.0)
+	watcher_encounter.set_presentation_enabled(false)
 	if in_level:
 		_level_runtime.deactivate()
 	else:
@@ -896,6 +910,7 @@ func _restore_structure_lifecycle() -> void:
 		game_environment.restore_debug_panel_input()
 	if not snapshot.saving_was_suspended:
 		game_session.resume_saving()
+	watcher_encounter.set_presentation_enabled(true)
 	_structure_lifecycle_snapshot = null
 
 func _restore_structure_designer_for_shutdown() -> void:
@@ -1007,21 +1022,26 @@ func _teardown_level_runtime():
 	_level_runtime.queue_free()
 	_level_runtime = null
 
-func _bind_entity_context(space: VoxelSpace, runtime: EntityRuntime) -> void:
-	assert(space != null and runtime != null)
+func _bind_entity_context(space: VoxelSpace, runtime: EntityRuntime, position_ready: Callable) -> void:
+	assert(space != null and runtime != null and position_ready.is_valid())
 	_unbind_entity_context()
 	player.bind_entity_runtime(runtime)
 	slime_attachment_coordinator.bind_runtime(runtime)
 	melee_combat.bind_context(space, runtime)
 	enemy_combat_feedback.bind_runtime(runtime)
+	watcher_encounter.bind_context(space, runtime, position_ready)
 	runtime.entity_melee_contact_reached.connect(melee_combat.try_commit_entity_contact)
 	runtime.entity_radial_contact_reached.connect(melee_combat.try_commit_entity_radial_contact)
 	melee_combat.melee_outcome_committed.connect(runtime.record_melee_outcome)
+	melee_combat.melee_outcome_committed.connect(watcher_encounter.record_melee_outcome)
 	_active_entity_runtime = runtime
 
 func _unbind_entity_context() -> void:
 	if _active_entity_runtime == null:
 		return
+	if melee_combat.melee_outcome_committed.is_connected(watcher_encounter.record_melee_outcome):
+		melee_combat.melee_outcome_committed.disconnect(watcher_encounter.record_melee_outcome)
+	watcher_encounter.unbind_context()
 	slime_attachment_coordinator.unbind_runtime()
 	if _active_entity_runtime.entity_melee_contact_reached.is_connected(melee_combat.try_commit_entity_contact):
 		_active_entity_runtime.entity_melee_contact_reached.disconnect(melee_combat.try_commit_entity_contact)
@@ -1032,3 +1052,6 @@ func _unbind_entity_context() -> void:
 	enemy_combat_feedback.unbind_runtime()
 	melee_combat.unbind_context()
 	_active_entity_runtime = null
+
+func _is_active_level_position_ready(_position: Vector3) -> bool:
+	return _level_runtime != null

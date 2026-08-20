@@ -1,4 +1,4 @@
-[gd_scene load_steps=43 format=3 uid="uid://b22g4me0x1f3h"]
+[gd_scene load_steps=45 format=3 uid="uid://b22g4me0x1f3h"]
 
 [ext_resource type="Script" path="res://game/game.gd" id="1_game"]
 [ext_resource type="PackedScene" path="res://world/world.tscn" id="2_world"]
@@ -42,6 +42,8 @@
 [ext_resource type="Resource" path="res://combat/damage/damage_type_catalog.tres" id="40_damage_types"]
 [ext_resource type="Resource" path="res://foliage/foliage_catalog.tres" id="41_foliage_catalog"]
 [ext_resource type="Script" path="res://entities/slime/slime_attachment_coordinator.gd" id="42_slime_attachments"]
+[ext_resource type="Script" path="res://entities/watcher/watcher_encounter_coordinator.gd" id="43_watcher_encounter"]
+[ext_resource type="PackedScene" path="res://entities/watcher/presentation/watcher_screen_effect.tscn" id="44_watcher_effect"]
 
 [node name="Game" type="Node3D"]
 script = ExtResource("1_game")
@@ -81,6 +83,9 @@ script = ExtResource("14_entities")
 [node name="SlimeAttachments" type="Node" parent="."]
 script = ExtResource("42_slime_attachments")
 
+[node name="WatcherEncounter" type="Node" parent="."]
+script = ExtResource("43_watcher_encounter")
+
 [node name="OverworldLoot" type="Node3D" parent="."]
 script = ExtResource("38_loot_coordinator")
 
@@ -91,6 +96,8 @@ script = ExtResource("18_melee_combat")
 
 [node name="EnemyCombatFeedback" type="Node3D" parent="."]
 script = ExtResource("37_enemy_feedback")
+
+[node name="WatcherScreenEffect" parent="." instance=ExtResource("44_watcher_effect")]
 
 [node name="HUD" parent="." instance=ExtResource("6_hud")]
 
