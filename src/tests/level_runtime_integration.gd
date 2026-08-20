@@ -516,9 +516,13 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	coordinator.interaction_requested.connect(game._on_level_interaction_requested)
 	var entrance := LevelEntrance.new()
 	entrance.name = "TestLevelEntrance"
-	entrance.interaction_position = doorway_anchor + Vector3(1.0, 0.0, 0.0)
 	game.add_child(entrance)
+	entrance.setup(doorway_anchor, world_spawn, block_catalog, game.level_entrance_definition)
+	entrance.interaction_position = doorway_anchor + Vector3(1.0, 0.0, 0.0)
 	game._level_entrance = entrance
+	var door_open_player := entrance.get_node("DoorOpenSound") as AudioStreamPlayer
+	_expect(door_open_player != null and door_open_player.bus == &"SFX", "dungeon entrance door audio was not configured on the SFX bus")
+	_expect(door_open_player != null and not door_open_player.playing, "dungeon entrance door audio played before entry")
 	game._entrance_coordinate = Vector3i(floori(entrance.interaction_position.x), floori(entrance.interaction_position.y), floori(entrance.interaction_position.z))
 	game._show_world_level_interaction()
 	var inventory_identity := game.inventory_model
@@ -562,6 +566,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 			Vector3.FORWARD,
 		)
 		_expect(player.interactor._melee_attack_command != null, "transition test could not prepare an exact-source attack in cycle %d" % cycle)
+		var previous_door_open_stream := door_open_player.stream
 		await game._enter_level()
 		var runtime := game._level_runtime
 		var dungeon_entity_runtime := runtime.get_entity_runtime()
@@ -574,6 +579,9 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 			_expect(not transition_slime.is_attached() and slime_attachments.get_attached_count() == 0, "level entry retained the overworld slime attachment")
 			_expect(transition_slime.knockback_velocity.is_equal_approx(expected_transition_knockback), "level entry slime knockback was %s instead of pre-transition %s" % [transition_slime.knockback_velocity, expected_transition_knockback])
 			_expect(is_equal_approx(game.player_stats.get_value(&"movement_speed_multiplier"), 1.0), "level entry retained the overworld slime slow")
+		_expect(door_open_player.playing and game.level_entrance_definition.door_open_streams.has(door_open_player.stream), "level entry did not play configured door-open audio in cycle %d" % cycle)
+		if previous_door_open_stream != null:
+			_expect(door_open_player.stream != previous_door_open_stream, "consecutive level entries repeated the same door-open sound in cycle %d" % cycle)
 		_expect(game._location_state.is_in_level(), "Game location did not enter level in cycle %d" % cycle)
 		_expect(game._get_persisted_position().is_equal_approx(doorway_anchor), "indoor persisted position differs from doorway anchor in cycle %d" % cycle)
 		_expect(world.is_suspended() and manager._suspended and world.chunk_scheduler._suspended, "Game did not suspend world streaming in cycle %d" % cycle)

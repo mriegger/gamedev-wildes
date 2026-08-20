@@ -670,6 +670,7 @@ func _enter_level():
 	next_runtime.get_chest_coordinator().transfer_rejected.connect(_show_save_status)
 	next_runtime.set_player_context(player, camera_rig.camera)
 	var return_position := player.global_position
+	_level_entrance.play_door_open_sound()
 	player.set_physics_process(false)
 	input_buffer.clear_gameplay()
 	await _fade_to(1.0)

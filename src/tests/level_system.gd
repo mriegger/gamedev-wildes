@@ -128,6 +128,7 @@ func _test_catalog_and_modules() -> void:
 	if entrance_definition != null:
 		_expect(entrance_definition.entrance_id == &"meadow_dungeon" and entrance_definition.level_id == LEVEL_ID, "meadow entrance IDs changed")
 		_expect(entrance_definition.arch_block_id == BlockId.Type.STONE and entrance_definition.door_block_id == BlockId.Type.LOG, "meadow entrance blocks changed")
+		_expect(entrance_definition.door_open_streams.size() == 2, "meadow entrance door-open audio variations changed")
 	_expect(definition.start_module_id == &"stone_entry_path", "stone entry path is not the selected start module")
 	var entry_module := _catalog.get_module(definition.start_module_id)
 	_expect(entry_module.spawn_marker.cell == Vector3i(7, 1, 3) and entry_module.spawn_marker.facing == LevelSocketDefinition.Direction.EAST, "stone entry player spawn changed")

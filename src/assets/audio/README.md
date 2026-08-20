@@ -20,6 +20,7 @@
 - `sfx/farming/tilling/bookFlip*.ogg` provides three soil-tilling variations.
 - `sfx/farming/harvesting/pop_generic_*_CC0.wav` provides three crop-harvesting variations.
 - `sfx/items/consume/munch_crunchy_fruit_sequence_3x_CC0.wav` provides pumpkin consumption feedback.
+- `sfx/levels/dungeon/door/doorOpen_*.ogg` provides dungeon entrance door-opening variations.
 
 ## Attribution
 
@@ -46,3 +47,4 @@
 | `sfx/farming/tilling/bookFlip1.ogg` to `bookFlip3.ogg` (3 files) | [RPG Audio](https://kenney.nl/assets/rpg-audio) – Kenney | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) | Attribution, license notice, and source credit are not required under CC0; documented here for provenance. Verified 2026-07-30 against the canonical Game Dev Assets list. |
 | `sfx/farming/harvesting/pop_generic_01_CC0.wav` to `pop_generic_03_CC0.wav` (3 files) | Generic pop by Muse Spark | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) | Procedurally generated harvest feedback. Attribution is not legally required; documented here for provenance. |
 | `sfx/items/consume/munch_crunchy_fruit_sequence_3x_CC0.wav` | Apple crunched #5 and Eat a Rusk recordings by Joseph SARDIN, [BigSoundBank](https://bigsoundbank.com/); edited by Muse Spark | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) | Trimmed, high-pass filtered at 65 Hz, normalized to -1 dB, and exported as 48 kHz mono. Attribution is not legally required; documented here for provenance. |
+| `sfx/levels/dungeon/door/doorOpen_1.ogg` and `doorOpen_2.ogg` | [RPG Audio](https://kenney.nl/assets/rpg-audio) – Kenney | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) | Original 48 kHz stereo Ogg Vorbis files. Attribution, license notice, and source credit are not required under CC0; documented here for provenance. Verified 2026-07-30 against the canonical Game Dev Assets list and added 2026-07-30 17:16 UTC on its first Manifold mirror write. Re-review if the source license, asset provenance, generation lineage, or canonical guidance changes. |
