@@ -66,6 +66,7 @@ func setup(
 	_interactor.melee_attack_impacted.connect(_on_melee_attack_impacted)
 	_interactor.soil_tilled.connect(_on_soil_tilled)
 	_combat.melee_outcome_committed.connect(_on_melee_outcome_committed)
+	_combat.projectile_outcome_committed.connect(_on_projectile_outcome_committed)
 	_inventory.inventory_changed.connect(_on_inventory_changed)
 	if _clunk_player.stream == null and not _clunk_streams.is_empty():
 		_clunk_player.stream = _clunk_streams[0]
@@ -118,6 +119,9 @@ func _on_melee_outcome_committed(outcome: MeleeOutcome):
 		return
 	if contact.target_runtime_id == MeleeCombatCoordinator.PLAYER_RUNTIME_ID:
 		_last_player_hit_idx = _play_random(_player_hit_player, _player_hit_streams, _last_player_hit_idx, 0.96, 1.04)
+
+func _on_projectile_outcome_committed(_outcome: ProjectileOutcome) -> void:
+	_last_creature_hit_idx = _play_random(_creature_hit_player, _creature_hit_streams, _last_creature_hit_idx, 0.94, 1.06)
 
 
 func _on_inventory_changed():
@@ -181,6 +185,8 @@ func _exit_tree():
 			_interactor.soil_tilled.disconnect(_on_soil_tilled)
 	if _combat != null and _combat.melee_outcome_committed.is_connected(_on_melee_outcome_committed):
 		_combat.melee_outcome_committed.disconnect(_on_melee_outcome_committed)
+	if _combat != null and _combat.projectile_outcome_committed.is_connected(_on_projectile_outcome_committed):
+		_combat.projectile_outcome_committed.disconnect(_on_projectile_outcome_committed)
 	if _harvest != null and _harvest.harvest_completed.is_connected(_on_harvest_completed):
 		_harvest.harvest_completed.disconnect(_on_harvest_completed)
 	if _consumption != null and _consumption.item_consumed.is_connected(_on_item_consumed):

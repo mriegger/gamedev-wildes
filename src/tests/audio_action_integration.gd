@@ -104,6 +104,7 @@ func _run():
 	var has_melee_impact = false
 	var has_swing = false
 	var has_creature_hit = false
+	var has_projectile_hit = false
 	var has_inventory = false
 	var has_till = false
 	var has_harvest = false
@@ -123,6 +124,9 @@ func _run():
 	for c in combat.melee_outcome_committed.get_connections():
 		if c["callable"].get_object() == action_audio:
 			has_creature_hit = true
+	for c in combat.projectile_outcome_committed.get_connections():
+		if c["callable"].get_object() == action_audio:
+			has_projectile_hit = true
 	for c in inventory.inventory_changed.get_connections():
 		if c["callable"].get_object() == action_audio:
 			has_inventory = true
@@ -140,6 +144,7 @@ func _run():
 	_expect(has_melee_impact, "melee_attack_impacted not connected")
 	_expect(not has_swing, "melee_attack_started still connected to action audio")
 	_expect(has_creature_hit, "melee_outcome_committed not connected")
+	_expect(has_projectile_hit, "projectile_outcome_committed not connected")
 	_expect(has_inventory, "inventory_changed not connected")
 	_expect(has_till, "soil_tilled not connected")
 	_expect(has_harvest, "harvest_completed not connected")
@@ -202,6 +207,13 @@ func _run():
 	_expect(action_audio._creature_hit_streams.has(creature_hit.stream), "confirmed player contact did not select a creature hit sound")
 	_expect(creature_hit.pitch_scale >= 0.94 and creature_hit.pitch_scale <= 1.06, "creature hit pitch out of range %f" % creature_hit.pitch_scale)
 	_expect(player_hit.stream == null, "outgoing player contact played the incoming player hit sound")
+	creature_hit.stop()
+	creature_hit.stream = null
+	var projectile_contact := ProjectileContact.new(1, &"zombie", Vector3.ONE, Vector3.FORWARD)
+	combat.projectile_outcome_committed.emit(ProjectileOutcome.new(projectile_contact, &"bow", 1.0, false, DamageAffinityDefinition.Response.NEUTRAL))
+	await process_frame
+	_expect(action_audio._creature_hit_streams.has(creature_hit.stream), "confirmed arrow contact did not select a creature hit sound")
+	_expect(creature_hit.pitch_scale >= 0.94 and creature_hit.pitch_scale <= 1.06, "arrow creature hit pitch is out of range")
 	creature_hit.stop()
 	creature_hit.stream = null
 	var entity_contact := MeleeContact.new(1, &"zombie", 0, &"player", &"zombie_melee", Vector3.ONE, Vector3.LEFT)
