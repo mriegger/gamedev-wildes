@@ -21,7 +21,7 @@ func _run() -> void:
 	var save_data := SaveManager.create_new_world(_slot_id, TEST_SEED, "Foliage Join Test")
 	var game_scene := load("res://game/game.tscn") as PackedScene
 	_game = game_scene.instantiate() as Game
-	_world = _game.get_node("World") as WorldController
+	_world = _game.get_node("Overworld/World") as WorldController
 	_game.configure_session(_slot_id, save_data, GameSettings.new())
 	_world.generation_progress.connect(_on_generation_progress)
 	_game.session_ready.connect(_on_session_ready)
