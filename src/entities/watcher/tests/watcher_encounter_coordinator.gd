@@ -223,7 +223,7 @@ func _outcome(
 		PLAYER_POSITION,
 		Vector3.RIGHT,
 	)
-	return MeleeOutcomeType.new(contact, &"", 1.0, target_defeated)
+	return MeleeOutcomeType.new(contact, &"", 1.0, target_defeated, DamageAffinityDefinition.Response.NEUTRAL)
 
 func _bearing(position: Vector3, player_position: Vector3) -> Vector2:
 	return Vector2(position.x - player_position.x, position.z - player_position.z).normalized()

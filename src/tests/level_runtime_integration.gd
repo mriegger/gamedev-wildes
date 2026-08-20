@@ -443,7 +443,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 			persistent_watcher.global_position,
 			Vector3.RIGHT,
 		)
-		watcher_encounter.record_melee_outcome(MeleeOutcome.new(watcher_contact, &"", 1.0, false))
+		watcher_encounter.record_melee_outcome(MeleeOutcome.new(watcher_contact, &"", 1.0, false, DamageAffinityDefinition.Response.NEUTRAL))
 		_expect(persistent_watcher.is_aggressive(), "persistent Watcher fixture was not provoked")
 		_expect(watcher_encounter.get_tracked_count() == 1 and watcher_effect.visible, "persistent Watcher fixture did not activate its encounter")
 	game._location_state = GameplayLocationState.new(doorway_anchor)
