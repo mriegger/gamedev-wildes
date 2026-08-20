@@ -21,3 +21,4 @@ ambient_max_active = 0
 ambient_spawn_floor_ids = Array[int]([1, 2, 3, 4])
 ambient_despawn_outside_spawn_phase = false
 combat_targetable = true
+hostile_to_player = true

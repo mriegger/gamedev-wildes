@@ -511,6 +511,18 @@ func get_active_actors() -> Array[EntityActor]:
 			actors.append(actor as EntityActor)
 	return actors
 
+func get_hostile_positions_near(position: Vector3, radius: float) -> PackedVector3Array:
+	assert(position.is_finite())
+	assert(is_finite(radius) and radius >= 0.0)
+	var positions := PackedVector3Array()
+	if _suspended:
+		return positions
+	for runtime_id in _spatial_index.query_nearby(position, radius):
+		var actor := get_actor(runtime_id)
+		if actor != null and actor.definition.hostile_to_player:
+			positions.append(actor.global_position)
+	return positions
+
 func get_actor(runtime_id: int) -> EntityActor:
 	if _suspended:
 		return null

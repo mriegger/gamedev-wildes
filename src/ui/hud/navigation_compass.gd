@@ -4,12 +4,15 @@ const HALF_VIEW_DEGREES: float = 90.0
 const EDGE_INSET: float = 18.0
 const RULER_Y: float = 31.0
 const MENU_FADE_SECONDS: float = 0.08
+const ENEMY_MARKER_RADIUS: float = 25.0
+const ENEMY_FULL_OPACITY_DISTANCE: float = 5.0
 const LABELS: Array[String] = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
 
 var _camera: Camera3D
 var _tracked_position: Node3D
 var _target_position: Vector3
 var _has_target: bool = false
+var _enemy_positions := PackedVector3Array()
 var _menu_open: bool = false
 var _available: bool = true
 
@@ -34,6 +37,10 @@ func set_target_position(target_position: Vector3) -> void:
 
 func clear_target() -> void:
 	_has_target = false
+	queue_redraw()
+
+func set_enemy_positions(positions: PackedVector3Array) -> void:
+	_enemy_positions = positions
 	queue_redraw()
 
 func set_menu_open(open: bool) -> void:
@@ -81,11 +88,13 @@ func _draw() -> void:
 		Vector2(center_x + 4.0, 48.0),
 		Vector2(center_x, 42.0),
 	]), Color.WHITE)
+	for enemy_position in _enemy_positions:
+		_draw_enemy_marker(enemy_position, center_x, usable_width)
 	if _has_target:
-		_draw_target_marker(center_x, usable_width, font)
+		_draw_target_marker(center_x, usable_width)
 
-func _draw_target_marker(center_x: float, usable_width: float, font: Font) -> void:
-	var relative := _get_target_relative_bearing()
+func _draw_target_marker(center_x: float, usable_width: float) -> void:
+	var relative := _get_relative_bearing(_target_position)
 	var x := center_x + clampf(relative, -HALF_VIEW_DEGREES, HALF_VIEW_DEGREES) / HALF_VIEW_DEGREES * usable_width * 0.5
 	var color := Color(1.0, 0.72, 0.16, 1.0)
 	draw_colored_polygon(PackedVector2Array([
@@ -100,9 +109,30 @@ func _draw_target_marker(center_x: float, usable_width: float, font: Font) -> vo
 		Vector2(x, RULER_Y + 5.0),
 		Vector2(x - 5.0, RULER_Y),
 	]), color)
-	var label_width := font.get_string_size("D", HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x
-	draw_string_outline(font, Vector2(x - label_width * 0.5, 58.0), "D", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, 2, Color.BLACK)
-	draw_string(font, Vector2(x - label_width * 0.5, 58.0), "D", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, color)
+
+func _draw_enemy_marker(enemy_position: Vector3, center_x: float, usable_width: float) -> void:
+	var distance := Vector2(
+		enemy_position.x - _tracked_position.global_position.x,
+		enemy_position.z - _tracked_position.global_position.z,
+	).length()
+	var alpha := _get_enemy_marker_alpha(distance)
+	if is_zero_approx(alpha):
+		return
+	var relative := _get_relative_bearing(enemy_position)
+	var x := center_x + clampf(relative, -HALF_VIEW_DEGREES, HALF_VIEW_DEGREES) / HALF_VIEW_DEGREES * usable_width * 0.5
+	draw_colored_polygon(PackedVector2Array([
+		Vector2(x - 6.0, RULER_Y - 10.0),
+		Vector2(x + 6.0, RULER_Y - 10.0),
+		Vector2(x, RULER_Y - 1.0),
+	]), Color(0.0, 0.0, 0.0, alpha))
+	draw_colored_polygon(PackedVector2Array([
+		Vector2(x - 4.0, RULER_Y - 9.0),
+		Vector2(x + 4.0, RULER_Y - 9.0),
+		Vector2(x, RULER_Y - 3.0),
+	]), Color(0.92, 0.08, 0.08, alpha))
+
+func _get_enemy_marker_alpha(distance: float) -> float:
+	return clampf(inverse_lerp(ENEMY_MARKER_RADIUS, ENEMY_FULL_OPACITY_DISTANCE, distance), 0.0, 1.0)
 
 func _get_heading_degrees() -> float:
 	var forward := -_camera.global_transform.basis.z
@@ -112,8 +142,8 @@ func _get_heading_degrees() -> float:
 	forward = forward.normalized()
 	return fposmod(rad_to_deg(atan2(forward.x, -forward.z)), 360.0)
 
-func _get_target_relative_bearing() -> float:
-	var direction := _target_position - _tracked_position.global_position
+func _get_relative_bearing(position: Vector3) -> float:
+	var direction := position - _tracked_position.global_position
 	direction.y = 0.0
 	if direction.is_zero_approx():
 		return 0.0

@@ -98,6 +98,12 @@ func set_compass_target(position: Vector3) -> void:
 func clear_compass_target() -> void:
 	navigation_compass.clear_target()
 
+func set_compass_enemy_positions(positions: PackedVector3Array) -> void:
+	navigation_compass.set_enemy_positions(positions)
+
+func get_compass_enemy_radius() -> float:
+	return navigation_compass.ENEMY_MARKER_RADIUS
+
 func set_compass_available(available: bool) -> void:
 	navigation_compass.set_available(available)
 

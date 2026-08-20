@@ -17,3 +17,4 @@ body_height = 0.45
 ambient_spawn_enabled = false
 ambient_max_active = 0
 ambient_spawn_floor_ids = Array[int]([])
+hostile_to_player = true

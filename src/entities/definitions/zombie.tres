@@ -28,3 +28,4 @@ ambient_spawn_phase = 1
 ambient_max_active = 6
 ambient_spawn_weight = 100.0
 ambient_spawn_floor_ids = Array[int]([1, 2, 3, 4])
+hostile_to_player = true

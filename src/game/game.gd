@@ -593,6 +593,13 @@ func _physics_process(delta):
 		)
 		assert(observation != null)
 		world_entity_coordinator.tick(delta, observation, game_environment.get_time_of_day())
+	if _active_entity_runtime != null:
+		hud.set_compass_enemy_positions(
+			_active_entity_runtime.get_hostile_positions_near(
+				player.global_position,
+				hud.get_compass_enemy_radius(),
+			)
+		)
 
 func _on_level_interaction_requested():
 	if _level_transitioning or _structure_transitioning or _structure_designer_runtime != null or _location_state == null:

@@ -52,6 +52,8 @@ func _run() -> void:
 	_expect(first_ids == [1, 2], "valid batch did not return stable runtime IDs")
 	_expect(runtime.get_active_count() == 2, "valid batch did not commit every actor")
 	_expect(runtime.get_actor(2).definition.id == &"sheep", "explicit spawn incorrectly used ambient floor restrictions")
+	_expect(runtime.get_hostile_positions_near(Vector3(0.5, FEET_Y, 0.5), 3.0) == PackedVector3Array([Vector3(0.5, FEET_Y, 0.5)]), "nearby hostile query included a passive entity or omitted a hostile entity")
+	_expect(runtime.get_hostile_positions_near(Vector3(0.5, FEET_Y, 0.5), 0.0) == PackedVector3Array([Vector3(0.5, FEET_Y, 0.5)]), "zero-radius hostile query omitted an exact match")
 
 	var mixed_invalid: Array[EntitySpawnRequest] = [
 		_request(&"zombie", 4.5, 103),

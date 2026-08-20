@@ -31,6 +31,7 @@ enum SpawnPlacement {
 @export_range(1, 32, 1) var ambient_aerial_altitude_max_blocks: int = 14
 @export var ambient_despawn_outside_spawn_phase: bool = false
 @export var combat_targetable: bool = true
+@export var hostile_to_player: bool = false
 
 func validate(source: String) -> bool:
 	var valid := true
@@ -97,6 +98,9 @@ func validate(source: String) -> bool:
 		valid = false
 	if not combat_targetable and experience_reward != 0:
 		push_error("[EntityDefinition] Non-targetable entity %s rewards experience at %s" % [id, source])
+		valid = false
+	if hostile_to_player and not combat_targetable:
+		push_error("[EntityDefinition] Hostile entity %s is not combat-targetable at %s" % [id, source])
 		valid = false
 	for block_id in ambient_spawn_floor_ids:
 		if not BlockId.is_valid(block_id) or block_id in [BlockId.Type.AIR, BlockId.Type.WATER]:
