@@ -6,6 +6,7 @@ const EntitySpawnGeometryType := preload("res://entities/entity_spawn_geometry.g
 signal entity_melee_contact_reached(source_runtime_id: int, profile: MeleeAttackProfile)
 signal entity_radial_contact_reached(source_runtime_id: int, profile: MeleeAttackProfile)
 signal entity_defeated(defeat: EntityDefeat)
+signal entity_removed(runtime_id: int)
 signal water_surface_motion_committed(position: Vector3, planar_velocity: Vector2)
 
 const SPATIAL_CELL_SIZE: float = 4.0
@@ -354,6 +355,7 @@ func _remove_active_actor(runtime_id: int) -> EntityActor:
 	_damage_immunity_remaining_by_runtime_id.erase(runtime_id)
 	_spatial_index.remove(runtime_id)
 	_preparation_needed = true
+	entity_removed.emit(runtime_id)
 	if is_instance_valid(actor):
 		if actor.melee_contact_reached.is_connected(_on_actor_melee_contact_reached):
 			actor.melee_contact_reached.disconnect(_on_actor_melee_contact_reached)
@@ -490,6 +492,16 @@ func get_active_lineage_count(root_definition_id: StringName) -> int:
 	assert(_catalog != null and _catalog.has_definition(root_definition_id))
 	return int(_active_lineage_count_by_root_definition.get(root_definition_id, 0))
 
+func get_active_runtime_ids_for_definition(definition_id: StringName) -> Array[int]:
+	assert(_catalog != null and _catalog.has_definition(definition_id))
+	var runtime_ids: Array[int] = []
+	for runtime_id in _active:
+		var actor := _active[runtime_id] as EntityActor
+		if is_instance_valid(actor) and actor.definition.id == definition_id:
+			runtime_ids.append(runtime_id)
+	runtime_ids.sort()
+	return runtime_ids
+
 func get_active_actors() -> Array[EntityActor]:
 	var actors: Array[EntityActor] = []
 	if _suspended:
@@ -514,6 +526,20 @@ func try_relocate_actor(runtime_id: int, position: Vector3) -> bool:
 	actor.global_position = position
 	_spatial_index.upsert(runtime_id, position, actor.get_world_bounds())
 	return true
+
+func try_teleport_actor(runtime_id: int, position: Vector3) -> bool:
+	if not position.is_finite():
+		return false
+	var actor := get_actor(runtime_id)
+	if actor == null or actor.definition == null:
+		return false
+	if not EntitySpawnGeometryType.can_spawn(_voxel_space, actor.definition, position):
+		return false
+	var bounds := EntitySpawnGeometryType.get_bounds(actor.definition, position)
+	for overlapping_runtime_id in _spatial_index.query_overlapping(bounds):
+		if overlapping_runtime_id != runtime_id:
+			return false
+	return try_relocate_actor(runtime_id, position)
 
 func get_presented_actor(runtime_id: int) -> EntityActor:
 	var active_actor := _active.get(runtime_id) as EntityActor

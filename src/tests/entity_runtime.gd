@@ -6,6 +6,7 @@ const TEST_RADIUS: int = 8
 
 var _failures: int = 0
 var _defeated: Array[EntityDefeat] = []
+var _removed_runtime_ids: Array[int] = []
 
 func _init() -> void:
 	call_deferred("_run")
@@ -31,12 +32,17 @@ func _request(definition_id: StringName, x: float, seed: int) -> EntitySpawnRequ
 func _on_entity_defeated(defeat: EntityDefeat) -> void:
 	_defeated.append(defeat)
 
+func _on_entity_removed(runtime_id: int) -> void:
+	_removed_runtime_ids.append(runtime_id)
+
 func _run() -> void:
 	var runtime := EntityRuntime.new()
 	root.add_child(runtime)
 	var catalog := load("res://entities/entity_catalog.tres") as EntityCatalog
-	runtime.setup(catalog, _make_world(), 3, 3, EntityNavigationLimits.new(48, 2048, 2))
+	var world := _make_world()
+	runtime.setup(catalog, world, 3, 3, EntityNavigationLimits.new(48, 2048, 2))
 	runtime.entity_defeated.connect(_on_entity_defeated)
+	runtime.entity_removed.connect(_on_entity_removed)
 
 	var first_batch: Array[EntitySpawnRequest] = [
 		_request(&"zombie", 0.5, 101),
@@ -63,12 +69,45 @@ func _run() -> void:
 	var over_capacity: Array[EntitySpawnRequest] = [_request(&"zombie", 6.5, 108)]
 	_expect(runtime.try_spawn_batch(over_capacity).is_empty(), "runtime accepted a batch beyond its active cap")
 
+	var third_actor := runtime.get_actor(3)
+	var original_position := third_actor.global_position
+	var original_bounds := third_actor.get_world_bounds()
+	_expect(not runtime.try_teleport_actor(3, runtime.get_actor(2).global_position), "strict teleport accepted an occupied destination")
+	_expect(third_actor.global_position == original_position, "rejected occupied teleport moved the actor")
+	_expect(runtime.get_active_runtime_ids_overlapping(original_bounds).has(3), "occupied teleport rejection lost the original spatial entry")
+	_expect(not runtime.get_active_runtime_ids_overlapping(runtime.get_actor(2).get_world_bounds()).has(3), "occupied teleport rejection indexed the actor at its destination")
+	var unsupported_position := Vector3(6.5, FEET_Y + 1.0, 0.5)
+	var unsupported_bounds := EntitySpawnGeometry.get_bounds(third_actor.definition, unsupported_position)
+	_expect(not runtime.try_teleport_actor(3, unsupported_position), "strict teleport accepted an unsupported destination")
+	_expect(third_actor.global_position == original_position, "rejected unsupported teleport moved the actor")
+	_expect(runtime.get_active_runtime_ids_overlapping(original_bounds).has(3), "unsupported teleport rejection lost the original spatial entry")
+	_expect(not runtime.get_active_runtime_ids_overlapping(unsupported_bounds).has(3), "unsupported teleport rejection indexed the actor at its destination")
+	world.height_map_dict[Vector2i(6, 0)] = FLOOR_Y + 1
+	var obstructed_position := Vector3(6.5, FEET_Y, 0.5)
+	var obstructed_bounds := EntitySpawnGeometry.get_bounds(third_actor.definition, obstructed_position)
+	_expect(not runtime.try_teleport_actor(3, obstructed_position), "strict teleport accepted an obstructed destination")
+	_expect(third_actor.global_position == original_position, "rejected obstructed teleport moved the actor")
+	_expect(runtime.get_active_runtime_ids_overlapping(original_bounds).has(3), "obstructed teleport rejection lost the original spatial entry")
+	_expect(not runtime.get_active_runtime_ids_overlapping(obstructed_bounds).has(3), "obstructed teleport rejection indexed the actor at its destination")
+	world.height_map_dict[Vector2i(6, 0)] = FLOOR_Y
+	var teleport_position := Vector3(6.5, FEET_Y, 0.5)
+	_expect(runtime.try_teleport_actor(3, teleport_position), "strict teleport rejected a clear destination")
+	_expect(third_actor.global_position == teleport_position, "successful teleport did not move the actor")
+	_expect(not runtime.get_active_runtime_ids_overlapping(original_bounds).has(3), "successful teleport retained the old spatial entry")
+	_expect(runtime.get_active_runtime_ids_overlapping(third_actor.get_world_bounds()).has(3), "successful teleport omitted the new spatial entry")
+	runtime.suspend()
+	_expect(runtime.get_active_runtime_ids_for_definition(&"zombie") == [1, 3], "suspended definition query lost active runtime IDs")
+	_expect(runtime.get_active_runtime_ids_for_definition(&"sheep") == [2], "suspended definition query returned the wrong species")
+	runtime.resume()
+
 	_expect(runtime.try_despawn(1), "active actor refused ordinary despawn")
 	_expect(_defeated.is_empty(), "ordinary despawn emitted an entity defeat")
+	_expect(_removed_runtime_ids == [1], "ordinary despawn did not emit one removal")
 	var lethal := runtime.try_apply_damage(2, 1000.0)
 	_expect(lethal != null and lethal.defeated, "lethal explicit damage was not committed")
 	_expect(runtime.get_actor(2) == null, "defeated actor remained active")
 	_expect(_defeated.size() == 1, "defeat did not emit exactly once")
+	_expect(_removed_runtime_ids == [1, 2], "lethal defeat did not emit one removal")
 	if _defeated.size() == 1:
 		_expect(_defeated[0].runtime_id == 2 and _defeated[0].definition_id == &"sheep", "defeat signal identified the wrong actor")
 		_expect(_defeated[0].world_position == Vector3(2.5, FEET_Y, 0.5), "defeat signal lost the actor position")
@@ -76,6 +115,7 @@ func _run() -> void:
 
 	runtime.shutdown()
 	_expect(_defeated.size() == 1, "shutdown emitted an entity defeat")
+	_expect(_removed_runtime_ids == [1, 2], "shutdown emitted an entity removal")
 	runtime.queue_free()
 	await process_frame
 	await process_frame
