@@ -15,6 +15,7 @@ var _config: WorldConfig
 var _block_catalog: BlockCatalog
 var _foliage_catalog: FoliageCatalog
 var _generator: TerrainGenerator
+var _visibility_changes: Array[Vector3i] = []
 
 func _init() -> void:
 	call_deferred("_run")
@@ -50,6 +51,7 @@ func _run() -> void:
 	_test_seed_variance(payloads)
 	_expect(total_foliage > 0, "test region generated no foliage")
 	if found_first:
+		_test_tree_visibility_reconciliation(first_coord, first_position, payloads[first_coord] as Dictionary)
 		_test_atomic_foliage_clearance(first_coord, payloads[first_coord] as Dictionary)
 		_test_authoritative_state(first_coord, first_position, payloads[first_coord] as Dictionary)
 	if _errors.is_empty():
@@ -65,7 +67,7 @@ func _make_generator(config: WorldConfig) -> TerrainGenerator:
 	generator.setup_noises()
 	return generator
 
-func _build_payload(generator: TerrainGenerator, config: WorldConfig, coord: Vector2i, removed: Dictionary = {}, foliage_clearance: Dictionary = {}) -> Dictionary:
+func _build_payload(generator: TerrainGenerator, config: WorldConfig, coord: Vector2i, removed: Dictionary = {}, foliage_clearance: Dictionary = {}, existing_trees: Dictionary = {}) -> Dictionary:
 	return generator.build_cache_with_generation(
 		coord.x * config.chunk_size,
 		coord.y * config.chunk_size,
@@ -73,12 +75,40 @@ func _build_payload(generator: TerrainGenerator, config: WorldConfig, coord: Vec
 		config.max_build_y,
 		{},
 		removed,
-		{},
+		existing_trees,
 		false,
 		{},
 		false,
 		foliage_clearance
 	)
+
+func _test_tree_visibility_reconciliation(coord: Vector2i, position: Vector3i, payload: Dictionary) -> void:
+	var tree_blocks: Dictionary = {position: BlockId.Type.LEAVES}
+	var generated_with_tree := _build_payload(_make_generator(_config), _config, coord, {}, {}, tree_blocks)
+	_expect((generated_with_tree["foliage_block_fast"] as Dictionary) == (payload["foliage_block_fast"] as Dictionary), "tree snapshot changed deterministic foliage generation")
+	_expect(not _sparse_foliage(generated_with_tree).has(position), "known cross-chunk tree remained in the foliage mesh snapshot")
+	var tree_owner := coord + Vector2i.LEFT
+	var tree_payload := {"tree_block_fast": tree_blocks}
+	var foliage_first := VoxelWorld.new(_config.chunk_size, _config.max_build_y, _config.water_level, _config.meadow_radius, _block_catalog)
+	foliage_first.apply_chunk_gen_for_coord(tree_owner, {})
+	foliage_first.apply_chunk_gen_for_coord(coord, payload)
+	foliage_first.apply_foliage_chunk_for_coord(coord, payload)
+	_visibility_changes.clear()
+	foliage_first.foliage_visibility_changed.connect(_record_foliage_visibility_changes)
+	foliage_first.apply_tree_chunk_for_coord(tree_owner, tree_payload)
+	_expect(foliage_first.foliage_block_fast.has(position), "tree application discarded deterministic foliage state")
+	_expect(not _unpack_foliage(foliage_first.get_visible_foliage_cells_for_chunk(coord)).has(position), "late cross-chunk tree left foliage visible")
+	_expect(_visibility_changes.has(position), "late cross-chunk tree did not announce the foliage visibility change")
+	_visibility_changes.clear()
+	foliage_first.max_terrain_cache_chunks = 1
+	_expect(foliage_first.prune_terrain_cache(1) == 1, "cross-chunk tree owner did not evict")
+	_expect(_unpack_foliage(foliage_first.get_visible_foliage_cells_for_chunk(coord)).has(position), "foliage did not return after its cross-chunk tree unloaded")
+	_expect(_visibility_changes.has(position), "cross-chunk tree unload did not announce the foliage visibility change")
+	var tree_first := VoxelWorld.new(_config.chunk_size, _config.max_build_y, _config.water_level, _config.meadow_radius, _block_catalog)
+	tree_first.apply_tree_chunk_for_coord(tree_owner, tree_payload)
+	tree_first.apply_foliage_chunk_for_coord(coord, payload)
+	_expect(tree_first.foliage_block_fast.has(position), "early cross-chunk tree discarded deterministic foliage state")
+	_expect(not _unpack_foliage(tree_first.get_visible_foliage_cells_for_chunk(coord)).has(position), "early cross-chunk tree left foliage visible")
 
 func _validate_payload(coord: Vector2i, payload: Dictionary) -> void:
 	var foliage := payload["foliage_block_fast"] as Dictionary
@@ -273,7 +303,6 @@ func _test_foliage_eviction(coord: Vector2i, position: Vector3i, payload: Dictio
 	var world := _make_world(coord, payload)
 	world.max_terrain_cache_chunks = 0
 	_expect(world.prune_terrain_cache(1) == 1, "foliage chunk did not evict with terrain")
-	_expect(not world.generated_foliage_chunks.has(coord), "eviction retained foliage generation marker")
 	_expect(not world.foliage_chunks_fast.has(coord), "eviction retained foliage chunk index")
 	_expect(not world.foliage_block_fast.has(position), "eviction retained foliage block state")
 	var regenerated := _build_payload(_generator, _config, coord)
@@ -323,6 +352,9 @@ func _unpack_foliage(cells: PackedInt32Array) -> Dictionary:
 	for offset in range(0, cells.size(), FoliageCellSnapshot.STRIDE):
 		result[Vector3i(cells[offset], cells[offset + 1], cells[offset + 2])] = cells[offset + 3]
 	return result
+
+func _record_foliage_visibility_changes(cells: Array[Vector3i]) -> void:
+	_visibility_changes.append_array(cells)
 
 func _expect(condition: bool, message: String) -> void:
 	if not condition:

@@ -37,6 +37,7 @@ func _run() -> void:
 	var foliage_data: Variant = _test_crossed_quad_mesh(cache["foliage_cells"] as PackedInt32Array)
 	if foliage_data != null:
 		await _test_renderer_lifecycle(cache, foliage_data)
+		await _test_stale_foliage_result(cache, foliage_data)
 	_finish()
 
 func _test_texture_layers() -> void:
@@ -118,7 +119,8 @@ func _test_renderer_lifecycle(cache: Dictionary, foliage_data: Dictionary) -> vo
 	root.add_child(renderer)
 	renderer.setup(_chunk_mesher, _foliage_mesher, terrain_material, StandardMaterial3D.new(), foliage_material, world, 0)
 	var coord := Vector2i.ZERO
-	renderer.apply_result(_make_result(coord, terrain_data, foliage_data))
+	var foliage_cells := cache["foliage_cells"] as PackedInt32Array
+	renderer.apply_result(_make_result(coord, terrain_data, foliage_cells, foliage_data))
 	_expect(renderer._terrain_instances.has(coord), "terrain instance was not created")
 	_expect(renderer._foliage_instances.has(coord), "foliage instance was not created")
 	var foliage_instance := renderer._foliage_instances.get(coord, null) as MeshInstance3D
@@ -154,10 +156,10 @@ func _test_renderer_lifecycle(cache: Dictionary, foliage_data: Dictionary) -> vo
 	_expect(foliage_instance != null and foliage_instance.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF, "distant foliage enabled shadows")
 	renderer.set_shadow_center(Vector2i.ZERO)
 	_expect(foliage_instance != null and foliage_instance.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF, "near foliage enabled shadows")
-	renderer.apply_result(_make_result(coord, terrain_data, null))
+	renderer.apply_result(_make_result(coord, terrain_data, PackedInt32Array(), null))
 	_expect(not renderer._foliage_instances.has(coord), "null foliage result left a stale instance")
 	_expect(renderer._foliage_pool.size() == 1, "released foliage instance did not enter the pool")
-	renderer.apply_result(_make_result(coord, terrain_data, foliage_data))
+	renderer.apply_result(_make_result(coord, terrain_data, foliage_cells, foliage_data))
 	_expect(renderer._foliage_instances.has(coord), "foliage instance was not recreated from the pool")
 	_expect(renderer._foliage_pool.is_empty(), "foliage pool was not reused")
 	renderer.unload(coord)
@@ -173,6 +175,28 @@ func _test_renderer_lifecycle(cache: Dictionary, foliage_data: Dictionary) -> vo
 		renderer._cache_terrain_mesh(Vector2i(index, 1), terrain_mesh)
 	_expect(renderer._mesh_cache.size() == ChunkRenderer.MAX_MESH_CACHE, "foliage-capable mesh cache exceeded its bound")
 	_expect(not renderer._mesh_cache.has(Vector2i(0, 1)), "mesh cache did not evict its oldest coordinate")
+	renderer.queue_free()
+	await process_frame
+
+func _test_stale_foliage_result(cache: Dictionary, foliage_data: Dictionary) -> void:
+	var terrain_data: Variant = _chunk_mesher.build_mesh_data_from_cache(cache)
+	var world := VoxelWorld.new(SPECIES_IDS.size(), 3, 0, 0.0, _block_catalog)
+	var renderer := ChunkRenderer.new()
+	root.add_child(renderer)
+	renderer.setup(_chunk_mesher, _foliage_mesher, StandardMaterial3D.new(), StandardMaterial3D.new(), StandardMaterial3D.new(), world, 0)
+	var foliage_cells := cache["foliage_cells"] as PackedInt32Array
+	var blocked_position := Vector3i(foliage_cells[0], foliage_cells[1], foliage_cells[2])
+	var tree_blocks: Dictionary = {blocked_position: BlockId.Type.LEAVES}
+	world.apply_tree_chunk_for_coord(Vector2i.LEFT, {"tree_block_fast": tree_blocks})
+	renderer.apply_result(_make_result(Vector2i.ZERO, terrain_data, foliage_cells, foliage_data))
+	var foliage_instance := renderer._foliage_instances.get(Vector2i.ZERO, null) as MeshInstance3D
+	_expect(foliage_instance != null, "stale foliage reconciliation removed unaffected plants")
+	if foliage_instance != null:
+		var foliage_mesh := foliage_instance.mesh as ArrayMesh
+		_expect(foliage_mesh != null, "stale foliage reconciliation produced no mesh")
+		if foliage_mesh != null:
+			var vertices := foliage_mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX] as PackedVector3Array
+			_expect(vertices.size() == (SPECIES_IDS.size() - 1) * FoliageMesher.VERTICES_PER_CELL, "stale worker foliage mesh ignored authoritative tree occupancy")
 	renderer.queue_free()
 	await process_frame
 
@@ -204,8 +228,11 @@ func _make_cache() -> Dictionary:
 		"foliage_cells": foliage_cells,
 	}
 
-func _make_result(coord: Vector2i, terrain_data: Variant, foliage_data: Variant) -> ChunkBuildResult:
-	return ChunkBuildResult.new(coord, 0, false, {}, terrain_data, null, foliage_data)
+func _make_result(coord: Vector2i, terrain_data: Variant, foliage_cells: PackedInt32Array, foliage_data: Variant) -> ChunkBuildResult:
+	var foliage_blocks: Dictionary = {}
+	for offset in range(0, foliage_cells.size(), FoliageCellSnapshot.STRIDE):
+		foliage_blocks[Vector3i(foliage_cells[offset], foliage_cells[offset + 1], foliage_cells[offset + 2])] = foliage_cells[offset + 3]
+	return ChunkBuildResult.new(coord, 0, false, {"foliage_block_fast": foliage_blocks}, terrain_data, null, foliage_cells, foliage_data)
 
 func _finish() -> void:
 	if _errors.is_empty():

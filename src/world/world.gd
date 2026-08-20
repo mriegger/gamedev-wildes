@@ -88,7 +88,7 @@ func _create_world_model(generation: Dictionary):
 	for pos in _start_state.removed_blocks:
 		voxel_model.tree_block_fast.erase(pos)
 	voxel_model.block_edit_committed.connect(_on_block_edit_committed)
-	voxel_model.foliage_clearance_changed.connect(_on_foliage_clearance_changed)
+	voxel_model.foliage_visibility_changed.connect(_on_foliage_visibility_changed)
 
 func _setup_systems():
 	chunk_mesher = ChunkMesher.new(config.chunk_size, config.max_build_y, config.seed_value, config.enable_ao, block_texture_set)
@@ -201,15 +201,26 @@ func _on_block_edit_committed(edit: BlockEdit):
 		chunk_manager.queue_rebuild_for_world_pos(edit.pos)
 	elif edit.is_mine() and edit.old_id == BlockId.Type.CAMPFIRE:
 		campfire_renderer.remove_campfire(edit.pos)
+		_refresh_emplacement_foliage(edit.pos, edit.old_id)
 	elif edit.new_id == BlockId.Type.CAMPFIRE:
 		if chunk_manager.visible_chunks.has(edit_chunk):
 			campfire_renderer.spawn_campfire(edit.pos)
+		_refresh_emplacement_foliage(edit.pos, edit.new_id)
 	elif _is_foliage_only_edit(edit):
 		chunk_manager.refresh_foliage(edit_chunk, voxel_model.get_visible_foliage_cells_for_chunk(edit_chunk))
 	else:
 		chunk_manager.queue_rebuild_for_world_pos(edit.pos)
+	if BlockId.is_foliage(edit.old_id) and edit.new_id != BlockId.Type.AIR and not BlockId.is_foliage(edit.new_id) and edit.new_id != BlockId.Type.CAMPFIRE:
+		chunk_manager.refresh_foliage(edit_chunk, voxel_model.get_visible_foliage_cells_for_chunk(edit_chunk))
 
-func _on_foliage_clearance_changed(cells: Array[Vector3i]) -> void:
+func _refresh_emplacement_foliage(anchor: Vector3i, block_id: int) -> void:
+	var definition := block_catalog.get_definition(block_id)
+	var cells: Array[Vector3i] = []
+	for offset in definition.emplacement.occupied_offsets:
+		cells.append(anchor + offset)
+	_on_foliage_visibility_changed(cells)
+
+func _on_foliage_visibility_changed(cells: Array[Vector3i]) -> void:
 	var changed_chunks: Dictionary = {}
 	for position in cells:
 		changed_chunks[ChunkCoord.world_to_chunk_vec3i(position, config.chunk_size)] = true

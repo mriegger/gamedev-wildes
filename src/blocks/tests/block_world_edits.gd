@@ -32,7 +32,16 @@ func _init() -> void:
 	_expect(VoxelWorldTestFixture.commit_mine(world, missing_support) != null, "campfire support could not be removed")
 	_expect(world.prepare_place_emplacement(anchor, BlockId.Type.CAMPFIRE) == null, "campfire placed on incomplete support")
 	_expect(VoxelWorldTestFixture.commit_place(world, missing_support, BlockId.Type.STONE) != null, "campfire support could not be restored")
+	var replaced_foliage := {
+		anchor: BlockId.Type.SHORT_GRASS,
+		anchor + Vector3i.RIGHT: BlockId.Type.BLUE_WILDFLOWER,
+	}
+	world.apply_foliage_chunk_for_coord(Vector2i.ZERO, {"foliage_block_fast": replaced_foliage})
 	_expect(VoxelWorldTestFixture.commit_place_emplacement(world, anchor, BlockId.Type.CAMPFIRE) != null, "campfire 3x3 placement failed")
+	var placed_edits := world.snapshot_block_edits()
+	for foliage_cell in replaced_foliage:
+		_expect((placed_edits["removed"] as Dictionary).has(foliage_cell), "campfire placement did not persist replaced foliage")
+		_expect(not world.foliage_block_fast.has(foliage_cell), "campfire placement retained replaced foliage state")
 	for offset in campfire.emplacement.occupied_offsets:
 		var cell: Vector3i = anchor + offset
 		_expect(world.get_block_id_at(cell) == BlockId.Type.CAMPFIRE and world.is_raycast_solid(cell), "campfire footprint was not reserved")
@@ -60,6 +69,8 @@ func _init() -> void:
 	var campfire_mining := VoxelWorldTestFixture.commit_mine(world, anchor + Vector3i(-1, 0, -1))
 	var campfire_mining_edits := campfire_mining.get_edits() if campfire_mining != null else []
 	_expect(campfire_mining_edits.size() == 1 and campfire_mining_edits[0].old_id == BlockId.Type.CAMPFIRE and campfire_mining_edits[0].pos == anchor, "outer-cell mining did not remove one anchored campfire")
+	for foliage_cell in replaced_foliage:
+		_expect(world.get_block_id_at(foliage_cell) == BlockId.Type.AIR, "replaced foliage returned after campfire mining")
 	_expect(VoxelWorldTestFixture.commit_place_emplacement(world, anchor, BlockId.Type.CAMPFIRE) != null, "campfire could not be replaced")
 	var support_mining := VoxelWorldTestFixture.commit_mine(world, anchor + Vector3i.DOWN)
 	var support_mining_edits := support_mining.get_edits() if support_mining != null else []

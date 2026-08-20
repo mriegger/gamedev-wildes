@@ -251,15 +251,17 @@ func _build(job: ChunkBuildJob) -> ChunkBuildResult:
 		return null
 	var terrain_data: Variant = null
 	var water_data: Variant = null
+	var foliage_cells := PackedInt32Array()
 	var foliage_data: Variant = null
 	if not job.terrain_only:
 		var cache := payload["cache_dict"] as Dictionary
-		foliage_data = _foliage_mesher.build_mesh_data(cache["foliage_cells"] as PackedInt32Array)
+		foliage_cells = cache["foliage_cells"] as PackedInt32Array
+		foliage_data = _foliage_mesher.build_mesh_data(foliage_cells)
 		payload.erase("cache_dict")
 		var mesh_data := _mesher.build_combined_mesh_data(cache)
 		terrain_data = mesh_data["terrain"]
 		water_data = mesh_data["water"]
-	return ChunkBuildResult.new(job.coord, job.generation, job.terrain_only, payload, terrain_data, water_data, foliage_data)
+	return ChunkBuildResult.new(job.coord, job.generation, job.terrain_only, payload, terrain_data, water_data, foliage_cells, foliage_data)
 
 func _is_current(coord: Vector2i, generation: int) -> bool:
 	_state_mutex.lock()

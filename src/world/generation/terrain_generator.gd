@@ -736,7 +736,7 @@ func build_cache_with_generation(
 				continue
 			if h < config.water_level or candidate.y >= size_y:
 				continue
-			if existing_tree_snap.has(candidate) or out_tree_fast.has(candidate):
+			if out_tree_fast.has(candidate):
 				continue
 			var biome := biome_dict[key] as Biome
 			var foliage_block_id := _foliage_generator.select_block_id(x, z, biome.foliage_density)
@@ -782,7 +782,7 @@ func build_cache_with_generation(
 			if foliage_clearance_snap.has(position):
 				continue
 			visible_foliage[position] = out_foliage_fast[position]
-		var overlays: Array[Dictionary] = [existing_copper_snap, out_copper_fast, existing_tree_snap, out_tree_fast, visible_foliage]
+		var overlays: Array[Dictionary] = [existing_copper_snap, out_copper_fast, visible_foliage, existing_tree_snap, out_tree_fast]
 		for overlay in overlays:
 			for position in overlay:
 				if not position is Vector3i:

@@ -254,7 +254,8 @@ func _handle_raycast():
 	var placement_action := get_selected_placement_action()
 	if editable_voxel_world != null and placement_action != null:
 		if placement_action.block.emplacement != null:
-			if not editable_voxel_world.is_edit_protected(best_place) and voxel_space.get_block_at(best_place) == null:
+			var existing_id := voxel_space.get_block_id_at(best_place)
+			if not editable_voxel_world.is_edit_protected(best_place) and (existing_id == BlockId.Type.AIR or voxel_space.block_catalog.get_definition(existing_id).is_replaceable):
 				placement_has = true
 				can_place_target = motor_pos.distance_squared_to(Vector3(best_place.x + 0.5, best_place.y + 0.5, best_place.z + 0.5)) <= reach_squared and _can_place_emplacement_geometry(best_place, placement_action.block)
 		else:

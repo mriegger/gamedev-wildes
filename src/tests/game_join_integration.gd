@@ -56,12 +56,12 @@ func _on_generation_progress(stage: String, _percent: float, _details: String) -
 		return
 	_world_generation_done = true
 	_world_was_inert_at_generation = not _world.is_processing() and _world._player_ref == null
-	_world.voxel_model.foliage_clearance_changed.connect(_on_foliage_clearance_changed)
+	_world.voxel_model.foliage_visibility_changed.connect(_on_foliage_visibility_changed)
 
 func _on_session_ready() -> void:
 	_session_ready = true
 
-func _on_foliage_clearance_changed(cells: Array[Vector3i]) -> void:
+func _on_foliage_visibility_changed(cells: Array[Vector3i]) -> void:
 	for position in cells:
 		if _world.voxel_model.foliage_block_fast.has(position):
 			_covered_foliage_count += 1
