@@ -197,7 +197,9 @@ use materials from the backpack and hotbar and craft immediately when the enable
 pressed, playing one success sound. Apples and pumpkins each restore 10% of maximum health, while
 health potions restore health completely.
 
-**Developer console.** Press `/` to open a command line at the bottom of the screen. The
+**Developer console.** Press `/` to open a command line at the bottom of the screen. Submitted
+commands remain available for the current game session; use `Up` and `Down` to browse them without
+losing an unfinished command. The
 `spawn <item> [count]` command adds any catalog item directly to the backpack for testing, with the
 count defaulting to one when omitted. `sethealth <number>` sets current health to a non-negative
 value, clamping values above the player's current maximum. Item IDs and display names are accepted;

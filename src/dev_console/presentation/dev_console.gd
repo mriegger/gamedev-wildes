@@ -3,10 +3,15 @@ class_name DevConsole
 
 signal open_state_changed(open: bool)
 
+const MAX_COMMAND_HISTORY_ENTRIES: int = 100
+
 @onready var _console_root: Control = $ConsoleRoot as Control
 @onready var _command_input: LineEdit = $ConsoleRoot/ConsolePanel/CommandRow/CommandInput as LineEdit
 
 var _command_processor: DevConsoleCommandProcessor
+var _command_history: Array[String] = []
+var _history_cursor: int = 0
+var _history_draft: String = ""
 
 func _ready() -> void:
 	_console_root.visible = false
@@ -47,11 +52,20 @@ func _input(event: InputEvent) -> void:
 		toggle()
 		get_viewport().set_input_as_handled()
 		return
-	if is_open() and event is InputEventKey and event.pressed and not event.echo:
-		var key_event := event as InputEventKey
-		if key_event.keycode == KEY_ESCAPE or key_event.physical_keycode == KEY_ESCAPE:
-			close()
-			get_viewport().set_input_as_handled()
+	if not is_open() or not event is InputEventKey or not event.pressed:
+		return
+	var key_event := event as InputEventKey
+	if _is_key(key_event, KEY_UP):
+		_recall_older_command()
+		get_viewport().set_input_as_handled()
+		return
+	if _is_key(key_event, KEY_DOWN):
+		_recall_newer_command()
+		get_viewport().set_input_as_handled()
+		return
+	if not event.echo and _is_key(key_event, KEY_ESCAPE):
+		close()
+		get_viewport().set_input_as_handled()
 
 func toggle() -> void:
 	if is_open():
@@ -64,6 +78,7 @@ func open() -> void:
 		return
 	_console_root.visible = true
 	_command_input.clear()
+	_reset_history_navigation()
 	_command_input.call_deferred("grab_focus")
 	open_state_changed.emit(true)
 
@@ -72,6 +87,7 @@ func close() -> void:
 		return
 	_command_input.release_focus()
 	_command_input.clear()
+	_reset_history_navigation()
 	_console_root.visible = false
 	open_state_changed.emit(false)
 
@@ -90,9 +106,47 @@ func get_console_root() -> Control:
 	return _console_root
 
 func _on_command_submitted(command_line: String) -> void:
+	_record_command(command_line)
 	var result := submit_command(command_line)
 	if result == DevConsoleCommandProcessor.ExecutionResult.CLOSE:
 		close()
 		return
 	_command_input.clear()
 	_command_input.call_deferred("grab_focus")
+
+func _record_command(command_line: String) -> void:
+	if not command_line.strip_edges().is_empty():
+		_command_history.append(command_line)
+		if _command_history.size() > MAX_COMMAND_HISTORY_ENTRIES:
+			_command_history.pop_front()
+	_reset_history_navigation()
+
+func _recall_older_command() -> void:
+	if _command_history.is_empty():
+		return
+	if _history_cursor == _command_history.size():
+		_history_draft = _command_input.text
+	if _history_cursor > 0:
+		_history_cursor -= 1
+	_set_command_input_text(_command_history[_history_cursor])
+
+func _recall_newer_command() -> void:
+	if _history_cursor >= _command_history.size():
+		return
+	_history_cursor += 1
+	if _history_cursor == _command_history.size():
+		_set_command_input_text(_history_draft)
+		return
+	_set_command_input_text(_command_history[_history_cursor])
+
+func _set_command_input_text(command_line: String) -> void:
+	_command_input.text = command_line
+	_command_input.caret_column = command_line.length()
+	_command_input.deselect()
+
+func _reset_history_navigation() -> void:
+	_history_cursor = _command_history.size()
+	_history_draft = ""
+
+func _is_key(event: InputEventKey, key: Key) -> bool:
+	return event.keycode == key or event.physical_keycode == key

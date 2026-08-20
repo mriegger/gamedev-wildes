@@ -45,6 +45,11 @@ func _process(_delta: float) -> bool:
 		_expect(_console.is_open(), "slash did not open the developer console")
 		var command_input := _console.get_command_input()
 		_expect(command_input.has_focus(), "open console did not focus the command input")
+		command_input.text = "unsubmitted draft"
+		_send_history_key(KEY_UP)
+		_expect(command_input.text == "unsubmitted draft", "up changed the input with empty command history")
+		_send_history_key(KEY_DOWN)
+		_expect(command_input.text == "unsubmitted draft", "down changed the input with empty command history")
 		command_input.text = "spawn stone 5"
 		command_input.text_submitted.emit(command_input.text)
 		_phase = 2
@@ -76,18 +81,56 @@ func _process(_delta: float) -> bool:
 		_expect(_console.get_command_input().text.is_empty(), "rejected command did not clear the input")
 		_expect(_console.get_command_input().has_focus(), "rejected command did not retain input focus")
 		_expect(_structure_calls == [&"new"], "rejected structure command did not route to new")
-		_structure_commands_accepted = true
 		var command_input := _console.get_command_input()
-		command_input.text = "dev structure new"
+		command_input.text = "unfinished draft"
+		_send_history_key(KEY_UP)
+		_expect(command_input.text == "dev structure new", "up did not recall the newest rejected command")
+		_expect(command_input.caret_column == command_input.text.length(), "history recall did not move the caret to the end")
+		_expect(command_input.has_focus(), "history recall released input focus")
+		_send_history_key(KEY_UP, true)
+		_expect(command_input.text == "set ripple strength 0.7", "physical up did not recall the next older command")
+		_send_history_key(KEY_UP, false, true)
+		_expect(command_input.text == "sethealth 40", "repeated up did not recall an older command")
+		_send_history_key(KEY_UP)
+		_expect(command_input.text == "give_xp 50", "up skipped an older command")
+		_send_history_key(KEY_UP)
+		_expect(command_input.text == "spawn stone 5", "up did not reach the oldest command")
+		_send_history_key(KEY_UP)
+		_expect(command_input.text == "spawn stone 5", "up did not clamp at the oldest command")
+		_send_history_key(KEY_DOWN)
+		_expect(command_input.text == "give_xp 50", "down did not recall the next newer command")
+		_send_history_key(KEY_DOWN, true)
+		_expect(command_input.text == "sethealth 40", "physical down did not recall the next newer command")
+		_send_history_key(KEY_DOWN)
+		_send_history_key(KEY_DOWN)
+		_expect(command_input.text == "dev structure new", "down did not reach the newest command")
+		_send_history_key(KEY_DOWN)
+		_expect(command_input.text == "unfinished draft", "down past the newest command did not restore the draft")
+		_send_history_key(KEY_DOWN)
+		_expect(command_input.text == "unfinished draft", "down did not clamp at the draft")
+		_structure_commands_accepted = true
+		_send_history_key(KEY_UP)
+		_expect(command_input.text == "dev structure new", "up did not return to the newest command from the draft")
 		command_input.text_submitted.emit(command_input.text)
 		_phase = 4
 	elif _phase == 4 and _frame == 10:
 		_expect(not _console.is_open(), "close command kept the developer console open")
 		_expect(_structure_calls == [&"new", &"new"], "accepted structure command did not route to new")
+		var command_input := _console.get_command_input()
+		command_input.text = "closed input"
+		_send_history_key(KEY_UP)
+		_expect(command_input.text == "closed input", "history navigation changed input while the console was closed")
 		_send_slash()
 		_phase = 5
 	elif _phase == 5 and _frame == 12:
 		_expect(_console.is_open(), "slash did not reopen the developer console")
+		var command_input := _console.get_command_input()
+		_send_history_key(KEY_UP)
+		_expect(command_input.text == "dev structure new", "closing command was not retained across console reopen")
+		_send_history_key(KEY_UP)
+		_expect(command_input.text == "dev structure new", "duplicate command submissions were not retained")
+		_send_history_key(KEY_UP)
+		_expect(command_input.text == "set ripple strength 0.7", "duplicate history entries changed command order")
 		_send_escape()
 		_phase = 6
 	elif _phase == 6 and _frame == 14:
@@ -96,6 +139,30 @@ func _process(_delta: float) -> bool:
 		_phase = 7
 	elif _phase == 7 and _frame == 16:
 		_expect(_console.is_open(), "slash did not reopen the developer console after escape")
+		var command_input := _console.get_command_input()
+		command_input.text = "   "
+		command_input.text_submitted.emit(command_input.text)
+		command_input.text = "session draft"
+		_send_history_key(KEY_UP)
+		_expect(command_input.text == "dev structure new", "whitespace-only submission was added to history")
+		_send_history_key(KEY_DOWN)
+		_expect(command_input.text == "session draft", "draft was not restored after reopening the console")
+		command_input.text = "  unknown original  "
+		command_input.text_submitted.emit(command_input.text)
+		_send_history_key(KEY_UP)
+		_expect(command_input.text == "  unknown original  ", "history did not preserve the submitted command text")
+		for index in range(DevConsole.MAX_COMMAND_HISTORY_ENTRIES + 1):
+			command_input.text = "unknown_command_%03d" % index
+			command_input.text_submitted.emit(command_input.text)
+		command_input.text = "bounded draft"
+		for _index in range(DevConsole.MAX_COMMAND_HISTORY_ENTRIES):
+			_send_history_key(KEY_UP)
+		_expect(command_input.text == "unknown_command_001", "history did not evict its oldest entry at capacity")
+		_send_history_key(KEY_UP)
+		_expect(command_input.text == "unknown_command_001", "bounded history did not clamp at its oldest retained entry")
+		for _index in range(DevConsole.MAX_COMMAND_HISTORY_ENTRIES):
+			_send_history_key(KEY_DOWN)
+		_expect(command_input.text == "bounded draft", "bounded history did not restore the current draft")
 		_send_slash()
 		_phase = 8
 	elif _phase == 8 and _frame == 18:
@@ -144,6 +211,16 @@ func _send_escape() -> void:
 	event.pressed = true
 	event.keycode = KEY_ESCAPE
 	event.physical_keycode = KEY_ESCAPE
+	_console._input(event)
+
+func _send_history_key(key: Key, physical: bool = false, echo: bool = false) -> void:
+	var event := InputEventKey.new()
+	event.pressed = true
+	event.echo = echo
+	if physical:
+		event.physical_keycode = key
+	else:
+		event.keycode = key
 	_console._input(event)
 
 func _action_uses_key(action: StringName, key: Key) -> bool:
