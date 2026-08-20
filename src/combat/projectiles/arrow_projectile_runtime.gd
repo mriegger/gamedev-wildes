@@ -6,6 +6,7 @@ const TRAJECTORY_STEP_SECONDS: float = 1.0 / 60.0
 
 class ActiveProjectile:
 	var view: NockableArrowView
+	var trail: ArrowTrailView
 	var ammunition: ArrowItemDefinition
 	var source_item_id: StringName
 	var launch_position: Vector3
@@ -131,19 +132,25 @@ func try_fire(
 	var view := ammunition.held_scene.instantiate() as NockableArrowView
 	if view == null:
 		return false
+	var trail := ArrowTrailView.new()
 	var launch_velocity := _get_launch_velocity(action, draw_progress, release_transform)
 	if launch_velocity.is_zero_approx():
 		view.free()
+		trail.free()
 		return false
 	if not _inventory_loadout.commit_prepared_change(loadout_change):
 		view.free()
+		trail.free()
 		return false
 	if _projectiles.size() >= MAXIMUM_ACTIVE_PROJECTILES:
 		_remove_projectile(0)
 	add_child(view)
+	add_child(trail)
 	view.global_transform = release_transform
+	trail.start(release_transform.origin)
 	var projectile := ActiveProjectile.new()
 	projectile.view = view
+	projectile.trail = trail
 	projectile.ammunition = ammunition
 	projectile.source_item_id = bow_source.get_item_id()
 	projectile.launch_position = release_transform.origin
@@ -158,6 +165,8 @@ func clear() -> void:
 	for projectile in _projectiles:
 		if is_instance_valid(projectile.view):
 			projectile.view.free()
+		if is_instance_valid(projectile.trail):
+			projectile.trail.free()
 	_projectiles.clear()
 	set_physics_process(false)
 
@@ -195,6 +204,8 @@ func _advance_flying_projectile(index: int, projectile: ActiveProjectile, delta:
 			projectile.velocity = _calculate_trajectory_velocity(projectile.launch_velocity, profile.gravity, hit_elapsed)
 			_orient_projectile(projectile)
 			projectile.flight_elapsed = hit_elapsed
+			projectile.trail.record_position(projectile.view.global_position, hit_elapsed)
+			projectile.trail.finish()
 			projectile.embedded_elapsed = 0.0
 			var target_runtime_id := int(hit.get("target_runtime_id", -1))
 			if target_runtime_id > 0:
@@ -210,6 +221,7 @@ func _advance_flying_projectile(index: int, projectile: ActiveProjectile, delta:
 		projectile.view.global_position = destination
 		projectile.velocity = _calculate_trajectory_velocity(projectile.launch_velocity, profile.gravity, next_elapsed)
 		_orient_projectile(projectile)
+		projectile.trail.record_position(destination, next_elapsed)
 	if projectile.flight_elapsed >= profile.maximum_flight_seconds:
 		_remove_projectile(index)
 
@@ -295,4 +307,6 @@ func _remove_projectile(index: int) -> void:
 	var projectile := _projectiles[index]
 	if is_instance_valid(projectile.view):
 		projectile.view.free()
+	if is_instance_valid(projectile.trail):
+		projectile.trail.free()
 	_projectiles.remove_at(index)

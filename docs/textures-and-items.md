@@ -206,7 +206,8 @@ the first contact. The player interaction state resolves the first voxel surface
 falling back to the ground plane, and the bow action adjusts its launch angle as speed increases to hit that point when possible while
 never raising beyond 45 degrees. Releasing commits one ammunition removal before `ArrowProjectileRuntime`
 launches the matching model from the same authoritative transform. The bounded runtime evaluates gravity, sweeps fixed flight segments against entity bounds and voxel raycast solids,
-aligns the arrow with its velocity, and owns its one-second impact hold and fade cleanup. Projectile
+aligns the arrow with its velocity, presents a short fading trail from bounded recent flight samples,
+and owns its one-second impact hold and fade cleanup. Projectile
 profiles own pierce damage, knockback, collision radius, gravity, and lifetime values; committed hits
 flow through combat affinity resolution, enemy hit reactions, damage feedback, particles, and bow
 proficiency.

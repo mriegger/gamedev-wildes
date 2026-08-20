@@ -70,11 +70,14 @@ func _run() -> void:
 	_expect(inventory.get_inventory_item_count(&"stone_arrow") == 0, "fired stone arrow was not consumed")
 	_expect(projectiles._projectiles.size() == 1, "fired stone arrow was not retained by the runtime")
 	var projectile: Variant = projectiles._projectiles[0]
+	var trail := projectile.trail as ArrowTrailView
+	_expect(trail != null and not trail.visible, "fired arrow did not create an empty bounded trail")
 	_expect(is_equal_approx(projectile.velocity.length(), bow_action.maximum_launch_speed), "full draw did not use maximum arrow speed")
 	var launch_position: Vector3 = projectile.view.global_position
 	projectiles.advance_projectiles(0.04)
 	_expect(projectile.view.global_position.z < launch_position.z and projectile.velocity.y < 0.0, "arrow did not follow a forward parabolic path")
 	_expect(projectile.view.global_basis.y.normalized().dot(projectile.velocity.normalized()) > 0.999, "arrow did not angle along its travel direction")
+	_expect(trail.visible and trail._positions.size() >= 2 and trail._positions[trail._positions.size() - 1].is_equal_approx(projectile.view.global_position), "arrow trail did not follow the flying arrow")
 	var uneven_deltas := [0.011, 0.023, 0.007]
 	for step_index in range(60):
 		if projectile.embedded_elapsed >= 0.0:
@@ -83,6 +86,11 @@ func _run() -> void:
 	_expect(projectile.embedded_elapsed >= 0.0, "arrow passed through the zombie")
 	var predicted_contact := full_draw_trajectory[full_draw_trajectory.size() - 1]
 	_expect(projectile.view.global_position.distance_to(predicted_contact) < 0.001, "fired arrow did not follow its predicted path to the first contact actual=%s predicted=%s distance=%.6f" % [projectile.view.global_position, predicted_contact, projectile.view.global_position.distance_to(predicted_contact)])
+	_expect(trail._finishing and trail._elapsed_samples[trail._elapsed_samples.size() - 1] - trail._elapsed_samples[0] <= ArrowTrailView.TRAIL_DURATION_SECONDS + 0.000001, "embedded arrow trail retained the full flight path")
+	trail._process(ArrowTrailView.FADE_SECONDS * 0.5)
+	_expect(trail.visible and trail._mesh_instance.transparency > 0.0 and trail._mesh_instance.transparency < 1.0, "embedded arrow trail did not begin fading")
+	trail._process(ArrowTrailView.FADE_SECONDS * 0.5)
+	_expect(not trail.visible, "embedded arrow trail did not finish fading")
 	_expect(_outcomes.size() == 1, "arrow collision did not commit exactly one damage outcome")
 	if not _outcomes.is_empty():
 		var outcome := _outcomes[0]

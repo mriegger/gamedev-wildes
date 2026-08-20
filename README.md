@@ -186,7 +186,7 @@ from the bow to the predicted first impact and fades near its endpoint. The bow 
 terrain or object surface under the cursor, solves a reachable ballistic angle dynamically, and caps unreachable shots at
 45 degrees. Releasing consumes the nocked arrow and fires it at a speed proportional to the draw. Arrows follow that gravity-driven arc, turn along
 their flight direction, and stick into the first enemy or solid block they hit for one second before
-fading away. Stone arrows deal 10 base pierce damage and copper arrows deal 15; both apply two
+fading away, with a short white trail following behind each arrow in flight. Stone arrows deal 10 base pierce damage and copper arrows deal 15; both apply two
 knockback before player strength, enemy defense, and damage affinities are resolved.
 Held tools use either runtime-extruded pixel art or authored 3D scenes.
 
