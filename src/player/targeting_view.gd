@@ -267,7 +267,7 @@ func _update_selection_visuals(_delta: float = 0.0):
 			if breaking_block:
 				breaking_block.visible = false
 				if breaking_block.scale != breaking_scale:
-				breaking_block.scale = breaking_scale
+					breaking_block.scale = breaking_scale
 			if selection_box.scale != selection_scale:
 				selection_box.scale = selection_scale
 	else:
