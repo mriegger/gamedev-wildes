@@ -67,7 +67,7 @@ func _draw() -> void:
 		draw_line(Vector2(x, RULER_Y - tick_height * 0.5), Vector2(x, RULER_Y + tick_height * 0.5), Color.BLACK, 3.0)
 		draw_line(Vector2(x, RULER_Y - tick_height * 0.5), Vector2(x, RULER_Y + tick_height * 0.5), Color.WHITE, 1.0)
 		if major:
-			var label := LABELS[int(bearing / 45)]
+			var label := LABELS[roundi(float(bearing) / 45.0)]
 			var label_width := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
 			draw_string_outline(font, Vector2(x - label_width * 0.5, 18.0), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, 2, Color.BLACK)
 			draw_string(font, Vector2(x - label_width * 0.5, 18.0), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color.WHITE)
