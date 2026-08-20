@@ -24,6 +24,7 @@ enum SpawnPlacement {
 @export var ambient_spawn_enabled: bool = true
 @export var ambient_spawn_phase: SpawnPhase = SpawnPhase.NIGHT
 @export_range(0, 64, 1) var ambient_max_active: int = 1
+@export_range(0.01, 10000.0, 0.01, "or_greater") var ambient_spawn_weight: float = 100.0
 @export var ambient_spawn_floor_ids: Array[int] = []
 @export var spawn_placement: SpawnPlacement = SpawnPlacement.GROUNDED
 @export_range(1, 32, 1) var ambient_aerial_altitude_min_blocks: int = 8
@@ -75,8 +76,11 @@ func validate(source: String) -> bool:
 		push_error("[EntityDefinition] Invalid body dimensions for %s at %s" % [id, source])
 		valid = false
 	if ambient_spawn_enabled:
-		if ambient_max_active < 1:
+		if ambient_max_active < 0:
 			push_error("[EntityDefinition] Invalid active cap for %s at %s" % [id, source])
+			valid = false
+		if not is_finite(ambient_spawn_weight) or ambient_spawn_weight <= 0.0:
+			push_error("[EntityDefinition] Invalid ambient spawn weight for %s at %s" % [id, source])
 			valid = false
 		if ambient_spawn_floor_ids.is_empty():
 			push_error("[EntityDefinition] Missing spawn floors for %s at %s" % [id, source])

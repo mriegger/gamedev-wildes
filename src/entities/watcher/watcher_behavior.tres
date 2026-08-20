@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="WatcherBehaviorDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://entities/watcher/watcher_behavior_definition.gd" id="1_behavior"]
+[ext_resource type="Resource" path="res://combat/profiles/watcher_melee.tres" id="2_melee"]
+
+[resource]
+script = ExtResource("1_behavior")
+wander_speed = 1.6
+stalk_speed = 2.2
+sprint_speed = 7.0
+gravity = 30.0
+jump_velocity = 7.0
+detection_range = 16.0
+forget_range = 24.0
+target_memory_seconds = 3.0
+stalk_inner_radius = 2.5
+stalk_radius = 3.0
+stalk_outer_radius = 3.5
+stalk_step_degrees = 45.0
+stalk_pause_seconds = 0.8
+melee_profile = ExtResource("2_melee")
+wander_radius = 8.0
+wander_goal_seconds = 4.0
+repath_seconds = 0.35

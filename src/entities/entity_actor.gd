@@ -76,6 +76,9 @@ func tick(_delta: float, _observation: EntityTargetObservation, _separation_velo
 func supports_behavior(_behavior: EntityBehaviorDefinition) -> bool:
 	return false
 
+func can_despawn_ambiently() -> bool:
+	return true
+
 func has_valid_presentation() -> bool:
 	if animation_driver_path.is_empty() or visual_fader_path.is_empty() or death_poof_path.is_empty():
 		return false

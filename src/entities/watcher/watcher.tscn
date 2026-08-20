@@ -1,0 +1,78 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://entities/watcher/watcher_actor.gd" id="1_actor"]
+[ext_resource type="PackedScene" path="res://entities/watcher/watcher_visual.tscn" id="2_visual"]
+[ext_resource type="Script" path="res://entities/presentation/entity_visual_fader.gd" id="3_fader"]
+[ext_resource type="PackedScene" path="res://entities/presentation/entity_death_poof.tscn" id="4_poof"]
+
+[sub_resource type="Gradient" id="Gradient_teleport"]
+offsets = PackedFloat32Array(0, 0.55, 1)
+colors = PackedColorArray(0.72, 0.4, 1, 0.95, 0.31, 0.08, 0.52, 0.7, 0.12, 0.015, 0.22, 0)
+
+[sub_resource type="StandardMaterial3D" id="Material_teleport"]
+transparency = 1
+shading_mode = 0
+vertex_color_use_as_albedo = true
+billboard_mode = 1
+billboard_keep_scale = true
+
+[sub_resource type="QuadMesh" id="Mesh_teleport"]
+material = SubResource("Material_teleport")
+size = Vector2(0.14, 0.14)
+
+[node name="Watcher" type="Node3D"]
+script = ExtResource("1_actor")
+animation_driver_path = NodePath("ModelRoot/WatcherVisual/AnimationDriver")
+visual_fader_path = NodePath("VisualFader")
+death_poof_path = NodePath("DeathPoof")
+
+[node name="ModelRoot" type="Node3D" parent="."]
+
+[node name="WatcherVisual" parent="ModelRoot" instance=ExtResource("2_visual")]
+
+[node name="VisualFader" type="Node" parent="."]
+script = ExtResource("3_fader")
+
+[node name="DeathPoof" parent="." instance=ExtResource("4_poof")]
+position = Vector3(0, 1.35, 0)
+color = Color(0.31, 0.08, 0.52, 1)
+
+[node name="TeleportDeparture" type="CPUParticles3D" parent="."]
+top_level = true
+emitting = false
+amount = 30
+lifetime = 0.38
+one_shot = true
+explosiveness = 1.0
+local_coords = false
+emission_shape = 3
+emission_box_extents = Vector3(0.32, 1.3, 0.32)
+direction = Vector3(0, 1, 0)
+spread = 180.0
+gravity = Vector3(0, 0.4, 0)
+initial_velocity_min = 0.8
+initial_velocity_max = 2.1
+scale_amount_min = 0.65
+scale_amount_max = 1.35
+color_ramp = SubResource("Gradient_teleport")
+mesh = SubResource("Mesh_teleport")
+
+[node name="TeleportArrival" type="CPUParticles3D" parent="."]
+top_level = true
+emitting = false
+amount = 30
+lifetime = 0.38
+one_shot = true
+explosiveness = 1.0
+local_coords = false
+emission_shape = 3
+emission_box_extents = Vector3(0.32, 1.3, 0.32)
+direction = Vector3(0, 1, 0)
+spread = 180.0
+gravity = Vector3(0, 0.25, 0)
+initial_velocity_min = 0.55
+initial_velocity_max = 1.7
+scale_amount_min = 0.65
+scale_amount_max = 1.35
+color_ramp = SubResource("Gradient_teleport")
+mesh = SubResource("Mesh_teleport")
