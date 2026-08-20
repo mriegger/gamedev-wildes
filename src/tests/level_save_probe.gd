@@ -8,7 +8,7 @@ func _init() -> void:
 	var chest_block := block_catalog.get_definition(BlockId.Type.CHEST) if block_catalog != null else null
 	var player_stats_definition := load("res://player/player_stats.tres") as CombatStatsDefinition
 	var player_perk_rules := load("res://progression/player_perk_rules.tres") as PlayerPerkRules
-	_expect(SaveManager.CURRENT_SAVE_VERSION == 14, "save version changed")
+	_expect(SaveManager.CURRENT_SAVE_VERSION == 15, "save version changed")
 	_expect(block_catalog != null and block_catalog.validate(), "block catalog invalid")
 	_expect(item_catalog != null and item_catalog.validate(block_catalog), "item catalog invalid")
 	_expect(chest_block != null and chest_block.container != null, "chest container definition invalid")
@@ -23,6 +23,7 @@ func _init() -> void:
 	_expect(version_six.get("apple_trees", null) == AppleTreeState.new().snapshot(), "version six apple migration shape changed")
 	_expect(version_six.get("chests", null) == {}, "version six chest migration shape changed")
 	_expect(version_six.get("emplacements", null) == {}, "version six emplacement migration shape changed")
+	_expect(version_six.get("dungeon_progress", null) == DungeonProgressState.new().snapshot(), "version six dungeon progress migration shape changed")
 	var migration_factory := EquipmentInstanceFactory.new(item_catalog)
 	var migration_affixes: Array[EquipmentAffixDefinition] = [item_catalog.get_equipment_affix(&"vicious")]
 	var migration_runes: Array[StringName] = [&"basic_rune"]
@@ -172,12 +173,13 @@ func _init() -> void:
 		"emplacements": {},
 		"chests": {},
 		"world_loot": {"next_entry_id": 1, "entries": []},
+		"dungeon_progress": DungeonProgressState.new().snapshot(),
 		"playtime_seconds": 0.0,
 		"time_of_day": 6.0,
 	}
 	var pumpkin_patch := {"present": false}
 	var apple_trees := AppleTreeState.new().snapshot()
-	var saved := SaveManager.save_world_state(slot_id, current_data, voxel_world, location.get_persisted_position(), player_stats, inventory, inventory.equipment_instance_factory, player_perks, item_proficiency, chest_storage, world_loot_state, pumpkin_patch, apple_trees, 2.5, 27.5)
+	var saved := SaveManager.save_world_state(slot_id, current_data, voxel_world, location.get_persisted_position(), player_stats, inventory, inventory.equipment_instance_factory, player_perks, item_proficiency, chest_storage, world_loot_state, DungeonProgressState.new(), pumpkin_patch, apple_trees, 2.5, 27.5)
 	_expect(saved, "save_world_state failed")
 	if saved:
 		_expect(int(current_data.get("version", -1)) == SaveManager.CURRENT_SAVE_VERSION, "current_data version changed")

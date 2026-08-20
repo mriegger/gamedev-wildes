@@ -108,6 +108,16 @@ func _test_catalog_and_modules() -> void:
 	var definition := _catalog.get_level(LEVEL_ID)
 	_expect(definition.validate(), "stone dungeon definition is invalid")
 	_expect(definition.format_version == LevelDefinition.FORMAT_VERSION, "stone dungeon format version changed")
+	_expect(definition.one_time_chest_reward != null, "stone dungeon one-time chest reward is missing")
+	if definition.one_time_chest_reward != null:
+		var reward := definition.one_time_chest_reward
+		_expect(reward.reward_id == &"stone_dungeon_one_time_chest_reward", "stone dungeon one-time reward ID changed")
+		_expect(reward.loot_bundle != null and reward.loot_bundle.id == &"stone_dungeon_one_time_chest_reward_loot", "stone dungeon one-time reward bundle changed")
+		if reward.loot_bundle != null:
+			_expect(reward.loot_bundle.max_rewards == 1 and reward.loot_bundle.fixed_entries.size() == 1 and reward.loot_bundle.weighted_candidates.is_empty(), "stone dungeon one-time reward is not a guaranteed single entry")
+			if reward.loot_bundle.fixed_entries.size() == 1:
+				var drop := reward.loot_bundle.fixed_entries[0].drop
+				_expect(drop != null and drop.item == _item_catalog.get_definition(&"basic_rune"), "stone dungeon one-time reward is not the canonical Basic Rune")
 	_expect(definition.presentation != null and definition.presentation.terrain_shader != null, "stone dungeon presentation is missing")
 	_expect(definition.presentation.terrain_shader.resource_path == "res://levels/presentation/level_terrain.gdshader", "stone dungeon terrain shader is not content-driven")
 	_expect(definition.presentation.return_door_block_id == BlockId.Type.LOG, "stone dungeon return-door block changed")
@@ -138,7 +148,11 @@ func _test_catalog_and_modules() -> void:
 			_expect(requirement.chest_loot_bundle != null and requirement.chest_loot_bundle.id == &"stone_dungeon_chest", "stone chest room loot bundle changed")
 			if requirement.chest_loot_bundle != null:
 				_expect(requirement.chest_loot_bundle.max_rewards == 3, "stone chest reward limit changed")
-				_expect(requirement.chest_loot_bundle.fixed_entries.size() == 1 and requirement.chest_loot_bundle.weighted_candidates.size() == 3, "stone chest loot composition changed")
+				_expect(requirement.chest_loot_bundle.fixed_entries.size() == 1 and requirement.chest_loot_bundle.weighted_candidates.size() == 2, "stone chest loot composition changed")
+				for candidate in requirement.chest_loot_bundle.weighted_candidates:
+					_expect(candidate.drop.item.id != &"basic_rune", "repeatable stone chest directly awards Basic Rune")
+					if candidate.drop.equipment_roll != null:
+						_expect(candidate.drop.equipment_roll.fixed_runes.is_empty() and candidate.drop.equipment_roll.random_runes.is_empty(), "repeatable stone chest equipment bypasses Basic Rune progression")
 			continue
 		_expect(requirement.chest_loot_bundle == null, "encounter room unexpectedly owns chest loot: %s" % requirement.room_type_id)
 		_expect(requirement.encounter != null and requirement.encounter.validate(String(requirement.room_type_id)), "stone room encounter is invalid: %s" % requirement.room_type_id)

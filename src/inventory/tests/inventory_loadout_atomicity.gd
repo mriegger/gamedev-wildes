@@ -11,6 +11,7 @@ func _init() -> void:
 	_expect(_item_catalog != null and _item_catalog.validate(block_catalog), "item catalog invalid")
 	_expect(_stats_definition != null and _stats_definition.validate(), "stats definition invalid")
 	_test_prepared_guards()
+	_test_exact_multi_stack_preparation()
 	_test_constrained_inventory_bounds()
 	_test_owner_bindings()
 	_test_reserved_stat_sources()
@@ -75,6 +76,58 @@ func _test_prepared_guards() -> void:
 	var second_inventory := _empty_inventory()
 	var inventory_change := first_inventory.prepare_add_backpack_item(&"sand_block", 1)
 	_expect(not second_inventory.can_commit_prepared_change(inventory_change), "cross-owner inventory change was accepted")
+
+func _test_exact_multi_stack_preparation() -> void:
+	var constrained := _empty_inventory()
+	var max_stack := _item_catalog.get_definition(&"dirt_block").max_stack
+	for index in range(InventoryModel.FILLABLE_SIZE - 1):
+		_expect(
+			InventoryTestFixture.restore_slot(
+				constrained,
+				index,
+				InventoryStack.new(&"dirt_block", max_stack),
+			),
+			"exact multi-stack capacity fixture failed at %d" % index,
+		)
+	var constrained_before := constrained.to_dict()
+	var constrained_revision := constrained.get_revision()
+	var oversized: Array[InventoryStack] = [
+		InventoryStack.new(&"copper", 1),
+		InventoryStack.new(&"basic_rune", 1),
+	]
+	_expect(
+		constrained.prepare_add_stacks_exact(oversized) == null,
+		"exact multi-stack preparation accepted a partial batch",
+	)
+	_expect(constrained.to_dict() == constrained_before, "failed exact multi-stack preparation changed inventory")
+	_expect(constrained.get_revision() == constrained_revision, "failed exact multi-stack preparation revised inventory")
+	_expect(constrained.prepare_add_stacks_exact([]) == null, "empty exact multi-stack preparation produced a change")
+
+	var inventory := _empty_inventory()
+	var sword := inventory.equipment_instance_factory.create(&"copper_sword")
+	var batch: Array[InventoryStack] = [
+		InventoryStack.new(&"copper", 3),
+		InventoryStack.new(&"copper_sword", 1, sword),
+	]
+	var inventory_before := inventory.to_dict()
+	var revision_before := inventory.get_revision()
+	var prepared_inventory := inventory.prepare_add_stacks_exact(batch)
+	_expect(prepared_inventory != null, "valid exact multi-stack batch did not prepare")
+	_expect(inventory.to_dict() == inventory_before, "exact multi-stack preparation changed live inventory")
+	_expect(inventory.get_revision() == revision_before, "exact multi-stack preparation revised live inventory")
+	batch[0].count = 99
+	batch[1].equipment_instance.socketed_rune_ids.append(&"basic_rune")
+	var loadout := _bind(inventory, ActorStats.new(_stats_definition))
+	var prepared_loadout := loadout.prepare_inventory_change(prepared_inventory)
+	_expect(prepared_loadout != null, "valid exact multi-stack batch did not prepare through loadout")
+	_expect(loadout.commit_prepared_change(prepared_loadout), "valid exact multi-stack batch did not commit")
+	var copper_index := _find_item(inventory, &"copper")
+	var sword_index := _find_item(inventory, &"copper_sword")
+	_expect(copper_index >= 0 and inventory.get_slot(copper_index).count == 3, "exact batch input mutation changed basic reward")
+	_expect(
+		sword_index >= 0 and inventory.get_slot(sword_index).equipment_instance.socketed_rune_ids.is_empty(),
+		"exact batch input mutation changed equipment reward",
+	)
 
 func _test_constrained_inventory_bounds() -> void:
 	var inventory := InventoryModel.new(

@@ -231,6 +231,7 @@ func _make_saved_world() -> Dictionary:
 		"inventory": null,
 		"next_equipment_instance_id": 1,
 		"world_loot": {"next_entry_id": 1, "entries": []},
+		"dungeon_progress": DungeonProgressState.new().snapshot(),
 		"chests": {},
 		"pumpkin_patch": null,
 		"apple_trees": AppleTreeState.new().snapshot(),

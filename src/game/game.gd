@@ -60,6 +60,7 @@ signal main_menu_requested
 var inventory_model: InventoryModel
 var equipment_instance_factory: EquipmentInstanceFactory
 var world_loot_state: WorldLootState
+var dungeon_progress: DungeonProgressState
 var player_stats: ActorStats
 var player_perks: PlayerPerks
 var player_perk_coordinator: PlayerPerkCoordinator
@@ -97,7 +98,6 @@ var _save_status_timer: float = 0.0
 var _session_active: bool = false
 var _recovered_defeated_save: bool = false
 var _level_transitioning: bool = false
-var _level_loot_attempt_index: int = 0
 var _structure_transitioning: bool = false
 var _structure_designer_runtime: StructureDesignerRuntime
 var _structure_lifecycle_snapshot: StructureDesignerLifecycleSnapshot
@@ -214,6 +214,9 @@ func _ready():
 	if not _restore_world_loot_state():
 		_fail_session_start("This world could not be loaded because its saved world loot is invalid or its equipment IDs conflict with other storage. The save was not changed.")
 		return
+	if not _restore_dungeon_progress():
+		_fail_session_start("This world could not be loaded because its saved dungeon progress is invalid. The save was not changed.")
+		return
 	var restored_instance_ids := inventory_model.get_equipment_instance_ids()
 	restored_instance_ids.append_array(chest_storage.get_equipment_instance_ids())
 	restored_instance_ids.append_array(world_loot_state.get_equipment_instance_ids())
@@ -251,6 +254,7 @@ func _ready():
 		item_proficiency,
 		chest_storage,
 		world_loot_state,
+		dungeon_progress,
 		chest_coordinator,
 		overworld_loot,
 		game_environment,
@@ -329,6 +333,10 @@ func _restore_world_loot_state() -> bool:
 		return false
 	world_loot_state = WorldLootState.new(item_catalog, equipment_instance_factory)
 	return world_loot_state.restore(encoded_world_loot, reserved_instance_ids)
+
+func _restore_dungeon_progress() -> bool:
+	dungeon_progress = DungeonProgressState.new()
+	return dungeon_progress.restore(_save_data.get("dungeon_progress", null))
 
 func _setup_chest_runtime(chest_block: BlockDefinition) -> bool:
 	var chest_state_error := _get_chest_state_error(
@@ -617,20 +625,41 @@ func _enter_level():
 	var next_runtime := level_runtime_scene.instantiate() as LevelRuntime
 	add_child(next_runtime)
 	var definition := level_catalog.get_level(level_entrance_definition.level_id)
-	var loot_seed := LootKeyedRandom.u53(
+	var dungeon_instance_id := level_entrance_definition.entrance_id
+	var attempt_index := dungeon_progress.begin_attempt(dungeon_instance_id)
+	if attempt_index < 0:
+		next_runtime.queue_free()
+		_show_save_status("Dungeon unavailable")
+		_show_world_level_interaction()
+		_level_transitioning = false
+		return
+	var repeat_loot_seed := LootKeyedRandom.u53(
 		result.layout.seed_value,
 		definition.level_id,
 		[
-			&"dungeon_attempt",
-			level_entrance_definition.entrance_id,
-			StringName(str(_level_loot_attempt_index)),
+			&"repeatable_chests",
+			dungeon_instance_id,
+			StringName(str(attempt_index)),
 		],
 	)
-	_level_loot_attempt_index += 1
+	var one_time_reward := definition.one_time_chest_reward
+	var one_time_reward_claimed := (
+		one_time_reward == null
+		or dungeon_progress.has_claimed_reward(dungeon_instance_id, one_time_reward.reward_id)
+	)
+	var one_time_loot_seed := 0
+	if one_time_reward != null:
+		one_time_loot_seed = LootKeyedRandom.u53(
+			result.layout.seed_value,
+			one_time_reward.reward_id,
+			[&"one_time_reward", dungeon_instance_id],
+		)
 	next_runtime.setup(
 		result.layout,
 		definition,
-		loot_seed,
+		repeat_loot_seed,
+		one_time_reward_claimed,
+		one_time_loot_seed,
 		block_catalog,
 		world.block_texture_set,
 		settings,
@@ -669,6 +698,31 @@ func _enter_level():
 	_level_transitioning = false
 
 func _exit_level(restore_from_defeat: bool = false):
+	if not restore_from_defeat and (player.is_defeated() or player.stats.is_dead()):
+		return
+	var dungeon_completed := false
+	if not restore_from_defeat:
+		hud.close_chest()
+		var definition := level_catalog.get_level(level_entrance_definition.level_id)
+		var completion_outcome := DungeonRunCompletionTransaction.try_complete(
+			_level_runtime.get_chest_coordinator(),
+			dungeon_progress,
+			level_entrance_definition.entrance_id,
+			definition.one_time_chest_reward,
+			inventory_loadout_coordinator,
+		)
+		if completion_outcome == DungeonRunCompletionTransaction.Outcome.INVENTORY_FULL:
+			_show_save_status(DungeonChestCoordinator.INVENTORY_FULL_MESSAGE)
+			return
+		if completion_outcome == DungeonRunCompletionTransaction.Outcome.INVALIDATED:
+			_show_save_status("Dungeon rewards changed — try exiting again")
+			return
+		dungeon_completed = completion_outcome == DungeonRunCompletionTransaction.Outcome.COMPLETED
+		if dungeon_completed:
+			if _slot_id == -1:
+				_show_save_status("Dungeon complete")
+			else:
+				game_session.save("dungeon_complete")
 	_level_transitioning = true
 	hud.close_chest()
 	level_interaction.clear_target()

@@ -5,11 +5,9 @@ var _errors: Array[String] = []
 func _init() -> void:
 	var block_catalog := load("res://blocks/block_catalog.tres") as BlockCatalog
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
-	var recipe_catalog := load("res://crafting/crafting_recipe_catalog.tres") as CraftingRecipeCatalog
 	var player_stats := load("res://player/player_stats.tres") as ActorStatsDefinition
 	_expect(block_catalog.validate(), "block catalog invalid")
 	_expect(item_catalog.validate(block_catalog), "item catalog invalid")
-	_expect(recipe_catalog.validate(item_catalog), "crafting catalog invalid")
 
 	var rune := item_catalog.get_definition(&"basic_rune") as RuneDefinition
 	var sand := item_catalog.get_definition(&"sand_block")
@@ -65,10 +63,6 @@ func _init() -> void:
 		_expect(head_only.is_compatible_with(item_catalog.get_definition(&"copper_helmet")), "head-only rune rejected a helmet")
 		_expect(not head_only.is_compatible_with(item_catalog.get_definition(&"copper_chest_plate")), "head-only rune accepted chest armor")
 		_expect(not head_only.is_compatible_with(item_catalog.get_definition(&"copper_sword")), "head-only rune accepted a weapon")
-
-	var recipe := recipe_catalog.get_definition(&"basic_rune")
-	_expect(recipe.output_item == rune and recipe.output_count == 1, "Basic Rune recipe output is not canonical")
-	_expect(recipe.get_ingredient_counts() == {&"sand_block": 32}, "Basic Rune recipe does not consume 32 Sand")
 
 	if _errors.is_empty():
 		print("RUNE_DEFINITION PASS")

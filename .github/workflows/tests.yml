@@ -859,6 +859,21 @@ jobs:
           bash .github/scripts/run_godot_check.sh \
             30 "LEVEL_ENCOUNTER_STATE PASS" /tmp/level_encounter_state.log -- \
             godot --headless --path src --script res://tests/level_encounter_state.gd
+      - name: Run dungeon progress state tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "DUNGEON_PROGRESS_STATE PASS" /tmp/dungeon_progress_state.log -- \
+            godot --headless --path src --script res://tests/dungeon_progress_state.gd
+      - name: Run dungeon progress persistence tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "DUNGEON_PROGRESS_PERSISTENCE PASS" /tmp/dungeon_progress_persistence.log -- \
+            godot --headless --path src --script res://save/tests/dungeon_progress_persistence.gd
+      - name: Run dungeon completion transaction tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "DUNGEON_RUN_COMPLETION PASS" /tmp/dungeon_run_completion.log -- \
+            godot --headless --path src --script res://tests/dungeon_run_completion_transaction.gd
       - name: Run dungeon encounter runtime tests
         run: |
           bash .github/scripts/run_godot_check.sh \

@@ -40,6 +40,13 @@ func _run() -> void:
 		_slot_id += 1
 	_save_path = SaveManager.get_slot_path(_slot_id)
 	var save_data := SaveManager.create_new_world(_slot_id, 4173, "World Loot Session")
+	var seeded_progress := DungeonProgressState.new()
+	_expect(seeded_progress.begin_attempt(&"stone_story") == 0, "session dungeon attempt fixture failed")
+	var seeded_completion := seeded_progress.prepare_completion(&"stone_story", &"basic_rune_reward")
+	_expect(seeded_completion != null and seeded_progress.commit_prepared_completion(seeded_completion), "session dungeon completion fixture failed")
+	save_data["dungeon_progress"] = seeded_progress.snapshot()
+	var restored_progress := DungeonProgressState.new()
+	_expect(restored_progress.restore(save_data["dungeon_progress"]), "session dungeon progress restore fixture failed")
 	var factory := EquipmentInstanceFactory.new(item_catalog)
 	var inventory := InventoryModel.new(item_catalog, factory)
 	inventory.setup_empty()
@@ -74,6 +81,7 @@ func _run() -> void:
 		item_proficiency,
 		chest_storage,
 		world_loot_state,
+		restored_progress,
 		chest_coordinator,
 		overworld_loot,
 		environment,
@@ -82,36 +90,51 @@ func _run() -> void:
 		func() -> Vector3: return persisted_position,
 	)
 	var initial_snapshot := world_loot_state.snapshot()
+	var dungeon_progress := restored_progress
+	var initial_progress_snapshot := seeded_progress.snapshot()
+	_expect(dungeon_progress.snapshot() == initial_progress_snapshot, "session did not retain dungeon progress")
 	_expect(save_data.get("world_loot", null) == initial_snapshot, "session did not seed current world loot before its initial write")
+	_expect(save_data.get("dungeon_progress", null) == initial_progress_snapshot, "session did not seed current dungeon progress before its initial write")
 	_expect(save_data.get("player_perks", null) == player_perks.snapshot(), "session did not seed current player perks before its initial write")
 	_expect(save_data.get("apple_trees", null) == apple_trees.snapshot(), "session did not seed current apple trees before its initial write")
 	var initial_disk := SaveManager.load_slot(_slot_id, item_catalog)
 	_expect(_saved_world_loot_matches(initial_disk, initial_snapshot, item_catalog, factory.get_next_instance_id()), "initial session write omitted current world loot")
+	_expect(_saved_dungeon_progress_matches(initial_disk, initial_progress_snapshot), "initial session write omitted current dungeon progress")
 	_expect(_saved_player_perks_match(initial_disk, player_perks.snapshot(), perk_rules, player_stats.get_level()), "initial session write omitted current player perks")
 	_expect(_saved_apple_trees_match(initial_disk, apple_trees.snapshot()), "initial session write omitted current apple trees")
 	_expect(_advance_time(world_loot_state, 13.0), "world loot debounce fixture did not advance")
+	_expect(dungeon_progress.begin_attempt(&"stone_story") == 1, "dungeon progress change did not advance attempt index")
+	_expect(session._pending_edit_save and is_zero_approx(session._edit_idle_elapsed), "dungeon progress change did not queue a debounced save")
 	overworld_loot.state_changed.emit()
 	_expect(session._pending_edit_save and is_zero_approx(session._edit_idle_elapsed), "world loot state change did not queue a debounced save")
 	session._edit_idle_elapsed = GameSession.EDIT_SAVE_DEBOUNCE - 0.05
 	session._process(0.1)
 	var debounced_snapshot := world_loot_state.snapshot()
+	var debounced_progress_snapshot := dungeon_progress.snapshot()
 	var debounced_disk := SaveManager.load_slot(_slot_id, item_catalog)
 	_expect(not session._pending_edit_save, "world loot debounce did not commit")
 	_expect(save_data.get("world_loot", null) == debounced_snapshot, "debounced save data did not snapshot current world loot")
 	_expect(_saved_world_loot_matches(debounced_disk, debounced_snapshot, item_catalog, factory.get_next_instance_id()), "debounced disk save did not snapshot current world loot")
+	_expect(_saved_dungeon_progress_matches(debounced_disk, debounced_progress_snapshot), "debounced disk save did not snapshot current dungeon progress")
 	_expect(_saved_player_perks_match(debounced_disk, player_perks.snapshot(), perk_rules, player_stats.get_level()), "debounced disk save omitted current player perks")
 	_expect(_saved_apple_trees_match(debounced_disk, apple_trees.snapshot()), "debounced disk save omitted current apple trees")
 	_expect(_advance_time(world_loot_state, 7.0), "world loot shutdown fixture did not advance")
+	var shutdown_completion := dungeon_progress.prepare_completion(&"stone_story")
+	_expect(shutdown_completion != null and dungeon_progress.commit_prepared_completion(shutdown_completion), "shutdown dungeon progress fixture failed")
 	var final_snapshot := world_loot_state.snapshot()
+	var final_progress_snapshot := dungeon_progress.snapshot()
 	session.shutdown("world_loot_test")
 	var final_disk := SaveManager.load_slot(_slot_id, item_catalog)
 	_expect(save_data.get("world_loot", null) == final_snapshot, "shutdown save data did not snapshot current world loot")
 	_expect(_saved_world_loot_matches(final_disk, final_snapshot, item_catalog, factory.get_next_instance_id()), "shutdown disk save did not snapshot current world loot")
+	_expect(_saved_dungeon_progress_matches(final_disk, final_progress_snapshot), "shutdown disk save did not snapshot current dungeon progress")
 	_expect(_saved_player_perks_match(final_disk, player_perks.snapshot(), perk_rules, player_stats.get_level()), "shutdown disk save omitted current player perks")
 	_expect(_saved_apple_trees_match(final_disk, apple_trees.snapshot()), "shutdown disk save omitted current apple trees")
 	_expect(not session._pending_edit_save, "successful shutdown retained a pending save")
 	overworld_loot.state_changed.emit()
 	_expect(not session._pending_edit_save, "shutdown retained the world loot save connection")
+	_expect(dungeon_progress.begin_attempt(&"after_shutdown") == 0, "post-shutdown progress fixture failed")
+	_expect(not session._pending_edit_save, "shutdown retained the dungeon progress save connection")
 	session.free()
 	overworld_loot.free()
 	pumpkin_patch.free()
@@ -154,6 +177,10 @@ func _saved_player_perks_match(
 		return false
 	var restored := PlayerPerks.new(perk_rules)
 	return restored.restore(encoded, player_level) and restored.snapshot() == expected_snapshot
+
+func _saved_dungeon_progress_matches(save_data: Dictionary, expected_snapshot: Dictionary) -> bool:
+	var restored := DungeonProgressState.new()
+	return restored.restore(save_data.get("dungeon_progress", null)) and restored.snapshot() == expected_snapshot
 
 func _saved_apple_trees_match(save_data: Dictionary, expected_snapshot: Dictionary) -> bool:
 	var encoded = save_data.get("apple_trees", null)

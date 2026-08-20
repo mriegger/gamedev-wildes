@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="LootPoolDefinition" load_steps=32 format=3]
+[gd_resource type="Resource" script_class="LootPoolDefinition" load_steps=30 format=3]
 
 [ext_resource type="Script" path="res://loot/loot_pool_definition.gd" id="1_pool"]
 [ext_resource type="Script" path="res://loot/loot_independent_roll_definition.gd" id="2_independent"]
@@ -14,7 +14,6 @@
 [ext_resource type="Resource" path="res://items/affixes/definitions/vicious.tres" id="12_vicious"]
 [ext_resource type="Resource" path="res://items/affixes/definitions/nimble.tres" id="13_nimble"]
 [ext_resource type="Resource" path="res://items/affixes/definitions/stout.tres" id="14_stout"]
-[ext_resource type="Resource" path="res://items/runes/definitions/basic_rune.tres" id="15_basic_rune"]
 [ext_resource type="Resource" path="res://items/runes/definitions/power_rune.tres" id="16_power_rune"]
 [ext_resource type="Script" path="res://items/affixes/equipment_affix_definition.gd" id="17_affix_definition"]
 
@@ -52,12 +51,6 @@ id = &"nimble"
 weight = 1.0
 affix = ExtResource("13_nimble")
 
-[sub_resource type="Resource" id="basic_rune_choice"]
-script = ExtResource("8_rune_choice")
-id = &"basic_rune"
-weight = 1.0
-rune = ExtResource("15_basic_rune")
-
 [sub_resource type="Resource" id="power_rune_choice"]
 script = ExtResource("8_rune_choice")
 id = &"power_rune"
@@ -70,7 +63,7 @@ minimum_random_affix_count = 1
 maximum_random_affix_count = 2
 random_affixes = Array[ExtResource("7_affix_choice")]([SubResource("vicious_choice"), SubResource("nimble_choice")])
 random_rune_slot_count = 1
-random_runes = Array[ExtResource("8_rune_choice")]([SubResource("basic_rune_choice"), SubResource("power_rune_choice")])
+random_runes = Array[ExtResource("8_rune_choice")]([SubResource("power_rune_choice")])
 
 [sub_resource type="Resource" id="rolled_sword_drop"]
 script = ExtResource("5_drop")

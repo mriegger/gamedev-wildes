@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="LootBundleDefinition" load_steps=30 format=3]
+[gd_resource type="Resource" script_class="LootBundleDefinition" load_steps=22 format=3]
 
 [ext_resource type="Script" path="res://loot/loot_bundle_definition.gd" id="1_bundle"]
 [ext_resource type="Script" path="res://loot/loot_bundle_entry_definition.gd" id="2_entry"]
@@ -6,16 +6,13 @@
 [ext_resource type="Script" path="res://loot/loot_drop_definition.gd" id="4_drop"]
 [ext_resource type="Script" path="res://loot/loot_equipment_roll_definition.gd" id="5_equipment_roll"]
 [ext_resource type="Script" path="res://loot/loot_affix_choice_definition.gd" id="6_affix_choice"]
-[ext_resource type="Script" path="res://loot/loot_rune_choice_definition.gd" id="7_rune_choice"]
 [ext_resource type="Script" path="res://items/affixes/equipment_affix_definition.gd" id="8_affix_definition"]
 [ext_resource type="Resource" path="res://items/definitions/copper.tres" id="9_copper"]
-[ext_resource type="Resource" path="res://items/runes/definitions/basic_rune.tres" id="10_basic_rune"]
 [ext_resource type="Resource" path="res://items/definitions/copper_sword.tres" id="11_sword"]
 [ext_resource type="Resource" path="res://equipment/armor/sets/copper/copper_helmet.tres" id="12_helmet"]
 [ext_resource type="Resource" path="res://items/affixes/definitions/vicious.tres" id="13_vicious"]
 [ext_resource type="Resource" path="res://items/affixes/definitions/nimble.tres" id="14_nimble"]
 [ext_resource type="Resource" path="res://items/affixes/definitions/stout.tres" id="15_stout"]
-[ext_resource type="Resource" path="res://items/runes/definitions/power_rune.tres" id="16_power_rune"]
 
 [sub_resource type="Resource" id="CopperDrop"]
 script = ExtResource("4_drop")
@@ -27,16 +24,6 @@ maximum_count = 8
 script = ExtResource("2_entry")
 id = &"copper"
 drop = SubResource("CopperDrop")
-
-[sub_resource type="Resource" id="BasicRuneDrop"]
-script = ExtResource("4_drop")
-item = ExtResource("10_basic_rune")
-
-[sub_resource type="Resource" id="BasicRuneChoice"]
-script = ExtResource("3_choice")
-id = &"basic_rune"
-weight = 6.0
-drop = SubResource("BasicRuneDrop")
 
 [sub_resource type="Resource" id="ViciousChoice"]
 script = ExtResource("6_affix_choice")
@@ -50,25 +37,11 @@ id = &"nimble"
 weight = 1.0
 affix = ExtResource("14_nimble")
 
-[sub_resource type="Resource" id="BasicSwordRuneChoice"]
-script = ExtResource("7_rune_choice")
-id = &"basic_rune"
-weight = 3.0
-rune = ExtResource("10_basic_rune")
-
-[sub_resource type="Resource" id="PowerSwordRuneChoice"]
-script = ExtResource("7_rune_choice")
-id = &"power_rune"
-weight = 1.0
-rune = ExtResource("16_power_rune")
-
 [sub_resource type="Resource" id="RolledSwordEquipment"]
 script = ExtResource("5_equipment_roll")
 minimum_random_affix_count = 1
 maximum_random_affix_count = 2
 random_affixes = Array[ExtResource("6_affix_choice")]([SubResource("ViciousChoice"), SubResource("NimbleChoice")])
-random_rune_slot_count = 1
-random_runes = Array[ExtResource("7_rune_choice")]([SubResource("BasicSwordRuneChoice"), SubResource("PowerSwordRuneChoice")])
 
 [sub_resource type="Resource" id="RolledSwordDrop"]
 script = ExtResource("4_drop")
@@ -77,7 +50,7 @@ equipment_roll = SubResource("RolledSwordEquipment")
 
 [sub_resource type="Resource" id="RolledSwordChoice"]
 script = ExtResource("3_choice")
-id = &"rolled_runed_copper_sword"
+id = &"rolled_copper_sword"
 weight = 3.0
 drop = SubResource("RolledSwordDrop")
 
@@ -101,4 +74,4 @@ script = ExtResource("1_bundle")
 id = &"stone_dungeon_chest"
 max_rewards = 3
 fixed_entries = Array[ExtResource("2_entry")]([SubResource("CopperEntry")])
-weighted_candidates = Array[ExtResource("3_choice")]([SubResource("BasicRuneChoice"), SubResource("RolledSwordChoice"), SubResource("StoutHelmetChoice")])
+weighted_candidates = Array[ExtResource("3_choice")]([SubResource("RolledSwordChoice"), SubResource("StoutHelmetChoice")])

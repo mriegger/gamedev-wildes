@@ -50,7 +50,9 @@ func _test_catalog_and_zombie_configuration() -> void:
 			var equipment_roll := rolled.drop.equipment_roll
 			_expect(equipment_roll.minimum_random_affix_count == 1 and equipment_roll.maximum_random_affix_count == 2, "zombie sword affix range mismatch")
 			_expect(equipment_roll.random_affixes.size() == 2, "zombie sword affix candidates missing")
-			_expect(equipment_roll.random_rune_slot_count == 1 and equipment_roll.random_runes.size() == 2, "zombie sword rune candidates missing")
+			_expect(equipment_roll.random_rune_slot_count == 1 and equipment_roll.random_runes.size() == 1, "zombie sword rune configuration changed")
+			if equipment_roll.random_runes.size() == 1:
+				_expect(equipment_roll.random_runes[0].rune == _item_catalog.get_definition(&"power_rune"), "zombie sword bypasses Basic Rune progression")
 	_expect(_item_catalog.has_equipment_affix(&"nimble"), "second sword affix missing")
 	_expect(_item_catalog.has_definition(&"power_rune"), "second weapon rune missing")
 	_expect(_item_catalog.get_equipment_affix(&"nimble").is_compatible_with(_item_catalog.get_definition(&"copper_sword")), "Nimble rejected copper sword")
@@ -292,7 +294,7 @@ func _test_zombie_distribution() -> void:
 	_expect(copper_count >= 680 and copper_count <= 820, "zombie copper frequency left expected tolerance: %d" % copper_count)
 	_expect(gear_count >= 115 and gear_count <= 225, "zombie gear frequency left expected tolerance: %d" % gear_count)
 	_expect(categories.size() == 3, "zombie gear choices were not all reachable")
-	_expect(rolled_runes.has(&"basic_rune") and rolled_runes.has(&"power_rune"), "zombie random runes were not both reachable")
+	_expect(rolled_runes.size() == 1 and rolled_runes.has(&"power_rune"), "zombie gear exposed a rune outside the Power Rune pool")
 	_expect(rolled_affixes.has(&"vicious") and rolled_affixes.has(&"nimble"), "zombie random affixes were not both reachable")
 	_expect(nimble_amounts.size() > 1, "zombie ranged Nimble rolls did not vary")
 

@@ -69,7 +69,7 @@ func _test_save_omits_generated_copper(catalog: BlockCatalog) -> void:
 		"quarter_turns": pumpkin_quarter_turns,
 	}
 	var apple_tree_snapshot := AppleTreeState.new().snapshot()
-	_expect(SaveManager.save_world_state(slot_id, save_data, world, player.global_position, player.stats, inventory, inventory.equipment_instance_factory, player_perks, item_proficiency, chest_storage, world_loot_state, pumpkin_snapshot, apple_tree_snapshot, 0.0, 6.0), "save manager could not write deterministic copper test save")
+	_expect(SaveManager.save_world_state(slot_id, save_data, world, player.global_position, player.stats, inventory, inventory.equipment_instance_factory, player_perks, item_proficiency, chest_storage, world_loot_state, DungeonProgressState.new(), pumpkin_snapshot, apple_tree_snapshot, 0.0, 6.0), "save manager could not write deterministic copper test save")
 	_expect(save_data["player_perks"] == {"allocations": {"health": 1}}, "in-memory save did not persist perk allocations")
 	_expect(save_data["apple_trees"] == apple_tree_snapshot, "in-memory save did not persist apple tree state")
 	_expect(save_data["world_loot"] == world_loot_state.snapshot(), "in-memory save did not persist world loot")

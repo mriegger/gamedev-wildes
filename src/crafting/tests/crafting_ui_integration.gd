@@ -94,11 +94,8 @@ func _process(_delta: float) -> bool:
 		_expect(_inventory.get_inventory_item_count(&"anvil") == 1, "anvil did not craft immediately")
 		_expect(_inventory.get_inventory_item_count(&"copper") == 15, "anvil consumed wrong copper count")
 		_expect(not _recipe_catalog.has_definition(&"copper_pickaxe"), "copper pickaxe remained in general crafting")
-		_hud.crafting_panel.select_recipe(&"basic_rune")
-		_expect(not _hud.crafting_panel.get_craft_button().is_craft_enabled(), "unavailable recipe button remained enabled")
+		_expect(not _recipe_catalog.has_definition(&"basic_rune"), "Basic Rune progression reward appeared in general crafting")
 		sound_player.stop()
-		_hud.crafting_panel.get_craft_button().pressed.emit()
-		_expect(not sound_player.playing, "failed craft played the success sound")
 		_hud.close_side_panel()
 		_phase = 2
 	elif _phase == 2 and _frame == 70:
@@ -124,7 +121,7 @@ func _check_open_state() -> void:
 	_expect(_camera_rig.camera.h_offset < 0.0, "camera framing did not account for the wider left panel")
 	var recipe_scroll := _hud.crafting_panel.get_node("Margin/Content/Body/Recipes/RecipeScroll") as ScrollContainer
 	var recipe_list := _hud.crafting_panel.get_node("Margin/Content/Body/Recipes/RecipeScroll/RecipeList") as VBoxContainer
-	_expect(recipe_scroll != null and recipe_list.get_child_count() == 7, "scrollable recipe list did not contain seven general recipes")
+	_expect(recipe_scroll != null and recipe_list.get_child_count() == 6, "scrollable recipe list did not contain six general recipes")
 	_expect(recipe_list.get_child(0).name == "TorchBundle" and recipe_list.get_child(1).name == "Chest" and recipe_list.get_child(2).name == "Anvil" and recipe_list.get_child(3).name == "Cauldron", "station recipes are not ordered after torches")
 	var recipe_button := recipe_list.get_child(0) as Button
 	var recipe_icon_frame := recipe_button.get_node("Content/IconFrame") as CenterContainer

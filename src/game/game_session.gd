@@ -17,6 +17,7 @@ var _player_perks: PlayerPerks
 var _item_proficiency: ItemProficiency
 var _chest_storage: ChestStorage
 var _world_loot_state: WorldLootState
+var _dungeon_progress: DungeonProgressState
 var _chest_coordinator: ChestCoordinator
 var _overworld_loot: OverworldLootCoordinator
 var _environment: GameEnvironment
@@ -43,6 +44,7 @@ func setup(
 	p_item_proficiency: ItemProficiency,
 	p_chest_storage: ChestStorage,
 	p_world_loot_state: WorldLootState,
+	p_dungeon_progress: DungeonProgressState,
 	p_chest_coordinator: ChestCoordinator,
 	p_overworld_loot: OverworldLootCoordinator,
 	p_environment: GameEnvironment,
@@ -66,6 +68,7 @@ func setup(
 	)
 	assert(p_world_loot_state != null and p_world_loot_state.item_catalog == p_inventory.item_catalog)
 	assert(p_world_loot_state.equipment_instance_factory == p_equipment_instance_factory)
+	assert(p_dungeon_progress != null)
 	assert(p_chest_coordinator != null)
 	assert(p_overworld_loot != null and p_overworld_loot._uses_world_loot_state(p_world_loot_state))
 	assert(p_environment != null)
@@ -82,6 +85,7 @@ func setup(
 	_item_proficiency = p_item_proficiency
 	_chest_storage = p_chest_storage
 	_world_loot_state = p_world_loot_state
+	_dungeon_progress = p_dungeon_progress
 	_chest_coordinator = p_chest_coordinator
 	_overworld_loot = p_overworld_loot
 	_environment = p_environment
@@ -99,6 +103,7 @@ func setup(
 		save_data["next_equipment_instance_id"] = _equipment_instance_factory.get_next_instance_id()
 		save_data["player_perks"] = _player_perks.snapshot()
 		save_data["world_loot"] = _world_loot_state.snapshot()
+		save_data["dungeon_progress"] = _dungeon_progress.snapshot()
 		save_data["pumpkin_patch"] = _pumpkin_patch.snapshot()
 		save_data["apple_trees"] = _apple_trees.snapshot()
 		SaveManager.update_last_played(slot_id, save_data)
@@ -107,6 +112,7 @@ func setup(
 		_apple_trees.state_changed.connect(_queue_state_save)
 		_chest_coordinator.contents_changed.connect(_on_chest_contents_changed)
 		_overworld_loot.state_changed.connect(_queue_state_save)
+		_dungeon_progress.state_changed.connect(_queue_state_save)
 
 func _process(delta):
 	_playtime_accum += delta
@@ -151,6 +157,7 @@ func save(reason: String) -> bool:
 		_item_proficiency,
 		_chest_storage,
 		_world_loot_state,
+		_dungeon_progress,
 		_pumpkin_patch.snapshot(),
 		_apple_trees.snapshot(),
 		_playtime_accum,
@@ -199,3 +206,5 @@ func shutdown(reason: String):
 		_chest_coordinator.contents_changed.disconnect(_on_chest_contents_changed)
 	if _overworld_loot != null and _overworld_loot.state_changed.is_connected(_queue_state_save):
 		_overworld_loot.state_changed.disconnect(_queue_state_save)
+	if _dungeon_progress != null and _dungeon_progress.state_changed.is_connected(_queue_state_save):
+		_dungeon_progress.state_changed.disconnect(_queue_state_save)

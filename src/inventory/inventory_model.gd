@@ -90,6 +90,15 @@ func prepare_add_stack(stack: InventoryStack) -> PreparedInventoryChange:
 		return null
 	return _prepare_simulated_change(simulated)
 
+func prepare_add_stacks_exact(stacks: Array[InventoryStack]) -> PreparedInventoryChange:
+	if stacks.is_empty():
+		return null
+	var simulated := _create_simulation()
+	for stack in stacks:
+		if not simulated._apply_add_stack(stack):
+			return null
+	return _prepare_simulated_change(simulated)
+
 func prepare_add_stack_up_to(stack: InventoryStack) -> PreparedInventoryChange:
 	var simulated := _create_simulation()
 	var accepted := simulated._apply_add_stack_up_to(stack)

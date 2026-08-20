@@ -183,6 +183,7 @@ func _test_save_round_trip() -> void:
 	var player_perks := PlayerPerks.new(load("res://progression/player_perk_rules.tres") as PlayerPerkRules)
 	_expect(player_perks.restore({"allocations": {"health": 1}}, 2), "round-trip perk setup failed")
 	var item_proficiency := ItemProficiency.new(_item_catalog)
+	var dungeon_progress := DungeonProgressState.new()
 	var apple_trees := AppleTreeState.new().snapshot()
 	var expected_snapshot := world_loot_state.snapshot()
 	var current_before_chest_validation := current.duplicate(true)
@@ -204,6 +205,7 @@ func _test_save_round_trip() -> void:
 			item_proficiency,
 			wrong_slot_storage,
 			world_loot_state,
+			dungeon_progress,
 			{"present": false},
 			apple_trees,
 			0.0,
@@ -232,6 +234,7 @@ func _test_save_round_trip() -> void:
 			item_proficiency,
 			orphan_chest_storage,
 			world_loot_state,
+			dungeon_progress,
 			{"present": false},
 			apple_trees,
 			0.0,
@@ -263,6 +266,7 @@ func _test_save_round_trip() -> void:
 			item_proficiency,
 			chest_storage,
 			world_loot_state,
+			dungeon_progress,
 			{"present": false},
 			apple_trees,
 			0.0,
@@ -284,6 +288,7 @@ func _test_save_round_trip() -> void:
 		item_proficiency,
 		chest_storage,
 		world_loot_state,
+		dungeon_progress,
 		{"present": false},
 		apple_trees,
 		0.0,
@@ -330,6 +335,7 @@ func _test_save_round_trip() -> void:
 			item_proficiency,
 			chest_storage,
 			world_loot_state,
+			dungeon_progress,
 			{"present": false},
 			apple_trees,
 			0.0,
@@ -357,6 +363,7 @@ func _test_save_round_trip() -> void:
 			item_proficiency,
 			chest_storage,
 			world_loot_state,
+			dungeon_progress,
 			{"present": false},
 			apple_trees,
 			0.0,
@@ -378,6 +385,7 @@ func _empty_current_save(next_instance_id: int = 1) -> Dictionary:
 		"chests": {},
 		"next_equipment_instance_id": next_instance_id,
 		"world_loot": _empty_world_loot(),
+		"dungeon_progress": DungeonProgressState.new().snapshot(),
 		"player_perks": {"allocations": {}},
 		"apple_trees": AppleTreeState.new().snapshot(),
 	}

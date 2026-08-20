@@ -103,6 +103,8 @@ func _run_runtime_lifecycle(
 		layout,
 		definition,
 		layout.seed_value + iteration,
+		false,
+		layout.seed_value,
 		block_catalog,
 		texture_set,
 		settings,
@@ -407,6 +409,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	game.inventory_model = InventoryModel.new(game.item_catalog, game.equipment_instance_factory)
 	game.inventory_model.setup_starter()
 	game.world_loot_state = WorldLootState.new(game.item_catalog, game.equipment_instance_factory)
+	game.dungeon_progress = DungeonProgressState.new()
 	game.player_stats = ActorStats.new(game.player_stats_definition)
 	game.inventory_loadout_coordinator = InventoryTestFixture.create_loadout(game.inventory_model, game.player_stats)
 	_expect(game.inventory_loadout_coordinator != null, "transition inventory loadout setup failed")
@@ -634,6 +637,10 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	await game._enter_level()
 	var defeated_runtime := game._level_runtime
 	var first_attempt_state := defeated_runtime._encounter_state
+	var basic_rune_count_before := game.inventory_model.get_inventory_item_count(&"basic_rune")
+	var failed_reward := _take_one_time_reward(defeated_runtime, block_catalog)
+	_expect(not failed_reward.is_empty(), "dungeon defeat fixture did not find the one-time reward chest")
+	_expect(game.inventory_model.get_inventory_item_count(&"basic_rune") == basic_rune_count_before, "one-time reward entered inventory before a successful exit")
 	game.player_stats.damage(game.player_stats.current_hp)
 	game._on_player_defeated()
 	if persistent_watcher != null:
@@ -655,10 +662,18 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	_expect(environment._world_environment.environment != null and environment._sun.visible and environment._sun_fill.visible, "dungeon defeat did not restore the outdoor environment")
 	_expect(not game.game_session.is_saving_suspended(), "dungeon defeat did not restore saving")
 	_expect(game._level_runtime == null and not is_instance_valid(defeated_runtime), "dungeon defeat retained the failed runtime")
+	var one_time_reward := catalog.get_level(&"stone_dungeon").one_time_chest_reward
+	_expect(not game.dungeon_progress.has_claimed_reward(game.level_entrance_definition.entrance_id, one_time_reward.reward_id), "dungeon defeat claimed the one-time reward")
+	_expect(game.dungeon_progress.get_completion_count(game.level_entrance_definition.entrance_id) == 0, "dungeon defeat completed the dungeon")
 	await game._enter_level()
 	var fresh_runtime := game._level_runtime
 	_expect(fresh_runtime._encounter_state != first_attempt_state and fresh_runtime._encounter_state.get_active_room_ids().is_empty(), "dungeon re-entry did not create a fresh encounter attempt")
+	var retried_reward := _take_one_time_reward(fresh_runtime, block_catalog)
+	_expect(retried_reward == failed_reward, "failed dungeon attempt changed the designated one-time chest or its contents")
 	await game._exit_level()
+	_expect(game.dungeon_progress.has_claimed_reward(game.level_entrance_definition.entrance_id, one_time_reward.reward_id), "successful dungeon exit did not claim the one-time reward")
+	_expect(game.dungeon_progress.get_completion_count(game.level_entrance_definition.entrance_id) == 1, "successful dungeon exit did not complete the dungeon")
+	_expect(game.inventory_model.get_inventory_item_count(&"basic_rune") == basic_rune_count_before + 1, "successful dungeon exit did not grant the Basic Rune")
 	player.unbind_space()
 	game._unbind_entity_context()
 	combat.shutdown()
@@ -696,6 +711,37 @@ func _dungeon_loot_signature(coordinator: DungeonChestCoordinator) -> String:
 				rune_ids.assign(stack.equipment_instance.socketed_rune_ids)
 			encoded.append("%s:%d:%s:%s" % [stack.item_id, stack.count, str(affixes), str(rune_ids)])
 	return "|".join(encoded)
+
+func _take_one_time_reward(runtime: LevelRuntime, block_catalog: BlockCatalog) -> Dictionary:
+	var coordinator := runtime.get_chest_coordinator()
+	var container := block_catalog.get_definition(BlockId.Type.CHEST).container
+	var positions: Array[Vector3i] = []
+	for position in coordinator._storage.snapshot():
+		positions.append(position as Vector3i)
+	positions.sort_custom(func(left: Vector3i, right: Vector3i) -> bool:
+		if left.x != right.x:
+			return left.x < right.x
+		if left.y != right.y:
+			return left.y < right.y
+		return left.z < right.z
+	)
+	for position in positions:
+		if not coordinator.try_open(position, container):
+			return {}
+		var encoded: Array[Dictionary] = []
+		var has_basic_rune := false
+		for slot_index in range(container.get_slot_count()):
+			var stack := coordinator.get_inventory_stack(ChestTransferCoordinator.CHEST_SCOPE, slot_index)
+			if stack == null:
+				continue
+			encoded.append(stack.to_dict())
+			has_basic_rune = stack.item_id == &"basic_rune" or has_basic_rune
+		if has_basic_rune:
+			var moved := coordinator.move_all_to_backpack()
+			coordinator.close()
+			return {"position": position, "contents": encoded} if moved else {}
+		coordinator.close()
+	return {}
 
 func _run_structure_designer_cycle(game: TransitionGame, in_level: bool, cycle: int) -> void:
 	var label := "%s cycle %d" % ["dungeon" if in_level else "overworld", cycle]

@@ -25,7 +25,6 @@ func _init() -> void:
 		&"cauldron",
 		&"campfire",
 		&"stone_pickaxe",
-		&"basic_rune",
 	]
 	_expect(recipe_catalog.definitions.size() == expected_recipe_ids.size(), "general recipe count differs")
 	for index in range(expected_recipe_ids.size()):
@@ -53,9 +52,9 @@ func _init() -> void:
 		_expect(anvil_recipe_catalog.get_definition(recipe_id).get_ingredient_counts() == expected_copper_recipes[recipe_id], "%s ingredients mismatch" % recipe_id)
 	_expect(anvil_recipe_catalog.definitions.size() == expected_copper_recipes.size(), "anvil catalog does not contain every copper recipe")
 	_expect(not anvil_recipe_catalog.has_definition(&"stone_pickaxe") and not anvil_recipe_catalog.has_definition(&"torch_bundle"), "non-metal recipe leaked into anvil crafting")
+	_expect(not recipe_catalog.has_definition(&"basic_rune"), "Basic Rune progression reward remained directly craftable")
 	_expect(recipe_catalog.get_definition(&"stone_pickaxe").get_ingredient_counts() == {&"stone_block": 10, &"log_block": 5}, "stone pickaxe ingredients mismatch")
 	_expect(recipe_catalog.get_definition(&"chest").get_ingredient_counts() == {&"log_block": 5}, "chest ingredients mismatch")
-	_expect(recipe_catalog.get_definition(&"basic_rune").get_ingredient_counts() == {&"sand_block": 32}, "basic rune ingredients mismatch")
 	_expect(recipe_catalog.get_definition(&"anvil").get_ingredient_counts() == {&"copper": 10}, "anvil ingredients mismatch")
 	_expect(recipe_catalog.get_definition(&"cauldron").get_ingredient_counts() == {&"log_block": 3, &"stone_block": 2}, "cauldron ingredients mismatch")
 	_expect(recipe_catalog.get_definition(&"campfire").get_ingredient_counts() == {&"stone_block": 12, &"log_block": 2}, "campfire ingredients mismatch")

@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="LevelDefinition" load_steps=16 format=3]
+[gd_resource type="Resource" script_class="LevelDefinition" load_steps=17 format=3]
 
 [ext_resource type="Script" path="res://levels/definitions/level_definition.gd" id="1_definition"]
 [ext_resource type="Resource" path="res://levels/content/dungeons/stone/stone_dungeon_presentation.tres" id="2_presentation"]
@@ -6,6 +6,7 @@
 [ext_resource type="Script" path="res://levels/definitions/level_enemy_group_definition.gd" id="4_enemy_group"]
 [ext_resource type="Script" path="res://levels/definitions/level_room_encounter_definition.gd" id="5_encounter"]
 [ext_resource type="Resource" path="res://levels/content/dungeons/stone/stone_chest_loot.tres" id="6_chest_loot"]
+[ext_resource type="Resource" path="res://levels/content/dungeons/stone/stone_one_time_chest_reward.tres" id="7_one_time_reward"]
 
 [sub_resource type="Resource" id="MasterEnemyGroup"]
 script = ExtResource("4_enemy_group")
@@ -48,11 +49,12 @@ chest_loot_bundle = ExtResource("6_chest_loot")
 
 [resource]
 script = ExtResource("1_definition")
-format_version = 3
+format_version = 4
 level_id = &"stone_dungeon"
 presentation = ExtResource("2_presentation")
 start_module_id = &"stone_entry_path"
 hallway_module_ids = Array[StringName]([&"stone_hallway"])
 room_requirements = Array[ExtResource("3_requirement")]([SubResource("MasterRoomRequirement"), SubResource("NormalRoomRequirement"), SubResource("ChestRoomRequirement")])
+one_time_chest_reward = ExtResource("7_one_time_reward")
 maximum_extent = Vector3i(96, 16, 96)
 maximum_explored_states = 10000

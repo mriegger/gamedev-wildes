@@ -1,7 +1,7 @@
 extends Resource
 class_name LevelDefinition
 
-const FORMAT_VERSION: int = 3
+const FORMAT_VERSION: int = 4
 const HARD_MAX_EXPLORED_STATES: int = 10000
 const HARD_MAX_MODULE_COUNT: int = 64
 
@@ -11,6 +11,7 @@ const HARD_MAX_MODULE_COUNT: int = 64
 @export var start_module_id: StringName
 @export var hallway_module_ids: Array[StringName] = []
 @export var room_requirements: Array[LevelRoomRequirement] = []
+@export var one_time_chest_reward: LevelOneTimeChestRewardDefinition
 @export var maximum_extent: Vector3i = LevelGeometryLimits.HARD_MAX_EXTENT
 @export_range(1, HARD_MAX_EXPLORED_STATES) var maximum_explored_states: int = HARD_MAX_EXPLORED_STATES
 
@@ -43,6 +44,7 @@ func validate() -> bool:
 	var assigned_module_ids: Dictionary = {start_module_id: "start"}
 	valid = _validate_module_pool(hallway_module_ids, "hallway", assigned_module_ids, source) and valid
 	var room_type_ids: Dictionary = {}
+	var has_chest_room := false
 	for requirement in room_requirements:
 		if requirement == null:
 			push_error("[LevelDefinition] Null room requirement for %s" % source)
@@ -53,7 +55,13 @@ func validate() -> bool:
 			push_error("[LevelDefinition] Duplicate room type %s for %s" % [requirement.room_type_id, source])
 			valid = false
 		room_type_ids[requirement.room_type_id] = true
+		has_chest_room = requirement.chest_loot_bundle != null or has_chest_room
 		valid = _validate_module_pool(requirement.module_ids, "room", assigned_module_ids, source) and valid
+	if one_time_chest_reward != null:
+		valid = one_time_chest_reward.validate(source) and valid
+		if not has_chest_room:
+			push_error("[LevelDefinition] One-time chest reward requires a chest-bearing room for %s" % source)
+			valid = false
 	return valid
 
 func get_room_count() -> int:

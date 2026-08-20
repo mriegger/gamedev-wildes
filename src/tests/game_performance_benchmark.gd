@@ -124,6 +124,7 @@ func _make_saved_world() -> Dictionary:
 		"next_equipment_instance_id": 1,
 		"chests": {},
 		"world_loot": {"next_entry_id": 1, "entries": []},
+		"dungeon_progress": DungeonProgressState.new().snapshot(),
 		"placed_blocks": {},
 		"removed_blocks": {},
 		"torch_attachments": {},

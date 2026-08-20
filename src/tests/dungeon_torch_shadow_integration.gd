@@ -208,6 +208,8 @@ func _test_level_runtime_setting(block_catalog: BlockCatalog) -> void:
 		result.layout,
 		level_catalog.get_level(&"stone_dungeon"),
 		result.layout.seed_value,
+		false,
+		result.layout.seed_value,
 		block_catalog,
 		BlockTextureSet.new(block_catalog),
 		settings,

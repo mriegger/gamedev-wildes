@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="LevelOneTimeChestRewardDefinition" load_steps=9 format=3]
+
+[ext_resource type="Script" path="res://levels/definitions/level_one_time_chest_reward_definition.gd" id="1_reward"]
+[ext_resource type="Script" path="res://loot/loot_bundle_definition.gd" id="2_bundle"]
+[ext_resource type="Script" path="res://loot/loot_bundle_entry_definition.gd" id="3_entry"]
+[ext_resource type="Script" path="res://loot/loot_drop_definition.gd" id="4_drop"]
+[ext_resource type="Resource" path="res://items/runes/definitions/basic_rune.tres" id="5_basic_rune"]
+
+[sub_resource type="Resource" id="BasicRuneDrop"]
+script = ExtResource("4_drop")
+item = ExtResource("5_basic_rune")
+
+[sub_resource type="Resource" id="BasicRuneEntry"]
+script = ExtResource("3_entry")
+id = &"basic_rune"
+drop = SubResource("BasicRuneDrop")
+
+[sub_resource type="Resource" id="BasicRuneBundle"]
+script = ExtResource("2_bundle")
+id = &"stone_dungeon_one_time_chest_reward_loot"
+max_rewards = 1
+fixed_entries = Array[ExtResource("3_entry")]([SubResource("BasicRuneEntry")])
+
+[resource]
+script = ExtResource("1_reward")
+reward_id = &"stone_dungeon_one_time_chest_reward"
+loot_bundle = SubResource("BasicRuneBundle")

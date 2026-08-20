@@ -34,7 +34,9 @@ func _ready() -> void:
 func setup(
 	layout: LevelLayout,
 	definition: LevelDefinition,
-	loot_seed: int,
+	repeat_loot_seed: int,
+	one_time_reward_claimed: bool,
+	one_time_loot_seed: int,
 	block_catalog: BlockCatalog,
 	texture_set: BlockTextureSet,
 	settings: GameSettings,
@@ -60,7 +62,10 @@ func setup(
 	_chest_coordinator = DungeonChestCoordinator.new()
 	var chest_coordinator_ready := _chest_coordinator.setup(
 		layout.chests,
-		loot_seed,
+		repeat_loot_seed,
+		definition.one_time_chest_reward,
+		one_time_reward_claimed,
+		one_time_loot_seed,
 		inventory_model,
 		inventory_loadout,
 		chest_block.container,

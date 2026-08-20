@@ -5,16 +5,28 @@ signal transfer_rejected(message: String)
 
 const INVENTORY_FULL_MESSAGE: String = "Inventory full — drop items first"
 
+var repeatable_reward_taken: bool:
+	get:
+		return _repeatable_reward_taken
+
 var _storage: ChestStorage
 var _inventory_model: InventoryModel
 var _inventory_loadout: InventoryLoadoutCoordinator
 var _container_definition: ContainerBlockDefinition
 var _active_position: Variant = null
 var _transaction_active: bool = false
+var _one_time_chest_position: Variant = null
+var _one_time_reward_id: StringName
+var _pending_one_time_stacks: Array[InventoryStack] = []
+var _escrow_revision: int = 0
+var _repeatable_reward_taken: bool = false
 
 func setup(
 	placements: Array[LevelChestPlacement],
-	p_loot_seed: int,
+	p_repeat_loot_seed: int,
+	p_one_time_reward: LevelOneTimeChestRewardDefinition,
+	p_one_time_reward_claimed: bool,
+	p_one_time_loot_seed: int,
 	p_inventory_model: InventoryModel,
 	p_inventory_loadout: InventoryLoadoutCoordinator,
 	p_container_definition: ContainerBlockDefinition,
@@ -27,13 +39,17 @@ func setup(
 	var live_factory := p_inventory_model.equipment_instance_factory
 	var expected_next_instance_id := live_factory.get_next_instance_id()
 	var pending_factory := live_factory.copy()
-	var pending_storage := _prepare_storage(
+	var initialization := _prepare_storage(
 		placements,
-		p_loot_seed,
+		p_repeat_loot_seed,
+		p_one_time_reward,
+		p_one_time_reward_claimed,
+		p_one_time_loot_seed,
 		p_inventory_model.item_catalog,
 		pending_factory,
 		p_container_definition.get_slot_count(),
 	)
+	var pending_storage := initialization.get("storage") as ChestStorage
 	if pending_storage == null:
 		return false
 	if (
@@ -69,6 +85,8 @@ func setup(
 	_inventory_model = p_inventory_model
 	_inventory_loadout = p_inventory_loadout
 	_container_definition = p_container_definition
+	_one_time_chest_position = initialization.get("one_time_chest_position", null)
+	_one_time_reward_id = initialization.get("one_time_reward_id", &"")
 	return true
 
 func can_open(position: Vector3i) -> bool:
@@ -137,7 +155,8 @@ func handle_drop(
 		drag_count,
 	)
 	if prepared.is_empty():
-		_notify_full_inventory(source_scope, source_index, drag_count)
+		if destination_scope == PLAYER_SCOPE and _is_valid_index(destination_scope, destination_index):
+			_notify_full_inventory(source_scope, source_index, drag_count)
 		return false
 	if prepared.has("loadout_only"):
 		_transaction_active = true
@@ -146,6 +165,8 @@ func handle_drop(
 		)
 		_transaction_active = false
 		return committed
+	if prepared.has("escrow"):
+		return _commit_escrow_take(prepared)
 	return _commit_take(prepared)
 
 func quick_transfer(source_scope: StringName, source_index: int) -> bool:
@@ -153,6 +174,8 @@ func quick_transfer(source_scope: StringName, source_index: int) -> bool:
 	if prepared.is_empty():
 		_notify_full_inventory(source_scope, source_index)
 		return false
+	if prepared.has("escrow"):
+		return _commit_escrow_take(prepared)
 	return _commit_take(prepared)
 
 func can_quick_transfer(source_scope: StringName, source_index: int) -> bool:
@@ -200,6 +223,8 @@ func _prepare_drop(
 		return {} if loadout_change == null else {"loadout_only": loadout_change}
 	if source_scope != CHEST_SCOPE or destination_scope != PLAYER_SCOPE:
 		return {}
+	if _is_one_time_chest(_active_position):
+		return _prepare_escrow_take(source_index, drag_count)
 	var source := _storage.get_slot(_active_position, source_index)
 	var destination := _inventory_model.get_slot(destination_index)
 	var projection := _project_take(source, destination, drag_count)
@@ -235,6 +260,8 @@ func _prepare_quick_take(
 		or not _is_valid_index(source_scope, source_index)
 	):
 		return {}
+	if _is_one_time_chest(_active_position):
+		return _prepare_escrow_take(source_index)
 	var storage_change := _storage.prepare_remove_stack(_active_position, source_index)
 	if storage_change == null:
 		return {}
@@ -251,6 +278,8 @@ func _commit_take(prepared: Dictionary) -> bool:
 	var loadout_change := prepared.get("loadout") as PreparedInventoryLoadoutChange
 	if (
 		_transaction_active
+		or storage_change == null
+		or _is_one_time_chest(storage_change._get_position())
 		or not _storage.can_commit_prepared_change(storage_change)
 		or not _inventory_loadout.can_commit_prepared_change(loadout_change)
 	):
@@ -260,8 +289,42 @@ func _commit_take(prepared: Dictionary) -> bool:
 	var inventory_committed := _inventory_loadout._commit_prepared_change(loadout_change)
 	assert(inventory_committed)
 	_storage._commit_prepared_change(storage_change)
+	_repeatable_reward_taken = true
 	var inventory_notified := _inventory_loadout._notify_prepared_change(loadout_change)
 	assert(inventory_notified)
+	contents_changed.emit(position)
+	_transaction_active = false
+	return true
+
+func _prepare_escrow_take(source_index: int, count: int = -1) -> Dictionary:
+	if not _is_one_time_chest(_active_position):
+		return {}
+	var storage_change := _storage.prepare_remove_stack(_active_position, source_index, count)
+	if storage_change == null:
+		return {}
+	var candidate := storage_change.get_result_stack()
+	var projected_stacks := _copy_stacks(_pending_one_time_stacks)
+	projected_stacks.append(candidate)
+	if _inventory_model.prepare_add_stacks_exact(projected_stacks) == null:
+		return {}
+	return {"storage": storage_change, "escrow": candidate}
+
+func _commit_escrow_take(prepared: Dictionary) -> bool:
+	var storage_change := prepared.get("storage") as PreparedChestStorageChange
+	var candidate := prepared.get("escrow") as InventoryStack
+	if (
+		_transaction_active
+		or storage_change == null
+		or candidate == null
+		or not _is_one_time_chest(storage_change._get_position())
+		or not _storage.can_commit_prepared_change(storage_change)
+	):
+		return false
+	var position := storage_change._get_position()
+	_transaction_active = true
+	_storage._commit_prepared_change(storage_change)
+	_pending_one_time_stacks.append(candidate.copy())
+	_escrow_revision += 1
 	contents_changed.emit(position)
 	_transaction_active = false
 	return true
@@ -320,8 +383,52 @@ func _notify_full_inventory(source_scope: StringName, source_index: int, count: 
 	if requested_count < 1 or requested_count > stack.count or stack.has_instance_data() and requested_count != stack.count:
 		return
 	var requested := InventoryStack.new(stack.item_id, requested_count, stack.equipment_instance)
-	if _inventory_model.prepare_add_stack(requested) == null:
+	var requested_stacks: Array[InventoryStack] = [requested]
+	if _is_one_time_chest(_active_position):
+		requested_stacks = _copy_stacks(_pending_one_time_stacks)
+		requested_stacks.append(requested)
+	if _inventory_model.prepare_add_stacks_exact(requested_stacks) == null:
 		transfer_rejected.emit(INVENTORY_FULL_MESSAGE)
+
+func prepare_one_time_claim() -> PreparedDungeonChestClaim:
+	if (
+		_transaction_active
+		or _one_time_chest_position == null
+		or _one_time_reward_id.is_empty()
+		or _pending_one_time_stacks.is_empty()
+		or not _storage.is_chest_empty(_one_time_chest_position)
+	):
+		return null
+	return PreparedDungeonChestClaim.new(
+		self,
+		_escrow_revision,
+		_one_time_reward_id,
+		_pending_one_time_stacks,
+	)
+
+func can_commit_prepared_claim(prepared: PreparedDungeonChestClaim) -> bool:
+	return (
+		prepared != null
+		and not _transaction_active
+		and prepared._is_for(self)
+		and prepared._is_prepared()
+		and prepared._get_expected_revision() == _escrow_revision
+		and prepared.get_reward_id() == _one_time_reward_id
+		and _one_time_chest_position != null
+		and not _pending_one_time_stacks.is_empty()
+		and _storage.is_chest_empty(_one_time_chest_position)
+	)
+
+func commit_prepared_claim(prepared: PreparedDungeonChestClaim) -> bool:
+	if not can_commit_prepared_claim(prepared):
+		return false
+	var marked := prepared._mark_committed(self)
+	assert(marked)
+	if not marked:
+		return false
+	_pending_one_time_stacks.clear()
+	_escrow_revision += 1
+	return true
 
 func _is_valid_index(scope: StringName, index: int) -> bool:
 	if scope == PLAYER_SCOPE:
@@ -336,16 +443,18 @@ func _is_valid_index(scope: StringName, index: int) -> bool:
 
 func _prepare_storage(
 	placements: Array[LevelChestPlacement],
-	loot_seed: int,
+	repeat_loot_seed: int,
+	one_time_reward: LevelOneTimeChestRewardDefinition,
+	one_time_reward_claimed: bool,
+	one_time_loot_seed: int,
 	item_catalog: ItemCatalog,
 	pending_factory: EquipmentInstanceFactory,
 	slot_count: int,
-) -> ChestStorage:
+) -> Dictionary:
 	var room_ids: Dictionary = {}
 	var cells: Dictionary = {}
 	var sorted_placements: Array[LevelChestPlacement] = placements.duplicate()
 	sorted_placements.sort_custom(_placement_less)
-	var pending_storage := ChestStorage.new(item_catalog, pending_factory, slot_count)
 	for placement in sorted_placements:
 		if (
 			placement == null
@@ -354,22 +463,50 @@ func _prepare_storage(
 			or cells.has(placement.cell)
 			or not LootCatalogValidator.validate_bundle(placement.loot_bundle, item_catalog)
 		):
-			return null
+			return {}
 		room_ids[placement.room_id] = true
 		cells[placement.cell] = true
+	if one_time_reward != null and (
+		not one_time_reward.validate("dungeon one-time chest reward")
+		or not LootCatalogValidator.validate_bundle(one_time_reward.loot_bundle, item_catalog)
+	):
+		return {}
+	var one_time_placement: LevelChestPlacement
+	if one_time_reward != null and not one_time_reward_claimed:
+		if sorted_placements.is_empty():
+			return {}
+		var one_time_index := LootKeyedRandom.integer_inclusive(
+			one_time_loot_seed,
+			one_time_reward.reward_id,
+			[&"one_time_chest"],
+			0,
+			sorted_placements.size() - 1,
+		)
+		one_time_placement = sorted_placements[one_time_index]
+	var pending_storage := ChestStorage.new(item_catalog, pending_factory, slot_count)
+	for placement in sorted_placements:
 		if not pending_storage.create_chest(placement.cell):
-			return null
+			return {}
+		var bundle := placement.loot_bundle
+		var resolved_seed := _placement_loot_seed(repeat_loot_seed, placement)
+		if placement == one_time_placement:
+			bundle = one_time_reward.loot_bundle
+			resolved_seed = one_time_loot_seed
 		var resolution := LootResolver.prepare_bundle(
-			placement.loot_bundle,
-			_placement_loot_seed(loot_seed, placement),
+			bundle,
+			resolved_seed,
 			pending_factory,
 		)
 		if resolution == null or not LootResolver._commit(resolution, pending_factory):
-			return null
+			return {}
 		for stack in resolution.get_drops():
 			if not pending_storage.add_stack(placement.cell, stack):
-				return null
-	return pending_storage
+				return {}
+	return {
+		"storage": pending_storage,
+		"one_time_chest_position": null if one_time_placement == null else one_time_placement.cell,
+		"one_time_reward_id": &"" if one_time_placement == null else one_time_reward.reward_id,
+	}
 
 func _placement_loot_seed(loot_seed: int, placement: LevelChestPlacement) -> int:
 	return LootKeyedRandom.u53(
@@ -401,3 +538,12 @@ static func _stacks_match(first: InventoryStack, second: InventoryStack) -> bool
 	if first == null or second == null:
 		return first == null and second == null
 	return first.to_dict() == second.to_dict()
+
+func _is_one_time_chest(position: Variant) -> bool:
+	return _one_time_chest_position != null and position == _one_time_chest_position
+
+static func _copy_stacks(source: Array[InventoryStack]) -> Array[InventoryStack]:
+	var copied: Array[InventoryStack] = []
+	for stack in source:
+		copied.append(stack.copy())
+	return copied

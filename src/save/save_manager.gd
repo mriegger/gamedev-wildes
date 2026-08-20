@@ -3,7 +3,7 @@ class_name SaveManager
 
 const SAVE_DIR: String = "user://saves"
 const SLOT_COUNT: int = 3
-const CURRENT_SAVE_VERSION: int = 14
+const CURRENT_SAVE_VERSION: int = 15
 const MINIMUM_MIGRATABLE_SAVE_VERSION: int = 4
 const VERSION_SEVEN_BASE_EXPERIENCE_TO_LEVEL: int = 100
 const VERSION_SEVEN_EXPERIENCE_GROWTH: float = 1.25
@@ -112,6 +112,7 @@ static func create_new_world(slot_id: int, seed_value: int, world_name: String) 
 			"next_entry_id": 1,
 			"entries": [],
 		},
+		"dungeon_progress": DungeonProgressState.new().snapshot(),
 		"playtime_seconds": 0,
 		"time_of_day": 6.0,
 		"pumpkin_patch": null,
@@ -377,16 +378,29 @@ static func _migrate_save_data(data: Dictionary, item_catalog: ItemCatalog) -> b
 					return false
 				migrated["emplacements"] = {}
 				version = 14
+			14:
+				if migrated.has("dungeon_progress"):
+					return false
+				migrated["dungeon_progress"] = DungeonProgressState.new().snapshot()
+				version = 15
 			_:
 				return false
 		migrated["version"] = version
 	if source_version < CURRENT_SAVE_VERSION and not _synthesize_missing_chest_storage(migrated):
+		return false
+	if not _validate_dungeon_progress(migrated):
 		return false
 	if not _validate_equipment_instance_identity(migrated, item_catalog):
 		return false
 	data.clear()
 	data.merge(migrated, true)
 	return true
+
+static func _validate_dungeon_progress(data: Dictionary) -> bool:
+	if not data.has("dungeon_progress"):
+		return false
+	var progress := DungeonProgressState.new()
+	return progress.restore(data["dungeon_progress"])
 
 static func _migrate_player_progression_data(data: Dictionary) -> bool:
 	if data.has("player_perks"):
@@ -840,6 +854,7 @@ static func save_world_state(
 	item_proficiency: ItemProficiency,
 	chest_storage: ChestStorage,
 	world_loot_state: WorldLootState,
+	dungeon_progress: DungeonProgressState,
 	pumpkin_patch: Dictionary,
 	apple_trees: Dictionary,
 	extra_seconds: float,
@@ -851,6 +866,7 @@ static func save_world_state(
 	assert(inventory.equipment_instance_factory == equipment_instance_factory)
 	assert(chest_storage != null)
 	assert(world_loot_state != null)
+	assert(dungeon_progress != null)
 	assert(world_loot_state.item_catalog == equipment_instance_factory.item_catalog)
 	assert(world_loot_state.equipment_instance_factory == equipment_instance_factory)
 	if not chest_storage._uses_configuration(
@@ -891,6 +907,7 @@ static func save_world_state(
 	updated["inventory"] = inventory.to_dict()
 	updated["next_equipment_instance_id"] = equipment_instance_factory.get_next_instance_id()
 	updated["world_loot"] = world_loot_state.snapshot()
+	updated["dungeon_progress"] = dungeon_progress.snapshot()
 	updated["item_proficiency"] = item_proficiency.snapshot()
 	updated["pumpkin_patch"] = pumpkin_patch.duplicate(true)
 	updated["apple_trees"] = apple_trees.duplicate(true)
