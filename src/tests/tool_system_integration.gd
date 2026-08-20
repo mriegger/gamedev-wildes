@@ -64,7 +64,34 @@ func _run():
 	_expect(stone_pickaxe_image.get_pixel(5, 5) == copper_pickaxe_image.get_pixel(5, 5), "stone pickaxe recolor changed the wooden handle")
 	_expect(iron_pickaxe.icon.resource_path == "res://assets/textures/tools/pickaxe/iron_pickaxe.svg", "Iron Pickaxe uses the wrong texture")
 	_expect(iron_pickaxe_image.get_size() == Vector2i(16, 16), "Iron Pickaxe texture is not 16x16")
-	_expect(iron_pickaxe_image.get_pixel(3, 2) != copper_pickaxe_image.get_pixel(3, 2), "Iron Pickaxe head is not visually distinct from Copper Pickaxe")
+	var iron_pickaxe_shape_matches := true
+	var iron_pickaxe_handle_matches := true
+	var iron_pickaxe_head_is_distinct := true
+	var iron_pickaxe_metal_pixels := 0
+	for texture_y in range(16):
+		for texture_x in range(16):
+			var stone_pickaxe_pixel := stone_pickaxe_image.get_pixel(texture_x, texture_y)
+			var copper_pickaxe_pixel := copper_pickaxe_image.get_pixel(texture_x, texture_y)
+			var iron_pickaxe_pixel := iron_pickaxe_image.get_pixel(texture_x, texture_y)
+			iron_pickaxe_shape_matches = (
+				iron_pickaxe_shape_matches
+				and is_equal_approx(stone_pickaxe_pixel.a, iron_pickaxe_pixel.a)
+				and is_equal_approx(copper_pickaxe_pixel.a, iron_pickaxe_pixel.a)
+			)
+			if iron_pickaxe_pixel.a < 0.5:
+				continue
+			if stone_pickaxe_pixel == copper_pickaxe_pixel:
+				iron_pickaxe_handle_matches = iron_pickaxe_handle_matches and iron_pickaxe_pixel == copper_pickaxe_pixel
+			else:
+				iron_pickaxe_metal_pixels += 1
+				iron_pickaxe_head_is_distinct = (
+					iron_pickaxe_head_is_distinct
+					and iron_pickaxe_pixel != stone_pickaxe_pixel
+					and iron_pickaxe_pixel != copper_pickaxe_pixel
+				)
+	_expect(iron_pickaxe_shape_matches, "Iron Pickaxe does not share the Stone and Copper Pickaxe silhouette")
+	_expect(iron_pickaxe_handle_matches, "Iron Pickaxe recolor changed the wooden handle")
+	_expect(iron_pickaxe_metal_pixels == 51 and iron_pickaxe_head_is_distinct, "Iron Pickaxe head is not a distinct metal recolor")
 	var iron_pickaxe_held := iron_pickaxe.held_scene.instantiate() as PixelExtrudedItem
 	_expect(iron_pickaxe_held != null and iron_pickaxe_held.texture == iron_pickaxe.icon, "Iron Pickaxe held scene does not use its canonical texture")
 	if iron_pickaxe_held != null:
