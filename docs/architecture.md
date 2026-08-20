@@ -140,7 +140,7 @@ priority so they remain above health bars and world geometry. Neutral labels rem
 weaknesses render yellow-gold, and resistances render dark grey. Rejected contacts change no health
 and produce no outcome.
 `ArrowProjectileRuntime` owns a bounded set of live arrow models. It atomically consumes the first
-available ammunition declared by the selected bow, launches from the action-authored bow transform at a
+compatible ammunition in hotbar order followed by backpack order, launches from the action-authored bow transform at a
 draw-scaled speed, evaluates its ballistic position under gravity, and sweeps fixed 60 Hz flight segments
 against the entity spatial index and voxel raycast solids. `ArrowTrajectoryView` requests the same
 prediction while the bow is drawn and renders it from the nocked arrow to the first predicted contact,

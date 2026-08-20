@@ -197,9 +197,9 @@ scene origin is its wrapped grip and cancels the hand socket's resting pitch so 
 right hand with its string side facing up. Their transparent 16×16 icons use deterministic hard-edged pixel
 silhouettes with bounded palettes; the arrow variants share one silhouette and differ at the head.
 The bow's primary action owns its quick raise duration, 1.5-second draw duration, launch-speed
-range, and ordered canonical ammunition definitions. Holding primary use keeps the draw state active,
+range, and canonical ammunition definitions. Holding primary use keeps the draw state active,
 while the humanoid animator poses both arms and the held bow view bends its two string segments around
-the first available stone or copper arrow. A player-relative billboard presents the current draw
+the first compatible arrow in hotbar order followed by backpack order. A player-relative billboard presents the current draw
 progress with a black background and yellow fill. A translucent white trajectory line uses the
 runtime's current draw-scaled ballistic prediction, fading from 30 to 95 percent of the path before
 the first contact. The player interaction state resolves the first voxel surface under the live cursor,

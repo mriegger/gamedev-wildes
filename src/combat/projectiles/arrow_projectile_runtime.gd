@@ -53,8 +53,12 @@ func unbind_context() -> void:
 func get_available_ammunition(action: BowDrawActionDefinition) -> ArrowItemDefinition:
 	if action == null or _inventory == null:
 		return null
-	for ammunition in action.ammunition:
-		if ammunition != null and _inventory.has_item(ammunition.id):
+	for index in range(mini(_inventory.get_size(), InventoryModel.FILLABLE_SIZE)):
+		var stack := _inventory.get_slot(index)
+		if stack == null:
+			continue
+		var ammunition := _inventory.item_catalog.get_definition(stack.item_id) as ArrowItemDefinition
+		if ammunition != null and ammunition in action.ammunition:
 			return ammunition
 	return null
 
