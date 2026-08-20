@@ -481,6 +481,14 @@ func _test_chest_marker_transactions() -> void:
 	_expect(socket_clearance.try_set_chest_marker(clearance_chest).succeeded, "chest socket-clearance marker setup failed")
 	_expect(not socket_clearance.try_remove_socket(&"north").succeeded, "socket removal created an enemy candidate on a chest marker")
 
+	var socket_only_access := StructureDraft.create_level_module(Vector3i(5, 4, 5))
+	_build_boundary_wall(socket_only_access, LevelSocketDefinition.Direction.NORTH)
+	var access_socket := Vector3i(2, 1, 0)
+	var blocked_chest := Vector3i(2, 1, 1)
+	_expect(socket_only_access.try_add_socket(access_socket, LevelSocketDefinition.Direction.NORTH).succeeded, "socket-only chest access fixture failed")
+	_expect(socket_only_access.try_place_block(blocked_chest + Vector3i.DOWN, BlockId.Type.STONE).succeeded, "socket-only chest floor fixture failed")
+	_expect(not socket_only_access.try_set_chest_marker(blocked_chest).succeeded, "chest marker accepted a socket aperture as its only accessible side")
+
 func _test_module_authoring_snapshot() -> void:
 	var draft := StructureDraft.create_level_module(Vector3i(5, 4, 5))
 	_build_boundary_wall(draft, LevelSocketDefinition.Direction.NORTH)

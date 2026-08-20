@@ -97,6 +97,7 @@ var _save_status_timer: float = 0.0
 var _session_active: bool = false
 var _recovered_defeated_save: bool = false
 var _level_transitioning: bool = false
+var _level_loot_attempt_index: int = 0
 var _structure_transitioning: bool = false
 var _structure_designer_runtime: StructureDesignerRuntime
 var _structure_lifecycle_snapshot: StructureDesignerLifecycleSnapshot
@@ -134,9 +135,19 @@ func _ready():
 	var player_stats_valid := player_stats_definition.validate()
 	var player_perks_valid := player_perk_rules != null and player_perk_rules.validate(player_stats_definition)
 	var level_catalog_valid := level_catalog.validate()
+	var level_loot_catalog_valid := (
+		level_catalog_valid
+		and item_catalog_valid
+		and chest_content_valid
+		and LevelLootCatalogValidator.validate(
+			level_catalog,
+			item_catalog,
+			chest_block.container.get_slot_count(),
+		)
+	)
 	var level_encounter_catalog_valid := level_catalog_valid and entity_catalog_valid and LevelEncounterCatalogValidator.validate(level_catalog, entity_catalog)
 	var level_entrance_valid := level_catalog_valid and level_entrance_definition != null and level_entrance_definition.validate(level_catalog)
-	if not block_catalog_valid or not foliage_catalog_valid or not item_catalog_valid or not chest_content_valid or not crafting_catalog_valid or not anvil_catalog_valid or not cauldron_catalog_valid or not entity_catalog_valid or not loot_catalog_valid or not damage_type_catalog_valid or not combat_particle_catalog_valid or not player_stats_valid or not player_perks_valid or not level_catalog_valid or not level_encounter_catalog_valid or not level_entrance_valid:
+	if not block_catalog_valid or not foliage_catalog_valid or not item_catalog_valid or not chest_content_valid or not crafting_catalog_valid or not anvil_catalog_valid or not cauldron_catalog_valid or not entity_catalog_valid or not loot_catalog_valid or not damage_type_catalog_valid or not combat_particle_catalog_valid or not player_stats_valid or not player_perks_valid or not level_catalog_valid or not level_loot_catalog_valid or not level_encounter_catalog_valid or not level_entrance_valid:
 		_fail_session_start("Game content validation failed. The save was not changed.")
 		return
 	var structure_file_store := StructureFileStore.new(ProjectSettings.globalize_path("res://../").simplify_path())
@@ -438,7 +449,7 @@ func _setup_gameplay() -> bool:
 	camera_rig.reset_panel_obstruction()
 	game_environment.sky_color_changed.connect(world.update_water_tint)
 	game_environment.start_clock()
-	hud.setup_with_camera(inventory_model, inventory_loadout_coordinator, crafting_coordinator, crafting_recipe_catalog, camera_rig, player_stats, item_proficiency, chest_coordinator)
+	hud.setup_with_camera(inventory_model, inventory_loadout_coordinator, crafting_coordinator, crafting_recipe_catalog, camera_rig, player_stats, item_proficiency)
 	var anvil_station := block_catalog.get_definition(BlockId.Type.ANVIL).crafting_station
 	hud.setup_anvil(anvil_coordinator, anvil_station, anvil_crafting_coordinator, anvil_recipe_catalog, camera_rig)
 	var cauldron_station := block_catalog.get_definition(BlockId.Type.CAULDRON).crafting_station
@@ -581,28 +592,21 @@ func _on_crafting_station_open_requested(position: Vector3i, definition: Craftin
 	hud.open_crafting_station(position, definition)
 
 func _try_interact_with_block(position: Vector3i) -> bool:
-	if chest_coordinator == null or _location_state == null or _location_state.is_in_level():
+	if _location_state == null:
 		return false
 	var center := Vector3(position) + Vector3(0.5, 0.5, 0.5)
 	if player.global_position.distance_squared_to(center) > player.interactor.reach * player.interactor.reach:
 		return false
-	if not chest_coordinator.can_open(position):
-		return false
-	var block_id := world.voxel_model.get_block_id_at(position)
-	var container := block_catalog.get_definition(block_id).container
-	if container == null:
-		return false
-	hud.open_container(position, container)
-	if not chest_coordinator.is_open():
-		return false
-	input_buffer.clear_gameplay()
-	return true
+	var space := _level_runtime.get_voxel_space() if _location_state.is_in_level() and _level_runtime != null else world.voxel_model
+	var block_id := space.get_block_id_at(position)
+	return _try_open_container(position, block_catalog.get_definition(block_id).container)
 
 func _can_break_block(position: Vector3i) -> bool:
-	return chest_coordinator == null or chest_coordinator.can_break(position)
+	return _location_state == null or not _location_state.is_in_level() and (chest_coordinator == null or chest_coordinator.can_break(position))
 
 func _enter_level():
 	_level_transitioning = true
+	hud.close_chest()
 	level_interaction.clear_target()
 	var result := LevelGenerator.new().generate(level_catalog, level_entrance_definition.level_id, world.config.seed_value, level_entrance_definition.entrance_id, _entrance_coordinate)
 	if not result.succeeded:
@@ -613,7 +617,28 @@ func _enter_level():
 	var next_runtime := level_runtime_scene.instantiate() as LevelRuntime
 	add_child(next_runtime)
 	var definition := level_catalog.get_level(level_entrance_definition.level_id)
-	next_runtime.setup(result.layout, definition, block_catalog, world.block_texture_set, settings, entity_catalog)
+	var loot_seed := LootKeyedRandom.u53(
+		result.layout.seed_value,
+		definition.level_id,
+		[
+			&"dungeon_attempt",
+			level_entrance_definition.entrance_id,
+			StringName(str(_level_loot_attempt_index)),
+		],
+	)
+	_level_loot_attempt_index += 1
+	next_runtime.setup(
+		result.layout,
+		definition,
+		loot_seed,
+		block_catalog,
+		world.block_texture_set,
+		settings,
+		entity_catalog,
+		inventory_model,
+		inventory_loadout_coordinator,
+	)
+	next_runtime.get_chest_coordinator().transfer_rejected.connect(_show_save_status)
 	next_runtime.set_player_context(player, camera_rig.camera)
 	var return_position := player.global_position
 	player.set_physics_process(false)
@@ -645,6 +670,7 @@ func _enter_level():
 
 func _exit_level(restore_from_defeat: bool = false):
 	_level_transitioning = true
+	hud.close_chest()
 	level_interaction.clear_target()
 	player.set_physics_process(false)
 	input_buffer.clear_gameplay()
@@ -946,7 +972,20 @@ func _sync_structure_designer_ui_blocking() -> void:
 	_structure_designer_runtime.set_external_ui_blocked(dev_console.is_open() or structure_designer_workflow.is_dialog_open())
 
 func _on_container_open_requested(position: Vector3i, definition: ContainerBlockDefinition):
-	hud.open_container(position, definition)
+	_try_open_container(position, definition)
+
+func _try_open_container(position: Vector3i, definition: ContainerBlockDefinition) -> bool:
+	if definition == null or _location_state == null:
+		return false
+	var coordinator: ChestTransferCoordinator = chest_coordinator
+	if _location_state.is_in_level():
+		if _level_runtime == null:
+			return false
+		coordinator = _level_runtime.get_chest_coordinator()
+	if coordinator == null or not hud.open_container(coordinator, position, definition):
+		return false
+	input_buffer.clear_gameplay()
+	return true
 
 func _show_pause_menu():
 	_pause_menu = pause_menu_scene.instantiate() as PauseMenu

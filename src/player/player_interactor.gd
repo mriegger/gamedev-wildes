@@ -743,10 +743,10 @@ func has_container_target() -> bool:
 
 func is_attempting_container_mining() -> bool:
 	var action := get_selected_primary_action() as MiningActionDefinition
-	return has_container_target() and action != null and action.get_tool_stat(&"pickaxe") != null
+	return editable_voxel_world != null and has_container_target() and action != null and action.get_tool_stat(&"pickaxe") != null
 
 func _get_target_container(position: Vector3i) -> ContainerBlockDefinition:
-	if editable_voxel_world == null:
+	if voxel_space == null:
 		return null
 	return voxel_space.block_catalog.get_definition(voxel_space.get_block_id_at(position)).container
 

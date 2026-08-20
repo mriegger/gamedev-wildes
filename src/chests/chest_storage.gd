@@ -40,6 +40,21 @@ func _uses_configuration(
 ) -> bool:
 	return _uses_dependencies(item_catalog, equipment_instance_factory) and _slot_count == slot_count
 
+func _replace_equipment_instance_factory(
+	expected: EquipmentInstanceFactory,
+	replacement: EquipmentInstanceFactory,
+) -> bool:
+	if (
+		_runtime_bound
+		or _equipment_instance_factory != expected
+		or replacement == null
+		or replacement.item_catalog != _item_catalog
+		or replacement.get_next_instance_id() != expected.get_next_instance_id()
+	):
+		return false
+	_equipment_instance_factory = replacement
+	return true
+
 func get_slot_count() -> int:
 	return _slot_count
 

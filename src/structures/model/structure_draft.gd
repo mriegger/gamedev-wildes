@@ -502,11 +502,21 @@ func _prepare_socket_edit(cell: Vector3i, direction: LevelSocketDefinition.Direc
 	if not LevelSocketAperture.is_valid(socket, _size, _cells, changes):
 		return null
 	var aperture_cells := LevelSocketAperture.find_cells(socket, _size, _cells, changes)
+	var blocked_chest_access := _socket_aperture_owners.duplicate()
 	for aperture_cell in aperture_cells:
 		if _socket_aperture_owners.has(aperture_cell):
 			return null
 		if has_torch(aperture_cell) or _marker_footprint_contains(aperture_cell):
 			return null
+		blocked_chest_access[aperture_cell] = socket.socket_id
+	if _chest_marker != null and not LevelChestMarkerDefinition.has_accessible_side(
+		_chest_marker.cell,
+		_size,
+		_cells,
+		changes,
+		blocked_chest_access,
+	):
+		return null
 	var additional_sockets: Array[LevelSocketDefinition] = [socket]
 	var changed_zone_ids := _merged_enemy_spawn_zone_ids(
 		_enemy_spawn_zone_ids_for_socket_aperture(aperture_cells),
@@ -768,11 +778,17 @@ func _chest_marker_is_valid(marker: LevelChestMarkerDefinition) -> bool:
 		get_cell(marker.cell) == StructureCell.AIR
 		and get_cell(upper) == StructureCell.AIR
 		and StructureCell.is_structure_solid(get_cell(floor_cell))
-		and LevelChestMarkerDefinition.has_accessible_side(marker.cell, _size, _cells)
+		and LevelChestMarkerDefinition.has_accessible_side(marker.cell, _size, _cells, {}, _socket_aperture_owners)
 	)
 
 func _chest_access_remains_valid(changes: Dictionary) -> bool:
-	return _chest_marker == null or LevelChestMarkerDefinition.has_accessible_side(_chest_marker.cell, _size, _cells, changes)
+	return _chest_marker == null or LevelChestMarkerDefinition.has_accessible_side(
+		_chest_marker.cell,
+		_size,
+		_cells,
+		changes,
+		_socket_aperture_owners,
+	)
 
 func _chest_marker_is_socket_clear(marker: LevelChestMarkerDefinition) -> bool:
 	return not _socket_aperture_owners.has(marker.cell) and not _socket_aperture_owners.has(marker.cell + Vector3i.UP)

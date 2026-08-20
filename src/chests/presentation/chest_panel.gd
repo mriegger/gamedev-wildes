@@ -7,7 +7,7 @@ class_name ChestPanel
 @onready var _chest_grid: GridContainer = $Center/Panel/Margin/Content/ChestGrid
 @onready var _move_all_button: Button = $Center/Panel/Margin/Content/ActionRow/MoveAllButton
 
-var coordinator: ChestCoordinator
+var coordinator: ChestTransferCoordinator
 var player_inventory: InventoryModel
 var item_proficiency: ItemProficiency
 var _chest_slots: Array[InventorySlot] = []
@@ -32,15 +32,42 @@ func _setup_move_all_button():
 	_move_all_button.add_theme_stylebox_override("focus", WildesStyle.make_panel(Color(0.14, 0.16, 0.18, 0.92), 10, Color(1, 1, 1, 0.20), 1))
 	_move_all_button.add_theme_stylebox_override("disabled", WildesStyle.make_panel(Color(0.14, 0.16, 0.18, 0.48), 10, Color(1, 1, 1, 0.08), 1))
 
-func setup(p_coordinator: ChestCoordinator, p_player_inventory: InventoryModel, p_item_proficiency: ItemProficiency):
-	assert(p_coordinator != null and p_player_inventory != null and p_item_proficiency != null)
-	coordinator = p_coordinator
+func setup(p_player_inventory: InventoryModel, p_item_proficiency: ItemProficiency) -> bool:
+	assert(p_player_inventory != null and p_item_proficiency != null)
+	if player_inventory != null or item_proficiency != null:
+		return false
 	player_inventory = p_player_inventory
 	item_proficiency = p_item_proficiency
+	player_inventory.inventory_changed.connect(_refresh_move_all_state)
+	return true
+
+func bind(p_coordinator: ChestTransferCoordinator) -> bool:
+	if (
+		p_coordinator == null
+		or coordinator != null
+		or player_inventory == null
+		or item_proficiency == null
+		or p_coordinator.is_open()
+	):
+		return false
+	coordinator = p_coordinator
 	coordinator.opened.connect(_on_opened)
 	coordinator.closed.connect(_on_closed)
 	coordinator.contents_changed.connect(_on_contents_changed)
-	player_inventory.inventory_changed.connect(_refresh_move_all_state)
+	return true
+
+func release() -> void:
+	if coordinator == null:
+		return
+	if coordinator.opened.is_connected(_on_opened):
+		coordinator.opened.disconnect(_on_opened)
+	if coordinator.closed.is_connected(_on_closed):
+		coordinator.closed.disconnect(_on_closed)
+	if coordinator.contents_changed.is_connected(_on_contents_changed):
+		coordinator.contents_changed.disconnect(_on_contents_changed)
+	for slot in _chest_slots:
+		slot.set_inventory_transfer_context(null, &"")
+	coordinator = null
 
 func _build_chest_slots(definition: ContainerBlockDefinition):
 	for slot in _chest_slots:
@@ -48,7 +75,7 @@ func _build_chest_slots(definition: ContainerBlockDefinition):
 	_chest_slots.clear()
 	_chest_grid.columns = definition.columns
 	for index in range(definition.get_slot_count()):
-		var slot := _create_slot(index, ChestCoordinator.CHEST_SCOPE)
+		var slot := _create_slot(index, ChestTransferCoordinator.CHEST_SCOPE)
 		_chest_grid.add_child(slot)
 		_chest_slots.append(slot)
 
@@ -74,6 +101,7 @@ func _on_closed():
 	_move_all_button.disabled = true
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_cancel_drag_if_needed()
+	release()
 
 func _on_contents_changed(position: Vector3i) -> void:
 	if coordinator != null and coordinator.get_active_position() == position:
@@ -83,7 +111,7 @@ func _refresh():
 	if not visible or coordinator == null:
 		return
 	for slot in _chest_slots:
-		_refresh_slot(slot, ChestCoordinator.CHEST_SCOPE)
+		_refresh_slot(slot, ChestTransferCoordinator.CHEST_SCOPE)
 	_refresh_move_all_state()
 
 func _refresh_move_all_state():
@@ -102,7 +130,10 @@ func _refresh_slot(slot: InventorySlot, scope: StringName):
 
 func close():
 	if coordinator != null:
-		coordinator.close()
+		if coordinator.is_open():
+			coordinator.close()
+		else:
+			release()
 
 func close_immediate():
 	close()

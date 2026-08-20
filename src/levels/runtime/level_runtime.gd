@@ -8,6 +8,7 @@ const MAX_NAVIGATION_SEARCH_NODES: int = 2048
 const MAX_NAVIGATION_SEARCHES_PER_TICK: int = 2
 
 @onready var _geometry_renderer: LevelGeometryRenderer = $Geometry as LevelGeometryRenderer
+@onready var _chest_renderer: ChestRenderer = $Chests as ChestRenderer
 @onready var _world_environment: WorldEnvironment = $WorldEnvironment
 @onready var _torch_renderer: TorchRenderer = $Torches
 @onready var _return_point: Marker3D = $ReturnPoint
@@ -19,9 +20,11 @@ var _topology: LevelEncounterTopology
 var _encounter_state: LevelEncounterState
 var _entity_runtime: EntityRuntime
 var _encounter_coordinator: LevelEncounterCoordinator
+var _chest_coordinator: DungeonChestCoordinator
 var _player: PlayerMotor
 var _camera: Camera3D
 var _level_environment: Environment
+var _chest_cells_by_room: Dictionary = {}
 
 func _ready() -> void:
 	visible = false
@@ -31,22 +34,41 @@ func _ready() -> void:
 func setup(
 	layout: LevelLayout,
 	definition: LevelDefinition,
+	loot_seed: int,
 	block_catalog: BlockCatalog,
 	texture_set: BlockTextureSet,
 	settings: GameSettings,
 	entity_catalog: EntityCatalog,
+	inventory_model: InventoryModel,
+	inventory_loadout: InventoryLoadoutCoordinator,
 ) -> void:
 	assert(is_node_ready())
 	assert(_state == null)
 	assert(layout != null)
 	assert(definition != null and definition.presentation != null)
 	assert(entity_catalog != null and entity_catalog.validate())
+	assert(inventory_model != null)
+	assert(inventory_loadout != null and inventory_loadout.inventory_model == inventory_model)
 	var presentation := definition.presentation
 	_state = LevelState.from_layout(layout, block_catalog)
 	_topology = LevelEncounterTopology.create(layout, definition)
 	assert(_topology != null)
 	_encounter_state = LevelEncounterState.create(_topology, layout.seed_value)
 	assert(_encounter_state != null)
+	var chest_block := block_catalog.get_definition(BlockId.Type.CHEST)
+	assert(chest_block != null and chest_block.container != null)
+	_chest_coordinator = DungeonChestCoordinator.new()
+	var chest_coordinator_ready := _chest_coordinator.setup(
+		layout.chests,
+		loot_seed,
+		inventory_model,
+		inventory_loadout,
+		chest_block.container,
+	)
+	assert(chest_coordinator_ready)
+	if not chest_coordinator_ready:
+		return
+	_setup_chests(layout, block_catalog, _encounter_state.get_discovered_room_ids())
 	_entity_runtime = EntityRuntime.new()
 	_entity_runtime.name = "Entities"
 	add_child(_entity_runtime)
@@ -122,6 +144,7 @@ func activate() -> void:
 
 func deactivate() -> void:
 	suspend_simulation()
+	_chest_coordinator.close()
 	_encounter_hud.visible = false
 	visible = false
 	_world_environment.environment = null
@@ -132,11 +155,13 @@ func suspend_simulation() -> void:
 	set_physics_process(false)
 	_entity_runtime.suspend()
 	_geometry_renderer.process_mode = Node.PROCESS_MODE_DISABLED
+	_chest_renderer.process_mode = Node.PROCESS_MODE_DISABLED
 	_encounter_hud.process_mode = Node.PROCESS_MODE_DISABLED
 
 func _resume_simulation() -> void:
 	assert(_state != null)
 	_geometry_renderer.process_mode = Node.PROCESS_MODE_INHERIT
+	_chest_renderer.process_mode = Node.PROCESS_MODE_INHERIT
 	_encounter_hud.process_mode = Node.PROCESS_MODE_INHERIT
 	_entity_runtime.resume()
 	set_process(true)
@@ -155,6 +180,9 @@ func get_return_door_position() -> Vector3:
 
 func get_entity_runtime() -> EntityRuntime:
 	return _entity_runtime
+
+func get_chest_coordinator() -> DungeonChestCoordinator:
+	return _chest_coordinator
 
 func set_player_context(player: PlayerMotor, camera: Camera3D) -> void:
 	assert(player != null and camera != null)
@@ -175,8 +203,32 @@ func _on_room_cleared(room_id: int) -> void:
 	var discovered_room_ids := _topology.get_discovered_room_ids_after_clear(room_id)
 	if not discovered_room_ids.is_empty():
 		_geometry_renderer.discover_rooms(discovered_room_ids)
+		_reveal_chests(discovered_room_ids)
 	if _encounter_state.get_summary().active_wave_count == 0:
 		_encounter_hud.show_cleared()
+
+func _setup_chests(layout: LevelLayout, block_catalog: BlockCatalog, discovered_room_ids: Array[int]) -> void:
+	_chest_renderer.setup(block_catalog)
+	var discovered: Dictionary = {}
+	for room_id in discovered_room_ids:
+		discovered[room_id] = true
+	var state_cells := _state.get_chest_cells()
+	assert(state_cells.size() == layout.chests.size())
+	for chest in layout.chests:
+		assert(_topology.get_room(chest.room_id) != null)
+		assert(not _chest_cells_by_room.has(chest.room_id))
+		assert(state_cells.has(chest.cell))
+		_chest_cells_by_room[chest.room_id] = chest.cell
+		var visual := _chest_renderer.spawn_chest(chest.cell)
+		visual.visible = discovered.has(chest.room_id)
+
+func _reveal_chests(room_ids: Array[int]) -> void:
+	for room_id in room_ids:
+		if not _chest_cells_by_room.has(room_id):
+			continue
+		var cell := _chest_cells_by_room[room_id] as Vector3i
+		assert(_chest_renderer.chest_instances.has(cell))
+		(_chest_renderer.chest_instances[cell] as Node3D).visible = true
 
 func _setup_return_door(block_catalog: BlockCatalog, door_block_id: int) -> void:
 	var mesh := BoxMesh.new()

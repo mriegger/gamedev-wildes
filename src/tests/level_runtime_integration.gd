@@ -29,6 +29,7 @@ class TransitionGame:
 				and not _level_runtime.is_physics_processing() \
 				and _level_runtime.get_entity_runtime().is_suspended() \
 				and _level_runtime._geometry_renderer.process_mode == Node.PROCESS_MODE_DISABLED \
+				and _level_runtime._chest_renderer.process_mode == Node.PROCESS_MODE_DISABLED \
 				and _level_runtime._encounter_hud.process_mode == Node.PROCESS_MODE_DISABLED
 			entity_context_was_bound_at_fade_start = _active_entity_runtime == _level_runtime.get_entity_runtime()
 		_fade.visible = not is_zero_approx(alpha)
@@ -97,9 +98,20 @@ func _run_runtime_lifecycle(
 	await process_frame
 	_expect(runtime.is_node_ready(), "runtime was not ready before setup at iteration %d" % iteration)
 	_expect(not runtime.visible and not runtime.is_processing(), "runtime starts active at iteration %d" % iteration)
-	runtime.setup(layout, definition, block_catalog, texture_set, settings, load("res://entities/entity_catalog.tres") as EntityCatalog)
+	var inventory_context := _create_inventory_context()
+	runtime.setup(
+		layout,
+		definition,
+		layout.seed_value + iteration,
+		block_catalog,
+		texture_set,
+		settings,
+		load("res://entities/entity_catalog.tres") as EntityCatalog,
+		inventory_context["inventory"] as InventoryModel,
+		inventory_context["loadout"] as InventoryLoadoutCoordinator,
+	)
 	_expect(not runtime.is_processing() and not runtime.is_physics_processing() and runtime.get_entity_runtime().is_suspended(), "setup left dungeon simulation active at iteration %d" % iteration)
-	_expect(runtime._geometry_renderer.process_mode == Node.PROCESS_MODE_DISABLED and runtime._encounter_hud.process_mode == Node.PROCESS_MODE_DISABLED, "setup left dungeon presentation timers active at iteration %d" % iteration)
+	_expect(runtime._geometry_renderer.process_mode == Node.PROCESS_MODE_DISABLED and runtime._chest_renderer.process_mode == Node.PROCESS_MODE_DISABLED and runtime._encounter_hud.process_mode == Node.PROCESS_MODE_DISABLED, "setup left dungeon presentation timers active at iteration %d" % iteration)
 	var state := runtime.get_voxel_space() as LevelState
 	_expect(state != null, "runtime did not expose LevelState at iteration %d" % iteration)
 	if state != null:
@@ -114,6 +126,7 @@ func _run_runtime_lifecycle(
 	var geometry := runtime.get_node("Geometry") as LevelGeometryRenderer
 	var environment_node := runtime.get_node("WorldEnvironment") as WorldEnvironment
 	var torch_renderer := runtime.get_node("Torches") as TorchRenderer
+	var chest_renderer := runtime.get_node("Chests") as ChestRenderer
 	var return_door := runtime.get_node("ReturnDoor") as MeshInstance3D
 	_expect(geometry != null and geometry.get_node_or_null("EntryGeometry") is MeshInstance3D, "runtime entry geometry was not built at iteration %d" % iteration)
 	_expect(geometry != null and geometry._room_meshes.size() == runtime._topology.get_room_ids().size(), "runtime omitted room branch geometry at iteration %d" % iteration)
@@ -124,6 +137,34 @@ func _run_runtime_lifecycle(
 	_expect(terrain_material != null and terrain_material.shader.resource_path == "res://levels/presentation/level_terrain.gdshader", "runtime terrain shader changed at iteration %d" % iteration)
 	_expect(terrain_material != null and terrain_material.get_shader_parameter("terrain_textures") == texture_set.texture_array, "runtime terrain texture array changed at iteration %d" % iteration)
 	var discovered_room_ids := runtime._encounter_state.get_discovered_room_ids()
+	var expected_chest_cells: Array[Vector3i] = []
+	for chest in layout.chests:
+		expected_chest_cells.append(chest.cell)
+	expected_chest_cells.sort_custom(func(a: Vector3i, b: Vector3i) -> bool:
+		if a.x != b.x:
+			return a.x < b.x
+		if a.y != b.y:
+			return a.y < b.y
+		return a.z < b.z
+	)
+	_expect(state.get_chest_cells() == expected_chest_cells, "runtime LevelState omitted generated chest placements at iteration %d" % iteration)
+	_expect(chest_renderer != null and chest_renderer.chest_instances.size() == layout.chests.size(), "runtime chest presentation count changed at iteration %d" % iteration)
+	for chest in layout.chests:
+		_expect(state.get_cell_value(chest.cell) == BlockId.Type.CHEST and state.is_solid(chest.cell) and state.is_raycast_solid(chest.cell), "generated chest did not project collision and targeting at iteration %d cell %s" % [iteration, chest.cell])
+		_expect(state.is_base_interior_open(chest.cell) and not state.is_interior_open(chest.cell), "generated chest changed base terrain ownership at iteration %d cell %s" % [iteration, chest.cell])
+		_expect(not state.get_solid_cells().has(chest.cell) and int(state.snapshot_cells()[chest.cell]) == StructureCell.AIR, "generated chest entered terrain mesh state at iteration %d cell %s" % [iteration, chest.cell])
+		_expect(block_catalog.get_definition(state.get_block_id_at(chest.cell)).container != null, "generated chest omitted container metadata at iteration %d cell %s" % [iteration, chest.cell])
+		_expect(runtime._chest_cells_by_room.get(chest.room_id) == chest.cell, "runtime chest ownership changed at iteration %d room %d" % [iteration, chest.room_id])
+		var chest_visual := chest_renderer.chest_instances.get(chest.cell) as Node3D
+		_expect(chest_visual != null and chest_visual.position == Vector3(chest.cell), "runtime chest visual used the wrong cell at iteration %d" % iteration)
+		_expect(chest_visual != null and chest_visual.visible == discovered_room_ids.has(chest.room_id), "runtime chest visibility ignored room discovery at iteration %d room %d" % [iteration, chest.room_id])
+	if iteration == 0 and not layout.chests.is_empty():
+		var reveal_probe := layout.chests[0]
+		var reveal_visual := chest_renderer.chest_instances[reveal_probe.cell] as Node3D
+		reveal_visual.visible = false
+		runtime._reveal_chests([reveal_probe.room_id])
+		_expect(reveal_visual.visible, "room discovery did not reveal its generated chest")
+		reveal_visual.visible = discovered_room_ids.has(reveal_probe.room_id)
 	for room_id in runtime._topology.get_room_ids():
 		var room := runtime._topology.get_room(room_id)
 		var discovered := discovered_room_ids.has(room_id)
@@ -167,7 +208,7 @@ func _run_runtime_lifecycle(
 		runtime.activate()
 		_expect(runtime.visible and runtime.is_processing(), "activate failed at iteration %d cycle %d" % [iteration, cycle])
 		_expect(runtime.is_physics_processing() and not runtime.get_entity_runtime().is_suspended(), "activate did not resume dungeon simulation at iteration %d cycle %d" % [iteration, cycle])
-		_expect(runtime._geometry_renderer.process_mode == Node.PROCESS_MODE_INHERIT and runtime._encounter_hud.process_mode == Node.PROCESS_MODE_INHERIT, "activate did not resume dungeon presentation timers at iteration %d cycle %d" % [iteration, cycle])
+		_expect(runtime._geometry_renderer.process_mode == Node.PROCESS_MODE_INHERIT and runtime._chest_renderer.process_mode == Node.PROCESS_MODE_INHERIT and runtime._encounter_hud.process_mode == Node.PROCESS_MODE_INHERIT, "activate did not resume dungeon presentation timers at iteration %d cycle %d" % [iteration, cycle])
 		_expect(environment_node.environment != null, "activate did not install the level environment at iteration %d cycle %d" % [iteration, cycle])
 		_expect(environment_node.environment.background_color == definition.presentation.background_color, "runtime ignored the authored background color at iteration %d cycle %d" % [iteration, cycle])
 		_expect(environment_node.environment.ambient_light_color == definition.presentation.ambient_light_color, "runtime ignored the authored ambient light at iteration %d cycle %d" % [iteration, cycle])
@@ -177,12 +218,21 @@ func _run_runtime_lifecycle(
 		runtime.deactivate()
 		_expect(not runtime.visible and not runtime.is_processing(), "deactivate failed at iteration %d cycle %d" % [iteration, cycle])
 		_expect(not runtime.is_processing() and not runtime.is_physics_processing() and runtime.get_entity_runtime().is_suspended(), "deactivate left dungeon simulation active at iteration %d cycle %d" % [iteration, cycle])
-		_expect(runtime._geometry_renderer.process_mode == Node.PROCESS_MODE_DISABLED and runtime._encounter_hud.process_mode == Node.PROCESS_MODE_DISABLED, "deactivate left dungeon presentation timers active at iteration %d cycle %d" % [iteration, cycle])
+		_expect(runtime._geometry_renderer.process_mode == Node.PROCESS_MODE_DISABLED and runtime._chest_renderer.process_mode == Node.PROCESS_MODE_DISABLED and runtime._encounter_hud.process_mode == Node.PROCESS_MODE_DISABLED, "deactivate left dungeon presentation timers active at iteration %d cycle %d" % [iteration, cycle])
 		_expect(environment_node.environment == null, "deactivate retained the level environment at iteration %d cycle %d" % [iteration, cycle])
 	runtime.queue_free()
 	await process_frame
 	await process_frame
 	_expect(not is_instance_valid(runtime), "queued runtime survived teardown at iteration %d" % iteration)
+
+func _create_inventory_context() -> Dictionary:
+	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
+	var inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
+	inventory.setup_empty()
+	var loadout := InventoryLoadoutCoordinator.new()
+	var stats := ActorStats.new(load("res://player/player_stats.tres") as CombatStatsDefinition)
+	assert(loadout.setup(inventory, stats, ItemProficiency.new(item_catalog)))
+	return {"inventory": inventory, "loadout": loadout}
 
 func _test_world_suspension(world_scene: PackedScene) -> void:
 	var world := world_scene.instantiate() as WorldController
@@ -482,6 +532,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	_expect(prompt_connections.size() == 1, "interaction coordinator does not have exactly one Game consumer")
 	if prompt_connections.size() == 1:
 		_expect(prompt_connections[0]["callable"] == Callable(game, "_on_level_interaction_requested"), "interaction coordinator is connected to the wrong consumer")
+	var loot_signatures: Dictionary = {}
 	for cycle in range(GAME_TRANSITION_CYCLES):
 		doorway_anchor = Vector3(0.5 + float(cycle), world_spawn.y, 0.5)
 		player.global_position = doorway_anchor
@@ -511,6 +562,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 		await game._enter_level()
 		var runtime := game._level_runtime
 		var dungeon_entity_runtime := runtime.get_entity_runtime()
+		loot_signatures[_dungeon_loot_signature(runtime.get_chest_coordinator())] = true
 		_expect(runtime != null and is_instance_valid(runtime), "Game did not retain an active runtime in cycle %d" % cycle)
 		if cycle == 0 and transition_slime != null:
 			expected_transition_knockback = transition_slime.global_position - doorway_anchor
@@ -575,6 +627,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 		_expect(coordinator._has_target and coordinator._prompt == "F  Enter Dungeon", "entry prompt was not restored in cycle %d" % cycle)
 		_expect(coordinator._target_position.is_equal_approx(entrance.interaction_position), "entry prompt target changed in cycle %d" % cycle)
 		_expect(coordinator.interaction_requested.get_connections().size() == 1, "transition duplicated interaction signal consumers in cycle %d" % cycle)
+	_expect(loot_signatures.size() > 1, "farmable dungeon entries reused identical loot across attempts")
 	var defeat_anchor := Vector3(9.5, world_spawn.y, 4.5)
 	player.global_position = defeat_anchor
 	game._location_state.update_world_position(defeat_anchor)
@@ -618,6 +671,31 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	await process_frame
 	_expect(not is_instance_valid(game), "Game transition fixture survived teardown")
 	_expect(root.get_child_count() == root_child_baseline, "Game transition fixture left root children behind")
+
+func _dungeon_loot_signature(coordinator: DungeonChestCoordinator) -> String:
+	var positions: Array[Vector3i] = []
+	for position in coordinator._storage.snapshot():
+		positions.append(position as Vector3i)
+	positions.sort_custom(func(left: Vector3i, right: Vector3i) -> bool:
+		if left.x != right.x:
+			return left.x < right.x
+		if left.y != right.y:
+			return left.y < right.y
+		return left.z < right.z
+	)
+	var encoded: Array[String] = []
+	for position in positions:
+		for stack in coordinator._storage.get_slots(position):
+			if stack == null:
+				continue
+			var affixes: Array = []
+			var rune_ids: Array[StringName] = []
+			if stack.equipment_instance != null:
+				for affix in stack.equipment_instance.affixes:
+					affixes.append(affix.to_dict())
+				rune_ids.assign(stack.equipment_instance.socketed_rune_ids)
+			encoded.append("%s:%d:%s:%s" % [stack.item_id, stack.count, str(affixes), str(rune_ids)])
+	return "|".join(encoded)
 
 func _run_structure_designer_cycle(game: TransitionGame, in_level: bool, cycle: int) -> void:
 	var label := "%s cycle %d" % ["dungeon" if in_level else "overworld", cycle]

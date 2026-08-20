@@ -6,6 +6,7 @@ var cells: Dictionary = {}
 var placed_modules: Array[LevelPlacedModule] = []
 var connections: Array[LevelConnection] = []
 var torches: Array[LevelTorchPlacement] = []
+var chests: Array[LevelChestPlacement] = []
 var spawn_cell: Vector3i
 var spawn_facing: LevelSocketDefinition.Direction
 var return_door_cell: Vector3i

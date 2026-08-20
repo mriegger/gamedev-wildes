@@ -13,6 +13,7 @@ var _return_door_cell: Vector3i
 var _return_door_facing: LevelSocketDefinition.Direction
 var _bounds_min: Vector3i
 var _bounds_max: Vector3i
+var _chest_cells: Dictionary = {}
 var _doorways_by_id: Dictionary = {}
 var _sealed_door_ids: Dictionary = {}
 var _sealed_door_cells: Dictionary = {}
@@ -40,7 +41,7 @@ func _init(
 	_build_solid_index()
 
 static func from_layout(layout: LevelLayout, p_block_catalog: BlockCatalog) -> LevelState:
-	return LevelState.new(
+	var state := LevelState.new(
 		p_block_catalog,
 		layout.cells,
 		layout.spawn_cell,
@@ -50,6 +51,12 @@ static func from_layout(layout: LevelLayout, p_block_catalog: BlockCatalog) -> L
 		layout.bounds_min,
 		layout.bounds_max
 	)
+	var chest_cells: Array[Vector3i] = []
+	for chest in layout.chests:
+		assert(chest != null)
+		chest_cells.append(chest.cell)
+	state._configure_chest_cells(chest_cells)
+	return state
 
 func _validate_cells() -> void:
 	assert(_bounds_min.x <= _bounds_max.x)
@@ -71,11 +78,12 @@ func _build_solid_index() -> void:
 	_highest_solid_by_column.clear()
 	for position in _cells:
 		var cell := position as Vector3i
-		if not is_solid(cell):
+		if not _is_base_solid(cell):
 			continue
 		_solid_cells.append(cell)
-		var column := Vector2i(cell.x, cell.z)
-		_highest_solid_by_column[column] = maxi(cell.y, int(_highest_solid_by_column.get(column, cell.y)))
+		_record_solid_height(cell)
+	for position in _chest_cells:
+		_record_solid_height(position as Vector3i)
 	_solid_cells.sort_custom(func(a: Vector3i, b: Vector3i) -> bool:
 		if a.x != b.x:
 			return a.x < b.x
@@ -87,13 +95,15 @@ func _build_solid_index() -> void:
 func get_cell_value(position: Vector3i) -> int:
 	if _sealed_door_cells.has(position):
 		return int(_sealed_door_cells[position])
+	if _chest_cells.has(position):
+		return BlockId.Type.CHEST
 	return int(_cells.get(position, VOID))
 
 func has_cell(position: Vector3i) -> bool:
 	return _cells.has(position)
 
 func is_interior_open(position: Vector3i) -> bool:
-	return not _sealed_door_cells.has(position) and int(_cells.get(position, VOID)) == AIR
+	return not _sealed_door_cells.has(position) and not _chest_cells.has(position) and int(_cells.get(position, VOID)) == AIR
 
 func is_base_interior_open(position: Vector3i) -> bool:
 	return int(_cells.get(position, VOID)) == AIR
@@ -105,7 +115,11 @@ func get_block_at(position: Vector3i) -> Variant:
 	return block_id
 
 func get_block_id_at(position: Vector3i) -> int:
-	return int(_sealed_door_cells[position]) if _sealed_door_cells.has(position) else int(_cells.get(position, AIR))
+	if _sealed_door_cells.has(position):
+		return int(_sealed_door_cells[position])
+	if _chest_cells.has(position):
+		return BlockId.Type.CHEST
+	return int(_cells.get(position, AIR))
 
 func is_solid(position: Vector3i) -> bool:
 	var block: Variant = get_block_at(position)
@@ -148,6 +162,19 @@ func get_bounds_max() -> Vector3i:
 func get_solid_cells() -> Array[Vector3i]:
 	return _solid_cells.duplicate()
 
+func get_chest_cells() -> Array[Vector3i]:
+	var cells: Array[Vector3i] = []
+	for position in _chest_cells:
+		cells.append(position as Vector3i)
+	cells.sort_custom(func(a: Vector3i, b: Vector3i) -> bool:
+		if a.x != b.x:
+			return a.x < b.x
+		if a.y != b.y:
+			return a.y < b.y
+		return a.z < b.z
+	)
+	return cells
+
 func snapshot_cells() -> Dictionary:
 	return _cells.duplicate()
 
@@ -160,7 +187,7 @@ func configure_seals(doorways: Array[LevelDoorway], sealed_door_ids: Array[int])
 		if doorway == null or doorways_by_id.has(doorway.door_id):
 			return false
 		for cell in doorway.aperture_cells:
-			if occupied_cells.has(cell) or int(_cells.get(cell, VOID)) != AIR:
+			if occupied_cells.has(cell) or _chest_cells.has(cell) or int(_cells.get(cell, VOID)) != AIR:
 				return false
 			occupied_cells[cell] = doorway.door_id
 		doorways_by_id[doorway.door_id] = doorway
@@ -194,3 +221,21 @@ func _rebuild_sealed_door_cells() -> void:
 		var doorway := _doorways_by_id[door_id] as LevelDoorway
 		for cell in doorway.aperture_cells:
 			_sealed_door_cells[cell] = doorway.fill_block_id
+
+func _configure_chest_cells(chest_cells: Array[Vector3i]) -> void:
+	assert(_chest_cells.is_empty())
+	for cell in chest_cells:
+		assert(not _chest_cells.has(cell))
+		assert(int(_cells.get(cell, VOID)) == AIR)
+		assert(int(_cells.get(cell + Vector3i.UP, VOID)) == AIR)
+		assert(_is_base_solid(cell + Vector3i.DOWN))
+		_chest_cells[cell] = true
+	_build_solid_index()
+
+func _is_base_solid(position: Vector3i) -> bool:
+	var block_id := int(_cells.get(position, VOID))
+	return block_id > AIR and block_catalog.is_solid(block_id)
+
+func _record_solid_height(cell: Vector3i) -> void:
+	var column := Vector2i(cell.x, cell.z)
+	_highest_solid_by_column[column] = maxi(cell.y, int(_highest_solid_by_column.get(column, cell.y)))

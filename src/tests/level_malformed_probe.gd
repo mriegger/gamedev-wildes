@@ -4,7 +4,9 @@ func _init() -> void:
 	var empty_result := LevelGenerator.new().generate(LevelCatalog.new(), &"stone_dungeon", 1, &"probe", Vector3i.ZERO)
 	var source_catalog := load("res://levels/content/dungeons/stone/level_catalog.tres") as LevelCatalog
 	var entity_catalog := load("res://entities/entity_catalog.tres") as EntityCatalog
-	if source_catalog == null or entity_catalog == null:
+	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
+	var block_catalog := load("res://blocks/block_catalog.tres") as BlockCatalog
+	if source_catalog == null or entity_catalog == null or item_catalog == null or block_catalog == null or not item_catalog.validate(block_catalog):
 		print("LEVEL_MALFORMED_PROBE FAILED")
 		quit(1)
 		return
@@ -23,6 +25,21 @@ func _init() -> void:
 	var chest_encounter := source_level.duplicate(true) as LevelDefinition
 	chest_encounter.room_requirements[2].encounter = chest_encounter.room_requirements[1].encounter
 	var chest_encounter_catalog := _catalog_with(source_catalog, chest_encounter)
+	var missing_chest_marker := source_catalog.get_module(&"stone_chest_room").duplicate(true) as LevelModuleDefinition
+	missing_chest_marker.chest_marker = null
+	var missing_chest_marker_catalog := _catalog_with(source_catalog, source_level, {missing_chest_marker.module_id: missing_chest_marker})
+	var missing_chest_loot := source_level.duplicate(true) as LevelDefinition
+	missing_chest_loot.room_requirements[2].chest_loot_bundle = null
+	var missing_chest_loot_catalog := _catalog_with(source_catalog, missing_chest_loot)
+	var noncanonical_item_level := source_level.duplicate(true) as LevelDefinition
+	var noncanonical_bundle := source_level.room_requirements[2].chest_loot_bundle.duplicate(true) as LootBundleDefinition
+	noncanonical_bundle.fixed_entries[0].drop.item = noncanonical_bundle.fixed_entries[0].drop.item.duplicate(true) as ItemDefinition
+	noncanonical_item_level.room_requirements[2].chest_loot_bundle = noncanonical_bundle
+	var noncanonical_item_catalog := _catalog_with(source_catalog, noncanonical_item_level)
+	var duplicate_bundle_level := source_level.duplicate(true) as LevelDefinition
+	duplicate_bundle_level.level_id = &"duplicate_bundle_level"
+	duplicate_bundle_level.room_requirements[2].chest_loot_bundle = source_level.room_requirements[2].chest_loot_bundle.duplicate(true) as LootBundleDefinition
+	var duplicate_bundle_catalog := _catalog_with_levels(source_catalog, [source_level, duplicate_bundle_level])
 	var empty_encounter := LevelRoomEncounterDefinition.new()
 	var null_group_encounter := LevelRoomEncounterDefinition.new()
 	null_group_encounter.enemy_groups.append(null)
@@ -158,6 +175,8 @@ func _init() -> void:
 		missing_encounter.validate(),
 		not missing_encounter_catalog.validate(),
 		not chest_encounter_catalog.validate(),
+		not missing_chest_marker_catalog.validate(),
+		not missing_chest_loot_catalog.validate(),
 		not empty_encounter.validate("probe"),
 		not null_group_encounter.validate("probe"),
 		not empty_entity_encounter.validate("probe"),
@@ -166,6 +185,10 @@ func _init() -> void:
 		not duplicate_enemy_encounter.validate("probe"),
 		not oversized_encounter.validate("probe"),
 		LevelEncounterCatalogValidator.validate(source_catalog, entity_catalog),
+		LevelLootCatalogValidator.validate(source_catalog, item_catalog, 15),
+		not LevelLootCatalogValidator.validate(source_catalog, item_catalog, 2),
+		not LevelLootCatalogValidator.validate(noncanonical_item_catalog, item_catalog, 15),
+		not LevelLootCatalogValidator.validate(duplicate_bundle_catalog, item_catalog, 15),
 		not LevelEncounterCatalogValidator.validate(unknown_enemy_catalog, entity_catalog),
 		not LevelEncounterCatalogValidator.validate(source_catalog, oversized_entity_catalog),
 		not empty_room_type.validate("probe"),
@@ -211,4 +234,10 @@ func _catalog_with(source: LevelCatalog, level: LevelDefinition, replacements: D
 	for module in source.modules:
 		catalog.modules.append(replacements.get(module.module_id, module) as LevelModuleDefinition)
 	catalog.levels.append(level)
+	return catalog
+
+func _catalog_with_levels(source: LevelCatalog, levels: Array) -> LevelCatalog:
+	var catalog := LevelCatalog.new()
+	catalog.modules.assign(source.modules)
+	catalog.levels.assign(levels)
 	return catalog

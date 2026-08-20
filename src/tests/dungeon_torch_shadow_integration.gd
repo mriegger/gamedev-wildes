@@ -195,13 +195,25 @@ func _test_level_runtime_setting(block_catalog: BlockCatalog) -> void:
 	var settings := GameSettings.new()
 	settings.torch_shadow_count = 0
 	settings.dungeon_torch_shadow_count = SHADOW_LIMIT
+	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
+	var inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
+	inventory.setup_empty()
+	var inventory_loadout := InventoryLoadoutCoordinator.new()
+	assert(inventory_loadout.setup(
+		inventory,
+		ActorStats.new(load("res://player/player_stats.tres") as CombatStatsDefinition),
+		ItemProficiency.new(item_catalog),
+	))
 	runtime.setup(
 		result.layout,
 		level_catalog.get_level(&"stone_dungeon"),
+		result.layout.seed_value,
 		block_catalog,
 		BlockTextureSet.new(block_catalog),
 		settings,
 		load("res://entities/entity_catalog.tres") as EntityCatalog,
+		inventory,
+		inventory_loadout,
 	)
 	var player := (load("res://player/player.tscn") as PackedScene).instantiate() as PlayerMotor
 	var camera := Camera3D.new()

@@ -10,23 +10,37 @@ const HORIZONTAL_NEIGHBORS: Array[Vector3i] = [
 
 @export var cell: Vector3i
 
-static func has_accessible_side(marker_cell: Vector3i, size: Vector3i, cells: PackedInt32Array, changes: Dictionary = {}) -> bool:
+static func has_accessible_side(
+	marker_cell: Vector3i,
+	size: Vector3i,
+	cells: PackedInt32Array,
+	changes: Dictionary = {},
+	blocked_cells: Dictionary = {},
+) -> bool:
+	var cell_value := func(cell: Vector3i) -> int:
+		if not StructureCell.is_in_bounds(cell, size):
+			return StructureCell.VOID
+		if changes.has(cell):
+			return int(changes[cell])
+		return cells[StructureCell.index_of(cell, size)]
+	return _has_accessible_side(marker_cell, cell_value, blocked_cells)
+
+static func has_accessible_side_in_world(marker_cell: Vector3i, cells: Dictionary) -> bool:
+	var cell_value := func(cell: Vector3i) -> int:
+		return int(cells.get(cell, StructureCell.VOID))
+	return _has_accessible_side(marker_cell, cell_value, {})
+
+static func _has_accessible_side(marker_cell: Vector3i, cell_value: Callable, blocked_cells: Dictionary) -> bool:
 	for offset in HORIZONTAL_NEIGHBORS:
 		var feet_cell := marker_cell + offset
 		var head_cell := feet_cell + Vector3i.UP
 		var support_cell := feet_cell + Vector3i.DOWN
 		if (
-			StructureCell.is_in_bounds(feet_cell, size)
-			and StructureCell.is_in_bounds(head_cell, size)
-			and StructureCell.is_in_bounds(support_cell, size)
-			and _cell_value(feet_cell, size, cells, changes) == StructureCell.AIR
-			and _cell_value(head_cell, size, cells, changes) == StructureCell.AIR
-			and StructureCell.is_structure_solid(_cell_value(support_cell, size, cells, changes))
+			not blocked_cells.has(feet_cell)
+			and not blocked_cells.has(head_cell)
+			and int(cell_value.call(feet_cell)) == StructureCell.AIR
+			and int(cell_value.call(head_cell)) == StructureCell.AIR
+			and StructureCell.is_structure_solid(int(cell_value.call(support_cell)))
 		):
 			return true
 	return false
-
-static func _cell_value(cell: Vector3i, size: Vector3i, cells: PackedInt32Array, changes: Dictionary) -> int:
-	if changes.has(cell):
-		return int(changes[cell])
-	return cells[StructureCell.index_of(cell, size)]

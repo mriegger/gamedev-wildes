@@ -180,7 +180,7 @@ func validate() -> bool:
 		valid = _validate_marker_socket_clearance(spawn_marker, "spawn", socket_aperture_owners, source) and valid
 		valid = _validate_marker_socket_clearance(return_door_marker, "entrance/exit door", socket_aperture_owners, source) and valid
 	if chest_marker != null:
-		valid = _validate_chest_marker(chest_marker, source) and valid
+		valid = _validate_chest_marker(chest_marker, socket_aperture_owners, source) and valid
 		valid = _validate_chest_marker_conflicts(chest_marker, socket_aperture_owners, torch_cells, source) and valid
 	var zone_ids: Dictionary = {}
 	if enemy_spawn_zones.size() > MAX_ENEMY_SPAWN_ZONES:
@@ -261,7 +261,7 @@ func _validate_marker_socket_clearance(marker: LevelMarkerDefinition, label: Str
 		return false
 	return true
 
-func _validate_chest_marker(marker: LevelChestMarkerDefinition, source: String) -> bool:
+func _validate_chest_marker(marker: LevelChestMarkerDefinition, socket_aperture_owners: Dictionary, source: String) -> bool:
 	if not StructureCell.is_in_bounds(marker.cell, size) or not StructureCell.is_in_bounds(marker.cell + Vector3i.UP, size):
 		push_error("[LevelModuleDefinition] Invalid chest marker for %s" % source)
 		return false
@@ -272,7 +272,7 @@ func _validate_chest_marker(marker: LevelChestMarkerDefinition, source: String) 
 	if not StructureCell.is_in_bounds(floor_cell, size) or not StructureCell.is_structure_solid(cell_at(floor_cell)):
 		push_error("[LevelModuleDefinition] Chest marker has no floor for %s" % source)
 		return false
-	if not LevelChestMarkerDefinition.has_accessible_side(marker.cell, size, cells):
+	if not LevelChestMarkerDefinition.has_accessible_side(marker.cell, size, cells, {}, socket_aperture_owners):
 		push_error("[LevelModuleDefinition] Chest marker has no accessible side for %s" % source)
 		return false
 	return true

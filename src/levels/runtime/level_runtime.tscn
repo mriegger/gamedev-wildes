@@ -1,9 +1,10 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://levels/runtime/level_runtime.gd" id="1_runtime"]
 [ext_resource type="Script" path="res://blocks/presentation/torch_renderer.gd" id="2_torches"]
 [ext_resource type="Script" path="res://levels/presentation/level_geometry_renderer.gd" id="3_geometry"]
 [ext_resource type="Script" path="res://levels/presentation/level_encounter_hud.gd" id="4_hud"]
+[ext_resource type="Script" path="res://chests/presentation/chest_renderer.gd" id="5_chests"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBox_encounter"]
 bg_color = Color(0.035, 0.025, 0.02, 0.9)
@@ -23,6 +24,9 @@ script = ExtResource("1_runtime")
 
 [node name="Geometry" type="Node3D" parent="."]
 script = ExtResource("3_geometry")
+
+[node name="Chests" type="Node3D" parent="."]
+script = ExtResource("5_chests")
 
 [node name="Torches" type="Node3D" parent="."]
 script = ExtResource("2_torches")

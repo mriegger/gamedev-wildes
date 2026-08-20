@@ -2,6 +2,7 @@ extends SceneTree
 
 const CATALOG_PATH: String = "res://levels/content/dungeons/stone/level_catalog.tres"
 const BLOCK_CATALOG_PATH: String = "res://blocks/block_catalog.tres"
+const ITEM_CATALOG_PATH: String = "res://items/item_catalog.tres"
 const ENTRANCE_DEFINITION_PATH: String = "res://levels/content/dungeons/stone/entrance.tres"
 const LEVEL_ID: StringName = &"stone_dungeon"
 const ENTRANCE_ID: StringName = &"overworld_dungeon_entrance"
@@ -11,7 +12,7 @@ const DEEP_FUZZ_INTERVAL: int = 20
 const LIVE_ROOM_COUNT: int = 7
 const LIVE_HALLWAY_COUNT: int = 5
 const LIVE_TARGET_MODULE_COUNT: int = 13
-const EXPECTED_LIVE_GOLDEN_DIGEST: String = "98e19f215318327be5659249a1f8e30037a826c8191e2c75b4c6a1bfc2f25123"
+const EXPECTED_LIVE_GOLDEN_DIGEST: String = "24c08b52fcfd94162e03bc988e8dabafd293f0781d951bf050bac4fc0b27a4da"
 const DIRECTIONS: Array[Vector3i] = [
 	Vector3i.LEFT,
 	Vector3i.RIGHT,
@@ -42,6 +43,7 @@ var _failures: int = 0
 var _assertions: int = 0
 var _catalog: LevelCatalog
 var _block_catalog: BlockCatalog
+var _item_catalog: ItemCatalog
 var _saw_connected_optional_socket: bool = false
 var _saw_sealed_optional_socket: bool = false
 
@@ -51,9 +53,11 @@ func _init() -> void:
 func _run() -> void:
 	_catalog = load(CATALOG_PATH) as LevelCatalog
 	_block_catalog = load(BLOCK_CATALOG_PATH) as BlockCatalog
+	_item_catalog = load(ITEM_CATALOG_PATH) as ItemCatalog
 	_expect(_catalog != null, "level catalog did not load")
 	_expect(_block_catalog != null and _block_catalog.validate(), "block catalog did not load or validate")
-	if _catalog == null or _block_catalog == null:
+	_expect(_item_catalog != null and _block_catalog != null and _item_catalog.validate(_block_catalog), "item catalog did not load or validate")
+	if _catalog == null or _block_catalog == null or _item_catalog == null:
 		_finish(0, 0)
 		return
 	_test_catalog_and_modules()
@@ -68,6 +72,7 @@ func _run() -> void:
 	var successful_seeds := _test_generation_fuzz()
 	var fuzz_msec := Time.get_ticks_msec() - fuzz_started
 	_test_level_state_and_mesher()
+	_test_level_chest_overlay()
 	_test_gameplay_location_state()
 	_finish(successful_seeds, fuzz_msec)
 
@@ -88,6 +93,8 @@ func _test_catalog_and_modules() -> void:
 	_expect(not LevelSocketDefinition.is_valid_unused_fill_block(BlockId.Type.WATER), "water socket fill block was accepted")
 	_expect(not LevelSocketDefinition.is_valid_unused_fill_block(BlockId.Type.COUNT), "unknown socket fill block was accepted")
 	_expect(_catalog.validate(), "level catalog validation failed")
+	var chest_slot_count := _block_catalog.get_definition(BlockId.Type.CHEST).container.get_slot_count()
+	_expect(LevelLootCatalogValidator.validate(_catalog, _item_catalog, chest_slot_count), "level chest loot catalog validation failed")
 	_expect(_catalog.modules.size() == EXPECTED_MODULE_IDS.size(), "catalog must contain exactly the expected live stone modules")
 	_expect(_catalog.levels.size() == 1, "catalog must contain exactly one initial level")
 	var actual_ids: Array[StringName] = []
@@ -128,7 +135,12 @@ func _test_catalog_and_modules() -> void:
 	for requirement in definition.room_requirements:
 		if requirement.room_type_id == &"chest_room":
 			_expect(requirement.encounter == null, "stone chest room must be passive")
+			_expect(requirement.chest_loot_bundle != null and requirement.chest_loot_bundle.id == &"stone_dungeon_chest", "stone chest room loot bundle changed")
+			if requirement.chest_loot_bundle != null:
+				_expect(requirement.chest_loot_bundle.max_rewards == 3, "stone chest reward limit changed")
+				_expect(requirement.chest_loot_bundle.fixed_entries.size() == 1 and requirement.chest_loot_bundle.weighted_candidates.size() == 3, "stone chest loot composition changed")
 			continue
+		_expect(requirement.chest_loot_bundle == null, "encounter room unexpectedly owns chest loot: %s" % requirement.room_type_id)
 		_expect(requirement.encounter != null and requirement.encounter.validate(String(requirement.room_type_id)), "stone room encounter is invalid: %s" % requirement.room_type_id)
 		if requirement.encounter == null:
 			continue
@@ -198,6 +210,8 @@ func _test_catalog_and_modules() -> void:
 		elif module.module_id != definition.start_module_id:
 			var requirement := _room_requirement_for_module(definition, module.module_id)
 			_expect(requirement != null, "live module has no room requirement: %s" % module.module_id)
+			if requirement != null:
+				_expect((module.chest_marker != null) == (requirement.chest_loot_bundle != null), "module chest marker and loot bundle differ: %s" % module.module_id)
 			if requirement != null and requirement.encounter == null:
 				_expect(module.enemy_spawn_zones.is_empty() and module.get_enemy_spawn_candidate_cells().is_empty(), "passive room module has enemy spawn zones: %s" % module.module_id)
 			else:
@@ -791,6 +805,7 @@ func _validate_layout(layout: LevelLayout, seed_index: int) -> void:
 	var has_rebuilt_bounds := false
 	var socket_records: Array[Dictionary] = []
 	var expected_torches: Dictionary = {}
+	var expected_chests: Dictionary = {}
 	var marker_count := 0
 	for placement_index in layout.placed_modules.size():
 		var placement := layout.placed_modules[placement_index]
@@ -842,6 +857,13 @@ func _validate_layout(layout: LevelLayout, seed_index: int) -> void:
 			var key := _torch_key(torch_cell, torch_direction, module.module_id)
 			_expect(not expected_torches.has(key), "duplicate reconstructed torch for %s" % label)
 			expected_torches[key] = true
+		if module.chest_marker != null:
+			var requirement := _room_requirement_for_module(definition, module.module_id)
+			_expect(requirement != null and requirement.chest_loot_bundle != null, "marked chest module has no loot bundle for %s" % label)
+			expected_chests[placement.placement_id] = {
+				"cell": placement.world_cell(module.chest_marker.cell),
+				"loot_bundle": requirement.chest_loot_bundle if requirement != null else null,
+			}
 		if module.spawn_marker != null:
 			marker_count += 1
 			_expect(layout.spawn_cell == placement.world_cell(module.spawn_marker.cell), "spawn marker transform changed for %s" % label)
@@ -923,6 +945,23 @@ func _validate_layout(layout: LevelLayout, seed_index: int) -> void:
 		var support := torch.cell + LevelSocketDefinition.vector_for(torch.wall_direction)
 		_expect(StructureCell.is_structure_solid(layout.get_cell(support)), "placed torch has no solid support for %s" % label)
 	_expect(actual_torches == expected_torches, "placed torch set differs from authored markers for %s" % label)
+	_expect(layout.chests.size() == expected_chests.size(), "placed chest count differs from authored markers for %s" % label)
+	var previous_room_id := -1
+	var actual_chest_cells: Dictionary = {}
+	for chest in layout.chests:
+		_expect(chest.room_id > previous_room_id, "placed chests are not ordered by room ID for %s" % label)
+		previous_room_id = chest.room_id
+		_expect(expected_chests.has(chest.room_id), "placed chest has no marked room for %s" % label)
+		if not expected_chests.has(chest.room_id):
+			continue
+		var expected := expected_chests[chest.room_id] as Dictionary
+		_expect(chest.cell == expected["cell"], "placed chest marker transform changed for %s" % label)
+		_expect(chest.loot_bundle == expected["loot_bundle"], "placed chest loot bundle is not canonical for %s" % label)
+		_expect(not actual_chest_cells.has(chest.cell), "duplicate placed chest cell for %s" % label)
+		actual_chest_cells[chest.cell] = true
+		_expect(layout.get_cell(chest.cell) == StructureCell.AIR, "placed chest marker is not in AIR for %s" % label)
+		_expect(StructureCell.is_structure_solid(layout.get_cell(chest.cell + Vector3i.DOWN)), "placed chest marker has no floor for %s" % label)
+		_expect(_has_accessible_chest_side(layout, chest.cell), "placed chest marker has no accessible side for %s" % label)
 
 func _validate_module_graph(layout: LevelLayout, label: String) -> void:
 	var definition := _catalog.get_level(LEVEL_ID)
@@ -1101,6 +1140,47 @@ func _test_level_state_and_mesher() -> void:
 		var arrays := mesh.surface_get_arrays(0)
 		_expect((arrays[Mesh.ARRAY_TEX_UV2] as PackedVector2Array) == texture_layers, "UV2 layers were not installed on the mesh surface")
 
+func _test_level_chest_overlay() -> void:
+	var spawn_floor := Vector3i.ZERO
+	var chest_floor := Vector3i.RIGHT
+	var chest_cell := chest_floor + Vector3i.UP
+	var cells: Dictionary = {
+		spawn_floor: BlockId.Type.STONE,
+		spawn_floor + Vector3i.UP: StructureCell.AIR,
+		spawn_floor + Vector3i.UP * 2: StructureCell.AIR,
+		chest_floor: BlockId.Type.STONE,
+		chest_cell: StructureCell.AIR,
+		chest_cell + Vector3i.UP: StructureCell.AIR,
+	}
+	var state := LevelState.new(
+		_block_catalog,
+		cells,
+		spawn_floor + Vector3i.UP,
+		LevelSocketDefinition.Direction.NORTH,
+		spawn_floor + Vector3i.UP,
+		LevelSocketDefinition.Direction.WEST,
+		Vector3i.ZERO,
+		Vector3i(1, 2, 0),
+	)
+	var terrain_cells := state.snapshot_cells()
+	var terrain_solids := state.get_solid_cells()
+	var terrain_mesh: Variant = LevelMesher.new(BlockTextureSet.new(_block_catalog)).build_mesh_data(state)
+	state._configure_chest_cells([chest_cell])
+	_expect(state.get_chest_cells() == [chest_cell], "LevelState omitted the configured chest overlay")
+	var copied_chests := state.get_chest_cells()
+	copied_chests.clear()
+	_expect(state.get_chest_cells() == [chest_cell], "LevelState exposed mutable chest ownership")
+	_expect(state.get_cell_value(chest_cell) == BlockId.Type.CHEST and state.get_block_id_at(chest_cell) == BlockId.Type.CHEST, "chest overlay did not project the canonical chest block")
+	_expect(state.get_block_at(chest_cell) == BlockId.Type.CHEST and state.block_catalog.get_definition(state.get_block_id_at(chest_cell)).container != null, "chest overlay did not expose container metadata")
+	_expect(state.is_solid(chest_cell) and state.is_raycast_solid(chest_cell), "chest overlay did not block bodies and raycasts")
+	_expect(not state.is_interior_open(chest_cell) and state.is_base_interior_open(chest_cell), "chest overlay changed base interior ownership")
+	_expect(state.is_face_targetable(chest_cell, Vector3i.UP), "chest overlay did not expose a targetable face")
+	_expect(state.get_highest_top(chest_cell.x, chest_cell.z) == 2.0, "chest overlay did not contribute to the collision surface height")
+	_expect(state.snapshot_cells() == terrain_cells and state.get_solid_cells() == terrain_solids, "chest overlay changed terrain snapshots or mesh cells")
+	_expect(LevelMesher.new(BlockTextureSet.new(_block_catalog)).build_mesh_data(state) == terrain_mesh, "chest overlay entered terrain mesh data")
+	var doorway := LevelDoorway.new(0, 1, LevelSocketDefinition.Direction.NORTH, [chest_cell], BlockId.Type.STONE_BRICKS)
+	_expect(not state.configure_seals([doorway], [0]), "doorway seal overlapped a generated chest")
+
 func _test_gameplay_location_state() -> void:
 	var initial := Vector3(2.5, 9.0, -3.5)
 	var location := GameplayLocationState.new(initial)
@@ -1150,6 +1230,8 @@ func _layout_digest(layout: LevelLayout) -> String:
 	torch_lines.sort()
 	for torch_line in torch_lines:
 		lines.append("torch=" + torch_line)
+	for chest in layout.chests:
+		lines.append("chest=%d:%d,%d,%d:%s" % [chest.room_id, chest.cell.x, chest.cell.y, chest.cell.z, chest.loot_bundle.id])
 	return "\n".join(lines).sha256_text()
 
 func _topology_digest(layout: LevelLayout) -> String:
@@ -1162,6 +1244,17 @@ func _topology_digest(layout: LevelLayout) -> String:
 
 func _torch_key(cell: Vector3i, direction: LevelSocketDefinition.Direction, module_id: StringName) -> String:
 	return "%d,%d,%d:%d:%s" % [cell.x, cell.y, cell.z, int(direction), module_id]
+
+func _has_accessible_chest_side(layout: LevelLayout, chest_cell: Vector3i) -> bool:
+	for offset in LevelChestMarkerDefinition.HORIZONTAL_NEIGHBORS:
+		var feet_cell := chest_cell + offset
+		if (
+			layout.get_cell(feet_cell) == StructureCell.AIR
+			and layout.get_cell(feet_cell + Vector3i.UP) == StructureCell.AIR
+			and StructureCell.is_structure_solid(layout.get_cell(feet_cell + Vector3i.DOWN))
+		):
+			return true
+	return false
 
 func _edge_key(first: Vector3i, second: Vector3i) -> String:
 	if _cell_less(second, first):

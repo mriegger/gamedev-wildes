@@ -23,6 +23,7 @@ class AssemblyState:
 	var placed_modules: Array[LevelPlacedModule] = []
 	var connections: Array[LevelConnection] = []
 	var torches: Array[LevelTorchPlacement] = []
+	var chests: Array[LevelChestPlacement] = []
 	var frontiers: Array[Dictionary] = []
 	var remaining_room_counts: Dictionary = {}
 	var remaining_hallway_count: int
@@ -39,6 +40,7 @@ class AssemblyState:
 		copied.placed_modules.assign(placed_modules)
 		copied.connections.assign(connections)
 		copied.torches.assign(torches)
+		copied.chests.assign(chests)
 		copied.frontiers.assign(frontiers)
 		copied.remaining_room_counts = remaining_room_counts.duplicate()
 		copied.remaining_hallway_count = remaining_hallway_count
@@ -483,6 +485,14 @@ func _write_placement(state: AssemblyState, placement: LevelPlacedModule, transf
 		state.bounds_min = state.bounds_min.min(cell)
 		state.bounds_max = state.bounds_max.max(cell)
 	state.placed_modules.append(placement)
+	if placement.definition.chest_marker != null:
+		var requirement := _room_requirement(placement.room_type_id)
+		assert(requirement != null and requirement.chest_loot_bundle != null)
+		state.chests.append(LevelChestPlacement.new(
+			placement.placement_id,
+			placement.world_cell(placement.definition.chest_marker.cell),
+			requirement.chest_loot_bundle,
+		))
 	var frontier_target := FrontierTarget.ROOM if placement.room_type_id.is_empty() else FrontierTarget.HALLWAY
 	for socket in placement.definition.sockets:
 		if socket.socket_id == connected_socket_id:
@@ -535,6 +545,8 @@ func _validate_finished_state(state: AssemblyState, target_module_count: int) ->
 		return false
 	if not _has_exact_composition(state):
 		return false
+	if not _has_exact_chest_placements(state):
+		return false
 	if not _fits_extent(state.bounds_min, state.bounds_max):
 		return false
 	if int(state.cells.get(state.spawn_cell, StructureCell.VOID)) != StructureCell.AIR:
@@ -568,6 +580,35 @@ func _has_exact_composition(state: AssemblyState) -> bool:
 			return false
 	return hallway_count == _definition.get_hallway_count(_catalog.get_module(_definition.start_module_id).sockets.size())
 
+func _has_exact_chest_placements(state: AssemblyState) -> bool:
+	var chest_index := 0
+	var chest_cells: Dictionary = {}
+	for placement in state.placed_modules:
+		if placement.definition.chest_marker == null:
+			continue
+		if chest_index >= state.chests.size():
+			return false
+		var chest := state.chests[chest_index]
+		var requirement := _room_requirement(placement.room_type_id)
+		if (
+			chest.room_id != placement.placement_id
+			or chest.cell != placement.world_cell(placement.definition.chest_marker.cell)
+			or requirement == null
+			or chest.loot_bundle != requirement.chest_loot_bundle
+			or chest_cells.has(chest.cell)
+			or not LevelChestMarkerDefinition.has_accessible_side_in_world(chest.cell, state.cells)
+		):
+			return false
+		chest_cells[chest.cell] = true
+		chest_index += 1
+	return chest_index == state.chests.size()
+
+func _room_requirement(room_type_id: StringName) -> LevelRoomRequirement:
+	for requirement in _definition.room_requirements:
+		if requirement.room_type_id == room_type_id:
+			return requirement
+	return null
+
 func _make_layout(state: AssemblyState, seed_value: int, target_module_count: int) -> LevelLayout:
 	var layout := LevelLayout.new()
 	layout.seed_value = seed_value
@@ -575,6 +616,7 @@ func _make_layout(state: AssemblyState, seed_value: int, target_module_count: in
 	layout.placed_modules.assign(state.placed_modules)
 	layout.connections.assign(state.connections)
 	layout.torches.assign(state.torches)
+	layout.chests.assign(state.chests)
 	layout.spawn_cell = state.spawn_cell
 	layout.spawn_facing = state.spawn_facing
 	layout.return_door_cell = state.return_door_cell

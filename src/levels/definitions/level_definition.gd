@@ -1,7 +1,7 @@
 extends Resource
 class_name LevelDefinition
 
-const FORMAT_VERSION: int = 2
+const FORMAT_VERSION: int = 3
 const HARD_MAX_EXTENT: Vector3i = Vector3i(96, 16, 96)
 const HARD_MAX_EXPLORED_STATES: int = 10000
 const HARD_MAX_MODULE_COUNT: int = 64

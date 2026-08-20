@@ -13,7 +13,7 @@ class_name HUD
 @onready var interaction_prompt: Label = $InteractionPrompt as Label
 
 var anvil_coordinator: AnvilCoordinator
-var chest_coordinator: ChestCoordinator
+var chest_coordinator: ChestTransferCoordinator
 var cauldron_coordinator: CauldronCoordinator
 var _left_panel_camera_rig: CameraRig
 
@@ -25,12 +25,10 @@ func setup_with_camera(
 	cam_rig: CameraRig,
 	stats: ActorStats,
 	item_proficiency: ItemProficiency,
-	p_chest_coordinator: ChestCoordinator = null,
 ):
 	assert(p_inventory != null)
 	assert(p_inventory_loadout_coordinator != null and p_inventory_loadout_coordinator.inventory_model == p_inventory)
 	assert(stats != null and p_inventory_loadout_coordinator.actor_stats == stats)
-	chest_coordinator = p_chest_coordinator
 	_left_panel_camera_rig = cam_rig
 	hotbar.setup(p_inventory, p_inventory_loadout_coordinator, item_proficiency)
 	health_bar.setup(stats)
@@ -38,9 +36,10 @@ func setup_with_camera(
 	side_panel.setup(p_inventory, p_inventory_loadout_coordinator, item_proficiency, cam_rig, hotbar, CraftingPanel.PANEL_WIDTH)
 	crafting_panel.setup(p_crafting_coordinator, p_recipe_catalog)
 	crafting_panel.progress_changed.connect(_on_left_panel_progress_changed)
-	if p_chest_coordinator != null:
-		chest_panel.setup(p_chest_coordinator, p_inventory, item_proficiency)
-		p_chest_coordinator.closed.connect(_on_chest_closed)
+	var chest_panel_ready := chest_panel.setup(p_inventory, item_proficiency)
+	assert(chest_panel_ready)
+	if not chest_panel_ready:
+		return
 	side_panel.progress_changed.connect(_on_side_panel_progress_changed)
 	_on_side_panel_progress_changed(side_panel.get_progress())
 
@@ -210,19 +209,31 @@ func _on_anvil_closed() -> void:
 func _on_cauldron_closed() -> void:
 	cauldron_panel.close()
 
-func open_container(position: Vector3i, definition: ContainerBlockDefinition):
-	if chest_coordinator == null:
-		return
+func open_container(coordinator: ChestTransferCoordinator, position: Vector3i, definition: ContainerBlockDefinition) -> bool:
+	if coordinator == null or definition == null:
+		return false
+	if chest_coordinator != null:
+		close_chest()
 	if anvil_panel.is_open():
 		close_anvil(false)
 	if cauldron_panel.is_open():
 		close_cauldron(false)
 	crafting_panel.close()
 	side_panel.open_inventory()
+	if not chest_panel.bind(coordinator):
+		side_panel.close()
+		return false
+	chest_coordinator = coordinator
+	chest_coordinator.closed.connect(_on_chest_closed)
 	_set_chest_transfer_context(chest_coordinator)
 	if not chest_coordinator.try_open(position, definition):
+		chest_coordinator.closed.disconnect(_on_chest_closed)
+		chest_coordinator = null
+		chest_panel.release()
 		_set_chest_transfer_context(null)
 		side_panel.close()
+		return false
+	return true
 
 func is_chest_open() -> bool:
 	return chest_panel.is_open()
@@ -233,6 +244,11 @@ func close_chest():
 	side_panel.close()
 
 func _on_chest_closed():
+	var closed_coordinator := chest_coordinator
+	chest_coordinator = null
+	if closed_coordinator != null and closed_coordinator.closed.is_connected(_on_chest_closed):
+		closed_coordinator.closed.disconnect(_on_chest_closed)
+	chest_panel.release()
 	_set_chest_transfer_context(null)
 
 func _set_chest_transfer_context(coordinator: InventoryTransferCoordinator):

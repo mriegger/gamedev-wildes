@@ -189,7 +189,7 @@ func _run():
 	interactor._block_break_validator = interaction_chest_coordinator.can_break
 	interactor.voxel_space = world
 	interactor.editable_voxel_world = null
-	_expect(interactor._get_target_container(chest_position) == null, "read-only voxel space exposed an overworld chest interaction")
+	_expect(interactor._get_target_container(chest_position) == container, "read-only voxel space hid its chest interaction")
 	interactor.editable_voxel_world = world
 	_expect(interactor._get_target_container(chest_position) == container, "editable overworld did not expose its chest interaction")
 	_expect(not interactor._can_mine_position(chest_position, stone_pickaxe), "non-empty chest passed the player mining validator")
@@ -308,8 +308,8 @@ func _run():
 	await process_frame
 	var ui_coordinator := ChestCoordinator.new()
 	_expect(ui_coordinator.setup(restored_storage, player_inventory, player_loadout, world, chest_block), "UI chest coordinator setup failed")
-	hud.setup_with_camera(player_inventory, player_loadout, crafting, recipe_catalog, null, player_stats, ItemProficiency.new(item_catalog), ui_coordinator)
-	hud.open_container(chest_position, container)
+	hud.setup_with_camera(player_inventory, player_loadout, crafting, recipe_catalog, null, player_stats, ItemProficiency.new(item_catalog))
+	hud.open_container(ui_coordinator, chest_position, container)
 	_expect(hud.chest_panel.is_open(), "chest panel did not open")
 	_expect(hud.side_panel.is_open(), "opening a chest did not open the right-side backpack")
 	_expect(hud.chest_panel.mouse_filter == Control.MOUSE_FILTER_IGNORE, "full-screen chest overlay blocks the backpack")
@@ -423,7 +423,8 @@ func _run():
 	_expect(hud.chest_panel._move_all_button.disabled, "move-all button stayed enabled for an empty chest")
 	hud.toggle_backpack()
 	_expect(not hud.chest_panel.is_open() and not hud.side_panel.is_open(), "P did not close the chest and backpack together")
-	hud.open_container(chest_position, container)
+	_expect(hud.chest_panel.coordinator == null and hud.chest_coordinator == null, "closed chest UI retained its coordinator binding")
+	hud.open_container(ui_coordinator, chest_position, container)
 	hud.toggle_crafting()
 	_expect(not hud.chest_panel.is_open(), "Tab did not close the chest")
 	_expect(hud.side_panel.is_open() and hud.crafting_panel.is_open(), "Tab did not replace the chest with backpack and crafting")
