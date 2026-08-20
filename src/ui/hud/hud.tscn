@@ -34,6 +34,7 @@ layer = 1
 
 [node name="NavigationCompass" type="Control" parent="."]
 modulate = Color(1, 1, 1, 0.9)
+process_mode = 3
 anchors_preset = 10
 anchor_left = 0.5
 anchor_right = 0.5

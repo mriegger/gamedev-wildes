@@ -19,6 +19,7 @@ var anvil_coordinator: AnvilCoordinator
 var chest_coordinator: ChestTransferCoordinator
 var cauldron_coordinator: CauldronCoordinator
 var _left_panel_camera_rig: CameraRig
+var _external_menu_open: bool = false
 
 func setup_with_camera(
 	p_inventory: InventoryModel,
@@ -97,12 +98,21 @@ func set_compass_target(position: Vector3) -> void:
 func clear_compass_target() -> void:
 	navigation_compass.clear_target()
 
+func set_compass_available(available: bool) -> void:
+	navigation_compass.set_available(available)
+
+func set_compass_external_menu_open(open: bool) -> void:
+	_external_menu_open = open
+	_refresh_compass_menu_state()
+
 func _on_side_panel_progress_changed(progress: float):
 	var right_inset := SidePanel.PANEL_WIDTH * progress
 	health_bar.set_right_inset(right_inset)
 	experience_bar.set_right_inset(right_inset)
+	_refresh_compass_menu_state()
 
 func _on_left_panel_progress_changed(_progress: float) -> void:
+	_refresh_compass_menu_state()
 	if _left_panel_camera_rig == null:
 		return
 	var obstruction_progress := maxf(crafting_panel.get_progress(), maxf(anvil_panel.get_progress(), cauldron_panel.get_progress()))
@@ -245,6 +255,7 @@ func open_container(coordinator: ChestTransferCoordinator, position: Vector3i, d
 		_set_chest_transfer_context(null)
 		side_panel.close()
 		return false
+	_refresh_compass_menu_state()
 	return true
 
 func is_chest_open() -> bool:
@@ -262,6 +273,17 @@ func _on_chest_closed():
 		closed_coordinator.closed.disconnect(_on_chest_closed)
 	chest_panel.release()
 	_set_chest_transfer_context(null)
+	_refresh_compass_menu_state()
+
+func _refresh_compass_menu_state() -> void:
+	var panel_open := (
+		side_panel.get_progress() > 0.01
+		or crafting_panel.get_progress() > 0.01
+		or anvil_panel.get_progress() > 0.01
+		or cauldron_panel.get_progress() > 0.01
+		or chest_panel.is_open()
+	)
+	navigation_compass.set_menu_open(_external_menu_open or panel_open)
 
 func _set_chest_transfer_context(coordinator: InventoryTransferCoordinator):
 	side_panel.set_inventory_transfer_context(coordinator)

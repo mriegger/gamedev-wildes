@@ -506,6 +506,7 @@ func _on_player_defeated():
 	_death_screen.respawn_requested.connect(_on_respawn_requested)
 	_death_screen.main_menu_requested.connect(_save_and_request_main_menu)
 	add_child(_death_screen)
+	_sync_compass_external_menu()
 
 func _on_respawn_requested():
 	if _death_screen == null or not is_instance_valid(_death_screen):
@@ -513,6 +514,7 @@ func _on_respawn_requested():
 	var completed_screen := _death_screen
 	_death_screen = null
 	completed_screen.queue_free()
+	_sync_compass_external_menu()
 	if _location_state != null and _location_state.is_in_level():
 		_exit_level(true)
 		return
@@ -568,6 +570,7 @@ func _process(delta):
 		_save_canvas.visible = false
 
 func _physics_process(delta):
+	_sync_compass_external_menu()
 	if _level_transitioning or _structure_transitioning or _structure_designer_runtime != null:
 		input_buffer.clear_gameplay()
 		return
@@ -677,6 +680,7 @@ func _enter_level():
 	player.set_physics_process(false)
 	input_buffer.clear_gameplay()
 	await _fade_to(1.0)
+	hud.set_compass_available(false)
 	hud.clear_compass_target()
 	player.unbind_space()
 	_unbind_entity_context()
@@ -747,6 +751,7 @@ func _exit_level(restore_from_defeat: bool = false):
 		_restore_player_from_defeat(player.global_position)
 	game_environment.set_outdoor_presentation_enabled(true)
 	overworld.visible = true
+	hud.set_compass_available(true)
 	_level_entrance.visible = true
 	_reset_camera_position()
 	_level_runtime.queue_free()
@@ -1033,10 +1038,23 @@ func _handle_structure_designer_cancel() -> void:
 	structure_designer_workflow.request_exit()
 
 func _on_dev_console_open_state_changed(_open: bool) -> void:
+	_sync_compass_external_menu()
 	_sync_structure_designer_ui_blocking()
 
 func _on_structure_dialog_open_state_changed(_open: bool) -> void:
+	_sync_compass_external_menu()
 	_sync_structure_designer_ui_blocking()
+
+func _sync_compass_external_menu() -> void:
+	hud.set_compass_external_menu_open(
+		dev_console.is_open()
+		or structure_designer_workflow.is_dialog_open()
+		or (animation_tuning_panel != null and animation_tuning_panel.is_open())
+		or (player_stats_debug_panel != null and player_stats_debug_panel.is_open())
+		or game_environment.is_debug_panel_open()
+		or (_pause_menu != null and is_instance_valid(_pause_menu))
+		or (_death_screen != null and is_instance_valid(_death_screen))
+	)
 
 func _sync_structure_designer_ui_blocking() -> void:
 	if _structure_designer_runtime == null:
@@ -1068,6 +1086,7 @@ func _show_pause_menu():
 	_pause_menu.settings_screen.settings_changed.connect(_on_settings_changed)
 	_save_canvas.visible = true
 	_refresh_save_label()
+	_sync_compass_external_menu()
 	get_tree().paused = true
 
 func _on_settings_changed(updated_settings: GameSettings):
@@ -1086,6 +1105,7 @@ func _resume_from_pause():
 	_pause_menu = null
 	_save_canvas.visible = false
 	get_tree().paused = false
+	_sync_compass_external_menu()
 
 func _save_and_request_main_menu():
 	_restore_structure_designer_for_shutdown()

@@ -74,6 +74,7 @@ func _process(_delta: float) -> bool:
 		print("[hud_integration] hud added orphan=%d" % int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT)))
 		_phase = 1
 	elif _phase == 1 and _frame == 4:
+		_check_compass_menu_visibility()
 		_check_health_bar_geometry()
 		_check_health_bar(100.0, 100.0)
 		_check_experience_bar_geometry()
@@ -1159,6 +1160,30 @@ func _check_equipment_trash_drag_result() -> void:
 		_fail("equipment trash drop leaked drag preview")
 		return
 	print("[hud_integration] trash drop deleted equipped armor")
+
+func _check_compass_menu_visibility() -> void:
+	_hud.side_panel.open()
+	_hud.side_panel._process(1.0)
+	if not _hud.navigation_compass._menu_open:
+		_fail("inventory did not hide the compass")
+		return
+	_hud.side_panel.close_immediate()
+	if _hud.navigation_compass._menu_open:
+		_fail("closing inventory did not restore the compass")
+		return
+	_hud.crafting_panel.open()
+	_hud.crafting_panel._process(1.0)
+	if not _hud.navigation_compass._menu_open:
+		_fail("crafting did not hide the compass")
+		return
+	_hud.crafting_panel.close_immediate()
+	_hud.set_compass_external_menu_open(true)
+	if not _hud.navigation_compass._menu_open:
+		_fail("external menu did not hide the compass")
+		return
+	_hud.set_compass_external_menu_open(false)
+	if _hud.navigation_compass._menu_open:
+		_fail("closing external menu did not restore the compass")
 
 func _find_drag_previews(node: Node, out: Array) -> void:
 	if node.name.contains("DragPreview"):

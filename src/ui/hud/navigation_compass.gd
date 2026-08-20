@@ -3,12 +3,15 @@ extends Control
 const HALF_VIEW_DEGREES: float = 90.0
 const EDGE_INSET: float = 18.0
 const RULER_Y: float = 31.0
+const MENU_FADE_SECONDS: float = 0.08
 const LABELS: Array[String] = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
 
 var _camera: Camera3D
 var _tracked_position: Node3D
 var _target_position: Vector3
 var _has_target: bool = false
+var _menu_open: bool = false
+var _available: bool = true
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -33,7 +36,15 @@ func clear_target() -> void:
 	_has_target = false
 	queue_redraw()
 
-func _process(_delta: float) -> void:
+func set_menu_open(open: bool) -> void:
+	_menu_open = open
+
+func set_available(available: bool) -> void:
+	_available = available
+
+func _process(delta: float) -> void:
+	var target_alpha := 1.0 if _available and not _menu_open else 0.0
+	self_modulate.a = move_toward(self_modulate.a, target_alpha, delta / MENU_FADE_SECONDS)
 	queue_redraw()
 
 func _draw() -> void:
