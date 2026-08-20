@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="SlimeBehaviorDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://entities/slime/slime_behavior_definition.gd" id="1_behavior"]
+[ext_resource type="Resource" path="res://entities/slime/profiles/slime_medium_attachment.tres" id="2_damage"]
+
+[resource]
+script = ExtResource("1_behavior")
+wander_speed = 1.6
+chase_speed = 3.2
+gravity = 30.0
+jump_velocity = 7.0
+detection_range = 16.0
+forget_range = 24.0
+target_memory_seconds = 3.0
+wander_radius = 8.0
+wander_goal_seconds = 4.0
+repath_seconds = 0.5
+hop_interval_seconds = 0.7
+attachment_slow_fraction = 0.25
+attachment_damage_profile = ExtResource("2_damage")
