@@ -80,6 +80,7 @@ func _run() -> void:
 	var projectile: Variant = projectiles._projectiles[0]
 	var trail := projectile.trail as ArrowTrailView
 	_expect(trail != null and not trail.visible, "fired arrow did not create an empty bounded trail")
+	_expect(is_equal_approx(projectile.damage_multiplier, 1.0), "full-draw projectile did not retain full damage")
 	_expect(is_equal_approx(projectile.velocity.length(), bow_action.maximum_launch_speed), "full draw did not use maximum arrow speed")
 	var launch_position: Vector3 = projectile.view.global_position
 	projectiles.advance_projectiles(0.04)
@@ -126,6 +127,7 @@ func _run() -> void:
 	projectiles.set_physics_process(false)
 	projectile = projectiles._projectiles[0]
 	_expect(is_equal_approx(projectile.velocity.length(), bow_action.get_launch_speed(0.5)), "half draw did not interpolate arrow speed")
+	_expect(is_equal_approx(projectile.damage_multiplier, 0.7), "half-draw projectile did not retain seventy percent damage")
 	for step_index in range(60):
 		if projectile.embedded_elapsed >= 0.0:
 			break

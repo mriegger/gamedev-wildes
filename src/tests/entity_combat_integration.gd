@@ -876,9 +876,9 @@ func _test_projectile_damage(world: VoxelWorld) -> void:
 	feedback.bind_runtime(coordinator.get_runtime())
 	var outcome_count_before := _projectile_outcomes.size()
 	var hit_position := actor.get_world_bounds().get_center()
-	_expect(combat.try_commit_player_projectile_hit(actor.runtime_id, stone_profile, &"bow", hit_position, Vector3.FORWARD), "stone arrow hit did not commit")
+	_expect(combat.try_commit_player_projectile_hit(actor.runtime_id, stone_profile, &"bow", hit_position, Vector3.FORWARD, 0.4), "stone arrow hit did not commit")
 	_expect(_projectile_outcomes.size() == outcome_count_before + 1, "stone arrow hit did not emit one outcome")
-	var expected_stone_damage := stone_profile.calculate_damage(10.0, coordinator.get_runtime().get_stat_value(actor.runtime_id, &"defense"))
+	var expected_stone_damage := stone_profile.calculate_damage(10.0, coordinator.get_runtime().get_stat_value(actor.runtime_id, &"defense")) * 0.4
 	var stone_outcome: ProjectileOutcome = _projectile_outcomes.back()
 	_expect(is_equal_approx(stone_outcome.applied_damage, expected_stone_damage) and stone_outcome.source_item_id == &"bow", "stone arrow damage outcome is incorrect")
 	_expect(stone_outcome.damage_response == DamageAffinityDefinition.Response.NEUTRAL, "stone arrow did not use neutral pierce affinity")
@@ -887,7 +887,7 @@ func _test_projectile_damage(world: VoxelWorld) -> void:
 	_expect(is_equal_approx((fixture["item_proficiency"] as ItemProficiency).get_experience(&"bow"), expected_stone_damage), "stone arrow damage did not award bow proficiency")
 	actor.knockback_velocity = Vector3.ZERO
 	outcome_count_before = _projectile_outcomes.size()
-	_expect(combat.try_commit_player_projectile_hit(actor.runtime_id, copper_profile, &"bow", hit_position, Vector3.FORWARD), "copper arrow hit did not commit")
+	_expect(combat.try_commit_player_projectile_hit(actor.runtime_id, copper_profile, &"bow", hit_position, Vector3.FORWARD, 1.0), "copper arrow hit did not commit")
 	_expect(_projectile_outcomes.size() == outcome_count_before + 1, "copper arrow hit did not emit one outcome")
 	var expected_copper_damage := copper_profile.calculate_damage(10.0, coordinator.get_runtime().get_stat_value(actor.runtime_id, &"defense"))
 	var copper_outcome: ProjectileOutcome = _projectile_outcomes.back()

@@ -119,6 +119,7 @@ func try_commit_player_projectile_hit(
 	source_item_id: StringName,
 	hit_position: Vector3,
 	hit_direction: Vector3,
+	damage_multiplier: float,
 ) -> bool:
 	assert(_is_setup())
 	if (
@@ -128,6 +129,9 @@ func try_commit_player_projectile_hit(
 		or not hit_position.is_finite()
 		or not hit_direction.is_finite()
 		or hit_direction.is_zero_approx()
+		or not is_finite(damage_multiplier)
+		or damage_multiplier <= 0.0
+		or damage_multiplier > 1.0
 		or not _damage_type_catalog.has_definition(profile.damage_type)
 	):
 		return false
@@ -139,7 +143,8 @@ func try_commit_player_projectile_hit(
 		_player_stats.get_value(&"strength"),
 		_entity_runtime.get_stat_value(target_runtime_id, &"defense"),
 	)
-	damage = maxf(1.0, damage * DamageAffinityDefinition.get_multiplier(damage_response))
+	damage *= damage_multiplier
+	damage *= DamageAffinityDefinition.get_multiplier(damage_response)
 	var damage_result := _entity_runtime.try_apply_damage(target_runtime_id, damage)
 	if damage_result == null:
 		return false

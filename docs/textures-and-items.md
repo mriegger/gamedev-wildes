@@ -210,7 +210,8 @@ draw immediately and requires primary use to be released before another draw. Th
 aligns the arrow with its velocity, presents a short fading trail from bounded recent flight samples,
 and owns its one-second impact hold and fade cleanup. Projectile
 profiles own pierce damage, knockback, collision radius, gravity, and lifetime values; committed hits
-flow through combat affinity resolution, enemy hit reactions, damage feedback, particles, and bow
+resolve combat stats, scale the result from 40 to 100 percent with draw progress, then apply damage
+affinity before enemy hit reactions, damage feedback, particles, and bow
 proficiency.
 
 Melee definitions own their idle and attack transforms, animation style, two-handed stance, and optional impact-effect radius. The copper sword's one-handed alternating swing renders a procedural radial scan from the player to its profile's full sweep and reach, while the copper hammer holds a custom modeled handle in both hands, raises it overhead, and drives it into a procedural shockwave without adding weapon-specific branches to inventory selection. Switching away from a melee item cancels its presentation before the newly selected tool is rendered.

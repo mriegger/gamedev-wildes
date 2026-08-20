@@ -6,6 +6,7 @@ class_name BowDrawActionDefinition
 @export_range(0.1, 1.0, 0.01) var full_draw_distance: float = 0.48
 @export_range(0.1, 100.0, 0.1, "or_greater") var minimum_launch_speed: float = 12.0
 @export_range(0.1, 100.0, 0.1, "or_greater") var maximum_launch_speed: float = 48.0
+@export_range(0.01, 1.0, 0.01) var minimum_damage_multiplier: float = 0.4
 @export_range(0.0, 3.0, 0.001, "or_greater") var projectile_launch_height: float = 1.0485
 @export_range(-2.0, 2.0, 0.001) var projectile_launch_right_offset: float = 0.1066
 @export_range(0.0, 3.0, 0.001, "or_greater") var projectile_launch_forward_offset: float = 0.8006
@@ -28,6 +29,9 @@ func validate(source: String) -> bool:
 		valid = false
 	if not is_finite(maximum_launch_speed) or maximum_launch_speed < minimum_launch_speed:
 		push_error("[BowDrawActionDefinition] Invalid maximum launch speed at %s" % source)
+		valid = false
+	if not is_finite(minimum_damage_multiplier) or minimum_damage_multiplier <= 0.0 or minimum_damage_multiplier > 1.0:
+		push_error("[BowDrawActionDefinition] Invalid minimum damage multiplier at %s" % source)
 		valid = false
 	if not is_finite(projectile_launch_height) or projectile_launch_height < 0.0:
 		push_error("[BowDrawActionDefinition] Invalid projectile launch height at %s" % source)
@@ -58,6 +62,10 @@ func validate(source: String) -> bool:
 func get_launch_speed(draw_progress: float) -> float:
 	assert(is_finite(draw_progress))
 	return lerpf(minimum_launch_speed, maximum_launch_speed, clampf(draw_progress, 0.0, 1.0))
+
+func get_damage_multiplier(draw_progress: float) -> float:
+	assert(is_finite(draw_progress))
+	return lerpf(minimum_damage_multiplier, 1.0, clampf(draw_progress, 0.0, 1.0))
 
 func get_projectile_release_transform(actor_position: Vector3, actor_forward: Vector3, aim_target: Vector3, draw_progress: float, gravity: float) -> Transform3D:
 	assert(actor_position.is_finite() and actor_forward.is_finite() and aim_target.is_finite() and is_finite(draw_progress))

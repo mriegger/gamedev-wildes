@@ -151,7 +151,9 @@ that authoritative transform. Secondary use cancels an active draw without commi
 requires primary use to be released before another draw begins. The arrow aligns its shaft to current velocity while `ArrowTrailView`
 retains only a short recent window of flight positions, then embeds at the nearest contact while its
 trail fades. The arrow holds for one second, then fades and is removed. Projectile profiles own pierce damage, knockback,
-collision radius, gravity, and lifetime limits. `Game` explicitly connects completed melee and
+collision radius, gravity, and lifetime limits. The bow action maps draw progress to a 0.4–1.0
+damage multiplier that the projectile captures at launch and combat applies after attacker strength
+and target defense, with damage affinity applied last. `Game` explicitly connects completed melee and
 projectile outcomes to entity reactions, progression, and presentation without making combat own
 those policies.
 

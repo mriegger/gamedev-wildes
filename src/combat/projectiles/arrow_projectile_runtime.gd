@@ -12,6 +12,7 @@ class ActiveProjectile:
 	var launch_position: Vector3
 	var launch_velocity: Vector3
 	var velocity: Vector3
+	var damage_multiplier: float = 1.0
 	var flight_elapsed: float = 0.0
 	var flight_step_accumulator: float = 0.0
 	var embedded_elapsed: float = -1.0
@@ -160,6 +161,7 @@ func try_fire(
 	projectile.launch_position = release_transform.origin
 	projectile.launch_velocity = launch_velocity
 	projectile.velocity = launch_velocity
+	projectile.damage_multiplier = action.get_damage_multiplier(draw_progress)
 	_projectiles.append(projectile)
 	_orient_projectile(projectile)
 	set_physics_process(true)
@@ -219,6 +221,7 @@ func _advance_flying_projectile(index: int, projectile: ActiveProjectile, delta:
 					projectile.source_item_id,
 					projectile.view.global_position,
 					projectile.velocity,
+					projectile.damage_multiplier,
 				)
 			return
 		projectile.flight_elapsed = next_elapsed

@@ -246,6 +246,8 @@ func _run():
 	var bow_action := bow.primary_action as BowDrawActionDefinition
 	_expect(bow_action != null and is_equal_approx(bow_action.raise_seconds, 0.18) and is_equal_approx(bow_action.draw_seconds, 1.5) and is_equal_approx(bow_action.full_draw_distance, 0.48), "bow draw timing is misconfigured")
 	_expect(is_equal_approx(bow_action.minimum_launch_speed, 12.0) and is_equal_approx(bow_action.maximum_launch_speed, 48.0), "bow launch speeds are misconfigured")
+	_expect(is_equal_approx(bow_action.minimum_damage_multiplier, 0.4), "bow minimum draw damage is misconfigured")
+	_expect(is_equal_approx(bow_action.get_damage_multiplier(0.0), 0.4) and is_equal_approx(bow_action.get_damage_multiplier(0.5), 0.7) and is_equal_approx(bow_action.get_damage_multiplier(1.0), 1.0), "bow damage does not scale from forty to one hundred percent with draw")
 	_expect(is_equal_approx(bow_action.maximum_launch_angle_degrees, 45.0), "bow maximum launch angle is not forty-five degrees")
 	_expect(bow_action.ammunition.size() == 2 and bow_action.ammunition[0] == stone_arrow and bow_action.ammunition[1] == copper_arrow, "bow ammunition priority is incorrect")
 	_expect(is_equal_approx(bow_action.ammunition[0].projectile_profile.base_damage, 10.0) and is_equal_approx(bow_action.ammunition[1].projectile_profile.base_damage, 15.0), "arrow damage values are incorrect")
@@ -269,13 +271,17 @@ func _run():
 	var invalid_ammunition_list: Array[ArrowItemDefinition] = [invalid_ammunition]
 	invalid_bow_action.ammunition = invalid_ammunition_list
 	var empty_bow_action := BowDrawActionDefinition.new()
+	var invalid_damage_bow_action := bow_action.duplicate(true) as BowDrawActionDefinition
+	invalid_damage_bow_action.minimum_damage_multiplier = 1.1
 	var print_error_messages := Engine.print_error_messages
 	Engine.print_error_messages = false
 	var invalid_bow_action_valid := invalid_bow_action.validate("test")
 	var empty_bow_action_valid := empty_bow_action.validate("test")
+	var invalid_damage_bow_action_valid := invalid_damage_bow_action.validate("test")
 	Engine.print_error_messages = print_error_messages
 	_expect(not invalid_bow_action_valid, "bow draw accepted an arrow without a nock contract")
 	_expect(not empty_bow_action_valid, "bow draw accepted no ammunition")
+	_expect(not invalid_damage_bow_action_valid, "bow draw accepted a minimum damage multiplier above one")
 	var reachable_target := Vector3(0.0, 0.0, 7.0)
 	var reachable_transform := bow_action.get_projectile_release_transform(Vector3.ZERO, Vector3.BACK, reachable_target, 0.5, bow_action.ammunition[0].projectile_profile.gravity)
 	var reachable_velocity := reachable_transform.basis.y * bow_action.get_launch_speed(0.5)
@@ -782,6 +788,7 @@ func _run():
 	var fired_start: Vector3 = fired_projectile.view.global_position
 	var fired_direction: Vector3 = fired_projectile.velocity.normalized()
 	_expect(is_equal_approx(fired_projectile.velocity.length(), bow_action.maximum_launch_speed), "full-draw arrow did not use maximum launch speed")
+	_expect(is_equal_approx(fired_projectile.damage_multiplier, 1.0), "full-draw arrow did not retain full listed damage")
 	_expect(is_equal_approx(bow_action.get_launch_speed(0.0), bow_action.minimum_launch_speed) and bow_action.get_launch_speed(0.5) > bow_action.minimum_launch_speed, "arrow launch speed is not proportional to draw progress")
 	_projectiles.advance_projectiles(ArrowProjectileRuntime.TRAJECTORY_STEP_SECONDS)
 	var fired_travel: Vector3 = fired_projectile.view.global_position - fired_start
