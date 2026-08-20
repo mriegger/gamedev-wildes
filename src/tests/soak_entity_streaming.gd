@@ -2,6 +2,7 @@ extends SceneTree
 
 const StoneGolemActorType := preload("res://entities/stone_golem/stone_golem_actor.gd")
 const StoneGolemBrainType := preload("res://entities/stone_golem/stone_golem_brain.gd")
+const SlimeActorType := preload("res://entities/slime/slime_actor.gd")
 
 const FLAT_HEIGHT: int = 6
 const FEET_Y: int = FLAT_HEIGHT + 1
@@ -21,10 +22,10 @@ const ZOMBIE_OFFSETS: Array[Vector2i] = [
 	Vector2i(0, -10),
 	Vector2i(8, -4),
 	Vector2i(-4, -16),
-	Vector2i(4, -16),
 ]
 const SKELETON_OFFSETS: Array[Vector2i] = [Vector2i(-10, -8), Vector2i(0, -12), Vector2i(10, -8)]
 const STONE_GOLEM_OFFSETS: Array[Vector2i] = [Vector2i(-16, 0), Vector2i(16, 0)]
+const SLIME_OFFSETS: Array[Vector2i] = [Vector2i(4, -16)]
 const SHEEP_OFFSETS: Array[Vector2i] = [Vector2i(-14, 8), Vector2i(-7, 14), Vector2i(7, 14), Vector2i(14, 8), Vector2i(-14, -14), Vector2i(14, -14)]
 const STREAM_REGIONS: Array[Vector2i] = [
 	Vector2i(-3, -2),
@@ -54,6 +55,7 @@ var _full_path_acquisitions_by_species: Dictionary = {
 	&"zombie": 0,
 	&"skeleton": 0,
 	&"stone_golem": 0,
+	&"slime_large": 0,
 	&"sheep": 0,
 }
 
@@ -122,7 +124,7 @@ func _assert_path_budget(world: VoxelWorld, catalog: EntityCatalog, region: Vect
 	var definitions := _eligible_definitions(catalog, time_of_day)
 	_expect(not definitions.is_empty(), "%s had no eligible ambient definitions" % context)
 	if not DayNightProfile.is_day_time(time_of_day):
-		_expect(definitions.size() == 3, "%s did not exercise all three night species" % context)
+		_expect(definitions.size() == 4, "%s did not exercise all four night species" % context)
 	var origin := region * STREAM_REGION_SIZE + Vector2i(STREAM_REGION_SIZE / 2, STREAM_REGION_SIZE / 2)
 	for index in range(definitions.size()):
 		var definition := definitions[index]
@@ -182,13 +184,14 @@ func _assert_population(coordinator: WorldEntityCoordinator, catalog: EntityCata
 
 func _assert_mixed_night_population(coordinator: WorldEntityCoordinator, catalog: EntityCatalog, context: String) -> void:
 	var night_definitions := _eligible_definitions(catalog, NIGHT_TIME)
-	_expect(night_definitions.size() == 3, "%s catalog did not contain exactly three night species" % context)
+	_expect(night_definitions.size() == 4, "%s catalog did not contain exactly four night species" % context)
 	var night_ids: Dictionary = {}
 	for definition in night_definitions:
 		night_ids[definition.id] = true
 		_expect(coordinator.get_runtime().get_definition_count(definition.id) > 0, "%s did not retain night species %s" % [context, definition.id])
-	_expect(night_ids.size() == 3 and night_ids.has(&"zombie") and night_ids.has(&"skeleton") and night_ids.has(&"stone_golem"), "%s night species IDs changed" % context)
+	_expect(night_ids.size() == 4 and night_ids.has(&"zombie") and night_ids.has(&"skeleton") and night_ids.has(&"stone_golem") and night_ids.has(&"slime_large"), "%s night species IDs changed" % context)
 	_expect(coordinator.get_runtime().get_definition_count(&"stone_golem") == 2, "%s did not contain exactly two Stone Golems" % context)
+	_expect(coordinator.get_runtime().get_definition_count(&"slime_large") == 1, "%s did not contain exactly one large Slime" % context)
 
 func _prepare_full_night_population(coordinator: WorldEntityCoordinator, catalog: EntityCatalog, player_position: Vector3, region_index: int) -> void:
 	var runtime := coordinator.get_runtime()
@@ -221,6 +224,8 @@ func _workload_offsets(definition_id: StringName) -> Array[Vector2i]:
 			return SKELETON_OFFSETS
 		&"stone_golem":
 			return STONE_GOLEM_OFFSETS
+		&"slime_large":
+			return SLIME_OFFSETS
 		&"sheep":
 			return SHEEP_OFFSETS
 	var empty: Array[Vector2i] = []
@@ -233,6 +238,7 @@ func _arrange_active_population(coordinator: WorldEntityCoordinator, player_posi
 		&"zombie": 0,
 		&"skeleton": 0,
 		&"stone_golem": 0,
+		&"slime_large": 0,
 		&"sheep": 0,
 	}
 	var activity: Dictionary = {}
@@ -277,6 +283,11 @@ func _arrange_active_population(coordinator: WorldEntityCoordinator, player_posi
 						"recovery_seen": false,
 						"max_displacement": 0.0,
 					}
+			&"slime_large":
+				var slime := actor as SlimeActorType
+				_expect(slime != null, "active workload Slime used the wrong actor type")
+				if slime != null:
+					slime._path_follower.request_repath()
 			&"sheep":
 				var sheep := actor as SheepActor
 				_expect(sheep != null, "active workload Sheep used the wrong actor type")
@@ -286,6 +297,7 @@ func _arrange_active_population(coordinator: WorldEntityCoordinator, player_posi
 	_expect(int(next_index[&"zombie"]) == ZOMBIE_OFFSETS.size(), "active workload did not arrange %d Zombies" % ZOMBIE_OFFSETS.size())
 	_expect(int(next_index[&"skeleton"]) == SKELETON_OFFSETS.size(), "active workload did not arrange three Skeletons")
 	_expect(int(next_index[&"stone_golem"]) == STONE_GOLEM_OFFSETS.size(), "active workload did not arrange two Stone Golems")
+	_expect(int(next_index[&"slime_large"]) == SLIME_OFFSETS.size(), "active workload did not arrange one large Slime")
 	_expect(int(next_index[&"sheep"]) == SHEEP_OFFSETS.size(), "active workload did not arrange six Sheep")
 	return activity
 
@@ -323,6 +335,8 @@ func _actor_has_navigation_path(actor: EntityActor) -> bool:
 			return not (actor as SkeletonActor)._path_follower._path.is_empty()
 		&"stone_golem":
 			return not (actor as StoneGolemActorType)._path_follower._path.is_empty()
+		&"slime_large":
+			return not (actor as SlimeActorType)._path_follower._path.is_empty()
 		&"sheep":
 			return not (actor as SheepActor)._path_follower._path.is_empty()
 	return false
@@ -466,6 +480,7 @@ func _run() -> void:
 	_expect(int(_full_path_acquisitions_by_species[&"zombie"]) == expected_full_regions * ZOMBIE_OFFSETS.size(), "full workloads did not record every Zombie path acquisition")
 	_expect(int(_full_path_acquisitions_by_species[&"skeleton"]) == expected_full_regions * SKELETON_OFFSETS.size(), "full workloads did not record every Skeleton path acquisition")
 	_expect(int(_full_path_acquisitions_by_species[&"stone_golem"]) == expected_full_regions * STONE_GOLEM_OFFSETS.size(), "full workloads did not record every Stone Golem path acquisition")
+	_expect(int(_full_path_acquisitions_by_species[&"slime_large"]) == expected_full_regions * SLIME_OFFSETS.size(), "full workloads did not record every large Slime path acquisition")
 	_expect(int(_full_path_acquisitions_by_species[&"sheep"]) == expected_full_regions * SHEEP_OFFSETS.size(), "full workloads did not record every Sheep path acquisition")
 	coordinator.shutdown()
 	_expect(coordinator.get_runtime().get_definition_count(&"stone_golem") == 0, "shutdown retained an active Stone Golem")
@@ -481,7 +496,7 @@ func _run() -> void:
 	_expect(orphan_count == 0, "shutdown ended with %d orphan nodes" % orphan_count)
 	if _failures == 0:
 		print(
-			"SOAK_ENTITY_STREAMING PASS regions=%d cycles=%d runtime_ids=%d searches=%d full_combat=%d stream_loss=%d path_actors=%d/%d path_species=zombie:%d,skeleton:%d,stone_golem:%d,sheep:%d contacts=%d orphan=%d" % [
+			"SOAK_ENTITY_STREAMING PASS regions=%d cycles=%d runtime_ids=%d searches=%d full_combat=%d stream_loss=%d path_actors=%d/%d path_species=zombie:%d,skeleton:%d,stone_golem:%d,slime_large:%d,sheep:%d contacts=%d orphan=%d" % [
 				STREAM_REGIONS.size(),
 				STREAM_REGIONS.size() * CYCLES_PER_REGION,
 				_instance_by_runtime_id.size(),
@@ -493,6 +508,7 @@ func _run() -> void:
 				int(_full_path_acquisitions_by_species[&"zombie"]),
 				int(_full_path_acquisitions_by_species[&"skeleton"]),
 				int(_full_path_acquisitions_by_species[&"stone_golem"]),
+				int(_full_path_acquisitions_by_species[&"slime_large"]),
 				int(_full_path_acquisitions_by_species[&"sheep"]),
 				_melee_contact_count + _radial_contact_count,
 				orphan_count,

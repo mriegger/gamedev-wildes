@@ -271,7 +271,7 @@ func try_commit_entity_radial_contact(source_runtime_id: int, profile: MeleeAtta
 	if not is_instance_valid(actor) or actor.definition == null:
 		return false
 	var source_bounds := actor.get_world_bounds()
-	var player_bounds := _get_player_bounds()
+	var player_bounds := _player.get_world_bounds()
 	var planar_offset := _player.global_position - actor.global_position
 	planar_offset.y = 0.0
 	if planar_offset.length_squared() > profile.reach * profile.reach:
