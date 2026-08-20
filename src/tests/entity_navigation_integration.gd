@@ -63,6 +63,26 @@ func _expect_eight_way_path(path: Array[Vector3i], message: String) -> void:
 	for index in range(1, path.size()):
 		_expect(_edge_cost(path[index - 1], path[index]) >= 0, "%s used an invalid edge at %d" % [message, index])
 
+func _priority_key_precedes(left: Vector2i, right: Vector2i) -> bool:
+	if left.x != right.x:
+		return left.x < right.x
+	return left.y < right.y
+
+func _test_navigation_priority_queue() -> void:
+	var queue := NavigationPriorityQueue.new(_priority_key_precedes)
+	for value in [Vector2i(2, 1), Vector2i(1, 2), Vector2i(3, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(0, 9), Vector2i(1, 1)]:
+		queue.push(value)
+	var ordered: Array[Vector2i] = []
+	while not queue.is_empty():
+		ordered.append(queue.pop() as Vector2i)
+	_expect(
+		ordered == [Vector2i(0, 9), Vector2i(1, 0), Vector2i(1, 1), Vector2i(1, 2), Vector2i(2, 0), Vector2i(2, 1), Vector2i(3, 0)],
+		"navigation priority queue changed minimum-first tie ordering",
+	)
+	queue.push(Vector2i(5, 0))
+	queue.clear()
+	_expect(queue.is_empty(), "navigation priority queue clear retained entries")
+
 func _test_deterministic_bounded_pathfinding() -> void:
 	var world := _make_flat_world()
 	var start := Vector3i(0, FEET_Y, 0)
@@ -220,6 +240,23 @@ func _test_successful_path_repath_throttle() -> void:
 	search_budget.reset()
 	var rebuilt := follower.advance(0.4, start, Vector3(-4.5, float(FEET_Y), 0.5), 1.0, true, search_budget)
 	_expect(rebuilt.desired_velocity.x < 0.0, "changed successful goal was not applied after the repath interval")
+
+func _test_cached_path_adoption_revalidates_world() -> void:
+	var world := _make_flat_world()
+	var start_cell := Vector3i(0, FEET_Y, 0)
+	var middle_cell := Vector3i(1, FEET_Y, 1)
+	var goal_cell := Vector3i(2, FEET_Y, 2)
+	var start := Vector3(0.5, float(FEET_Y), 0.5)
+	var goal := Vector3(2.5, float(FEET_Y), 2.5)
+	var result := VoxelPathfinder.find_path(world, start_cell, goal_cell, BODY_WIDTH, BODY_HEIGHT, 4, 64)
+	_expect(result.path == [start_cell, middle_cell, goal_cell], "cached-path fixture did not produce its diagonal route")
+	var placed := VoxelWorldTestFixture.commit_place(world, Vector3i(1, FEET_Y, 0), BlockId.Type.STONE)
+	_expect(placed != null, "cached-path fixture world edit failed")
+	for cell in result.path:
+		_expect(VoxelPathfinder.is_walkable(world, cell, BODY_WIDTH, BODY_HEIGHT), "world edit blocked a cached path node")
+	var follower := VoxelPathFollower.new(world, BODY_WIDTH, BODY_HEIGHT, 0.5, EntityNavigationLimits.new(24, 256, 1))
+	_expect(not follower.try_adopt_path_to_goal(result.path, start, goal), "cached path crossed an edited diagonal corner")
+	_expect(follower._path.is_empty(), "rejected cached path changed follower state")
 
 func _test_diagonal_path_follower_speed() -> void:
 	var world := _make_flat_world()
@@ -406,6 +443,7 @@ func _test_zombie_actor_movement_and_animation() -> void:
 	actor.free()
 
 func _run() -> void:
+	_test_navigation_priority_queue()
 	_test_deterministic_bounded_pathfinding()
 	_test_adjacent_goals_fit_tight_node_limit()
 	_test_diagonal_corner_blocking()
@@ -414,6 +452,7 @@ func _run() -> void:
 	_test_elevation_clearance_and_water()
 	_test_failed_path_repath_throttle()
 	_test_successful_path_repath_throttle()
+	_test_cached_path_adoption_revalidates_world()
 	_test_diagonal_path_follower_speed()
 	_test_blocked_motion_keeps_repath_cadence()
 	_test_shared_navigation_search_budget()

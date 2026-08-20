@@ -31,7 +31,7 @@ var _status: Status = Status.EXHAUSTED
 var _origin_feet: Vector3i
 var _candidate_exclusion_origin: Vector2
 var _observation: EntityTargetObservation
-var _frontier: Array[ReachableEntry] = []
+var _frontier: NavigationPriorityQueue
 var _path_costs: Dictionary = {}
 var _came_from: Dictionary = {}
 var _closed: Dictionary = {}
@@ -54,6 +54,7 @@ func _init(
 	_body_height = p_body_height
 	_navigation_limits = p_navigation_limits
 	_search_radius = mini(SEARCH_RADIUS, _navigation_limits.get_max_search_radius())
+	_frontier = NavigationPriorityQueue.new(_entry_precedes)
 
 func begin(origin: Vector3, candidate_exclusion_origin: Vector3, observation: EntityTargetObservation, minimum_candidate_distance: float) -> void:
 	assert(origin.is_finite())
@@ -79,7 +80,7 @@ func begin(origin: Vector3, candidate_exclusion_origin: Vector3, observation: En
 		_status = Status.EXHAUSTED
 		return
 	_path_costs[_origin_feet] = 0
-	_heap_push(ReachableEntry.new(_origin_feet, 0))
+	_frontier.push(ReachableEntry.new(_origin_feet, 0))
 	_status = Status.SEARCHING
 
 func advance(search_budget: NavigationSearchBudget) -> Status:
@@ -93,7 +94,7 @@ func advance(search_budget: NavigationSearchBudget) -> Status:
 		if _frontier.is_empty():
 			_status = Status.EXHAUSTED
 			return _status
-		var entry := _heap_pop()
+		var entry := _frontier.pop() as ReachableEntry
 		processed_nodes += 1
 		if _closed.has(entry.position):
 			continue
@@ -125,7 +126,7 @@ func advance(search_budget: NavigationSearchBudget) -> Status:
 				continue
 			_path_costs[neighbor] = next_cost
 			_came_from[neighbor] = entry.position
-			_heap_push(ReachableEntry.new(neighbor, next_cost))
+			_frontier.push(ReachableEntry.new(neighbor, next_cost))
 	if _frontier.is_empty():
 		_status = Status.EXHAUSTED
 	return _status
@@ -163,41 +164,7 @@ func _reconstruct_path(goal: Vector3i) -> Array[Vector3i]:
 	path.reverse()
 	return path
 
-func _heap_push(entry: ReachableEntry) -> void:
-	_frontier.append(entry)
-	var index := _frontier.size() - 1
-	while index > 0:
-		var parent := (index - 1) / 2
-		if not _entry_precedes(_frontier[index], _frontier[parent]):
-			break
-		var parent_entry := _frontier[parent]
-		_frontier[parent] = _frontier[index]
-		_frontier[index] = parent_entry
-		index = parent
-
-func _heap_pop() -> ReachableEntry:
-	var first := _frontier[0]
-	var last := _frontier.pop_back() as ReachableEntry
-	if not _frontier.is_empty():
-		_frontier[0] = last
-		var index := 0
-		while true:
-			var left := index * 2 + 1
-			var right := left + 1
-			var smallest := index
-			if left < _frontier.size() and _entry_precedes(_frontier[left], _frontier[smallest]):
-				smallest = left
-			if right < _frontier.size() and _entry_precedes(_frontier[right], _frontier[smallest]):
-				smallest = right
-			if smallest == index:
-				break
-			var smallest_entry := _frontier[smallest]
-			_frontier[smallest] = _frontier[index]
-			_frontier[index] = smallest_entry
-			index = smallest
-	return first
-
-func _entry_precedes(left: ReachableEntry, right: ReachableEntry) -> bool:
+static func _entry_precedes(left: ReachableEntry, right: ReachableEntry) -> bool:
 	if left.path_cost != right.path_cost:
 		return left.path_cost < right.path_cost
 	if left.position.x != right.position.x:

@@ -37,7 +37,8 @@ static func find_path(voxel_space: VoxelSpace, start_feet: Vector3i, goal_feet: 
 	if not _is_within_radius(start_feet, goal_feet, max_radius):
 		return VoxelPathResult.new(VoxelPathResult.Status.NO_PATH, [], 0)
 
-	var open_heap: Array[OpenEntry] = []
+	var open_heap := NavigationPriorityQueue.new(_entry_precedes)
+	var candidates := NavigationPriorityQueue.new(_entry_precedes)
 	var path_costs: Dictionary = {start_feet: 0}
 	var came_from: Dictionary = {}
 	var closed: Dictionary = {}
@@ -45,11 +46,11 @@ static func find_path(voxel_space: VoxelSpace, start_feet: Vector3i, goal_feet: 
 	var body_clearance_cache: Dictionary = {}
 	var sequence := 0
 	var start_estimate := _estimate_cost(start_feet, goal_feet)
-	_heap_push(open_heap, OpenEntry.new(start_feet, 0, start_estimate, sequence))
+	open_heap.push(OpenEntry.new(start_feet, 0, start_estimate, sequence))
 	var limit_reached := false
 
 	while not open_heap.is_empty():
-		var current_entry := _heap_pop(open_heap)
+		var current_entry := open_heap.pop() as OpenEntry
 		var current := current_entry.position
 		if closed.has(current):
 			continue
@@ -60,7 +61,6 @@ static func find_path(voxel_space: VoxelSpace, start_feet: Vector3i, goal_feet: 
 		if current == goal_feet:
 			return VoxelPathResult.new(VoxelPathResult.Status.FOUND, _reconstruct_path(came_from, start_feet, goal_feet), path_costs.size())
 
-		var candidates: Array[OpenEntry] = []
 		var candidate_sequence := 0
 		for neighbor in get_walkable_neighbors(
 			voxel_space,
@@ -78,10 +78,10 @@ static func find_path(voxel_space: VoxelSpace, start_feet: Vector3i, goal_feet: 
 				continue
 			candidate_sequence += 1
 			var estimated_cost := next_cost + _estimate_cost(neighbor, goal_feet)
-			_heap_push(candidates, OpenEntry.new(neighbor, next_cost, estimated_cost, candidate_sequence))
+			candidates.push(OpenEntry.new(neighbor, next_cost, estimated_cost, candidate_sequence))
 
 		while not candidates.is_empty():
-			var candidate := _heap_pop(candidates)
+			var candidate := candidates.pop() as OpenEntry
 			var previous_cost := path_costs.get(candidate.position, -1) as int
 			if previous_cost >= 0 and candidate.path_cost >= previous_cost:
 				continue
@@ -91,7 +91,7 @@ static func find_path(voxel_space: VoxelSpace, start_feet: Vector3i, goal_feet: 
 			path_costs[candidate.position] = candidate.path_cost
 			came_from[candidate.position] = current
 			sequence += 1
-			_heap_push(open_heap, OpenEntry.new(candidate.position, candidate.path_cost, candidate.estimated_cost, sequence))
+			open_heap.push(OpenEntry.new(candidate.position, candidate.path_cost, candidate.estimated_cost, sequence))
 
 	var status := VoxelPathResult.Status.LIMIT_REACHED if limit_reached else VoxelPathResult.Status.NO_PATH
 	return VoxelPathResult.new(status, [], path_costs.size())
@@ -101,6 +101,32 @@ static func is_walkable(voxel_space: VoxelSpace, feet: Vector3i, body_width: flo
 		return false
 	var body_position := _body_position(feet)
 	return is_equal_approx(VoxelBodySolver.get_ground_y(voxel_space, body_position, body_width), float(feet.y))
+
+static func is_path_traversable(voxel_space: VoxelSpace, path: Array[Vector3i], body_width: float, body_height: float) -> bool:
+	if path.is_empty():
+		return false
+	var walkability_cache: Dictionary = {}
+	var body_clearance_cache: Dictionary = {}
+	if not _is_walkable_cached(voxel_space, path[0], body_width, body_height, walkability_cache):
+		return false
+	for index in range(1, path.size()):
+		var current := path[index - 1]
+		var neighbor := path[index]
+		var direction := neighbor - current
+		if not _is_step_offset(direction):
+			return false
+		if not _is_traversable_transition(
+			voxel_space,
+			current,
+			neighbor,
+			direction,
+			body_width,
+			body_height,
+			walkability_cache,
+			body_clearance_cache,
+		):
+			return false
+	return true
 
 static func get_walkable_neighbors(
 	voxel_space: VoxelSpace,
@@ -119,21 +145,11 @@ static func get_walkable_neighbors(
 			var neighbor := Vector3i(horizontal.x, current.y + height_offset, horizontal.z)
 			if not _is_within_radius(search_origin, neighbor, max_radius):
 				continue
-			if not _is_valid_transition(
+			if not _is_traversable_transition(
 				voxel_space,
 				current,
 				neighbor,
-				body_width,
-				body_height,
-				walkability_cache,
-				body_clearance_cache,
-			):
-				continue
-			if _is_diagonal(direction) and not _has_clear_diagonal_sides(
-				voxel_space,
-				current,
 				direction,
-				neighbor.y,
 				body_width,
 				body_height,
 				walkability_cache,
@@ -146,6 +162,37 @@ static func get_walkable_neighbors(
 
 static func get_step_cost(from_feet: Vector3i, to_feet: Vector3i) -> int:
 	return DIAGONAL_COST if from_feet.x != to_feet.x and from_feet.z != to_feet.z else ORTHOGONAL_COST
+
+static func _is_traversable_transition(
+	voxel_space: VoxelSpace,
+	current: Vector3i,
+	neighbor: Vector3i,
+	direction: Vector3i,
+	body_width: float,
+	body_height: float,
+	walkability_cache: Dictionary,
+	body_clearance_cache: Dictionary,
+) -> bool:
+	if not _is_valid_transition(
+		voxel_space,
+		current,
+		neighbor,
+		body_width,
+		body_height,
+		walkability_cache,
+		body_clearance_cache,
+	):
+		return false
+	return not _is_diagonal(direction) or _has_clear_diagonal_sides(
+		voxel_space,
+		current,
+		direction,
+		neighbor.y,
+		body_width,
+		body_height,
+		walkability_cache,
+		body_clearance_cache,
+	)
 
 static func _is_valid_transition(
 	voxel_space: VoxelSpace,
@@ -182,6 +229,14 @@ static func _has_clear_diagonal_sides(
 
 static func _is_diagonal(direction: Vector3i) -> bool:
 	return direction.x != 0 and direction.z != 0
+
+static func _is_step_offset(direction: Vector3i) -> bool:
+	return (
+		absi(direction.x) <= 1
+		and absi(direction.y) <= 1
+		and absi(direction.z) <= 1
+		and (direction.x != 0 or direction.z != 0)
+	)
 
 static func _has_body_clearance(voxel_space: VoxelSpace, feet: Vector3i, body_width: float, body_height: float) -> bool:
 	var body_position := _body_position(feet)
@@ -249,40 +304,6 @@ static func _reconstruct_path(came_from: Dictionary, start_feet: Vector3i, goal_
 		path.append(cursor)
 	path.reverse()
 	return path
-
-static func _heap_push(heap: Array[OpenEntry], entry: OpenEntry) -> void:
-	heap.append(entry)
-	var index := heap.size() - 1
-	while index > 0:
-		var parent := (index - 1) / 2
-		if not _entry_precedes(heap[index], heap[parent]):
-			break
-		var parent_entry := heap[parent]
-		heap[parent] = heap[index]
-		heap[index] = parent_entry
-		index = parent
-
-static func _heap_pop(heap: Array[OpenEntry]) -> OpenEntry:
-	var first := heap[0]
-	var last := heap.pop_back() as OpenEntry
-	if not heap.is_empty():
-		heap[0] = last
-		var index := 0
-		while true:
-			var left := index * 2 + 1
-			var right := left + 1
-			var smallest := index
-			if left < heap.size() and _entry_precedes(heap[left], heap[smallest]):
-				smallest = left
-			if right < heap.size() and _entry_precedes(heap[right], heap[smallest]):
-				smallest = right
-			if smallest == index:
-				break
-			var smallest_entry := heap[smallest]
-			heap[smallest] = heap[index]
-			heap[index] = smallest_entry
-			index = smallest
-	return first
 
 static func _entry_precedes(left: OpenEntry, right: OpenEntry) -> bool:
 	if left.estimated_cost != right.estimated_cost:

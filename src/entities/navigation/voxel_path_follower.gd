@@ -59,6 +59,8 @@ func try_adopt_path_to_goal(path: Array[Vector3i], position: Vector3, goal: Vect
 		return false
 	if path.front() != _resolve_feet_cell(position) or path.back() != _resolve_feet_cell(goal):
 		return false
+	if not VoxelPathfinder.is_path_traversable(_voxel_space, path, _body_width, _body_height):
+		return false
 	_path = path.duplicate()
 	_path_index = 1 if _path.size() > 1 else _path.size()
 	_repath_remaining = _repath_seconds
