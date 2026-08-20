@@ -87,7 +87,7 @@ func _validate_pumpkin_footprint() -> void:
 	_expect(_covered_foliage_count > 0, "join fixture did not exercise foliage-covered pumpkin soil")
 
 func _validate_startup_save() -> void:
-	var saved := SaveManager.load_slot(_slot_id)
+	var saved := SaveManager.load_slot(_slot_id, _game.item_catalog)
 	_expect(saved.get("exists", false), "session startup did not write the save slot")
 	var saved_patch = saved.get("pumpkin_patch", null)
 	_expect(saved_patch is Dictionary, "session startup omitted the pumpkin snapshot")
@@ -102,7 +102,10 @@ func _validate_startup_save() -> void:
 	if encoded_origin.size() != 3:
 		return
 	var origin := Vector3i(int(encoded_origin[0]), int(encoded_origin[1]), int(encoded_origin[2]))
-	var persisted_world := SaveManager.decode_world_state(saved)
+	var persisted_world := SaveManager.decode_world_state(saved) as WorldState
+	_expect(persisted_world != null, "startup save did not decode its world state")
+	if persisted_world == null:
+		return
 	var clearance_removals := 0
 	for x_offset in range(PumpkinPatchCoordinator.PATCH_WIDTH):
 		for z_offset in range(PumpkinPatchCoordinator.PATCH_DEPTH):
