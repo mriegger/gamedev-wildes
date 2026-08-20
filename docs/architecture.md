@@ -147,7 +147,8 @@ prediction while the bow is drawn and renders it from the nocked arrow to the fi
 so presentation and the fired projectile share trajectory and collision rules. `PlayerInteractor`
 resolves the first voxel surface under the cursor, falling back to the player's ground plane, and owns
 the current aim target; the bow action solves the reachable ballistic angle or raises toward its 45-degree cap, and both presentation and firing consume
-that authoritative transform. The arrow aligns its shaft to current velocity while `ArrowTrailView`
+that authoritative transform. Secondary use cancels an active draw without committing ammunition and
+requires primary use to be released before another draw begins. The arrow aligns its shaft to current velocity while `ArrowTrailView`
 retains only a short recent window of flight positions, then embeds at the nearest contact while its
 trail fades. The arrow holds for one second, then fades and is removed. Projectile profiles own pierce damage, knockback,
 collision radius, gravity, and lifetime limits. `Game` explicitly connects completed melee and

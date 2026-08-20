@@ -20,7 +20,7 @@ world seed.
 | `Q` / `E` | Rotate the camera 45° |
 | Mouse wheel / pinch | Zoom |
 | Left-click / hold | Open a targeted chest or crafting station, or use the selected item; hold to mine or draw a bow, release to fire an arrow, or click to attack, till soil, or consume food and potions |
-| Right-click | Use the selected item's secondary action, including consuming food or potions and placing blocks |
+| Right-click | Use the selected item's secondary action, including consuming food or potions and placing blocks; cancel an active bow draw |
 | `F` | Enter or leave a nearby dungeon |
 | `1`–`9` | Select hotbar slot; while the backpack is open, assign the hovered item to that slot |
 | `Tab` | Toggle backpack and crafting |
@@ -184,7 +184,7 @@ stone or copper arrow, and draws the string over 1.5 seconds before holding at m
 black-and-yellow bar above the player shows the draw progress, while a white trajectory line updates
 from the bow to the predicted first impact and fades near its endpoint. The bow aims at the first
 terrain or object surface under the cursor, solves a reachable ballistic angle dynamically, and caps unreachable shots at
-45 degrees. Releasing consumes the nocked arrow and fires it at a speed proportional to the draw. Arrows follow that gravity-driven arc, turn along
+45 degrees. Right-clicking cancels the draw immediately without consuming its arrow; primary use must be released before drawing again. Releasing consumes the nocked arrow and fires it at a speed proportional to the draw. Arrows follow that gravity-driven arc, turn along
 their flight direction, and stick into the first enemy or solid block they hit for one second before
 fading away, with a short white trail following behind each arrow in flight. Stone arrows deal 10 base pierce damage and copper arrows deal 15; both apply two
 knockback before player strength, enemy defense, and damage affinities are resolved.

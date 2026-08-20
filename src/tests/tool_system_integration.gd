@@ -673,6 +673,28 @@ func _run():
 	var bow_progress_bar := _player.bow_draw_progress_bar
 	_expect(bow_progress_bar.visible and is_zero_approx(bow_progress_bar._progress), "bow draw progress bar did not appear empty when drawing began")
 	_expect(is_equal_approx(bow_progress_bar.position.y, _player.player_height + BowDrawProgressBar3D.HEIGHT_OFFSET), "bow draw progress bar is not above the player")
+	var arrows_before_cancel := _inventory.get_inventory_item_count(&"stone_arrow")
+	_input_buffer.secondary_use_just = true
+	_input_buffer.secondary_use_pressed = true
+	_input_buffer.secondary_use_physical_pressed = true
+	_interactor._handle_item_actions(0.1)
+	_player.animation_driver._process(0.0)
+	_arrow_trajectory._process(0.0)
+	_expect(not _interactor.is_drawing_bow() and active_bow_view._nocked_arrow == null, "secondary use did not immediately cancel the bow draw")
+	_expect(_inventory.get_inventory_item_count(&"stone_arrow") == arrows_before_cancel and _projectiles._projectiles.is_empty(), "canceling a bow draw consumed or fired its arrow")
+	_expect(not bow_progress_bar.visible and not _arrow_trajectory.visible, "canceling a bow draw retained its progress or trajectory presentation")
+	_input_buffer.secondary_use_pressed = false
+	_input_buffer.secondary_use_physical_pressed = false
+	_input_buffer.primary_use_just = true
+	_interactor._handle_item_actions(0.0)
+	_expect(not _interactor.is_drawing_bow(), "holding primary use restarted a canceled bow draw")
+	_input_buffer.primary_use_pressed = false
+	_interactor._handle_item_actions(0.0)
+	_input_buffer.primary_use_just = true
+	_input_buffer.primary_use_pressed = true
+	_interactor._handle_item_actions(0.0)
+	_player.animation_driver._process(0.0)
+	_expect(_interactor.is_drawing_bow() and active_bow_view._nocked_arrow != null, "releasing and pressing primary use did not restart bow draw")
 	var bow_aim_direction := Vector3(_interactor._bow_aim_target.x - _player.global_position.x, 0.0, _interactor._bow_aim_target.z - _player.global_position.z).normalized()
 	var bow_aim_yaw := atan2(bow_aim_direction.x, bow_aim_direction.z)
 	var bow_aim_start_yaw := bow_aim_yaw - 1.0

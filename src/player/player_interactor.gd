@@ -62,6 +62,7 @@ var bow_draw_ammunition: ArrowItemDefinition
 var _bow_source: SelectedItemSource
 var _bow_aim_target: Vector3
 var _bow_aim_target_valid: bool = false
+var _bow_draw_requires_primary_release: bool = false
 var secondary_use_timer: float = 0.0
 var _secondary_use_consumed_until_release: bool = false
 var _melee_contact_pending: bool = false
@@ -176,6 +177,7 @@ func _clear_active_state():
 	_primary_harvest_latched = false
 	_target_cache_position = Vector3i(-999, -999, -999)
 	_target_cache_revision = -1
+	_bow_draw_requires_primary_release = false
 	if harvest != null:
 		harvest.clear_target()
 	_reset_mining()
@@ -197,6 +199,7 @@ func cancel_actions():
 	can_interact_target = false
 	_primary_consumption_latched = false
 	_primary_harvest_latched = false
+	_bow_draw_requires_primary_release = false
 	if harvest != null:
 		harvest.clear_target()
 
@@ -314,6 +317,12 @@ func _handle_item_actions(delta):
 		_reset_mining()
 		_reset_melee_chain()
 		_reset_bow_draw()
+	if _bow_draw_requires_primary_release:
+		if primary_use_pressed:
+			primary_use_just = false
+			primary_use_pressed = false
+		else:
+			_bow_draw_requires_primary_release = false
 	var selected_primary := get_selected_primary_action()
 	var selected_mining := selected_primary as MiningActionDefinition
 	var selected_melee := selected_primary as MeleeAttackActionDefinition
@@ -327,6 +336,13 @@ func _handle_item_actions(delta):
 		_reset_bow_draw()
 	if primary_use_just and selected_bow != null:
 		_start_bow_draw(selected_bow)
+	if bow_draw_action != null and _input_buffer.secondary_use_just:
+		_input_buffer.secondary_use_just = false
+		_input_buffer.secondary_use_pressed = false
+		_bow_draw_requires_primary_release = true
+		_reset_bow_draw()
+		primary_use_just = false
+		primary_use_pressed = false
 	if bow_draw_action != null:
 		_update_bow_aim_target()
 		if primary_use_pressed:
