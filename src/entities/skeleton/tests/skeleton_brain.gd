@@ -87,6 +87,14 @@ func _test_deterministic_drifting_roam() -> void:
 	var replacement_distance := Vector2(first.get_movement_goal().x - drift_position.x, first.get_movement_goal().z - drift_position.z).length()
 	_expect(replacement_distance >= behavior.roam_radius * 0.35 and replacement_distance <= behavior.roam_radius, "replacement roam goal exceeded its configured radius")
 
+func _test_forced_player_alert() -> void:
+	var brain := SkeletonBrainType.new(_make_behavior(), 723)
+	var player_position := Vector3(6.5, 7.0, -4.5)
+	_expect(not brain.is_alerted(), "new Skeleton brain started alerted")
+	brain.alert_to_player(player_position)
+	_expect(brain.is_alerted() and brain.state == SkeletonBrainType.State.SPRINT, "player attack did not force Skeleton aggro")
+	_expect(brain.get_movement_goal().is_equal_approx(player_position), "forced Skeleton aggro did not target the player")
+
 func _test_detection_and_initial_occlusion() -> void:
 	var behavior := _make_behavior()
 	var brain := SkeletonBrainType.new(behavior, 810)
@@ -330,6 +338,7 @@ func _run() -> void:
 	_test_definition_defaults()
 	_test_ambush_range_validation()
 	_test_deterministic_drifting_roam()
+	_test_forced_player_alert()
 	_test_detection_and_initial_occlusion()
 	_test_search_sprint_and_retry_boundaries()
 	_test_cover_revalidation_boundaries()

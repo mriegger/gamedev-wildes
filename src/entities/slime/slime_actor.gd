@@ -169,6 +169,17 @@ func begin_death_retirement() -> void:
 	_clear_attachment()
 	super.begin_death_retirement()
 
+func try_begin_player_hit_response(player_position: Vector3) -> bool:
+	if brain == null or brain.state != SlimeBrain.State.WANDER:
+		return false
+	brain.alert_to_player(player_position)
+	_path_follower.request_repath()
+	max_speed = _behavior.chase_speed
+	return true
+
+func supports_player_hit_response() -> bool:
+	return true
+
 func _advance_attachment_damage(delta: float) -> void:
 	_attachment_damage_remaining -= delta
 	while _attachment_damage_remaining < 0.0 or is_zero_approx(_attachment_damage_remaining):

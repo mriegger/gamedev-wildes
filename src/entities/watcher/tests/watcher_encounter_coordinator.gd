@@ -87,6 +87,8 @@ func _test_provocation_teleport_and_reset(
 	var first := runtime.get_actor(runtime_ids[0]) as WatcherActor
 	var second := runtime.get_actor(runtime_ids[1]) as WatcherActor
 	var first_origin := first.global_position
+	_expect(first.try_begin_player_hit_response(player.global_position), "pre-damage response did not immediately provoke watcher")
+	_expect(first.get_teleport_sequence() == 0, "pre-damage response consumed a committed-hit teleport sequence")
 	var blocked_candidates := WatcherTeleportSearchType.find_candidates(
 		first.voxel_space,
 		first.definition,

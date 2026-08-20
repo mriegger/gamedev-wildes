@@ -75,6 +75,18 @@ func begin_death_retirement():
 	_timed_melee_contact.cancel()
 	super.begin_death_retirement()
 
+func try_begin_player_hit_response(player_position: Vector3) -> bool:
+	if brain == null or brain.is_alerted():
+		return false
+	brain.alert_to_player(player_position)
+	_path_follower.request_repath()
+	max_speed = _behavior.chase_speed
+	_zombie_animation.set_chasing(true)
+	return true
+
+func supports_player_hit_response() -> bool:
+	return true
+
 func _get_path_velocity(delta: float, goal: Vector3, speed: float, navigation_search_budget: NavigationSearchBudget) -> Vector3:
 	var result := _path_follower.advance(delta, global_position, goal, speed, on_ground, navigation_search_budget)
 	if result.path_failed:

@@ -104,7 +104,8 @@ func _run() -> void:
 	if not _outcomes.is_empty():
 		var outcome := _outcomes[0]
 		_expect(outcome.source_item_id == &"bow" and outcome.contact.target_runtime_id == actor.runtime_id, "arrow outcome identifies the wrong source or target")
-		_expect(is_equal_approx(outcome.applied_damage, 16.0), "stone arrow did not apply ten base pierce damage with combat stats")
+		_expect(is_equal_approx(outcome.applied_damage, 32.0), "stone arrow did not apply its full-draw sneak damage")
+	_expect(actor is ZombieActor and (actor as ZombieActor).brain.is_alerted(), "sneak arrow hit did not immediately aggro the zombie")
 	_expect(is_equal_approx(actor.knockback_velocity.length(), 2.0), "stone arrow did not apply two knockback")
 	var embedded_position: Vector3 = projectile.view.global_position
 	projectiles.advance_projectiles(projectile.ammunition.projectile_profile.embedded_seconds)

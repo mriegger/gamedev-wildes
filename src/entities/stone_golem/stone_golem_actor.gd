@@ -226,6 +226,18 @@ func record_melee_contact(world_hit_direction: Vector3) -> void:
 	super.record_melee_contact(world_hit_direction)
 	_action_audio.play_impact()
 
+func try_begin_player_hit_response(player_position: Vector3) -> bool:
+	if brain == null or brain.is_alerted():
+		return false
+	brain.alert_to_player(player_position)
+	_path_follower.request_repath()
+	max_speed = _behavior.movement_speed
+	_stone_golem_animation.set_alerted(true)
+	return true
+
+func supports_player_hit_response() -> bool:
+	return true
+
 func begin_despawn_fade() -> void:
 	_timed_melee_contact.cancel()
 	_cancel_slam()

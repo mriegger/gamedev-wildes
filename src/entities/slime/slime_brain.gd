@@ -74,6 +74,12 @@ func consume_hop_started() -> bool:
 	_hop_started = false
 	return started
 
+func alert_to_player(player_position: Vector3) -> void:
+	assert(player_position.is_finite())
+	_last_seen_position = player_position
+	_target_memory_remaining = _definition.target_memory_seconds
+	state = State.CHASE
+
 func reject_movement_goal(self_position: Vector3) -> void:
 	if state != State.WANDER:
 		return

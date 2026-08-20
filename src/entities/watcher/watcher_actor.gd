@@ -90,9 +90,13 @@ func tick(
 	advance_voxel_motion(delta, desired_velocity, _behavior.gravity)
 
 func record_player_attack() -> void:
+	_apply_player_attack_response(true)
+
+func _apply_player_attack_response(advance_teleport_sequence: bool) -> void:
 	assert(brain != null and _path_follower != null and _watcher_animation != null)
 	brain.record_player_attack()
-	_teleport_sequence += 1
+	if advance_teleport_sequence:
+		_teleport_sequence += 1
 	_timed_melee_contact.cancel()
 	_watcher_animation.cancel_attack()
 	velocity = Vector3.ZERO
@@ -114,6 +118,15 @@ func reset_after_player_defeat() -> void:
 
 func is_aggressive() -> bool:
 	return brain != null and brain.is_aggressive()
+
+func try_begin_player_hit_response(_player_position: Vector3) -> bool:
+	if brain == null or brain.is_aggressive():
+		return false
+	_apply_player_attack_response(false)
+	return true
+
+func supports_player_hit_response() -> bool:
+	return true
 
 func get_teleport_sequence() -> int:
 	return _teleport_sequence

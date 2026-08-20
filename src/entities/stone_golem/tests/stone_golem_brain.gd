@@ -97,6 +97,14 @@ func _test_dormant_stability() -> void:
 			_expect(brain.state == StoneGolemBrainType.State.DORMANT, "valid advance changed the dormant state")
 			_expect(not brain.is_alerted(), "dormant stability reported an alert")
 
+func _test_forced_player_alert() -> void:
+	var brain := StoneGolemBrainType.new(StoneGolemBehaviorDefinitionType.new())
+	var player_position := Vector3(7.5, 2.0, -3.5)
+	_expect(not brain.is_alerted(), "new Stone Golem brain started alerted")
+	brain.alert_to_player(player_position)
+	_expect(brain.is_alerted() and brain.state == StoneGolemBrainType.State.CHASE, "player attack did not force Stone Golem aggro")
+	_expect(brain.get_movement_goal().is_equal_approx(player_position), "forced Stone Golem aggro did not target the player")
+
 func _test_awareness_transitions() -> void:
 	var behavior := StoneGolemBehaviorDefinitionType.new()
 	var brain := StoneGolemBrainType.new(behavior)
@@ -258,6 +266,7 @@ func _run() -> void:
 	_test_definition_defaults_and_resource()
 	_test_invalid_behavior_values()
 	_test_dormant_stability()
+	_test_forced_player_alert()
 	_test_awareness_transitions()
 	_test_punch_profile_and_timing()
 	_test_slam_profile_and_timing()

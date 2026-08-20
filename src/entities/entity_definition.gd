@@ -118,6 +118,7 @@ func is_actor_compatible() -> bool:
 		actor_root is EntityActor
 		and (actor_root as EntityActor).supports_behavior(behavior)
 		and (actor_root as EntityActor).has_valid_presentation()
+		and (not combat_targetable or (actor_root as EntityActor).supports_player_hit_response())
 	)
 	actor_root.free()
 	return compatible

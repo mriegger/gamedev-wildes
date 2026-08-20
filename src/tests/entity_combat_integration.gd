@@ -99,7 +99,7 @@ func _make_combat_catalog(zombie_count: int, sheep_count: int, skeleton_count: i
 	catalog.definitions = definitions
 	return catalog
 
-func _make_combat_fixture(world: VoxelWorld, zombie_count: int, sheep_count: int, seed: int, skeleton_count: int = 0) -> Dictionary:
+func _make_combat_fixture(world: VoxelWorld, zombie_count: int, sheep_count: int, seed: int, skeleton_count: int = 0, targets_start_reacting: bool = true) -> Dictionary:
 	var coordinator := WorldEntityCoordinator.new()
 	var combat := MeleeCombatCoordinator.new()
 	var player := (load("res://player/player.tscn") as PackedScene).instantiate() as PlayerMotor
@@ -132,6 +132,9 @@ func _make_combat_fixture(world: VoxelWorld, zombie_count: int, sheep_count: int
 		coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
 	for _index in range(skeleton_count):
 		coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
+	if targets_start_reacting:
+		for actor in coordinator.get_runtime().get_active_actors():
+			actor.try_begin_player_hit_response(player.global_position)
 	return {
 		"camera": camera,
 		"combat": combat,
@@ -246,6 +249,7 @@ func _run() -> void:
 
 	var world := _make_flat_world()
 	await _test_projectile_damage(world)
+	await _test_sneak_attack_damage(world, configured_sword_profile)
 	await _test_randomized_sword_damage(world, configured_sword_profile)
 	sword_profile.base_damage_random_reduction = 0
 	await _test_damage_affinities(world, sword_profile, hammer_profile, zombie_definition, skeleton_definition)
@@ -291,6 +295,8 @@ func _run() -> void:
 		return
 	var near_actor := actors[0]
 	var far_actor := actors[1]
+	near_actor.try_begin_player_hit_response(player.global_position)
+	far_actor.try_begin_player_hit_response(player.global_position)
 	_expect(is_equal_approx(coordinator.get_runtime().get_current_hp(near_actor.runtime_id), 80.0), "first zombie did not spawn at full HP")
 	_expect(is_equal_approx(coordinator.get_runtime().get_current_hp(far_actor.runtime_id), 80.0), "second zombie did not spawn at full HP")
 	_expect(near_actor.health_bar != null and not near_actor.health_bar.visible, "full-health enemy bar was visible")
@@ -786,6 +792,7 @@ func _test_sheep_damage(world: VoxelWorld, sword_profile: MeleeAttackProfile) ->
 		return
 	var sheep := actors[0] as SheepActor
 	sheep.global_position = Vector3(0.5, FEET_Y, -0.5)
+	_expect(sheep.try_begin_player_hit_response(player.global_position), "sheep damage fixture could not enter its established flee state")
 	var target_id := sheep.runtime_id
 	var sheep_damage := sword_profile.calculate_damage(player_stats.get_value(&"strength"), coordinator.get_runtime().get_stat_value(target_id, &"defense"))
 	_expect(is_equal_approx(coordinator.get_runtime().get_current_hp(target_id), 40.0), "sheep did not spawn at 40 HP")
@@ -897,6 +904,56 @@ func _test_projectile_damage(world: VoxelWorld) -> void:
 	feedback.unbind_runtime()
 	feedback.queue_free()
 	await process_frame
+	await _cleanup(combat, coordinator, player, fixture["camera"] as Camera3D)
+
+func _test_sneak_attack_damage(world: VoxelWorld, configured_sword_profile: MeleeAttackProfile) -> void:
+	var fixture := _make_combat_fixture(world, 2, 1, 8024, 0, false)
+	var coordinator := fixture["coordinator"] as WorldEntityCoordinator
+	var combat := fixture["combat"] as MeleeCombatCoordinator
+	var player := fixture["player"] as PlayerMotor
+	var player_stats := fixture["player_stats"] as ActorStats
+	_expect(player_stats.set_base_value(&"strength", 0.0), "sneak attack fixture could not remove player strength")
+	var zombies: Array[ZombieActor] = []
+	var sheep: SheepActor
+	for actor in coordinator.get_runtime().get_active_actors():
+		if actor is ZombieActor:
+			zombies.append(actor as ZombieActor)
+		elif actor is SheepActor:
+			sheep = actor as SheepActor
+	_expect(zombies.size() == 2 and sheep != null, "sneak attack fixture did not spawn its targets")
+	if zombies.size() != 2 or sheep == null:
+		await _cleanup(combat, coordinator, player, fixture["camera"] as Camera3D)
+		return
+	for zombie in zombies:
+		zombie.brain = GroundMeleeEnemyBrain.new(zombie._behavior, zombie.behavior_seed)
+	_expect(not zombies[0].brain.is_alerted() and not zombies[1].brain.is_alerted(), "sneak attack fixture started with alerted zombies")
+	var stone_profile := load("res://combat/projectiles/profiles/stone_arrow.tres") as ProjectileAttackProfile
+	var player_strength := player_stats.get_value(&"strength")
+	var projectile_normal_damage := stone_profile.calculate_damage(player_strength, coordinator.get_runtime().get_stat_value(zombies[0].runtime_id, &"defense"))
+	var projectile_outcome_count := _projectile_outcomes.size()
+	_expect(combat.try_commit_player_projectile_hit(zombies[0].runtime_id, stone_profile, &"bow", zombies[0].get_world_bounds().get_center(), Vector3.FORWARD, 1.0), "sneak arrow hit did not commit")
+	_expect(zombies[0].brain.is_alerted(), "sneak arrow hit did not immediately aggro its target")
+	_expect(_projectile_outcomes.size() == projectile_outcome_count + 1 and is_equal_approx(_projectile_outcomes.back().applied_damage, projectile_normal_damage * MeleeCombatCoordinator.SNEAK_ATTACK_MULTIPLIER), "unaware enemy did not take double arrow damage")
+	projectile_outcome_count = _projectile_outcomes.size()
+	_expect(combat.try_commit_player_projectile_hit(zombies[0].runtime_id, stone_profile, &"bow", zombies[0].get_world_bounds().get_center(), Vector3.FORWARD, 1.0), "alerted arrow hit did not commit")
+	_expect(_projectile_outcomes.size() == projectile_outcome_count + 1 and is_equal_approx(_projectile_outcomes.back().applied_damage, projectile_normal_damage), "alerted enemy retained the sneak arrow bonus")
+	var sword_profile := configured_sword_profile.duplicate(true) as MeleeAttackProfile
+	sword_profile.base_damage_random_reduction = 0
+	var melee_normal_damage := sword_profile.calculate_damage(player_strength, coordinator.get_runtime().get_stat_value(zombies[1].runtime_id, &"defense")) * DamageAffinityDefinition.WEAK_MULTIPLIER
+	var melee_contact := MeleeContactType.new(0, &"player", zombies[1].runtime_id, zombies[1].definition.id, sword_profile.id, zombies[1].get_world_bounds().get_center(), Vector3.FORWARD)
+	var melee_outcome_count := _outcomes.size()
+	_expect(combat._commit_contact(melee_contact, sword_profile, &"copper_sword"), "sneak melee hit did not commit")
+	_expect(zombies[1].brain.is_alerted(), "sneak melee hit did not immediately aggro its target")
+	_expect(_outcomes.size() == melee_outcome_count + 1 and is_equal_approx(_outcomes.back().applied_damage, melee_normal_damage * MeleeCombatCoordinator.SNEAK_ATTACK_MULTIPLIER), "unaware enemy did not take double melee damage")
+	var sheep_normal_damage := sword_profile.calculate_damage(player_strength, coordinator.get_runtime().get_stat_value(sheep.runtime_id, &"defense"))
+	var sheep_contact := MeleeContactType.new(0, &"player", sheep.runtime_id, sheep.definition.id, sword_profile.id, sheep.get_world_bounds().get_center(), Vector3.FORWARD)
+	melee_outcome_count = _outcomes.size()
+	_expect(combat._commit_contact(sheep_contact, sword_profile, &"copper_sword"), "player hit against a sheep did not commit")
+	_expect(sheep.brain.state == SheepBrain.State.FLEE, "first hit did not immediately make the sheep flee")
+	_expect(_outcomes.size() == melee_outcome_count + 1 and is_equal_approx(_outcomes.back().applied_damage, sheep_normal_damage * MeleeCombatCoordinator.SNEAK_ATTACK_MULTIPLIER), "unaware sheep did not receive sneak damage")
+	melee_outcome_count = _outcomes.size()
+	_expect(combat._commit_contact(sheep_contact, sword_profile, &"copper_sword"), "second player hit against a fleeing sheep did not commit")
+	_expect(_outcomes.size() == melee_outcome_count + 1 and is_equal_approx(_outcomes.back().applied_damage, sheep_normal_damage), "fleeing sheep retained the sneak damage bonus")
 	await _cleanup(combat, coordinator, player, fixture["camera"] as Camera3D)
 
 func _test_damage_affinities(world: VoxelWorld, sword_profile: MeleeAttackProfile, hammer_profile: MeleeAttackProfile, zombie_definition: EntityDefinition, skeleton_definition: EntityDefinition) -> void:

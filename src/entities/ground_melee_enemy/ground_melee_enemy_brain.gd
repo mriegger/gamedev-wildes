@@ -79,6 +79,17 @@ func consume_attack_started() -> bool:
 	_attack_started = false
 	return started
 
+func is_alerted() -> bool:
+	return state != State.WANDER
+
+func alert_to_player(player_position: Vector3) -> void:
+	assert(player_position.is_finite())
+	if is_alerted():
+		return
+	_last_seen_position = player_position
+	_target_memory_remaining = _definition.target_memory_seconds
+	state = State.CHASE
+
 func reject_wander_goal():
 	if state == State.WANDER:
 		_wander_goal_remaining = 0.0

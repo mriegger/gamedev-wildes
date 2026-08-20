@@ -160,6 +160,17 @@ func consume_attack_started() -> bool:
 	_attack_started = false
 	return started
 
+func is_alerted() -> bool:
+	return state != State.ROAM
+
+func alert_to_player(player_position: Vector3) -> void:
+	assert(player_position.is_finite())
+	if is_alerted():
+		return
+	_last_player_position = player_position
+	_clear_post_attack_retreat()
+	_enter_sprint()
+
 func reject_movement_goal(self_position: Vector3):
 	if state == State.ROAM:
 		_select_roam_goal(self_position)

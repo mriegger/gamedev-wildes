@@ -137,6 +137,17 @@ func begin_death_retirement():
 	_timed_melee_contact.cancel()
 	super.begin_death_retirement()
 
+func try_begin_player_hit_response(player_position: Vector3) -> bool:
+	if brain == null or brain.is_alerted():
+		return false
+	var previous_state := brain.state
+	brain.alert_to_player(player_position)
+	_apply_state_change(previous_state)
+	return true
+
+func supports_player_hit_response() -> bool:
+	return true
+
 func _advance_cover_search(
 	observation: EntityTargetObservation,
 	navigation_search_budget: NavigationSearchBudget,

@@ -4,6 +4,7 @@ class_name MeleeCombatCoordinator
 const PLAYER_RUNTIME_ID: int = 0
 const PLAYER_DEFINITION_ID: StringName = &"player"
 const GEOMETRY_EPSILON: float = 0.000001
+const SNEAK_ATTACK_MULTIPLIER: float = 2.0
 
 const MeleeAttackProfileType := preload("res://combat/melee_attack_profile.gd")
 const MeleeContactType := preload("res://combat/melee_contact.gd")
@@ -138,12 +139,15 @@ func try_commit_player_projectile_hit(
 	var target := _entity_runtime.get_actor(target_runtime_id)
 	if target == null or target.definition == null or not target.definition.combat_targetable:
 		return false
+	var sneak_attack := target.try_begin_player_hit_response(_player.global_position)
 	var damage_response := target.definition.get_damage_response(profile.damage_type)
 	var damage := profile.calculate_damage(
 		_player_stats.get_value(&"strength"),
 		_entity_runtime.get_stat_value(target_runtime_id, &"defense"),
 	)
 	damage *= damage_multiplier
+	if sneak_attack:
+		damage *= SNEAK_ATTACK_MULTIPLIER
 	damage *= DamageAffinityDefinition.get_multiplier(damage_response)
 	var damage_result := _entity_runtime.try_apply_damage(target_runtime_id, damage)
 	if damage_result == null:
@@ -373,6 +377,7 @@ func _commit_contact(contact: MeleeContactType, profile: MeleeAttackProfileType,
 		var target := _entity_runtime.get_actor(contact.target_runtime_id)
 		if target == null or target.definition.id != contact.target_definition_id:
 			return false
+		var sneak_attack := target.try_begin_player_hit_response(_player.global_position)
 		damage_response = target.definition.get_damage_response(profile.damage_type)
 		var damage := profile.roll_damage_at_distance(
 			_damage_rng,
@@ -380,6 +385,8 @@ func _commit_contact(contact: MeleeContactType, profile: MeleeAttackProfileType,
 			_entity_runtime.get_stat_value(contact.target_runtime_id, &"defense"),
 			distance_from_attack_center,
 		)
+		if sneak_attack:
+			damage *= SNEAK_ATTACK_MULTIPLIER
 		damage = maxf(1.0, damage * DamageAffinityDefinition.get_multiplier(damage_response))
 		var damage_result := _entity_runtime.try_apply_damage(contact.target_runtime_id, damage)
 		if damage_result == null:

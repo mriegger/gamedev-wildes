@@ -47,6 +47,22 @@ func record_melee_contact(world_hit_direction: Vector3):
 	_path_follower.request_repath()
 	super.record_melee_contact(world_hit_direction)
 
+func try_begin_player_hit_response(player_position: Vector3) -> bool:
+	if brain == null or brain.state == SheepBrain.State.FLEE:
+		return false
+	var flee_direction := global_position - player_position
+	flee_direction.y = 0.0
+	if flee_direction.is_zero_approx():
+		flee_direction = Vector3.FORWARD
+	brain.record_melee_contact(global_position, flee_direction)
+	_path_follower.request_repath()
+	max_speed = _behavior.flee_speed
+	_sheep_animation.set_fleeing(true)
+	return true
+
+func supports_player_hit_response() -> bool:
+	return true
+
 func _get_path_velocity(delta: float, goal: Vector3, speed: float, navigation_search_budget: NavigationSearchBudget) -> Vector3:
 	var result := _path_follower.advance(delta, global_position, goal, speed, on_ground, navigation_search_budget)
 	if result.path_failed:

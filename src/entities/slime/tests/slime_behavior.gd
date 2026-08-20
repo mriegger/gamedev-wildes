@@ -131,6 +131,8 @@ func _test_deterministic_brain() -> void:
 	_expect(first.state == SlimeBrain.State.CHASE, "slime forgot the player before memory expired")
 	first.advance(0.0, origin, distant_player, false, false, true)
 	_expect(first.state == SlimeBrain.State.WANDER, "forget range did not end the chase")
+	first.alert_to_player(nearby_player)
+	_expect(first.state == SlimeBrain.State.CHASE and first.get_movement_goal() == nearby_player, "player hit did not immediately alert the slime")
 	first.advance(0.0, origin, nearby_player, true, true, false)
 	_expect(first.state == SlimeBrain.State.ATTACHED and not first.consume_hop_started(), "attached slime retained locomotion")
 

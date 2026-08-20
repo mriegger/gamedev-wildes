@@ -169,12 +169,16 @@ func _test_actor_contract() -> void:
 	actor.setup(7, definition, _make_world(), 7202, EntityNavigationLimits.new(24, 256, 1))
 	actor.set_process(false)
 	_expect(not actor.is_aggressive() and actor.can_despawn_ambiently(), "fresh watcher aggression state is invalid")
+	_expect(actor.supports_player_hit_response(), "watcher does not advertise its player-hit response")
 	_expect(actor.get_teleport_sequence() == 0, "fresh watcher teleport sequence is not zero")
 	var contact_count: Array[int] = [0]
 	actor.melee_contact_reached.connect(func(_runtime_id: int, _profile: MeleeAttackProfile) -> void: contact_count[0] += 1)
-	actor.record_player_attack()
+	_expect(actor.try_begin_player_hit_response(actor.global_position + Vector3.RIGHT), "fresh watcher rejected its player-hit response")
 	_expect(actor.is_aggressive() and not actor.can_despawn_ambiently(), "provoked watcher remained ambient-despawnable")
-	_expect(actor.get_teleport_sequence() == 1, "first hit did not advance teleport sequence")
+	_expect(actor.get_teleport_sequence() == 0, "pre-damage response advanced the committed-hit teleport sequence")
+	_expect(not actor.try_begin_player_hit_response(actor.global_position + Vector3.RIGHT), "aggressive watcher granted a second first-hit response")
+	actor.record_player_attack()
+	_expect(actor.get_teleport_sequence() == 1, "committed hit did not advance teleport sequence")
 	var observation := EntityTargetObservation.create(
 		actor.global_position + Vector3.RIGHT,
 		actor.global_position,

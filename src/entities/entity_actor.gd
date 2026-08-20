@@ -165,6 +165,12 @@ func record_melee_contact(world_hit_direction: Vector3):
 	var model_basis := model_root.global_transform.basis.orthonormalized()
 	play_hit(model_basis.inverse() * world_hit_direction)
 
+func try_begin_player_hit_response(_player_position: Vector3) -> bool:
+	return false
+
+func supports_player_hit_response() -> bool:
+	return false
+
 func apply_path_follow_result(result: VoxelPathFollowResult, delta: float, jump_velocity: float) -> Vector3:
 	if result.should_jump:
 		velocity.y = jump_velocity

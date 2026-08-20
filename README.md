@@ -170,10 +170,12 @@ enemies are neutral by default. Zombies take 1.5 times damage from slash, while 
 damage from slash and 1.5 times damage from blunt. Stone Golems take half damage from slash and
 pierce while remaining neutral to blunt. The Iron Pickaxe is initially guaranteed by the stone
 dungeon and can later roll from its farm pool. It has mining power 3, a 2.5 speed multiplier, and no
-crafting recipe. The copper hammer uses a slower two-handed overhead slam that damages and knocks
-back enemies within about four blocks of the hammer's ground contact while an expanding white ring
-marks that area. Its authored damage falls linearly from 15 at the impact center to 5 at the edge
-before combat stats.
+crafting recipe. The first hit against an unaware combat target deals double
+damage and immediately starts its response: enemies aggro and docile creatures flee. Further hits
+while the target remains aggroed or fleeing receive no sneak bonus. The copper hammer uses a slower
+two-handed overhead slam that damages and knocks back enemies within about
+four blocks of the hammer's ground contact while an expanding white ring marks that area. Its
+authored damage falls linearly from 15 at the impact center to 5 at the edge before combat stats.
 Damaged enemies show a small black-and-red health bar above their model. Successful hits also show
 damage numbers that rise and fade above each affected enemy; the numbers remain legible at the
 default camera zoom, render over health bars and world geometry, and are hidden once the camera is

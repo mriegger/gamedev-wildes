@@ -127,7 +127,11 @@ aim. The profile calculates
 `max(1, (base damage + attacker strength - target defense) × damage multiplier)`. Entity definitions
 optionally map canonical damage types to weak or resistant responses; missing entries remain neutral.
 Combat applies the response multiplier after the profile calculation: 1.5 for weak, 0.5 for resistant,
-and 1.0 for neutral. Each successful
+and 1.0 for neutral. Player hits ask the target actor to begin its player-hit response; an actor that
+was neither aggroed nor fleeing transitions immediately and returns a 2.0 sneak multiplier for that
+hit. Aggressive actors enter their chase state, while sheep enter `FLEE`; later hits during those states
+receive no bonus. Entity validation requires every combat-targetable actor to implement that response
+contract, so future damageable creatures cannot silently omit sneak behavior. The sneak multiplier is applied before affinity. Each successful
 physical hit applies that damage through the target state owner and optionally adds a decaying planar
 knockback velocity. Melee hits produce immutable `MeleeOutcome` values; arrow hits produce parallel
 `ProjectileOutcome` values. Both carry the contact, exact applied damage, source item ID, affinity
@@ -140,7 +144,7 @@ priority so they remain above health bars and world geometry. Neutral labels rem
 weaknesses render yellow-gold, and resistances render dark grey. Rejected contacts change no health
 and produce no outcome.
 `ArrowProjectileRuntime` owns a bounded set of live arrow models. It atomically consumes the first
-compatible ammunition in hotbar order followed by backpack order, launches from the action-authored bow transform at a
+available ammunition declared by the selected bow, launches from the action-authored bow transform at a
 draw-scaled speed, evaluates its ballistic position under gravity, and sweeps fixed 60 Hz flight segments
 against the entity spatial index and voxel raycast solids. `ArrowTrajectoryView` requests the same
 prediction while the bow is drawn and renders it from the nocked arrow to the first predicted contact,
@@ -148,12 +152,13 @@ so presentation and the fired projectile share trajectory and collision rules. `
 resolves the first voxel surface under the cursor, falling back to the player's ground plane, and owns
 the current aim target; the bow action solves the reachable ballistic angle or raises toward its 45-degree cap, and both presentation and firing consume
 that authoritative transform. Secondary use cancels an active draw without committing ammunition and
-requires primary use to be released before another draw begins. The arrow aligns its shaft to current velocity while `ArrowTrailView`
-retains only a short recent window of flight positions, then embeds at the nearest contact while its
-trail fades. The arrow holds for one second, then fades and is removed. Projectile profiles own pierce damage, knockback,
+requires primary use to be released before another draw begins. The arrow aligns its shaft to current
+velocity while `ArrowTrailView` retains only a short recent window of flight positions, then embeds at
+the nearest contact while its trail fades. The arrow holds for one second, then fades and is removed. Projectile profiles own pierce damage, knockback,
 collision radius, gravity, and lifetime limits. The bow action maps draw progress to a 0.4–1.0
 damage multiplier that the projectile captures at launch and combat applies after attacker strength
-and target defense, with damage affinity applied last. `Game` explicitly connects completed melee and
+and target defense, with damage affinity applied last. Ammunition lookup scans hotbar slots before backpack slots, so
+inventory position selects the arrow type without a separate mutable preference. `Game` explicitly connects completed melee and
 projectile outcomes to entity reactions, progression, and presentation without making combat own
 those policies.
 

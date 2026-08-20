@@ -167,3 +167,11 @@ func get_movement_goal() -> Vector3:
 
 func is_alerted() -> bool:
 	return state != State.DORMANT
+
+func alert_to_player(player_position: Vector3) -> void:
+	assert(player_position.is_finite())
+	if is_alerted():
+		return
+	_movement_goal = player_position
+	_target_memory_remaining = _definition.target_memory_seconds
+	state = State.CHASE
