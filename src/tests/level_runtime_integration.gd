@@ -637,10 +637,10 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	await game._enter_level()
 	var defeated_runtime := game._level_runtime
 	var first_attempt_state := defeated_runtime._encounter_state
-	var basic_rune_count_before := game.inventory_model.get_inventory_item_count(&"basic_rune")
+	var iron_pickaxe_count_before := game.inventory_model.get_inventory_item_count(&"iron_pickaxe")
 	var failed_reward := _take_one_time_reward(defeated_runtime, block_catalog)
 	_expect(not failed_reward.is_empty(), "dungeon defeat fixture did not find the one-time reward chest")
-	_expect(game.inventory_model.get_inventory_item_count(&"basic_rune") == basic_rune_count_before, "one-time reward entered inventory before a successful exit")
+	_expect(game.inventory_model.get_inventory_item_count(&"iron_pickaxe") == iron_pickaxe_count_before, "one-time reward entered inventory before a successful exit")
 	game.player_stats.damage(game.player_stats.current_hp)
 	game._on_player_defeated()
 	if persistent_watcher != null:
@@ -673,7 +673,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	await game._exit_level()
 	_expect(game.dungeon_progress.has_claimed_reward(game.level_entrance_definition.entrance_id, one_time_reward.reward_id), "successful dungeon exit did not claim the one-time reward")
 	_expect(game.dungeon_progress.get_completion_count(game.level_entrance_definition.entrance_id) == 1, "successful dungeon exit did not complete the dungeon")
-	_expect(game.inventory_model.get_inventory_item_count(&"basic_rune") == basic_rune_count_before + 1, "successful dungeon exit did not grant the Basic Rune")
+	_expect(game.inventory_model.get_inventory_item_count(&"iron_pickaxe") == iron_pickaxe_count_before + 1, "successful dungeon exit did not grant the Iron Pickaxe")
 	player.unbind_space()
 	game._unbind_entity_context()
 	combat.shutdown()
@@ -729,14 +729,14 @@ func _take_one_time_reward(runtime: LevelRuntime, block_catalog: BlockCatalog) -
 		if not coordinator.try_open(position, container):
 			return {}
 		var encoded: Array[Dictionary] = []
-		var has_basic_rune := false
+		var has_iron_pickaxe := false
 		for slot_index in range(container.get_slot_count()):
 			var stack := coordinator.get_inventory_stack(ChestTransferCoordinator.CHEST_SCOPE, slot_index)
 			if stack == null:
 				continue
 			encoded.append(stack.to_dict())
-			has_basic_rune = stack.item_id == &"basic_rune" or has_basic_rune
-		if has_basic_rune:
+			has_iron_pickaxe = stack.item_id == &"iron_pickaxe" or has_iron_pickaxe
+		if has_iron_pickaxe:
 			var moved := coordinator.move_all_to_backpack()
 			coordinator.close()
 			return {"position": position, "contents": encoded} if moved else {}

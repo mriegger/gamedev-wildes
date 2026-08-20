@@ -52,7 +52,7 @@ func _test_catalog_and_zombie_configuration() -> void:
 			_expect(equipment_roll.random_affixes.size() == 2, "zombie sword affix candidates missing")
 			_expect(equipment_roll.random_rune_slot_count == 1 and equipment_roll.random_runes.size() == 1, "zombie sword rune configuration changed")
 			if equipment_roll.random_runes.size() == 1:
-				_expect(equipment_roll.random_runes[0].rune == _item_catalog.get_definition(&"power_rune"), "zombie sword bypasses Basic Rune progression")
+				_expect(equipment_roll.random_runes[0].rune == _item_catalog.get_definition(&"power_rune"), "zombie sword does not use the canonical Power Rune")
 	_expect(_item_catalog.has_equipment_affix(&"nimble"), "second sword affix missing")
 	_expect(_item_catalog.has_definition(&"power_rune"), "second weapon rune missing")
 	_expect(_item_catalog.get_equipment_affix(&"nimble").is_compatible_with(_item_catalog.get_definition(&"copper_sword")), "Nimble rejected copper sword")

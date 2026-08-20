@@ -53,6 +53,12 @@ func _init() -> void:
 	_expect(anvil_recipe_catalog.definitions.size() == expected_copper_recipes.size(), "anvil catalog does not contain every copper recipe")
 	_expect(not anvil_recipe_catalog.has_definition(&"stone_pickaxe") and not anvil_recipe_catalog.has_definition(&"torch_bundle"), "non-metal recipe leaked into anvil crafting")
 	_expect(not recipe_catalog.has_definition(&"basic_rune"), "Basic Rune progression reward remained directly craftable")
+	_expect(
+		not recipe_catalog.has_definition(&"iron_pickaxe")
+		and not anvil_recipe_catalog.has_definition(&"iron_pickaxe")
+		and not cauldron_recipe_catalog.has_definition(&"iron_pickaxe"),
+		"Iron Pickaxe progression reward remained directly craftable",
+	)
 	_expect(recipe_catalog.get_definition(&"stone_pickaxe").get_ingredient_counts() == {&"stone_block": 10, &"log_block": 5}, "stone pickaxe ingredients mismatch")
 	_expect(recipe_catalog.get_definition(&"chest").get_ingredient_counts() == {&"log_block": 5}, "chest ingredients mismatch")
 	_expect(recipe_catalog.get_definition(&"anvil").get_ingredient_counts() == {&"copper": 10}, "anvil ingredients mismatch")

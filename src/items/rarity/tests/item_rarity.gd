@@ -28,6 +28,8 @@ func _init():
 		_expect(item_catalog.get_definition(armor_id).rarity == common, "%s does not use canonical Common rarity" % armor_id)
 	_expect(not item_catalog.is_combat_item(&"copper_pickaxe"), "non-combat pickaxe is classified as combat gear")
 	_expect(item_catalog.get_definition(&"copper_pickaxe").rarity == null, "non-combat pickaxe gained a rarity")
+	_expect(not item_catalog.is_combat_item(&"iron_pickaxe"), "non-combat iron pickaxe is classified as combat gear")
+	_expect(item_catalog.get_definition(&"iron_pickaxe").rarity == null, "non-combat iron pickaxe gained a rarity")
 
 	if _errors.is_empty():
 		print("ITEM_RARITY PASS")

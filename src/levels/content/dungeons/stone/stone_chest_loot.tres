@@ -1,77 +1,23 @@
-[gd_resource type="Resource" script_class="LootBundleDefinition" load_steps=22 format=3]
+[gd_resource type="Resource" script_class="LootBundleDefinition" load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://loot/loot_bundle_definition.gd" id="1_bundle"]
 [ext_resource type="Script" path="res://loot/loot_bundle_entry_definition.gd" id="2_entry"]
-[ext_resource type="Script" path="res://loot/loot_weighted_choice_definition.gd" id="3_choice"]
-[ext_resource type="Script" path="res://loot/loot_drop_definition.gd" id="4_drop"]
-[ext_resource type="Script" path="res://loot/loot_equipment_roll_definition.gd" id="5_equipment_roll"]
-[ext_resource type="Script" path="res://loot/loot_affix_choice_definition.gd" id="6_affix_choice"]
-[ext_resource type="Script" path="res://items/affixes/equipment_affix_definition.gd" id="8_affix_definition"]
-[ext_resource type="Resource" path="res://items/definitions/copper.tres" id="9_copper"]
-[ext_resource type="Resource" path="res://items/definitions/copper_sword.tres" id="11_sword"]
-[ext_resource type="Resource" path="res://equipment/armor/sets/copper/copper_helmet.tres" id="12_helmet"]
-[ext_resource type="Resource" path="res://items/affixes/definitions/vicious.tres" id="13_vicious"]
-[ext_resource type="Resource" path="res://items/affixes/definitions/nimble.tres" id="14_nimble"]
-[ext_resource type="Resource" path="res://items/affixes/definitions/stout.tres" id="15_stout"]
+[ext_resource type="Script" path="res://loot/loot_drop_definition.gd" id="3_drop"]
+[ext_resource type="Resource" path="res://items/definitions/pumpkin.tres" id="4_pumpkin"]
 
-[sub_resource type="Resource" id="CopperDrop"]
-script = ExtResource("4_drop")
-item = ExtResource("9_copper")
-minimum_count = 4
-maximum_count = 8
+[sub_resource type="Resource" id="PumpkinDrop"]
+script = ExtResource("3_drop")
+item = ExtResource("4_pumpkin")
+minimum_count = 5
+maximum_count = 10
 
-[sub_resource type="Resource" id="CopperEntry"]
+[sub_resource type="Resource" id="PumpkinEntry"]
 script = ExtResource("2_entry")
-id = &"copper"
-drop = SubResource("CopperDrop")
-
-[sub_resource type="Resource" id="ViciousChoice"]
-script = ExtResource("6_affix_choice")
-id = &"vicious"
-weight = 1.0
-affix = ExtResource("13_vicious")
-
-[sub_resource type="Resource" id="NimbleChoice"]
-script = ExtResource("6_affix_choice")
-id = &"nimble"
-weight = 1.0
-affix = ExtResource("14_nimble")
-
-[sub_resource type="Resource" id="RolledSwordEquipment"]
-script = ExtResource("5_equipment_roll")
-minimum_random_affix_count = 1
-maximum_random_affix_count = 2
-random_affixes = Array[ExtResource("6_affix_choice")]([SubResource("ViciousChoice"), SubResource("NimbleChoice")])
-
-[sub_resource type="Resource" id="RolledSwordDrop"]
-script = ExtResource("4_drop")
-item = ExtResource("11_sword")
-equipment_roll = SubResource("RolledSwordEquipment")
-
-[sub_resource type="Resource" id="RolledSwordChoice"]
-script = ExtResource("3_choice")
-id = &"rolled_copper_sword"
-weight = 3.0
-drop = SubResource("RolledSwordDrop")
-
-[sub_resource type="Resource" id="StoutHelmetEquipment"]
-script = ExtResource("5_equipment_roll")
-fixed_affixes = Array[ExtResource("8_affix_definition")]([ExtResource("15_stout")])
-
-[sub_resource type="Resource" id="StoutHelmetDrop"]
-script = ExtResource("4_drop")
-item = ExtResource("12_helmet")
-equipment_roll = SubResource("StoutHelmetEquipment")
-
-[sub_resource type="Resource" id="StoutHelmetChoice"]
-script = ExtResource("3_choice")
-id = &"stout_copper_helmet"
-weight = 2.0
-drop = SubResource("StoutHelmetDrop")
+id = &"pumpkin"
+drop = SubResource("PumpkinDrop")
 
 [resource]
 script = ExtResource("1_bundle")
 id = &"stone_dungeon_chest"
-max_rewards = 3
-fixed_entries = Array[ExtResource("2_entry")]([SubResource("CopperEntry")])
-weighted_candidates = Array[ExtResource("3_choice")]([SubResource("RolledSwordChoice"), SubResource("StoutHelmetChoice")])
+max_rewards = 1
+fixed_entries = Array[ExtResource("2_entry")]([SubResource("PumpkinEntry")])

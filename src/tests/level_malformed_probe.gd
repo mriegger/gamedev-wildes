@@ -228,7 +228,7 @@ func _init() -> void:
 		not oversized_encounter.validate("probe"),
 		LevelEncounterCatalogValidator.validate(source_catalog, entity_catalog),
 		LevelLootCatalogValidator.validate(source_catalog, item_catalog, 15),
-		not LevelLootCatalogValidator.validate(source_catalog, item_catalog, 2),
+		not LevelLootCatalogValidator.validate(source_catalog, item_catalog, 0),
 		not LevelLootCatalogValidator.validate(noncanonical_item_catalog, item_catalog, 15),
 		not LevelLootCatalogValidator.validate(duplicate_bundle_catalog, item_catalog, 15),
 		not LevelLootCatalogValidator.validate(oversized_reward_catalog, item_catalog, 15),

@@ -105,8 +105,8 @@ stores that instance ID with the reward ID, so changing either ID creates a diff
 Do not rename released IDs without an explicit save migration.
 
 Progression-gated items must be absent from unrelated production acquisition paths. A guaranteed
-Basic Rune does not gate progression if the same rune remains in a general recipe or ordinary enemy
-pool. Developer-console spawning is intentionally outside production progression rules.
+Iron Pickaxe does not gate progression if the same pickaxe remains in a crafting recipe or ordinary
+enemy pool. Developer-console spawning is intentionally outside production progression rules.
 
 ## Create another dungeon
 
@@ -139,16 +139,19 @@ The current resources are:
 - `src/levels/content/dungeons/stone/modules/stone_chest_room.tres` — reusable geometry and chest
   marker;
 - `src/levels/content/dungeons/stone/stone_chest_loot.tres` — repeat pool;
-- `src/levels/content/dungeons/stone/stone_one_time_chest_reward.tres` — first-clear Basic Rune; and
+- `src/levels/content/dungeons/stone/stone_one_time_chest_reward.tres` — first-clear Iron Pickaxe; and
 - `src/levels/content/dungeons/stone/stone_dungeon.tres` — three chest rooms and reward wiring.
 
-On an unclaimed run, one of the three chests deterministically contains the Basic Rune and the other
-two use repeat loot. The repeat bundle always includes 4–8 Copper and can add an affixed Copper
-Sword, a Stout Copper Helmet, or both, up to three resolved stacks. After the Basic Rune is secured
-by an alive exit, all three chests use that repeat bundle on later attempts.
+On an unclaimed run, one of the three chests deterministically contains the Iron Pickaxe and each of
+the other two contains exactly one 5–10 Pumpkin stack. After the Iron Pickaxe is secured by an alive
+exit, all three chests use that Pumpkin repeat bundle on later attempts. The Iron Pickaxe is a
+power-3 mining tool with a 2.5 speed multiplier and has no crafting recipe or ordinary enemy-loot
+source.
 
-Basic Rune is no longer available from general crafting or zombie loot. Existing saves keep any
-Basic Runes acquired before this change.
+The generic `stone_dungeon_one_time_chest_reward` ID remains unchanged. A saved dungeon instance
+that already claimed that ID does not receive another first-clear reward after the content changes to
+Iron Pickaxe. Basic Rune now has no normal production acquisition; developer spawning remains a
+debug path, and existing saved copies remain valid.
 
 ## Persistence
 

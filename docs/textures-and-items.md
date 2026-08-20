@@ -99,9 +99,10 @@ size, canonical rarity, compatible equipment types, and socket-only stat modifie
 runes must also declare the supported head, chest, legs, or feet slots. Register the resource in
 `src/items/item_catalog.tres`; acquisition remains separate content, such as a crafting recipe,
 enemy loot entry, or dungeon one-time reward. Progression-gated items must be excluded from
-unrelated production acquisition paths. Basic Rune, for example, is guaranteed by the stone
-dungeon's first-clear reward and is absent from general crafting and zombie loot. See
-[Dungeon chest authoring and rewards](dungeon-chest-authoring.md) for that content wiring.
+unrelated production acquisition paths. Basic Rune currently has no normal production source;
+developer spawning remains available for testing and saved copies remain valid. See
+[Dungeon chest authoring and rewards](dungeon-chest-authoring.md) for an implemented progression
+reward content path.
 
 Socketed rune IDs belong to the physical `EquipmentInstance`. Their array index is the physical
 socket index, so fixed loot runes preserve authored order and an empty interior ID preserves an empty
@@ -173,6 +174,11 @@ progress.
 ## Add a mining tool
 
 Create a `MiningActionDefinition` with one or more `MiningToolStat` entries, then assign it as the item's primary action. Each stat has a `StringName` tag, power, and speed multiplier. Blocks declare a mining tag, minimum power, and base duration. A minimum power of zero keeps hand mining available; a positive value requires a matching tool stat.
+
+The Iron Pickaxe uses the canonical `pickaxe` tag with power 3 and a 2.5 speed multiplier. It is
+registered as a single-stack non-block item with its own icon and held presentation. Its only normal
+acquisition is the stone dungeon's secured first-clear reward; no crafting recipe or ordinary enemy
+loot pool references it.
 
 ## Add a tilling tool
 

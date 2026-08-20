@@ -89,9 +89,10 @@ generator branch.
 Master rooms configure 40 zombies and normal rooms 25. Chest rooms are passive: each generated room
 contains one take-only chest, creates no local enemy wave, and does not seal its branch. Enemies from
 other rooms can still enter and attack. On the stone dungeon's first clear, one deterministic chest
-contains the guaranteed Basic Rune while the other chests use the repeat pool; after that reward is
-claimed, every chest uses repeat loot. First-clear items remain in attempt escrow until the complete
-chest is taken and the player exits alive. Death, quit, or an incomplete exit discards that escrow.
+contains the guaranteed Iron Pickaxe while each other chest contains one stack of 5–10 Pumpkins;
+after that reward is claimed, every chest uses the Pumpkin repeat loot. First-clear items remain in
+attempt escrow until the complete chest is taken and the player exits alive. Death, quit, or an
+incomplete exit discards that escrow.
 Repeat loot transfers immediately and survives death. A full inventory leaves the reward unchanged
 and displays `Inventory full — drop items first`; the return door rechecks capacity before securing
 the first-clear reward. Enemy clearance is not currently required for completion. See
@@ -138,11 +139,12 @@ Using a hoe on the exposed top face of grass or dirt converts it into dry farmla
 when mined.
 Seeded copper deposits generate after the surrounding terrain as connected 5–30 block blobs. Most
 of each deposit stays underground, while some deposits expose up to three blocks at the surface.
-Stone and the other common blocks are hand-minable. Copper requires a stone or copper pickaxe,
-while the masonry blocks require a copper pickaxe. Torches are placeable blocks that you can walk
-through — each is an omni light with a 9-block radius. Overworld chests are crafted from wood,
-placed by the player, persist 15 storage slots, and must be empty before they can be mined. Generated
-dungeon chests use the same panel but are take-only and last only for the current attempt.
+Stone and the other common blocks are hand-minable. Copper requires a stone, copper, or iron
+pickaxe, while the stronger masonry blocks require a copper or iron pickaxe. Torches are placeable
+blocks that you can walk through — each is an omni light with a 9-block radius. Overworld chests are
+crafted from wood, placed by the player, persist 15 storage slots, and must be empty before they can
+be mined. Generated dungeon chests use the same panel but are take-only and last only for the
+current attempt.
 Permanent campfires are atomic 3×3 emplacements crafted from twelve stone and two wood. They require
 a clear, fully supported footprint, stay lit without fuel, cast the nearest bounded campfire shadow,
 and return one campfire item when any footprint cell is mined.
@@ -158,16 +160,17 @@ an empty overworld chest returns it to the player inventory. `P` or `Esc` closes
 replaces the chest with the crafting menu while keeping the backpack open.
 
 **Tools.** New worlds start with an empty inventory, while the first pickaxe is crafted from stone
-and wood. Item actions are data-driven: the hoe tills exposed grass and dirt, stone and copper
-pickaxes can mine copper, and the sword uses click-triggered, alternating melee swings with a fading
+and wood. Item actions are data-driven: the hoe tills exposed grass and dirt, all three pickaxe tiers
+can mine copper, and the sword uses click-triggered, alternating melee swings with a fading
 radial scan tracing its 120-degree attack area in front of the player. Its base damage rolls from 8
 to 10 independently for each enemy hit. Combat registers slash, blunt, and pierce damage types;
 enemies are neutral by default. Zombies take 1.5 times damage from slash, while Skeletons take half
 damage from slash and 1.5 times damage from blunt. Stone Golems take half damage from slash and
-pierce while remaining neutral to blunt. The copper hammer uses a slower
-two-handed overhead slam that damages and knocks back enemies within about
-four blocks of the hammer's ground contact while an expanding white ring marks that area. Its
-authored damage falls linearly from 15 at the impact center to 5 at the edge before combat stats.
+pierce while remaining neutral to blunt. The dungeon-only Iron Pickaxe has mining power 3 and a 2.5
+speed multiplier; it has no crafting recipe. The copper hammer uses a slower two-handed overhead
+slam that damages and knocks back enemies within about four blocks of the hammer's ground contact
+while an expanding white ring marks that area. Its authored damage falls linearly from 15 at the
+impact center to 5 at the edge before combat stats.
 Damaged enemies show a small black-and-red health bar above their model. Successful hits also show
 damage numbers that rise and fade above each affected enemy; the numbers remain legible at the
 default camera zoom, render over health bars and world geometry, and are hidden once the camera is
@@ -201,10 +204,11 @@ immediate defense-aware damage and repeating it every half second while stacking
 to a 60% reduction. Each successful grounded jump dislodges one attached slime.
 
 **Crafting.** Opening crafting with `Tab` reveals the general recipe panel alongside the backpack.
-It contains the six recipes that do not require a workstation. Basic Rune is a secured first-clear
-reward from the stone dungeon rather than a general crafting recipe. A placed anvil opens its own
-panel with the eight copper tool, weapon, and armor recipes. A placed cauldron opens a food-and-potion
-panel; its initial recipe combines two pumpkins and two apples into one health potion. All catalogs
+It contains the six recipes that do not require a workstation. Iron Pickaxe is a secured first-clear
+reward from the stone dungeon rather than a crafting recipe. Basic Rune currently has no normal
+production acquisition. A placed anvil opens its own panel with the eight copper tool, weapon, and
+armor recipes. A placed cauldron opens a food-and-potion panel; its initial recipe combines two
+pumpkins and two apples into one health potion. All catalogs
 show a short description of the selected output above its ingredients. Stat-bearing recipes show
 their item stats below the ingredients, with numeric values in the same yellow-gold used
 for weakness damage. Weapon stats include damage type, maximum damage and its authored range,
@@ -219,11 +223,13 @@ commands remain available for the current game session; use `Up` and `Down` to b
 losing an unfinished command. The
 `spawn <item> [count]` command adds any catalog item directly to the backpack for testing, with the
 count defaulting to one when omitted. This intentionally allows debug-only progression bypasses such
-as `spawn basic_rune`. `sethealth <number>` sets current health to a non-negative
+as `spawn iron_pickaxe`; `spawn basic_rune` also remains available for testing content that has no
+normal production source. `sethealth <number>` sets current health to a non-negative
 value, clamping values above the player's current maximum. Item IDs and display names are accepted;
-equipment IDs remain material-qualified, such as `copper_pickaxe` and `copper_sword`. Structure construction uses
-`dev structure new`, `dev structure import`, `dev structure export`, and `dev structure exit`. Press `/` again or
-`Esc` to close the console without opening the pause menu. `spawn birds [count]` creates a mixed
+material-qualified item IDs include `iron_pickaxe`, `copper_pickaxe`, and `copper_sword`. Structure
+construction uses `dev structure new`, `dev structure import`, `dev structure export`, and
+`dev structure exit`. Press `/` again or `Esc` to close the console without opening the pause menu.
+`spawn birds [count]` creates a mixed
 batch of crows, redbirds, ducks, and bluebirds near the player, while
 `spawn bird <crow|redbird|duck|bluebird> [count]` creates a specific variant. Bird counts default
 to four for a mixed batch and one for a specific variant, with a maximum of sixteen. Copper can be

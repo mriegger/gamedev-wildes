@@ -4,24 +4,24 @@
 [ext_resource type="Script" path="res://loot/loot_bundle_definition.gd" id="2_bundle"]
 [ext_resource type="Script" path="res://loot/loot_bundle_entry_definition.gd" id="3_entry"]
 [ext_resource type="Script" path="res://loot/loot_drop_definition.gd" id="4_drop"]
-[ext_resource type="Resource" path="res://items/runes/definitions/basic_rune.tres" id="5_basic_rune"]
+[ext_resource type="Resource" path="res://items/definitions/iron_pickaxe.tres" id="5_iron_pickaxe"]
 
-[sub_resource type="Resource" id="BasicRuneDrop"]
+[sub_resource type="Resource" id="IronPickaxeDrop"]
 script = ExtResource("4_drop")
-item = ExtResource("5_basic_rune")
+item = ExtResource("5_iron_pickaxe")
 
-[sub_resource type="Resource" id="BasicRuneEntry"]
+[sub_resource type="Resource" id="IronPickaxeEntry"]
 script = ExtResource("3_entry")
-id = &"basic_rune"
-drop = SubResource("BasicRuneDrop")
+id = &"iron_pickaxe"
+drop = SubResource("IronPickaxeDrop")
 
-[sub_resource type="Resource" id="BasicRuneBundle"]
+[sub_resource type="Resource" id="IronPickaxeBundle"]
 script = ExtResource("2_bundle")
 id = &"stone_dungeon_one_time_chest_reward_loot"
 max_rewards = 1
-fixed_entries = Array[ExtResource("3_entry")]([SubResource("BasicRuneEntry")])
+fixed_entries = Array[ExtResource("3_entry")]([SubResource("IronPickaxeEntry")])
 
 [resource]
 script = ExtResource("1_reward")
 reward_id = &"stone_dungeon_one_time_chest_reward"
-loot_bundle = SubResource("BasicRuneBundle")
+loot_bundle = SubResource("IronPickaxeBundle")

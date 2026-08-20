@@ -117,7 +117,9 @@ func _test_catalog_and_modules() -> void:
 			_expect(reward.loot_bundle.max_rewards == 1 and reward.loot_bundle.fixed_entries.size() == 1 and reward.loot_bundle.weighted_candidates.is_empty(), "stone dungeon one-time reward is not a guaranteed single entry")
 			if reward.loot_bundle.fixed_entries.size() == 1:
 				var drop := reward.loot_bundle.fixed_entries[0].drop
-				_expect(drop != null and drop.item == _item_catalog.get_definition(&"basic_rune"), "stone dungeon one-time reward is not the canonical Basic Rune")
+				_expect(drop != null and drop.item == _item_catalog.get_definition(&"iron_pickaxe"), "stone dungeon one-time reward is not the canonical Iron Pickaxe")
+				if drop != null:
+					_expect(drop.minimum_count == 1 and drop.maximum_count == 1 and drop.equipment_roll == null, "stone dungeon Iron Pickaxe reward is not exactly one ordinary item")
 	_expect(definition.presentation != null and definition.presentation.terrain_shader != null, "stone dungeon presentation is missing")
 	_expect(definition.presentation.terrain_shader.resource_path == "res://levels/presentation/level_terrain.gdshader", "stone dungeon terrain shader is not content-driven")
 	_expect(definition.presentation.return_door_block_id == BlockId.Type.LOG, "stone dungeon return-door block changed")
@@ -147,12 +149,16 @@ func _test_catalog_and_modules() -> void:
 			_expect(requirement.encounter == null, "stone chest room must be passive")
 			_expect(requirement.chest_loot_bundle != null and requirement.chest_loot_bundle.id == &"stone_dungeon_chest", "stone chest room loot bundle changed")
 			if requirement.chest_loot_bundle != null:
-				_expect(requirement.chest_loot_bundle.max_rewards == 3, "stone chest reward limit changed")
-				_expect(requirement.chest_loot_bundle.fixed_entries.size() == 1 and requirement.chest_loot_bundle.weighted_candidates.size() == 2, "stone chest loot composition changed")
-				for candidate in requirement.chest_loot_bundle.weighted_candidates:
-					_expect(candidate.drop.item.id != &"basic_rune", "repeatable stone chest directly awards Basic Rune")
-					if candidate.drop.equipment_roll != null:
-						_expect(candidate.drop.equipment_roll.fixed_runes.is_empty() and candidate.drop.equipment_roll.random_runes.is_empty(), "repeatable stone chest equipment bypasses Basic Rune progression")
+				var repeat_loot := requirement.chest_loot_bundle
+				_expect(repeat_loot.max_rewards == 1, "stone chest reward limit changed")
+				_expect(repeat_loot.fixed_entries.size() == 1 and repeat_loot.weighted_candidates.is_empty(), "stone chest loot is not exactly one fixed entry")
+				if repeat_loot.fixed_entries.size() == 1:
+					var pumpkin_entry := repeat_loot.fixed_entries[0]
+					var pumpkin_drop := pumpkin_entry.drop
+					_expect(pumpkin_entry.id == &"pumpkin", "stone chest fixed entry is not Pumpkin")
+					_expect(pumpkin_drop != null and pumpkin_drop.item == _item_catalog.get_definition(&"pumpkin"), "stone chest does not use the canonical Pumpkin")
+					if pumpkin_drop != null:
+						_expect(pumpkin_drop.minimum_count == 5 and pumpkin_drop.maximum_count == 10 and pumpkin_drop.equipment_roll == null, "stone chest does not contain exactly 5-10 Pumpkins")
 			continue
 		_expect(requirement.chest_loot_bundle == null, "encounter room unexpectedly owns chest loot: %s" % requirement.room_type_id)
 		_expect(requirement.encounter != null and requirement.encounter.validate(String(requirement.room_type_id)), "stone room encounter is invalid: %s" % requirement.room_type_id)

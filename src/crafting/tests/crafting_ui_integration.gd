@@ -95,6 +95,7 @@ func _process(_delta: float) -> bool:
 		_expect(_inventory.get_inventory_item_count(&"copper") == 15, "anvil consumed wrong copper count")
 		_expect(not _recipe_catalog.has_definition(&"copper_pickaxe"), "copper pickaxe remained in general crafting")
 		_expect(not _recipe_catalog.has_definition(&"basic_rune"), "Basic Rune progression reward appeared in general crafting")
+		_expect(not _recipe_catalog.has_definition(&"iron_pickaxe"), "Iron Pickaxe progression reward appeared in general crafting")
 		sound_player.stop()
 		_hud.close_side_panel()
 		_phase = 2

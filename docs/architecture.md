@@ -269,8 +269,9 @@ same instance values.
 
 `RuneDefinition` is typed item content with rarity, equipment-type and armor-slot compatibility,
 and socket-only stat modifiers. The Basic Rune is Common, works on every weapon and armor slot, and
-adds one hundred maximum HP. Its production acquisition is the stone dungeon's secured first-clear
-reward, not general crafting or ordinary enemy loot. The weapon-only Power Rune adds one Strength.
+adds one hundred maximum HP. It currently has no normal production acquisition; developer spawning
+and copies already present in saved inventories remain valid. The weapon-only Power Rune adds one
+Strength.
 A gear instance's `socketed_rune_ids` array preserves physical slot order, permits empty interior
 slots, and omits trailing empty slots.
 
@@ -473,8 +474,9 @@ three chest rooms, five ordinary hallways, and the two-ended entry path for 13 m
 socket's authored fill block. Stone master rooms configure 40 zombies over local feet cells
 `(4,1,4)`–`(34,1,34)` and normal rooms configure 25 over `(3,1,3)`–`(17,1,17)`. Each passive
 chest-room copy transforms its authored marker into one chest and has no encounter or spawn zones.
-One deterministic chest carries the unclaimed Basic Rune first-clear bundle; the others, and every
-chest after that claim, use the stone repeat bundle.
+One deterministic chest carries the unclaimed Iron Pickaxe first-clear bundle. Each other chest, and
+every chest after that claim, contains one repeat stack of 5–10 Pumpkins. Iron Pickaxe is a
+dungeon-only mining tool with power 3 and a 2.5 speed multiplier; it has no crafting recipe.
 
 ## Structure authoring
 
