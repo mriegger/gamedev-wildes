@@ -220,6 +220,7 @@ func _init() -> void:
 	var consumption := apple.secondary_action as ConsumableActionDefinition
 	_expect(consumption != null and is_equal_approx(consumption.health_restore_fraction, 0.1), "apple did not restore ten percent of maximum health")
 	_expect(apple.consume_audio != null and apple.consume_audio.streams.size() == 1, "apple munch audio was not configured")
+	_test_tree_chunk_query_filters_mined_cross_chunk_blocks(block_catalog)
 	await _test_retained_tree_identity(block_catalog, item_catalog, apple_position)
 	apple_trees.free()
 	await process_frame
@@ -332,6 +333,22 @@ func _populate_tree(world: VoxelWorld, tree_position: Vector3i) -> void:
 			blocks[Vector3i(tree_position.x + x_offset, tree_position.y + 4, tree_position.z + z_offset)] = BlockId.Type.LEAVES
 	world.tree_chunks_fast[Vector2i.ZERO] = blocks
 	world.tree_block_fast.merge(blocks)
+
+func _test_tree_chunk_query_filters_mined_cross_chunk_blocks(block_catalog: BlockCatalog) -> void:
+	var world := VoxelWorld.new(20, 36, 5, 12.0, block_catalog)
+	var source_chunk := Vector2i.ZERO
+	var live_leaf := Vector3i(19, 6, 0)
+	var cross_chunk_leaf := Vector3i(20, 6, 0)
+	var blocks: Dictionary = {
+		live_leaf: BlockId.Type.LEAVES,
+		cross_chunk_leaf: BlockId.Type.LEAVES,
+	}
+	world.tree_chunks_fast[source_chunk] = blocks
+	world.tree_block_fast.merge(blocks)
+	_expect(VoxelWorldTestFixture.commit_mine(world, cross_chunk_leaf) != null, "cross-chunk canopy leaf could not be mined")
+	var live_blocks := world.get_tree_blocks_for_chunk(source_chunk)
+	_expect(live_blocks.has(live_leaf), "tree chunk query omitted a live canopy leaf")
+	_expect(not live_blocks.has(cross_chunk_leaf), "tree chunk query retained a mined cross-chunk canopy leaf")
 
 func _count_apple_trees(coordinator: AppleTreeCoordinator, sample_count: int) -> int:
 	var count := 0

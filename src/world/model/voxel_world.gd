@@ -101,7 +101,12 @@ func snapshot_block_edits() -> Dictionary:
 func get_tree_blocks_for_chunk(coord: Vector2i) -> Dictionary:
 	if not tree_chunks_fast.has(coord):
 		return {}
-	return (tree_chunks_fast[coord] as Dictionary).duplicate()
+	var live_blocks: Dictionary = {}
+	for position in tree_chunks_fast[coord]:
+		var block_id := int(tree_chunks_fast[coord][position])
+		if get_block_id_at(position) == block_id:
+			live_blocks[position] = block_id
+	return live_blocks
 
 func get_foliage_blocks_for_chunk(coord: Vector2i) -> Dictionary:
 	if not _foliage_chunks_fast.has(coord):
