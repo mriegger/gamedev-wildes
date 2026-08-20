@@ -176,11 +176,11 @@ func _force_steady_population(game: Game, player_position: Vector3) -> int:
 
 func _capture_steady_frames(game: Game, recorder: FrameRecorder) -> Array[int]:
 	await _advance_frames(STEADY_WARMUP_FRAMES)
-	_expect(game.world_entity_coordinator.get_runtime().get_active_count() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "steady warmup did not retain twelve actors")
+	_expect(game.world_entity_coordinator.get_runtime().get_active_count() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "steady warmup did not retain the full entity population")
 	recorder.start_capture()
 	await _advance_frames(STEADY_SAMPLE_FRAMES)
 	recorder.stop_capture()
-	_expect(game.world_entity_coordinator.get_runtime().get_active_count() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "steady sample did not retain twelve actors")
+	_expect(game.world_entity_coordinator.get_runtime().get_active_count() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "steady sample did not retain the full entity population")
 	return recorder.samples_usec.duplicate()
 
 func _streaming_position(world: WorldController, origin: Vector3, frame_index: int) -> Vector3:
@@ -371,7 +371,7 @@ func _run() -> void:
 	var spawn := world.voxel_model.get_spawn_position()
 	_place_player(player, spawn + Vector3(0.0, 1.0, 0.0))
 	var population_attempts := _force_steady_population(game, player.global_position)
-	_expect(game.world_entity_coordinator.get_runtime().get_active_count() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "steady fixture did not create twelve actors")
+	_expect(game.world_entity_coordinator.get_runtime().get_active_count() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "steady fixture did not create the full entity population")
 	var recorder := FrameRecorder.new()
 	var start_probe := FrameStartProbe.new(recorder)
 	var end_probe := FrameEndProbe.new(recorder)

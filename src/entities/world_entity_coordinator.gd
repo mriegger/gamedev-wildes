@@ -23,7 +23,6 @@ var _position_ready: Callable
 var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 var _debug_rng: RandomNumberGenerator = RandomNumberGenerator.new()
 var _runtime: EntityRuntime
-var _ambient_definition_cursor: int = 0
 var _spawn_elapsed: float = 0.0
 var _suspended: bool = false
 
@@ -39,7 +38,6 @@ func setup(p_catalog: EntityCatalog, p_voxel_world: VoxelWorld, world_seed: int,
 	_position_ready = p_position_ready
 	_rng.seed = world_seed
 	_debug_rng.seed = world_seed ^ 0x2b7e1516
-	_ambient_definition_cursor = 0
 	_spawn_elapsed = 0.0
 	_suspended = false
 	visible = true
@@ -70,19 +68,31 @@ func tick(delta: float, observation: EntityTargetObservation, time_of_day: float
 	_spawn_elapsed = fmod(_spawn_elapsed, SPAWN_INTERVAL_SECONDS)
 	if _runtime.get_active_count() >= MAX_TOTAL_ACTIVE:
 		return
-	var definition_count := _catalog.definitions.size()
-	for offset in range(definition_count):
-		var definition_index := (_ambient_definition_cursor + offset) % definition_count
-		var definition := _catalog.definitions[definition_index]
+	var definition := _select_ambient_definition(is_day)
+	if definition == null:
+		return
+	if definition.ambient_max_active > 0 and _runtime.get_active_lineage_count(definition.id) >= definition.ambient_max_active:
+		return
+	_try_spawn(definition, player_position)
+
+func _select_ambient_definition(is_day: bool) -> EntityDefinition:
+	var candidates: Array[EntityDefinition] = []
+	var total_weight := 0.0
+	for definition in _catalog.definitions:
 		if definition == null or not definition.ambient_spawn_enabled:
-			continue
-		if _runtime.get_active_lineage_count(definition.id) >= definition.ambient_max_active:
 			continue
 		if is_day != (definition.ambient_spawn_phase == EntityDefinition.SpawnPhase.DAY):
 			continue
-		if _try_spawn(definition, player_position):
-			_ambient_definition_cursor = (definition_index + 1) % definition_count
-			return
+		candidates.append(definition)
+		total_weight += definition.ambient_spawn_weight
+	if candidates.is_empty():
+		return null
+	var selection := _rng.randf() * total_weight
+	for definition in candidates:
+		selection -= definition.ambient_spawn_weight
+		if selection < 0.0:
+			return definition
+	return candidates.back()
 
 func _try_spawn(definition: EntityDefinition, player_position: Vector3) -> bool:
 	for _attempt in range(SPAWN_ATTEMPTS):
@@ -176,7 +186,7 @@ func _despawn_outside_phase(is_day: bool) -> void:
 	var to_remove: Array[int] = []
 	for actor in _runtime.get_active_actors():
 		var definition := actor.definition
-		if definition.ambient_despawn_outside_spawn_phase and is_day != (definition.ambient_spawn_phase == EntityDefinition.SpawnPhase.DAY):
+		if actor.can_despawn_ambiently() and definition.ambient_despawn_outside_spawn_phase and is_day != (definition.ambient_spawn_phase == EntityDefinition.SpawnPhase.DAY):
 			to_remove.append(actor.runtime_id)
 	for runtime_id in to_remove:
 		_runtime.try_despawn(runtime_id)
@@ -185,7 +195,9 @@ func _despawn_distant(player_position: Vector3) -> void:
 	var max_distance_squared := DESPAWN_DISTANCE * DESPAWN_DISTANCE
 	var to_remove: Array[int] = []
 	for actor in _runtime.get_active_actors():
-		if actor.global_position.distance_squared_to(player_position) > max_distance_squared or not bool(_position_ready.call(actor.global_position)):
+		if not bool(_position_ready.call(actor.global_position)):
+			to_remove.append(actor.runtime_id)
+		elif actor.can_despawn_ambiently() and actor.global_position.distance_squared_to(player_position) > max_distance_squared:
 			to_remove.append(actor.runtime_id)
 	for runtime_id in to_remove:
 		_runtime.try_despawn(runtime_id)
@@ -216,6 +228,5 @@ func shutdown() -> void:
 	_catalog = null
 	_voxel_world = null
 	_position_ready = Callable()
-	_ambient_definition_cursor = 0
 	_spawn_elapsed = 0.0
 	_suspended = false

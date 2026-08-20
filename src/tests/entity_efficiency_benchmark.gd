@@ -13,13 +13,13 @@ const SAMPLE_FRAMES: int = 1800
 const PATH_WARMUP_SAMPLES: int = 20
 const PATH_SAMPLES: int = 200
 const DAY_TIME: float = 12.0
-const NIGHT_TIME: float = 20.0
-const EXPECTED_SHEEP_COUNT: int = 6
-const EXPECTED_ZOMBIE_COUNT: int = 1
+const EXPECTED_SHEEP_COUNT: int = 4
+const EXPECTED_ZOMBIE_COUNT: int = 2
 const EXPECTED_SKELETON_COUNT: int = 2
 const EXPECTED_BIRD_COUNT: int = 4
-const EXPECTED_STONE_GOLEM_COUNT: int = 2
 const EXPECTED_SLIME_COUNT: int = 1
+const EXPECTED_WATCHER_COUNT: int = 1
+const EXPECTED_STONE_GOLEM_COUNT: int = 2
 
 const FIXED_TARGET_FRAMES: int = 360
 const ENTITY_FRAME_P95_LIMIT_MS: float = 75.0
@@ -67,17 +67,35 @@ func _consume_radial_contact(source_runtime_id: int, profile: MeleeAttackProfile
 func _spawn_population(coordinator: WorldEntityCoordinator, player_position: Vector3) -> Dictionary:
 	var spawn_samples: Array[int] = []
 	var preparation_samples: Array[int] = []
-	for cycle in range(WorldEntityCoordinator.MAX_TOTAL_ACTIVE):
-		var time_of_day := NIGHT_TIME if cycle < 6 else DAY_TIME
+	var definition_ids: Array[StringName] = [
+		&"sheep", &"sheep", &"sheep", &"sheep",
+		&"zombie", &"zombie",
+		&"skeleton", &"skeleton",
+		&"bird", &"bird", &"bird", &"bird",
+		&"slime_large",
+		&"watcher",
+		&"stone_golem", &"stone_golem",
+	]
+	_expect(definition_ids.size() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "explicit benchmark population did not match the active slot count")
+	for index in range(definition_ids.size()):
+		var definition_id := definition_ids[index]
+		var spawn_height := FEET_Y + 10.0 if definition_id == &"bird" else FEET_Y
+		var spawn_position := Vector3(
+			float(-28 + index % 8 * 8) + 0.5,
+			spawn_height,
+			float(-18 + index / 8 * 36) + 0.5,
+		)
 		var before_count := coordinator.get_runtime().get_active_count()
-		coordinator._spawn_elapsed = WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS - FRAME_DELTA
 		var spawn_started := Time.get_ticks_usec()
-		coordinator.tick(FRAME_DELTA, PerformanceEntityTarget.create(player_position), time_of_day)
+		var runtime_ids := coordinator.get_runtime().try_spawn_batch([
+			EntitySpawnRequest.new(definition_id, spawn_position, WORLD_SEED + index + 1),
+		])
 		spawn_samples.append(Time.get_ticks_usec() - spawn_started)
-		_expect(coordinator.get_runtime().get_active_count() == before_count + 1, "spawn cycle %d did not add one actor" % cycle)
+		_expect(runtime_ids.size() == 1, "explicit spawn %d for %s was rejected" % [index, definition_id])
+		_expect(coordinator.get_runtime().get_active_count() == before_count + 1, "explicit spawn %d did not add one actor" % index)
 		var prepared_before := coordinator.get_runtime()._prepared_actor_count()
 		var preparation_started := Time.get_ticks_usec()
-		coordinator.tick(FRAME_DELTA, PerformanceEntityTarget.create(player_position), time_of_day)
+		coordinator.tick(FRAME_DELTA, PerformanceEntityTarget.create(player_position), DAY_TIME)
 		var preparation_usec := Time.get_ticks_usec() - preparation_started
 		if coordinator.get_runtime()._prepared_actor_count() > prepared_before:
 			preparation_samples.append(preparation_usec)
@@ -99,6 +117,7 @@ func _arrange_population(coordinator: WorldEntityCoordinator, actors: Array[Enti
 	var skeleton_index := 0
 	var bird_index := 0
 	var slime_index := 0
+	var watcher_index := 0
 	var stone_golem_index := 0
 	for actor in actors:
 		var angle: float
@@ -151,6 +170,14 @@ func _arrange_population(coordinator: WorldEntityCoordinator, actors: Array[Enti
 				_expect(slime != null, "slime definition did not instantiate a SlimeActor")
 				if slime != null:
 					slime._path_follower.request_repath()
+			&"watcher":
+				angle = TAU * float(watcher_index) / float(EXPECTED_WATCHER_COUNT) + PI
+				radius = 16.0
+				watcher_index += 1
+				var watcher := actor as WatcherActor
+				_expect(watcher != null, "watcher definition did not instantiate a WatcherActor")
+				if watcher != null:
+					watcher._path_follower.request_repath()
 			_:
 				_expect(false, "benchmark population contained unsupported entity %s" % actor.definition.id)
 				continue
@@ -165,6 +192,7 @@ func _arrange_population(coordinator: WorldEntityCoordinator, actors: Array[Enti
 	_expect(skeleton_index == EXPECTED_SKELETON_COUNT, "benchmark population had %d skeletons" % skeleton_index)
 	_expect(bird_index == EXPECTED_BIRD_COUNT, "benchmark population had %d birds" % bird_index)
 	_expect(slime_index == EXPECTED_SLIME_COUNT, "benchmark population had %d large slimes" % slime_index)
+	_expect(watcher_index == EXPECTED_WATCHER_COUNT, "benchmark population had %d watchers" % watcher_index)
 	_expect(stone_golem_index == EXPECTED_STONE_GOLEM_COUNT, "benchmark population had %d Stone Golems" % stone_golem_index)
 	return {
 		"sheep": sheep_index,
@@ -172,6 +200,7 @@ func _arrange_population(coordinator: WorldEntityCoordinator, actors: Array[Enti
 		"skeleton": skeleton_index,
 		"bird": bird_index,
 		"slime_large": slime_index,
+		"watcher": watcher_index,
 		"stone_golem": stone_golem_index,
 	}
 
@@ -326,7 +355,6 @@ func _run() -> void:
 	var coordinator := WorldEntityCoordinator.new()
 	get_root().add_child(coordinator)
 	coordinator.setup(catalog, world, WORLD_SEED, _position_ready)
-	coordinator._ambient_definition_cursor = catalog.definitions.find(catalog.get_definition(&"skeleton"))
 	coordinator.get_runtime().entity_melee_contact_reached.connect(_consume_melee_contact)
 	coordinator.get_runtime().entity_radial_contact_reached.connect(_consume_radial_contact)
 	var origin := Vector3(0.5, FEET_Y, 0.5)

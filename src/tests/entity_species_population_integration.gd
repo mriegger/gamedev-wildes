@@ -36,10 +36,11 @@ func _species_counts(coordinator: WorldEntityCoordinator) -> Dictionary:
 		&"zombie": 0,
 		&"skeleton": 0,
 		&"bird": 0,
-		&"stone_golem": 0,
 		&"slime_large": 0,
 		&"slime_medium": 0,
 		&"slime_small": 0,
+		&"watcher": 0,
+		&"stone_golem": 0,
 	}
 	for actor in coordinator.get_runtime().get_active_actors():
 		counts[actor.definition.id] = int(counts.get(actor.definition.id, 0)) + 1
@@ -68,46 +69,57 @@ func _species_id_set(coordinator: WorldEntityCoordinator, definition_id: StringN
 
 func _assert_catalog(catalog: EntityCatalog) -> void:
 	_expect(catalog != null and catalog.validate(), "entity catalog failed validation")
-	_expect(catalog.definitions.size() == 8, "entity catalog did not contain all eight stable species")
+	_expect(catalog.definitions.size() == 9, "entity catalog did not contain all nine stable species")
 	_expect(catalog.has_definition(&"sheep"), "stable sheep ID was missing")
 	_expect(catalog.has_definition(&"zombie"), "stable zombie ID was missing")
 	_expect(catalog.has_definition(&"bird"), "stable bird ID was missing")
 	_expect(catalog.has_definition(&"skeleton"), "stable Skeleton ID was missing")
-	_expect(catalog.has_definition(&"stone_golem"), "stable Stone Golem ID was missing")
 	_expect(catalog.has_definition(&"slime_large"), "stable large slime ID was missing")
 	_expect(catalog.has_definition(&"slime_medium"), "stable medium slime ID was missing")
 	_expect(catalog.has_definition(&"slime_small"), "stable small slime ID was missing")
+	_expect(catalog.has_definition(&"watcher"), "stable Watcher ID was missing")
+	_expect(catalog.has_definition(&"stone_golem"), "stable Stone Golem ID was missing")
 	var sheep := catalog.get_definition(&"sheep")
 	var zombie := catalog.get_definition(&"zombie")
 	var bird := catalog.get_definition(&"bird")
 	var skeleton := catalog.get_definition(&"skeleton")
-	var stone_golem := catalog.get_definition(&"stone_golem")
 	var slime_large := catalog.get_definition(&"slime_large")
 	var slime_medium := catalog.get_definition(&"slime_medium")
 	var slime_small := catalog.get_definition(&"slime_small")
-	_expect(sheep.id == &"sheep" and zombie.id == &"zombie" and bird.id == &"bird" and skeleton.id == &"skeleton" and stone_golem.id == &"stone_golem" and slime_large.id == &"slime_large" and slime_medium.id == &"slime_medium" and slime_small.id == &"slime_small", "species IDs changed")
+	var watcher := catalog.get_definition(&"watcher")
+	var stone_golem := catalog.get_definition(&"stone_golem")
+	_expect(sheep.id == &"sheep" and zombie.id == &"zombie" and bird.id == &"bird" and skeleton.id == &"skeleton" and stone_golem.id == &"stone_golem", "species IDs changed")
 	_expect(sheep.ambient_spawn_phase == EntityDefinition.SpawnPhase.DAY, "sheep were not day-spawned")
 	_expect(zombie.ambient_spawn_phase == EntityDefinition.SpawnPhase.NIGHT, "zombies were not night-spawned")
 	_expect(skeleton.ambient_spawn_phase == EntityDefinition.SpawnPhase.NIGHT, "Skeletons were not night-spawned")
 	_expect(bird.ambient_spawn_phase == EntityDefinition.SpawnPhase.DAY and bird.ambient_despawn_outside_spawn_phase, "birds were not phase-bound to daytime")
-	_expect(stone_golem.ambient_spawn_phase == EntityDefinition.SpawnPhase.NIGHT, "Stone Golems were not night-spawned")
-	_expect(sheep.ambient_max_active == 6 and zombie.ambient_max_active == 6 and skeleton.ambient_max_active == 3 and stone_golem.ambient_max_active == 2, "ground species caps changed")
+	_expect(sheep.ambient_max_active == 6 and zombie.ambient_max_active == 6 and skeleton.ambient_max_active == 3, "ground species caps changed")
 	_expect(bird.ambient_max_active == 4, "bird cap was not four")
 	_expect(slime_large.ambient_spawn_enabled and slime_large.ambient_spawn_phase == EntityDefinition.SpawnPhase.NIGHT and slime_large.ambient_max_active == 1, "large slime ambient policy changed")
 	_expect(not slime_medium.ambient_spawn_enabled and not slime_small.ambient_spawn_enabled, "split descendants became ambient species")
+	_expect(watcher.ambient_spawn_enabled and watcher.ambient_spawn_phase == EntityDefinition.SpawnPhase.NIGHT, "Watcher ambient phase changed")
+	_expect(is_equal_approx(watcher.ambient_spawn_weight, 1000.0) and watcher.ambient_max_active == 0, "Watcher testing weight or population policy changed")
+	_expect(stone_golem.ambient_spawn_phase == EntityDefinition.SpawnPhase.NIGHT and stone_golem.ambient_max_active == 2, "Stone Golem ambient policy changed")
 	_expect(stone_golem.ambient_spawn_floor_ids == zombie.ambient_spawn_floor_ids, "Stone Golem spawn floors differ from Zombie spawn floors")
 	_expect(is_equal_approx(stone_golem.body_width, 1.2) and is_equal_approx(stone_golem.body_height, 2.4), "Stone Golem body dimensions changed")
 	_expect(stone_golem.stats_definition != null and is_equal_approx(stone_golem.stats_definition.maximum_hp, 200.0), "Stone Golem maximum HP changed")
 	_expect(stone_golem.stats_definition != null and is_equal_approx(stone_golem.stats_definition.defense, 10.0), "Stone Golem defense changed")
 	_expect(stone_golem.stats_definition != null and is_equal_approx(stone_golem.stats_definition.strength, 10.0), "Stone Golem strength changed")
 	_expect(stone_golem.experience_reward == 30, "Stone Golem experience reward changed")
+	for definition in [sheep, zombie, bird, skeleton, slime_large, stone_golem]:
+		_expect(is_equal_approx(definition.ambient_spawn_weight, 100.0), "%s ambient weight changed" % definition.id)
+
+func _spawn_until_count(coordinator: WorldEntityCoordinator, player_position: Vector3, time_of_day: float, target_count: int) -> void:
+	for _attempt in range(96):
+		if coordinator.get_runtime().get_active_count() >= target_count:
+			return
+		coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), time_of_day)
 
 func _spawn_day_population(coordinator: WorldEntityCoordinator, player_position: Vector3) -> Dictionary:
-	for _spawn in range(10):
-		coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), DAY_TIME)
+	_spawn_until_count(coordinator, player_position, DAY_TIME, 10)
 	var counts := _species_counts(coordinator)
 	_expect(coordinator.get_runtime().get_active_count() == 10, "day population did not reach ten")
-	_expect(counts[&"sheep"] == 6 and counts[&"bird"] == 4 and counts[&"zombie"] == 0 and counts[&"skeleton"] == 0 and counts[&"stone_golem"] == 0 and counts[&"slime_large"] == 0, "day population did not contain six sheep and four birds")
+	_expect(counts[&"sheep"] == 6 and counts[&"bird"] == 4 and counts[&"zombie"] == 0 and counts[&"skeleton"] == 0, "day population did not contain six sheep and four birds")
 	var sheep_ids := _species_id_set(coordinator, &"sheep")
 	var day_ids := _runtime_id_set(coordinator)
 	coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), DAY_TIME)
@@ -115,50 +127,27 @@ func _spawn_day_population(coordinator: WorldEntityCoordinator, player_position:
 	_expect(_runtime_id_set(coordinator) == day_ids, "capped day tick replaced an existing entity")
 	return sheep_ids
 
-func _spawn_night_population(coordinator: WorldEntityCoordinator, player_position: Vector3, sheep_ids: Dictionary) -> Dictionary:
-	var expected_sequence: Array[StringName] = [&"skeleton", &"stone_golem", &"slime_large", &"zombie", &"skeleton", &"stone_golem"]
-	for expected_id in expected_sequence:
-		coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), NIGHT_TIME)
-		var latest_actor: EntityActor = null
-		for actor in coordinator.get_runtime().get_active_actors():
-			if latest_actor == null or actor.runtime_id > latest_actor.runtime_id:
-				latest_actor = actor
-		_expect(latest_actor != null and latest_actor.definition.id == expected_id, "night round-robin order did not select %s" % expected_id)
+func _spawn_night_population(coordinator: WorldEntityCoordinator, player_position: Vector3, sheep_ids: Dictionary) -> void:
+	_spawn_until_count(coordinator, player_position, NIGHT_TIME, 12)
 	var counts := _species_counts(coordinator)
 	_expect(coordinator.get_runtime().get_active_count() == 12, "night population did not reach twelve")
-	_expect(counts[&"sheep"] == 6 and counts[&"zombie"] == 1 and counts[&"skeleton"] == 2 and counts[&"stone_golem"] == 2 and counts[&"slime_large"] == 1 and counts[&"bird"] == 0, "night population retained birds or did not balance hostile species with one large-slime lineage")
-	_expect(coordinator.get_runtime().get_active_lineage_count(&"slime_large") == 1, "night population did not retain exactly one large-slime lineage")
-	_expect(coordinator.get_runtime().get_population_cost() == 27, "night population did not reserve weighted lineage capacity")
+	var night_count: int = int(counts[&"zombie"]) + int(counts[&"skeleton"]) + int(counts[&"slime_large"]) + int(counts[&"watcher"]) + int(counts[&"stone_golem"])
+	_expect(counts[&"sheep"] == 6 and counts[&"bird"] == 0 and night_count == 6, "night population retained birds or changed the seeded phase mix")
+	_expect(counts[&"slime_medium"] == 0 and counts[&"slime_small"] == 0, "split descendants spawned ambiently")
+	_expect(coordinator.get_runtime().get_active_lineage_count(&"slime_large") == counts[&"slime_large"], "large-slime lineage count diverged from ambient roots")
+	_expect(coordinator.get_runtime().get_population_cost() <= WorldEntityCoordinator.MAX_TOTAL_POPULATION_COST, "night population exceeded weighted lineage capacity")
 	for runtime_id in sheep_ids:
 		var actor := coordinator.get_runtime().get_actor(runtime_id)
 		_expect(actor != null and actor.definition.id == &"sheep", "day sheep did not persist into night")
-	return _runtime_id_set(coordinator)
 
 func _respawn_day_birds(coordinator: WorldEntityCoordinator, player_position: Vector3) -> Dictionary:
-	for _spawn in range(4):
-		coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), DAY_TIME)
+	_spawn_until_count(coordinator, player_position, DAY_TIME, WorldEntityCoordinator.MAX_TOTAL_ACTIVE)
 	var counts := _species_counts(coordinator)
 	_expect(coordinator.get_runtime().get_active_count() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "returning day did not reach the total population cap")
-	_expect(counts[&"sheep"] == 6 and counts[&"zombie"] == 1 and counts[&"skeleton"] == 2 and counts[&"stone_golem"] == 2 and counts[&"slime_large"] == 1 and counts[&"bird"] == 4, "returning day did not preserve the night population while restoring four birds")
-	_expect(coordinator.get_runtime().get_population_cost() == 31, "returning day exceeded or lost weighted population capacity")
+	var night_count: int = int(counts[&"zombie"]) + int(counts[&"skeleton"]) + int(counts[&"slime_large"]) + int(counts[&"watcher"]) + int(counts[&"stone_golem"])
+	_expect(counts[&"sheep"] == 6 and counts[&"bird"] == 4 and night_count == 6, "returning day did not preserve night entities while restoring birds")
+	_expect(coordinator.get_runtime().get_population_cost() <= WorldEntityCoordinator.MAX_TOTAL_POPULATION_COST, "returning day exceeded weighted population capacity")
 	return _runtime_id_set(coordinator)
-
-func _assert_night_species_caps(catalog: EntityCatalog, world: VoxelWorld, player_position: Vector3) -> void:
-	var coordinator := WorldEntityCoordinator.new()
-	get_root().add_child(coordinator)
-	coordinator.setup(catalog, world, 11971, _is_position_streamed)
-	for _spawn in range(WorldEntityCoordinator.MAX_TOTAL_ACTIVE):
-		coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), NIGHT_TIME)
-	var counts := _species_counts(coordinator)
-	_expect(coordinator.get_runtime().get_active_count() == 12, "night-only population did not stop at the eligible species caps")
-	_expect(counts[&"zombie"] == 6 and counts[&"skeleton"] == 3 and counts[&"stone_golem"] == 2 and counts[&"slime_large"] == 1 and counts[&"sheep"] == 0, "night-only population did not fill every enemy cap fairly")
-	_expect(coordinator.get_runtime().get_active_lineage_count(&"slime_large") == 1, "night-only population did not retain one large-slime lineage")
-	_expect(coordinator.get_runtime().get_population_cost() == 27, "night-only population cost did not include one reserved slime lineage")
-	var ids := _runtime_id_set(coordinator)
-	coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), NIGHT_TIME)
-	_expect(_runtime_id_set(coordinator) == ids, "capped night tick replaced an existing enemy")
-	coordinator.shutdown()
-	coordinator.free()
 
 func _assert_spatial_bound(coordinator: WorldEntityCoordinator, expected_entries: int) -> void:
 	var entry_count := coordinator.get_runtime()._spatial_index.get_entry_count()
@@ -206,14 +195,15 @@ func _route_sheep_contact(coordinator: WorldEntityCoordinator, world: VoxelWorld
 	return [combat, player]
 
 func _assert_cleanup(coordinator: WorldEntityCoordinator, player_position: Vector3) -> void:
-	var distant_zombie := _first_species(coordinator, &"zombie")
-	_expect(distant_zombie != null, "no zombie was available for distance cleanup")
-	var distant_runtime_id := distant_zombie.runtime_id
-	distant_zombie.global_position = player_position + Vector3(WorldEntityCoordinator.DESPAWN_DISTANCE + 5.0, 0.0, 0.0)
-	coordinator.tick(0.0, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), NIGHT_TIME)
+	var distant_actor := _first_species(coordinator, &"sheep")
+	_expect(distant_actor != null, "no ambient actor was available for distance cleanup")
+	var distant_runtime_id := distant_actor.runtime_id
+	var active_before := coordinator.get_runtime().get_active_count()
+	distant_actor.global_position = player_position + Vector3(WorldEntityCoordinator.DESPAWN_DISTANCE + 5.0, 0.0, 0.0)
+	coordinator.tick(0.0, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), DAY_TIME)
 	_expect(coordinator.get_runtime().get_actor(distant_runtime_id) == null, "distant entity was not removed")
-	_expect(coordinator.get_runtime().get_active_count() == 11, "distance cleanup removed the wrong number of entities")
-	_assert_spatial_bound(coordinator, 11)
+	_expect(coordinator.get_runtime().get_active_count() == active_before - 1, "distance cleanup removed the wrong number of entities")
+	_assert_spatial_bound(coordinator, active_before - 1)
 	_streaming_enabled = false
 	coordinator.tick(0.0, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), NIGHT_TIME)
 	_expect(coordinator.get_runtime().get_active_count() == 0, "unstreamed entities were not removed")
@@ -227,7 +217,6 @@ func _run() -> void:
 	var coordinator := WorldEntityCoordinator.new()
 	get_root().add_child(coordinator)
 	var player_position := Vector3(0.5, FEET_Y, 0.5)
-	_assert_night_species_caps(catalog, world, player_position)
 	coordinator.setup(catalog, world, 9167, _is_position_streamed)
 	var sheep_ids := _spawn_day_population(coordinator, player_position)
 	_spawn_night_population(coordinator, player_position, sheep_ids)

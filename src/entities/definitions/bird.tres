@@ -16,6 +16,7 @@ body_width = 0.4
 body_height = 0.5
 ambient_spawn_phase = 0
 ambient_max_active = 4
+ambient_spawn_weight = 100.0
 ambient_spawn_floor_ids = Array[int]([1, 2, 3])
 spawn_placement = 1
 ambient_aerial_altitude_min_blocks = 8

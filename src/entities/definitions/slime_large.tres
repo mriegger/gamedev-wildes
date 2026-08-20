@@ -28,6 +28,7 @@ body_height = 1.2
 ambient_spawn_enabled = true
 ambient_spawn_phase = 1
 ambient_max_active = 1
+ambient_spawn_weight = 100.0
 ambient_spawn_floor_ids = Array[int]([1, 2, 3, 4])
 ambient_despawn_outside_spawn_phase = false
 defeat_spawn = SubResource("Resource_defeat_spawn")

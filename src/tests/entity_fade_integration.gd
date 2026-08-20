@@ -77,7 +77,7 @@ func _expect_opacity(
 		_expect(is_equal_approx(geometries[index].transparency, expected), "%s geometry %d had transparency %.3f instead of %.3f" % [context, index, geometries[index].transparency, expected])
 
 func _test_species_visual_fades(catalog: EntityCatalog, world: VoxelWorld) -> void:
-	var definition_ids: Array[StringName] = [&"zombie", &"sheep", &"bird", &"skeleton", &"stone_golem"]
+	var definition_ids: Array[StringName] = [&"zombie", &"sheep", &"bird", &"skeleton", &"watcher", &"stone_golem"]
 	for index in range(definition_ids.size()):
 		var definition := catalog.get_definition(definition_ids[index])
 		var actor := definition.actor_scene.instantiate() as EntityActor
@@ -93,7 +93,10 @@ func _test_species_visual_fades(catalog: EntityCatalog, world: VoxelWorld) -> vo
 		_expect(poof.amount == 12, "%s death poof amount is not twelve" % definition.id)
 		_expect(is_equal_approx(poof.lifetime, 0.35), "%s death poof lifetime is not 0.35 seconds" % definition.id)
 		_expect(poof.one_shot and is_equal_approx(poof.explosiveness, 1.0), "%s death poof is not a one-shot burst" % definition.id)
-		_expect(poof.color.r >= 0.75 and poof.color.g >= 0.75 and poof.color.b >= 0.75, "%s death poof is not pale" % definition.id)
+		if definition.id == &"watcher":
+			_expect(poof.color.b > poof.color.r and poof.color.r > poof.color.g, "watcher death poof is not dark purple")
+		else:
+			_expect(poof.color.r >= 0.75 and poof.color.g >= 0.75 and poof.color.b >= 0.75, "%s death poof is not pale" % definition.id)
 		_expect(not poof.emitting and not poof.has_played(), "%s death poof began before lethal retirement" % definition.id)
 		_expect(is_zero_approx(actor.get_visual_opacity()), "%s did not begin fully faded out" % definition.id)
 		_expect_opacity(geometries, baselines, 0.0, "%s spawn start" % definition.id)
@@ -363,9 +366,11 @@ func _test_coordinator_retirement(catalog: EntityCatalog, world: VoxelWorld) -> 
 	get_root().add_child(coordinator)
 	coordinator.setup(catalog, world, 7021, _position_ready)
 	var player_position := Vector3(0.5, FEET_Y, 0.5)
-	coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
+	var spawned_ids := coordinator.get_runtime().try_spawn_batch([
+		EntitySpawnRequest.new(&"zombie", Vector3(18.5, FEET_Y, 0.5), 7022),
+	])
 	var actors := coordinator.get_runtime().get_active_actors()
-	_expect(actors.size() == 1, "coordinator did not spawn the fade test zombie")
+	_expect(spawned_ids.size() == 1 and actors.size() == 1, "coordinator did not accept the explicit fade test actor")
 	if actors.is_empty():
 		coordinator.shutdown()
 		coordinator.queue_free()
@@ -402,14 +407,22 @@ func _test_retiring_bound_and_population_independence(catalog: EntityCatalog, wo
 	get_root().add_child(coordinator)
 	coordinator.setup(catalog, world, 8842, _position_ready)
 	var player_position := Vector3(0.5, FEET_Y, 0.5)
-	for _spawn in range(6):
-		coordinator._spawn_elapsed = WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS
-		coordinator.tick(0.0, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
-	for _spawn in range(10):
-		coordinator._spawn_elapsed = WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS
-		coordinator.tick(0.0, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), 12.0)
+	var requests: Array[EntitySpawnRequest] = []
+	for index in range(WorldEntityCoordinator.MAX_TOTAL_ACTIVE):
+		requests.append(EntitySpawnRequest.new(
+			&"zombie",
+			Vector3(float(-30 + index * 4) + 0.5, FEET_Y, 0.5),
+			8843 + index,
+		))
+	var spawned_ids := coordinator.get_runtime().try_spawn_batch(requests)
 	_expect(coordinator.get_runtime().get_active_count() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "retiring-cap setup did not reach the active entity limit")
+	_expect(spawned_ids.size() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "retiring-cap setup rejected its explicit population")
 	var actors := coordinator.get_runtime().get_active_actors()
+	if actors.size() != WorldEntityCoordinator.MAX_TOTAL_ACTIVE:
+		coordinator.shutdown()
+		coordinator.queue_free()
+		await process_frame
+		return
 	actors.sort_custom(func(left: EntityActor, right: EntityActor) -> bool: return left.runtime_id < right.runtime_id)
 	var first_retired_actor := actors[1]
 	var first_retired_runtime_id := first_retired_actor.runtime_id
@@ -419,9 +432,16 @@ func _test_retiring_bound_and_population_independence(catalog: EntityCatalog, wo
 	coordinator.get_runtime().try_despawn(newest_at_capacity.runtime_id)
 	_expect(coordinator.get_runtime().get_active_count() == 0, "mass retirement retained active entities")
 	_expect(coordinator.get_runtime()._retiring.size() == WorldEntityCoordinator.MAX_RETIRING_VISUALS, "mass retirement did not fill the visual bound")
-	coordinator._spawn_elapsed = WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS - 0.1
-	coordinator.tick(0.1, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
+	var replacement_ids := coordinator.get_runtime().try_spawn_batch([
+		EntitySpawnRequest.new(&"zombie", Vector3(0.5, FEET_Y, 18.5), 9901),
+	])
 	_expect(coordinator.get_runtime().get_active_count() == 1, "retiring visuals suppressed an available population slot")
+	_expect(replacement_ids.size() == 1, "retiring visuals rejected an explicit replacement")
+	if replacement_ids.is_empty():
+		coordinator.shutdown()
+		coordinator.queue_free()
+		await process_frame
+		return
 	var replacement := coordinator.get_runtime().get_active_actors()[0]
 	replacement.global_position = player_position + Vector3(WorldEntityCoordinator.DESPAWN_DISTANCE + 1.0, 0.0, 0.0)
 	coordinator.tick(0.0, EntityTargetObservation.create(player_position, player_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)

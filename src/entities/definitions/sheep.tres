@@ -16,4 +16,5 @@ body_width = 0.8
 body_height = 1.4
 ambient_spawn_phase = 0
 ambient_max_active = 6
+ambient_spawn_weight = 100.0
 ambient_spawn_floor_ids = Array[int]([1])
