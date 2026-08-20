@@ -18,10 +18,12 @@ enum SpawnPlacement {
 @export var damage_affinities: Array[DamageAffinityDefinition]
 @export_range(0, 999999999, 1, "or_greater") var experience_reward: int = 0
 @export var loot_pool: LootPoolDefinition
+@export var defeat_spawn: EntityDefeatSpawnDefinition
 @export_range(0.1, 4.0, 0.01) var body_width: float = 0.6
 @export_range(0.1, 4.0, 0.01) var body_height: float = 1.8
+@export var ambient_spawn_enabled: bool = true
 @export var ambient_spawn_phase: SpawnPhase = SpawnPhase.NIGHT
-@export_range(1, 64, 1) var ambient_max_active: int = 1
+@export_range(0, 64, 1) var ambient_max_active: int = 1
 @export var ambient_spawn_floor_ids: Array[int] = []
 @export var spawn_placement: SpawnPlacement = SpawnPlacement.GROUNDED
 @export_range(1, 32, 1) var ambient_aerial_altitude_min_blocks: int = 8
@@ -64,23 +66,33 @@ func validate(source: String) -> bool:
 	if loot_pool != null and not loot_pool.validate():
 		push_error("[EntityDefinition] Invalid loot pool for %s at %s" % [id, source])
 		valid = false
+	if defeat_spawn != null and not defeat_spawn.validate(source):
+		valid = false
 	if actor_scene != null and behavior != null and not is_actor_compatible():
 		push_error("[EntityDefinition] Actor scene and behavior are incompatible for %s at %s" % [id, source])
 		valid = false
-	if body_width <= 0.0 or body_height <= 0.0:
+	if not is_finite(body_width) or body_width <= 0.0 or not is_finite(body_height) or body_height <= 0.0:
 		push_error("[EntityDefinition] Invalid body dimensions for %s at %s" % [id, source])
 		valid = false
-	if ambient_max_active < 1:
-		push_error("[EntityDefinition] Invalid active cap for %s at %s" % [id, source])
-		valid = false
+	if ambient_spawn_enabled:
+		if ambient_max_active < 1:
+			push_error("[EntityDefinition] Invalid active cap for %s at %s" % [id, source])
+			valid = false
+		if ambient_spawn_floor_ids.is_empty():
+			push_error("[EntityDefinition] Missing spawn floors for %s at %s" % [id, source])
+			valid = false
+	else:
+		if ambient_max_active != 0:
+			push_error("[EntityDefinition] Disabled ambient spawn has an active cap for %s at %s" % [id, source])
+			valid = false
+		if not ambient_spawn_floor_ids.is_empty():
+			push_error("[EntityDefinition] Disabled ambient spawn has spawn floors for %s at %s" % [id, source])
+			valid = false
 	if spawn_placement == SpawnPlacement.AERIAL and (ambient_aerial_altitude_min_blocks < 1 or ambient_aerial_altitude_min_blocks > ambient_aerial_altitude_max_blocks):
 		push_error("[EntityDefinition] Invalid aerial altitude range for %s at %s" % [id, source])
 		valid = false
 	if not combat_targetable and experience_reward != 0:
 		push_error("[EntityDefinition] Non-targetable entity %s rewards experience at %s" % [id, source])
-		valid = false
-	if ambient_spawn_floor_ids.is_empty():
-		push_error("[EntityDefinition] Missing spawn floors for %s at %s" % [id, source])
 		valid = false
 	for block_id in ambient_spawn_floor_ids:
 		if not BlockId.is_valid(block_id) or block_id in [BlockId.Type.AIR, BlockId.Type.WATER]:

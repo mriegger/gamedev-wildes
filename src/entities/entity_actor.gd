@@ -205,6 +205,20 @@ func apply_knockback(direction: Vector3, speed: float) -> bool:
 	knockback_velocity = planar_direction.normalized() * speed
 	return true
 
+func begin_defeat_spawn_launch(direction: Vector3, planar_speed: float, vertical_speed: float) -> bool:
+	if not direction.is_finite() or not is_finite(planar_speed) or planar_speed <= 0.0:
+		return false
+	if not is_finite(vertical_speed) or vertical_speed <= 0.0:
+		return false
+	var planar_direction := Vector3(direction.x, 0.0, direction.z)
+	if planar_direction.is_zero_approx():
+		return false
+	if not apply_knockback(planar_direction, planar_speed):
+		return false
+	velocity.y = vertical_speed
+	on_ground = false
+	return true
+
 func get_world_bounds() -> AABB:
 	assert(definition != null)
 	var half_width := definition.body_width * 0.5

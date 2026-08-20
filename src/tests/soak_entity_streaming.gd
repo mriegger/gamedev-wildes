@@ -114,7 +114,7 @@ func _eligible_definitions(catalog: EntityCatalog, time_of_day: float) -> Array[
 	var eligible: Array[EntityDefinition] = []
 	var is_day := DayNightProfile.is_day_time(time_of_day)
 	for definition in catalog.definitions:
-		if definition != null and is_day == (definition.ambient_spawn_phase == EntityDefinition.SpawnPhase.DAY):
+		if definition != null and definition.ambient_spawn_enabled and is_day == (definition.ambient_spawn_phase == EntityDefinition.SpawnPhase.DAY):
 			eligible.append(definition)
 	return eligible
 

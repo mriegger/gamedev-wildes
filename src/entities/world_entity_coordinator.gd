@@ -7,6 +7,7 @@ const MIN_SPAWN_DISTANCE: float = 18.0
 const MAX_SPAWN_DISTANCE: float = 36.0
 const DESPAWN_DISTANCE: float = 56.0
 const MAX_TOTAL_ACTIVE: int = 16
+const MAX_TOTAL_POPULATION_COST: int = 32
 const MAX_RETIRING_VISUALS: int = 12
 const MAX_NAVIGATION_SEARCH_RADIUS: int = 32
 const MAX_NAVIGATION_SEARCH_NODES: int = 512
@@ -45,7 +46,7 @@ func setup(p_catalog: EntityCatalog, p_voxel_world: VoxelWorld, world_seed: int,
 	_runtime.setup(
 		p_catalog,
 		p_voxel_world,
-		MAX_TOTAL_ACTIVE,
+		MAX_TOTAL_POPULATION_COST,
 		MAX_RETIRING_VISUALS,
 		EntityNavigationLimits.new(
 			MAX_NAVIGATION_SEARCH_RADIUS,
@@ -73,7 +74,9 @@ func tick(delta: float, observation: EntityTargetObservation, time_of_day: float
 	for offset in range(definition_count):
 		var definition_index := (_ambient_definition_cursor + offset) % definition_count
 		var definition := _catalog.definitions[definition_index]
-		if definition == null or _runtime.get_definition_count(definition.id) >= definition.ambient_max_active:
+		if definition == null or not definition.ambient_spawn_enabled:
+			continue
+		if _runtime.get_active_lineage_count(definition.id) >= definition.ambient_max_active:
 			continue
 		if is_day != (definition.ambient_spawn_phase == EntityDefinition.SpawnPhase.DAY):
 			continue

@@ -116,7 +116,7 @@ func _run_runtime_lifecycle(
 	_expect(geometry != null and geometry.get_node_or_null("EntryGeometry") is MeshInstance3D, "runtime entry geometry was not built at iteration %d" % iteration)
 	_expect(geometry != null and geometry._room_meshes.size() == runtime._topology.get_room_ids().size(), "runtime omitted room branch geometry at iteration %d" % iteration)
 	_expect(geometry != null and geometry._seal_meshes.size() == runtime._topology.get_doorways().size(), "runtime omitted authored doorway seals at iteration %d" % iteration)
-	_expect(runtime.get_entity_runtime()._max_active == runtime._topology.get_maximum_simultaneous_encounter_enemy_count(), "runtime ignored topology-derived encounter capacity at iteration %d" % iteration)
+	_expect(runtime.get_entity_runtime()._max_population_cost == runtime._topology.get_maximum_simultaneous_encounter_enemy_count(), "runtime ignored topology-derived encounter capacity at iteration %d" % iteration)
 	var entry_mesh := geometry.get_node("EntryGeometry") as MeshInstance3D
 	var terrain_material := entry_mesh.material_override as ShaderMaterial
 	_expect(terrain_material != null and terrain_material.shader.resource_path == "res://levels/presentation/level_terrain.gdshader", "runtime terrain shader changed at iteration %d" % iteration)
