@@ -29,6 +29,7 @@ wall_direction = 3
 
 [resource]
 script = ExtResource("1_module")
+format_version = 2
 module_id = &"dungeon_small_room"
 size = Vector3i(7, 4, 7)
 weight = 2.0

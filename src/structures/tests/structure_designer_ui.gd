@@ -12,6 +12,8 @@ var _removed_enemy_spawn_zones: Array[StringName] = []
 var _marker_targets: Array[Array] = []
 var _marker_commits: Array[Array] = []
 var _marker_clear_count: int
+var _chest_marker_target_count: int
+var _chest_marker_clear_count: int
 
 func _init() -> void:
 	call_deferred("_run")
@@ -106,6 +108,7 @@ func _test_module_ui(item_catalog: ItemCatalog) -> void:
 	var enemy_spawn_zone_add := ui.get_node("ModulePanel/Margin/VBox/DetailsScroll/Details/EnemySpawnZoneHeader/Add") as Button
 	var enemy_spawn_zone_summary := ui.get_node("ModulePanel/Margin/VBox/DetailsScroll/Details/EnemySpawnZoneSummary") as Label
 	var enemy_spawn_zone_list := ui.get_node("ModulePanel/Margin/VBox/DetailsScroll/Details/EnemySpawnZoneList") as VBoxContainer
+	var chest_marker_current := ui.get_node("ModulePanel/Margin/VBox/DetailsScroll/Details/ChestMarker/Current") as Label
 	var marker_title := ui.get_node("ModulePanel/Margin/VBox/DetailsScroll/Details/MarkersTitle") as Label
 	var spawn_title := ui.get_node("ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Spawn/Title") as Label
 	var entrance_exit_title := ui.get_node("ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Return/Title") as Label
@@ -134,6 +137,8 @@ func _test_module_ui(item_catalog: ItemCatalog) -> void:
 	ui.marker_target_requested.connect(_on_marker_target_requested)
 	ui.markers_commit_requested.connect(_on_markers_commit_requested)
 	ui.markers_clear_requested.connect(_on_markers_clear_requested)
+	ui.chest_marker_target_requested.connect(_on_chest_marker_target_requested)
+	ui.chest_marker_clear_requested.connect(_on_chest_marker_clear_requested)
 	var north_socket := LevelSocketDefinition.new()
 	north_socket.socket_id = &"north"
 	north_socket.cell = Vector3i(3, 1, 0)
@@ -157,6 +162,8 @@ func _test_module_ui(item_catalog: ItemCatalog) -> void:
 	var return_marker := LevelMarkerDefinition.new()
 	return_marker.cell = Vector3i(5, 1, 5)
 	return_marker.facing = LevelSocketDefinition.Direction.WEST
+	var chest_marker := LevelChestMarkerDefinition.new()
+	chest_marker.cell = Vector3i(3, 1, 3)
 	var sockets: Array[LevelSocketDefinition] = [north_socket, east_socket]
 	var aperture_sizes: Dictionary = {
 		&"north": Vector2i(3, 6),
@@ -165,7 +172,7 @@ func _test_module_ui(item_catalog: ItemCatalog) -> void:
 		&"west": Vector2i(1, 2),
 	}
 	var no_enemy_spawn_zones: Array[LevelEnemySpawnZone] = []
-	ui.present_module_state(0.05, sockets, aperture_sizes, null, null)
+	ui.present_module_state(0.05, sockets, aperture_sizes, null, null, null)
 	ui.present_enemy_spawn_zones(no_enemy_spawn_zones, {})
 	_expect(connection_summary.text.contains("eligible as an expansion module"), "two connections were not presented as expansion-eligible")
 	_expect((socket_list.get_child(0).get_child(0).get_child(0) as Label).text.contains("3×6"), "connection list omitted the opening size")
@@ -183,18 +190,18 @@ func _test_module_ui(item_catalog: ItemCatalog) -> void:
 	north_fill.item_selected.emit(must_connect_index)
 	_expect(_socket_fill_requests == [[&"north", BlockId.Type.STONE_BRICKS], [&"north", StructureCell.AIR]], "Must connect did not emit the required-connection sentinel")
 	var one_socket: Array[LevelSocketDefinition] = [north_socket]
-	ui.present_module_state(0.05, one_socket, aperture_sizes, null, null)
+	ui.present_module_state(0.05, one_socket, aperture_sizes, null, null, null)
 	_expect(_socket_fill_requests.size() == 2, "rebuilding connection rows emitted a fill request")
 	_expect(connection_summary.text.contains("cap or dead end"), "one connection was not presented as cap-eligible")
 	var four_sockets: Array[LevelSocketDefinition] = [north_socket, east_socket, south_socket, west_socket]
-	ui.present_module_state(0.05, four_sockets, aperture_sizes, null, null)
+	ui.present_module_state(0.05, four_sockets, aperture_sizes, null, null, null)
 	_expect(socket_list.get_child_count() == 4 and connection_button.disabled, "four-sided room did not complete the simple connection workflow")
 	var enemy_spawn_zone := LevelEnemySpawnZone.new()
 	enemy_spawn_zone.zone_id = &"enemy_spawn_zone"
 	enemy_spawn_zone.minimum_feet_cell = Vector3i(2, 1, 2)
 	enemy_spawn_zone.maximum_feet_cell = Vector3i(4, 1, 4)
 	var enemy_spawn_zones: Array[LevelEnemySpawnZone] = [enemy_spawn_zone]
-	ui.present_module_state(0.05, sockets, aperture_sizes, spawn_marker, return_marker)
+	ui.present_module_state(0.05, sockets, aperture_sizes, spawn_marker, return_marker, chest_marker)
 	ui.present_enemy_spawn_zones(enemy_spawn_zones, {&"enemy_spawn_zone": 7})
 	_expect(weight_input.value == 0.05 and _weights.is_empty(), "module weight presentation changed or re-emitted an imported sub-tenth value")
 	_expect(is_zero_approx(weight_input.step) and weight_input.allow_lesser and weight_input.allow_greater, "module weight editor did not preserve the positive finite weight contract")
@@ -203,6 +210,7 @@ func _test_module_ui(item_catalog: ItemCatalog) -> void:
 	_expect(connection_summary.text.contains("eligible as a start module"), "paired markers were not presented as start-eligible")
 	_expect(enemy_spawn_zone_summary.text == "1 zone • 7 usable cells", "enemy spawn zone summary changed")
 	_expect(enemy_spawn_zone_list.get_child_count() == 1 and (enemy_spawn_zone_list.get_child(0).get_child(0) as Label).text.contains("7 cells"), "enemy spawn zone list omitted its candidate count")
+	_expect(chest_marker_current.text == "Current: (3, 1, 3)", "chest marker presentation omitted its authored cell")
 	weight_input.value = 3.25
 	_expect(_weights == [3.25], "weight editor quantized a non-tenth request")
 	(ui.get_node("ModulePanel/Margin/VBox/SetVoid") as Button).pressed.emit()
@@ -231,6 +239,10 @@ func _test_module_ui(item_catalog: ItemCatalog) -> void:
 	ui.open_module_panel()
 	(enemy_spawn_zone_list.get_child(0).get_child(1) as Button).pressed.emit()
 	_expect(_removed_enemy_spawn_zones == [&"enemy_spawn_zone"], "enemy spawn zone remove control emitted the wrong ID")
+	(ui.get_node("ModulePanel/Margin/VBox/DetailsScroll/Details/ChestMarker/Actions/Set") as Button).pressed.emit()
+	_expect(_chest_marker_target_count == 1, "chest marker set control did not request the current target")
+	(ui.get_node("ModulePanel/Margin/VBox/DetailsScroll/Details/ChestMarker/Actions/Clear") as Button).pressed.emit()
+	_expect(_chest_marker_clear_count == 1, "chest marker clear control did not emit")
 	var spawn_facing := ui.get_node("ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Spawn/Controls/Facing") as OptionButton
 	spawn_facing.select(LevelSocketDefinition.Direction.EAST)
 	(ui.get_node("ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Spawn/Controls/Set") as Button).pressed.emit()
@@ -301,6 +313,12 @@ func _on_markers_commit_requested(
 
 func _on_markers_clear_requested() -> void:
 	_marker_clear_count += 1
+
+func _on_chest_marker_target_requested() -> void:
+	_chest_marker_target_count += 1
+
+func _on_chest_marker_clear_requested() -> void:
+	_chest_marker_clear_count += 1
 
 func _expect(condition: bool, message: String) -> void:
 	if not condition:

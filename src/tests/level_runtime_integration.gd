@@ -123,9 +123,14 @@ func _run_runtime_lifecycle(
 	var terrain_material := entry_mesh.material_override as ShaderMaterial
 	_expect(terrain_material != null and terrain_material.shader.resource_path == "res://levels/presentation/level_terrain.gdshader", "runtime terrain shader changed at iteration %d" % iteration)
 	_expect(terrain_material != null and terrain_material.get_shader_parameter("terrain_textures") == texture_set.texture_array, "runtime terrain texture array changed at iteration %d" % iteration)
+	var discovered_room_ids := runtime._encounter_state.get_discovered_room_ids()
 	for room_id in runtime._topology.get_room_ids():
-		var progress := runtime._encounter_state._rooms[room_id] as LevelEncounterState.RoomProgress
-		var discovered := progress.status != LevelEncounterState.RoomStatus.LOCKED
+		var room := runtime._topology.get_room(room_id)
+		var discovered := discovered_room_ids.has(room_id)
+		if not room.has_encounter():
+			_expect(not runtime._encounter_state._rooms.has(room_id), "runtime created encounter state for passive room %d" % room_id)
+			_expect(not runtime._encounter_coordinator._spawn_cells_by_room.has(room_id), "runtime created spawn cells for passive room %d" % room_id)
+			_expect(not runtime._encounter_coordinator._capacity_by_room.has(room_id), "runtime created encounter capacity for passive room %d" % room_id)
 		var room_mesh := geometry._room_meshes[room_id] as MeshInstance3D
 		_expect(room_mesh.material_override == terrain_material, "runtime room branch did not share the terrain material at iteration %d room %d" % [iteration, room_id])
 		_expect(room_mesh.visible == discovered, "runtime room branch visibility changed at iteration %d room %d" % [iteration, room_id])
@@ -138,9 +143,13 @@ func _run_runtime_lifecycle(
 			_expect_runtime_torch_discovery_state(torch_renderer, torch_cell, discovered, iteration, room_id)
 	var sealed_door_ids := runtime._encounter_state.get_sealed_door_ids()
 	for doorway in runtime._topology.get_doorways():
-		var owner_progress := runtime._encounter_state._rooms[doorway.room_id] as LevelEncounterState.RoomProgress
-		var owner_discovered := owner_progress.status != LevelEncounterState.RoomStatus.LOCKED
+		var owner_room := runtime._topology.get_room(doorway.room_id)
+		var owner_discovered := discovered_room_ids.has(doorway.room_id)
 		var expected_visible := sealed_door_ids.has(doorway.door_id) and owner_discovered
+		if not owner_room.has_encounter():
+			_expect(not sealed_door_ids.has(doorway.door_id), "runtime sealed passive-room doorway %d" % doorway.door_id)
+			for cell in doorway.aperture_cells:
+				_expect(not state.is_solid(cell), "runtime passive-room doorway blocked movement at %s" % cell)
 		var seal_mesh := geometry._seal_meshes[doorway.door_id] as MeshInstance3D
 		_expect(seal_mesh.material_override == terrain_material, "runtime seal did not share the authored terrain material at iteration %d door %d" % [iteration, doorway.door_id])
 		_expect(seal_mesh.visible == expected_visible, "runtime seal visibility changed at iteration %d door %d" % [iteration, doorway.door_id])

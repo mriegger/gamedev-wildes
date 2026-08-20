@@ -17,6 +17,7 @@ wall_direction = 2
 
 [resource]
 script = ExtResource("1_module")
+format_version = 2
 module_id = &"dungeon_compact_dead_end"
 size = Vector3i(5, 4, 5)
 weight = 3.0

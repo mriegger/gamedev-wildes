@@ -38,21 +38,11 @@ count = 3
 module_ids = Array[StringName]([&"stone_room"])
 encounter = SubResource("NormalEncounter")
 
-[sub_resource type="Resource" id="ChestEnemyGroup"]
-script = ExtResource("4_enemy_group")
-entity_id = &"zombie"
-count = 6
-
-[sub_resource type="Resource" id="ChestEncounter"]
-script = ExtResource("5_encounter")
-enemy_groups = Array[ExtResource("4_enemy_group")]([SubResource("ChestEnemyGroup")])
-
 [sub_resource type="Resource" id="ChestRoomRequirement"]
 script = ExtResource("3_requirement")
 room_type_id = &"chest_room"
 count = 3
 module_ids = Array[StringName]([&"stone_chest_room"])
-encounter = SubResource("ChestEncounter")
 
 [resource]
 script = ExtResource("1_definition")

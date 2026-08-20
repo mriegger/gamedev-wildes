@@ -67,6 +67,8 @@ func setup(
 	_designer_ui.marker_target_requested.connect(_on_marker_target_requested)
 	_designer_ui.markers_commit_requested.connect(_on_markers_commit_requested)
 	_designer_ui.markers_clear_requested.connect(_on_markers_clear_requested)
+	_designer_ui.chest_marker_target_requested.connect(_on_chest_marker_target_requested)
+	_designer_ui.chest_marker_clear_requested.connect(_on_chest_marker_clear_requested)
 	_spawn_initial_torches()
 	_sync_module_presentation()
 	_sync_all_enemy_spawn_zones()
@@ -222,6 +224,7 @@ func _sync_module_presentation() -> void:
 		_socket_aperture_sizes(),
 		_draft.get_spawn_marker(),
 		_draft.get_return_door_marker(),
+		_draft.get_chest_marker(),
 	)
 
 func _sync_all_enemy_spawn_zones() -> void:
@@ -467,6 +470,14 @@ func _on_markers_commit_requested(
 
 func _on_markers_clear_requested() -> void:
 	_apply_change(_draft.try_clear_markers())
+
+func _on_chest_marker_target_requested() -> void:
+	if _current_hit == null or not _draft.is_in_bounds(_current_hit.placement_cell):
+		return
+	_apply_change(_draft.try_set_chest_marker(_current_hit.placement_cell))
+
+func _on_chest_marker_clear_requested() -> void:
+	_apply_change(_draft.try_clear_chest_marker())
 
 func _setup_environment() -> void:
 	var environment := Environment.new()

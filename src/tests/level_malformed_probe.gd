@@ -19,6 +19,10 @@ func _init() -> void:
 	missing_presentation.presentation = null
 	var missing_encounter := source_level.duplicate(true) as LevelDefinition
 	missing_encounter.room_requirements[0].encounter = null
+	var missing_encounter_catalog := _catalog_with(source_catalog, missing_encounter)
+	var chest_encounter := source_level.duplicate(true) as LevelDefinition
+	chest_encounter.room_requirements[2].encounter = chest_encounter.room_requirements[1].encounter
+	var chest_encounter_catalog := _catalog_with(source_catalog, chest_encounter)
 	var empty_encounter := LevelRoomEncounterDefinition.new()
 	var null_group_encounter := LevelRoomEncounterDefinition.new()
 	null_group_encounter.enemy_groups.append(null)
@@ -151,7 +155,9 @@ func _init() -> void:
 		not unversioned.validate(),
 		not obsolete_version.validate(),
 		not missing_presentation.validate(),
-		not missing_encounter.validate(),
+		missing_encounter.validate(),
+		not missing_encounter_catalog.validate(),
+		not chest_encounter_catalog.validate(),
 		not empty_encounter.validate("probe"),
 		not null_group_encounter.validate("probe"),
 		not empty_entity_encounter.validate("probe"),

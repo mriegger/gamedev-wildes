@@ -25,6 +25,8 @@ class RoomProgress:
 
 var _rooms: Dictionary = {}
 var _room_ids: Array[int] = []
+var _topology: LevelEncounterTopology
+var _discovered_room_ids: Dictionary = {}
 var _sealed_door_ids: Dictionary = {}
 var _runtime_to_room: Dictionary = {}
 var _runtime_to_entity: Dictionary = {}
@@ -45,10 +47,9 @@ func get_active_room_ids() -> Array[int]:
 
 func get_discovered_room_ids() -> Array[int]:
 	var discovered_room_ids: Array[int] = []
-	for room_id in _room_ids:
-		var room := _rooms[room_id] as RoomProgress
-		if room.status != RoomStatus.LOCKED:
-			discovered_room_ids.append(room_id)
+	for room_id in _discovered_room_ids:
+		discovered_room_ids.append(int(room_id))
+	discovered_room_ids.sort()
 	return discovered_room_ids
 
 func get_sealed_door_ids() -> Array[int]:
@@ -83,7 +84,7 @@ func get_configured_enemy_ids(room_id: int) -> Array[StringName]:
 
 func can_activate(room_id: int) -> bool:
 	var room := _rooms.get(room_id) as RoomProgress
-	return room != null and room.status == RoomStatus.READY and room.next_spawn_index == 0
+	return room != null and room.definition.has_encounter() and room.status == RoomStatus.READY and room.next_spawn_index == 0
 
 func can_commit_activation(room_id: int, entity_ids: Array[StringName], concurrent_capacity: int) -> bool:
 	var room := _rooms.get(room_id) as RoomProgress
@@ -99,7 +100,7 @@ func get_defeat_opened_seal_ids(runtime_id: int, entity_id: StringName) -> Array
 	var room := _get_assigned_room(runtime_id, entity_id)
 	if room == null or not _will_clear_after_defeat(room):
 		return []
-	return _collect_clear_opened_seal_ids(room)
+	return _collect_clear_opened_seal_ids(int(_runtime_to_room[runtime_id]), room)
 
 func get_next_enemy_ids(room_id: int, maximum_count: int) -> Array[StringName]:
 	var result: Array[StringName] = []
@@ -155,41 +156,46 @@ func record_defeat(runtime_id: int, entity_id: StringName) -> LevelEncounterTran
 	var cleared := _will_clear_after_defeat(room)
 	var opened_seal_ids: Array[int] = []
 	if cleared:
-		opened_seal_ids = _collect_clear_opened_seal_ids(room)
+		opened_seal_ids = _collect_clear_opened_seal_ids(room_id, room)
 	room.active_entity_ids.erase(runtime_id)
 	_runtime_to_room.erase(runtime_id)
 	_runtime_to_entity.erase(runtime_id)
 	room.defeated_count += 1
 	if cleared:
 		room.status = RoomStatus.CLEARED
-		for child_room_id in room.definition.child_room_ids:
-			var child := _rooms[child_room_id] as RoomProgress
-			assert(child.status == RoomStatus.LOCKED)
-			child.status = RoomStatus.READY
+		_discover_rooms(_topology.get_discovered_room_ids_after_clear(room_id))
 		_open_seals(opened_seal_ids)
 	return _make_transition(room_id, cleared, opened_seal_ids)
 
 func _initialize(topology: LevelEncounterTopology, level_seed: int) -> bool:
-	_room_ids = topology.get_room_ids()
-	if _room_ids.is_empty():
+	if topology.get_room_ids().is_empty():
 		return false
+	_topology = topology
+	_room_ids = topology.get_encounter_room_ids()
 	_room_ids.sort()
 	for doorway in topology.get_doorways():
 		if doorway == null or _sealed_door_ids.has(doorway.door_id):
 			return false
-		_sealed_door_ids[doorway.door_id] = true
+		var owner := topology.get_room(doorway.room_id)
+		if owner == null:
+			return false
+		if owner.has_encounter():
+			_sealed_door_ids[doorway.door_id] = true
 	for room_id in _room_ids:
 		var definition := topology.get_room(room_id)
-		if definition == null:
+		if definition == null or not definition.has_encounter():
 			return false
 		var enemy_ids := _shuffle_enemy_ids(definition.enemy_ids, level_seed, room_id)
-		var progress := RoomProgress.new(definition, enemy_ids)
-		if definition.parent_room_id < 0:
-			if not _sealed_door_ids.has(definition.parent_door_id):
-				return false
-			progress.status = RoomStatus.READY
-			_sealed_door_ids.erase(definition.parent_door_id)
-		_rooms[room_id] = progress
+		_rooms[room_id] = RoomProgress.new(definition, enemy_ids)
+	var initial_room_ids := topology.get_initial_discovered_room_ids()
+	var opened_seal_ids: Array[int] = []
+	var seen_opened_seal_ids: Dictionary = {}
+	for room_id in initial_room_ids:
+		var room := topology.get_room(room_id)
+		if room.has_encounter():
+			_append_opened_seal_id(room.parent_door_id, seen_opened_seal_ids, opened_seal_ids)
+	_discover_rooms(initial_room_ids)
+	_open_seals(opened_seal_ids)
 	return true
 
 func _can_commit_spawns(room: RoomProgress, runtime_ids: Array[int], entity_ids: Array[StringName]) -> bool:
@@ -233,16 +239,27 @@ func _will_clear_after_defeat(room: RoomProgress) -> bool:
 		and room.next_spawn_index == room.enemy_ids.size() \
 		and room.active_entity_ids.size() == 1
 
-func _collect_clear_opened_seal_ids(room: RoomProgress) -> Array[int]:
+func _collect_clear_opened_seal_ids(room_id: int, room: RoomProgress) -> Array[int]:
 	var opened_seal_ids: Array[int] = []
 	var seen: Dictionary = {}
 	for door_id in room.definition.door_ids:
 		_append_opened_seal_id(door_id, seen, opened_seal_ids)
-	for child_room_id in room.definition.child_room_ids:
-		var child := _rooms[child_room_id] as RoomProgress
-		_append_opened_seal_id(child.definition.parent_door_id, seen, opened_seal_ids)
+	for discovered_room_id in _topology.get_discovered_room_ids_after_clear(room_id):
+		var discovered_room := _topology.get_room(discovered_room_id)
+		if discovered_room.has_encounter():
+			_append_opened_seal_id(discovered_room.parent_door_id, seen, opened_seal_ids)
 	opened_seal_ids.sort()
 	return opened_seal_ids
+
+func _discover_rooms(room_ids: Array[int]) -> void:
+	for room_id in room_ids:
+		assert(not _discovered_room_ids.has(room_id))
+		_discovered_room_ids[room_id] = true
+		var progress := _rooms.get(room_id) as RoomProgress
+		if progress == null:
+			continue
+		assert(progress.status == RoomStatus.LOCKED)
+		progress.status = RoomStatus.READY
 
 func _append_opened_seal_id(door_id: int, seen: Dictionary, opened_seal_ids: Array[int]) -> void:
 	if _sealed_door_ids.has(door_id) and not seen.has(door_id):

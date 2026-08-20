@@ -34,7 +34,7 @@ func setup(
 	_entity_runtime = entity_runtime
 	_entity_catalog = entity_catalog
 	_level_seed = level_seed
-	for room_id in topology.get_room_ids():
+	for room_id in topology.get_encounter_room_ids():
 		_spawn_cells_by_room[room_id] = _shuffle_spawn_cells(topology.get_room(room_id).spawn_cells, room_id)
 		var enemy_ids := state.get_configured_enemy_ids(room_id)
 		enemy_ids.resize(mini(enemy_ids.size(), LevelEncounterState.MAX_CONCURRENT_ENEMIES_PER_ROOM))

@@ -17,7 +17,7 @@ func validate(source: String) -> bool:
 	if module_ids.is_empty():
 		push_error("[LevelRoomRequirement] Empty module pool for %s in %s" % [room_type_id, source])
 		valid = false
-	if encounter == null or not encounter.validate("%s room type %s" % [source, room_type_id]):
+	if encounter != null and not encounter.validate("%s room type %s" % [source, room_type_id]):
 		push_error("[LevelRoomRequirement] Invalid encounter for %s in %s" % [room_type_id, source])
 		valid = false
 	var seen: Dictionary = {}

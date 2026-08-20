@@ -25,6 +25,7 @@ var _enemy_spawn_zones: Array[LevelEnemySpawnZone] = []
 var _enemy_spawn_zone_ids_by_cell: Dictionary = {}
 var _spawn_marker: LevelMarkerDefinition
 var _return_door_marker: LevelMarkerDefinition
+var _chest_marker: LevelChestMarkerDefinition
 var _weight: float = 1.0
 var _required_air_cells: Dictionary = {}
 var _required_solid_cells: Dictionary = {}
@@ -82,6 +83,7 @@ static func restore_level_module(definition: LevelModuleDefinition, source_path:
 		draft._enemy_spawn_zones.append(_copy_enemy_spawn_zone(zone))
 	draft._spawn_marker = _copy_marker(definition.spawn_marker)
 	draft._return_door_marker = _copy_marker(definition.return_door_marker)
+	draft._chest_marker = _copy_chest_marker(definition.chest_marker)
 	draft._index_module_metadata()
 	return draft
 
@@ -217,6 +219,9 @@ func get_spawn_marker() -> LevelMarkerDefinition:
 func get_return_door_marker() -> LevelMarkerDefinition:
 	return _copy_marker(_return_door_marker)
 
+func get_chest_marker() -> LevelChestMarkerDefinition:
+	return _copy_chest_marker(_chest_marker)
+
 func get_weight() -> float:
 	return _weight
 
@@ -246,6 +251,8 @@ func can_place_block(cell: Vector3i, block_id: int) -> bool:
 	if _required_air_cells.has(cell):
 		return false
 	var changes: Dictionary = {cell: block_id}
+	if not _chest_access_remains_valid(changes):
+		return false
 	return _enemy_spawn_zones_are_valid(_enemy_spawn_zone_ids_for_cells([cell]), changes)
 
 func try_place_block(cell: Vector3i, block_id: int) -> StructureDraftChange:
@@ -260,6 +267,8 @@ func try_remove_block(cell: Vector3i) -> StructureDraftChange:
 	if _required_solid_cells.has(cell) or _required_non_air_cells.has(cell):
 		return StructureDraftChange.reject()
 	var changes: Dictionary = {cell: StructureCell.AIR}
+	if not _chest_access_remains_valid(changes):
+		return StructureDraftChange.reject()
 	if not _enemy_spawn_zones_are_valid(_enemy_spawn_zone_ids_for_cells([cell]), changes):
 		return StructureDraftChange.reject()
 	var removed_torch_cells := _get_torch_cells_supported_by(cell)
@@ -276,6 +285,8 @@ func try_set_void(cell: Vector3i) -> StructureDraftChange:
 	if _required_air_cells.has(cell) or _required_solid_cells.has(cell) or _required_non_air_cells.has(cell):
 		return StructureDraftChange.reject()
 	var changes: Dictionary = {cell: StructureCell.VOID}
+	if not _chest_access_remains_valid(changes):
+		return StructureDraftChange.reject()
 	if not _enemy_spawn_zones_are_valid(_enemy_spawn_zone_ids_for_cells([cell]), changes):
 		return StructureDraftChange.reject()
 	var removed_torch_cells := _get_torch_cells_supported_by(cell)
@@ -287,7 +298,7 @@ func try_set_void(cell: Vector3i) -> StructureDraftChange:
 func can_place_torch(cell: Vector3i, support_direction: Vector3i) -> bool:
 	if not is_in_bounds(cell) or get_cell(cell) != StructureCell.AIR or has_torch(cell):
 		return false
-	if _format == Format.LEVEL_MODULE and _socket_aperture_owners.has(cell):
+	if _format == Format.LEVEL_MODULE and (_socket_aperture_owners.has(cell) or _marker_footprint_contains(cell)):
 		return false
 	if not StructureTorchDefinition.is_horizontal_support(support_direction):
 		return false
@@ -332,6 +343,8 @@ func try_remove_socket(socket_id: StringName) -> StructureDraftChange:
 		if socket.socket_id != socket_id:
 			continue
 		var changed_zone_ids := _enemy_spawn_zone_ids_for_socket_aperture(get_socket_aperture_cells(socket_id))
+		if not _enemy_spawn_zones_are_valid(changed_zone_ids, {}, [], socket_id):
+			return StructureDraftChange.reject()
 		_remove_socket_requirements(socket)
 		_sockets.remove_at(index)
 		return _commit_change([], [], [], true, changed_zone_ids)
@@ -390,6 +403,8 @@ func try_set_markers(
 		return StructureDraftChange.reject()
 	if not _marker_is_socket_clear(spawn) or not _marker_is_socket_clear(return_marker):
 		return StructureDraftChange.reject()
+	if _marker_overlaps_chest(spawn) or _marker_overlaps_chest(return_marker):
+		return StructureDraftChange.reject()
 	if _markers_equal(_spawn_marker, spawn) and _markers_equal(_return_door_marker, return_marker):
 		return StructureDraftChange.reject()
 	_remove_marker_requirements(_spawn_marker)
@@ -408,6 +423,31 @@ func try_clear_markers() -> StructureDraftChange:
 	_remove_marker_requirements(_return_door_marker)
 	_spawn_marker = null
 	_return_door_marker = null
+	return _commit_change([], [], [], true)
+
+func try_set_chest_marker(cell: Vector3i) -> StructureDraftChange:
+	if _format != Format.LEVEL_MODULE:
+		return StructureDraftChange.reject()
+	var marker := LevelChestMarkerDefinition.new()
+	marker.cell = cell
+	if not _chest_marker_is_valid(marker) or not _chest_marker_is_socket_clear(marker):
+		return StructureDraftChange.reject()
+	if _player_marker_footprint_contains(marker.cell) or _player_marker_footprint_contains(marker.cell + Vector3i.UP):
+		return StructureDraftChange.reject()
+	if has_torch(marker.cell) or has_torch(marker.cell + Vector3i.UP) or _enemy_spawn_candidate_contains(marker.cell):
+		return StructureDraftChange.reject()
+	if _chest_markers_equal(_chest_marker, marker):
+		return StructureDraftChange.reject()
+	_remove_chest_marker_requirements(_chest_marker)
+	_chest_marker = marker
+	_add_chest_marker_requirements(_chest_marker)
+	return _commit_change([], [], [], true)
+
+func try_clear_chest_marker() -> StructureDraftChange:
+	if _format != Format.LEVEL_MODULE or _chest_marker == null:
+		return StructureDraftChange.reject()
+	_remove_chest_marker_requirements(_chest_marker)
+	_chest_marker = null
 	return _commit_change([], [], [], true)
 
 func try_set_weight(value: float) -> StructureDraftChange:
@@ -520,15 +560,26 @@ func _enemy_spawn_zones_are_valid(
 	zone_ids: Array[StringName],
 	changes: Dictionary,
 	additional_sockets: Array[LevelSocketDefinition] = [],
+	excluded_socket_id: StringName = &"",
 ) -> bool:
 	var sockets: Array[LevelSocketDefinition] = []
-	sockets.assign(_sockets)
+	for socket in _sockets:
+		if socket.socket_id != excluded_socket_id:
+			sockets.append(socket)
 	sockets.append_array(additional_sockets)
 	for zone_id in zone_ids:
 		var zone := _enemy_spawn_zone_by_id(zone_id)
-		if zone != null and zone.get_candidate_cells(_size, _cells, sockets, changes).is_empty():
-			return false
+		if zone != null:
+			var candidates := zone.get_candidate_cells(_size, _cells, sockets, changes)
+			if candidates.is_empty() or _chest_marker != null and candidates.has(_chest_marker.cell):
+				return false
 	return true
+
+func _enemy_spawn_candidate_contains(cell: Vector3i) -> bool:
+	for zone in _enemy_spawn_zones:
+		if zone.get_candidate_cells(_size, _cells, _sockets).has(cell):
+			return true
+	return false
 
 func _enemy_spawn_zone_ids_for_cells(cells: Array) -> Array[StringName]:
 	var affected_lookup: Dictionary = {}
@@ -604,6 +655,7 @@ func _index_module_metadata() -> void:
 		_index_enemy_spawn_zone(zone)
 	_add_marker_requirements(_spawn_marker)
 	_add_marker_requirements(_return_door_marker)
+	_add_chest_marker_requirements(_chest_marker)
 
 func _add_socket_requirements(socket: LevelSocketDefinition) -> void:
 	var inward := -LevelSocketDefinition.vector_for(socket.direction)
@@ -672,6 +724,20 @@ func _remove_marker_requirements(marker: LevelMarkerDefinition) -> void:
 	_decrement_requirement(_required_air_cells, marker.cell + Vector3i.UP)
 	_decrement_requirement(_required_solid_cells, marker.cell + Vector3i.DOWN)
 
+func _add_chest_marker_requirements(marker: LevelChestMarkerDefinition) -> void:
+	if marker == null:
+		return
+	_increment_requirement(_required_air_cells, marker.cell)
+	_increment_requirement(_required_air_cells, marker.cell + Vector3i.UP)
+	_increment_requirement(_required_solid_cells, marker.cell + Vector3i.DOWN)
+
+func _remove_chest_marker_requirements(marker: LevelChestMarkerDefinition) -> void:
+	if marker == null:
+		return
+	_decrement_requirement(_required_air_cells, marker.cell)
+	_decrement_requirement(_required_air_cells, marker.cell + Vector3i.UP)
+	_decrement_requirement(_required_solid_cells, marker.cell + Vector3i.DOWN)
+
 func _increment_requirement(index: Dictionary, cell: Vector3i) -> void:
 	index[cell] = int(index.get(cell, 0)) + 1
 
@@ -693,7 +759,40 @@ func _marker_is_valid(marker: LevelMarkerDefinition) -> bool:
 func _marker_is_socket_clear(marker: LevelMarkerDefinition) -> bool:
 	return not _socket_aperture_owners.has(marker.cell) and not _socket_aperture_owners.has(marker.cell + Vector3i.UP)
 
+func _chest_marker_is_valid(marker: LevelChestMarkerDefinition) -> bool:
+	var upper := marker.cell + Vector3i.UP
+	var floor_cell := marker.cell + Vector3i.DOWN
+	if not is_in_bounds(marker.cell) or not is_in_bounds(upper) or not is_in_bounds(floor_cell):
+		return false
+	return (
+		get_cell(marker.cell) == StructureCell.AIR
+		and get_cell(upper) == StructureCell.AIR
+		and StructureCell.is_structure_solid(get_cell(floor_cell))
+		and LevelChestMarkerDefinition.has_accessible_side(marker.cell, _size, _cells)
+	)
+
+func _chest_access_remains_valid(changes: Dictionary) -> bool:
+	return _chest_marker == null or LevelChestMarkerDefinition.has_accessible_side(_chest_marker.cell, _size, _cells, changes)
+
+func _chest_marker_is_socket_clear(marker: LevelChestMarkerDefinition) -> bool:
+	return not _socket_aperture_owners.has(marker.cell) and not _socket_aperture_owners.has(marker.cell + Vector3i.UP)
+
+func _marker_overlaps_chest(marker: LevelMarkerDefinition) -> bool:
+	if _chest_marker == null:
+		return false
+	return marker.cell == _chest_marker.cell \
+		or marker.cell == _chest_marker.cell + Vector3i.UP \
+		or marker.cell + Vector3i.UP == _chest_marker.cell \
+		or marker.cell + Vector3i.UP == _chest_marker.cell + Vector3i.UP
+
 func _marker_footprint_contains(cell: Vector3i) -> bool:
+	if _player_marker_footprint_contains(cell):
+		return true
+	if _chest_marker != null and (_chest_marker.cell == cell or _chest_marker.cell + Vector3i.UP == cell):
+		return true
+	return false
+
+func _player_marker_footprint_contains(cell: Vector3i) -> bool:
 	for marker in [_spawn_marker, _return_door_marker]:
 		if marker != null and (marker.cell == cell or marker.cell + Vector3i.UP == cell):
 			return true
@@ -728,7 +827,8 @@ func _prepare_enemy_spawn_zone(first_corner: Vector3i, second_corner: Vector3i) 
 	)
 	if not zone.has_valid_bounds(_size):
 		return null
-	if zone.get_candidate_cells(_size, _cells, _sockets).is_empty():
+	var candidate_cells := zone.get_candidate_cells(_size, _cells, _sockets)
+	if candidate_cells.is_empty() or _chest_marker != null and candidate_cells.has(_chest_marker.cell):
 		return null
 	return zone
 
@@ -806,10 +906,22 @@ static func _copy_marker(source: LevelMarkerDefinition) -> LevelMarkerDefinition
 	copied.facing = source.facing
 	return copied
 
+static func _copy_chest_marker(source: LevelChestMarkerDefinition) -> LevelChestMarkerDefinition:
+	if source == null:
+		return null
+	var copied := LevelChestMarkerDefinition.new()
+	copied.cell = source.cell
+	return copied
+
 static func _markers_equal(first: LevelMarkerDefinition, second: LevelMarkerDefinition) -> bool:
 	if first == null or second == null:
 		return first == second
 	return first.cell == second.cell and first.facing == second.facing
+
+static func _chest_markers_equal(first: LevelChestMarkerDefinition, second: LevelChestMarkerDefinition) -> bool:
+	if first == null or second == null:
+		return first == second
+	return first.cell == second.cell
 
 static func _cell_less(a: Vector3i, b: Vector3i) -> bool:
 	if a.x != b.x:

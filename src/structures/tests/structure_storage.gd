@@ -146,6 +146,7 @@ func _test_module_round_trip(store: StructureFileStore, root_path: String, suffi
 	var torches := draft.get_torches()
 	_expect(torches.size() == 2 and torches[0].cell == Vector3i(3, 2, 3) and torches[1].cell == Vector3i(1, 2, 3), "Level Module import changed torch order")
 	_expect(draft.get_spawn_marker().cell == Vector3i(1, 1, 2) and draft.get_return_door_marker().cell == Vector3i(3, 1, 2), "Level Module import changed paired markers")
+	_expect(draft.get_chest_marker().cell == Vector3i(2, 1, 2), "Level Module import changed the chest marker")
 	var snapshot := StructureResourceAdapter.create_snapshot(draft, identifier) as LevelModuleDefinition
 	_expect(snapshot != null and StructureResourceAdapter.resources_equal(original, snapshot), "Level Module adapter snapshot changed persisted fields")
 	if snapshot != null:
@@ -153,8 +154,10 @@ func _test_module_round_trip(store: StructureFileStore, root_path: String, suffi
 		snapshot.sockets[0].socket_id = &"mutated"
 		snapshot.torches[0].cell = Vector3i.ZERO
 		snapshot.spawn_marker.cell = Vector3i.ZERO
+		snapshot.chest_marker.cell = Vector3i.ZERO
 	_expect(draft.get_cell(Vector3i(4, 0, 4)) == BlockId.Type.STONE and draft.get_sockets()[0].socket_id == &"north_entry", "Level Module snapshot exposed cells or sockets")
 	_expect(draft.get_torches()[0].cell == Vector3i(3, 2, 3) and draft.get_spawn_marker().cell == Vector3i(1, 1, 2), "Level Module snapshot exposed torches or markers")
+	_expect(draft.get_chest_marker().cell == Vector3i(2, 1, 2), "Level Module snapshot exposed the chest marker")
 	_expect(draft.try_place_block(Vector3i(4, 3, 3), BlockId.Type.DIRT).succeeded, "Level Module overwrite edit failed")
 	var overwritten := store.export_draft(draft)
 	_expect(overwritten.succeeded and not draft.is_dirty(), "bound Level Module overwrite failed: %s" % overwritten.message)
@@ -165,6 +168,7 @@ func _test_module_round_trip(store: StructureFileStore, root_path: String, suffi
 	_expect(reloaded != null and reloaded.sockets.size() == 2 and reloaded.sockets[0].socket_id == &"north_entry" and reloaded.sockets[1].socket_id == &"south_exit", "Level Module overwrite changed socket order")
 	_expect(reloaded != null and reloaded.torches.size() == 2 and reloaded.torches[0].cell == Vector3i(3, 2, 3) and reloaded.torches[1].cell == Vector3i(1, 2, 3), "Level Module overwrite changed torch order")
 	_expect(reloaded != null and reloaded.spawn_marker.cell == Vector3i(1, 1, 2) and reloaded.return_door_marker.cell == Vector3i(3, 1, 2), "Level Module overwrite changed paired markers")
+	_expect(reloaded != null and reloaded.chest_marker.cell == Vector3i(2, 1, 2), "Level Module overwrite changed the chest marker")
 	_expect(draft.try_place_block(Vector3i(3, 3, 3), BlockId.Type.STONE).succeeded, "Level Module stale-type edit failed")
 	_expect(ResourceSaver.save(_make_definition(identifier, BlockId.Type.STONE), path) == OK, "bound Level Module source could not be replaced with a generic structure")
 	var replacement_bytes := FileAccess.get_file_as_bytes(path)
@@ -194,9 +198,11 @@ func _test_variable_module_round_trip(store: StructureFileStore, root_path: Stri
 	for floor_cell in [Vector3i(0, 0, 2), Vector3i(3, 0, 2)]:
 		_expect(draft.try_place_block(floor_cell, BlockId.Type.STONE).succeeded, "module floor setup failed")
 	_expect(draft.try_place_block(Vector3i(0, 0, 3), BlockId.Type.STONE).succeeded, "module spawn-zone floor setup failed")
+	_expect(draft.try_place_block(Vector3i(1, 0, 3), BlockId.Type.STONE).succeeded, "module chest marker floor setup failed")
 	_expect(draft.try_add_socket(Vector3i(1, 1, 0), LevelSocketDefinition.Direction.NORTH).succeeded, "module socket setup failed")
 	_expect(draft.try_set_socket_unused_fill_block(&"north", BlockId.Type.MOSSY_STONE_BRICKS).succeeded, "module socket fill setup failed")
 	_expect(draft.try_set_markers(Vector3i(0, 1, 2), LevelSocketDefinition.Direction.EAST, Vector3i(3, 1, 2), LevelSocketDefinition.Direction.WEST).succeeded, "module marker setup failed")
+	_expect(draft.try_set_chest_marker(Vector3i(1, 1, 3)).succeeded, "module chest marker setup failed")
 	_expect(draft.try_place_block(Vector3i(3, 2, 3), BlockId.Type.STONE).succeeded, "module torch support setup failed")
 	_expect(draft.try_place_torch(Vector3i(2, 2, 3), Vector3i.RIGHT).succeeded, "module torch setup failed")
 	_expect(draft.try_add_enemy_spawn_zone(Vector3i(0, 1, 3), Vector3i(0, 1, 3)).succeeded, "module spawn-zone setup failed")
@@ -205,8 +211,9 @@ func _test_variable_module_round_trip(store: StructureFileStore, root_path: Stri
 	_expect(exported.succeeded and FileAccess.file_exists(path), "variable module root export failed: %s" % exported.message)
 	_expect(FileAccess.get_file_as_string(path).contains("unused_fill_block_id = 11"), "module resource did not physically serialize the socket fill block")
 	var exported_text := FileAccess.get_file_as_string(path)
-	_expect(exported_text.contains("format_version = 1"), "module resource did not physically serialize format version 1")
+	_expect(exported_text.contains("format_version = 2"), "module resource did not physically serialize format version 2")
 	_expect(exported_text.contains("enemy_spawn_zones") and exported_text.contains("minimum_feet_cell = Vector3i(0, 1, 3)"), "module resource did not physically serialize enemy spawn zones")
+	_expect(exported_text.contains("chest_marker") and exported_text.contains("cell = Vector3i(1, 1, 3)"), "module resource did not physically serialize the chest marker")
 	var entry := _find_entry(store.list_importable(), identifier)
 	_expect(entry != null and entry.format == StructureDraft.Format.LEVEL_MODULE, "variable module was not listed for import")
 	if entry == null:
@@ -222,6 +229,7 @@ func _test_variable_module_round_trip(store: StructureFileStore, root_path: Stri
 	_expect(imported.draft.get_sockets()[0].unused_fill_block_id == BlockId.Type.MOSSY_STONE_BRICKS, "variable module import changed the socket fill block")
 	_expect(imported.draft.get_torches().size() == 1 and imported.draft.get_torches()[0].support_direction == Vector3i.RIGHT, "module import changed torches")
 	_expect(imported.draft.get_spawn_marker().cell == Vector3i(0, 1, 2) and imported.draft.get_return_door_marker().cell == Vector3i(3, 1, 2), "module import changed paired markers")
+	_expect(imported.draft.get_chest_marker().cell == Vector3i(1, 1, 3), "module import changed the chest marker")
 	_expect(imported.draft.get_enemy_spawn_zone_candidate_cells(&"enemy_spawn_zone") == [Vector3i(0, 1, 3)], "module import changed enemy spawn zones")
 	var expected := StructureResourceAdapter.create_snapshot(draft, identifier)
 	var actual := StructureResourceAdapter.create_snapshot(imported.draft, identifier)
@@ -230,6 +238,7 @@ func _test_variable_module_round_trip(store: StructureFileStore, root_path: Stri
 	_expect(reloaded != null and reloaded.format_version == LevelModuleDefinition.CURRENT_FORMAT_VERSION and reloaded.module_id == identifier and reloaded.weight == 3.25, "module resource round trip changed metadata")
 	_expect(reloaded != null and reloaded.sockets[0].unused_fill_block_id == BlockId.Type.MOSSY_STONE_BRICKS, "module resource round trip changed the socket fill block")
 	_expect(reloaded != null and reloaded.enemy_spawn_zones.size() == 1 and reloaded.get_enemy_spawn_candidate_cells() == [Vector3i(0, 1, 3)], "module resource round trip changed enemy spawn zones")
+	_expect(reloaded != null and reloaded.chest_marker.cell == Vector3i(1, 1, 3), "module resource round trip changed the chest marker")
 	_expect(reloaded != null and reloaded.validate(), "reloaded module resource is invalid")
 
 func _test_export_failures(store: StructureFileStore, root_path: String, suffix: String) -> void:
@@ -330,6 +339,7 @@ func _make_module_definition(identifier: StringName) -> LevelModuleDefinition:
 		Vector3i(2, 0, 0),
 		Vector3i(2, 0, 4),
 		Vector3i(1, 0, 2),
+		Vector3i(2, 0, 2),
 		Vector3i(3, 0, 2),
 		Vector3i(4, 2, 3),
 		Vector3i(0, 2, 3),
@@ -366,6 +376,9 @@ func _make_module_definition(identifier: StringName) -> LevelModuleDefinition:
 	return_marker.cell = Vector3i(3, 1, 2)
 	return_marker.facing = LevelSocketDefinition.Direction.WEST
 	definition.return_door_marker = return_marker
+	var chest_marker := LevelChestMarkerDefinition.new()
+	chest_marker.cell = Vector3i(2, 1, 2)
+	definition.chest_marker = chest_marker
 	return definition
 
 func _make_draft() -> StructureDraft:

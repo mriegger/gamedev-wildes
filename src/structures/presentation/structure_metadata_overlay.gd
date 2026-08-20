@@ -4,6 +4,7 @@ class_name StructureMetadataOverlay
 const SOCKET_COLOR := Color(0.12, 0.9, 1.0, 0.48)
 const SPAWN_COLOR := Color(0.2, 1.0, 0.36, 0.78)
 const RETURN_COLOR := Color(1.0, 0.52, 0.12, 0.78)
+const CHEST_COLOR := Color(1.0, 0.78, 0.16, 0.72)
 const ENEMY_SPAWN_ZONE_COLOR := Color(0.72, 0.24, 1.0, 0.42)
 
 var _draft: StructureDraft
@@ -26,10 +27,13 @@ func rebuild() -> void:
 		_add_enemy_spawn_zone(zone)
 	var spawn_marker := _draft.get_spawn_marker()
 	var return_marker := _draft.get_return_door_marker()
+	var chest_marker := _draft.get_chest_marker()
 	if spawn_marker != null:
 		_add_marker("Spawn", spawn_marker.cell, spawn_marker.facing, SPAWN_COLOR)
 	if return_marker != null:
 		_add_marker("Return", return_marker.cell, return_marker.facing, RETURN_COLOR)
+	if chest_marker != null:
+		_add_chest_marker(chest_marker.cell)
 
 func rebuild_non_zone_metadata() -> void:
 	for child in get_children():
@@ -42,10 +46,13 @@ func rebuild_non_zone_metadata() -> void:
 		_add_socket(socket)
 	var spawn_marker := _draft.get_spawn_marker()
 	var return_marker := _draft.get_return_door_marker()
+	var chest_marker := _draft.get_chest_marker()
 	if spawn_marker != null:
 		_add_marker("Spawn", spawn_marker.cell, spawn_marker.facing, SPAWN_COLOR)
 	if return_marker != null:
 		_add_marker("Return", return_marker.cell, return_marker.facing, RETURN_COLOR)
+	if chest_marker != null:
+		_add_chest_marker(chest_marker.cell)
 
 func rebuild_enemy_spawn_zone(zone_id: StringName) -> void:
 	var node_name := "EnemySpawnZone_%s" % zone_id
@@ -99,6 +106,19 @@ func _add_marker(label: String, cell: Vector3i, facing: LevelSocketDefinition.Di
 	marker.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(marker)
 	_add_arrow(root, Vector3(cell) + Vector3(0.5, 0.18, 0.5), LevelSocketDefinition.vector_for(facing), material)
+
+func _add_chest_marker(cell: Vector3i) -> void:
+	var root := Node3D.new()
+	root.name = "ChestMarker"
+	add_child(root)
+	var marker := MeshInstance3D.new()
+	var marker_mesh := BoxMesh.new()
+	marker_mesh.size = Vector3(0.68, 0.48, 0.52)
+	marker.mesh = marker_mesh
+	marker.position = Vector3(cell) + Vector3(0.5, 0.25, 0.5)
+	marker.material_override = _make_material(CHEST_COLOR)
+	marker.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(marker)
 
 func _add_enemy_spawn_zone(zone: LevelEnemySpawnZone) -> void:
 	var root := Node3D.new()

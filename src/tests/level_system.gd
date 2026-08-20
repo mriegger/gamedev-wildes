@@ -36,7 +36,6 @@ const EXPECTED_ROOM_COUNTS: Dictionary = {
 const EXPECTED_ENCOUNTER_COUNTS: Dictionary = {
 	&"master_room": 40,
 	&"normal_room": 25,
-	&"chest_room": 6,
 }
 
 var _failures: int = 0
@@ -127,13 +126,17 @@ func _test_catalog_and_modules() -> void:
 	_expect(actual_hallway_ids == expected_hallway_ids, "stone hallway pool changed: %s" % str(actual_hallway_ids))
 	_expect(_room_requirement_counts(definition) == EXPECTED_ROOM_COUNTS, "stone room requirements changed: %s" % str(_room_requirement_counts(definition)))
 	for requirement in definition.room_requirements:
+		if requirement.room_type_id == &"chest_room":
+			_expect(requirement.encounter == null, "stone chest room must be passive")
+			continue
 		_expect(requirement.encounter != null and requirement.encounter.validate(String(requirement.room_type_id)), "stone room encounter is invalid: %s" % requirement.room_type_id)
-		if requirement.encounter != null:
-			_expect(requirement.encounter.enemy_groups.size() == 1, "stone room encounter does not have exactly one enemy group: %s" % requirement.room_type_id)
-			if requirement.encounter.enemy_groups.size() == 1:
-				var group := requirement.encounter.enemy_groups[0]
-				_expect(group.entity_id == &"zombie", "stone room encounter does not use zombies: %s" % requirement.room_type_id)
-				_expect(group.count == int(EXPECTED_ENCOUNTER_COUNTS[requirement.room_type_id]), "stone room encounter count changed: %s" % requirement.room_type_id)
+		if requirement.encounter == null:
+			continue
+		_expect(requirement.encounter.enemy_groups.size() == 1, "stone room encounter does not have exactly one enemy group: %s" % requirement.room_type_id)
+		if requirement.encounter.enemy_groups.size() == 1:
+			var group := requirement.encounter.enemy_groups[0]
+			_expect(group.entity_id == &"zombie", "stone room encounter does not use zombies: %s" % requirement.room_type_id)
+			_expect(group.count == int(EXPECTED_ENCOUNTER_COUNTS[requirement.room_type_id]), "stone room encounter count changed: %s" % requirement.room_type_id)
 	_expect(definition.get_room_count() == LIVE_ROOM_COUNT, "stone required room count changed")
 	_expect(definition.get_hallway_count(entry_module.sockets.size()) == LIVE_HALLWAY_COUNT, "stone required hallway count changed")
 	_expect(definition.get_target_module_count(entry_module.sockets.size()) == LIVE_TARGET_MODULE_COUNT, "stone target module count changed")
@@ -193,8 +196,12 @@ func _test_catalog_and_modules() -> void:
 		if module.module_id in definition.hallway_module_ids:
 			_expect(module.sockets.size() == 2, "hallway module does not have exactly two sockets: %s" % module.module_id)
 		elif module.module_id != definition.start_module_id:
-			_expect(not _room_type_for_module(definition, module.module_id).is_empty(), "live module has no room requirement: %s" % module.module_id)
-			_expect(not module.enemy_spawn_zones.is_empty() and not module.get_enemy_spawn_candidate_cells().is_empty(), "live room module has no usable enemy spawn zone: %s" % module.module_id)
+			var requirement := _room_requirement_for_module(definition, module.module_id)
+			_expect(requirement != null, "live module has no room requirement: %s" % module.module_id)
+			if requirement != null and requirement.encounter == null:
+				_expect(module.enemy_spawn_zones.is_empty() and module.get_enemy_spawn_candidate_cells().is_empty(), "passive room module has enemy spawn zones: %s" % module.module_id)
+			else:
+				_expect(not module.enemy_spawn_zones.is_empty() and not module.get_enemy_spawn_candidate_cells().is_empty(), "encounter room module has no usable enemy spawn zone: %s" % module.module_id)
 	_expect(start_count == 1, "catalog must have exactly one entry module")
 
 func _test_marker(module: LevelModuleDefinition, marker: LevelMarkerDefinition, label: String) -> void:
@@ -590,10 +597,14 @@ func _room_requirement_counts(definition: LevelDefinition) -> Dictionary:
 	return counts
 
 func _room_type_for_module(definition: LevelDefinition, module_id: StringName) -> StringName:
+	var requirement := _room_requirement_for_module(definition, module_id)
+	return requirement.room_type_id if requirement != null else &""
+
+func _room_requirement_for_module(definition: LevelDefinition, module_id: StringName) -> LevelRoomRequirement:
 	for requirement in definition.room_requirements:
 		if requirement.module_ids.has(module_id):
-			return requirement.room_type_id
-	return &""
+			return requirement
+	return null
 
 func _layout_room_counts(layout: LevelLayout) -> Dictionary:
 	var counts: Dictionary = {}

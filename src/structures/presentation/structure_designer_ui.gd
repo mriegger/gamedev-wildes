@@ -28,6 +28,8 @@ signal markers_commit_requested(
 	return_facing: LevelSocketDefinition.Direction,
 )
 signal markers_clear_requested
+signal chest_marker_target_requested
+signal chest_marker_clear_requested
 
 var _item_catalog: ItemCatalog
 var _toolbelt: CreativeToolbelt
@@ -59,6 +61,9 @@ var _enemy_spawn_zone_candidate_counts: Dictionary = {}
 @onready var _enemy_spawn_zone_button: Button = $ModulePanel/Margin/VBox/DetailsScroll/Details/EnemySpawnZoneHeader/Add as Button
 @onready var _enemy_spawn_zone_summary: Label = $ModulePanel/Margin/VBox/DetailsScroll/Details/EnemySpawnZoneSummary as Label
 @onready var _enemy_spawn_zone_list: VBoxContainer = $ModulePanel/Margin/VBox/DetailsScroll/Details/EnemySpawnZoneList as VBoxContainer
+@onready var _chest_marker_current: Label = $ModulePanel/Margin/VBox/DetailsScroll/Details/ChestMarker/Current as Label
+@onready var _chest_marker_set_button: Button = $ModulePanel/Margin/VBox/DetailsScroll/Details/ChestMarker/Actions/Set as Button
+@onready var _chest_marker_clear_button: Button = $ModulePanel/Margin/VBox/DetailsScroll/Details/ChestMarker/Actions/Clear as Button
 @onready var _spawn_current: Label = $ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Spawn/Current as Label
 @onready var _spawn_pending: Label = $ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Spawn/Pending as Label
 @onready var _spawn_facing: OptionButton = $ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Spawn/Controls/Facing as OptionButton
@@ -82,6 +87,8 @@ func _ready() -> void:
 	_void_button.pressed.connect(_on_void_pressed)
 	_connection_button.pressed.connect(_on_connection_pressed)
 	_enemy_spawn_zone_button.pressed.connect(_on_enemy_spawn_zone_pressed)
+	_chest_marker_set_button.pressed.connect(_on_chest_marker_target_pressed)
+	_chest_marker_clear_button.pressed.connect(_on_chest_marker_clear_pressed)
 	_spawn_set_button.pressed.connect(_on_marker_target_pressed.bind(MarkerRole.SPAWN, _spawn_facing))
 	_return_set_button.pressed.connect(_on_marker_target_pressed.bind(MarkerRole.RETURN, _return_facing))
 	_marker_commit_button.pressed.connect(_on_markers_commit_pressed)
@@ -203,6 +210,7 @@ func present_module_state(
 	aperture_sizes: Dictionary,
 	spawn_marker: LevelMarkerDefinition,
 	return_marker: LevelMarkerDefinition,
+	chest_marker: LevelChestMarkerDefinition,
 ) -> void:
 	assert(_module_tools_available)
 	_weight_input.set_value_no_signal(weight)
@@ -211,6 +219,7 @@ func present_module_state(
 	_connection_button.disabled = _all_cardinal_sides_used(sockets)
 	_spawn_current.text = _marker_text("Current", spawn_marker)
 	_return_current.text = _marker_text("Current", return_marker)
+	_chest_marker_current.text = _chest_marker_text(chest_marker)
 
 func present_enemy_spawn_zones(zones: Array[LevelEnemySpawnZone], candidate_counts: Dictionary) -> void:
 	_clear_container(_enemy_spawn_zone_list)
@@ -356,6 +365,12 @@ func _on_socket_unused_fill_block_selected(item_index: int, socket_id: StringNam
 func _on_enemy_spawn_zone_remove_pressed(zone_id: StringName) -> void:
 	enemy_spawn_zone_remove_requested.emit(zone_id)
 
+func _on_chest_marker_target_pressed() -> void:
+	chest_marker_target_requested.emit()
+
+func _on_chest_marker_clear_pressed() -> void:
+	chest_marker_clear_requested.emit()
+
 func _on_marker_target_pressed(role: MarkerRole, option: OptionButton) -> void:
 	marker_target_requested.emit(role, option.get_selected_id() as LevelSocketDefinition.Direction)
 
@@ -466,6 +481,11 @@ func _marker_text(prefix: String, marker: LevelMarkerDefinition) -> String:
 	if marker == null:
 		return "%s: not set" % prefix
 	return "%s: %s %s" % [prefix, _cell_text(marker.cell), _direction_text(marker.facing)]
+
+func _chest_marker_text(marker: LevelChestMarkerDefinition) -> String:
+	if marker == null:
+		return "Current: not set"
+	return "Current: %s" % _cell_text(marker.cell)
 
 func _pending_marker_text(cell: Variant, facing: LevelSocketDefinition.Direction) -> String:
 	if cell == null:

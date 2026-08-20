@@ -54,6 +54,7 @@ static func _create_module_snapshot(draft: StructureDraft, identifier: StringNam
 		definition.torches.append(torch)
 	definition.spawn_marker = draft.get_spawn_marker()
 	definition.return_door_marker = draft.get_return_door_marker()
+	definition.chest_marker = draft.get_chest_marker()
 	if not definition.validate():
 		return null
 	return definition
@@ -94,9 +95,16 @@ static func _modules_equal(first: LevelModuleDefinition, second: LevelModuleDefi
 		var right_zone := second.enemy_spawn_zones[index]
 		if left_zone == null or right_zone == null or left_zone.zone_id != right_zone.zone_id or left_zone.minimum_feet_cell != right_zone.minimum_feet_cell or left_zone.maximum_feet_cell != right_zone.maximum_feet_cell:
 			return false
-	return _markers_equal(first.spawn_marker, second.spawn_marker) and _markers_equal(first.return_door_marker, second.return_door_marker)
+	return _markers_equal(first.spawn_marker, second.spawn_marker) \
+		and _markers_equal(first.return_door_marker, second.return_door_marker) \
+		and _chest_markers_equal(first.chest_marker, second.chest_marker)
 
 static func _markers_equal(first: LevelMarkerDefinition, second: LevelMarkerDefinition) -> bool:
 	if first == null or second == null:
 		return first == second
 	return first.cell == second.cell and first.facing == second.facing
+
+static func _chest_markers_equal(first: LevelChestMarkerDefinition, second: LevelChestMarkerDefinition) -> bool:
+	if first == null or second == null:
+		return first == second
+	return first.cell == second.cell

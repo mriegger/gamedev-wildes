@@ -46,7 +46,8 @@ func _init(
 ) -> void:
 	assert(p_room_id >= 0)
 	assert(p_parent_room_id >= -1 and p_parent_door_id >= 0)
-	assert(not p_door_ids.is_empty() and not p_enemy_ids.is_empty() and not p_spawn_cells.is_empty() and not p_discovery_placement_ids.is_empty())
+	assert(not p_door_ids.is_empty() and not p_discovery_placement_ids.is_empty())
+	assert(p_enemy_ids.is_empty() == p_spawn_cells.is_empty())
 	_room_id = p_room_id
 	_parent_room_id = p_parent_room_id
 	_parent_door_id = p_parent_door_id
@@ -56,6 +57,9 @@ func _init(
 	_spawn_cells.assign(p_spawn_cells)
 	_discovery_placement_ids.assign(p_discovery_placement_ids)
 	_interior_cells = p_interior_cells.duplicate()
+
+func has_encounter() -> bool:
+	return not _enemy_ids.is_empty()
 
 func contains_body(feet_position: Vector3, body_width: float, body_height: float, doorways: Array[LevelDoorway]) -> bool:
 	assert(feet_position.is_finite() and body_width > 0.0 and body_height > 0.0)

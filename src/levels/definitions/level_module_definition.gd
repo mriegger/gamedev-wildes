@@ -1,7 +1,7 @@
 extends Resource
 class_name LevelModuleDefinition
 
-const CURRENT_FORMAT_VERSION: int = 1
+const CURRENT_FORMAT_VERSION: int = 2
 const MAX_ENEMY_SPAWN_ZONES: int = 64
 const AIR_NEIGHBORS: Array[Vector3i] = [
 	Vector3i.LEFT,
@@ -21,6 +21,7 @@ const AIR_NEIGHBORS: Array[Vector3i] = [
 @export var torches: Array[LevelTorchDefinition] = []
 @export var spawn_marker: LevelMarkerDefinition
 @export var return_door_marker: LevelMarkerDefinition
+@export var chest_marker: LevelChestMarkerDefinition
 @export var enemy_spawn_zones: Array[LevelEnemySpawnZone] = []
 
 func cell_at(cell: Vector3i) -> int:
@@ -68,6 +69,9 @@ func rotate_cell(cell: Vector3i, quarter_turns: int) -> Vector3i:
 
 func has_connected_traversable_air(seal_unused_sockets: bool) -> bool:
 	var sealed_cells: Dictionary = {}
+	if chest_marker != null:
+		sealed_cells[chest_marker.cell] = true
+		sealed_cells[chest_marker.cell + Vector3i.UP] = true
 	if seal_unused_sockets:
 		for socket in sockets:
 			if socket != null and not socket.requires_connection():
@@ -175,6 +179,9 @@ func validate() -> bool:
 		valid = _validate_marker(return_door_marker, "entrance/exit door", source) and valid
 		valid = _validate_marker_socket_clearance(spawn_marker, "spawn", socket_aperture_owners, source) and valid
 		valid = _validate_marker_socket_clearance(return_door_marker, "entrance/exit door", socket_aperture_owners, source) and valid
+	if chest_marker != null:
+		valid = _validate_chest_marker(chest_marker, source) and valid
+		valid = _validate_chest_marker_conflicts(chest_marker, socket_aperture_owners, torch_cells, source) and valid
 	var zone_ids: Dictionary = {}
 	if enemy_spawn_zones.size() > MAX_ENEMY_SPAWN_ZONES:
 		push_error("[LevelModuleDefinition] Enemy spawn zone count exceeds %d for %s" % [MAX_ENEMY_SPAWN_ZONES, source])
@@ -193,8 +200,12 @@ func validate() -> bool:
 			push_error("[LevelModuleDefinition] Invalid enemy spawn zone bounds for %s" % source)
 			valid = false
 			continue
-		if zone.get_candidate_cells(size, cells, sockets).is_empty():
+		var candidate_cells := zone.get_candidate_cells(size, cells, sockets)
+		if candidate_cells.is_empty():
 			push_error("[LevelModuleDefinition] Enemy spawn zone has no usable cells for %s" % source)
+			valid = false
+		elif chest_marker != null and candidate_cells.has(chest_marker.cell):
+			push_error("[LevelModuleDefinition] Chest marker overlaps an enemy spawn candidate for %s" % source)
 			valid = false
 	return valid
 
@@ -249,3 +260,37 @@ func _validate_marker_socket_clearance(marker: LevelMarkerDefinition, label: Str
 		push_error("[LevelModuleDefinition] %s marker overlaps a socket aperture for %s" % [label, source])
 		return false
 	return true
+
+func _validate_chest_marker(marker: LevelChestMarkerDefinition, source: String) -> bool:
+	if not StructureCell.is_in_bounds(marker.cell, size) or not StructureCell.is_in_bounds(marker.cell + Vector3i.UP, size):
+		push_error("[LevelModuleDefinition] Invalid chest marker for %s" % source)
+		return false
+	if cell_at(marker.cell) != StructureCell.AIR or cell_at(marker.cell + Vector3i.UP) != StructureCell.AIR:
+		push_error("[LevelModuleDefinition] Chest marker is not in interior air for %s" % source)
+		return false
+	var floor_cell := marker.cell + Vector3i.DOWN
+	if not StructureCell.is_in_bounds(floor_cell, size) or not StructureCell.is_structure_solid(cell_at(floor_cell)):
+		push_error("[LevelModuleDefinition] Chest marker has no floor for %s" % source)
+		return false
+	if not LevelChestMarkerDefinition.has_accessible_side(marker.cell, size, cells):
+		push_error("[LevelModuleDefinition] Chest marker has no accessible side for %s" % source)
+		return false
+	return true
+
+func _validate_chest_marker_conflicts(marker: LevelChestMarkerDefinition, socket_aperture_owners: Dictionary, torch_cells: Dictionary, source: String) -> bool:
+	var head_cell := marker.cell + Vector3i.UP
+	if socket_aperture_owners.has(marker.cell) or socket_aperture_owners.has(head_cell):
+		push_error("[LevelModuleDefinition] Chest marker overlaps a socket aperture for %s" % source)
+		return false
+	if torch_cells.has(marker.cell) or torch_cells.has(head_cell):
+		push_error("[LevelModuleDefinition] Chest marker overlaps a torch for %s" % source)
+		return false
+	if _marker_overlaps_cells(spawn_marker, marker.cell, head_cell) or _marker_overlaps_cells(return_door_marker, marker.cell, head_cell):
+		push_error("[LevelModuleDefinition] Chest marker overlaps a player marker for %s" % source)
+		return false
+	return true
+
+func _marker_overlaps_cells(marker: LevelMarkerDefinition, first_cell: Vector3i, second_cell: Vector3i) -> bool:
+	if marker == null:
+		return false
+	return marker.cell == first_cell or marker.cell == second_cell or marker.cell + Vector3i.UP == first_cell or marker.cell + Vector3i.UP == second_cell

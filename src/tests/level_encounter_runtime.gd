@@ -197,7 +197,9 @@ func _run() -> void:
 	coordinator.encounter_summary_changed.connect(hud.show_summary)
 	coordinator.room_cleared.connect(_on_room_cleared)
 	coordinator.room_cleared.connect(func(cleared_room_id: int) -> void:
-		renderer.discover_rooms(topology.get_room(cleared_room_id).child_room_ids)
+		var discovered_room_ids := topology.get_discovered_room_ids_after_clear(cleared_room_id)
+		if not discovered_room_ids.is_empty():
+			renderer.discover_rooms(discovered_room_ids)
 		if state.get_summary().active_wave_count == 0:
 			hud.show_cleared()
 	)
@@ -474,10 +476,15 @@ func _run() -> void:
 			for cell in doorway.aperture_cells:
 				_expect(level_state.get_cell_value(cell) == StructureCell.AIR, "cleared seal did not restore AIR at %s" % cell)
 				_expect(not level_state.is_solid(cell), "cleared seal still blocked movement at %s" % cell)
-	for child_room_id in room.child_room_ids:
-		var child_room := topology.get_room(child_room_id)
-		_expect(_room_progress(state, child_room_id).status == LevelEncounterState.RoomStatus.READY, "cleared room did not ready child %d" % child_room_id)
-		_expect(not state.get_sealed_door_ids().has(child_room.parent_door_id), "cleared room did not open child seal %d" % child_room.parent_door_id)
+	for discovered_room_id in topology.get_discovered_room_ids_after_clear(room_id):
+		var discovered_room := topology.get_room(discovered_room_id)
+		if discovered_room.has_encounter():
+			_expect(_room_progress(state, discovered_room_id).status == LevelEncounterState.RoomStatus.READY, "cleared room did not ready downstream encounter %d" % discovered_room_id)
+			_expect(not state.get_sealed_door_ids().has(discovered_room.parent_door_id), "cleared room did not open downstream encounter seal %d" % discovered_room.parent_door_id)
+		else:
+			_expect(not state._rooms.has(discovered_room_id), "cleared room created wave progress for passive room %d" % discovered_room_id)
+			for door_id in discovered_room.door_ids:
+				_expect(not state.get_sealed_door_ids().has(door_id), "passive room doorway became sealed: %d" % door_id)
 	await create_timer(LevelGeometryRenderer.TRANSITION_SECONDS * 0.35).timeout
 	_expect(
 		visible_seal != null \
@@ -513,9 +520,8 @@ func _run() -> void:
 	_finish()
 
 func _find_ready_root_with_child(topology: LevelEncounterTopology, state: LevelEncounterState) -> int:
-	for room_id in topology.get_room_ids():
-		var room := topology.get_room(room_id)
-		if room.parent_room_id < 0 and not room.child_room_ids.is_empty() and _room_progress(state, room_id).status == LevelEncounterState.RoomStatus.READY:
+	for room_id in topology.get_encounter_room_ids():
+		if state.can_activate(room_id) and not topology.get_discovered_room_ids_after_clear(room_id).is_empty():
 			return room_id
 	return -1
 
@@ -527,9 +533,8 @@ func _find_highest_capacity_ready_root(
 ) -> int:
 	var selected_room_id := -1
 	var selected_capacity := -1
-	for room_id in topology.get_room_ids():
-		var room := topology.get_room(room_id)
-		if room_id != excluded_room_id and room.parent_room_id < 0 and _room_progress(state, room_id).status == LevelEncounterState.RoomStatus.READY:
+	for room_id in topology.get_encounter_room_ids():
+		if room_id != excluded_room_id and state.can_activate(room_id):
 			var capacity := int(capacity_by_room.get(room_id, 0))
 			if capacity > selected_capacity:
 				selected_room_id = room_id
@@ -614,13 +619,19 @@ func _test_production_room_cap(
 	runtime.setup(entity_catalog, level_state, 64, 64, EntityNavigationLimits.new(48, 2048, 2))
 	_expect(coordinator.setup(topology, state, level_state, runtime, entity_catalog, layout.seed_value), "production room-cap coordinator setup failed")
 	var master_room_id := -1
-	for room_id in topology.get_room_ids():
+	for room_id in topology.get_encounter_room_ids():
 		var capacity := int(coordinator._capacity_by_room[room_id])
 		_expect(capacity <= LevelEncounterState.MAX_CONCURRENT_ENEMIES_PER_ROOM, "production room capacity exceeded twenty: %d" % room_id)
 		if state.get_configured_enemy_ids(room_id).size() == 40:
 			master_room_id = room_id
 			_expect(capacity == LevelEncounterState.MAX_CONCURRENT_ENEMIES_PER_ROOM, "production master room did not expose twenty concurrent slots")
 	_expect(master_room_id >= 0, "production topology has no forty-enemy master room")
+	for room_id in topology.get_room_ids():
+		if topology.get_room(room_id).has_encounter():
+			continue
+		_expect(not coordinator._spawn_cells_by_room.has(room_id), "coordinator retained passive-room spawn cells: %d" % room_id)
+		_expect(not coordinator._capacity_by_room.has(room_id), "coordinator retained passive-room capacity: %d" % room_id)
+		_expect(not state._rooms.has(room_id), "encounter state retained passive-room wave progress: %d" % room_id)
 	coordinator.shutdown()
 	runtime.shutdown()
 	coordinator.queue_free()

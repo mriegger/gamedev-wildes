@@ -53,7 +53,7 @@ func setup(
 	_entity_runtime.setup(
 		entity_catalog,
 		_state,
-		_topology.get_maximum_simultaneous_encounter_enemy_count(),
+		maxi(1, _topology.get_maximum_simultaneous_encounter_enemy_count()),
 		MAX_RETIRING_ENTITIES,
 		EntityNavigationLimits.new(
 			MAX_NAVIGATION_SEARCH_RADIUS,
@@ -171,8 +171,10 @@ func _on_seals_opened(seal_ids: Array[int]) -> void:
 
 func _on_room_cleared(room_id: int) -> void:
 	var room := _topology.get_room(room_id)
-	assert(room != null)
-	_geometry_renderer.discover_rooms(room.child_room_ids)
+	assert(room != null and room.has_encounter())
+	var discovered_room_ids := _topology.get_discovered_room_ids_after_clear(room_id)
+	if not discovered_room_ids.is_empty():
+		_geometry_renderer.discover_rooms(discovered_room_ids)
 	if _encounter_state.get_summary().active_wave_count == 0:
 		_encounter_hud.show_cleared()
 

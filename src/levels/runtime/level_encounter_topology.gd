@@ -17,6 +17,31 @@ func get_room_ids() -> Array[int]:
 func get_room(room_id: int) -> LevelEncounterRoom:
 	return _rooms_by_id.get(room_id) as LevelEncounterRoom
 
+func get_encounter_room_ids() -> Array[int]:
+	var encounter_room_ids: Array[int] = []
+	for room_id in _room_ids:
+		if get_room(room_id).has_encounter():
+			encounter_room_ids.append(room_id)
+	return encounter_room_ids
+
+func get_initial_discovered_room_ids() -> Array[int]:
+	var room_ids: Array[int] = []
+	for room_id in _room_ids:
+		if get_room(room_id).parent_room_id < 0:
+			_append_discovery_branch(room_id, room_ids)
+	room_ids.sort()
+	return room_ids
+
+func get_discovered_room_ids_after_clear(room_id: int) -> Array[int]:
+	var room := get_room(room_id)
+	if room == null or not room.has_encounter():
+		return []
+	var room_ids: Array[int] = []
+	for child_room_id in room.child_room_ids:
+		_append_discovery_branch(child_room_id, room_ids)
+	room_ids.sort()
+	return room_ids
+
 func get_doorways() -> Array[LevelDoorway]:
 	return _doorways.duplicate()
 
@@ -29,7 +54,7 @@ func get_maximum_simultaneous_encounter_enemy_count() -> int:
 	return maximum_count
 
 func find_room_containing_body(feet_position: Vector3, body_width: float, body_height: float) -> int:
-	for room_id in _room_ids:
+	for room_id in get_encounter_room_ids():
 		var room := get_room(room_id)
 		if room.contains_body(feet_position, body_width, body_height, _doorways):
 			return room_id
@@ -134,18 +159,20 @@ func _build(layout: LevelLayout, definition: LevelDefinition) -> bool:
 	for room_id in room_placement_ids:
 		var placement := placements[room_id] as LevelPlacedModule
 		var requirement := requirements[placement.room_type_id] as LevelRoomRequirement
-		if requirement.encounter == null or not parent_connection.has(room_id):
+		if not parent_connection.has(room_id):
 			return false
 		var parent_door_key := _door_key(room_id, int(parent_connection[room_id]))
 		if not door_key_to_id.has(parent_door_key):
 			return false
 		var enemy_ids: Array[StringName] = []
-		for group in requirement.encounter.enemy_groups:
-			for _index in group.count:
-				enemy_ids.append(group.entity_id)
+		if requirement.encounter != null:
+			for group in requirement.encounter.enemy_groups:
+				for _index in group.count:
+					enemy_ids.append(group.entity_id)
 		var spawn_cells: Array[Vector3i] = []
-		for local_cell in placement.definition.get_enemy_spawn_candidate_cells():
-			spawn_cells.append(placement.world_cell(local_cell))
+		if requirement.encounter != null:
+			for local_cell in placement.definition.get_enemy_spawn_candidate_cells():
+				spawn_cells.append(placement.world_cell(local_cell))
 		var interior_cells: Dictionary = {}
 		for y in placement.definition.size.y:
 			for z in placement.definition.size.z:
@@ -160,7 +187,11 @@ func _build(layout: LevelLayout, definition: LevelDefinition) -> bool:
 		door_ids.assign(room_door_ids[room_id])
 		door_ids.sort()
 		var discovery_placement_ids := _collect_discovery_placement_ids(room_id, int(room_parent_ids[room_id]), parent_placement)
-		if enemy_ids.is_empty() or spawn_cells.is_empty() or door_ids.is_empty() or discovery_placement_ids.is_empty():
+		if door_ids.is_empty() or discovery_placement_ids.is_empty():
+			return false
+		if requirement.encounter != null and (enemy_ids.is_empty() or spawn_cells.is_empty()):
+			return false
+		if requirement.encounter == null and (not enemy_ids.is_empty() or not spawn_cells.is_empty()):
 			return false
 		for placement_id in discovery_placement_ids:
 			if placement_id == 0 or discovery_placement_owners.has(placement_id):
@@ -229,6 +260,15 @@ func _get_subtree_maximum_enemy_count(room: LevelEncounterRoom) -> int:
 		child_maximum_count += _get_subtree_maximum_enemy_count(get_room(child_room_id))
 	var room_maximum_count := mini(room.enemy_ids.size(), LevelEncounterState.MAX_CONCURRENT_ENEMIES_PER_ROOM)
 	return maxi(room_maximum_count, child_maximum_count)
+
+func _append_discovery_branch(room_id: int, target: Array[int]) -> void:
+	var room := get_room(room_id)
+	assert(room != null)
+	target.append(room_id)
+	if room.has_encounter():
+		return
+	for child_room_id in room.child_room_ids:
+		_append_discovery_branch(child_room_id, target)
 
 func _door_key(room_id: int, connection_id: int) -> String:
 	return "%d:%d" % [room_id, connection_id]

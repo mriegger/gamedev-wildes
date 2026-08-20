@@ -13,7 +13,9 @@ func _init() -> void:
 	_test_variable_connection_aperture()
 	_test_four_way_room_connections()
 	_test_requirement_reference_counts()
+	_test_chest_marker_transactions()
 	_test_module_authoring_snapshot()
+	_test_authored_chest_room_marker()
 	_test_malformed_module_definitions()
 	_test_bounded_chunk_queries()
 	_test_enemy_spawn_zone_transactions()
@@ -158,18 +160,23 @@ func _test_module_restore_and_protection() -> void:
 	_expect(torches[0].support_direction == Vector3i.RIGHT and torches[1].support_direction == Vector3i.LEFT, "restored Level Module changed torch directions")
 	_expect(draft.get_spawn_marker().cell == Vector3i(1, 1, 2) and draft.get_spawn_marker().facing == LevelSocketDefinition.Direction.EAST, "restored Level Module changed its spawn marker")
 	_expect(draft.get_return_door_marker().cell == Vector3i(3, 1, 2) and draft.get_return_door_marker().facing == LevelSocketDefinition.Direction.WEST, "restored Level Module changed its return marker")
+	_expect(draft.get_chest_marker().cell == Vector3i(2, 1, 2), "restored Level Module changed its chest marker")
 	definition.cells[StructureCell.index_of(Vector3i(4, 0, 4), definition.size)] = BlockId.Type.DIRT
 	definition.weight = 2.0
 	definition.sockets[0].socket_id = &"mutated"
 	definition.torches[0].cell = Vector3i.ZERO
 	definition.spawn_marker.cell = Vector3i.ZERO
+	definition.chest_marker.cell = Vector3i.ZERO
 	sockets[0].socket_id = &"query_mutation"
 	torches[0].cell = Vector3i.ZERO
 	var copied_spawn := draft.get_spawn_marker()
 	copied_spawn.cell = Vector3i.ZERO
+	var copied_chest := draft.get_chest_marker()
+	copied_chest.cell = Vector3i.ZERO
 	_expect(draft.get_cell(Vector3i(4, 0, 4)) == BlockId.Type.STONE and is_equal_approx(draft.get_weight(), 150.25), "restored Level Module retained mutable definition cells or weight")
 	_expect(draft.get_sockets()[0].socket_id == &"north_entry" and draft.get_torches()[0].cell == Vector3i(3, 2, 3), "Level Module metadata query exposed sockets or torches")
 	_expect(draft.get_spawn_marker().cell == Vector3i(1, 1, 2), "Level Module marker query exposed mutable state")
+	_expect(draft.get_chest_marker().cell == Vector3i(2, 1, 2), "Level Module chest marker query exposed mutable state")
 	var required_air: Array[Vector3i] = [
 		Vector3i(2, 1, 0),
 		Vector3i(2, 2, 0),
@@ -183,11 +190,13 @@ func _test_module_restore_and_protection() -> void:
 		Vector3i(1, 2, 2),
 		Vector3i(3, 1, 2),
 		Vector3i(3, 2, 2),
+		Vector3i(2, 1, 2),
+		Vector3i(2, 2, 2),
 	]
 	for cell in required_air:
 		_expect(not draft.can_place_block(cell, BlockId.Type.DIRT), "metadata-required AIR placement query accepted %s" % cell)
 		_expect(not draft.try_place_block(cell, BlockId.Type.DIRT).succeeded, "metadata-required AIR accepted a block at %s" % cell)
-	for cell in [Vector3i(2, 0, 0), Vector3i(2, 0, 4), Vector3i(1, 0, 2), Vector3i(3, 0, 2)]:
+	for cell in [Vector3i(2, 0, 0), Vector3i(2, 0, 4), Vector3i(1, 0, 2), Vector3i(2, 0, 2), Vector3i(3, 0, 2)]:
 		_expect(not draft.try_remove_block(cell).succeeded, "metadata-required solid accepted removal at %s" % cell)
 	_expect(not draft.is_dirty(), "rejected metadata edits dirtied the Level Module draft")
 	_expect(draft.try_place_block(Vector3i(4, 3, 3), BlockId.Type.DIRT).succeeded, "unrelated Level Module placement was rejected")
@@ -199,13 +208,18 @@ func _test_module_authoring_transactions() -> void:
 	_expect(not generic.try_set_void(Vector3i.ZERO).succeeded, "generic draft accepted VOID")
 	_expect(not generic.try_add_socket(Vector3i.ZERO, LevelSocketDefinition.Direction.NORTH).succeeded, "generic draft accepted a socket")
 	_expect(not generic.try_set_markers(Vector3i.ZERO, LevelSocketDefinition.Direction.NORTH, Vector3i.ONE, LevelSocketDefinition.Direction.SOUTH).succeeded, "generic draft accepted markers")
+	_expect(not generic.try_set_chest_marker(Vector3i.ZERO).succeeded and not generic.try_clear_chest_marker().succeeded, "generic draft accepted chest marker metadata")
 	_expect(not generic.try_set_weight(2.0).succeeded and not generic.is_dirty(), "generic draft accepted module metadata")
 	var clean_module := StructureDraft.create_level_module(Vector3i(5, 4, 5))
 	var clean_cells := clean_module.snapshot_cells()
 	_expect(not clean_module.try_add_socket(Vector3i(2, 1, 0), LevelSocketDefinition.Direction.NORTH).succeeded, "clean module accepted a socket without a floor")
 	_expect(not clean_module.try_set_markers(Vector3i(1, 1, 1), LevelSocketDefinition.Direction.NORTH, Vector3i(3, 1, 3), LevelSocketDefinition.Direction.SOUTH).succeeded, "clean module accepted markers without floors")
+	_expect(not clean_module.try_set_chest_marker(Vector3i(2, 1, 2)).succeeded, "clean module accepted a chest marker without a floor")
 	_expect(not clean_module.try_set_weight(0.0).succeeded, "clean module accepted an invalid weight")
 	_expect(not clean_module.is_dirty() and clean_module.snapshot_cells() == clean_cells and clean_module.get_sockets().is_empty(), "rejected clean-module metadata commands committed state")
+	var inaccessible_chest := StructureDraft.create_level_module(Vector3i(5, 4, 5))
+	_expect(inaccessible_chest.try_place_block(Vector3i(2, 0, 2), BlockId.Type.STONE).succeeded, "inaccessible chest floor setup failed")
+	_expect(not inaccessible_chest.try_set_chest_marker(Vector3i(2, 1, 2)).succeeded, "module accepted a chest marker without a standable side")
 	var draft := StructureDraft.create_level_module(Vector3i(5, 4, 5))
 	for direction in LevelSocketDefinition.Direction.values():
 		_build_boundary_wall(draft, direction as LevelSocketDefinition.Direction)
@@ -398,18 +412,89 @@ func _test_requirement_reference_counts() -> void:
 	_expect(coincident.try_clear_markers().succeeded, "coincident marker clearing failed")
 	_expect(coincident.try_place_block(shared_cell, BlockId.Type.DIRT).succeeded and coincident.try_remove_block(shared_cell + Vector3i.DOWN).succeeded, "coincident marker clearing left stale requirement counts")
 
+func _test_chest_marker_transactions() -> void:
+	var chest_cell := Vector3i(2, 1, 2)
+	var access_cell := chest_cell + Vector3i.LEFT
+	var draft := StructureDraft.create_level_module(Vector3i(5, 4, 5))
+	for floor_cell in [chest_cell + Vector3i.DOWN, access_cell + Vector3i.DOWN]:
+		_expect(draft.try_place_block(floor_cell, BlockId.Type.STONE).succeeded, "chest marker floor setup failed")
+	var set_change := draft.try_set_chest_marker(chest_cell)
+	_expect(set_change.succeeded and set_change.metadata_changed and draft.get_chest_marker().cell == chest_cell, "valid chest marker did not commit")
+	var copied := draft.get_chest_marker()
+	copied.cell = Vector3i.ZERO
+	_expect(draft.get_chest_marker().cell == chest_cell, "chest marker query exposed mutable state")
+	_expect(not draft.try_set_chest_marker(chest_cell).succeeded, "unchanged chest marker succeeded")
+	_expect(not draft.try_place_block(chest_cell, BlockId.Type.DIRT).succeeded, "chest marker feet accepted a block")
+	_expect(not draft.try_place_block(chest_cell + Vector3i.UP, BlockId.Type.DIRT).succeeded, "chest marker headroom accepted a block")
+	_expect(not draft.try_remove_block(chest_cell + Vector3i.DOWN).succeeded, "chest marker floor accepted removal")
+	_expect(not draft.try_place_block(access_cell, BlockId.Type.DIRT).succeeded, "chest marker accepted removal of its only accessible side")
+	_expect(not draft.try_remove_block(access_cell + Vector3i.DOWN).succeeded, "chest marker accepted removal of its only accessible-side floor")
+	_expect(not draft.can_place_torch(chest_cell, Vector3i.LEFT) and not draft.can_place_torch(chest_cell + Vector3i.UP, Vector3i.LEFT), "chest marker footprint accepted a torch")
+	_expect(draft.try_clear_chest_marker().succeeded and draft.get_chest_marker() == null, "chest marker clear failed")
+	_expect(not draft.try_clear_chest_marker().succeeded, "missing chest marker clear succeeded")
+	_expect(draft.try_place_block(chest_cell, BlockId.Type.DIRT).succeeded and draft.try_remove_block(chest_cell + Vector3i.DOWN).succeeded, "cleared chest marker retained geometry requirements")
+
+	var player_overlap := StructureDraft.create_level_module(Vector3i(5, 4, 5))
+	var return_cell := Vector3i(4, 1, 4)
+	for floor_cell in [chest_cell + Vector3i.DOWN, access_cell + Vector3i.DOWN, return_cell + Vector3i.DOWN]:
+		_expect(player_overlap.try_place_block(floor_cell, BlockId.Type.STONE).succeeded, "chest player-overlap floor setup failed")
+	_expect(player_overlap.try_set_chest_marker(chest_cell).succeeded, "chest player-overlap marker setup failed")
+	_expect(not player_overlap.try_set_markers(chest_cell, LevelSocketDefinition.Direction.NORTH, return_cell, LevelSocketDefinition.Direction.SOUTH).succeeded, "player marker overlapped a chest marker")
+	_expect(player_overlap.try_clear_chest_marker().succeeded, "chest player-overlap clear failed")
+	_expect(player_overlap.try_set_markers(chest_cell, LevelSocketDefinition.Direction.NORTH, return_cell, LevelSocketDefinition.Direction.SOUTH).succeeded, "chest player-overlap entry marker setup failed")
+	_expect(not player_overlap.try_set_chest_marker(chest_cell).succeeded, "chest marker overlapped a player marker")
+
+	var torch_overlap := StructureDraft.create_level_module(Vector3i(5, 4, 5))
+	var torch_cell := chest_cell + Vector3i.UP
+	_expect(torch_overlap.try_place_block(chest_cell + Vector3i.DOWN, BlockId.Type.STONE).succeeded, "chest torch-overlap floor setup failed")
+	_expect(torch_overlap.try_place_block(torch_cell + Vector3i.RIGHT, BlockId.Type.STONE).succeeded, "chest torch-overlap support setup failed")
+	_expect(torch_overlap.try_place_torch(torch_cell, Vector3i.RIGHT).succeeded, "chest torch-overlap torch setup failed")
+	_expect(not torch_overlap.try_set_chest_marker(chest_cell).succeeded, "chest marker overlapped a torch")
+
+	var socket_overlap := StructureDraft.create_level_module(Vector3i(5, 4, 5))
+	_build_boundary_wall(socket_overlap, LevelSocketDefinition.Direction.NORTH)
+	var socket_cell := Vector3i(2, 1, 0)
+	_expect(socket_overlap.try_place_block(socket_cell + Vector3i.BACK + Vector3i.DOWN, BlockId.Type.STONE).succeeded, "chest socket-overlap accessible floor setup failed")
+	_expect(socket_overlap.try_remove_block(socket_cell).succeeded and socket_overlap.try_remove_block(socket_cell + Vector3i.UP).succeeded, "chest socket-overlap opening setup failed")
+	_expect(socket_overlap.try_set_chest_marker(socket_cell).succeeded, "chest socket-overlap marker setup failed")
+	_expect(not socket_overlap.try_add_socket(socket_cell, LevelSocketDefinition.Direction.NORTH).succeeded, "socket overlapped a chest marker")
+	_expect(socket_overlap.try_clear_chest_marker().succeeded and socket_overlap.try_add_socket(socket_cell, LevelSocketDefinition.Direction.NORTH).succeeded, "chest socket-overlap socket setup failed")
+	_expect(not socket_overlap.try_set_chest_marker(socket_cell).succeeded, "chest marker overlapped a socket aperture")
+
+	var enemy_overlap := StructureDraft.create_level_module(Vector3i(5, 4, 5))
+	for floor_cell in [chest_cell + Vector3i.DOWN, access_cell + Vector3i.DOWN]:
+		_expect(enemy_overlap.try_place_block(floor_cell, BlockId.Type.STONE).succeeded, "chest enemy-overlap floor setup failed")
+	_expect(enemy_overlap.try_add_enemy_spawn_zone(chest_cell, chest_cell).succeeded, "chest enemy-overlap zone setup failed")
+	_expect(not enemy_overlap.try_set_chest_marker(chest_cell).succeeded, "chest marker overlapped an enemy spawn candidate")
+	_expect(enemy_overlap.try_remove_enemy_spawn_zone(&"enemy_spawn_zone").succeeded and enemy_overlap.try_set_chest_marker(chest_cell).succeeded, "chest enemy-overlap reverse setup failed")
+	_expect(not enemy_overlap.try_add_enemy_spawn_zone(chest_cell, chest_cell).succeeded, "enemy spawn candidate overlapped a chest marker")
+
+	var socket_clearance := StructureDraft.create_level_module(Vector3i(9, 5, 9))
+	_build_boundary_wall(socket_clearance, LevelSocketDefinition.Direction.NORTH)
+	var clearance_socket := Vector3i(4, 1, 0)
+	var clearance_chest := Vector3i(4, 1, 2)
+	var distant_candidate := Vector3i(7, 1, 7)
+	for floor_cell in [clearance_chest + Vector3i.DOWN, clearance_chest + Vector3i.LEFT + Vector3i.DOWN, distant_candidate + Vector3i.DOWN]:
+		_expect(socket_clearance.try_place_block(floor_cell, BlockId.Type.STONE).succeeded, "chest socket-clearance floor setup failed")
+	_expect(socket_clearance.try_add_socket(clearance_socket, LevelSocketDefinition.Direction.NORTH).succeeded, "chest socket-clearance socket setup failed")
+	_expect(socket_clearance.try_add_enemy_spawn_zone(clearance_chest, distant_candidate).succeeded, "chest socket-clearance zone setup failed")
+	_expect(socket_clearance.try_set_chest_marker(clearance_chest).succeeded, "chest socket-clearance marker setup failed")
+	_expect(not socket_clearance.try_remove_socket(&"north").succeeded, "socket removal created an enemy candidate on a chest marker")
+
 func _test_module_authoring_snapshot() -> void:
 	var draft := StructureDraft.create_level_module(Vector3i(5, 4, 5))
 	_build_boundary_wall(draft, LevelSocketDefinition.Direction.NORTH)
 	var socket_cell := Vector3i(2, 1, 0)
 	var spawn_cell := Vector3i(1, 1, 2)
 	var return_cell := Vector3i(3, 1, 2)
+	var chest_cell := Vector3i(2, 1, 3)
 	var zone_cell := Vector3i(4, 1, 4)
 	var torch_support := Vector3i(4, 2, 3)
-	for floor_cell in [spawn_cell + Vector3i.DOWN, return_cell + Vector3i.DOWN, zone_cell + Vector3i.DOWN]:
+	for floor_cell in [spawn_cell + Vector3i.DOWN, return_cell + Vector3i.DOWN, chest_cell + Vector3i.DOWN, chest_cell + Vector3i.LEFT + Vector3i.DOWN, zone_cell + Vector3i.DOWN]:
 		_expect(draft.try_place_block(floor_cell, BlockId.Type.STONE).succeeded, "snapshot floor setup failed")
 	_expect(draft.try_add_socket(socket_cell, LevelSocketDefinition.Direction.NORTH).succeeded, "snapshot socket command failed")
 	_expect(draft.try_set_markers(spawn_cell, LevelSocketDefinition.Direction.EAST, return_cell, LevelSocketDefinition.Direction.WEST).succeeded, "snapshot marker command failed")
+	_expect(draft.try_set_chest_marker(chest_cell).succeeded, "snapshot chest marker command failed")
 	_expect(draft.try_add_enemy_spawn_zone(zone_cell, zone_cell).succeeded, "snapshot enemy spawn-zone command failed")
 	_expect(draft.try_place_block(torch_support, BlockId.Type.STONE).succeeded, "snapshot torch support failed")
 	_expect(draft.try_place_torch(Vector3i(3, 2, 3), Vector3i.RIGHT).succeeded, "snapshot torch command failed")
@@ -424,6 +509,7 @@ func _test_module_authoring_snapshot() -> void:
 	_expect(restored != null and StructureResourceAdapter.resources_equal(snapshot, restored_snapshot), "authored module snapshot did not round-trip exactly")
 	_expect(restored.get_weight() == 137.625 and restored.get_sockets()[0].socket_id == &"north", "authored module round trip changed weight or socket order")
 	_expect(restored.get_torches()[0].cell == Vector3i(3, 2, 3), "authored module round trip changed torch order")
+	_expect(restored.get_chest_marker().cell == chest_cell, "authored module round trip changed the chest marker")
 	_expect(restored.get_enemy_spawn_zone_candidate_cells(&"enemy_spawn_zone") == [zone_cell], "authored module round trip changed enemy spawn zones")
 
 func _test_malformed_module_definitions() -> void:
@@ -437,6 +523,15 @@ func _test_malformed_module_definitions() -> void:
 	var text := "\n".join(PackedStringArray(output))
 	_expect(exit_code == 0, "malformed Level Module probe exited %d" % exit_code)
 	_expect(text.contains("LEVEL_MODULE_DEFINITION_MALFORMED PASS"), "malformed Level Module probe did not reject every invalid resource")
+
+func _test_authored_chest_room_marker() -> void:
+	var module := ResourceLoader.load("res://levels/content/dungeons/stone/modules/stone_chest_room.tres", "", ResourceLoader.CACHE_MODE_IGNORE) as LevelModuleDefinition
+	_expect(module != null and module.validate(), "authored stone chest room module is invalid")
+	if module == null:
+		return
+	_expect(module.format_version == LevelModuleDefinition.CURRENT_FORMAT_VERSION, "authored stone chest room retained an old module format")
+	_expect(module.chest_marker != null and module.chest_marker.cell == Vector3i(4, 1, 4), "authored stone chest room omitted its accessible chest marker")
+	_expect(module.enemy_spawn_zones.is_empty(), "authored stone chest room retained conflicting enemy spawn metadata")
 
 func _test_bounded_chunk_queries() -> void:
 	var draft := StructureDraft.create_generic(Vector3i(64, 64, 64))
@@ -467,6 +562,7 @@ func _make_module_definition(identifier: StringName) -> LevelModuleDefinition:
 		Vector3i(2, 0, 0),
 		Vector3i(2, 0, 4),
 		Vector3i(1, 0, 2),
+		Vector3i(2, 0, 2),
 		Vector3i(3, 0, 2),
 		Vector3i(4, 2, 3),
 		Vector3i(0, 2, 3),
@@ -503,6 +599,9 @@ func _make_module_definition(identifier: StringName) -> LevelModuleDefinition:
 	return_marker.cell = Vector3i(3, 1, 2)
 	return_marker.facing = LevelSocketDefinition.Direction.WEST
 	definition.return_door_marker = return_marker
+	var chest_marker := LevelChestMarkerDefinition.new()
+	chest_marker.cell = Vector3i(2, 1, 2)
+	definition.chest_marker = chest_marker
 	return definition
 
 func _test_enemy_spawn_zone_transactions() -> void:

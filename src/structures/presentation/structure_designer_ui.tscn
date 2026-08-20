@@ -230,6 +230,30 @@ theme_override_colors/font_color = Color(0.82, 0.58, 1, 1)
 [node name="EnemySpawnZoneList" type="VBoxContainer" parent="ModulePanel/Margin/VBox/DetailsScroll/Details"]
 layout_mode = 2
 
+[node name="ChestMarkerTitle" type="Label" parent="ModulePanel/Margin/VBox/DetailsScroll/Details"]
+layout_mode = 2
+text = "Chest Marker — aim before opening Module Tools"
+
+[node name="ChestMarker" type="VBoxContainer" parent="ModulePanel/Margin/VBox/DetailsScroll/Details"]
+layout_mode = 2
+
+[node name="Current" type="Label" parent="ModulePanel/Margin/VBox/DetailsScroll/Details/ChestMarker"]
+layout_mode = 2
+text = "Current: not set"
+
+[node name="Actions" type="HBoxContainer" parent="ModulePanel/Margin/VBox/DetailsScroll/Details/ChestMarker"]
+layout_mode = 2
+
+[node name="Set" type="Button" parent="ModulePanel/Margin/VBox/DetailsScroll/Details/ChestMarker/Actions"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Set from target"
+
+[node name="Clear" type="Button" parent="ModulePanel/Margin/VBox/DetailsScroll/Details/ChestMarker/Actions"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Clear"
+
 [node name="MarkersTitle" type="Label" parent="ModulePanel/Margin/VBox/DetailsScroll/Details"]
 layout_mode = 2
 text = "Entry Markers — aim before opening Module Tools"

@@ -352,6 +352,19 @@ func _test_module_runtime() -> void:
 	(ui.get_node("ModulePanel/Margin/VBox/DetailsScroll/Details/Markers/Actions/Clear") as Button).pressed.emit()
 	await _tree.process_frame
 	_expect(draft.get_spawn_marker() == null and draft.get_return_door_marker() == null and overlay.get_child_count() == 0, "marker clear retained paired domain or overlay state")
+	_toggle_module_tools(runtime)
+	_aim_at(controller, Vector3(4.5, 3.0, 3.5), Vector3(4.5, 0.5, 3.5))
+	_toggle_module_tools(runtime)
+	(ui.get_node("ModulePanel/Margin/VBox/DetailsScroll/Details/ChestMarker/Actions/Set") as Button).pressed.emit()
+	var chest_marker := draft.get_chest_marker()
+	var chest_current := ui.get_node("ModulePanel/Margin/VBox/DetailsScroll/Details/ChestMarker/Current") as Label
+	_expect(chest_marker != null and chest_marker.cell == Vector3i(4, 1, 3), "chest marker target did not commit")
+	_expect(chest_current.text == "Current: (4, 1, 3)", "chest marker panel did not refresh its committed cell")
+	_expect(overlay.get_child_count() == 1 and overlay.has_node("ChestMarker"), "chest marker overlay did not refresh exactly once")
+	_expect_overlay_color(overlay.get_node("ChestMarker") as Node3D, StructureMetadataOverlay.CHEST_COLOR, "chest marker")
+	(ui.get_node("ModulePanel/Margin/VBox/DetailsScroll/Details/ChestMarker/Actions/Clear") as Button).pressed.emit()
+	await _tree.process_frame
+	_expect(draft.get_chest_marker() == null and chest_current.text == "Current: not set" and overlay.get_child_count() == 0, "chest marker clear retained domain, UI, or overlay state")
 	(ui.get_node("ModulePanel/Margin/VBox/Header/Close") as Button).pressed.emit()
 	_expect(not ui.is_module_panel_open() and controller._input_enabled and controller._mouse_capture_enabled, "module close button did not restore first-person input")
 	_expect(torch_renderer.torch_instances.get(retained_torch) == retained_torch_node, "metadata authoring rebuilt an unrelated torch node")

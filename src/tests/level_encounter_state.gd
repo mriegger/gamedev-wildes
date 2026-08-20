@@ -40,6 +40,7 @@ func _run() -> void:
 		return
 	_test_discovery_partition(topology, generation.layout)
 	_test_production_progression(topology, generation.layout.seed_value)
+	_test_passive_room_progression()
 	_test_concurrent_waves_and_capacity()
 	_test_two_full_waves()
 	_test_seal_overlay(topology, generation.layout, block_catalog)
@@ -50,20 +51,23 @@ func _test_production_progression(topology: LevelEncounterTopology, level_seed: 
 	_expect(state != null, "encounter state creation failed")
 	if state == null:
 		return
-	var expected_discovered_room_ids: Array[int] = []
-	var expected_sealed_door_ids := _all_door_ids(topology)
+	var expected_discovered_room_ids := topology.get_initial_discovered_room_ids()
+	var expected_sealed_door_ids := _encounter_door_ids(topology)
 	var root_with_child_id := -1
 	for room_id in topology.get_room_ids():
 		var room := topology.get_room(room_id)
-		if room.parent_room_id < 0:
-			expected_discovered_room_ids.append(room_id)
+		if not room.has_encounter():
+			_expect(not state._rooms.has(room_id), "passive room received encounter progress: %d" % room_id)
+			for door_id in room.door_ids:
+				_expect(not expected_sealed_door_ids.has(door_id), "passive room doorway began sealed: %d" % door_id)
+			continue
+		if expected_discovered_room_ids.has(room_id):
 			expected_sealed_door_ids.erase(room.parent_door_id)
-			_expect(_room_progress(state, room_id).status == LevelEncounterState.RoomStatus.READY, "root room did not begin ready: %d" % room_id)
-			if not room.child_room_ids.is_empty():
+			_expect(_room_progress(state, room_id).status == LevelEncounterState.RoomStatus.READY, "discovered encounter room did not begin ready: %d" % room_id)
+			if not topology.get_discovered_room_ids_after_clear(room_id).is_empty():
 				root_with_child_id = room_id
 		else:
-			_expect(_room_progress(state, room_id).status == LevelEncounterState.RoomStatus.LOCKED, "child room did not begin locked: %d" % room_id)
-	expected_discovered_room_ids.sort()
+			_expect(_room_progress(state, room_id).status == LevelEncounterState.RoomStatus.LOCKED, "undiscovered encounter room did not begin locked: %d" % room_id)
 	expected_sealed_door_ids.sort()
 	_expect(state.get_active_room_ids().is_empty(), "encounter began with an active wave")
 	_expect(state.get_discovered_room_ids() == expected_discovered_room_ids, "initial discovery did not contain exactly the ready roots")
@@ -75,13 +79,14 @@ func _test_production_progression(topology: LevelEncounterTopology, level_seed: 
 	copied_sealed_ids.clear()
 	_expect(state.get_discovered_room_ids() == expected_discovered_room_ids, "discovered-room query exposed mutable ownership")
 	_expect(state.get_sealed_door_ids() == expected_sealed_door_ids, "sealed-door query exposed mutable ownership")
-	_expect(root_with_child_id >= 0, "production topology has no root room with a child")
+	_expect(root_with_child_id >= 0, "production topology has no ready encounter with a downstream branch")
 	if root_with_child_id < 0:
 		return
 
 	var root_room := topology.get_room(root_with_child_id)
 	var copied_children := root_room.child_room_ids
 	var expected_child_ids := copied_children.duplicate()
+	var expected_revealed_ids := topology.get_discovered_room_ids_after_clear(root_with_child_id)
 	copied_children.clear()
 	_expect(root_room.child_room_ids == expected_child_ids, "room child query exposed mutable ownership")
 	var copied_spawn_cells := root_room.spawn_cells
@@ -168,10 +173,10 @@ func _test_production_progression(topology: LevelEncounterTopology, level_seed: 
 	for door_id in root_room.door_ids:
 		if expected_sealed_door_ids.has(door_id):
 			expected_opened_seal_ids.append(door_id)
-	for child_room_id in expected_child_ids:
-		var child := topology.get_room(child_room_id)
-		if expected_sealed_door_ids.has(child.parent_door_id) and not expected_opened_seal_ids.has(child.parent_door_id):
-			expected_opened_seal_ids.append(child.parent_door_id)
+	for revealed_room_id in expected_revealed_ids:
+		var revealed_room := topology.get_room(revealed_room_id)
+		if revealed_room.has_encounter() and expected_sealed_door_ids.has(revealed_room.parent_door_id) and not expected_opened_seal_ids.has(revealed_room.parent_door_id):
+			expected_opened_seal_ids.append(revealed_room.parent_door_id)
 	expected_opened_seal_ids.sort()
 	_expect(final_preflight == expected_opened_seal_ids, "clear preflight did not open the current and child incoming seals")
 	var copied_opened_ids := final_transition.opened_seal_ids
@@ -182,11 +187,56 @@ func _test_production_progression(topology: LevelEncounterTopology, level_seed: 
 	_expect(state.get_sealed_door_ids() == expected_sealed_door_ids, "clear did not remove exactly the opened seals")
 	_expect(state.get_active_room_ids().is_empty(), "cleared production room remained active")
 	_expect(_summary_equals(final_transition.summary, 0, 0, 0), "final transition retained a finished wave")
-	for child_room_id in expected_child_ids:
-		_expect(_room_progress(state, child_room_id).status == LevelEncounterState.RoomStatus.READY, "clear did not make child ready: %d" % child_room_id)
-		expected_discovered_room_ids.append(child_room_id)
+	for revealed_room_id in expected_revealed_ids:
+		var revealed_room := topology.get_room(revealed_room_id)
+		if revealed_room.has_encounter():
+			_expect(_room_progress(state, revealed_room_id).status == LevelEncounterState.RoomStatus.READY, "clear did not make downstream encounter ready: %d" % revealed_room_id)
+		else:
+			_expect(not state._rooms.has(revealed_room_id), "clear created encounter progress for passive room: %d" % revealed_room_id)
+		expected_discovered_room_ids.append(revealed_room_id)
 	expected_discovered_room_ids.sort()
-	_expect(state.get_discovered_room_ids() == expected_discovered_room_ids, "clear did not discover exactly the child branches")
+	_expect(state.get_discovered_room_ids() == expected_discovered_room_ids, "clear did not discover exactly the downstream branches")
+
+func _test_passive_room_progression() -> void:
+	var topology := LevelEncounterTopology.new()
+	topology._rooms_by_id[10] = _make_room(10, -1, 0, [11], [0, 1], 1)
+	topology._rooms_by_id[11] = _make_room(11, 10, 2, [12], [2, 3], 0)
+	topology._rooms_by_id[12] = _make_room(12, 11, 4, [], [4], 1)
+	topology._room_ids.assign([10, 11, 12])
+	var doorway_room_ids: Array[int] = [10, 10, 11, 11, 12]
+	for door_id in doorway_room_ids.size():
+		topology._doorways.append(LevelDoorway.new(
+			door_id,
+			doorway_room_ids[door_id],
+			LevelSocketDefinition.Direction.NORTH,
+			[Vector3i(door_id * 2, 1, 0)],
+			BlockId.Type.STONE_BRICKS,
+		))
+	_expect(topology.get_encounter_room_ids() == [10, 12], "passive topology included a passive room in encounter IDs")
+	_expect(topology.get_initial_discovered_room_ids() == [10], "passive topology crossed an uncleared encounter")
+	_expect(topology.get_discovered_room_ids_after_clear(10) == [11, 12], "passive topology did not reveal through to the next encounter")
+	_expect(topology.get_discovered_room_ids_after_clear(11).is_empty(), "passive room exposed a clear transition")
+	_expect(topology.find_room_containing_body(Vector3(11.5, 1.0, 11.5), 0.4, 0.5) == -1, "passive room accepted encounter activation containment")
+	_expect(topology.find_room_containing_body(Vector3(10.5, 1.0, 10.5), 0.4, 0.5) == 10, "encounter room containment stopped working")
+	var state := LevelEncounterState.create(topology, WORLD_SEED)
+	_expect(state != null, "passive synthetic encounter state failed to initialize")
+	if state == null:
+		return
+	_expect(state.get_discovered_room_ids() == [10], "passive branch began discovered before its encounter cleared")
+	_expect(state.get_sealed_door_ids() == [1, 4], "passive-owned doors were sealed or encounter seals were omitted")
+	_expect(not state._rooms.has(11), "passive room received wave progress")
+	_expect(not state.can_activate(11), "passive room allowed encounter activation")
+	_expect(_room_progress(state, 12).status == LevelEncounterState.RoomStatus.LOCKED, "encounter beyond passive room began ready")
+	var enemy_ids := state.get_next_enemy_ids(10, 1)
+	_expect(state.commit_activation(10, [1000], enemy_ids, 1) != null, "encounter before passive room did not activate")
+	_expect(state.get_defeat_opened_seal_ids(1000, enemy_ids[0]) == [1, 4], "encounter clear did not propose opening the passive branch")
+	var transition := state.record_defeat(1000, enemy_ids[0])
+	_expect(transition != null and transition.room_cleared, "encounter before passive room did not clear")
+	_expect(transition != null and transition.opened_seal_ids == [1, 4], "passive branch clear opened the wrong seals")
+	_expect(state.get_discovered_room_ids() == [10, 11, 12], "passive room and downstream encounter were not discovered together")
+	_expect(state.get_sealed_door_ids().is_empty(), "passive branch retained an authoritative seal")
+	_expect(not state._rooms.has(11), "discovering passive room created wave progress")
+	_expect(_room_progress(state, 12).status == LevelEncounterState.RoomStatus.READY, "encounter beyond passive room did not become ready")
 
 func _test_concurrent_waves_and_capacity() -> void:
 	var topology := _make_concurrent_topology()
@@ -298,6 +348,13 @@ func _test_seal_overlay(topology: LevelEncounterTopology, layout: LevelLayout, b
 	if sealed_door_ids.is_empty():
 		return
 	_expect(level_state.configure_seals(topology.get_doorways(), sealed_door_ids), "level state rejected encounter seal configuration")
+	for doorway in topology.get_doorways():
+		var room := topology.get_room(doorway.room_id)
+		if room.has_encounter():
+			continue
+		_expect(not encounter_state.get_sealed_door_ids().has(doorway.door_id), "passive room doorway entered the seal overlay: %d" % doorway.door_id)
+		for cell in doorway.aperture_cells:
+			_expect(not level_state.is_solid(cell), "passive room doorway blocked movement: %s" % cell)
 	var sealed_door_id := sealed_door_ids[0]
 	sealed_door_ids.clear()
 	var doorway: LevelDoorway
@@ -368,6 +425,9 @@ func _make_room(
 	for _index in enemy_count:
 		enemy_ids.append(&"zombie")
 	var room_cell := Vector3i(room_id, 1, room_id)
+	var spawn_cells: Array[Vector3i] = []
+	if enemy_count > 0:
+		spawn_cells.append(room_cell)
 	return LevelEncounterRoom.new(
 		room_id,
 		parent_room_id,
@@ -375,15 +435,16 @@ func _make_room(
 		child_room_ids,
 		door_ids,
 		enemy_ids,
-		[room_cell],
+		spawn_cells,
 		[room_id],
 		{room_cell: true},
 	)
 
-func _all_door_ids(topology: LevelEncounterTopology) -> Array[int]:
+func _encounter_door_ids(topology: LevelEncounterTopology) -> Array[int]:
 	var door_ids: Array[int] = []
 	for doorway in topology.get_doorways():
-		door_ids.append(doorway.door_id)
+		if topology.get_room(doorway.room_id).has_encounter():
+			door_ids.append(doorway.door_id)
 	door_ids.sort()
 	return door_ids
 
