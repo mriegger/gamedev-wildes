@@ -222,7 +222,7 @@ func build_mesh_data_from_cache(cache_dict: Dictionary) -> Variant:
 										if idx_s < 0 or idx_s >= cache.size():
 											continue
 										var vvs = cache[idx_s]
-										if vvs != -1 and vvs != BlockId.Type.AIR and vvs != BlockId.Type.TORCH and vvs != BlockId.Type.WATER:
+										if BlockId.is_ao_solid(vvs):
 											var vert = dy - 1
 											var f = 0.78 + float(vert - 1) * 0.05 + horiz * 0.08
 											if f > 0.98:

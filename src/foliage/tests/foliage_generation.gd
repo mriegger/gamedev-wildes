@@ -96,7 +96,7 @@ func _test_tree_visibility_reconciliation(coord: Vector2i, position: Vector3i, p
 	_visibility_changes.clear()
 	foliage_first.foliage_visibility_changed.connect(_record_foliage_visibility_changes)
 	foliage_first.apply_tree_chunk_for_coord(tree_owner, tree_payload)
-	_expect(foliage_first.foliage_block_fast.has(position), "tree application discarded deterministic foliage state")
+	_expect(foliage_first.has_generated_foliage(position), "tree application discarded deterministic foliage state")
 	_expect(not _unpack_foliage(foliage_first.get_visible_foliage_cells_for_chunk(coord)).has(position), "late cross-chunk tree left foliage visible")
 	_expect(_visibility_changes.has(position), "late cross-chunk tree did not announce the foliage visibility change")
 	_visibility_changes.clear()
@@ -107,7 +107,7 @@ func _test_tree_visibility_reconciliation(coord: Vector2i, position: Vector3i, p
 	var tree_first := VoxelWorld.new(_config.chunk_size, _config.max_build_y, _config.water_level, _config.meadow_radius, _block_catalog)
 	tree_first.apply_tree_chunk_for_coord(tree_owner, tree_payload)
 	tree_first.apply_foliage_chunk_for_coord(coord, payload)
-	_expect(tree_first.foliage_block_fast.has(position), "early cross-chunk tree discarded deterministic foliage state")
+	_expect(tree_first.has_generated_foliage(position), "early cross-chunk tree discarded deterministic foliage state")
 	_expect(not _unpack_foliage(tree_first.get_visible_foliage_cells_for_chunk(coord)).has(position), "early cross-chunk tree left foliage visible")
 
 func _validate_payload(coord: Vector2i, payload: Dictionary) -> void:
@@ -303,8 +303,8 @@ func _test_foliage_eviction(coord: Vector2i, position: Vector3i, payload: Dictio
 	var world := _make_world(coord, payload)
 	world.max_terrain_cache_chunks = 0
 	_expect(world.prune_terrain_cache(1) == 1, "foliage chunk did not evict with terrain")
-	_expect(not world.foliage_chunks_fast.has(coord), "eviction retained foliage chunk index")
-	_expect(not world.foliage_block_fast.has(position), "eviction retained foliage block state")
+	_expect(world.get_foliage_blocks_for_chunk(coord).is_empty(), "eviction retained foliage chunk index")
+	_expect(not world.has_generated_foliage(position), "eviction retained foliage block state")
 	var regenerated := _build_payload(_generator, _config, coord)
 	world.apply_chunk_gen_for_coord(coord, regenerated)
 	world.apply_tree_chunk_for_coord(coord, regenerated)

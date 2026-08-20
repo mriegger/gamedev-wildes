@@ -63,7 +63,7 @@ func _on_session_ready() -> void:
 
 func _on_foliage_visibility_changed(cells: Array[Vector3i]) -> void:
 	for position in cells:
-		if _world.voxel_model.foliage_block_fast.has(position):
+		if _world.voxel_model.has_generated_foliage(position):
 			_covered_foliage_count += 1
 
 func _validate_pumpkin_footprint() -> void:

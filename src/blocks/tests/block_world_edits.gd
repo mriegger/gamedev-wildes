@@ -41,7 +41,7 @@ func _init() -> void:
 	var placed_edits := world.snapshot_block_edits()
 	for foliage_cell in replaced_foliage:
 		_expect((placed_edits["removed"] as Dictionary).has(foliage_cell), "campfire placement did not persist replaced foliage")
-		_expect(not world.foliage_block_fast.has(foliage_cell), "campfire placement retained replaced foliage state")
+		_expect(not world.has_generated_foliage(foliage_cell), "campfire placement retained replaced foliage state")
 	for offset in campfire.emplacement.occupied_offsets:
 		var cell: Vector3i = anchor + offset
 		_expect(world.get_block_id_at(cell) == BlockId.Type.CAMPFIRE and world.is_raycast_solid(cell), "campfire footprint was not reserved")

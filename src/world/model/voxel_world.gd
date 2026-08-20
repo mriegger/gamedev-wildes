@@ -24,8 +24,8 @@ var generated_terrain_chunks: Dictionary = {}
 var copper_block_fast: Dictionary = {}
 var copper_chunks_fast: Dictionary = {}
 var generated_copper_chunks: Dictionary = {}
-var foliage_block_fast: Dictionary = {}
-var foliage_chunks_fast: Dictionary = {}
+var _foliage_block_fast: Dictionary = {}
+var _foliage_chunks_fast: Dictionary = {}
 
 var _terrain_chunk_lru: Dictionary = {}
 var max_terrain_cache_chunks: int = 257
@@ -104,14 +104,17 @@ func get_tree_blocks_for_chunk(coord: Vector2i) -> Dictionary:
 	return (tree_chunks_fast[coord] as Dictionary).duplicate()
 
 func get_foliage_blocks_for_chunk(coord: Vector2i) -> Dictionary:
-	if not foliage_chunks_fast.has(coord):
+	if not _foliage_chunks_fast.has(coord):
 		return {}
-	return (foliage_chunks_fast[coord] as Dictionary).duplicate()
+	return (_foliage_chunks_fast[coord] as Dictionary).duplicate()
+
+func has_generated_foliage(position: Vector3i) -> bool:
+	return _foliage_block_fast.has(position)
 
 func get_visible_foliage_cells_for_chunk(coord: Vector2i) -> PackedInt32Array:
 	var candidates: Dictionary = {}
-	if foliage_chunks_fast.has(coord):
-		for position in foliage_chunks_fast[coord]:
+	if _foliage_chunks_fast.has(coord):
+		for position in _foliage_chunks_fast[coord]:
 			candidates[position] = true
 	if _placed_edits_by_chunk.has(coord):
 		for position in _placed_edits_by_chunk[coord]:
@@ -223,11 +226,11 @@ func prune_terrain_cache(max_to_evict: int) -> int:
 				copper_block_fast.erase(copper_pos)
 			copper_chunks_fast.erase(coord)
 		generated_copper_chunks.erase(coord)
-		if foliage_chunks_fast.has(coord):
-			var chunk_foliage := foliage_chunks_fast[coord] as Dictionary
+		if _foliage_chunks_fast.has(coord):
+			var chunk_foliage := _foliage_chunks_fast[coord] as Dictionary
 			for foliage_pos in chunk_foliage:
-				foliage_block_fast.erase(foliage_pos)
-			foliage_chunks_fast.erase(coord)
+				_foliage_block_fast.erase(foliage_pos)
+			_foliage_chunks_fast.erase(coord)
 		evicted.append(coord)
 
 	var changed_foliage_cells: Array[Vector3i] = []
@@ -343,19 +346,19 @@ func apply_copper_chunk_for_coord(coord: Vector2i, copper_data: Dictionary):
 	generated_copper_chunks[coord] = true
 
 func apply_foliage_chunk_for_coord(coord: Vector2i, foliage_data: Dictionary) -> void:
-	if foliage_chunks_fast.has(coord):
-		var previous_foliage := foliage_chunks_fast[coord] as Dictionary
+	if _foliage_chunks_fast.has(coord):
+		var previous_foliage := _foliage_chunks_fast[coord] as Dictionary
 		for position in previous_foliage:
-			foliage_block_fast.erase(position)
-		foliage_chunks_fast.erase(coord)
+			_foliage_block_fast.erase(position)
+		_foliage_chunks_fast.erase(coord)
 	var fast := foliage_data.get("foliage_block_fast", {}) as Dictionary
 	var chunk_foliage: Dictionary = {}
 	for position in fast:
 		if position is Vector3i:
-			foliage_block_fast[position] = fast[position]
+			_foliage_block_fast[position] = fast[position]
 			chunk_foliage[position] = fast[position]
 	if not chunk_foliage.is_empty():
-		foliage_chunks_fast[coord] = chunk_foliage
+		_foliage_chunks_fast[coord] = chunk_foliage
 
 func get_block_at(p: Vector3i):
 	if _emplacement_anchor_by_cell.has(p):
@@ -368,10 +371,10 @@ func get_block_at(p: Vector3i):
 		return tree_block_fast[p]
 	if copper_block_fast.has(p):
 		return copper_block_fast[p]
-	if foliage_block_fast.has(p):
+	if _foliage_block_fast.has(p):
 		if _foliage_clearance_cells.has(p):
 			return null
-		return foliage_block_fast[p]
+		return _foliage_block_fast[p]
 	var key = Vector2i(p.x, p.z)
 	if not height_map_dict.has(key):
 		return null
@@ -508,7 +511,7 @@ func can_place_emplacement(anchor: Vector3i, block_id: int) -> bool:
 func _get_unreplaced_generated_foliage_id(p: Vector3i) -> int:
 	if _placed_blocks.has(p) or _removed_blocks.has(p) or _emplacement_anchor_by_cell.has(p):
 		return BlockId.Type.AIR
-	return int(foliage_block_fast.get(p, BlockId.Type.AIR))
+	return int(_foliage_block_fast.get(p, BlockId.Type.AIR))
 
 func _effective_mined_block_id(p: Vector3i) -> int:
 	var block_id := get_block_id_at(p)
@@ -524,16 +527,16 @@ func _get_foliage_above(support_pos: Vector3i) -> Variant:
 	return foliage_pos if BlockId.is_foliage(foliage_id) or BlockId.is_foliage(_get_unreplaced_generated_foliage_id(foliage_pos)) else null
 
 func _erase_foliage_block(p: Vector3i) -> void:
-	if not foliage_block_fast.has(p):
+	if not _foliage_block_fast.has(p):
 		return
-	foliage_block_fast.erase(p)
+	_foliage_block_fast.erase(p)
 	var coord := ChunkCoord.world_to_chunk_vec3i(p, chunk_size)
-	if not foliage_chunks_fast.has(coord):
+	if not _foliage_chunks_fast.has(coord):
 		return
-	var chunk_foliage := foliage_chunks_fast[coord] as Dictionary
+	var chunk_foliage := _foliage_chunks_fast[coord] as Dictionary
 	chunk_foliage.erase(p)
 	if chunk_foliage.is_empty():
-		foliage_chunks_fast.erase(coord)
+		_foliage_chunks_fast.erase(coord)
 
 func _foliage_clearance_is_valid(cells: Array[Vector3i]) -> bool:
 	var unique_cells: Dictionary = {}
@@ -1017,8 +1020,8 @@ func _snapshot_transaction_cell(position: Vector3i) -> Dictionary:
 		"tree_block": tree_block_fast.get(position, null),
 		"has_copper_block": copper_block_fast.has(position),
 		"copper_block": copper_block_fast.get(position, null),
-		"has_foliage_block": foliage_block_fast.has(position),
-		"foliage_block": foliage_block_fast.get(position, null),
+		"has_foliage_block": _foliage_block_fast.has(position),
+		"foliage_block": _foliage_block_fast.get(position, null),
 		"has_foliage_clearance": _foliage_clearance_cells.has(position),
 		"torch_attachment": torch_attachments.get(position, Vector3i.ZERO),
 		"emplacement_anchor": emplacement_anchor,

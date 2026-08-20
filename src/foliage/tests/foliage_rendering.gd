@@ -33,6 +33,7 @@ func _run() -> void:
 	_chunk_mesher = ChunkMesher.new(SPECIES_IDS.size(), 3, 7, false, _block_texture_set)
 	_foliage_mesher = FoliageMesher.new(_foliage_texture_set, 7)
 	_test_texture_layers()
+	_test_foliage_shadow_occlusion()
 	var cache := _make_cache()
 	var foliage_data: Variant = _test_crossed_quad_mesh(cache["foliage_cells"] as PackedInt32Array)
 	if foliage_data != null:
@@ -48,6 +49,35 @@ func _test_texture_layers() -> void:
 	for block_id in SPECIES_IDS:
 		var layer := _foliage_texture_set.texture_layers[block_id]
 		_expect(layer >= 0 and layer < _foliage_texture_set.texture_array.get_layers(), "foliage texture layer is out of bounds for %s" % BlockId.get_display_name(block_id))
+
+func _test_foliage_shadow_occlusion() -> void:
+	var clear_data := _chunk_mesher.build_mesh_data_from_cache(_make_shadow_cache(BlockId.Type.AIR)) as Dictionary
+	var foliage_data := _chunk_mesher.build_mesh_data_from_cache(_make_shadow_cache(BlockId.Type.SHORT_GRASS)) as Dictionary
+	_expect(not clear_data.is_empty() and not foliage_data.is_empty(), "foliage shadow fixture produced no terrain mesh")
+	if clear_data.is_empty() or foliage_data.is_empty():
+		return
+	_expect((foliage_data["colors"] as PackedColorArray) == (clear_data["colors"] as PackedColorArray), "foliage baked an overhead shadow into terrain")
+
+func _make_shadow_cache(overhead_block_id: int) -> Dictionary:
+	var size_y := 4
+	var cache_x := 3
+	var cache_z := 3
+	var cache := PackedInt32Array()
+	cache.resize(cache_x * size_y * cache_z)
+	cache.fill(BlockId.Type.AIR)
+	var center_column := size_y * cache_z
+	cache[center_column + 1] = BlockId.Type.STONE
+	cache[center_column + 2 * cache_z + 1] = overhead_block_id
+	return {
+		"cache": cache,
+		"origin_x": 0,
+		"origin_z": 0,
+		"size_x": 1,
+		"size_z": 1,
+		"size_y": size_y,
+		"cache_x": cache_x,
+		"cache_z": cache_z,
+	}
 
 func _test_crossed_quad_mesh(cells: PackedInt32Array) -> Variant:
 	var data: Variant = _foliage_mesher.build_mesh_data(cells)
