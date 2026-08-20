@@ -19,7 +19,7 @@ func _run():
 	animator.setup(state)
 	var torso_mesh = (animator.get_node("RigRoot/BodySecondary/BodyAction/TorsoBase/Torso") as MeshInstance3D).mesh as BoxMesh
 	var head_mesh = (animator.get_node("RigRoot/BodySecondary/BodyAction/TorsoBase/HeadAnchor/HeadBase/HeadSecondary/Head") as MeshInstance3D).mesh as BoxMesh
-	var arm_mesh = (animator.get_node("RigRoot/BodySecondary/BodyAction/TorsoBase/LeftShoulder/LeftArmBase/LeftArmAction/LeftArm") as MeshInstance3D).mesh as BoxMesh
+	var arm_mesh = (animator.get_node("RigRoot/BodySecondary/BodyAction/TorsoBase/LeftShoulder/LeftArmBase/LeftArmAction/LeftArmNockConstraint/LeftArm") as MeshInstance3D).mesh as BoxMesh
 	var leg_mesh = (animator.get_node("RigRoot/LeftHip/LeftLegLocomotion/LeftLegBase/LeftLeg") as MeshInstance3D).mesh as BoxMesh
 	_expect(torso_mesh.size.is_equal_approx(Vector3(0.45, 0.675, 0.225)), "torso proportions changed")
 	_expect(head_mesh.size.is_equal_approx(Vector3(0.45, 0.45, 0.45)), "head proportions changed")
@@ -322,8 +322,8 @@ func _run():
 	_advance(animator, 8)
 	held_item_view.set_attack_pose(animator.held_item_pose_weight, animator.right_arm_action.rotation.x, hammer_action, animator.held_item_windup_pose_weight)
 	var walking_hammer_head := held_item_view.held_node.get_node("Head") as MeshInstance3D
-	var left_hand_position: Vector3 = animator.left_arm_action.to_global(Vector3(0.0, -0.675, 0.0))
-	var right_hand_position: Vector3 = animator.right_arm_action.to_global(Vector3(0.0, -0.675, 0.0))
+	var left_hand_position: Vector3 = animator.get_left_hand_global_position()
+	var right_hand_position: Vector3 = animator.get_right_hand_global_position()
 	_expect(animator.left_arm_action.rotation.x < animator.right_arm_action.rotation.x - deg_to_rad(8.0), "walking hammer pose did not hold the left hand higher than the right")
 	_expect(abs(animator.left_arm_action.rotation.z) < deg_to_rad(5.0) and abs(animator.right_arm_action.rotation.z) < deg_to_rad(5.0), "walking hammer pose leaned the arms too far inward")
 	_expect(Vector2(left_hand_position.x, left_hand_position.z).distance_to(Vector2(right_hand_position.x, right_hand_position.z)) > 0.5, "walking hammer pose did not keep the hands apart")
@@ -384,8 +384,8 @@ func _run():
 		held_item_view.align_overhead_striking_face(animator.held_item_alignment_weight, animator.held_item_face_turn_weight, hammer_action, animator.global_transform.basis.z)
 		held_item_view.anchor_two_handed_grip(
 			animator.held_item_alignment_weight,
-			animator.left_arm_action.to_global(Vector3(0.0, -0.675, 0.0)),
-			animator.right_arm_action.to_global(Vector3(0.0, -0.675, 0.0))
+			animator.get_left_hand_global_position(),
+			animator.get_right_hand_global_position()
 		)
 		held_item_view.apply_linear_attack_recovery(animator.held_item_recovery_progress, animator.global_transform, animator.right_arm_base.global_transform)
 		var hammer_head := held_item_view.held_node.get_node("Head") as MeshInstance3D
@@ -393,8 +393,8 @@ func _run():
 		var hammer_rotation := hammer_basis.get_rotation_quaternion()
 		var attack_progress: float = animator._attack_elapsed / hammer_action.attack_profile.duration
 		if attack_progress >= BlockyHumanoidAnimator.HAMMER_WINDUP_END and attack_progress <= BlockyHumanoidAnimator.HAMMER_HOLD_END:
-			var aligned_left_hand: Vector3 = animator.left_arm_action.to_global(Vector3(0.0, -0.675, 0.0))
-			var aligned_right_hand: Vector3 = animator.right_arm_action.to_global(Vector3(0.0, -0.675, 0.0))
+			var aligned_left_hand: Vector3 = animator.get_left_hand_global_position()
+			var aligned_right_hand: Vector3 = animator.get_right_hand_global_position()
 			var aligned_hand_midpoint: Vector3 = (aligned_left_hand + aligned_right_hand) * 0.5
 			maximum_aligned_grip_to_hands = maxf(maximum_aligned_grip_to_hands, held_item_view.global_position.distance_to(aligned_hand_midpoint))
 		if attack_progress >= BlockyHumanoidAnimator.HAMMER_HOLD_END:
@@ -417,7 +417,7 @@ func _run():
 		if not overhead_captured and attack_progress >= BlockyHumanoidAnimator.HAMMER_WINDUP_END - 0.005:
 			overhead_captured = true
 			overhead_hammer_basis = hammer_basis
-			overhead_hand_distance = animator.left_arm_action.to_global(Vector3(0.0, -0.675, 0.0)).distance_to(animator.right_arm_action.to_global(Vector3(0.0, -0.675, 0.0)))
+			overhead_hand_distance = animator.get_left_hand_global_position().distance_to(animator.get_right_hand_global_position())
 		if attack_progress >= BlockyHumanoidAnimator.HAMMER_WINDUP_END and attack_progress <= BlockyHumanoidAnimator.HAMMER_IMPACT:
 			maximum_mid_swing_up_dot = maxf(maximum_mid_swing_up_dot, hammer_basis.y.dot(Vector3.UP))
 		if not impact_captured and attack_progress >= BlockyHumanoidAnimator.HAMMER_IMPACT + 0.01:
@@ -429,20 +429,20 @@ func _run():
 			var hammer_head_mesh := hammer_head.mesh as BoxMesh
 			impact_striking_face_height = (hammer_head.global_position + hammer_basis.x * hammer_head_mesh.size.x * 0.5).y
 			impact_grip_position = held_item_view.global_position
-			impact_left_hand_position = animator.left_arm_action.to_global(Vector3(0.0, -0.675, 0.0))
-			impact_right_hand_position = animator.right_arm_action.to_global(Vector3(0.0, -0.675, 0.0))
+			impact_left_hand_position = animator.get_left_hand_global_position()
+			impact_right_hand_position = animator.get_right_hand_global_position()
 			impact_arm_pitch_difference = abs(animator.left_arm_action.rotation.x - animator.right_arm_action.rotation.x)
-			impact_hand_distance = animator.left_arm_action.to_global(Vector3(0.0, -0.675, 0.0)).distance_to(animator.right_arm_action.to_global(Vector3(0.0, -0.675, 0.0)))
+			impact_hand_distance = animator.get_left_hand_global_position().distance_to(animator.get_right_hand_global_position())
 			impact_hold_start_pitch = animator.right_arm_action.rotation.x
 		if not hold_end_captured and attack_progress >= BlockyHumanoidAnimator.HAMMER_HOLD_END - 0.01:
 			hold_end_captured = true
 			impact_hold_end_pitch = animator.right_arm_action.rotation.x
-			hold_end_hand_distance = animator.left_arm_action.to_global(Vector3(0.0, -0.675, 0.0)).distance_to(animator.right_arm_action.to_global(Vector3(0.0, -0.675, 0.0)))
+			hold_end_hand_distance = animator.get_left_hand_global_position().distance_to(animator.get_right_hand_global_position())
 		var recovery_midpoint := BlockyHumanoidAnimator.HAMMER_HOLD_END + (1.0 - BlockyHumanoidAnimator.HAMMER_HOLD_END) * 0.5
 		if not recovery_midpoint_captured and attack_progress >= recovery_midpoint:
 			recovery_midpoint_captured = true
 			recovery_midpoint_hammer_head_height = hammer_head.global_position.y
-			recovery_midpoint_hand_distance = animator.left_arm_action.to_global(Vector3(0.0, -0.675, 0.0)).distance_to(animator.right_arm_action.to_global(Vector3(0.0, -0.675, 0.0)))
+			recovery_midpoint_hand_distance = animator.get_left_hand_global_position().distance_to(animator.get_right_hand_global_position())
 			recovery_midpoint_alignment_weight = animator.held_item_alignment_weight
 			recovery_midpoint_pose_weight = animator.held_item_pose_weight
 			var midpoint_relative: Transform3D = animator.global_transform.affine_inverse() * held_item_view.global_transform
@@ -495,14 +495,40 @@ func _run():
 			held_item_view.align_overhead_striking_face(animator.held_item_alignment_weight, animator.held_item_face_turn_weight, hammer_action, animator.global_transform.basis.z)
 			held_item_view.anchor_two_handed_grip(
 				animator.held_item_alignment_weight,
-				animator.left_arm_action.to_global(Vector3(0.0, -0.675, 0.0)),
-				animator.right_arm_action.to_global(Vector3(0.0, -0.675, 0.0))
+				animator.get_left_hand_global_position(),
+				animator.get_right_hand_global_position()
 			)
 			held_item_view.apply_linear_attack_recovery(animator.held_item_recovery_progress, animator.global_transform, animator.right_arm_base.global_transform)
 	_expect(held_item_view.scale.is_equal_approx(hammer_scale_before_repeats), "repeated hammer attacks compounded the held model scale")
 	animator.set_held_melee_action(null)
 	_advance(animator, 2)
 	_expect(abs(animator.left_arm_action.rotation.z) < 0.001 and abs(animator.right_arm_action.rotation.z) < 0.001, "hammer two-handed pose did not clear")
+	state.set_motion(Vector3.ZERO, 0.0, false, true, 0.0, 0.0, false, Vector3.ZERO)
+	animator.set_bow_draw_state(true, 1.0)
+	_advance(animator, 1)
+	var bow_nock_right_hand: Vector3 = animator.torso_base.to_local(animator.get_right_hand_global_position())
+	_expect(bow_nock_right_hand.x > 0.08 and bow_nock_right_hand.x < 0.14 and bow_nock_right_hand.z > 0.55, "bow hand was not extended forward and slightly right of the body")
+	var rest_nock_local := bow_nock_right_hand + Vector3(0.0, 0.0, -0.18)
+	var half_nock_local := rest_nock_local + Vector3(0.0, 0.0, -0.24)
+	var full_nock_local := rest_nock_local + Vector3(0.0, 0.0, -0.48)
+	animator.track_bow_nock(animator.torso_base.to_global(rest_nock_local))
+	var bow_rest_left_hand: Vector3 = animator.torso_base.to_local(animator.get_left_hand_global_position())
+	animator.track_bow_nock(animator.torso_base.to_global(half_nock_local))
+	var bow_half_left_hand: Vector3 = animator.torso_base.to_local(animator.get_left_hand_global_position())
+	animator.track_bow_nock(animator.torso_base.to_global(full_nock_local))
+	var bow_full_left_hand: Vector3 = animator.torso_base.to_local(animator.get_left_hand_global_position())
+	_expect(bow_rest_left_hand.distance_to(rest_nock_local) < 0.001 and bow_half_left_hand.distance_to(half_nock_local) < 0.001 and bow_full_left_hand.distance_to(full_nock_local) < 0.001, "draw hand did not follow the arrow nock")
+	_expect(is_equal_approx(bow_rest_left_hand.x, bow_half_left_hand.x) and is_equal_approx(bow_half_left_hand.x, bow_full_left_hand.x) and is_equal_approx(bow_rest_left_hand.y, bow_half_left_hand.y) and is_equal_approx(bow_half_left_hand.y, bow_full_left_hand.y), "draw hand drifted sideways or vertically while following the arrow")
+	animator.set_tuning_transform(BlockyHumanoidAnimator.TUNING_LEFT_ARM, Vector3(0.02, 0.01, 0.0), Vector3(3.0, 2.0, 4.0), Vector3(1.05, 0.95, 1.0))
+	_advance(animator, 1)
+	var tuned_left_arm_transform: Transform3D = animator.left_arm_action.transform
+	animator.track_bow_nock(animator.torso_base.to_global(full_nock_local))
+	_expect(animator.left_arm_action.transform.is_equal_approx(tuned_left_arm_transform), "bow nock constraint overwrote left-arm tuning")
+	_expect(animator.torso_base.to_local(animator.get_left_hand_global_position()).distance_to(full_nock_local) < 0.001, "tuned draw hand did not reach the arrow nock")
+	animator.reset_tuning_transforms()
+	animator.set_bow_draw_state(false, 0.0)
+	_advance(animator, 1)
+	_expect(animator.left_arm_nock_constraint.transform.is_equal_approx(Transform3D.IDENTITY) and abs(animator.left_arm_action.rotation.z) < 0.001 and abs(animator.right_arm_action.rotation.z) < 0.001, "bow draw pose did not clear")
 
 	await _run_crowd_smoke(packed)
 	animator.queue_free()

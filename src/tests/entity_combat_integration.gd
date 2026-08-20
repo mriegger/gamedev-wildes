@@ -1392,7 +1392,7 @@ func _test_hammer_slam(world: VoxelWorld, hammer_profile: MeleeAttackProfile) ->
 	player.model_root.rotation.y = wrapf(locked_hammer_yaw + 0.75, -PI, PI)
 	player.interactor._advance_melee_attack(0.02)
 	_expect(_contacts.size() == contact_count_before + 2, "hammer slam did not hit every enemy in its contact-time radius")
-	player.interactor._update_melee_facing(0.0)
+	player.interactor._update_action_facing(0.0)
 	_expect(is_equal_approx(player.model_root.rotation.y, locked_hammer_yaw), "sprinting overrode the locked hammer facing")
 	player.is_sprinting = false
 	var first_target_center := actors[0].get_world_bounds().get_center()

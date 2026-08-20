@@ -93,7 +93,9 @@ position = Vector3(-0.3375, 0.675, 0)
 
 [node name="LeftArmAction" type="Node3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/LeftShoulder/LeftArmBase"]
 
-[node name="LeftArm" type="MeshInstance3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/LeftShoulder/LeftArmBase/LeftArmAction"]
+[node name="LeftArmNockConstraint" type="Node3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/LeftShoulder/LeftArmBase/LeftArmAction"]
+
+[node name="LeftArm" type="MeshInstance3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/LeftShoulder/LeftArmBase/LeftArmAction/LeftArmNockConstraint"]
 position = Vector3(0, -0.3375, 0)
 mesh = SubResource("Box_arm")
 

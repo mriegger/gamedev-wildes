@@ -18,8 +18,10 @@ const HAMMER_WINDUP_END: float = 0.465
 const HAMMER_IMPACT: float = 0.59
 const HAMMER_HOLD_END: float = 0.80
 const HAMMER_BODY_DROP: float = 0.17
+const BOW_RIGHT_ARM_DRAW_ROTATION := Vector3(-68.0, 0.0, -20.0)
 
 @export var profile: BlockyHumanoidAnimationProfile
+@export_range(0.1, 2.0, 0.001) var arm_length: float = 0.675
 
 @onready var rig_root: Node3D = $RigRoot as Node3D
 @onready var body_secondary: Node3D = $RigRoot/BodySecondary as Node3D
@@ -28,6 +30,7 @@ const HAMMER_BODY_DROP: float = 0.17
 @onready var head_secondary: Node3D = $RigRoot/BodySecondary/BodyAction/TorsoBase/HeadAnchor/HeadBase/HeadSecondary as Node3D
 @onready var left_arm_base: Node3D = $RigRoot/BodySecondary/BodyAction/TorsoBase/LeftShoulder/LeftArmBase as Node3D
 @onready var left_arm_action: Node3D = $RigRoot/BodySecondary/BodyAction/TorsoBase/LeftShoulder/LeftArmBase/LeftArmAction as Node3D
+@onready var left_arm_nock_constraint: Node3D = get_node_or_null(^"RigRoot/BodySecondary/BodyAction/TorsoBase/LeftShoulder/LeftArmBase/LeftArmAction/LeftArmNockConstraint") as Node3D
 @onready var right_arm_base: Node3D = $RigRoot/BodySecondary/BodyAction/TorsoBase/RightShoulder/RightArmBase as Node3D
 @onready var right_arm_action: Node3D = $RigRoot/BodySecondary/BodyAction/TorsoBase/RightShoulder/RightArmBase/RightArmAction as Node3D
 @onready var left_hip: Node3D = $RigRoot/LeftHip as Node3D
@@ -57,6 +60,8 @@ var _attack_animation_style: int = MeleeAttackActionDefinition.AnimationStyle.SW
 var _attack_contact_progress: float = 0.52
 var _attacking: bool = false
 var _held_melee_action: MeleeAttackActionDefinition
+var _bow_draw_active: bool = false
+var _bow_raise_progress: float = 0.0
 var attack_pose_weight: float = 0.0
 var held_item_windup_pose_weight: float = 0.0
 var held_item_pose_weight: float = 0.0
@@ -100,6 +105,7 @@ func setup(p_animation_state: ActorAnimationState):
 	_head_secondary_origin = head_secondary.position
 	_left_arm_action_origin = left_arm_action.position
 	_right_arm_action_origin = right_arm_action.position
+	assert(is_finite(arm_length) and arm_length > 0.0)
 	reset_tuning_transforms()
 
 func get_tuning_parts() -> Array[StringName]:
@@ -153,6 +159,25 @@ func play_place():
 func set_held_melee_action(action: MeleeAttackActionDefinition) -> void:
 	_held_melee_action = action
 
+func set_bow_draw_state(active: bool, raise_progress: float) -> void:
+	_bow_draw_active = active
+	_bow_raise_progress = clampf(raise_progress, 0.0, 1.0) if active else 0.0
+
+func track_bow_nock(nock_global_position: Vector3) -> void:
+	assert(_bow_draw_active and nock_global_position.is_finite() and left_arm_nock_constraint != null)
+	var target_in_parent := left_arm_action.to_local(nock_global_position)
+	assert(not target_in_parent.is_zero_approx())
+	left_arm_nock_constraint.quaternion = Quaternion(Vector3.DOWN, target_in_parent.normalized())
+	left_arm_nock_constraint.scale = Vector3(1.0, target_in_parent.length() / arm_length, 1.0)
+
+func get_left_hand_global_position() -> Vector3:
+	if left_arm_nock_constraint != null:
+		return left_arm_nock_constraint.to_global(Vector3.DOWN * arm_length)
+	return left_arm_action.to_global(Vector3.DOWN * arm_length)
+
+func get_right_hand_global_position() -> Vector3:
+	return right_arm_action.to_global(Vector3.DOWN * arm_length)
+
 func prepare_held_idle_reference(action: MeleeAttackActionDefinition) -> void:
 	cancel_attack()
 	_placing = false
@@ -185,6 +210,7 @@ func cancel_attack():
 	held_item_alignment_weight = 0.0
 	held_item_face_turn_weight = 0.0
 	held_item_recovery_progress = 0.0
+	set_bow_draw_state(false, 0.0)
 
 func is_attacking() -> bool:
 	return _attacking
@@ -489,6 +515,8 @@ func _update_head(delta: float):
 	head_secondary.rotation = _current_head_rotation
 
 func _update_actions(delta: float):
+	if left_arm_nock_constraint != null:
+		left_arm_nock_constraint.transform = Transform3D.IDENTITY
 	var response = 1.0 - exp(-profile.motion_response * delta)
 	attack_pose_weight = 0.0
 	held_item_windup_pose_weight = 0.0
@@ -499,11 +527,12 @@ func _update_actions(delta: float):
 	if animation_state.sprinting:
 		_placing = false
 	var attack_active := _attacking
+	var bow_active := _bow_draw_active
 	var attack_progress := 0.0
 	if attack_active:
 		_attack_elapsed += delta
 		attack_progress = clamp(_attack_elapsed / _attack_duration, 0.0, 1.0)
-	_mine_blend = lerp(_mine_blend, 1.0 if _mining_active and not _placing and not attack_active and not animation_state.sprinting else 0.0, response)
+	_mine_blend = lerp(_mine_blend, 1.0 if _mining_active and not _placing and not attack_active and not bow_active and not animation_state.sprinting else 0.0, response)
 	if _mining_active:
 		_mine_phase = fmod(_mine_phase + delta / profile.mine_cycle_seconds, 1.0)
 	var right_rotation = Vector3.ZERO
@@ -532,7 +561,7 @@ func _update_actions(delta: float):
 		right_rotation.x = deg_to_rad(mine_degrees) * _mine_blend
 		left_rotation.x = deg_to_rad(-12.0 * clamp(-mine_degrees / 120.0, 0.0, 1.0)) * _mine_blend
 		body_rotation.y = deg_to_rad(-6.0 * clamp(-mine_degrees / 120.0, 0.0, 1.0)) * _mine_blend
-	if _placing and not attack_active and not animation_state.sprinting:
+	if _placing and not attack_active and not bow_active and not animation_state.sprinting:
 		_place_elapsed += delta
 		var place_progress = clamp(_place_elapsed / profile.place_seconds, 0.0, 1.0)
 		var place_degrees = _place_swing_degrees(place_progress)
@@ -590,7 +619,16 @@ func _update_actions(delta: float):
 			rig_root.position.y -= profile.attack_crouch_depth * attack_pose_weight
 		if _attack_elapsed >= _attack_duration:
 			_attacking = false
-	if _uses_two_handed_pose() and not attack_active and _mine_blend <= 0.001 and not _placing:
+	if bow_active:
+		var raise_weight := smoothstep(0.0, 1.0, _bow_raise_progress)
+		var right_draw_rotation := Vector3(
+			deg_to_rad(BOW_RIGHT_ARM_DRAW_ROTATION.x),
+			deg_to_rad(BOW_RIGHT_ARM_DRAW_ROTATION.y),
+			deg_to_rad(BOW_RIGHT_ARM_DRAW_ROTATION.z)
+		)
+		right_rotation = right_rotation.lerp(right_draw_rotation, raise_weight)
+		left_rotation = left_rotation.lerp(Vector3.ZERO, raise_weight)
+	elif _uses_two_handed_pose() and not attack_active and _mine_blend <= 0.001 and not _placing:
 		var hold_wave := sin(_elapsed * 4.0) * 1.5
 		var left_hold := _held_melee_action.two_handed_left_arm_rotation_degrees
 		var right_hold := _held_melee_action.two_handed_right_arm_rotation_degrees

@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="BowDrawActionDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://items/actions/bow_draw_action_definition.gd" id="1_action"]
+[ext_resource type="PackedScene" path="res://items/held/stone_arrow.tscn" id="2_arrow"]
+
+[resource]
+script = ExtResource("1_action")
+raise_seconds = 0.18
+draw_seconds = 1.5
+full_draw_distance = 0.48
+nocked_arrow_scene = ExtResource("2_arrow")

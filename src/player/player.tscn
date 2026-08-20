@@ -1,4 +1,4 @@
-[gd_scene load_steps=13 format=3 uid="uid://p1a2y3r0m0t0r"]
+[gd_scene load_steps=14 format=3 uid="uid://p1a2y3r0m0t0r"]
 
 [ext_resource type="Script" path="res://player/player_motor.gd" id="1_motor"]
 [ext_resource type="Script" path="res://player/player_interactor.gd" id="2_interactor"]
@@ -12,6 +12,7 @@
 [ext_resource type="Script" path="res://stats/stat_modifier_clock.gd" id="10_stat_clock"]
 [ext_resource type="Script" path="res://combat/presentation/hammer_shockwave_view.gd" id="11_shockwave"]
 [ext_resource type="Script" path="res://combat/presentation/sword_swing_arc_view.gd" id="12_sword_arc"]
+[ext_resource type="Script" path="res://player/visuals/bow_draw_progress_bar_3d.gd" id="13_bow_progress"]
 
 [node name="Player" type="Node3D" groups=["player"]]
 script = ExtResource("1_motor")
@@ -58,6 +59,10 @@ script = ExtResource("11_shockwave")
 
 [node name="SwordSwingArc" type="Node3D" parent="."]
 script = ExtResource("12_sword_arc")
+
+[node name="BowDrawProgress" type="Sprite3D" parent="."]
+position = Vector3(0, 2.1, 0)
+script = ExtResource("13_bow_progress")
 
 [node name="Footsteps" parent="." instance=ExtResource("8_footsteps")]
 

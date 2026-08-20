@@ -53,6 +53,8 @@ var melee_attack_action: MeleeAttackActionDefinition
 var melee_attack_elapsed: float = 0.0
 var melee_chain_input_timer: float = 0.0
 var next_melee_attack_direction: int = -1
+var bow_draw_action: BowDrawActionDefinition
+var bow_draw_elapsed: float = 0.0
 var secondary_use_timer: float = 0.0
 var _secondary_use_consumed_until_release: bool = false
 var _melee_contact_pending: bool = false
@@ -165,11 +167,13 @@ func _clear_active_state():
 		harvest.clear_target()
 	_reset_mining()
 	_reset_melee_chain()
+	_reset_bow_draw()
 	secondary_use_timer = 0.0
 
 func cancel_actions():
 	_reset_mining()
 	_reset_melee_chain()
+	_reset_bow_draw()
 	secondary_use_timer = 0.0
 	target_has = false
 	placement_has = false
@@ -190,24 +194,11 @@ func _physics_process(delta):
 		return
 	pointer_over_ui = UiUtils.is_pointer_over_ui(get_viewport())
 	if pointer_over_ui:
-		target_has = false
-		placement_has = false
-		can_primary_target = false
-		can_place_target = false
-		target_crafting_station = null
-		target_container = null
-		can_interact_target = false
-		if harvest != null:
-			harvest.clear_target()
-		if is_mining:
-			_reset_mining()
-		_reset_melee_chain()
-		_input_buffer.primary_use_just = false
-		_input_buffer.secondary_use_just = false
+		_clear_pointer_blocked_state()
 		return
 	_handle_raycast()
 	_handle_item_actions(delta)
-	_update_melee_facing(delta)
+	_update_action_facing(delta)
 
 func _handle_raycast():
 	target_has = false
@@ -309,6 +300,25 @@ func _handle_item_actions(delta):
 		primary_use_pressed = false
 		_reset_mining()
 		_reset_melee_chain()
+		_reset_bow_draw()
+	var selected_primary := get_selected_primary_action()
+	var selected_mining := selected_primary as MiningActionDefinition
+	var selected_melee := selected_primary as MeleeAttackActionDefinition
+	var selected_tilling := selected_primary as TillingActionDefinition
+	var selected_bow := selected_primary as BowDrawActionDefinition
+	if selected_bow == null or bow_draw_action != null and bow_draw_action != selected_bow:
+		_reset_bow_draw()
+	if primary_use_just and selected_bow != null:
+		_start_bow_draw(selected_bow)
+	if bow_draw_action != null:
+		if primary_use_pressed:
+			bow_draw_elapsed = minf(bow_draw_elapsed + delta, bow_draw_action.raise_seconds + bow_draw_action.draw_seconds)
+		else:
+			_reset_bow_draw()
+		primary_use_just = false
+		primary_use_pressed = false
+		_reset_mining()
+		_reset_melee_chain()
 	if _primary_harvest_latched:
 		if primary_use_pressed:
 			primary_use_just = false
@@ -322,10 +332,7 @@ func _handle_item_actions(delta):
 		primary_use_pressed = false
 		_reset_mining()
 		_reset_melee_chain()
-	var selected_primary := get_selected_primary_action()
-	var selected_mining := selected_primary as MiningActionDefinition
-	var selected_melee := selected_primary as MeleeAttackActionDefinition
-	var selected_tilling := selected_primary as TillingActionDefinition
+		_reset_bow_draw()
 	if primary_use_just and not is_attempting_container_mining() and _try_open_target_container():
 		primary_use_just = false
 	elif primary_use_just and not is_attempting_crafting_station_mining() and _try_open_target_crafting_station():
@@ -421,6 +428,22 @@ func _reset_mining():
 	mine_action = null
 	mine_source = null
 
+func _clear_pointer_blocked_state() -> void:
+	target_has = false
+	placement_has = false
+	can_primary_target = false
+	can_place_target = false
+	target_crafting_station = null
+	target_container = null
+	can_interact_target = false
+	if harvest != null:
+		harvest.clear_target()
+	_reset_mining()
+	_reset_melee_chain()
+	_reset_bow_draw()
+	_input_buffer.primary_use_just = false
+	_input_buffer.secondary_use_just = false
+
 func _reset_melee_chain():
 	_melee_contact_pending = false
 	_melee_impact_pending = false
@@ -432,6 +455,36 @@ func _reset_melee_chain():
 	melee_attack_action = null
 	melee_chain_input_timer = 0.0
 	next_melee_attack_direction = -1
+
+func _start_bow_draw(action: BowDrawActionDefinition) -> void:
+	assert(action != null)
+	bow_draw_action = action
+	bow_draw_elapsed = 0.0
+	_reset_mining()
+	_reset_melee_chain()
+	var mouse_position := get_viewport().get_mouse_position()
+	var ray_origin := camera.project_ray_origin(mouse_position)
+	var ray_direction := camera.project_ray_normal(mouse_position).normalized()
+	var cursor_direction := _get_cursor_planar_direction(ray_origin, ray_direction)
+	if not cursor_direction.is_zero_approx():
+		motor.face_direction(cursor_direction)
+
+func _reset_bow_draw() -> void:
+	bow_draw_action = null
+	bow_draw_elapsed = 0.0
+
+func is_drawing_bow() -> bool:
+	return bow_draw_action != null
+
+func get_bow_raise_progress() -> float:
+	if bow_draw_action == null:
+		return 0.0
+	return clampf(bow_draw_elapsed / bow_draw_action.raise_seconds, 0.0, 1.0)
+
+func get_bow_draw_progress() -> float:
+	if bow_draw_action == null:
+		return 0.0
+	return clampf((bow_draw_elapsed - bow_draw_action.raise_seconds) / bow_draw_action.draw_seconds, 0.0, 1.0)
 
 func _start_melee_attack():
 	var mouse_position := get_viewport().get_mouse_position()
@@ -479,8 +532,21 @@ func _advance_melee_attack(delta: float):
 	if (_melee_impact_pending or _melee_contact_pending) and previous_elapsed < profile.contact_time and melee_attack_elapsed >= profile.contact_time:
 		_commit_melee_impact()
 
-func _update_melee_facing(delta: float):
-	if pointer_over_ui or not get_selected_primary_action() is MeleeAttackActionDefinition:
+func _update_action_facing(delta: float):
+	if pointer_over_ui:
+		return
+	var selected_primary := get_selected_primary_action()
+	if selected_primary is BowDrawActionDefinition:
+		if not is_drawing_bow():
+			return
+		var bow_mouse_position := get_viewport().get_mouse_position()
+		var bow_ray_origin := camera.project_ray_origin(bow_mouse_position)
+		var bow_ray_direction := camera.project_ray_normal(bow_mouse_position).normalized()
+		var bow_cursor_direction := _get_cursor_planar_direction(bow_ray_origin, bow_ray_direction)
+		if not bow_cursor_direction.is_zero_approx():
+			motor.turn_toward_direction(bow_cursor_direction, delta)
+		return
+	if not selected_primary is MeleeAttackActionDefinition:
 		return
 	if melee_attack_action != null and melee_attack_timer > 0.0 and melee_attack_elapsed < melee_attack_action.attack_profile.duration:
 		motor.face_direction(_melee_locked_facing_direction)

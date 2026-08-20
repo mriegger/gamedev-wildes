@@ -71,11 +71,13 @@ position = Vector3(-0.3375, 0.675, 0)
 
 [node name="LeftArmAction" type="Node3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/LeftShoulder/LeftArmBase"]
 
-[node name="LeftArm" type="MeshInstance3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/LeftShoulder/LeftArmBase/LeftArmAction"]
+[node name="LeftArmNockConstraint" type="Node3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/LeftShoulder/LeftArmBase/LeftArmAction"]
+
+[node name="LeftArm" type="MeshInstance3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/LeftShoulder/LeftArmBase/LeftArmAction/LeftArmNockConstraint"]
 position = Vector3(0, -0.3375, 0)
 mesh = SubResource("Box_arm")
 
-[node name="ArmorLeftArmSocket" type="Node3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/LeftShoulder/LeftArmBase/LeftArmAction"]
+[node name="ArmorLeftArmSocket" type="Node3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/LeftShoulder/LeftArmBase/LeftArmAction/LeftArmNockConstraint"]
 position = Vector3(0, -0.3375, 0)
 
 [node name="RightShoulder" type="Node3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase"]
@@ -139,7 +141,7 @@ position = Vector3(0, -0.3375, 0)
 script = ExtResource("4_armor_view")
 head_attachment_path = NodePath("../RigRoot/BodySecondary/BodyAction/TorsoBase/HeadAnchor/HeadBase/HeadSecondary/ArmorHeadSocket")
 torso_attachment_path = NodePath("../RigRoot/BodySecondary/BodyAction/TorsoBase/ArmorTorsoSocket")
-left_arm_attachment_path = NodePath("../RigRoot/BodySecondary/BodyAction/TorsoBase/LeftShoulder/LeftArmBase/LeftArmAction/ArmorLeftArmSocket")
+left_arm_attachment_path = NodePath("../RigRoot/BodySecondary/BodyAction/TorsoBase/LeftShoulder/LeftArmBase/LeftArmAction/LeftArmNockConstraint/ArmorLeftArmSocket")
 right_arm_attachment_path = NodePath("../RigRoot/BodySecondary/BodyAction/TorsoBase/RightShoulder/RightArmBase/RightArmAction/ArmorRightArmSocket")
 left_leg_attachment_path = NodePath("../RigRoot/LeftHip/LeftLegLocomotion/LeftLegBase/ArmorLeftLegSocket")
 right_leg_attachment_path = NodePath("../RigRoot/RightHip/RightLegLocomotion/RightLegBase/ArmorRightLegSocket")

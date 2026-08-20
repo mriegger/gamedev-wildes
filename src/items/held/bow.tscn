@@ -1,4 +1,6 @@
-[gd_scene load_steps=10 format=3]
+[gd_scene load_steps=11 format=3]
+
+[ext_resource type="Script" path="res://items/held/bow_held_view.gd" id="1_view"]
 
 [sub_resource type="StandardMaterial3D" id="Material_bow"]
 albedo_color = Color(0.5, 0.27, 0.1, 1)
@@ -56,12 +58,13 @@ rings = 1
 material = SubResource("Material_string")
 top_radius = 0.004
 bottom_radius = 0.004
-height = 1.36
+height = 0.68
 radial_segments = 4
 rings = 1
 
 [node name="Bow" type="Node3D"]
 rotation = Vector3(-0.785398, 0, 0)
+script = ExtResource("1_view")
 
 [node name="DepthPivot" type="Node3D" parent="."]
 rotation = Vector3(0, -1.5708, 0)
@@ -92,6 +95,10 @@ position = Vector3(-0.125, -0.525, 0)
 rotation = Vector3(0, 0, -0.340979)
 mesh = SubResource("Cylinder_limb_outer_reversed")
 
-[node name="String" type="MeshInstance3D" parent="DepthPivot/PlanePivot"]
-position = Vector3(-0.18, 0, 0)
+[node name="UpperString" type="MeshInstance3D" parent="DepthPivot/PlanePivot"]
+position = Vector3(-0.18, 0.34, 0)
+mesh = SubResource("Cylinder_string")
+
+[node name="LowerString" type="MeshInstance3D" parent="DepthPivot/PlanePivot"]
+position = Vector3(-0.18, -0.34, 0)
 mesh = SubResource("Cylinder_string")

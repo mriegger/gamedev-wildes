@@ -241,6 +241,25 @@ func _run():
 	var stone_arrow := item_catalog.get_definition(&"stone_arrow")
 	var copper_arrow := item_catalog.get_definition(&"copper_arrow")
 	_expect(bow.max_stack == 1 and stone_arrow.max_stack == 99 and copper_arrow.max_stack == 99, "ranged item stack limits are incorrect")
+	var bow_action := bow.primary_action as BowDrawActionDefinition
+	_expect(bow_action != null and is_equal_approx(bow_action.raise_seconds, 0.18) and is_equal_approx(bow_action.draw_seconds, 1.5) and is_equal_approx(bow_action.full_draw_distance, 0.48), "bow draw timing is misconfigured")
+	_expect(bow_action.nocked_arrow_scene == stone_arrow.held_scene, "bow draw does not nock the canonical stone arrow model")
+	_expect(bow.rarity == null and bow.proficiency == null and not item_catalog.is_combat_item(&"bow"), "draw-only bow was prematurely registered with combat progression")
+	var invalid_arrow_root := Node3D.new()
+	var invalid_arrow_scene := PackedScene.new()
+	_expect(invalid_arrow_scene.pack(invalid_arrow_root) == OK, "invalid bow arrow fixture did not pack")
+	invalid_arrow_root.free()
+	var invalid_bow_action := BowDrawActionDefinition.new()
+	invalid_bow_action.nocked_arrow_scene = invalid_arrow_scene
+	var empty_bow_action := BowDrawActionDefinition.new()
+	empty_bow_action.nocked_arrow_scene = PackedScene.new()
+	var print_error_messages := Engine.print_error_messages
+	Engine.print_error_messages = false
+	var invalid_bow_action_valid := invalid_bow_action.validate("test")
+	var empty_bow_action_valid := empty_bow_action.validate("test")
+	Engine.print_error_messages = print_error_messages
+	_expect(not invalid_bow_action_valid, "bow draw accepted an arrow without a nock contract")
+	_expect(not empty_bow_action_valid, "bow draw accepted an empty nocked arrow scene")
 	_expect_pixel_icon(bow, "res://assets/textures/tools/bow/bow.png", 6)
 	_expect_pixel_icon(stone_arrow, "res://assets/textures/tools/bow/stone_arrow.png", 6)
 	_expect_pixel_icon(copper_arrow, "res://assets/textures/tools/bow/copper_arrow.png", 6)
@@ -260,22 +279,24 @@ func _run():
 	for x in range(16):
 		for offset in range(1, 8):
 			_expect(is_zero_approx(stone_arrow_icon.get_pixel(x, 7 - offset).a - stone_arrow_icon.get_pixel(x, 7 + offset).a), "arrow icon is not vertically symmetric at column %d" % x)
-	var bow_held := bow.held_scene.instantiate() as Node3D
+	var bow_held := bow.held_scene.instantiate() as BowHeldView
 	var depth_pivot := bow_held.get_node_or_null("DepthPivot") as Node3D
 	var bow_plane := bow_held.get_node_or_null("DepthPivot/PlanePivot") as Node3D
 	var bow_grip := bow_held.get_node_or_null("DepthPivot/PlanePivot/Grip") as MeshInstance3D
-	var bow_string := bow_held.get_node_or_null("DepthPivot/PlanePivot/String") as MeshInstance3D
+	var upper_string := bow_held.get_node_or_null("DepthPivot/PlanePivot/UpperString") as MeshInstance3D
+	var lower_string := bow_held.get_node_or_null("DepthPivot/PlanePivot/LowerString") as MeshInstance3D
 	var upper_inner_limb := bow_held.get_node_or_null("DepthPivot/PlanePivot/UpperInnerLimb") as MeshInstance3D
 	var upper_limb := bow_held.get_node_or_null("DepthPivot/PlanePivot/UpperOuterLimb") as MeshInstance3D
 	var lower_inner_limb := bow_held.get_node_or_null("DepthPivot/PlanePivot/LowerInnerLimb") as MeshInstance3D
 	var lower_limb := bow_held.get_node_or_null("DepthPivot/PlanePivot/LowerOuterLimb") as MeshInstance3D
 	_expect(bow_held.get_child_count() == 1 and depth_pivot != null and bow_plane != null, "bow held model is missing its orientation pivots")
 	_expect(bow_grip != null and bow_grip.position.is_zero_approx(), "bow grip is not anchored at the player's hand")
-	_expect(bow_string != null and bow_string.mesh is CylinderMesh and is_equal_approx((bow_string.mesh as CylinderMesh).height, 1.36), "bow string is incomplete")
+	_expect(upper_string != null and lower_string != null and upper_string.mesh is CylinderMesh and lower_string.mesh is CylinderMesh, "bow string segments are incomplete")
+	_expect(is_equal_approx((upper_string.mesh as CylinderMesh).height, 0.68) and is_equal_approx((lower_string.mesh as CylinderMesh).height, 0.68), "bow string segments do not span the resting bow")
 	_expect(upper_limb != null and lower_limb != null and is_equal_approx(upper_limb.position.y, -lower_limb.position.y), "bow limbs are not vertically balanced around the grip")
 	_expect(upper_inner_limb.rotation.z > 0.0 and upper_limb.rotation.z > upper_inner_limb.rotation.z, "upper bow limb does not form a continuous curve")
 	_expect(is_equal_approx(lower_inner_limb.rotation.z, -upper_inner_limb.rotation.z) and is_equal_approx(lower_limb.rotation.z, -upper_limb.rotation.z), "lower bow limb does not mirror the upper curve")
-	_expect(bow_string.position.x < upper_limb.position.x and bow_string.position.x < bow_grip.position.x, "bow string is not stretched across the open side of the curve")
+	_expect(upper_string.position.x < upper_limb.position.x and upper_string.position.x < bow_grip.position.x and is_equal_approx(upper_string.position.x, lower_string.position.x), "bow string is not stretched across the open side of the curve")
 	var hand_socket_basis := Basis.from_euler(Vector3(PI / 4.0, 0.0, 0.0))
 	var composed_bow_basis := hand_socket_basis * bow_held.basis * depth_pivot.basis * bow_plane.basis
 	var limb_axis := (composed_bow_basis * Vector3.UP).normalized()
@@ -285,7 +306,8 @@ func _run():
 	var upper_limb_mesh := upper_limb.mesh as CylinderMesh
 	var lower_limb_mesh := lower_limb.mesh as CylinderMesh
 	var grip_mesh := bow_grip.mesh as CylinderMesh
-	var string_mesh := bow_string.mesh as CylinderMesh
+	var upper_string_mesh := upper_string.mesh as CylinderMesh
+	var lower_string_mesh := lower_string.mesh as CylinderMesh
 	var upper_inner_mesh := upper_inner_limb.mesh as CylinderMesh
 	var lower_inner_mesh := lower_inner_limb.mesh as CylinderMesh
 	var upper_grip_end := bow_grip.position + bow_grip.basis.y.normalized() * grip_mesh.height * 0.5
@@ -298,18 +320,37 @@ func _run():
 	var lower_inner_lower_end := lower_inner_limb.position - lower_inner_limb.basis.y.normalized() * lower_inner_mesh.height * 0.5
 	var lower_outer_upper_end := lower_limb.position + lower_limb.basis.y.normalized() * lower_limb_mesh.height * 0.5
 	var lower_outer_lower_end := lower_limb.position - lower_limb.basis.y.normalized() * lower_limb_mesh.height * 0.5
-	var upper_string_end := bow_string.position + bow_string.basis.y.normalized() * string_mesh.height * 0.5
-	var lower_string_end := bow_string.position - bow_string.basis.y.normalized() * string_mesh.height * 0.5
+	var upper_string_end := upper_string.position + upper_string.basis.y.normalized() * upper_string_mesh.height * upper_string.scale.y * 0.5
+	var lower_string_end := lower_string.position - lower_string.basis.y.normalized() * lower_string_mesh.height * lower_string.scale.y * 0.5
 	_expect(upper_grip_end.distance_to(upper_inner_lower_end) < 0.001 and upper_inner_upper_end.distance_to(upper_outer_lower_end) < 0.001 and upper_outer_upper_end.distance_to(upper_string_end) < 0.001, "upper bow curve contains a visible gap")
 	_expect(lower_grip_end.distance_to(lower_inner_upper_end) < 0.001 and lower_inner_lower_end.distance_to(lower_outer_upper_end) < 0.001 and lower_outer_lower_end.distance_to(lower_string_end) < 0.001, "lower bow curve contains a visible gap")
 	_expect(is_equal_approx(upper_limb_mesh.top_radius, lower_limb_mesh.bottom_radius) and is_equal_approx(upper_limb_mesh.bottom_radius, lower_limb_mesh.top_radius), "bow limb taper is not mirrored around the grip")
-	bow_held.free()
-	var stone_arrow_held := stone_arrow.held_scene.instantiate() as Node3D
-	var copper_arrow_held := copper_arrow.held_scene.instantiate() as Node3D
+	var bow_parent := Node3D.new()
+	root.add_child(bow_parent)
+	bow_parent.add_child(bow_held)
+	await process_frame
+	bow_held.set_draw_pose(true, 1.0, 0.5, bow_action.full_draw_distance, bow_action.nocked_arrow_scene, Vector3.BACK)
+	var drawn_string_center := bow_held._string_center
+	var expected_half_draw_center := BowHeldView.REST_STRING_CENTER + Vector3.LEFT * bow_action.full_draw_distance * 0.5
+	var nocked_arrow := bow_held._nocked_arrow
+	var nocked_fletching := nocked_arrow.get_node("FletchingHorizontal") as MeshInstance3D
+	_expect(drawn_string_center.distance_to(expected_half_draw_center) < 0.001, "bow string did not move halfway through its authored draw path")
+	_expect(is_equal_approx(drawn_string_center.y, BowHeldView.REST_STRING_CENTER.y) and is_equal_approx(drawn_string_center.z, BowHeldView.REST_STRING_CENTER.z), "bow string drifted sideways or vertically while drawing")
+	_expect(bow_plane.to_local(nocked_fletching.global_position).distance_to(drawn_string_center) < 0.001, "nocked arrow fletching is not centered on the string")
+	_expect((nocked_arrow.basis * Vector3.UP).normalized().dot(Vector3.RIGHT) > 0.999, "nocked arrow does not point forward from the string")
+	var drawn_bow_basis := bow_held.global_transform.basis.orthonormalized() * depth_pivot.basis.orthonormalized() * bow_plane.basis.orthonormalized()
+	_expect((drawn_bow_basis * Vector3.UP).normalized().dot(Vector3.UP) > 0.999, "drawn bow is not vertical")
+	_expect((drawn_bow_basis * Vector3.LEFT).normalized().dot(Vector3.FORWARD) > 0.999, "drawn bow string does not face the player's body")
+	bow_held.reset_draw_pose()
+	_expect(bow_held._nocked_arrow == null and bow_held._string_center.distance_to(Vector3(-0.18, 0.0, 0.0)) < 0.001, "bow draw presentation did not reset")
+	bow_parent.free()
+	var stone_arrow_held := stone_arrow.held_scene.instantiate() as NockableArrowView
+	var copper_arrow_held := copper_arrow.held_scene.instantiate() as NockableArrowView
 	var stone_arrow_head := stone_arrow_held.get_node_or_null("Head") as MeshInstance3D
 	var copper_arrow_head := copper_arrow_held.get_node_or_null("Head") as MeshInstance3D
 	var stone_arrow_shaft := stone_arrow_held.get_node_or_null("Shaft") as MeshInstance3D
 	_expect(stone_arrow_held.get_child_count() == 4 and copper_arrow_held.get_child_count() == 4, "arrow held models do not contain shaft, head, and fletching")
+	_expect(stone_arrow_held.nock_local_position.is_equal_approx(Vector3(0.0, -0.35, 0.0)) and copper_arrow_held.nock_local_position.is_equal_approx(stone_arrow_held.nock_local_position), "arrow models do not expose the canonical fletching nock point")
 	_expect(stone_arrow_shaft != null and stone_arrow_shaft.mesh is CylinderMesh and is_equal_approx((stone_arrow_shaft.mesh as CylinderMesh).height, 0.82), "arrow shaft dimensions changed")
 	_expect(stone_arrow_head != null and stone_arrow_head.mesh is CylinderMesh and (stone_arrow_head.mesh as CylinderMesh).radial_segments == 4, "stone arrowhead is not low-poly")
 	_expect(copper_arrow_head != null and copper_arrow_head.mesh is CylinderMesh and (copper_arrow_head.mesh as CylinderMesh).radial_segments == 4, "copper arrowhead is not low-poly")
@@ -562,6 +603,118 @@ func _run():
 	var restored_pickaxe_source := _find_inventory_item(&"stone_pickaxe")
 	_expect(restored_pickaxe_source >= 0 and (restored_pickaxe_source == 0 or _inventory_loadout.assign_slot_to_hotbar(restored_pickaxe_source, 0)), "stone pickaxe could not be moved back to the selected slot")
 	_expect(_inventory.get_slot(0) != null and _inventory.get_slot(0).item_id == &"stone_pickaxe", "stone pickaxe did not return to the selected slot")
+	_expect(_inventory_loadout.discard_stack(0, 1), "stone pickaxe could not be removed before the bow presentation test")
+	_expect(_inventory_loadout.add_stack(InventoryStack.new(&"bow", 1)), "bow could not be added for the presentation test")
+	var bow_source := _find_inventory_item(&"bow")
+	_expect(bow_source >= 0 and (bow_source == 0 or _inventory_loadout.assign_slot_to_hotbar(bow_source, 0)), "bow could not be moved to the selected slot")
+	_expect(_interactor.get_selected_primary_action() == bow_action and _player.held_item_view.held_node is BowHeldView, "selected bow did not expose its draw action in the right hand")
+	_input_buffer.primary_use_just = true
+	_input_buffer.primary_use_pressed = true
+	_interactor._handle_item_actions(0.0)
+	_player.animation_driver._process(0.0)
+	var active_bow_view := _player.held_item_view.held_node as BowHeldView
+	_expect(_interactor.is_drawing_bow() and is_zero_approx(_interactor.get_bow_raise_progress()) and active_bow_view._nocked_arrow != null, "pressing primary use did not begin the nocked bow pose")
+	var bow_progress_bar := _player.bow_draw_progress_bar
+	_expect(bow_progress_bar.visible and is_zero_approx(bow_progress_bar._progress), "bow draw progress bar did not appear empty when drawing began")
+	_expect(is_equal_approx(bow_progress_bar.position.y, _player.player_height + BowDrawProgressBar3D.HEIGHT_OFFSET), "bow draw progress bar is not above the player")
+	var bow_mouse_position := _interactor.get_viewport().get_mouse_position()
+	var bow_ray_origin := _camera.project_ray_origin(bow_mouse_position)
+	var bow_ray_direction := _camera.project_ray_normal(bow_mouse_position).normalized()
+	var bow_aim_direction := _interactor._get_cursor_planar_direction(bow_ray_origin, bow_ray_direction)
+	var bow_aim_yaw := atan2(bow_aim_direction.x, bow_aim_direction.z)
+	var bow_aim_start_yaw := bow_aim_yaw - 1.0
+	_player.model_root.rotation.y = bow_aim_start_yaw
+	_player.is_sprinting = false
+	_player._turn_toward_movement(-bow_aim_direction, 0.1)
+	_expect(is_equal_approx(_player.model_root.rotation.y, bow_aim_start_yaw), "walking movement overrode active bow aim")
+	_interactor._update_action_facing(0.1)
+	var expected_bow_aim_yaw := lerp_angle(bow_aim_start_yaw, bow_aim_yaw, 1.0 - exp(-10.0 * 0.1))
+	_expect(is_equal_approx(_player.model_root.rotation.y, expected_bow_aim_yaw), "walking bow draw did not track the cursor")
+	_player.model_root.rotation.y = bow_aim_start_yaw
+	_player.is_sprinting = true
+	_player._turn_toward_movement(-bow_aim_direction, 0.1)
+	_expect(is_equal_approx(_player.model_root.rotation.y, bow_aim_start_yaw), "sprint movement overrode active bow aim")
+	_interactor._update_action_facing(0.1)
+	_expect(is_equal_approx(_player.model_root.rotation.y, expected_bow_aim_yaw), "sprinting bow draw did not track the cursor")
+	_player.is_sprinting = false
+	_interactor._handle_item_actions(0.09)
+	_player.animation_driver._process(0.0)
+	_expect(is_equal_approx(_interactor.get_bow_raise_progress(), 0.5) and is_zero_approx(_interactor.get_bow_draw_progress()), "bow raise timing is incorrect")
+	_interactor._handle_item_actions(0.84)
+	_player.animation_driver._process(0.0)
+	_expect(is_equal_approx(_interactor.get_bow_raise_progress(), 1.0) and is_equal_approx(_interactor.get_bow_draw_progress(), 0.5), "bow draw did not reach halfway after 0.75 seconds")
+	var bow_fill_sample := bow_progress_bar._image.get_pixel(1, 3)
+	var bow_background_sample := bow_progress_bar._image.get_pixel(BowDrawProgressBar3D.TEXTURE_WIDTH - 2, 3)
+	_expect(is_equal_approx(bow_progress_bar._progress, 0.5), "bow draw progress bar did not reach halfway with the draw")
+	_expect(absf(bow_fill_sample.r - BowDrawProgressBar3D.FILL_COLOR.r) < 0.01 and absf(bow_fill_sample.g - BowDrawProgressBar3D.FILL_COLOR.g) < 0.01 and absf(bow_fill_sample.b - BowDrawProgressBar3D.FILL_COLOR.b) < 0.01, "bow draw progress bar fill is not yellow")
+	_expect(absf(bow_background_sample.r - BowDrawProgressBar3D.BACKGROUND_COLOR.r) < 0.01 and absf(bow_background_sample.g - BowDrawProgressBar3D.BACKGROUND_COLOR.g) < 0.01 and absf(bow_background_sample.b - BowDrawProgressBar3D.BACKGROUND_COLOR.b) < 0.01, "bow draw progress bar background is not black")
+	var half_draw_hand_local := active_bow_view.plane_pivot.to_local(_player.animation_driver.animator.get_left_hand_global_position())
+	_expect(active_bow_view._string_center.distance_to(half_draw_hand_local) < 0.001, "draw hand did not track the authored string center")
+	var half_draw_fletching := active_bow_view._nocked_arrow.get_node("FletchingHorizontal") as MeshInstance3D
+	var half_draw_hand_global := _player.animation_driver.animator.get_left_hand_global_position()
+	var half_draw_fletching_global := half_draw_fletching.global_position
+	_expect(half_draw_fletching.global_position.distance_to(half_draw_hand_global) < 0.001, "draw hand did not track the arrow fletching")
+	_interactor._handle_item_actions(0.75)
+	_player.animation_driver._process(0.0)
+	var full_draw_center := active_bow_view._string_center
+	var full_draw_fletching := active_bow_view._nocked_arrow.get_node("FletchingHorizontal") as MeshInstance3D
+	var full_draw_hand_global := _player.animation_driver.animator.get_left_hand_global_position()
+	var draw_travel := full_draw_fletching.global_position - half_draw_fletching_global
+	var actor_forward := _player.animation_driver.animator.global_transform.basis.z.normalized()
+	_expect(is_equal_approx(_interactor.get_bow_draw_progress(), 1.0) and full_draw_center.x < BowHeldView.REST_STRING_CENTER.x - 0.2, "bow did not reach its full draw after 1.5 seconds")
+	_expect(full_draw_fletching.global_position.distance_to(full_draw_hand_global) < 0.001, "draw hand did not continue following the arrow fletching")
+	_expect(is_equal_approx(full_draw_center.y, BowHeldView.REST_STRING_CENTER.y) and is_equal_approx(full_draw_center.z, BowHeldView.REST_STRING_CENTER.z), "nocked arrow did not travel straight backward")
+	_expect(draw_travel.normalized().dot(-actor_forward) > 0.999 and absf(draw_travel.y) < 0.001, "nocked arrow did not travel straight backward in actor space")
+	_expect(is_equal_approx(bow_progress_bar._progress, 1.0) and absf(bow_progress_bar._image.get_pixel(BowDrawProgressBar3D.TEXTURE_WIDTH - 2, 3).r - BowDrawProgressBar3D.FILL_COLOR.r) < 0.01, "bow draw progress bar did not fill at maximum draw")
+	_interactor._handle_item_actions(0.5)
+	_player.animation_driver._process(0.0)
+	_expect(is_equal_approx(_interactor.get_bow_draw_progress(), 1.0) and active_bow_view._string_center.is_equal_approx(full_draw_center), "held bow did not remain at maximum draw")
+	_input_buffer.primary_use_pressed = false
+	_interactor._handle_item_actions(0.016)
+	_player.animation_driver._process(0.0)
+	_expect(not _interactor.is_drawing_bow() and active_bow_view._nocked_arrow == null, "releasing primary use did not reset the unfinished bow shot")
+	_expect(not bow_progress_bar.visible and is_zero_approx(bow_progress_bar._progress), "bow draw progress bar remained visible after release")
+	_input_buffer.primary_use_just = true
+	_input_buffer.primary_use_pressed = true
+	_interactor._handle_item_actions(0.0)
+	_player.animation_driver._process(0.0)
+	_interactor._clear_pointer_blocked_state()
+	_player.animation_driver._process(0.0)
+	_expect(not _interactor.is_drawing_bow() and active_bow_view._nocked_arrow == null, "pointer-over-UI cancellation retained the bow draw")
+	_input_buffer.primary_use_pressed = false
+	_input_buffer.primary_use_just = true
+	_input_buffer.primary_use_pressed = true
+	_interactor._handle_item_actions(0.0)
+	_player.animation_driver._process(0.0)
+	_interactor.cancel_actions()
+	_player.animation_driver._process(0.0)
+	_expect(not _interactor.is_drawing_bow() and active_bow_view._nocked_arrow == null, "explicit action cancellation retained the bow draw")
+	_input_buffer.primary_use_pressed = false
+	_input_buffer.primary_use_just = true
+	_input_buffer.primary_use_pressed = true
+	_interactor._handle_item_actions(0.0)
+	_player.animation_driver._process(0.0)
+	_interactor.unbind_space()
+	_player.animation_driver._process(0.0)
+	_expect(not _interactor.is_drawing_bow() and active_bow_view._nocked_arrow == null, "world unbind retained the bow draw")
+	_interactor.bind_space(_voxel_world, _voxel_world)
+	_input_buffer.primary_use_pressed = false
+	_input_buffer.primary_use_just = true
+	_input_buffer.primary_use_pressed = true
+	_interactor._handle_item_actions(0.0)
+	_player.animation_driver._process(0.0)
+	_expect(_inventory_loadout.discard_stack(0, 1), "bow could not be removed after the presentation test")
+	_expect(_inventory_loadout.add_stack(InventoryStack.new(
+		&"stone_pickaxe",
+		1,
+		_inventory.equipment_instance_factory.create(&"stone_pickaxe"),
+	)), "stone pickaxe could not be restored after the bow presentation test")
+	restored_pickaxe_source = _find_inventory_item(&"stone_pickaxe")
+	_expect(restored_pickaxe_source >= 0 and (restored_pickaxe_source == 0 or _inventory_loadout.assign_slot_to_hotbar(restored_pickaxe_source, 0)), "stone pickaxe could not return to the selected slot after drawing the bow")
+	_interactor._handle_item_actions(0.0)
+	_player.animation_driver._process(0.0)
+	_expect(not _interactor.is_drawing_bow() and _player.held_item_view.held_node is PixelExtrudedItem, "selection change retained the bow draw presentation")
+	_input_buffer.primary_use_pressed = false
 	_player.held_item_view.set_attack_pose(0.0, 0.0, null)
 	var shockwave := _player.get_node("HammerShockwave") as HammerShockwaveView
 	movement_camera_rig._camera_rest_position = _camera.position
@@ -738,20 +891,20 @@ func _run():
 	var aim_start_yaw := aim_target_yaw - 1.0
 	_player.model_root.rotation.y = aim_start_yaw
 	_player.is_sprinting = true
-	_interactor._update_melee_facing(0.1)
+	_interactor._update_action_facing(0.1)
 	_expect(is_equal_approx(_player.model_root.rotation.y, aim_start_yaw), "armed sprinting tracked the cursor")
 	_player.is_sprinting = false
 
 	_player.model_root.rotation.y = aim_start_yaw
 	_player.on_ground = false
 	_player.velocity = Vector3(-2.0, 3.0, 1.0)
-	_interactor._update_melee_facing(0.1)
+	_interactor._update_action_facing(0.1)
 	var expected_aim_yaw := lerp_angle(aim_start_yaw, aim_target_yaw, 1.0 - exp(-10.0 * 0.1))
 	_expect(is_equal_approx(_player.model_root.rotation.y, expected_aim_yaw), "airborne moving melee aim did not track the cursor smoothly")
 
 	var held_aim_yaw := _player.model_root.rotation.y
 	_interactor.pointer_over_ui = true
-	_interactor._update_melee_facing(0.2)
+	_interactor._update_action_facing(0.2)
 	_expect(is_equal_approx(_player.model_root.rotation.y, held_aim_yaw), "melee aim changed while the pointer was over UI")
 	_interactor.pointer_over_ui = false
 	_player.velocity = Vector3.ZERO
@@ -784,7 +937,7 @@ func _run():
 	_player.is_sprinting = true
 	_player._turn_toward_movement(-expected_attack_facing, 0.2)
 	_expect(not is_equal_approx(_player.model_root.rotation.y, locked_attack_yaw), "sprint movement did not turn the player during the attack lock test")
-	_interactor._update_melee_facing(0.0)
+	_interactor._update_action_facing(0.0)
 	_expect(is_equal_approx(_player.model_root.rotation.y, locked_attack_yaw), "sprinting overrode the locked sword facing")
 	_player.is_sprinting = false
 
@@ -795,7 +948,7 @@ func _run():
 	var redirected_ray_direction := _camera.project_ray_normal(redirected_mouse_position).normalized()
 	var redirected_aim := _interactor._get_cursor_planar_direction(redirected_ray_origin, redirected_ray_direction)
 	_expect(not redirected_aim.is_zero_approx() and redirected_aim.dot(expected_attack_facing) < 0.99, "attack lock test did not redirect the cursor ray")
-	_interactor._update_melee_facing(0.2)
+	_interactor._update_action_facing(0.2)
 	_expect(is_equal_approx(_player.model_root.rotation.y, locked_attack_yaw), "player facing changed during an active sword swing")
 	_camera.transform = attack_camera_transform
 	_player.on_ground = true
@@ -840,13 +993,13 @@ func _run():
 	_player.is_sprinting = true
 	_player._turn_toward_movement(facing_direction, 0.1)
 	var post_attack_sprint_yaw := _player.model_root.rotation.y
-	_interactor._update_melee_facing(0.1)
+	_interactor._update_action_facing(0.1)
 	_expect(is_equal_approx(_player.model_root.rotation.y, post_attack_sprint_yaw), "cursor-facing resumed during a post-attack sprint")
 	_player.is_sprinting = false
 
 	var resumed_aim_start_yaw := aim_target_yaw - 1.0
 	_player.model_root.rotation.y = resumed_aim_start_yaw
-	_interactor._update_melee_facing(0.1)
+	_interactor._update_action_facing(0.1)
 	_expect(not is_equal_approx(_player.model_root.rotation.y, resumed_aim_start_yaw), "melee aim did not resume after the swing duration")
 	_expect(absf(wrapf(_player.model_root.rotation.y - aim_target_yaw, -PI, PI)) > 0.1, "resumed melee aim snapped to the cursor")
 	_player.animation_driver._process(sword_action.attack_profile.duration)
@@ -872,7 +1025,7 @@ func _run():
 	_player._turn_toward_movement(Vector3.RIGHT, 0.1)
 	_expect(not is_equal_approx(_player.model_root.rotation.y, pickaxe_facing_start_yaw), "non-melee movement stopped controlling facing")
 	var pickaxe_movement_yaw := _player.model_root.rotation.y
-	_interactor._update_melee_facing(0.5)
+	_interactor._update_action_facing(0.5)
 	_expect(is_equal_approx(_player.model_root.rotation.y, pickaxe_movement_yaw), "non-melee item started cursor-facing")
 	_input_buffer.move_dir = Vector2(0.0, 1.0)
 	_player._handle_movement(0.0)

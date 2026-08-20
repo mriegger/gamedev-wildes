@@ -29,6 +29,7 @@ signal jump_committed
 @onready var _action_audio: PlayerActionAudio = $ActionAudio as PlayerActionAudio
 @onready var _hammer_shockwave: HammerShockwaveView = $HammerShockwave as HammerShockwaveView
 @onready var _sword_swing_arc: SwordSwingArcView = $SwordSwingArc as SwordSwingArcView
+@onready var bow_draw_progress_bar: BowDrawProgressBar3D = $BowDrawProgress as BowDrawProgressBar3D
 @onready var armor_view: PlayerArmorView = $ModelRoot/PlayerVisual/ArmorView as PlayerArmorView
 @onready var stat_modifier_clock: StatModifierClock = $StatModifierClock as StatModifierClock
 
@@ -106,6 +107,7 @@ func setup(
 	_action_audio.setup(animation_driver, interactor, p_inventory, p_combat)
 	_hammer_shockwave.setup(interactor, p_camera_rig)
 	_sword_swing_arc.setup(interactor, self)
+	bow_draw_progress_bar.set_body_height(player_height)
 	armor_view.setup(p_inventory)
 	_is_setup = true
 
@@ -344,14 +346,17 @@ func turn_toward_direction(world_direction: Vector3, delta: float):
 	model_root.rotation.y = lerp_angle(model_root.rotation.y, target_yaw, turn_weight)
 
 func _turn_toward_movement(world_direction: Vector3, delta: float):
-	if _selected_item_uses_melee_action() and not is_sprinting:
+	if _selected_action_locks_cursor_facing():
 		return
 	turn_toward_direction(world_direction, delta)
 
-func _selected_item_uses_melee_action() -> bool:
+func _selected_action_locks_cursor_facing() -> bool:
 	if _inventory_model == null:
 		return false
 	var selected_item_id = _inventory_model.get_selected_item_id()
 	if selected_item_id == null:
 		return false
-	return _inventory_model.item_catalog.get_definition(selected_item_id).primary_action is MeleeAttackActionDefinition
+	var action := _inventory_model.item_catalog.get_definition(selected_item_id).primary_action
+	if action is MeleeAttackActionDefinition:
+		return not is_sprinting
+	return action is BowDrawActionDefinition and interactor.is_drawing_bow()

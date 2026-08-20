@@ -185,7 +185,7 @@ enemy loot pool references it.
 
 Create a `TillingActionDefinition` with canonical source block resources and one canonical result block, then assign it as the item's primary action. The copper hoe maps grass and dirt to dry farmland. Tilling requires the top face, an air block directly above it, and normal interaction reach. The voxel world validates and commits the replacement atomically.
 
-Primary actions currently accept mining, melee, and tilling definitions. Secondary actions accept
+Primary actions currently accept mining, melee, tilling, and held bow-draw definitions. Secondary actions accept
 block placement and consumption. Catalog validation rejects action types in slots that do not yet
 have an execution path, and new action types must add their runtime handler and catalog allowance
 together.
@@ -196,6 +196,10 @@ The bow and its stone and copper arrows use project-authored low-poly primitive 
 scene origin is its wrapped grip and cancels the hand socket's resting pitch so it rests across the
 right hand with its string side facing up. Their transparent 16×16 icons use deterministic hard-edged pixel
 silhouettes with bounded palettes; the arrow variants share one silhouette and differ at the head.
+The bow's primary action owns its quick raise duration, 1.5-second draw duration, and nocked arrow
+scene. Holding primary use keeps the draw state active, while the humanoid animator poses both arms
+and the held bow view bends its two string segments around the nocked arrow. A player-relative
+billboard presents the current draw progress with a black background and yellow fill.
 
 Melee definitions own their idle and attack transforms, animation style, two-handed stance, and optional impact-effect radius. The copper sword's one-handed alternating swing renders a procedural radial scan from the player to its profile's full sweep and reach, while the copper hammer holds a custom modeled handle in both hands, raises it overhead, and drives it into a procedural shockwave without adding weapon-specific branches to inventory selection. Switching away from a melee item cancels its presentation before the newly selected tool is rendered.
 

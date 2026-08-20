@@ -1,4 +1,6 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://items/held/nockable_arrow_view.gd" id="1_view"]
 
 [sub_resource type="StandardMaterial3D" id="Material_wood"]
 albedo_color = Color(0.48, 0.27, 0.12, 1)
@@ -34,6 +36,7 @@ size = Vector3(0.12, 0.15, 0.018)
 
 [node name="StoneArrow" type="Node3D"]
 rotation = Vector3(-0.785398, 0, 0)
+script = ExtResource("1_view")
 
 [node name="Shaft" type="MeshInstance3D" parent="."]
 mesh = SubResource("Cylinder_shaft")

@@ -59,6 +59,7 @@ size = Vector3(0.12, 0.68, 0.12)
 [node name="SkeletonVisual" type="Node3D"]
 script = ExtResource("1_animator")
 profile = ExtResource("2_profile")
+arm_length = 0.8
 
 [node name="RigRoot" type="Node3D" parent="."]
 
@@ -143,7 +144,9 @@ position = Vector3(-0.34, 0.61, 0)
 
 [node name="LeftArmAction" type="Node3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/LeftShoulder/LeftArmBase"]
 
-[node name="Arm" type="MeshInstance3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/LeftShoulder/LeftArmBase/LeftArmAction"]
+[node name="LeftArmNockConstraint" type="Node3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/LeftShoulder/LeftArmBase/LeftArmAction"]
+
+[node name="Arm" type="MeshInstance3D" parent="RigRoot/BodySecondary/BodyAction/TorsoBase/LeftShoulder/LeftArmBase/LeftArmAction/LeftArmNockConstraint"]
 position = Vector3(0, -0.4, 0)
 mesh = SubResource("Box_arm")
 

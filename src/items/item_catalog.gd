@@ -132,7 +132,7 @@ func _rebuild_lookup() -> void:
 		_is_valid = affix.validate(source) and _is_valid
 
 func _is_supported_primary_action(action: ItemActionDefinition) -> bool:
-	return action == null or action is MiningActionDefinition or action is MeleeAttackActionDefinition or action is TillingActionDefinition
+	return action == null or action is MiningActionDefinition or action is MeleeAttackActionDefinition or action is TillingActionDefinition or action is BowDrawActionDefinition
 
 func _is_supported_secondary_action(action: ItemActionDefinition) -> bool:
 	return action == null or action is BlockPlacementActionDefinition or action is ConsumableActionDefinition

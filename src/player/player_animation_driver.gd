@@ -96,8 +96,13 @@ func _process(delta: float):
 	if _active_attack_action != null and (_interactor.melee_attack_action != _active_attack_action or _interactor.get_selected_primary_action() != _active_attack_action):
 		_active_attack_action = null
 		animator.cancel_attack()
-	var selected_attack_action := _interactor.get_selected_primary_action() as MeleeAttackActionDefinition
+	var selected_primary_action := _interactor.get_selected_primary_action()
+	var selected_attack_action := selected_primary_action as MeleeAttackActionDefinition
+	var selected_bow_action := selected_primary_action as BowDrawActionDefinition
+	var bow_draw_active := selected_bow_action != null and _interactor.bow_draw_action == selected_bow_action
 	animator.set_held_melee_action(selected_attack_action)
+	animator.set_bow_draw_state(bow_draw_active, _interactor.get_bow_raise_progress())
+	_motor.bow_draw_progress_bar.set_progress(bow_draw_active, _interactor.get_bow_draw_progress())
 	var model_basis = _motor.model_root.global_transform.basis.orthonormalized()
 	var local_velocity = model_basis.inverse() * _motor.velocity
 	var planar_speed = Vector2(_motor.velocity.x, _motor.velocity.z).length()
@@ -118,8 +123,12 @@ func _process(delta: float):
 	_update_mining_impact(delta, mining_active)
 	_advance_presented_animation(delta, selected_attack_action)
 	_apply_held_item_attack_pose(selected_attack_action)
+	_apply_bow_draw_pose(selected_bow_action, bow_draw_active)
 
 func _update_preview(delta: float):
+	animator.set_bow_draw_state(false, 0.0)
+	_motor.bow_draw_progress_bar.set_progress(false, 0.0)
+	_reset_bow_draw_view()
 	var local_velocity = Vector3.ZERO
 	var speed_ratio = 0.0
 	var sprinting = false
@@ -167,10 +176,32 @@ func _apply_held_item_attack_pose(action: MeleeAttackActionDefinition) -> void:
 	_motor.held_item_view.set_attack_pose(animator.held_item_pose_weight, animator.right_arm_action.rotation.x, action, animator.held_item_windup_pose_weight)
 	_motor.held_item_view.align_overhead_striking_face(animator.held_item_alignment_weight, animator.held_item_face_turn_weight, action, animator.global_transform.basis.z)
 	if action != null and action.two_handed_pose:
-		var left_hand_position := animator.left_arm_action.to_global(Vector3(0.0, -0.675, 0.0))
-		var right_hand_position := animator.right_arm_action.to_global(Vector3(0.0, -0.675, 0.0))
+		var left_hand_position := animator.get_left_hand_global_position()
+		var right_hand_position := animator.get_right_hand_global_position()
 		_motor.held_item_view.anchor_two_handed_grip(animator.held_item_alignment_weight, left_hand_position, right_hand_position)
 	_motor.held_item_view.apply_linear_attack_recovery(animator.held_item_recovery_progress, animator.global_transform, animator.right_arm_base.global_transform)
+
+func _apply_bow_draw_pose(action: BowDrawActionDefinition, active: bool) -> void:
+	var bow_view := _motor.held_item_view.held_node as BowHeldView
+	if bow_view == null:
+		return
+	if not active or action == null:
+		bow_view.reset_draw_pose()
+		return
+	bow_view.set_draw_pose(
+		true,
+		_interactor.get_bow_raise_progress(),
+		_interactor.get_bow_draw_progress(),
+		action.full_draw_distance,
+		action.nocked_arrow_scene,
+		animator.global_transform.basis.z
+	)
+	animator.track_bow_nock(bow_view.get_nock_global_position())
+
+func _reset_bow_draw_view() -> void:
+	var bow_view := _motor.held_item_view.held_node as BowHeldView
+	if bow_view != null:
+		bow_view.reset_draw_pose()
 
 func _prepare_attack_idle_reference(action: MeleeAttackActionDefinition) -> void:
 	animator.prepare_held_idle_reference(action)
