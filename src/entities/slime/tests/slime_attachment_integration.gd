@@ -77,7 +77,7 @@ func _run() -> void:
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
 	var inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	_expect(inventory.setup_starter(), "combat inventory fixture setup failed")
-	combat.setup(world, player, player_stats, inventory, runtime)
+	combat.setup(world, player, player_stats, inventory, runtime, load("res://combat/damage/damage_type_catalog.tres") as DamageTypeCatalog)
 	runtime.entity_melee_contact_reached.connect(combat.try_commit_entity_contact)
 	combat.melee_outcome_committed.connect(_on_melee_outcome)
 
