@@ -36,6 +36,15 @@ class TransitionGame:
 		_fade.color = Color(0.0, 0.0, 0.0, alpha)
 		await get_tree().process_frame
 
+class SaveSessionProbe:
+	extends GameSession
+
+	var reasons: Array[String] = []
+
+	func save(reason: String) -> bool:
+		reasons.append(reason)
+		return true
+
 var _failures: int = 0
 var _assertions: int = 0
 
@@ -99,12 +108,14 @@ func _run_runtime_lifecycle(
 	_expect(runtime.is_node_ready(), "runtime was not ready before setup at iteration %d" % iteration)
 	_expect(not runtime.visible and not runtime.is_processing(), "runtime starts active at iteration %d" % iteration)
 	var inventory_context := _create_inventory_context()
+	var dungeon_progress := DungeonProgressState.new()
 	runtime.setup(
 		layout,
 		definition,
 		layout.seed_value + iteration,
-		false,
 		layout.seed_value,
+		&"runtime_lifecycle",
+		dungeon_progress,
 		block_catalog,
 		texture_set,
 		settings,
@@ -309,7 +320,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	var dev_console := (load("res://dev_console/presentation/dev_console.tscn") as PackedScene).instantiate() as DevConsole
 	var structure_workflow := StructureDesignerWorkflow.new()
 	var structure_dialogs := (load(STRUCTURE_DIALOGS_SCENE) as PackedScene).instantiate() as StructureDesignerDialogs
-	var session := GameSession.new()
+	var session := SaveSessionProbe.new()
 	var coordinator := LevelInteractionCoordinator.new()
 	var entities := WorldEntityCoordinator.new()
 	var slime_attachments := SlimeAttachmentCoordinator.new()
@@ -386,6 +397,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	world.config = world.config.runtime_copy_for_seed(1337)
 	root.add_child(game)
 	await process_frame
+	game._slot_id = 1
 	_expect(game.world == world and game.player == player and game.camera_rig == camera_rig, "Game onready dependencies were not wired")
 	_expect(game.enemy_combat_feedback == enemy_combat_feedback, "Game combat feedback dependency was not wired")
 	_expect(game.watcher_encounter == watcher_encounter and game.watcher_screen_effect == watcher_effect, "Game Watcher dependencies were not wired")
@@ -650,9 +662,13 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	var defeated_runtime := game._level_runtime
 	var first_attempt_state := defeated_runtime._encounter_state
 	var iron_pickaxe_count_before := game.inventory_model.get_inventory_item_count(&"iron_pickaxe")
-	var failed_reward := _take_one_time_reward(defeated_runtime, block_catalog)
-	_expect(not failed_reward.is_empty(), "dungeon defeat fixture did not find the one-time reward chest")
-	_expect(game.inventory_model.get_inventory_item_count(&"iron_pickaxe") == iron_pickaxe_count_before, "one-time reward entered inventory before a successful exit")
+	var claimed_reward := _take_one_time_reward(defeated_runtime, block_catalog)
+	_expect(not claimed_reward.is_empty(), "dungeon defeat fixture did not find the one-time reward chest")
+	_expect(game.inventory_model.get_inventory_item_count(&"iron_pickaxe") == iron_pickaxe_count_before + 1, "one-time reward did not enter inventory when claimed")
+	_expect(session.reasons == ["dungeon_reward_claimed_stone_dungeon_one_time_chest_reward"], "one-time reward claim did not request an immediate save")
+	var one_time_reward := catalog.get_level(&"stone_dungeon").one_time_chest_reward
+	_expect(game.dungeon_progress.has_claimed_reward(game.level_entrance_definition.entrance_id, one_time_reward.reward_id), "direct dungeon reward claim was not recorded")
+	_expect(game.dungeon_progress.get_completion_count(game.level_entrance_definition.entrance_id) == 0, "reward pickup completed the dungeon before exit")
 	game.player_stats.damage(game.player_stats.current_hp)
 	game._on_player_defeated()
 	if persistent_watcher != null:
@@ -674,18 +690,19 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	_expect(environment._world_environment.environment != null and environment._sun.visible and environment._sun_fill.visible, "dungeon defeat did not restore the outdoor environment")
 	_expect(not game.game_session.is_saving_suspended(), "dungeon defeat did not restore saving")
 	_expect(game._level_runtime == null and not is_instance_valid(defeated_runtime), "dungeon defeat retained the failed runtime")
-	var one_time_reward := catalog.get_level(&"stone_dungeon").one_time_chest_reward
-	_expect(not game.dungeon_progress.has_claimed_reward(game.level_entrance_definition.entrance_id, one_time_reward.reward_id), "dungeon defeat claimed the one-time reward")
+	_expect(game.dungeon_progress.has_claimed_reward(game.level_entrance_definition.entrance_id, one_time_reward.reward_id), "dungeon defeat discarded the direct reward claim")
 	_expect(game.dungeon_progress.get_completion_count(game.level_entrance_definition.entrance_id) == 0, "dungeon defeat completed the dungeon")
+	_expect(game.inventory_model.get_inventory_item_count(&"iron_pickaxe") == iron_pickaxe_count_before + 1, "dungeon defeat removed the claimed Iron Pickaxe")
 	await game._enter_level()
 	var fresh_runtime := game._level_runtime
 	_expect(fresh_runtime._encounter_state != first_attempt_state and fresh_runtime._encounter_state.get_active_room_ids().is_empty(), "dungeon re-entry did not create a fresh encounter attempt")
 	var retried_reward := _take_one_time_reward(fresh_runtime, block_catalog)
-	_expect(retried_reward == failed_reward, "failed dungeon attempt changed the designated one-time chest or its contents")
+	_expect(retried_reward.is_empty(), "claimed one-time reward respawned after dungeon defeat")
+	_expect(_take_first_repeat_reward(fresh_runtime, block_catalog), "post-defeat run could not collect repeat loot")
 	await game._exit_level()
 	_expect(game.dungeon_progress.has_claimed_reward(game.level_entrance_definition.entrance_id, one_time_reward.reward_id), "successful dungeon exit did not claim the one-time reward")
 	_expect(game.dungeon_progress.get_completion_count(game.level_entrance_definition.entrance_id) == 1, "successful dungeon exit did not complete the dungeon")
-	_expect(game.inventory_model.get_inventory_item_count(&"iron_pickaxe") == iron_pickaxe_count_before + 1, "successful dungeon exit did not grant the Iron Pickaxe")
+	_expect(game.inventory_model.get_inventory_item_count(&"iron_pickaxe") == iron_pickaxe_count_before + 1, "dungeon completion duplicated the Iron Pickaxe")
 	player.unbind_space()
 	game._unbind_entity_context()
 	combat.shutdown()
@@ -754,6 +771,18 @@ func _take_one_time_reward(runtime: LevelRuntime, block_catalog: BlockCatalog) -
 			return {"position": position, "contents": encoded} if moved else {}
 		coordinator.close()
 	return {}
+
+func _take_first_repeat_reward(runtime: LevelRuntime, block_catalog: BlockCatalog) -> bool:
+	var coordinator := runtime.get_chest_coordinator()
+	var container := block_catalog.get_definition(BlockId.Type.CHEST).container
+	for position in coordinator._storage.snapshot():
+		if not coordinator.try_open(position as Vector3i, container):
+			return false
+		var moved := coordinator.move_all_to_backpack()
+		coordinator.close()
+		if moved:
+			return true
+	return false
 
 func _run_structure_designer_cycle(game: TransitionGame, in_level: bool, cycle: int) -> void:
 	var label := "%s cycle %d" % ["dungeon" if in_level else "overworld", cycle]

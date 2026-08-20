@@ -51,12 +51,12 @@ func _test_strict_current_schema() -> void:
 		"instances": {
 			"stone_story": {
 				"next_attempt_index": 3,
-				"completion_count": 1,
+				"completion_count": 0,
 				"claimed_reward_ids": ["basic_rune_reward"],
 			},
 		},
 	}
-	_expect(SaveManager._migrate_save_data(current, _item_catalog), "valid current dungeon progress was rejected")
+	_expect(SaveManager._migrate_save_data(current, _item_catalog), "current reward claim without completion was rejected")
 	var missing := current.duplicate(true)
 	missing.erase("dungeon_progress")
 	_expect_rejected_unchanged(missing, "current save without dungeon progress migrated")
@@ -93,8 +93,9 @@ func _test_save_round_trip() -> void:
 	var world_loot := WorldLootState.new(_item_catalog, factory)
 	var progress := DungeonProgressState.new()
 	_expect(progress.begin_attempt(&"stone_story") == 0, "progress attempt setup failed")
-	var completion := progress.prepare_completion(&"stone_story", &"basic_rune_reward")
-	_expect(completion != null and progress.commit_prepared_completion(completion), "progress completion setup failed")
+	var claim := progress.prepare_reward_claim(&"stone_story", &"basic_rune_reward")
+	_expect(claim != null and progress.commit_prepared_reward_claim(claim), "progress reward claim setup failed")
+	_expect(progress.get_completion_count(&"stone_story") == 0, "reward claim setup completed the dungeon")
 	_expect(progress.begin_attempt(&"stone_story") == 1, "second progress attempt setup failed")
 	var expected_snapshot := progress.snapshot()
 	var voxel_world := VoxelWorld.new(20, 36, 5, 12.0, _block_catalog)
@@ -123,6 +124,8 @@ func _test_save_round_trip() -> void:
 	var restored := DungeonProgressState.new()
 	_expect(restored.restore(loaded.get("dungeon_progress", null)), "saved dungeon progress did not restore")
 	_expect(restored.snapshot() == expected_snapshot, "saved dungeon progress did not round-trip")
+	_expect(restored.get_completion_count(&"stone_story") == 0, "round-trip reward claim gained a completion")
+	_expect(restored.has_claimed_reward(&"stone_story", &"basic_rune_reward"), "round-trip reward claim was lost")
 
 func _base_save(version: int) -> Dictionary:
 	var data := {

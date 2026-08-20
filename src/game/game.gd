@@ -644,10 +644,6 @@ func _enter_level():
 		],
 	)
 	var one_time_reward := definition.one_time_chest_reward
-	var one_time_reward_claimed := (
-		one_time_reward == null
-		or dungeon_progress.has_claimed_reward(dungeon_instance_id, one_time_reward.reward_id)
-	)
 	var one_time_loot_seed := 0
 	if one_time_reward != null:
 		one_time_loot_seed = LootKeyedRandom.u53(
@@ -659,8 +655,9 @@ func _enter_level():
 		result.layout,
 		definition,
 		repeat_loot_seed,
-		one_time_reward_claimed,
 		one_time_loot_seed,
+		dungeon_instance_id,
+		dungeon_progress,
 		block_catalog,
 		world.block_texture_set,
 		settings,
@@ -669,6 +666,9 @@ func _enter_level():
 		inventory_loadout_coordinator,
 	)
 	next_runtime.get_chest_coordinator().transfer_rejected.connect(_show_save_status)
+	next_runtime.get_chest_coordinator().one_time_reward_claimed.connect(
+		_on_dungeon_one_time_reward_claimed,
+	)
 	next_runtime.set_player_context(player, camera_rig.camera)
 	var return_position := player.global_position
 	_level_entrance.play_door_open_sound()
@@ -705,17 +705,11 @@ func _exit_level(restore_from_defeat: bool = false):
 	var dungeon_completed := false
 	if not restore_from_defeat:
 		hud.close_chest()
-		var definition := level_catalog.get_level(level_entrance_definition.level_id)
 		var completion_outcome := DungeonRunCompletionTransaction.try_complete(
 			_level_runtime.get_chest_coordinator(),
 			dungeon_progress,
 			level_entrance_definition.entrance_id,
-			definition.one_time_chest_reward,
-			inventory_loadout_coordinator,
 		)
-		if completion_outcome == DungeonRunCompletionTransaction.Outcome.INVENTORY_FULL:
-			_show_save_status(DungeonChestCoordinator.INVENTORY_FULL_MESSAGE)
-			return
 		if completion_outcome == DungeonRunCompletionTransaction.Outcome.INVALIDATED:
 			_show_save_status("Dungeon rewards changed — try exiting again")
 			return
@@ -756,6 +750,10 @@ func _exit_level(restore_from_defeat: bool = false):
 	await _fade_to(0.0)
 	player.set_physics_process(true)
 	_level_transitioning = false
+
+func _on_dungeon_one_time_reward_claimed(reward_id: StringName) -> void:
+	if _slot_id != -1:
+		game_session.save("dungeon_reward_claimed_%s" % reward_id)
 
 func _show_world_level_interaction():
 	if _level_entrance != null:

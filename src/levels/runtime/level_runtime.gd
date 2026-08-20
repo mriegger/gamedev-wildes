@@ -35,8 +35,9 @@ func setup(
 	layout: LevelLayout,
 	definition: LevelDefinition,
 	repeat_loot_seed: int,
-	one_time_reward_claimed: bool,
 	one_time_loot_seed: int,
+	dungeon_instance_id: StringName,
+	dungeon_progress: DungeonProgressState,
 	block_catalog: BlockCatalog,
 	texture_set: BlockTextureSet,
 	settings: GameSettings,
@@ -48,6 +49,8 @@ func setup(
 	assert(_state == null)
 	assert(layout != null)
 	assert(definition != null and definition.presentation != null)
+	assert(not dungeon_instance_id.is_empty())
+	assert(dungeon_progress != null)
 	assert(entity_catalog != null and entity_catalog.validate())
 	assert(inventory_model != null)
 	assert(inventory_loadout != null and inventory_loadout.inventory_model == inventory_model)
@@ -64,8 +67,9 @@ func setup(
 		layout.chests,
 		repeat_loot_seed,
 		definition.one_time_chest_reward,
-		one_time_reward_claimed,
 		one_time_loot_seed,
+		dungeon_instance_id,
+		dungeon_progress,
 		inventory_model,
 		inventory_loadout,
 		chest_block.container,

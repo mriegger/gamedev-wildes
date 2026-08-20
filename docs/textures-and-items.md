@@ -176,9 +176,10 @@ progress.
 Create a `MiningActionDefinition` with one or more `MiningToolStat` entries, then assign it as the item's primary action. Each stat has a `StringName` tag, power, and speed multiplier. Blocks declare a mining tag, minimum power, and base duration. A minimum power of zero keeps hand mining available; a positive value requires a matching tool stat.
 
 The Iron Pickaxe uses the canonical `pickaxe` tag with power 3 and a 2.5 speed multiplier. It is
-registered as a single-stack non-block item with its own icon and held presentation. Its only normal
-acquisition is the stone dungeon's secured first-clear reward; no crafting recipe or ordinary enemy
-loot pool references it.
+registered as a single-stack non-block item with its own icon and held presentation. Its initial
+normal acquisition is the stone dungeon's guaranteed reward; after that dungeon's first completion,
+each repeat chest independently has a 25% chance to contain another. No crafting recipe or ordinary
+enemy loot pool references it.
 
 ## Add a tilling tool
 

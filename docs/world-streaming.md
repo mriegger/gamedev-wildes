@@ -46,6 +46,7 @@ a dungeon suspends the overworld coordinator without destroying its runtime. Pas
 create no local encounter, but they remain part of the same finite voxel and navigation space, so
 enemies from active rooms may enter them. Leaving restores and resumes the same overworld instance
 before queuing the dungeon runtime for deletion; death suspends it immediately and follows that
-restore-then-retire order during the return flow. Teardown discards generated chest contents and
-uncommitted first-clear escrow. Repeat loot is committed directly to player inventory and therefore
-survives death, quit, or an incomplete exit.
+restore-then-retire order during the return flow. Teardown discards remaining generated chest
+contents. Guaranteed and repeat loot are committed directly to player inventory, so both survive
+death, quit, or an incomplete exit; the guaranteed reward claim is persisted independently from the
+completion count.

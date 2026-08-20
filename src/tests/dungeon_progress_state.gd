@@ -8,6 +8,7 @@ func _init() -> void:
 func _run() -> void:
 	_test_attempts_and_queries()
 	_test_prepared_completions()
+	_test_prepared_reward_claims()
 	_test_snapshot_restore()
 	_test_restore_rejections()
 	call_deferred("_finish")
@@ -50,33 +51,29 @@ func _test_prepared_completions() -> void:
 		if active != null:
 			observations.append(active.snapshot())
 	)
-	var empty_reward := state.prepare_completion(&"stone_story")
-	_expect(empty_reward != null, "farmable completion was not prepared")
-	_expect(state.can_commit_prepared_completion(empty_reward), "fresh farmable completion was not committable")
-	_expect(state.commit_prepared_completion(empty_reward), "farmable completion did not commit")
-	_expect(state.get_completion_count(&"stone_story") == 1, "farmable completion count did not increment")
-	_expect(not state.can_commit_prepared_completion(empty_reward), "committed completion remained committable")
-	_expect(not state.commit_prepared_completion(empty_reward), "completion committed twice")
+	var completion := state.prepare_completion(&"stone_story")
+	_expect(completion != null, "completion was not prepared")
+	_expect(state.can_commit_prepared_completion(completion), "fresh completion was not committable")
+	_expect(state.commit_prepared_completion(completion), "completion did not commit")
+	_expect(state.get_completion_count(&"stone_story") == 1, "completion count did not increment")
+	_expect(not state.has_claimed_reward(&"stone_story", &"basic_rune_reward"), "completion claimed a reward")
+	_expect(not state.can_commit_prepared_completion(completion), "committed completion remained committable")
+	_expect(not state.commit_prepared_completion(completion), "completion committed twice")
 
-	var reward := state.prepare_completion(&"stone_story", &"basic_rune_reward")
-	_expect(reward != null and state.can_commit_prepared_completion(reward), "one-time reward completion was not prepared")
+	var second := state.prepare_completion(&"stone_story")
+	_expect(second != null and state.can_commit_prepared_completion(second), "second completion was not prepared")
 	var signal_count_before_silent_commit := observations.size()
-	_expect(state._commit_prepared_completion(reward), "silent reward completion did not commit")
-	_expect(observations.size() == signal_count_before_silent_commit, "silent reward completion emitted early")
-	_expect(state.get_completion_count(&"stone_story") == 2, "silent reward completion did not increment count")
-	_expect(state.has_claimed_reward(&"stone_story", &"basic_rune_reward"), "silent reward completion did not claim reward")
-	_expect(not state.can_commit_prepared_completion(reward), "silently committed reward remained committable")
-	_expect(state._notify_prepared_completion(reward), "silent reward completion did not notify")
-	_expect(observations.size() == signal_count_before_silent_commit + 1, "reward completion did not notify exactly once")
-	_expect(not state._notify_prepared_completion(reward), "reward completion notified twice")
-	_expect(state.prepare_completion(&"stone_story", &"basic_rune_reward") == null, "claimed reward was prepared again")
-
-	var atomic := state.prepare_completion(&"stone_story", &"second_reward")
-	_expect(atomic != null and state.commit_prepared_completion(atomic), "second reward completion did not commit")
-	var atomic_observation: Dictionary = observations.back()
-	var observed_record := atomic_observation["instances"]["stone_story"] as Dictionary
-	_expect(int(observed_record["completion_count"]) == 3, "completion signal observed an old count")
-	_expect("second_reward" in observed_record["claimed_reward_ids"], "completion signal observed an unclaimed reward")
+	_expect(state._commit_prepared_completion(second), "silent completion did not commit")
+	_expect(observations.size() == signal_count_before_silent_commit, "silent completion emitted early")
+	_expect(state.get_completion_count(&"stone_story") == 2, "silent completion did not increment count")
+	_expect(not state.can_commit_prepared_completion(second), "silently committed completion remained committable")
+	_expect(state._notify_prepared_completion(second), "silent completion did not notify")
+	_expect(observations.size() == signal_count_before_silent_commit + 1, "completion did not notify exactly once")
+	_expect(not state._notify_prepared_completion(second), "completion notified twice")
+	var observed_snapshot: Dictionary = observations.back()
+	var observed_record := observed_snapshot["instances"]["stone_story"] as Dictionary
+	_expect(int(observed_record["completion_count"]) == 2, "completion signal observed an old count")
+	_expect((observed_record["claimed_reward_ids"] as Array).is_empty(), "completion signal observed a reward claim")
 
 	var stale := state.prepare_completion(&"stone_story")
 	_expect(stale != null, "stale completion fixture was not prepared")
@@ -91,6 +88,51 @@ func _test_prepared_completions() -> void:
 	_expect(not foreign_state._commit_prepared_completion(foreign), "foreign state committed a prepared completion")
 	_expect(state.prepare_completion(&"") == null, "empty instance completion was prepared")
 
+func _test_prepared_reward_claims() -> void:
+	var state := DungeonProgressState.new()
+	var observations: Array[Dictionary] = []
+	var state_ref: WeakRef = weakref(state)
+	state.state_changed.connect(func() -> void:
+		var active: DungeonProgressState = state_ref.get_ref()
+		if active != null:
+			observations.append(active.snapshot())
+	)
+	var claim := state.prepare_reward_claim(&"stone_story", &"basic_rune_reward")
+	_expect(claim != null, "reward claim was not prepared")
+	_expect(state.can_commit_prepared_reward_claim(claim), "fresh reward claim was not committable")
+	var signal_count_before_silent_commit := observations.size()
+	_expect(state._commit_prepared_reward_claim(claim), "silent reward claim did not commit")
+	_expect(observations.size() == signal_count_before_silent_commit, "silent reward claim emitted early")
+	_expect(state.has_claimed_reward(&"stone_story", &"basic_rune_reward"), "reward claim was not recorded")
+	_expect(state.get_completion_count(&"stone_story") == 0, "reward claim incremented completion count")
+	_expect(not state.can_commit_prepared_reward_claim(claim), "committed reward claim remained committable")
+	_expect(not state.commit_prepared_reward_claim(claim), "reward claim committed twice")
+	_expect(state._notify_prepared_reward_claim(claim), "silent reward claim did not notify")
+	_expect(observations.size() == signal_count_before_silent_commit + 1, "reward claim did not notify exactly once")
+	_expect(not state._notify_prepared_reward_claim(claim), "reward claim notified twice")
+	_expect(state.prepare_reward_claim(&"stone_story", &"basic_rune_reward") == null, "claimed reward was prepared again")
+
+	var second := state.prepare_reward_claim(&"stone_story", &"second_reward")
+	_expect(second != null and state.commit_prepared_reward_claim(second), "second reward claim did not commit")
+	_expect(state.get_completion_count(&"stone_story") == 0, "second reward claim incremented completion count")
+	var observed_snapshot: Dictionary = observations.back()
+	var observed_record := observed_snapshot["instances"]["stone_story"] as Dictionary
+	_expect(observed_record["claimed_reward_ids"] == ["basic_rune_reward", "second_reward"], "reward claim signal observed stale claims")
+
+	var stale := state.prepare_reward_claim(&"stone_story", &"stale_reward")
+	_expect(stale != null, "stale reward claim fixture was not prepared")
+	_expect(state.begin_attempt(&"another_instance") == 0, "stale reward claim mutation fixture failed")
+	_expect(not state.can_commit_prepared_reward_claim(stale), "revision-stale reward claim remained committable")
+	_expect(not state._commit_prepared_reward_claim(stale), "revision-stale reward claim committed")
+
+	var foreign_state := DungeonProgressState.new()
+	var foreign := state.prepare_reward_claim(&"stone_story", &"foreign_reward")
+	_expect(foreign != null, "foreign reward claim fixture was not prepared")
+	_expect(not foreign_state.can_commit_prepared_reward_claim(foreign), "foreign state accepted a prepared reward claim")
+	_expect(not foreign_state._commit_prepared_reward_claim(foreign), "foreign state committed a prepared reward claim")
+	_expect(state.prepare_reward_claim(&"", &"reward") == null, "empty instance reward claim was prepared")
+	_expect(state.prepare_reward_claim(&"stone_story", &"") == null, "empty reward ID claim was prepared")
+
 func _test_snapshot_restore() -> void:
 	var encoded := {
 		"version": 1.0,
@@ -103,7 +145,7 @@ func _test_snapshot_restore() -> void:
 			"alpha": {
 				"next_attempt_index": 1,
 				"completion_count": 0,
-				"claimed_reward_ids": [],
+				"claimed_reward_ids": ["pre_completion_reward"],
 			},
 		},
 	}
@@ -112,6 +154,8 @@ func _test_snapshot_restore() -> void:
 	_expect(state.begin_attempt(&"zeta") == 4, "restored next attempt index changed")
 	_expect(state.get_completion_count(&"zeta") == 2, "restored completion count changed")
 	_expect(state.has_claimed_reward(&"zeta", &"a_reward"), "restored reward claim was missing")
+	_expect(state.get_completion_count(&"alpha") == 0, "pre-completion reward restore changed completion count")
+	_expect(state.has_claimed_reward(&"alpha", &"pre_completion_reward"), "pre-completion reward claim was not restored")
 	var snapshot := state.snapshot()
 	_expect(snapshot["instances"].keys() == ["alpha", "zeta"], "snapshot instance IDs were not deterministic")
 	_expect(snapshot["instances"]["zeta"]["claimed_reward_ids"] == ["a_reward", "z_reward"], "snapshot reward IDs were not deterministic")
@@ -164,9 +208,6 @@ func _test_restore_rejections() -> void:
 	var extra_field := valid_record.duplicate(true)
 	extra_field["extra"] = true
 	_expect_rejected_unchanged(state, {"version": 1, "instances": {"dungeon": extra_field}}, "record with extra field restored")
-	var uncompleted_claim := valid_record.duplicate(true)
-	uncompleted_claim["completion_count"] = 0
-	_expect_rejected_unchanged(state, {"version": 1, "instances": {"dungeon": uncompleted_claim}}, "reward claim without a completion restored")
 	for invalid_counter in [-1, 0.5, DungeonProgressState.MAXIMUM_COUNTER_VALUE + 1, INF, true, "1"]:
 		var invalid_attempt := valid_record.duplicate(true)
 		invalid_attempt["next_attempt_index"] = invalid_counter

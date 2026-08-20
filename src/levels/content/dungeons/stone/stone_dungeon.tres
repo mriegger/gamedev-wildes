@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="LevelDefinition" load_steps=17 format=3]
+[gd_resource type="Resource" script_class="LevelDefinition" load_steps=18 format=3]
 
 [ext_resource type="Script" path="res://levels/definitions/level_definition.gd" id="1_definition"]
 [ext_resource type="Resource" path="res://levels/content/dungeons/stone/stone_dungeon_presentation.tres" id="2_presentation"]
@@ -7,6 +7,7 @@
 [ext_resource type="Script" path="res://levels/definitions/level_room_encounter_definition.gd" id="5_encounter"]
 [ext_resource type="Resource" path="res://levels/content/dungeons/stone/stone_chest_loot.tres" id="6_chest_loot"]
 [ext_resource type="Resource" path="res://levels/content/dungeons/stone/stone_one_time_chest_reward.tres" id="7_one_time_reward"]
+[ext_resource type="Resource" path="res://levels/content/dungeons/stone/stone_post_completion_chest_loot.tres" id="8_post_completion_chest_loot"]
 
 [sub_resource type="Resource" id="MasterEnemyGroup"]
 script = ExtResource("4_enemy_group")
@@ -45,11 +46,12 @@ script = ExtResource("3_requirement")
 room_type_id = &"chest_room"
 count = 3
 module_ids = Array[StringName]([&"stone_chest_room"])
-chest_loot_bundle = ExtResource("6_chest_loot")
+chest_loot_pool = ExtResource("6_chest_loot")
+post_first_completion_chest_loot_pool = ExtResource("8_post_completion_chest_loot")
 
 [resource]
 script = ExtResource("1_definition")
-format_version = 4
+format_version = 5
 level_id = &"stone_dungeon"
 presentation = ExtResource("2_presentation")
 start_module_id = &"stone_entry_path"

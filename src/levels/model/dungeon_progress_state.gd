@@ -33,16 +33,66 @@ func has_claimed_reward(instance_id: StringName, reward_id: StringName) -> bool:
 	var claimed_reward_ids := (_instances[instance_id] as Dictionary)["claimed_reward_ids"] as Dictionary
 	return claimed_reward_ids.has(reward_id)
 
-func prepare_completion(
+func prepare_reward_claim(
 	instance_id: StringName,
-	reward_id: StringName = &"",
-) -> PreparedDungeonCompletionChange:
+	reward_id: StringName,
+) -> PreparedDungeonRewardClaim:
+	if instance_id.is_empty() or reward_id.is_empty() or has_claimed_reward(instance_id, reward_id):
+		return null
+	return PreparedDungeonRewardClaim.new(
+		self,
+		_revision,
+		instance_id,
+		reward_id,
+	)
+
+func can_commit_prepared_reward_claim(prepared: PreparedDungeonRewardClaim) -> bool:
+	if (
+		prepared == null
+		or not prepared._is_for(self)
+		or not prepared._is_prepared()
+		or prepared._get_expected_revision() != _revision
+	):
+		return false
+	var instance_id := prepared._get_instance_id()
+	var reward_id := prepared._get_reward_id()
+	return (
+		not instance_id.is_empty()
+		and not reward_id.is_empty()
+		and not has_claimed_reward(instance_id, reward_id)
+	)
+
+func commit_prepared_reward_claim(prepared: PreparedDungeonRewardClaim) -> bool:
+	if not _commit_prepared_reward_claim(prepared):
+		return false
+	var notified := _notify_prepared_reward_claim(prepared)
+	assert(notified)
+	return notified
+
+func _commit_prepared_reward_claim(prepared: PreparedDungeonRewardClaim) -> bool:
+	if not can_commit_prepared_reward_claim(prepared):
+		return false
+	var instance_id := prepared._get_instance_id()
+	var record := _get_record(instance_id)
+	var claimed_reward_ids := record["claimed_reward_ids"] as Dictionary
+	claimed_reward_ids[prepared._get_reward_id()] = true
+	_instances[instance_id] = record
+	_revision += 1
+	var marked := prepared._mark_committed(self)
+	assert(marked)
+	return marked
+
+func _notify_prepared_reward_claim(prepared: PreparedDungeonRewardClaim) -> bool:
+	if prepared == null or not prepared._mark_notified(self):
+		return false
+	state_changed.emit()
+	return true
+
+func prepare_completion(instance_id: StringName) -> PreparedDungeonCompletionChange:
 	if instance_id.is_empty():
 		return null
 	var completion_count := get_completion_count(instance_id)
 	if completion_count >= MAXIMUM_COUNTER_VALUE:
-		return null
-	if not reward_id.is_empty() and has_claimed_reward(instance_id, reward_id):
 		return null
 	return PreparedDungeonCompletionChange.new(
 		self,
@@ -50,7 +100,6 @@ func prepare_completion(
 		instance_id,
 		completion_count,
 		completion_count + 1,
-		reward_id,
 	)
 
 func can_commit_prepared_completion(prepared: PreparedDungeonCompletionChange) -> bool:
@@ -63,14 +112,12 @@ func can_commit_prepared_completion(prepared: PreparedDungeonCompletionChange) -
 		return false
 	var instance_id := prepared._get_instance_id()
 	var expected_count := prepared._get_expected_completion_count()
-	var reward_id := prepared._get_reward_id()
 	return (
 		not instance_id.is_empty()
 		and expected_count >= 0
 		and expected_count < MAXIMUM_COUNTER_VALUE
 		and get_completion_count(instance_id) == expected_count
 		and prepared._get_result_completion_count() == expected_count + 1
-		and (reward_id.is_empty() or not has_claimed_reward(instance_id, reward_id))
 	)
 
 func commit_prepared_completion(prepared: PreparedDungeonCompletionChange) -> bool:
@@ -86,10 +133,6 @@ func _commit_prepared_completion(prepared: PreparedDungeonCompletionChange) -> b
 	var instance_id := prepared._get_instance_id()
 	var record := _get_record(instance_id)
 	record["completion_count"] = prepared._get_result_completion_count()
-	var reward_id := prepared._get_reward_id()
-	if not reward_id.is_empty():
-		var claimed_reward_ids := record["claimed_reward_ids"] as Dictionary
-		claimed_reward_ids[reward_id] = true
 	_instances[instance_id] = record
 	_revision += 1
 	var marked := prepared._mark_committed(self)
@@ -167,8 +210,6 @@ func restore(encoded: Variant) -> bool:
 			if claimed_reward_ids.has(reward_id):
 				return false
 			claimed_reward_ids[reward_id] = true
-		if claimed_reward_ids.size() > completion_count:
-			return false
 		decoded_instances[instance_id] = {
 			"next_attempt_index": next_attempt_index,
 			"completion_count": completion_count,

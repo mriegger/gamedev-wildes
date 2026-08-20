@@ -6,6 +6,7 @@ class_name ChestPanel
 @onready var _panel: Panel = $Center/Panel
 @onready var _chest_grid: GridContainer = $Center/Panel/Margin/Content/ChestGrid
 @onready var _move_all_button: Button = $Center/Panel/Margin/Content/ActionRow/MoveAllButton
+@onready var _move_all_label: Label = $Center/Panel/Margin/Content/ActionRow/MoveAllButton/Content/Text
 
 var coordinator: ChestTransferCoordinator
 var player_inventory: InventoryModel
@@ -99,6 +100,7 @@ func _on_opened(_position: Vector3i, definition: ContainerBlockDefinition):
 func _on_closed():
 	visible = false
 	_move_all_button.disabled = true
+	_move_all_label.text = "Take all"
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_cancel_drag_if_needed()
 	release()
@@ -115,7 +117,8 @@ func _refresh():
 	_refresh_move_all_state()
 
 func _refresh_move_all_state():
-	_move_all_button.disabled = not visible or coordinator == null or not coordinator.can_move_all_to_backpack()
+	_move_all_button.disabled = not visible or coordinator == null or not coordinator.has_items_to_take()
+	_move_all_label.text = "Claim Reward" if coordinator != null and coordinator.is_active_one_time_reward() else "Take all"
 
 func _on_move_all_pressed():
 	if coordinator != null:

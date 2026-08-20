@@ -1,9 +1,10 @@
-[gd_resource type="Resource" script_class="LootPoolDefinition" load_steps=7 format=3]
+[gd_resource type="Resource" script_class="LootPoolDefinition" load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://loot/loot_pool_definition.gd" id="1_pool"]
 [ext_resource type="Script" path="res://loot/loot_independent_roll_definition.gd" id="2_roll"]
 [ext_resource type="Script" path="res://loot/loot_drop_definition.gd" id="3_drop"]
 [ext_resource type="Resource" path="res://items/definitions/pumpkin.tres" id="4_pumpkin"]
+[ext_resource type="Resource" path="res://items/definitions/iron_pickaxe.tres" id="5_iron_pickaxe"]
 
 [sub_resource type="Resource" id="PumpkinDrop"]
 script = ExtResource("3_drop")
@@ -17,7 +18,17 @@ id = &"pumpkin"
 chance = 1.0
 drop = SubResource("PumpkinDrop")
 
+[sub_resource type="Resource" id="IronPickaxeDrop"]
+script = ExtResource("3_drop")
+item = ExtResource("5_iron_pickaxe")
+
+[sub_resource type="Resource" id="IronPickaxeRoll"]
+script = ExtResource("2_roll")
+id = &"iron_pickaxe"
+chance = 0.25
+drop = SubResource("IronPickaxeDrop")
+
 [resource]
 script = ExtResource("1_pool")
-id = &"stone_dungeon_chest"
-independent_rolls = Array[ExtResource("2_roll")]([SubResource("PumpkinRoll")])
+id = &"stone_dungeon_post_completion_chest"
+independent_rolls = Array[ExtResource("2_roll")]([SubResource("PumpkinRoll"), SubResource("IronPickaxeRoll")])

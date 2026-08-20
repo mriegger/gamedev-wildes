@@ -235,11 +235,12 @@ position-keyed storage.
 Each `LevelRuntime` instead composes an attempt-owned `ChestStorage` through
 `DungeonChestCoordinator`. Generated dungeon chests are take-only and are not save-state owners.
 Repeat rewards use the normal prepared inventory transfer and record repeat-loot collection for
-repeat-mode runs. An unclaimed first-clear chest transfers into coordinator-owned escrow after
-validating exact inventory capacity. `DungeonRunCompletionTransaction` validates the
-escrow claim, inventory/loadout projection, and `DungeonProgressState` change before silently
-committing all three and then notifying observers. Runtime teardown discards uncommitted escrow and
-remaining generated chest contents.
+repeat-mode runs. Claiming an unclaimed guaranteed chest prepares its complete storage removal,
+inventory/loadout projection, and `DungeonProgressState` reward claim, validates all three owners,
+then commits them silently before notifying observers. `DungeonRunCompletionTransaction` separately
+consumes the attempt's run qualification and increments completion at an alive exit. Runtime teardown
+discards only remaining generated chest contents; already claimed inventory and progress are
+player-owned.
 
 ## Equipment instances, runes, and loot
 
@@ -397,7 +398,7 @@ and edit capabilities when the active space changes. Dungeon levels never become
 owners: version-fifteen saves receive an explicit overworld position while retaining player-owned
 inventory, equipment instances, progression, overworld chest contents, and overworld loot. `Game`
 owns persistent `DungeonProgressState`; `LevelRuntime` owns only the transient generated layout,
-encounter state, dungeon chest contents, and first-clear escrow for one attempt.
+encounter state, dungeon chest contents, and run-completion qualification for one attempt.
 
 Dungeon content is selected through stable typed resources. `LevelEntranceDefinition` maps a
 doorway ID to a level ID and owns its current doorway presentation; its entrance ID is also the
@@ -405,8 +406,9 @@ current stable dungeon-instance ID for claims and completion history. `LevelDefi
 entry module, hallway module pool, exact typed room requirements, `LevelPresentationDefinition`, and
 optional `LevelOneTimeChestRewardDefinition`; `LevelCatalog` resolves the stable IDs. Each room
 requirement owns a stable room type, an exact count, a module pool, and either one
-`LevelRoomEncounterDefinition` or one repeat `LootBundleDefinition`, so variants share count and
-behavior without teaching generation their individual IDs. A loot-bearing room module must have
+`LevelRoomEncounterDefinition` or a base and optional post-first-completion `LootPoolDefinition`,
+so variants share count and behavior without teaching generation their individual IDs. A
+loot-bearing room module must have
 one valid chest marker, while an encounter room must have enemy spawn zones. Encounter groups use
 unique stable entity IDs.
 `LevelEncounterCatalogValidator` proves every entity exists
@@ -414,12 +416,12 @@ and every referenced room module has at least one spawn position that fits that 
 torch placements remain presentation-owned, while `LevelState` contains finite voxel-space truth,
 bounds, entry/return geometry, and a dynamic authored-fill overlay without rewriting base cells.
 `LevelGenerator` transforms each authored chest marker into one `LevelChestPlacement` with its room
-requirement's canonical repeat bundle. `LevelLootCatalogValidator` validates unique reward IDs,
-canonical bundles, item content, equipment variants, and the 15-slot chest bound. Bundle resolution
-includes every fixed entry and then chooses weighted candidates without replacement. A seeded target
-stack count is selected inclusively between `max(1, fixed_entries.size())` and the authored
-`max_rewards`. See [Dungeon chest authoring and rewards](dungeon-chest-authoring.md) for the content
-contract.
+requirement's canonical base and optional post-completion pools. `LevelLootCatalogValidator`
+validates unique reward IDs, canonical pools and bundles, item content, equipment variants, at least
+one guaranteed repeat roll, and the 15-slot chest bound. Repeat pools evaluate independent chances
+and weighted exclusive groups. Guaranteed bundles include every fixed entry and then choose weighted
+candidates without replacement up to their authored `max_rewards`. See
+[Dungeon chest authoring and rewards](dungeon-chest-authoring.md) for the content contract.
 
 Generation retains immutable `LevelConnection` records with stable placement IDs, socket IDs,
 directions, and aperture cells without consuming additional random values. `LevelEncounterTopology`
@@ -453,14 +455,15 @@ waves continue. The encounter HUD aggregates active-wave, active-enemy, and pend
 `Game` starts a persisted attempt before setting up and activating `LevelRuntime`. Repeat chest
 seeds include that attempt index, while the one-time seed uses only stable layout, instance, and
 reward identity so a failed first clear preserves both the designated chest and its contents. First
-completion requires
-the complete one-time escrow and an alive return-door exit. After the claim, or in a level without a
-one-time reward, taking any repeat reward and exiting alive completes the run. Enemy clearance is
-not currently an input. Full inventory capacity blocks first-clear transfer or exit without
-discarding state. Death suspends and destroys the runtime without claiming escrow; repeat loot
-already committed to inventory remains player-owned. Ordinary incomplete exit, quit, and window
-close also destroy attempt-owned chest state. Level exit restores the overworld before retiring the
-runtime, so the next entry starts fresh.
+completion requires claiming the complete guaranteed bundle into inventory and using the return door
+alive. The claim is recorded and synchronously saved at pickup, independently of completion. Death,
+quit, and ordinary abandon keep the claimed items and claim ID but do not increment completion. A
+later attempt that starts with the reward already claimed, or a dungeon with no guaranteed reward,
+requires any positive repeat chest-to-inventory transfer before an alive exit can complete it.
+Completion qualification is consumed once. Enemy clearance is not currently an input. Full
+inventory capacity rejects the complete guaranteed bundle without changing chest, inventory, or
+progress state. Level exit restores the overworld before retiring the runtime, so the next entry
+starts fresh.
 
 Content directories organize ownership without becoming runtime registries. Each destination
 dungeon keeps its catalog, entrance, definition, presentation, and modules together under
@@ -475,8 +478,10 @@ socket's authored fill block. Stone master rooms configure 40 zombies over local
 `(4,1,4)`–`(34,1,34)` and normal rooms configure 25 over `(3,1,3)`–`(17,1,17)`. Each passive
 chest-room copy transforms its authored marker into one chest and has no encounter or spawn zones.
 One deterministic chest carries the unclaimed Iron Pickaxe first-clear bundle. Each other chest, and
-every chest after that claim, contains one repeat stack of 5–10 Pumpkins. Iron Pickaxe is a
-dungeon-only mining tool with power 3 and a 2.5 speed multiplier; it has no crafting recipe.
+every chest before the first completion, contains one repeat stack of 5–10 Pumpkins. Beginning with
+the next run after the first completion, every chest keeps those Pumpkins and independently rolls a
+25% chance for one Iron Pickaxe. Iron Pickaxe is a dungeon reward with power 3 and a 2.5 speed
+multiplier; it has no crafting recipe.
 
 ## Structure authoring
 
@@ -501,7 +506,7 @@ and empty structures. Level Modules retain their independent dimensions, cells i
 weight, ordered sockets with per-socket unused fill blocks, ordered torches, and paired markers.
 They also persist ordered enemy spawn zones and an optional chest marker and require physical format
 version two; unversioned or obsolete resources are invalid. `LevelDefinition` independently
-requires format version four.
+requires format version five.
 `StructureResourceAdapter` converts both formats without changing their persisted contracts.
 `StructureFileStore` scans only direct
 `.tres` files in the globalized repository root and bypasses the resource cache during discovery,
@@ -512,7 +517,7 @@ leave the prior file and draft state unchanged.
 Hall and room membership is not duplicated on the module resource. `LevelDefinition` classifies
 module IDs through its hallway pool and typed room requirements, while paired markers identify the
 entry module. Adding a visual variant extends a requirement's module pool; adding a room class such
-as small or boss adds another typed requirement with its own encounter or chest loot bundle. The
+as small or boss adds another typed requirement with its own encounter or chest loot pools. The
 designer's simple connection mode authors at most one doorway per cardinal side while the persisted
 module format and generator continue to support existing advanced multi-door resources.
 
@@ -541,7 +546,7 @@ The optional chest marker targets one supported empty cell with empty headroom a
 adjacent supported two-cell standing space. It cannot overlap a socket aperture, torch, entry marker,
 or enemy spawn zone. Module Tools captures it from the centered world target and renders a copied
 metadata overlay. Catalog validation pairs a marked module only with a room requirement that owns a
-chest loot bundle and no encounter.
+base chest loot pool and no encounter.
 
 `Game` constructs and injects the dual-format file store while composing the console, authoring
 workflow, dialogs, and dedicated first-person runtime. It

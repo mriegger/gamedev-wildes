@@ -8,6 +8,7 @@ func _init() -> void:
 	_block_catalog = load("res://blocks/block_catalog.tres") as BlockCatalog
 	_item_catalog = load("res://items/item_catalog.tres") as ItemCatalog
 	_test_catalog_and_zombie_configuration()
+	_test_stone_post_completion_chest_pool()
 	_test_golden_keyed_random()
 	_test_order_and_unrelated_content_invariance()
 	_test_exclusive_groups()
@@ -57,6 +58,46 @@ func _test_catalog_and_zombie_configuration() -> void:
 	_expect(_item_catalog.has_definition(&"power_rune"), "second weapon rune missing")
 	_expect(_item_catalog.get_equipment_affix(&"nimble").is_compatible_with(_item_catalog.get_definition(&"copper_sword")), "Nimble rejected copper sword")
 	_expect((_item_catalog.get_definition(&"power_rune") as RuneDefinition).is_compatible_with(_item_catalog.get_definition(&"copper_sword")), "Power Rune rejected copper sword")
+
+func _test_stone_post_completion_chest_pool() -> void:
+	var pool := load("res://levels/content/dungeons/stone/stone_post_completion_chest_loot.tres") as LootPoolDefinition
+	_expect(pool != null and pool.validate(), "stone post-completion chest pool invalid")
+	_expect(LootCatalogValidator.validate(pool, _item_catalog), "stone post-completion chest pool references invalid content")
+	if pool == null:
+		return
+	var rolls: Dictionary = {}
+	for roll in pool.independent_rolls:
+		rolls[roll.id] = roll
+	_expect(rolls.size() == 2 and rolls.has(&"pumpkin") and rolls.has(&"iron_pickaxe"), "stone post-completion chest rolls changed")
+	if not rolls.has(&"pumpkin") or not rolls.has(&"iron_pickaxe"):
+		return
+	var pumpkin_roll := rolls[&"pumpkin"] as LootIndependentRollDefinition
+	var iron_roll := rolls[&"iron_pickaxe"] as LootIndependentRollDefinition
+	_expect(is_equal_approx(pumpkin_roll.chance, 1.0), "stone post-completion Pumpkin is not guaranteed")
+	_expect(is_equal_approx(iron_roll.chance, 0.25), "stone post-completion Iron Pickaxe chance is not 25%")
+	var saw_bonus := false
+	var saw_no_bonus := false
+	for seed in range(100):
+		var drops := _resolve(pool, seed, EquipmentInstanceFactory.new(_item_catalog))
+		var pumpkin_count := 0
+		var iron_count := 0
+		for stack in drops:
+			if stack.item_id == &"pumpkin":
+				pumpkin_count += stack.count
+			elif stack.item_id == &"iron_pickaxe":
+				iron_count += stack.count
+			else:
+				_expect(false, "stone post-completion chest resolved an unexpected item")
+		var expected_bonus := LootKeyedRandom.unit(
+			seed,
+			pool.id,
+			_path([&"independent", &"iron_pickaxe", &"chance"]),
+		) < 0.25
+		_expect(pumpkin_count >= 5 and pumpkin_count <= 10, "stone post-completion chest omitted its 5-10 Pumpkins")
+		_expect(iron_count == (1 if expected_bonus else 0), "stone post-completion chest did not honor its keyed 25% Iron roll")
+		saw_bonus = saw_bonus or iron_count == 1
+		saw_no_bonus = saw_no_bonus or iron_count == 0
+	_expect(saw_bonus and saw_no_bonus, "stone post-completion Iron roll did not cover both outcomes")
 
 func _test_golden_keyed_random() -> void:
 	var path := _path([&"independent", &"copper", &"chance"])

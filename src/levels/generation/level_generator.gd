@@ -487,11 +487,12 @@ func _write_placement(state: AssemblyState, placement: LevelPlacedModule, transf
 	state.placed_modules.append(placement)
 	if placement.definition.chest_marker != null:
 		var requirement := _room_requirement(placement.room_type_id)
-		assert(requirement != null and requirement.chest_loot_bundle != null)
+		assert(requirement != null and requirement.chest_loot_pool != null)
 		state.chests.append(LevelChestPlacement.new(
 			placement.placement_id,
 			placement.world_cell(placement.definition.chest_marker.cell),
-			requirement.chest_loot_bundle,
+			requirement.chest_loot_pool,
+			requirement.post_first_completion_chest_loot_pool,
 		))
 	var frontier_target := FrontierTarget.ROOM if placement.room_type_id.is_empty() else FrontierTarget.HALLWAY
 	for socket in placement.definition.sockets:
@@ -594,7 +595,8 @@ func _has_exact_chest_placements(state: AssemblyState) -> bool:
 			chest.room_id != placement.placement_id
 			or chest.cell != placement.world_cell(placement.definition.chest_marker.cell)
 			or requirement == null
-			or chest.loot_bundle != requirement.chest_loot_bundle
+			or chest.loot_pool != requirement.chest_loot_pool
+			or chest.post_first_completion_loot_pool != requirement.post_first_completion_chest_loot_pool
 			or chest_cells.has(chest.cell)
 			or not LevelChestMarkerDefinition.has_accessible_side_in_world(chest.cell, state.cells)
 		):

@@ -14,4 +14,5 @@ const CHEST_SCOPE: StringName = &"chest"
 @abstract func is_open() -> bool
 @abstract func get_active_position() -> Variant
 @abstract func move_all_to_backpack() -> bool
-@abstract func can_move_all_to_backpack() -> bool
+@abstract func has_items_to_take() -> bool
+@abstract func is_active_one_time_reward() -> bool

@@ -82,7 +82,7 @@ materials are configured through typed level resources rather than hardcoded dun
 destination dungeon owns its catalog, entrance, definition, presentation, and modules under
 `levels/content/dungeons/<family>`. Directories organize each self-contained family but never
 register content through filesystem scans. A room requirement maps a stable room type, count,
-module pool, and either an encounter or chest loot bundle, so additional variants can join an
+module pool, and either an encounter or base and optional post-completion chest loot pools, so additional variants can join an
 existing type and new types such as small or boss rooms can be added without a dungeon-specific
 generator branch.
 
@@ -90,12 +90,13 @@ Master rooms configure 40 zombies and normal rooms 25. Chest rooms are passive: 
 contains one take-only chest, creates no local enemy wave, and does not seal its branch. Enemies from
 other rooms can still enter and attack. On the stone dungeon's first clear, one deterministic chest
 contains the guaranteed Iron Pickaxe while each other chest contains one stack of 5–10 Pumpkins;
-after that reward is claimed, every chest uses the Pumpkin repeat loot. First-clear items remain in
-attempt escrow until the complete chest is taken and the player exits alive. Death, quit, or an
-incomplete exit discards that escrow.
-Repeat loot transfers immediately and survives death. A full inventory leaves the reward unchanged
-and displays `Inventory full — drop items first`; the return door rechecks capacity before securing
-the first-clear reward. Enemy clearance is not currently required for completion. See
+claiming the guaranteed chest moves its complete bundle directly into inventory, records the claim,
+and requests an immediate save. The dungeon is completed separately by exiting alive. If the player
+dies or abandons the attempt after claiming, the item and claim remain but completion does not; the
+next run requires a repeat-loot transfer before exit. Beginning with the run after the first
+completion, every chest contains 5–10 Pumpkins and independently has a 25% chance to include one
+Iron Pickaxe. A full inventory leaves a guaranteed bundle unchanged and displays
+`Inventory full — drop items first`. Enemy clearance is not currently required for completion. See
 [Dungeon chest authoring and rewards](docs/dungeon-chest-authoring.md) for the full authoring and
 completion rules.
 
@@ -128,7 +129,7 @@ must still be added explicitly to the appropriate level content and catalog; rep
 are not consumed or registered by generation automatically. Spawn zones persist horizontal floor
 rectangles; blocked decorative cells are ignored, but every zone must retain at least one
 supported, body-clear candidate away from doorways. Current Level Module resources require physical
-format version two, while `LevelDefinition` uses format version four. Module resources remain
+format version two, while `LevelDefinition` uses format version five. Module resources remain
 geometry-focused, while `LevelDefinition` assigns them to its entry, hallway, and typed
 room-requirement pools. Connection openings are derived from authored boundary geometry, so
 hallways can use any enclosed opening size supported by the module bounds.
@@ -155,7 +156,8 @@ can be mined with a pickaxe.
 Hovering a reachable chest brightens it and hinges its lid open slightly. Left-clicking opens its
 3×5 storage in the center while the backpack opens from the right. Overworld chests allow transfers
 in both directions and persist their contents; dungeon chests allow only taking items. Clicking a
-chest item transfers its stack to inventory, and Take all transfers every stack that fits. Mining
+repeat chest item transfers its stack to inventory, and Take all transfers every stack that fits.
+Guaranteed chests use Claim Reward to transfer the whole bundle atomically. Mining
 an empty overworld chest returns it to the player inventory. `P` or `Esc` closes both panels; `Tab`
 replaces the chest with the crafting menu while keeping the backpack open.
 
@@ -166,11 +168,12 @@ radial scan tracing its 120-degree attack area in front of the player. Its base 
 to 10 independently for each enemy hit. Combat registers slash, blunt, and pierce damage types;
 enemies are neutral by default. Zombies take 1.5 times damage from slash, while Skeletons take half
 damage from slash and 1.5 times damage from blunt. Stone Golems take half damage from slash and
-pierce while remaining neutral to blunt. The dungeon-only Iron Pickaxe has mining power 3 and a 2.5
-speed multiplier; it has no crafting recipe. The copper hammer uses a slower two-handed overhead
-slam that damages and knocks back enemies within about four blocks of the hammer's ground contact
-while an expanding white ring marks that area. Its authored damage falls linearly from 15 at the
-impact center to 5 at the edge before combat stats.
+pierce while remaining neutral to blunt. The Iron Pickaxe is initially guaranteed by the stone
+dungeon and can later roll from its farm pool. It has mining power 3, a 2.5 speed multiplier, and no
+crafting recipe. The copper hammer uses a slower two-handed overhead slam that damages and knocks
+back enemies within about four blocks of the hammer's ground contact while an expanding white ring
+marks that area. Its authored damage falls linearly from 15 at the impact center to 5 at the edge
+before combat stats.
 Damaged enemies show a small black-and-red health bar above their model. Successful hits also show
 damage numbers that rise and fade above each affected enemy; the numbers remain legible at the
 default camera zoom, render over health bars and world geometry, and are hidden once the camera is
@@ -204,8 +207,9 @@ immediate defense-aware damage and repeating it every half second while stacking
 to a 60% reduction. Each successful grounded jump dislodges one attached slime.
 
 **Crafting.** Opening crafting with `Tab` reveals the general recipe panel alongside the backpack.
-It contains the six recipes that do not require a workstation. Iron Pickaxe is a secured first-clear
-reward from the stone dungeon rather than a crafting recipe. Basic Rune currently has no normal
+It contains the six recipes that do not require a workstation. Iron Pickaxe is initially a
+guaranteed stone-dungeon reward and later appears in that dungeon's repeat pool rather than a
+crafting recipe. Basic Rune currently has no normal
 production acquisition. A placed anvil opens its own panel with the eight copper tool, weapon, and
 armor recipes. A placed cauldron opens a food-and-potion panel; its initial recipe combines two
 pumpkins and two apples into one health potion. All catalogs

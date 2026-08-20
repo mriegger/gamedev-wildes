@@ -61,6 +61,7 @@ func _run() -> void:
 		_finish(0, 0)
 		return
 	_test_catalog_and_modules()
+	_test_optional_post_completion_pool()
 	_test_rotations()
 	_test_variable_aperture_generation()
 	_test_optional_socket_sealing()
@@ -148,20 +149,33 @@ func _test_catalog_and_modules() -> void:
 	for requirement in definition.room_requirements:
 		if requirement.room_type_id == &"chest_room":
 			_expect(requirement.encounter == null, "stone chest room must be passive")
-			_expect(requirement.chest_loot_bundle != null and requirement.chest_loot_bundle.id == &"stone_dungeon_chest", "stone chest room loot bundle changed")
-			if requirement.chest_loot_bundle != null:
-				var repeat_loot := requirement.chest_loot_bundle
-				_expect(repeat_loot.max_rewards == 1, "stone chest reward limit changed")
-				_expect(repeat_loot.fixed_entries.size() == 1 and repeat_loot.weighted_candidates.is_empty(), "stone chest loot is not exactly one fixed entry")
-				if repeat_loot.fixed_entries.size() == 1:
-					var pumpkin_entry := repeat_loot.fixed_entries[0]
-					var pumpkin_drop := pumpkin_entry.drop
-					_expect(pumpkin_entry.id == &"pumpkin", "stone chest fixed entry is not Pumpkin")
-					_expect(pumpkin_drop != null and pumpkin_drop.item == _item_catalog.get_definition(&"pumpkin"), "stone chest does not use the canonical Pumpkin")
-					if pumpkin_drop != null:
-						_expect(pumpkin_drop.minimum_count == 5 and pumpkin_drop.maximum_count == 10 and pumpkin_drop.equipment_roll == null, "stone chest does not contain exactly 5-10 Pumpkins")
+			_expect(requirement.chest_loot_pool != null and requirement.chest_loot_pool.id == &"stone_dungeon_chest", "stone chest base loot pool changed")
+			if requirement.chest_loot_pool != null:
+				var base_pool := requirement.chest_loot_pool
+				_expect(LevelLootCatalogValidator.validate_chest_pool(base_pool, _item_catalog, chest_slot_count), "stone base chest pool failed focused validation")
+				_expect(base_pool.independent_rolls.size() == 1 and base_pool.exclusive_groups.is_empty(), "stone base chest loot is not exactly one independent roll")
+				if base_pool.independent_rolls.size() == 1:
+					_expect_pumpkin_roll(base_pool.independent_rolls[0], "stone base chest")
+			var post_pool := requirement.post_first_completion_chest_loot_pool
+			_expect(post_pool != null and post_pool.id == &"stone_dungeon_post_completion_chest", "stone post-completion chest loot pool changed")
+			if post_pool != null:
+				_expect(LevelLootCatalogValidator.validate_chest_pool(post_pool, _item_catalog, chest_slot_count), "stone post-completion chest pool failed focused validation")
+				_expect(post_pool.independent_rolls.size() == 2 and post_pool.exclusive_groups.is_empty(), "stone post-completion chest loot is not two independent rolls")
+				var post_rolls: Dictionary = {}
+				for roll in post_pool.independent_rolls:
+					post_rolls[roll.id] = roll
+				_expect(post_rolls.size() == 2 and post_rolls.has(&"pumpkin") and post_rolls.has(&"iron_pickaxe"), "stone post-completion chest roll IDs changed")
+				if post_rolls.has(&"pumpkin"):
+					_expect_pumpkin_roll(post_rolls[&"pumpkin"] as LootIndependentRollDefinition, "stone post-completion chest")
+				if post_rolls.has(&"iron_pickaxe"):
+					var iron_roll := post_rolls[&"iron_pickaxe"] as LootIndependentRollDefinition
+					var iron_drop := iron_roll.drop
+					_expect(is_equal_approx(iron_roll.chance, 0.25), "stone post-completion Iron Pickaxe chance is not 25%")
+					_expect(iron_drop != null and iron_drop.item == _item_catalog.get_definition(&"iron_pickaxe"), "stone post-completion chest does not use the canonical Iron Pickaxe")
+					if iron_drop != null:
+						_expect(iron_drop.minimum_count == 1 and iron_drop.maximum_count == 1 and iron_drop.equipment_roll == null, "stone post-completion Iron Pickaxe is not exactly one ordinary item")
 			continue
-		_expect(requirement.chest_loot_bundle == null, "encounter room unexpectedly owns chest loot: %s" % requirement.room_type_id)
+		_expect(requirement.chest_loot_pool == null and requirement.post_first_completion_chest_loot_pool == null, "encounter room unexpectedly owns chest loot: %s" % requirement.room_type_id)
 		_expect(requirement.encounter != null and requirement.encounter.validate(String(requirement.room_type_id)), "stone room encounter is invalid: %s" % requirement.room_type_id)
 		if requirement.encounter == null:
 			continue
@@ -232,12 +246,38 @@ func _test_catalog_and_modules() -> void:
 			var requirement := _room_requirement_for_module(definition, module.module_id)
 			_expect(requirement != null, "live module has no room requirement: %s" % module.module_id)
 			if requirement != null:
-				_expect((module.chest_marker != null) == (requirement.chest_loot_bundle != null), "module chest marker and loot bundle differ: %s" % module.module_id)
+				_expect((module.chest_marker != null) == (requirement.chest_loot_pool != null), "module chest marker and loot pool differ: %s" % module.module_id)
 			if requirement != null and requirement.encounter == null:
 				_expect(module.enemy_spawn_zones.is_empty() and module.get_enemy_spawn_candidate_cells().is_empty(), "passive room module has enemy spawn zones: %s" % module.module_id)
 			else:
 				_expect(not module.enemy_spawn_zones.is_empty() and not module.get_enemy_spawn_candidate_cells().is_empty(), "encounter room module has no usable enemy spawn zone: %s" % module.module_id)
 	_expect(start_count == 1, "catalog must have exactly one entry module")
+
+func _expect_pumpkin_roll(roll: LootIndependentRollDefinition, source: String) -> void:
+	_expect(roll != null and roll.id == &"pumpkin" and is_equal_approx(roll.chance, 1.0), "%s does not guarantee its Pumpkin roll" % source)
+	if roll == null:
+		return
+	var drop := roll.drop
+	_expect(drop != null and drop.item == _item_catalog.get_definition(&"pumpkin"), "%s does not use the canonical Pumpkin" % source)
+	if drop != null:
+		_expect(drop.minimum_count == 5 and drop.maximum_count == 10 and drop.equipment_roll == null, "%s does not contain exactly 5-10 Pumpkins" % source)
+
+func _test_optional_post_completion_pool() -> void:
+	var definition := _catalog.get_level(LEVEL_ID).duplicate(true) as LevelDefinition
+	definition.room_requirements[2].post_first_completion_chest_loot_pool = null
+	var catalog := LevelCatalog.new()
+	catalog.modules.assign(_catalog.modules)
+	catalog.levels.append(definition)
+	_expect(catalog.validate(), "level without a post-completion chest pool failed validation")
+	var chest_slot_count := _block_catalog.get_definition(BlockId.Type.CHEST).container.get_slot_count()
+	_expect(LevelLootCatalogValidator.validate(catalog, _item_catalog, chest_slot_count), "level without a post-completion chest pool failed loot validation")
+	var result := LevelGenerator.new().generate(catalog, definition.level_id, 71, &"optional_post_pool", Vector3i.ZERO)
+	_expect(result.succeeded, "level without a post-completion chest pool failed generation")
+	if not result.succeeded:
+		return
+	for chest in result.layout.chests:
+		_expect(chest.loot_pool == definition.room_requirements[2].chest_loot_pool, "base chest pool was not carried into a placement")
+		_expect(chest.post_first_completion_loot_pool == null, "missing post-completion chest pool did not remain optional")
 
 func _test_marker(module: LevelModuleDefinition, marker: LevelMarkerDefinition, label: String) -> void:
 	_expect(StructureCell.is_in_bounds(marker.cell, module.size), "%s marker is outside %s" % [label, module.module_id])
@@ -880,10 +920,11 @@ func _validate_layout(layout: LevelLayout, seed_index: int) -> void:
 			expected_torches[key] = true
 		if module.chest_marker != null:
 			var requirement := _room_requirement_for_module(definition, module.module_id)
-			_expect(requirement != null and requirement.chest_loot_bundle != null, "marked chest module has no loot bundle for %s" % label)
+			_expect(requirement != null and requirement.chest_loot_pool != null, "marked chest module has no loot pool for %s" % label)
 			expected_chests[placement.placement_id] = {
 				"cell": placement.world_cell(module.chest_marker.cell),
-				"loot_bundle": requirement.chest_loot_bundle if requirement != null else null,
+				"loot_pool": requirement.chest_loot_pool if requirement != null else null,
+				"post_first_completion_loot_pool": requirement.post_first_completion_chest_loot_pool if requirement != null else null,
 			}
 		if module.spawn_marker != null:
 			marker_count += 1
@@ -977,7 +1018,8 @@ func _validate_layout(layout: LevelLayout, seed_index: int) -> void:
 			continue
 		var expected := expected_chests[chest.room_id] as Dictionary
 		_expect(chest.cell == expected["cell"], "placed chest marker transform changed for %s" % label)
-		_expect(chest.loot_bundle == expected["loot_bundle"], "placed chest loot bundle is not canonical for %s" % label)
+		_expect(chest.loot_pool == expected["loot_pool"], "placed chest loot pool is not canonical for %s" % label)
+		_expect(chest.post_first_completion_loot_pool == expected["post_first_completion_loot_pool"], "placed chest post-completion loot pool is not canonical for %s" % label)
 		_expect(not actual_chest_cells.has(chest.cell), "duplicate placed chest cell for %s" % label)
 		actual_chest_cells[chest.cell] = true
 		_expect(layout.get_cell(chest.cell) == StructureCell.AIR, "placed chest marker is not in AIR for %s" % label)
@@ -1252,7 +1294,7 @@ func _layout_digest(layout: LevelLayout) -> String:
 	for torch_line in torch_lines:
 		lines.append("torch=" + torch_line)
 	for chest in layout.chests:
-		lines.append("chest=%d:%d,%d,%d:%s" % [chest.room_id, chest.cell.x, chest.cell.y, chest.cell.z, chest.loot_bundle.id])
+		lines.append("chest=%d:%d,%d,%d:%s" % [chest.room_id, chest.cell.x, chest.cell.y, chest.cell.z, chest.loot_pool.id])
 	return "\n".join(lines).sha256_text()
 
 func _topology_digest(layout: LevelLayout) -> String:

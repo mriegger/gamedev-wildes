@@ -117,7 +117,7 @@ func _validate_level_modules(level: LevelDefinition) -> bool:
 		if requirement == null:
 			continue
 		var has_encounter := requirement.encounter != null
-		var has_chest_loot := requirement.chest_loot_bundle != null
+		var has_chest_loot := requirement.chest_loot_pool != null
 		var maximum_extra_sockets := -1
 		for module_id in requirement.module_ids:
 			valid = _claim_role(module_id, "room", claimed_roles, level.level_id) and valid
@@ -131,7 +131,7 @@ func _validate_level_modules(level: LevelDefinition) -> bool:
 				continue
 			var room := _modules_by_id[module_id] as LevelModuleDefinition
 			if (room.chest_marker != null) != has_chest_loot:
-				push_error("[LevelCatalog] Room module chest marker and loot bundle must be configured together: %s for %s" % [module_id, level.level_id])
+				push_error("[LevelCatalog] Room module chest marker and loot pool must be configured together: %s for %s" % [module_id, level.level_id])
 				valid = false
 			if has_encounter and room.enemy_spawn_zones.is_empty():
 				push_error("[LevelCatalog] Room module requires enemy spawn zones: %s for %s" % [module_id, level.level_id])

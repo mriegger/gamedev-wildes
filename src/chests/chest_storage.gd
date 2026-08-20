@@ -153,6 +153,21 @@ func prepare_remove_stack(
 		simulated[slot_index] = null
 	return PreparedChestStorageChange.new(self, _revision, position, simulated, removed)
 
+func prepare_remove_all_stacks(position: Vector3i) -> PreparedChestStorageChange:
+	if not has_chest(position):
+		return null
+	var simulated := get_slots(position)
+	var removed: Array[InventoryStack] = []
+	for slot_index in range(simulated.size()):
+		var stack := simulated[slot_index]
+		if stack == null:
+			continue
+		removed.append(stack)
+		simulated[slot_index] = null
+	if removed.is_empty():
+		return null
+	return PreparedChestStorageChange.new(self, _revision, position, simulated, null, removed)
+
 func remove_stack(position: Vector3i, slot_index: int, count: int = -1) -> InventoryStack:
 	if _runtime_bound:
 		return null

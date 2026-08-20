@@ -15,6 +15,7 @@ func _run():
 	var chest_block := block_catalog.get_definition(BlockId.Type.CHEST)
 	var container := chest_block.container
 	_expect(container != null and container.rows == 3 and container.columns == 5, "chest is not a 3x5 container")
+	_test_atomic_whole_chest_removal(item_catalog, container.get_slot_count())
 	_expect(BlockId.is_ao_solid(BlockId.Type.CHEST), "separately rendered chest does not occlude ambient light")
 	_expect(chest_block.is_breakable and chest_block.mining_tool_tag == &"pickaxe" and chest_block.minimum_mining_power == 1, "chest mining metadata is invalid")
 	var unarmed := load("res://items/actions/definitions/unarmed_mining.tres") as MiningActionDefinition
@@ -165,6 +166,8 @@ func _run():
 	var full_coordinator := ChestCoordinator.new()
 	_expect(full_coordinator.setup(full_storage, full_player_inventory, full_loadout, world, chest_block), "full-backpack coordinator setup failed")
 	_expect(full_coordinator.try_open(second_chest_position, container), "full-backpack coordinator could not open a chest")
+	_expect(full_coordinator.has_items_to_take(), "full backpack hid non-empty chest contents")
+	_expect(not full_coordinator.is_active_one_time_reward(), "ordinary chest reported a one-time reward")
 	_expect(not full_coordinator.quick_transfer(ChestCoordinator.CHEST_SCOPE, 0), "chest click moved an item into a full backpack")
 	_expect(not full_coordinator.move_all_to_backpack(), "move-all changed a full backpack")
 	_expect(full_storage.get_slot(second_chest_position, 0).count == 3, "full backpack transfer changed the chest stack")
@@ -332,10 +335,16 @@ func _run():
 		saved_backpack_slots.append(player_inventory.get_slot(index))
 	for index in range(InventoryModel.HOTBAR_SIZE, InventoryModel.FILLABLE_SIZE):
 		_expect(_replace_inventory_slot(player_loadout, player_inventory, index, InventoryStack.new(&"sand_block", item_catalog.get_definition(&"sand_block").max_stack)), "full-backpack UI fixture failed at %d" % index)
-	_expect(hud.chest_panel._move_all_button.disabled, "move-all stayed enabled for a full backpack")
+	_expect(not hud.chest_panel._move_all_button.disabled, "move-all was disabled for a non-empty chest with a full backpack")
+	var full_backpack_chest_snapshot := restored_storage.snapshot()
+	var full_backpack_inventory_snapshot := player_inventory.to_dict()
+	hud.chest_panel._move_all_button.pressed.emit()
+	_expect(restored_storage.snapshot() == full_backpack_chest_snapshot, "full-backpack move-all changed chest contents")
+	_expect(player_inventory.to_dict() == full_backpack_inventory_snapshot, "full-backpack move-all changed inventory contents")
+	_expect(not hud.chest_panel._move_all_button.disabled, "failed full-backpack move-all disabled a non-empty chest")
 	for offset in range(saved_backpack_slots.size()):
 		_expect(_replace_inventory_slot(player_loadout, player_inventory, InventoryModel.HOTBAR_SIZE + offset, saved_backpack_slots[offset]), "backpack UI fixture restore failed at %d" % offset)
-	_expect(not hud.chest_panel._move_all_button.disabled, "move-all did not re-enable when backpack space became available")
+	_expect(not hud.chest_panel._move_all_button.disabled, "move-all was disabled after backpack space became available")
 	_expect(hud.side_panel._equipment_button.is_disabled(), "equipment tab remains available while chest storage is open")
 	var chest_slot := hud.chest_panel.get_chest_slots()[0]
 	var backpack_slot := hud.side_panel.get_inventory_slots()[3]
@@ -418,6 +427,7 @@ func _run():
 		chest_counts[item_id] = player_inventory.get_inventory_item_count(item_id) + chest_counts[item_id]
 	hud.chest_panel._move_all_button.pressed.emit()
 	_expect(restored_storage.is_chest_empty(chest_position), "move-all retained items in the chest")
+	_expect(not ui_coordinator.has_items_to_take(), "empty chest still reported items to take")
 	for item_id in chest_counts:
 		_expect(player_inventory.get_inventory_item_count(item_id) == chest_counts[item_id], "move-all lost %s items" % item_id)
 	_expect(hud.chest_panel._move_all_button.disabled, "move-all button stayed enabled for an empty chest")
@@ -446,6 +456,64 @@ func _run():
 func _expect(condition: bool, message: String):
 	if not condition:
 		_failures.append(message)
+
+func _test_atomic_whole_chest_removal(item_catalog: ItemCatalog, slot_count: int):
+	var factory := EquipmentInstanceFactory.new(item_catalog)
+	var storage := ChestStorage.new(item_catalog, factory, slot_count)
+	var reward_position := Vector3i(21, 4, 8)
+	var other_position := Vector3i(22, 4, 8)
+	var empty_position := Vector3i(23, 4, 8)
+	_expect(storage.create_chest(reward_position), "whole-removal reward chest creation failed")
+	_expect(storage.create_chest(other_position), "whole-removal second chest creation failed")
+	_expect(storage.create_chest(empty_position), "whole-removal empty chest creation failed")
+	var affixes: Array[EquipmentAffixDefinition] = [item_catalog.get_equipment_affix(&"vicious")]
+	var runes: Array[StringName] = [&"basic_rune"]
+	var sword := factory.create(&"copper_sword", affixes, runes)
+	_expect(sword != null, "whole-removal equipment fixture creation failed")
+	_expect(storage.add_stack(reward_position, InventoryStack.new(&"pumpkin", 7), 0), "whole-removal pumpkin fixture failed")
+	_expect(storage.add_stack(reward_position, InventoryStack.new(&"copper_sword", 1, sword), 4), "whole-removal equipment fixture failed")
+	_expect(storage.add_stack(reward_position, InventoryStack.new(&"log_block", 3), 9), "whole-removal log fixture failed")
+	_expect(storage.add_stack(other_position, InventoryStack.new(&"torch", 2), 2), "whole-removal second chest fixture failed")
+	_expect(storage.prepare_remove_all_stacks(Vector3i(99, 99, 99)) == null, "unknown chest prepared a whole removal")
+	_expect(storage.prepare_remove_all_stacks(empty_position) == null, "empty chest prepared a whole removal")
+	var snapshot_before := storage.snapshot()
+	var revision_before := storage.get_revision()
+	var prepared := storage.prepare_remove_all_stacks(reward_position)
+	_expect(prepared != null, "populated chest rejected a whole removal")
+	_expect(storage.snapshot() == snapshot_before and storage.get_revision() == revision_before, "whole removal mutated storage during preparation")
+	_expect(prepared.get_result_stack() == null, "whole removal exposed a singular result")
+	var results := prepared.get_result_stacks()
+	_expect(results.size() == 3, "whole removal did not return every non-empty stack")
+	if results.size() == 3:
+		_expect(results[0].item_id == &"pumpkin" and results[0].count == 7, "whole removal changed first slot order")
+		_expect(results[1].item_id == &"copper_sword" and results[1].equipment_instance.to_dict() == sword.to_dict(), "whole removal changed equipment identity or slot order")
+		_expect(results[2].item_id == &"log_block" and results[2].count == 3, "whole removal changed final slot order")
+		results[0].count = 1
+		results[1].equipment_instance.instance_id += 1000
+	var fresh_results := prepared.get_result_stacks()
+	_expect(fresh_results.size() == 3 and fresh_results[0].count == 7, "whole-removal result stacks were not defensively copied")
+	_expect(fresh_results.size() == 3 and fresh_results[1].equipment_instance.to_dict() == sword.to_dict(), "whole-removal equipment result was not defensively copied")
+	var foreign_storage := ChestStorage.new(item_catalog, factory, slot_count)
+	_expect(foreign_storage.create_chest(reward_position), "foreign storage fixture creation failed")
+	_expect(not foreign_storage.can_commit_prepared_change(prepared), "foreign storage accepted a whole-removal change")
+	_expect(storage.add_stack(other_position, InventoryStack.new(&"sand_block", 1), 3), "stale whole-removal mutation fixture failed")
+	_expect(not storage.can_commit_prepared_change(prepared), "stale whole-removal change remained committable")
+	_expect(not storage.is_chest_empty(reward_position), "stale whole-removal change altered the reward chest")
+	prepared = storage.prepare_remove_all_stacks(reward_position)
+	_expect(prepared != null and storage.can_commit_prepared_change(prepared), "fresh whole-removal change was not committable")
+	var commit_revision := storage.get_revision()
+	storage._commit_prepared_change(prepared)
+	_expect(storage.is_chest_empty(reward_position), "whole-removal commit retained reward stacks")
+	_expect(storage.get_slot(other_position, 2).count == 2 and storage.get_slot(other_position, 3).count == 1, "whole-removal commit changed another chest")
+	_expect(storage.get_revision() == commit_revision + 1, "whole-removal commit changed revision more than once")
+	_expect(not storage.can_commit_prepared_change(prepared), "committed whole-removal change remained committable")
+	_expect(storage.prepare_remove_all_stacks(reward_position) == null, "empty reward chest prepared a repeated whole removal")
+	var single := storage.prepare_remove_stack(other_position, 2, 1)
+	var single_results := single.get_result_stacks()
+	_expect(single_results.size() == 1 and single_results[0].item_id == &"torch" and single_results[0].count == 1, "single removal did not expose its generic result list")
+	if not single_results.is_empty():
+		single_results[0].count = 99
+	_expect(single.get_result_stacks()[0].count == 1, "single-removal result list was not defensively copied")
 
 func _on_container_open_requested(_position: Vector3i, _definition: ContainerBlockDefinition):
 	_open_requests += 1

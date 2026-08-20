@@ -1,7 +1,7 @@
 extends Resource
 class_name LevelDefinition
 
-const FORMAT_VERSION: int = 4
+const FORMAT_VERSION: int = 5
 const HARD_MAX_EXPLORED_STATES: int = 10000
 const HARD_MAX_MODULE_COUNT: int = 64
 
@@ -55,7 +55,7 @@ func validate() -> bool:
 			push_error("[LevelDefinition] Duplicate room type %s for %s" % [requirement.room_type_id, source])
 			valid = false
 		room_type_ids[requirement.room_type_id] = true
-		has_chest_room = requirement.chest_loot_bundle != null or has_chest_room
+		has_chest_room = requirement.chest_loot_pool != null or has_chest_room
 		valid = _validate_module_pool(requirement.module_ids, "room", assigned_module_ids, source) and valid
 	if one_time_chest_reward != null:
 		valid = one_time_chest_reward.validate(source) and valid

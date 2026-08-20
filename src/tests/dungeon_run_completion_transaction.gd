@@ -11,13 +11,15 @@ func _run() -> void:
 	_item_catalog = load("res://items/item_catalog.tres") as ItemCatalog
 	_expect(block_catalog != null and block_catalog.validate(), "block catalog invalid")
 	_expect(_item_catalog != null and _item_catalog.validate(block_catalog), "item catalog invalid")
-	_test_atomic_one_time_completion()
-	_test_exit_capacity_revalidation()
-	_test_repeatable_completion()
+	_test_direct_claim_then_alive_completion()
+	_test_abandoned_claim_requires_repeat_transfer()
+	_test_farmable_dungeon_requires_repeat_transfer()
+	_test_invalid_arguments()
 	_item_catalog = null
 	call_deferred("_finish")
 
-func _test_atomic_one_time_completion() -> void:
+func _test_direct_claim_then_alive_completion() -> void:
+	var dungeon_instance_id := &"story_instance"
 	var reward := _reward(
 		&"story_reward",
 		_bundle(
@@ -29,187 +31,282 @@ func _test_atomic_one_time_completion() -> void:
 			]),
 		),
 	)
-	var repeat_bundle := _bundle(
+	var repeat_pool := _pool(
 		&"story_repeat",
-		1,
-		_entries([_entry(&"sand", _drop(&"sand_block", 3))]),
+		_rolls([_roll(&"sand", _drop(&"sand_block", 3))]),
 	)
 	var cell := Vector3i(4, 2, -7)
 	var inventory := _inventory()
 	var loadout := InventoryTestFixture.create_loadout(inventory)
+	var progress := DungeonProgressState.new()
+	_expect(progress.begin_attempt(dungeon_instance_id) == 0, "story attempt did not begin")
 	var chests := DungeonChestCoordinator.new()
 	var container := _container(1, 3)
 	_expect(
 		chests.setup(
-			_placements([LevelChestPlacement.new(1, cell, repeat_bundle)]),
+			_placements([LevelChestPlacement.new(1, cell, repeat_pool, null)]),
 			17,
 			reward,
-			false,
 			33,
+			dungeon_instance_id,
+			progress,
 			inventory,
 			loadout,
 			container,
 		),
-		"one-time completion chest setup failed",
+		"story chest setup failed",
 	)
-	_expect(chests.try_open(cell, container), "one-time completion chest did not open")
-	var inventory_before := inventory.to_dict()
-	_expect(chests.move_all_to_backpack(), "one-time bundle did not enter escrow")
-	_expect(inventory.to_dict() == inventory_before, "one-time escrow changed inventory before exit")
-	var progress := DungeonProgressState.new()
+	_expect(
+		DungeonRunCompletionTransaction.try_complete(
+			chests,
+			progress,
+			dungeon_instance_id,
+		) == DungeonRunCompletionTransaction.Outcome.INCOMPLETE,
+		"unclaimed story run completed before its reward was claimed",
+	)
+	_expect(progress.get_completion_count(dungeon_instance_id) == 0, "incomplete story run changed completion count")
+	_expect(chests.try_open(cell, container), "story chest did not open")
+	_expect(chests.is_active_one_time_reward(), "story reward chest was not active")
 	var inventory_observations: Array[bool] = []
 	var progress_observations: Array[bool] = []
+	var contents_observations: Array[bool] = []
+	var claim_observations: Array[bool] = []
 	var inventory_observer := func() -> void:
 		inventory_observations.append(
-			progress.has_claimed_reward(&"stone_instance", reward.reward_id)
-			and chests.prepare_one_time_claim() == null
+			progress.has_claimed_reward(dungeon_instance_id, reward.reward_id)
+			and not chests.has_items_to_take()
+			and progress.get_completion_count(dungeon_instance_id) == 0
 		)
 	var progress_observer := func() -> void:
 		progress_observations.append(
 			inventory.get_inventory_item_count(&"copper") == 7
 			and inventory.get_inventory_item_count(&"basic_rune") == 2
+			and not chests.has_items_to_take()
+			and progress.get_completion_count(dungeon_instance_id) == 0
+		)
+	var contents_observer := func(position: Vector3i) -> void:
+		contents_observations.append(
+			position == cell
+			and inventory.get_inventory_item_count(&"copper") == 7
+			and inventory.get_inventory_item_count(&"basic_rune") == 2
+			and progress.has_claimed_reward(dungeon_instance_id, reward.reward_id)
+			and progress.get_completion_count(dungeon_instance_id) == 0
+		)
+	var claim_observer := func(reward_id: StringName) -> void:
+		claim_observations.append(
+			reward_id == reward.reward_id
+			and inventory.get_inventory_item_count(&"copper") == 7
+			and inventory.get_inventory_item_count(&"basic_rune") == 2
+			and progress.has_claimed_reward(dungeon_instance_id, reward.reward_id)
+			and progress.get_completion_count(dungeon_instance_id) == 0
 		)
 	inventory.inventory_changed.connect(inventory_observer)
 	progress.state_changed.connect(progress_observer)
-	var outcome := DungeonRunCompletionTransaction.try_complete(
-		chests,
-		progress,
-		&"stone_instance",
-		reward,
-		loadout,
-	)
-	_expect(outcome == DungeonRunCompletionTransaction.Outcome.COMPLETED, "one-time dungeon exit did not complete")
-	_expect(progress.get_completion_count(&"stone_instance") == 1, "one-time exit did not increment completion count")
-	_expect(progress.has_claimed_reward(&"stone_instance", reward.reward_id), "one-time exit did not persist its claim")
-	_expect(inventory.get_inventory_item_count(&"copper") == 7, "one-time copper did not reach inventory")
-	_expect(inventory.get_inventory_item_count(&"basic_rune") == 2, "one-time runes did not reach inventory")
-	_expect(inventory_observations == [true], "inventory observer saw a partial completion transaction")
-	_expect(progress_observations == [true], "progress observer saw a partial completion transaction")
+	chests.contents_changed.connect(contents_observer)
+	chests.one_time_reward_claimed.connect(claim_observer)
+	_expect(chests.move_all_to_backpack(), "story reward was not claimed directly")
+	_expect(inventory.get_inventory_item_count(&"copper") == 7, "direct claim did not add story copper")
+	_expect(inventory.get_inventory_item_count(&"basic_rune") == 2, "direct claim did not add story runes")
+	_expect(progress.has_claimed_reward(dungeon_instance_id, reward.reward_id), "direct claim was not persisted")
+	_expect(progress.get_completion_count(dungeon_instance_id) == 0, "direct claim completed the story run")
+	_expect(chests.has_met_completion_requirement(), "direct claim did not qualify the story run")
+	_expect(inventory_observations == [true], "inventory observer saw a partial direct claim")
+	_expect(progress_observations == [true], "progress observer saw a partial direct claim")
+	_expect(contents_observations == [true], "chest observer saw a partial direct claim")
+	_expect(claim_observations == [true], "claim observer saw a partial direct claim")
 	inventory.inventory_changed.disconnect(inventory_observer)
 	progress.state_changed.disconnect(progress_observer)
+	chests.contents_changed.disconnect(contents_observer)
+	chests.one_time_reward_claimed.disconnect(claim_observer)
 	_expect(
 		DungeonRunCompletionTransaction.try_complete(
 			chests,
 			progress,
-			&"stone_instance",
-			reward,
-			loadout,
-		) == DungeonRunCompletionTransaction.Outcome.INCOMPLETE,
-		"claimed one-time completion replayed without repeat loot",
+			dungeon_instance_id,
+		) == DungeonRunCompletionTransaction.Outcome.COMPLETED,
+		"alive story exit did not complete after the direct claim",
 	)
+	_expect(progress.get_completion_count(dungeon_instance_id) == 1, "alive story exit did not increment completion count")
 
-func _test_exit_capacity_revalidation() -> void:
+func _test_abandoned_claim_requires_repeat_transfer() -> void:
+	var dungeon_instance_id := &"abandoned_instance"
 	var reward := _reward(
-		&"capacity_reward",
+		&"abandoned_reward",
 		_bundle(
-			&"capacity_bundle",
+			&"abandoned_bundle",
 			1,
 			_entries([_entry(&"rune", _drop(&"basic_rune"))]),
 		),
 	)
-	var repeat_bundle := _bundle(
-		&"capacity_repeat",
-		1,
-		_entries([_entry(&"sand", _drop(&"sand_block"))]),
+	var repeat_pool := _pool(
+		&"abandoned_repeat",
+		_rolls([_roll(&"sand", _drop(&"sand_block", 3))]),
 	)
-	var cell := Vector3i(-3, 5, 11)
+	var placement := LevelChestPlacement.new(2, Vector3i(-3, 5, 11), repeat_pool, null)
+	var placements := _placements([placement])
 	var inventory := _inventory()
 	var loadout := InventoryTestFixture.create_loadout(inventory)
-	var chests := DungeonChestCoordinator.new()
-	var container := _container(1, 1)
+	var progress := DungeonProgressState.new()
+	var container := _container(1, 3)
+	_expect(progress.begin_attempt(dungeon_instance_id) == 0, "abandoned attempt did not begin")
+	var abandoned_chests := DungeonChestCoordinator.new()
 	_expect(
-		chests.setup(
-			_placements([LevelChestPlacement.new(1, cell, repeat_bundle)]),
+		abandoned_chests.setup(
+			placements,
 			29,
 			reward,
-			false,
 			41,
+			dungeon_instance_id,
+			progress,
 			inventory,
 			loadout,
 			container,
 		),
-		"capacity completion chest setup failed",
+		"abandoned run chest setup failed",
 	)
-	_expect(chests.try_open(cell, container), "capacity completion chest did not open")
-	_expect(chests.move_all_to_backpack(), "capacity reward did not enter escrow")
-	var dirt_count := _item_catalog.get_definition(&"dirt_block").max_stack
-	for _index in range(InventoryModel.FILLABLE_SIZE):
-		_expect(loadout.add_stack(InventoryStack.new(&"dirt_block", dirt_count)), "capacity fixture did not fill inventory")
-	var full_inventory := inventory.to_dict()
-	var progress := DungeonProgressState.new()
-	var outcome := DungeonRunCompletionTransaction.try_complete(
-		chests,
-		progress,
-		&"capacity_instance",
-		reward,
-		loadout,
+	_expect(abandoned_chests.try_open(placement.cell, container), "abandoned reward chest did not open")
+	_expect(abandoned_chests.move_all_to_backpack(), "abandoned reward was not claimed")
+	_expect(progress.has_claimed_reward(dungeon_instance_id, reward.reward_id), "abandoned reward claim was not retained")
+	_expect(progress.get_completion_count(dungeon_instance_id) == 0, "claiming before death or abandon completed the run")
+	_expect(inventory.get_inventory_item_count(&"basic_rune") == 1, "abandoned reward was not retained in inventory")
+	_expect(progress.begin_attempt(dungeon_instance_id) == 1, "repeat attempt did not begin")
+	var repeat_chests := DungeonChestCoordinator.new()
+	_expect(
+		repeat_chests.setup(
+			placements,
+			53,
+			reward,
+			67,
+			dungeon_instance_id,
+			progress,
+			inventory,
+			loadout,
+			container,
+		),
+		"repeat run chest setup failed",
 	)
-	_expect(outcome == DungeonRunCompletionTransaction.Outcome.INVENTORY_FULL, "full exit did not request an inventory drop")
-	_expect(inventory.to_dict() == full_inventory, "blocked exit changed full inventory")
-	_expect(progress.get_completion_count(&"capacity_instance") == 0, "blocked exit completed the dungeon")
-	_expect(not progress.has_claimed_reward(&"capacity_instance", reward.reward_id), "blocked exit claimed the reward")
-	_expect(chests.prepare_one_time_claim() != null, "blocked exit discarded pending rewards")
-	_expect(loadout.discard_stack(0, dirt_count), "capacity fixture could not drop an inventory stack")
 	_expect(
 		DungeonRunCompletionTransaction.try_complete(
-			chests,
+			repeat_chests,
 			progress,
-			&"capacity_instance",
-			reward,
-			loadout,
+			dungeon_instance_id,
+		) == DungeonRunCompletionTransaction.Outcome.INCOMPLETE,
+		"already-claimed repeat run completed without a positive transfer",
+	)
+	_expect(repeat_chests.try_open(placement.cell, container), "repeat reward chest did not open")
+	_expect(not repeat_chests.is_active_one_time_reward(), "claimed reward was offered again")
+	_expect(repeat_chests.move_all_to_backpack(), "repeat reward did not transfer")
+	_expect(inventory.get_inventory_item_count(&"sand_block") == 3, "repeat transfer did not add sand")
+	_expect(
+		DungeonRunCompletionTransaction.try_complete(
+			repeat_chests,
+			DungeonProgressState.new(),
+			dungeon_instance_id,
+		) == DungeonRunCompletionTransaction.Outcome.INVALIDATED,
+		"completion accepted a different progress owner",
+	)
+	_expect(
+		DungeonRunCompletionTransaction.try_complete(
+			repeat_chests,
+			progress,
+			dungeon_instance_id,
 		) == DungeonRunCompletionTransaction.Outcome.COMPLETED,
-		"exit did not complete after inventory space was freed",
+		"repeat run did not complete after a positive transfer",
 	)
-	_expect(inventory.get_inventory_item_count(&"basic_rune") == 1, "freed inventory did not receive the pending reward")
+	_expect(progress.get_completion_count(dungeon_instance_id) == 1, "repeat run completion count did not increment")
+	_expect(
+		DungeonRunCompletionTransaction.try_complete(
+			repeat_chests,
+			progress,
+			dungeon_instance_id,
+		) == DungeonRunCompletionTransaction.Outcome.INCOMPLETE,
+		"repeated exit completed without a new qualifying transfer",
+	)
+	_expect(progress.get_completion_count(dungeon_instance_id) == 1, "repeated exit changed completion count")
 
-func _test_repeatable_completion() -> void:
-	var repeat_bundle := _bundle(
-		&"farm_bundle",
-		1,
-		_entries([_entry(&"copper", _drop(&"copper", 4))]),
+func _test_farmable_dungeon_requires_repeat_transfer() -> void:
+	var dungeon_instance_id := &"farm_instance"
+	var repeat_pool := _pool(
+		&"farm_pool",
+		_rolls([_roll(&"copper", _drop(&"copper", 4))]),
 	)
-	var cell := Vector3i(8, 1, 6)
+	var placement := LevelChestPlacement.new(3, Vector3i(8, 1, 6), repeat_pool, null)
 	var inventory := _inventory()
 	var loadout := InventoryTestFixture.create_loadout(inventory)
+	var progress := DungeonProgressState.new()
+	_expect(progress.begin_attempt(dungeon_instance_id) == 0, "farm attempt did not begin")
 	var chests := DungeonChestCoordinator.new()
 	var container := _container(1, 1)
 	_expect(
 		chests.setup(
-			_placements([LevelChestPlacement.new(1, cell, repeat_bundle)]),
-			53,
+			_placements([placement]),
+			71,
 			null,
-			false,
 			0,
+			dungeon_instance_id,
+			progress,
 			inventory,
 			loadout,
 			container,
 		),
-		"repeatable completion chest setup failed",
+		"farm chest setup failed",
 	)
-	var progress := DungeonProgressState.new()
 	_expect(
 		DungeonRunCompletionTransaction.try_complete(
 			chests,
 			progress,
-			&"farm_instance",
-			null,
-			loadout,
+			dungeon_instance_id,
 		) == DungeonRunCompletionTransaction.Outcome.INCOMPLETE,
-		"untouched repeatable dungeon completed",
+		"untouched farmable dungeon completed",
 	)
-	_expect(chests.try_open(cell, container), "repeatable completion chest did not open")
-	_expect(chests.move_all_to_backpack(), "repeatable reward did not transfer directly")
+	_expect(chests.try_open(placement.cell, container), "farm chest did not open")
+	_expect(chests.move_all_to_backpack(), "farm reward did not transfer")
+	_expect(inventory.get_inventory_item_count(&"copper") == 4, "farm transfer did not add copper")
 	_expect(
 		DungeonRunCompletionTransaction.try_complete(
 			chests,
 			progress,
-			&"farm_instance",
-			null,
-			loadout,
+			dungeon_instance_id,
 		) == DungeonRunCompletionTransaction.Outcome.COMPLETED,
-		"repeatable dungeon did not complete after taking loot",
+		"farmable dungeon did not complete after a positive transfer",
 	)
-	_expect(progress.get_completion_count(&"farm_instance") == 1, "repeatable completion count did not increment")
+	_expect(progress.get_completion_count(dungeon_instance_id) == 1, "farmable completion count did not increment")
+
+func _test_invalid_arguments() -> void:
+	var progress := DungeonProgressState.new()
+	var chests := DungeonChestCoordinator.new()
+	_expect(
+		DungeonRunCompletionTransaction.try_complete(
+			chests,
+			progress,
+			&"invalid_instance",
+		) == DungeonRunCompletionTransaction.Outcome.INVALIDATED,
+		"uninitialized chest coordinator was not invalidated",
+	)
+	_expect(
+		DungeonRunCompletionTransaction.try_complete(
+			null,
+			progress,
+			&"invalid_instance",
+		) == DungeonRunCompletionTransaction.Outcome.INVALIDATED,
+		"null chest coordinator was not invalidated",
+	)
+	_expect(
+		DungeonRunCompletionTransaction.try_complete(
+			chests,
+			null,
+			&"invalid_instance",
+		) == DungeonRunCompletionTransaction.Outcome.INVALIDATED,
+		"null progress was not invalidated",
+	)
+	_expect(
+		DungeonRunCompletionTransaction.try_complete(
+			chests,
+			progress,
+			&"",
+		) == DungeonRunCompletionTransaction.Outcome.INVALIDATED,
+		"empty dungeon instance ID was not invalidated",
+	)
 
 func _inventory() -> InventoryModel:
 	var inventory := InventoryModel.new(_item_catalog, EquipmentInstanceFactory.new(_item_catalog))
@@ -245,6 +342,22 @@ func _entry(id: StringName, drop: LootDropDefinition) -> LootBundleEntryDefiniti
 	entry.drop = drop
 	return entry
 
+func _pool(
+	id: StringName,
+	independent_rolls: Array[LootIndependentRollDefinition],
+) -> LootPoolDefinition:
+	var pool := LootPoolDefinition.new()
+	pool.id = id
+	pool.independent_rolls = independent_rolls
+	return pool
+
+func _roll(id: StringName, drop: LootDropDefinition) -> LootIndependentRollDefinition:
+	var roll := LootIndependentRollDefinition.new()
+	roll.id = id
+	roll.chance = 1.0
+	roll.drop = drop
+	return roll
+
 func _drop(item_id: StringName, count: int = 1) -> LootDropDefinition:
 	var drop := LootDropDefinition.new()
 	drop.item = _item_catalog.get_definition(item_id)
@@ -256,6 +369,11 @@ func _entries(values: Array) -> Array[LootBundleEntryDefinition]:
 	var entries: Array[LootBundleEntryDefinition] = []
 	entries.assign(values)
 	return entries
+
+func _rolls(values: Array) -> Array[LootIndependentRollDefinition]:
+	var rolls: Array[LootIndependentRollDefinition] = []
+	rolls.assign(values)
+	return rolls
 
 func _placements(values: Array) -> Array[LevelChestPlacement]:
 	var placements: Array[LevelChestPlacement] = []

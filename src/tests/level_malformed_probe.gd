@@ -29,21 +29,30 @@ func _init() -> void:
 	missing_chest_marker.chest_marker = null
 	var missing_chest_marker_catalog := _catalog_with(source_catalog, source_level, {missing_chest_marker.module_id: missing_chest_marker})
 	var missing_chest_loot := source_level.duplicate(true) as LevelDefinition
-	missing_chest_loot.room_requirements[2].chest_loot_bundle = null
+	missing_chest_loot.room_requirements[2].chest_loot_pool = null
+	missing_chest_loot.room_requirements[2].post_first_completion_chest_loot_pool = null
 	var missing_chest_loot_catalog := _catalog_with(source_catalog, missing_chest_loot)
 	var noncanonical_item_level := source_level.duplicate(true) as LevelDefinition
-	var noncanonical_bundle := source_level.room_requirements[2].chest_loot_bundle.duplicate(true) as LootBundleDefinition
-	noncanonical_bundle.fixed_entries[0].drop.item = noncanonical_bundle.fixed_entries[0].drop.item.duplicate(true) as ItemDefinition
-	noncanonical_item_level.room_requirements[2].chest_loot_bundle = noncanonical_bundle
+	var noncanonical_pool := source_level.room_requirements[2].chest_loot_pool.duplicate(true) as LootPoolDefinition
+	noncanonical_pool.independent_rolls[0].drop.item = noncanonical_pool.independent_rolls[0].drop.item.duplicate(true) as ItemDefinition
+	noncanonical_item_level.room_requirements[2].chest_loot_pool = noncanonical_pool
 	var noncanonical_item_catalog := _catalog_with(source_catalog, noncanonical_item_level)
-	var duplicate_bundle_level := source_level.duplicate(true) as LevelDefinition
-	duplicate_bundle_level.level_id = &"duplicate_bundle_level"
-	duplicate_bundle_level.room_requirements[2].chest_loot_bundle = source_level.room_requirements[2].chest_loot_bundle.duplicate(true) as LootBundleDefinition
+	var duplicate_pool_level := source_level.duplicate(true) as LevelDefinition
+	duplicate_pool_level.level_id = &"duplicate_pool_level"
+	duplicate_pool_level.room_requirements[2].chest_loot_pool = source_level.room_requirements[2].chest_loot_pool.duplicate(true) as LootPoolDefinition
 	var duplicate_bundle_reward := source_level.one_time_chest_reward.duplicate(true) as LevelOneTimeChestRewardDefinition
-	duplicate_bundle_reward.reward_id = &"duplicate_bundle_level_reward"
-	duplicate_bundle_reward.loot_bundle.id = &"duplicate_bundle_level_reward_loot"
-	duplicate_bundle_level.one_time_chest_reward = duplicate_bundle_reward
-	var duplicate_bundle_catalog := _catalog_with_levels(source_catalog, [source_level, duplicate_bundle_level])
+	duplicate_bundle_reward.reward_id = &"duplicate_pool_level_reward"
+	duplicate_bundle_reward.loot_bundle.id = &"duplicate_pool_level_reward_loot"
+	duplicate_pool_level.one_time_chest_reward = duplicate_bundle_reward
+	var duplicate_pool_catalog := _catalog_with_levels(source_catalog, [source_level, duplicate_pool_level])
+	var post_without_base := source_level.room_requirements[2].duplicate(true) as LevelRoomRequirement
+	post_without_base.chest_loot_pool = null
+	var no_guaranteed_pool_level := source_level.duplicate(true) as LevelDefinition
+	var no_guaranteed_pool := source_level.room_requirements[2].chest_loot_pool.duplicate(true) as LootPoolDefinition
+	no_guaranteed_pool.id = &"no_guaranteed_chest_pool"
+	no_guaranteed_pool.independent_rolls[0].chance = 0.25
+	no_guaranteed_pool_level.room_requirements[2].chest_loot_pool = no_guaranteed_pool
+	var no_guaranteed_pool_catalog := _catalog_with(source_catalog, no_guaranteed_pool_level)
 	var empty_reward_id_level := source_level.duplicate(true) as LevelDefinition
 	empty_reward_id_level.one_time_chest_reward = source_level.one_time_chest_reward.duplicate(true) as LevelOneTimeChestRewardDefinition
 	empty_reward_id_level.one_time_chest_reward.reward_id = &""
@@ -51,7 +60,8 @@ func _init() -> void:
 	missing_reward_bundle_level.one_time_chest_reward = source_level.one_time_chest_reward.duplicate(true) as LevelOneTimeChestRewardDefinition
 	missing_reward_bundle_level.one_time_chest_reward.loot_bundle = null
 	var no_chest_reward_level := source_level.duplicate(true) as LevelDefinition
-	no_chest_reward_level.room_requirements[2].chest_loot_bundle = null
+	no_chest_reward_level.room_requirements[2].chest_loot_pool = null
+	no_chest_reward_level.room_requirements[2].post_first_completion_chest_loot_pool = null
 	var multiple_guaranteed_reward := source_level.one_time_chest_reward.duplicate(true) as LevelOneTimeChestRewardDefinition
 	var second_guaranteed_entry := multiple_guaranteed_reward.loot_bundle.fixed_entries[0].duplicate(true) as LootBundleEntryDefinition
 	second_guaranteed_entry.id = &"second_basic_rune"
@@ -65,18 +75,21 @@ func _init() -> void:
 		oversized_reward.loot_bundle.fixed_entries.append(entry)
 	oversized_reward.loot_bundle.max_rewards = 16
 	oversized_reward_level.one_time_chest_reward = oversized_reward
-	oversized_reward_level.room_requirements[2].chest_loot_bundle = source_level.room_requirements[2].chest_loot_bundle
+	oversized_reward_level.room_requirements[2].chest_loot_pool = source_level.room_requirements[2].chest_loot_pool
+	oversized_reward_level.room_requirements[2].post_first_completion_chest_loot_pool = source_level.room_requirements[2].post_first_completion_chest_loot_pool
 	var oversized_reward_catalog := _catalog_with(source_catalog, oversized_reward_level)
 	var noncanonical_reward_item_level := source_level.duplicate(true) as LevelDefinition
 	var noncanonical_reward := source_level.one_time_chest_reward.duplicate(true) as LevelOneTimeChestRewardDefinition
 	noncanonical_reward.loot_bundle.fixed_entries[0].drop.item = noncanonical_reward.loot_bundle.fixed_entries[0].drop.item.duplicate(true) as ItemDefinition
 	noncanonical_reward_item_level.one_time_chest_reward = noncanonical_reward
-	noncanonical_reward_item_level.room_requirements[2].chest_loot_bundle = source_level.room_requirements[2].chest_loot_bundle
+	noncanonical_reward_item_level.room_requirements[2].chest_loot_pool = source_level.room_requirements[2].chest_loot_pool
+	noncanonical_reward_item_level.room_requirements[2].post_first_completion_chest_loot_pool = source_level.room_requirements[2].post_first_completion_chest_loot_pool
 	var noncanonical_reward_item_catalog := _catalog_with(source_catalog, noncanonical_reward_item_level)
 	var duplicate_reward_level := source_level.duplicate(true) as LevelDefinition
 	duplicate_reward_level.level_id = &"duplicate_reward_level"
 	duplicate_reward_level.one_time_chest_reward = source_level.one_time_chest_reward
-	duplicate_reward_level.room_requirements[2].chest_loot_bundle = source_level.room_requirements[2].chest_loot_bundle
+	duplicate_reward_level.room_requirements[2].chest_loot_pool = source_level.room_requirements[2].chest_loot_pool
+	duplicate_reward_level.room_requirements[2].post_first_completion_chest_loot_pool = source_level.room_requirements[2].post_first_completion_chest_loot_pool
 	var duplicate_reward_catalog := _catalog_with_levels(source_catalog, [source_level, duplicate_reward_level])
 	var empty_encounter := LevelRoomEncounterDefinition.new()
 	var null_group_encounter := LevelRoomEncounterDefinition.new()
@@ -215,6 +228,7 @@ func _init() -> void:
 		not chest_encounter_catalog.validate(),
 		not missing_chest_marker_catalog.validate(),
 		not missing_chest_loot_catalog.validate(),
+		not post_without_base.validate("probe"),
 		not empty_reward_id_level.validate(),
 		not missing_reward_bundle_level.validate(),
 		not no_chest_reward_level.validate(),
@@ -229,8 +243,12 @@ func _init() -> void:
 		LevelEncounterCatalogValidator.validate(source_catalog, entity_catalog),
 		LevelLootCatalogValidator.validate(source_catalog, item_catalog, 15),
 		not LevelLootCatalogValidator.validate(source_catalog, item_catalog, 0),
+		not LevelLootCatalogValidator.validate(source_catalog, item_catalog, 1),
+		not LevelLootCatalogValidator.validate_chest_pool(source_level.room_requirements[2].post_first_completion_chest_loot_pool, item_catalog, 1),
+		not LevelLootCatalogValidator.validate_chest_pool(no_guaranteed_pool, item_catalog, 15),
 		not LevelLootCatalogValidator.validate(noncanonical_item_catalog, item_catalog, 15),
-		not LevelLootCatalogValidator.validate(duplicate_bundle_catalog, item_catalog, 15),
+		not LevelLootCatalogValidator.validate(duplicate_pool_catalog, item_catalog, 15),
+		not LevelLootCatalogValidator.validate(no_guaranteed_pool_catalog, item_catalog, 15),
 		not LevelLootCatalogValidator.validate(oversized_reward_catalog, item_catalog, 15),
 		not LevelLootCatalogValidator.validate(noncanonical_reward_item_catalog, item_catalog, 15),
 		not LevelLootCatalogValidator.validate(duplicate_reward_catalog, item_catalog, 15),

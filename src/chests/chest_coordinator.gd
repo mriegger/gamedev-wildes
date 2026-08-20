@@ -162,9 +162,6 @@ func quick_transfer(source_scope: StringName, source_index: int) -> bool:
 		return false
 	return _commit_cross_scope(prepared)
 
-func can_quick_transfer(source_scope: StringName, source_index: int) -> bool:
-	return not _prepare_quick_transfer(source_scope, source_index, true).is_empty()
-
 func move_all_to_backpack() -> bool:
 	if not is_open() or _transaction_active:
 		return false
@@ -174,12 +171,10 @@ func move_all_to_backpack() -> bool:
 			changed = true
 	return changed
 
-func can_move_all_to_backpack() -> bool:
-	if not is_open():
-		return false
-	for slot_index in range(_storage.get_slot_count()):
-		if can_quick_transfer(CHEST_SCOPE, slot_index):
-			return true
+func has_items_to_take() -> bool:
+	return is_open() and not _storage.is_chest_empty(_active_position)
+
+func is_active_one_time_reward() -> bool:
 	return false
 
 func _prepare_drop(
@@ -258,10 +253,9 @@ func _prepare_drop(
 func _prepare_quick_transfer(
 	source_scope: StringName,
 	source_index: int,
-	allow_during_transaction: bool = false,
 ) -> Dictionary:
 	if (
-		_transaction_active and not allow_during_transaction
+		_transaction_active
 		or not is_open()
 		or not _is_quick_transfer_source(source_scope, source_index)
 	):
