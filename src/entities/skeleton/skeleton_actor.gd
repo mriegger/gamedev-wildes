@@ -74,8 +74,9 @@ func tick(
 	var cover_work_advanced := false
 	if brain.state == SkeletonBrain.State.SEARCH_COVER:
 		previous_state = brain.state
-		_advance_cover_search(observation, navigation_search_budget)
+		var cover_path := _advance_cover_search(observation, navigation_search_budget)
 		_apply_state_change(previous_state)
+		_adopt_cover_path_or_retry(cover_path)
 		cover_work_advanced = true
 
 	var desired_velocity := Vector3.ZERO
@@ -93,7 +94,7 @@ func tick(
 				previous_state = brain.state
 				brain.record_cover_arrival(_is_hidden(global_position, observation))
 				_apply_state_change(previous_state)
-			else:
+			elif not cover_work_advanced:
 				desired_velocity = _follow_movement_goal(
 					delta,
 					separation_velocity,
@@ -111,8 +112,9 @@ func tick(
 			)
 			if not cover_work_advanced and (brain.needs_cover_search() or brain.is_cover_search_in_progress()):
 				previous_state = brain.state
-				_advance_cover_search(observation, navigation_search_budget)
+				var cover_path := _advance_cover_search(observation, navigation_search_budget)
 				_apply_state_change(previous_state)
+				_adopt_cover_path_or_retry(cover_path)
 				if brain.state != SkeletonBrain.State.SPRINT:
 					desired_velocity = Vector3.ZERO
 	advance_voxel_motion(delta, desired_velocity, _behavior.gravity)
@@ -138,7 +140,7 @@ func begin_death_retirement():
 func _advance_cover_search(
 	observation: EntityTargetObservation,
 	navigation_search_budget: NavigationSearchBudget,
-):
+) -> Array[Vector3i]:
 	if brain.needs_cover_search():
 		var search_origin := global_position
 		_cover_search.begin(
@@ -149,15 +151,25 @@ func _advance_cover_search(
 		)
 		brain.record_cover_search_started()
 	if not brain.is_cover_search_in_progress():
-		return
+		return []
 	var status := _cover_search.advance(navigation_search_budget)
 	if status == VoxelCoverSearchType.Status.FOUND:
 		var target := _cover_search.get_target()
 		brain.record_cover_found(target)
 		if not _is_hidden(target, observation):
 			brain.reject_cover_goal()
+			return []
+		return _cover_search.get_target_path()
 	elif status == VoxelCoverSearchType.Status.EXHAUSTED:
 		brain.record_cover_exhausted()
+	return []
+
+func _adopt_cover_path_or_retry(path: Array[Vector3i]) -> void:
+	if path.is_empty() or _path_follower.try_adopt_path_to_goal(path, global_position, brain.get_movement_goal()):
+		return
+	var previous_state := brain.state
+	brain.reject_cover_goal()
+	_apply_state_change(previous_state)
 
 func _follow_movement_goal(
 	delta: float,

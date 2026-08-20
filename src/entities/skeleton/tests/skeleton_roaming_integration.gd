@@ -150,6 +150,8 @@ func _run() -> void:
 		if actor.brain.state == SkeletonBrain.State.MOVE_TO_COVER:
 			break
 	_expect(actor.brain.state == SkeletonBrain.State.MOVE_TO_COVER, "Exposed Skeleton did not find reachable off-position cover")
+	_expect(budget.try_acquire(), "Accepted cover path was recomputed in the same tick")
+	_expect(not budget.try_acquire(), "Cover search did not consume exactly one navigation slot")
 	var cover_target := actor.brain.get_movement_goal()
 	var target_offset := Vector2(cover_target.x - cover_origin.x, cover_target.z - cover_origin.z)
 	_expect(target_offset.length() > 1.0, "Cover search accepted the exposed starting position")

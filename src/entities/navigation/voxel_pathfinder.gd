@@ -41,6 +41,8 @@ static func find_path(voxel_space: VoxelSpace, start_feet: Vector3i, goal_feet: 
 	var path_costs: Dictionary = {start_feet: 0}
 	var came_from: Dictionary = {}
 	var closed: Dictionary = {}
+	var walkability_cache: Dictionary = {start_feet: true, goal_feet: true}
+	var body_clearance_cache: Dictionary = {}
 	var sequence := 0
 	var start_estimate := _estimate_cost(start_feet, goal_feet)
 	_heap_push(open_heap, OpenEntry.new(start_feet, 0, start_estimate, sequence))
@@ -60,24 +62,23 @@ static func find_path(voxel_space: VoxelSpace, start_feet: Vector3i, goal_feet: 
 
 		var candidates: Array[OpenEntry] = []
 		var candidate_sequence := 0
-		for direction in HORIZONTAL_DIRECTIONS:
-			var horizontal := current + direction
-			for height_offset in STEP_HEIGHT_OFFSETS:
-				var neighbor := Vector3i(horizontal.x, current.y + height_offset, horizontal.z)
-				if not _is_within_radius(start_feet, neighbor, max_radius):
-					continue
-				if not _is_valid_transition(voxel_space, current, neighbor, body_width, body_height):
-					continue
-				if _is_diagonal(direction) and not _has_clear_diagonal_sides(voxel_space, current, direction, neighbor.y, body_width, body_height):
-					continue
-				var next_cost := best_known_cost + _get_step_cost(direction)
-				var previous_cost := path_costs.get(neighbor, -1) as int
-				if previous_cost >= 0 and next_cost >= previous_cost:
-					break
-				candidate_sequence += 1
-				var estimated_cost := next_cost + _estimate_cost(neighbor, goal_feet)
-				_heap_push(candidates, OpenEntry.new(neighbor, next_cost, estimated_cost, candidate_sequence))
-				break
+		for neighbor in get_walkable_neighbors(
+			voxel_space,
+			start_feet,
+			current,
+			body_width,
+			body_height,
+			max_radius,
+			walkability_cache,
+			body_clearance_cache,
+		):
+			var next_cost := best_known_cost + get_step_cost(current, neighbor)
+			var previous_cost := path_costs.get(neighbor, -1) as int
+			if previous_cost >= 0 and next_cost >= previous_cost:
+				continue
+			candidate_sequence += 1
+			var estimated_cost := next_cost + _estimate_cost(neighbor, goal_feet)
+			_heap_push(candidates, OpenEntry.new(neighbor, next_cost, estimated_cost, candidate_sequence))
 
 		while not candidates.is_empty():
 			var candidate := _heap_pop(candidates)
@@ -101,24 +102,86 @@ static func is_walkable(voxel_space: VoxelSpace, feet: Vector3i, body_width: flo
 	var body_position := _body_position(feet)
 	return is_equal_approx(VoxelBodySolver.get_ground_y(voxel_space, body_position, body_width), float(feet.y))
 
-static func _is_valid_transition(voxel_space: VoxelSpace, current: Vector3i, neighbor: Vector3i, body_width: float, body_height: float) -> bool:
-	if not is_walkable(voxel_space, neighbor, body_width, body_height):
+static func get_walkable_neighbors(
+	voxel_space: VoxelSpace,
+	search_origin: Vector3i,
+	current: Vector3i,
+	body_width: float,
+	body_height: float,
+	max_radius: int,
+	walkability_cache: Dictionary,
+	body_clearance_cache: Dictionary,
+) -> Array[Vector3i]:
+	var neighbors: Array[Vector3i] = []
+	for direction in HORIZONTAL_DIRECTIONS:
+		var horizontal := current + direction
+		for height_offset in STEP_HEIGHT_OFFSETS:
+			var neighbor := Vector3i(horizontal.x, current.y + height_offset, horizontal.z)
+			if not _is_within_radius(search_origin, neighbor, max_radius):
+				continue
+			if not _is_valid_transition(
+				voxel_space,
+				current,
+				neighbor,
+				body_width,
+				body_height,
+				walkability_cache,
+				body_clearance_cache,
+			):
+				continue
+			if _is_diagonal(direction) and not _has_clear_diagonal_sides(
+				voxel_space,
+				current,
+				direction,
+				neighbor.y,
+				body_width,
+				body_height,
+				walkability_cache,
+				body_clearance_cache,
+			):
+				continue
+			neighbors.append(neighbor)
+			break
+	return neighbors
+
+static func get_step_cost(from_feet: Vector3i, to_feet: Vector3i) -> int:
+	return DIAGONAL_COST if from_feet.x != to_feet.x and from_feet.z != to_feet.z else ORTHOGONAL_COST
+
+static func _is_valid_transition(
+	voxel_space: VoxelSpace,
+	current: Vector3i,
+	neighbor: Vector3i,
+	body_width: float,
+	body_height: float,
+	walkability_cache: Dictionary,
+	body_clearance_cache: Dictionary,
+) -> bool:
+	if not _is_walkable_cached(voxel_space, neighbor, body_width, body_height, walkability_cache):
 		return false
 	if neighbor.y == current.y + 1:
 		var raised_current := Vector3i(current.x, current.y + 1, current.z)
-		return _has_body_clearance(voxel_space, raised_current, body_width, body_height)
+		return _has_body_clearance_cached(voxel_space, raised_current, body_width, body_height, body_clearance_cache)
 	return true
 
-static func _has_clear_diagonal_sides(voxel_space: VoxelSpace, current: Vector3i, direction: Vector3i, target_y: int, body_width: float, body_height: float) -> bool:
+static func _has_clear_diagonal_sides(
+	voxel_space: VoxelSpace,
+	current: Vector3i,
+	direction: Vector3i,
+	target_y: int,
+	body_width: float,
+	body_height: float,
+	walkability_cache: Dictionary,
+	body_clearance_cache: Dictionary,
+) -> bool:
 	var x_side := Vector3i(current.x + direction.x, target_y, current.z)
 	var z_side := Vector3i(current.x, target_y, current.z + direction.z)
-	return _is_valid_transition(voxel_space, current, x_side, body_width, body_height) and _is_valid_transition(voxel_space, current, z_side, body_width, body_height)
+	return (
+		_is_valid_transition(voxel_space, current, x_side, body_width, body_height, walkability_cache, body_clearance_cache)
+		and _is_valid_transition(voxel_space, current, z_side, body_width, body_height, walkability_cache, body_clearance_cache)
+	)
 
 static func _is_diagonal(direction: Vector3i) -> bool:
 	return direction.x != 0 and direction.z != 0
-
-static func _get_step_cost(direction: Vector3i) -> int:
-	return DIAGONAL_COST if _is_diagonal(direction) else ORTHOGONAL_COST
 
 static func _has_body_clearance(voxel_space: VoxelSpace, feet: Vector3i, body_width: float, body_height: float) -> bool:
 	var body_position := _body_position(feet)
@@ -136,6 +199,32 @@ static func _has_body_clearance(voxel_space: VoxelSpace, feet: Vector3i, body_wi
 				if voxel_space.get_block_id_at(Vector3i(x, y, z)) == BlockId.Type.WATER:
 					return false
 	return true
+
+static func _is_walkable_cached(
+	voxel_space: VoxelSpace,
+	feet: Vector3i,
+	body_width: float,
+	body_height: float,
+	cache: Dictionary,
+) -> bool:
+	if cache.has(feet):
+		return bool(cache[feet])
+	var walkable := is_walkable(voxel_space, feet, body_width, body_height)
+	cache[feet] = walkable
+	return walkable
+
+static func _has_body_clearance_cached(
+	voxel_space: VoxelSpace,
+	feet: Vector3i,
+	body_width: float,
+	body_height: float,
+	cache: Dictionary,
+) -> bool:
+	if cache.has(feet):
+		return bool(cache[feet])
+	var clear := _has_body_clearance(voxel_space, feet, body_width, body_height)
+	cache[feet] = clear
+	return clear
 
 static func _body_position(feet: Vector3i) -> Vector3:
 	return Vector3(float(feet.x) + 0.5, float(feet.y), float(feet.z) + 0.5)

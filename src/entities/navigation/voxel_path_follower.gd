@@ -54,6 +54,16 @@ func request_repath():
 	_path_index = 0
 	_repath_remaining = 0.0
 
+func try_adopt_path_to_goal(path: Array[Vector3i], position: Vector3, goal: Vector3) -> bool:
+	if path.is_empty():
+		return false
+	if path.front() != _resolve_feet_cell(position) or path.back() != _resolve_feet_cell(goal):
+		return false
+	_path = path.duplicate()
+	_path_index = 1 if _path.size() > 1 else _path.size()
+	_repath_remaining = _repath_seconds
+	return true
+
 func _rebuild_path(position: Vector3, goal_cell: Vector3i) -> bool:
 	_repath_remaining = _repath_seconds
 	var start_cell := _resolve_feet_cell(position)
