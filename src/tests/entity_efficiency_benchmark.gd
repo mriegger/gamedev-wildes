@@ -15,10 +15,11 @@ const PATH_SAMPLES: int = 200
 const DAY_TIME: float = 12.0
 const NIGHT_TIME: float = 20.0
 const EXPECTED_SHEEP_COUNT: int = 6
-const EXPECTED_ZOMBIE_COUNT: int = 2
+const EXPECTED_ZOMBIE_COUNT: int = 1
 const EXPECTED_SKELETON_COUNT: int = 2
 const EXPECTED_BIRD_COUNT: int = 4
 const EXPECTED_STONE_GOLEM_COUNT: int = 2
+const EXPECTED_SLIME_COUNT: int = 1
 
 const FIXED_TARGET_FRAMES: int = 360
 const ENTITY_FRAME_P95_LIMIT_MS: float = 75.0
@@ -97,6 +98,7 @@ func _arrange_population(coordinator: WorldEntityCoordinator, actors: Array[Enti
 	var sheep_index := 0
 	var skeleton_index := 0
 	var bird_index := 0
+	var slime_index := 0
 	var stone_golem_index := 0
 	for actor in actors:
 		var angle: float
@@ -141,6 +143,14 @@ func _arrange_population(coordinator: WorldEntityCoordinator, actors: Array[Enti
 				height += 10.0
 				bird_index += 1
 				_expect(actor is BirdActor, "bird definition did not instantiate a BirdActor")
+			&"slime_large":
+				angle = TAU * float(slime_index) / float(EXPECTED_SLIME_COUNT) + PI / 2.0
+				radius = 17.0
+				slime_index += 1
+				var slime := actor as SlimeActor
+				_expect(slime != null, "slime definition did not instantiate a SlimeActor")
+				if slime != null:
+					slime._path_follower.request_repath()
 			_:
 				_expect(false, "benchmark population contained unsupported entity %s" % actor.definition.id)
 				continue
@@ -154,12 +164,14 @@ func _arrange_population(coordinator: WorldEntityCoordinator, actors: Array[Enti
 	_expect(sheep_index == EXPECTED_SHEEP_COUNT, "benchmark population had %d sheep" % sheep_index)
 	_expect(skeleton_index == EXPECTED_SKELETON_COUNT, "benchmark population had %d skeletons" % skeleton_index)
 	_expect(bird_index == EXPECTED_BIRD_COUNT, "benchmark population had %d birds" % bird_index)
+	_expect(slime_index == EXPECTED_SLIME_COUNT, "benchmark population had %d large slimes" % slime_index)
 	_expect(stone_golem_index == EXPECTED_STONE_GOLEM_COUNT, "benchmark population had %d Stone Golems" % stone_golem_index)
 	return {
 		"sheep": sheep_index,
 		"zombie": zombie_index,
 		"skeleton": skeleton_index,
 		"bird": bird_index,
+		"slime_large": slime_index,
 		"stone_golem": stone_golem_index,
 	}
 
@@ -314,6 +326,7 @@ func _run() -> void:
 	var coordinator := WorldEntityCoordinator.new()
 	get_root().add_child(coordinator)
 	coordinator.setup(catalog, world, WORLD_SEED, _position_ready)
+	coordinator._ambient_definition_cursor = catalog.definitions.find(catalog.get_definition(&"skeleton"))
 	coordinator.get_runtime().entity_melee_contact_reached.connect(_consume_melee_contact)
 	coordinator.get_runtime().entity_radial_contact_reached.connect(_consume_radial_contact)
 	var origin := Vector3(0.5, FEET_Y, 0.5)

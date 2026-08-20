@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="EntityCatalog" load_steps=7 format=3]
+[gd_resource type="Resource" script_class="EntityCatalog" load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://entities/entity_catalog.gd" id="1_catalog"]
 [ext_resource type="Script" path="res://entities/entity_definition.gd" id="2_definition"]
@@ -7,7 +7,10 @@
 [ext_resource type="Resource" path="res://entities/definitions/bird.tres" id="5_bird"]
 [ext_resource type="Resource" path="res://entities/definitions/skeleton.tres" id="6_skeleton"]
 [ext_resource type="Resource" path="res://entities/definitions/stone_golem.tres" id="7_stone_golem"]
+[ext_resource type="Resource" path="res://entities/definitions/slime_large.tres" id="8_slime_large"]
+[ext_resource type="Resource" path="res://entities/definitions/slime_medium.tres" id="9_slime_medium"]
+[ext_resource type="Resource" path="res://entities/definitions/slime_small.tres" id="10_slime_small"]
 
 [resource]
 script = ExtResource("1_catalog")
-definitions = Array[ExtResource("2_definition")]([ExtResource("3_zombie"), ExtResource("4_sheep"), ExtResource("5_bird"), ExtResource("6_skeleton"), ExtResource("7_stone_golem")])
+definitions = Array[ExtResource("2_definition")]([ExtResource("3_zombie"), ExtResource("4_sheep"), ExtResource("5_bird"), ExtResource("6_skeleton"), ExtResource("7_stone_golem"), ExtResource("8_slime_large"), ExtResource("9_slime_medium"), ExtResource("10_slime_small")])

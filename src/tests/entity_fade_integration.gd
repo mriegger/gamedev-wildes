@@ -284,6 +284,50 @@ func _test_species_death_retirement(catalog: EntityCatalog, world: VoxelWorld) -
 		_expect(actor.advance_retirement(fade_out_seconds * 0.5), "%s death retirement did not complete" % definition.id)
 		actor.free()
 
+func _test_slime_death_retirement(catalog: EntityCatalog, world: VoxelWorld) -> void:
+	var definition := catalog.get_definition(&"slime_small")
+	var actor := definition.actor_scene.instantiate() as SlimeActor
+	get_root().add_child(actor)
+	actor.global_position = Vector3(4.5, FEET_Y, 2.5)
+	actor.setup(31, definition, world, 231, EntityNavigationLimits.new(24, 256, 1))
+	actor.advance_visual_fade(actor.visual_fader.fade_in_seconds)
+	actor.velocity = Vector3(1.0, 2.0, 3.0)
+	actor.knockback_velocity = Vector3.RIGHT * 2.0
+	var actor_transform := actor.transform
+	var actor_bounds := actor.get_world_bounds()
+	var driver := actor.animation_driver as SlimeAnimationDriver
+	var body_pivot := actor.get_node(^"ModelRoot/SlimeVisual/RigRoot/SizeRoot/BodyPivot") as Node3D
+	actor.play_hit(Vector3.RIGHT)
+	actor.begin_death_retirement()
+	_expect(not actor.is_processing(), "slime kept normal animation processing after lethal retirement")
+	_expect(actor.velocity.is_zero_approx() and actor.knockback_velocity.is_zero_approx(), "slime retained movement after lethal retirement")
+	_expect(driver.get_current_state() == SlimeAnimationDriver.DEATH, "slime did not enter its death state")
+	_expect(not driver.is_death_complete(), "slime death completed at retirement start")
+	_expect(is_equal_approx(actor.get_visual_opacity(), 1.0), "slime faded at retirement start")
+	_expect(not actor.death_poof.has_played(), "slime death poof began at retirement start")
+
+	var squash_seconds := SlimeAnimationDriver.DEATH_SECONDS * SlimeAnimationDriver.DEATH_SQUASH_END_RATIO
+	_expect(not actor.advance_retirement(squash_seconds), "slime retirement completed during its squash")
+	_expect(is_equal_approx(body_pivot.scale.y, SlimeAnimationDriver.DEATH_SQUASH_SCALE), "slime retirement skipped its squash")
+	_expect(is_equal_approx(actor.get_visual_opacity(), 1.0) and not actor.death_poof.has_played(), "slime squash started its fade or poof")
+	var rebound_seconds := SlimeAnimationDriver.DEATH_SECONDS * (
+		SlimeAnimationDriver.DEATH_REBOUND_END_RATIO - SlimeAnimationDriver.DEATH_SQUASH_END_RATIO
+	)
+	_expect(not actor.advance_retirement(rebound_seconds), "slime retirement completed during its rebound")
+	_expect(body_pivot.scale.y >= SlimeAnimationDriver.DEATH_REBOUND_SCALE - 0.001, "slime retirement skipped its rebound stretch")
+	_expect(body_pivot.position.y >= SlimeAnimationDriver.DEATH_REBOUND_LIFT - 0.001, "slime retirement skipped its rebound lift")
+	actor.play_hit(Vector3.LEFT)
+	_expect(not actor.advance_retirement(driver.get_death_time_remaining()), "slime retirement completed when its poof began")
+	_expect(driver.is_death_complete() and driver.get_current_state() == SlimeAnimationDriver.DEATH, "slime death did not remain authoritative through snap-pop")
+	_expect(body_pivot.scale.is_equal_approx(Vector3.ONE * SlimeAnimationDriver.DEATH_POP_SCALE), "slime retirement skipped its snap-pop contraction")
+	_expect(actor.death_poof.has_played() and actor.death_poof.emitting, "slime snap-pop did not begin its death poof")
+	_expect(is_equal_approx(actor.get_visual_opacity(), 1.0), "slime snap-pop changed opacity before fade-out")
+	_expect(actor.transform.is_equal_approx(actor_transform) and actor.get_world_bounds() == actor_bounds, "slime death presentation changed gameplay geometry")
+	var presentation_seconds := maxf(actor.visual_fader.fade_out_seconds, actor.death_poof.lifetime)
+	_expect(actor.advance_retirement(presentation_seconds), "slime retirement did not complete after its fade and poof")
+	_expect(is_zero_approx(actor.get_visual_opacity()), "slime remained visible after death retirement")
+	actor.free()
+
 func _test_retirement_waits_for_poof(catalog: EntityCatalog, world: VoxelWorld) -> void:
 	var definition := catalog.get_definition(&"sheep")
 	var actor := definition.actor_scene.instantiate() as EntityActor
@@ -399,6 +443,7 @@ func _run() -> void:
 	_test_instance_isolation(catalog, world)
 	_test_skeleton_attack_presentation(catalog, world)
 	_test_species_death_retirement(catalog, world)
+	_test_slime_death_retirement(catalog, world)
 	_test_retirement_waits_for_poof(catalog, world)
 	_test_oversized_death_retirement_delta(catalog, world)
 	await _test_coordinator_retirement(catalog, world)
