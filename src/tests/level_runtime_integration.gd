@@ -612,9 +612,12 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 		_expect(game._get_persisted_position().is_equal_approx(doorway_anchor), "level-local movement changed persisted anchor in cycle %d" % cycle)
 		game.level_was_suspended_at_fade_start = false
 		game.entity_context_was_bound_at_fade_start = false
+		var entry_door_open_stream := door_open_player.stream
 		await game._exit_level()
 		_expect(game.level_was_suspended_at_fade_start, "level exit began fading before dungeon simulation suspended in cycle %d" % cycle)
 		_expect(game.entity_context_was_bound_at_fade_start, "level exit hid its Watcher context before the transition was opaque in cycle %d" % cycle)
+		_expect(door_open_player.playing and game.level_entrance_definition.door_open_streams.has(door_open_player.stream), "level exit did not play configured door-open audio in cycle %d" % cycle)
+		_expect(door_open_player.stream != entry_door_open_stream, "level exit repeated the entry door-open sound in cycle %d" % cycle)
 		_expect(not game._location_state.is_in_level(), "Game location remained in level after cycle %d" % cycle)
 		_expect(player.global_position.is_equal_approx(doorway_anchor), "Game restored %s instead of exact anchor %s in cycle %d" % [player.global_position, doorway_anchor, cycle])
 		_expect(player.voxel_space == voxel_world and player.interactor.voxel_space == voxel_world, "player world binding was not restored in cycle %d" % cycle)

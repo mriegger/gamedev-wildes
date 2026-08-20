@@ -727,6 +727,8 @@ func _exit_level(restore_from_defeat: bool = false):
 	_level_transitioning = true
 	hud.close_chest()
 	level_interaction.clear_target()
+	if not restore_from_defeat:
+		_level_entrance.play_door_open_sound()
 	player.set_physics_process(false)
 	input_buffer.clear_gameplay()
 	_level_runtime.suspend_simulation()

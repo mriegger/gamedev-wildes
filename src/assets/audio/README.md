@@ -20,7 +20,7 @@
 - `sfx/farming/tilling/bookFlip*.ogg` provides three soil-tilling variations.
 - `sfx/farming/harvesting/pop_generic_*_CC0.wav` provides three crop-harvesting variations.
 - `sfx/items/consume/munch_crunchy_fruit_sequence_3x_CC0.wav` provides pumpkin consumption feedback.
-- `sfx/levels/dungeon/door/doorOpen_*.ogg` provides dungeon entrance door-opening variations.
+- `sfx/levels/dungeon/door/doorOpen_*.ogg` provides door-opening variations for dungeon entry and return transitions.
 
 ## Attribution
 
