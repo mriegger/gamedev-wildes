@@ -9,6 +9,8 @@ static func cast(voxel_space: VoxelSpace, origin: Vector3, direction: Vector3, m
 		return null
 	var current := Vector3i(floor(origin.x), floor(origin.y), floor(origin.z))
 	var can_hit := not voxel_space.is_raycast_solid(current)
+	if not can_hit:
+		can_hit = not voxel_space.get_interaction_bounds(current).has_point(origin)
 
 	var step_x := 1 if direction.x >= 0 else -1
 	var step_y := 1 if direction.y >= 0 else -1

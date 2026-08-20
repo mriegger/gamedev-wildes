@@ -36,6 +36,7 @@ func _init() -> void:
 	_test_axes()
 	_test_diagonal_tie_order()
 	_test_starting_inside_solid()
+	_test_starting_outside_custom_bounds()
 	_test_untargetable_face()
 	_test_exact_reach()
 	_test_custom_bounds()
@@ -119,6 +120,22 @@ func _test_starting_inside_solid() -> void:
 	space.add_solid(Vector3i(2, 0, 0))
 	var hit := VoxelRaycast.cast(space, Vector3(0.5, 0.5, 0.5), Vector3.RIGHT, 4.0)
 	_expect_hit(hit, Vector3i(2, 0, 0), Vector3i(1, 0, 0), Vector3i.LEFT, "start solid")
+
+func _test_starting_outside_custom_bounds() -> void:
+	var space := TestVoxelSpace.new()
+	var foliage_cell := Vector3i.ZERO
+	var contiguous_cell := Vector3i.RIGHT
+	space.add_solid(foliage_cell)
+	space.set_interaction_bounds(foliage_cell, AABB(Vector3(0.375, 0.0, 0.375), Vector3(0.25, 0.75, 0.25)))
+	space.add_solid(contiguous_cell)
+	var foliage_hit := VoxelRaycast.cast(space, Vector3(0.1, 0.5, 0.5), Vector3.RIGHT, 2.0)
+	_expect_hit(foliage_hit, foliage_cell, foliage_cell + Vector3i.LEFT, Vector3i.LEFT, "custom bounds start margin")
+	if foliage_hit != null:
+		_expect(is_equal_approx(foliage_hit.ray_distance, 0.275), "custom bounds start margin reported the wrong distance")
+	var margin_hit := VoxelRaycast.cast(space, Vector3(0.1, 0.5, 0.2), Vector3.RIGHT, 2.0)
+	_expect_hit(margin_hit, contiguous_cell, foliage_cell, Vector3i.LEFT, "custom bounds transparent start margin")
+	if margin_hit != null:
+		_expect(is_equal_approx(margin_hit.ray_distance, 0.9), "custom bounds transparent start margin reported the wrong distance")
 
 func _test_untargetable_face() -> void:
 	var space := TestVoxelSpace.new()
