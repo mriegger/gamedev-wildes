@@ -97,6 +97,8 @@ func _process(_delta: float) -> bool:
 		_hud.anvil_panel.select_recipe(&"copper_hammer")
 		for expected_stat in ["Blunt: 15 (5–15)", "Reach: 4", "Cooldown: 1.65s", "Sweep: 360°", "Knockback: 8"]:
 			_expect(stats_label.get_parsed_text().contains(expected_stat), "hammer recipe stats are missing %s" % expected_stat)
+		_hud.anvil_panel.select_recipe(&"copper_arrow_bundle")
+		_expect(stats_heading.visible and stats_label.visible and stats_label.get_parsed_text().contains("Pierce: 15") and stats_label.get_parsed_text().contains("Knockback: 2"), "copper arrow recipe did not display its combat stats")
 		_hud.anvil_panel.select_recipe(&"copper_helmet")
 		_expect(stats_heading.visible and stats_label.visible, "armor recipe did not display item stats")
 		_expect(stats_label.get_parsed_text().contains("Slot: Head") and stats_label.get_parsed_text().contains("Defense: +1"), "helmet recipe stats are incomplete")

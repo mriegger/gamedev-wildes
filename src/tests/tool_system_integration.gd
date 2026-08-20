@@ -256,6 +256,17 @@ func _run():
 	_expect(is_equal_approx(bow_action.ammunition[0].projectile_profile.gravity, 94.08) and is_equal_approx(bow_action.ammunition[1].projectile_profile.gravity, 94.08), "arrow gravity is misconfigured")
 	_expect(is_equal_approx(ProjectileAttackProfile.new().gravity, 78.4), "bow gravity changed the generic projectile default")
 	_expect(bow.rarity != null and bow.proficiency != null and item_catalog.is_combat_item(&"bow"), "bow is not registered with weapon progression")
+	_expect(ItemStatFormatter.get_item_stat_lines(bow) == [
+		"Draw Time: [b][color=#%s]1.5s[/color][/b]" % highlight_color,
+	], "bow presentation stats are incorrect")
+	_expect(ItemStatFormatter.get_item_stat_lines(stone_arrow) == [
+		"Pierce: [b][color=#%s]10[/color][/b]" % highlight_color,
+		"Knockback: [b][color=#%s]2[/color][/b]" % highlight_color,
+	], "stone arrow presentation stats are incorrect")
+	_expect(ItemStatFormatter.get_item_stat_lines(copper_arrow) == [
+		"Pierce: [b][color=#%s]15[/color][/b]" % highlight_color,
+		"Knockback: [b][color=#%s]2[/color][/b]" % highlight_color,
+	], "copper arrow presentation stats are incorrect")
 	var invalid_arrow_root := Node3D.new()
 	var invalid_arrow_scene := PackedScene.new()
 	_expect(invalid_arrow_scene.pack(invalid_arrow_root) == OK, "invalid bow arrow fixture did not pack")

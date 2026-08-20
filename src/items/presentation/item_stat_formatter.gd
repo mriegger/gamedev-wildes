@@ -8,6 +8,8 @@ static func get_item_stat_lines(item_definition: ItemDefinition) -> Array[String
 	if armor != null:
 		lines.append("Slot: %s" % ArmorDefinition.get_slot_label(armor.armor_slot))
 	lines.append_array(get_melee_stat_lines(item_definition))
+	lines.append_array(get_bow_stat_lines(item_definition))
+	lines.append_array(get_arrow_stat_lines(item_definition))
 	lines.append_array(get_pickaxe_stat_lines(item_definition))
 	lines.append_array(get_consumable_stat_lines(item_definition))
 	lines.append_array(get_modifier_stat_lines(item_definition.stat_modifiers))
@@ -31,6 +33,24 @@ static func get_melee_stat_lines(item_definition: ItemDefinition) -> Array[Strin
 	lines.append("Sweep: %s" % highlight("%s°" % format_number(profile.sweep_degrees)))
 	lines.append("Knockback: %s" % highlight(format_number(profile.knockback_speed)))
 	return lines
+
+static func get_bow_stat_lines(item_definition: ItemDefinition) -> Array[String]:
+	assert(item_definition != null)
+	var bow_action := item_definition.primary_action as BowDrawActionDefinition
+	if bow_action == null:
+		return []
+	return ["Draw Time: %s" % highlight("%ss" % format_number(bow_action.draw_seconds))]
+
+static func get_arrow_stat_lines(item_definition: ItemDefinition) -> Array[String]:
+	assert(item_definition != null)
+	var arrow := item_definition as ArrowItemDefinition
+	if arrow == null:
+		return []
+	var profile := arrow.projectile_profile
+	return [
+		"%s: %s" % [String(profile.damage_type.id).capitalize(), highlight(format_number(profile.base_damage))],
+		"Knockback: %s" % highlight(format_number(profile.knockback_speed)),
+	]
 
 static func get_pickaxe_stat_lines(item_definition: ItemDefinition) -> Array[String]:
 	assert(item_definition != null)
