@@ -43,6 +43,7 @@ signal main_menu_requested
 @onready var overworld_loot: OverworldLootCoordinator = $OverworldLoot as OverworldLootCoordinator
 @onready var melee_combat: MeleeCombatCoordinator = $MeleeCombat as MeleeCombatCoordinator
 @onready var arrow_projectiles: ArrowProjectileRuntime = $ArrowProjectiles as ArrowProjectileRuntime
+@onready var arrow_trajectory: ArrowTrajectoryView = $ArrowTrajectory as ArrowTrajectoryView
 @onready var combat_hit_particles: CombatHitParticles = $CombatHitParticles as CombatHitParticles
 @onready var enemy_combat_feedback: EnemyCombatFeedbackType = $EnemyCombatFeedback as EnemyCombatFeedbackType
 @onready var hud: HUD = $HUD as HUD
@@ -412,6 +413,7 @@ func _setup_gameplay() -> bool:
 	slime_attachment_coordinator.setup(player, player_stats)
 	arrow_projectiles.setup(inventory_model, inventory_loadout_coordinator, melee_combat)
 	player.setup_projectiles(arrow_projectiles)
+	arrow_trajectory.setup(player.interactor, arrow_projectiles)
 	player.water_step_committed.connect(world.play_water_ripple)
 	world_entities.water_surface_motion_committed.connect(world.play_water_ripple)
 	overworld_loot.setup(

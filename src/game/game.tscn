@@ -1,4 +1,4 @@
-[gd_scene load_steps=46 format=3 uid="uid://b22g4me0x1f3h"]
+[gd_scene load_steps=47 format=3 uid="uid://b22g4me0x1f3h"]
 
 [ext_resource type="Script" path="res://game/game.gd" id="1_game"]
 [ext_resource type="PackedScene" path="res://world/world.tscn" id="2_world"]
@@ -45,6 +45,7 @@
 [ext_resource type="Script" path="res://entities/watcher/watcher_encounter_coordinator.gd" id="43_watcher_encounter"]
 [ext_resource type="PackedScene" path="res://entities/watcher/presentation/watcher_screen_effect.tscn" id="44_watcher_effect"]
 [ext_resource type="Script" path="res://combat/projectiles/arrow_projectile_runtime.gd" id="45_arrow_projectiles"]
+[ext_resource type="Script" path="res://combat/presentation/arrow_trajectory_view.gd" id="46_arrow_trajectory"]
 
 [node name="Game" type="Node3D"]
 script = ExtResource("1_game")
@@ -97,6 +98,9 @@ script = ExtResource("18_melee_combat")
 
 [node name="ArrowProjectiles" type="Node3D" parent="."]
 script = ExtResource("45_arrow_projectiles")
+
+[node name="ArrowTrajectory" type="Node3D" parent="."]
+script = ExtResource("46_arrow_trajectory")
 
 [node name="CombatHitParticles" parent="." instance=ExtResource("21_combat_particles")]
 

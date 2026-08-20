@@ -200,7 +200,9 @@ The bow's primary action owns its quick raise duration, 1.5-second draw duration
 range, and ordered canonical ammunition definitions. Holding primary use keeps the draw state active,
 while the humanoid animator poses both arms and the held bow view bends its two string segments around
 the first available stone or copper arrow. A player-relative billboard presents the current draw
-progress with a black background and yellow fill. The player interaction state resolves the first voxel surface under the live cursor,
+progress with a black background and yellow fill. A translucent white trajectory line uses the
+runtime's current draw-scaled ballistic prediction, fading from 30 to 95 percent of the path before
+the first contact. The player interaction state resolves the first voxel surface under the live cursor,
 falling back to the ground plane, and the bow action adjusts its launch angle as speed increases to hit that point when possible while
 never raising beyond 45 degrees. Releasing commits one ammunition removal before `ArrowProjectileRuntime`
 launches the matching model from the same authoritative transform. The bounded runtime evaluates gravity, sweeps fixed flight segments against entity bounds and voxel raycast solids,

@@ -142,7 +142,9 @@ and produce no outcome.
 `ArrowProjectileRuntime` owns a bounded set of live arrow models. It atomically consumes the first
 available ammunition declared by the selected bow, launches from the action-authored bow transform at a
 draw-scaled speed, evaluates its ballistic position under gravity, and sweeps fixed 60 Hz flight segments
-against the entity spatial index and voxel raycast solids. `PlayerInteractor`
+against the entity spatial index and voxel raycast solids. `ArrowTrajectoryView` requests the same
+prediction while the bow is drawn and renders it from the nocked arrow to the first predicted contact,
+so presentation and the fired projectile share trajectory and collision rules. `PlayerInteractor`
 resolves the first voxel surface under the cursor, falling back to the player's ground plane, and owns
 the current aim target; the bow action solves the reachable ballistic angle or raises toward its 45-degree cap, and both presentation and firing consume
 that authoritative transform. The arrow aligns its shaft to current velocity, embeds at the nearest contact,

@@ -10,6 +10,7 @@ var _voxel_world: VoxelWorld
 var _world_entity_coordinator: WorldEntityCoordinator
 var _combat: MeleeCombatCoordinator
 var _projectiles: ArrowProjectileRuntime
+var _arrow_trajectory: ArrowTrajectoryView
 var _hotbar: InventoryHotbar
 var _inventory_loadout: InventoryLoadoutCoordinator
 var _stone_pos := Vector3i(1, 0, 0)
@@ -585,6 +586,8 @@ func _run():
 	root.add_child(_projectiles)
 	_projectiles.setup(_inventory, _inventory_loadout, _combat)
 	_projectiles.bind_context(_voxel_world, _world_entity_coordinator.get_runtime())
+	_arrow_trajectory = ArrowTrajectoryView.new()
+	root.add_child(_arrow_trajectory)
 	var movement_camera_rig := (load("res://player/camera/camera_rig.tscn") as PackedScene).instantiate() as CameraRig
 	root.add_child(movement_camera_rig)
 	movement_camera_rig.camera = _camera
@@ -601,6 +604,8 @@ func _run():
 		_world_entity_coordinator.get_runtime(),
 	)
 	_player.setup_projectiles(_projectiles)
+	_arrow_trajectory.setup(_interactor, _projectiles)
+	_arrow_trajectory.set_process(false)
 	_player.bind_space(_voxel_world, root, Vector3.ZERO, _voxel_world)
 	var elevated_cursor_target: Variant = _interactor._get_bow_cursor_target(Vector3(1.5, 10.0, 0.5), Vector3.DOWN)
 	_expect(elevated_cursor_target is Vector3 and (elevated_cursor_target as Vector3).distance_to(Vector3(1.5, 1.0, 0.5)) < 0.001, "bow cursor aim ignored an elevated voxel surface")
@@ -688,13 +693,18 @@ func _run():
 	_expect(is_equal_approx(_interactor.get_bow_raise_progress(), 0.5) and is_zero_approx(_interactor.get_bow_draw_progress()), "bow raise timing is incorrect")
 	_interactor._handle_item_actions(0.84)
 	_player.animation_driver._process(0.0)
+	_arrow_trajectory._process(0.0)
 	_expect(is_equal_approx(_interactor.get_bow_raise_progress(), 1.0) and is_equal_approx(_interactor.get_bow_draw_progress(), 0.5), "bow draw did not reach halfway after 0.75 seconds")
 	var bow_fill_sample := bow_progress_bar._image.get_pixel(1, 3)
 	var bow_background_sample := bow_progress_bar._image.get_pixel(BowDrawProgressBar3D.TEXTURE_WIDTH - 2, 3)
 	_expect(is_equal_approx(bow_progress_bar._progress, 0.5), "bow draw progress bar did not reach halfway with the draw")
 	_expect(absf(bow_fill_sample.r - BowDrawProgressBar3D.FILL_COLOR.r) < 0.01 and absf(bow_fill_sample.g - BowDrawProgressBar3D.FILL_COLOR.g) < 0.01 and absf(bow_fill_sample.b - BowDrawProgressBar3D.FILL_COLOR.b) < 0.01, "bow draw progress bar fill is not yellow")
 	_expect(absf(bow_background_sample.r - BowDrawProgressBar3D.BACKGROUND_COLOR.r) < 0.01 and absf(bow_background_sample.g - BowDrawProgressBar3D.BACKGROUND_COLOR.g) < 0.01 and absf(bow_background_sample.b - BowDrawProgressBar3D.BACKGROUND_COLOR.b) < 0.01, "bow draw progress bar background is not black")
+	var half_draw_trajectory_vertices := _arrow_trajectory._mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX] as PackedVector3Array
+	_expect(_arrow_trajectory.visible and half_draw_trajectory_vertices.size() >= 2, "holding the bow did not show a predicted trajectory")
+	var half_draw_trajectory_step := half_draw_trajectory_vertices[0].distance_to(half_draw_trajectory_vertices[1])
 	var half_draw_release_transform := _interactor.get_bow_release_transform()
+	_expect(_arrow_trajectory.global_position.is_equal_approx(half_draw_release_transform.origin), "trajectory did not start from the authoritative arrow position")
 	_expect(active_bow_view._nocked_arrow.global_transform.origin.distance_to(half_draw_release_transform.origin) < 0.005, "rendered arrow diverged from the authoritative launch position")
 	var half_draw_hand_local := active_bow_view.plane_pivot.to_local(_player.animation_driver.animator.get_left_hand_global_position())
 	_expect(active_bow_view._string_center.distance_to(half_draw_hand_local) < 0.001, "draw hand did not track the authored string center")
@@ -704,6 +714,7 @@ func _run():
 	_expect(active_bow_view._nocked_arrow.global_transform.basis.y.normalized().dot(half_draw_release_transform.basis.y.normalized()) > 0.999, "rendered arrow did not match the authoritative half-draw angle")
 	_interactor._handle_item_actions(0.75)
 	_player.animation_driver._process(0.0)
+	_arrow_trajectory._process(0.0)
 	var full_draw_center := active_bow_view._string_center
 	var full_draw_fletching := active_bow_view._nocked_arrow.get_node("FletchingHorizontal") as MeshInstance3D
 	var full_draw_hand_global := _player.animation_driver.animator.get_left_hand_global_position()
@@ -723,19 +734,26 @@ func _run():
 	_player.velocity = Vector3.ZERO
 	_player.on_ground = true
 	_expect(is_equal_approx(bow_progress_bar._progress, 1.0) and absf(bow_progress_bar._image.get_pixel(BowDrawProgressBar3D.TEXTURE_WIDTH - 2, 3).r - BowDrawProgressBar3D.FILL_COLOR.r) < 0.01, "bow draw progress bar did not fill at maximum draw")
+	var full_draw_trajectory_vertices := _arrow_trajectory._mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX] as PackedVector3Array
+	_expect(full_draw_trajectory_vertices[0].distance_to(full_draw_trajectory_vertices[1]) > half_draw_trajectory_step, "trajectory did not lengthen as draw progress increased")
+	_expect(is_equal_approx(_arrow_trajectory._calculate_line_alpha(0.0), ArrowTrajectoryView.LINE_ALPHA) and is_equal_approx(_arrow_trajectory._calculate_line_alpha(0.3), ArrowTrajectoryView.LINE_ALPHA), "trajectory faded before thirty percent of its path")
+	_expect(is_zero_approx(_arrow_trajectory._calculate_line_alpha(0.95)) and is_zero_approx(_arrow_trajectory._calculate_line_alpha(1.0)), "trajectory did not fade out by ninety-five percent of its path")
 	var original_launch_direction := bow_launch_direction
 	_interactor._bow_aim_target = _player.global_position + Vector3(10.0, 0.0, 0.0)
 	_interactor._update_action_facing(0.0)
 	_player.animation_driver._process(0.0)
+	_arrow_trajectory._process(0.0)
 	var moved_launch_direction := _interactor.get_bow_launch_direction()
 	_expect(Vector2(moved_launch_direction.x, moved_launch_direction.z).normalized().dot(Vector2.RIGHT) > 0.999, "moving the cursor did not redirect the bow trajectory")
 	_expect(moved_launch_direction.distance_to(original_launch_direction) > 0.1 and active_bow_view._nocked_arrow.global_transform.basis.y.normalized().dot(moved_launch_direction) > 0.999, "moving the cursor did not update the rendered bow angle")
 	_input_buffer.primary_use_pressed = false
 	_interactor._handle_item_actions(0.016)
 	_player.animation_driver._process(0.0)
+	_arrow_trajectory._process(0.0)
 	_expect(not _interactor.is_drawing_bow() and active_bow_view._nocked_arrow == null, "releasing primary use did not reset the fired bow")
 	_expect(_projectiles._projectiles.size() == 1 and _inventory.get_inventory_item_count(&"stone_arrow") == 2, "releasing the bow did not fire and consume one stone arrow")
 	_expect(not bow_progress_bar.visible and is_zero_approx(bow_progress_bar._progress), "bow draw progress bar remained visible after release")
+	_expect(not _arrow_trajectory.visible, "arrow trajectory remained visible after release")
 	_projectiles.set_physics_process(false)
 	var fired_projectile: Variant = _projectiles._projectiles[0]
 	var fired_start: Vector3 = fired_projectile.view.global_position
@@ -1283,6 +1301,7 @@ func _run():
 	_camera.queue_free()
 	_projectiles.unbind_context()
 	_projectiles.queue_free()
+	_arrow_trajectory.queue_free()
 	_combat.queue_free()
 	_world_entity_coordinator.queue_free()
 	_hotbar.queue_free()

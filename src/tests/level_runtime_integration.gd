@@ -330,6 +330,8 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	var combat := MeleeCombatCoordinator.new()
 	var arrow_projectiles := ArrowProjectileRuntime.new()
 	arrow_projectiles.name = "ArrowProjectiles"
+	var arrow_trajectory := ArrowTrajectoryView.new()
+	arrow_trajectory.name = "ArrowTrajectory"
 	var combat_hit_particles := (load("res://combat/particles/combat_hit_particles.tscn") as PackedScene).instantiate() as CombatHitParticles
 	var enemy_combat_feedback := EnemyCombatFeedbackType.new()
 	var mining_break_particles := (load("res://mining/presentation/mining_break_particles.tscn") as PackedScene).instantiate()
@@ -372,6 +374,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	game.add_child(loot)
 	game.add_child(combat)
 	game.add_child(arrow_projectiles)
+	game.add_child(arrow_trajectory)
 	game.add_child(combat_hit_particles)
 	game.add_child(enemy_combat_feedback)
 	game.add_child(watcher_effect)
@@ -471,6 +474,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	slime_attachments.setup(player, game.player_stats)
 	hud.setup_compass(camera_rig.camera, player)
 	player.setup_projectiles(arrow_projectiles)
+	arrow_trajectory.setup(player.interactor, arrow_projectiles)
 	_expect(game.inventory_loadout_coordinator.select_slot(3), "transition test could not select the starter sword")
 	loot.setup(
 		game.entity_catalog,
