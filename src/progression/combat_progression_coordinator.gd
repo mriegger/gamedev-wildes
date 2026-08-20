@@ -31,6 +31,12 @@ func record_melee_outcome(outcome: MeleeOutcome):
 	elif contact.target_runtime_id == MeleeCombatCoordinator.PLAYER_RUNTIME_ID:
 		_award_armor_damage(outcome.applied_damage)
 
+func record_projectile_outcome(outcome: ProjectileOutcome):
+	assert(outcome != null)
+	_award_weapon_damage(outcome.source_item_id, outcome.applied_damage)
+	if outcome.target_defeated:
+		_award_defeat(outcome.contact.target_definition_id)
+
 func _award_defeat(entity_id: StringName):
 	assert(_entity_catalog.has_definition(entity_id))
 	_player_stats.add_experience(_entity_catalog.get_definition(entity_id).experience_reward)

@@ -44,10 +44,22 @@ func _make_catalog(max_stack: int, include_nonplaceable: bool = false) -> ItemCa
 	if not include_nonplaceable and _catalogs_by_limit.has(max_stack):
 		return _catalogs_by_limit[max_stack] as ItemCatalog
 	var definitions: Array[ItemDefinition] = []
+	var definitions_by_id: Dictionary[StringName, ItemDefinition] = {}
 	for source in _base_item_catalog.definitions:
 		var definition := source.duplicate() as ItemDefinition
 		definition.max_stack = 1 if definition.equipment_type != null else max_stack
 		definitions.append(definition)
+		definitions_by_id[definition.id] = definition
+	for definition in definitions:
+		var bow_action := definition.primary_action as BowDrawActionDefinition
+		if bow_action == null:
+			continue
+		var copied_action := bow_action.duplicate() as BowDrawActionDefinition
+		var copied_ammunition: Array[ArrowItemDefinition] = []
+		for source_ammunition in bow_action.ammunition:
+			copied_ammunition.append(definitions_by_id[source_ammunition.id] as ArrowItemDefinition)
+		copied_action.ammunition = copied_ammunition
+		definition.primary_action = copied_action
 	if include_nonplaceable:
 		var nonplaceable := ItemDefinition.new()
 		nonplaceable.id = &"test_tool"

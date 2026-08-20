@@ -328,6 +328,8 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	var watcher_effect := (load("res://entities/watcher/presentation/watcher_screen_effect.tscn") as PackedScene).instantiate() as WatcherScreenEffect
 	var loot := OverworldLootCoordinator.new()
 	var combat := MeleeCombatCoordinator.new()
+	var arrow_projectiles := ArrowProjectileRuntime.new()
+	arrow_projectiles.name = "ArrowProjectiles"
 	var combat_hit_particles := (load("res://combat/particles/combat_hit_particles.tscn") as PackedScene).instantiate() as CombatHitParticles
 	var enemy_combat_feedback := EnemyCombatFeedbackType.new()
 	var mining_break_particles := (load("res://mining/presentation/mining_break_particles.tscn") as PackedScene).instantiate()
@@ -369,6 +371,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	game.add_child(watcher_encounter)
 	game.add_child(loot)
 	game.add_child(combat)
+	game.add_child(arrow_projectiles)
 	game.add_child(combat_hit_particles)
 	game.add_child(enemy_combat_feedback)
 	game.add_child(watcher_effect)
@@ -449,6 +452,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	watcher_encounter.setup(player, watcher_effect)
 	entities.setup(game.entity_catalog, voxel_world, 1337, _position_ready)
 	combat.setup(voxel_world, player, game.player_stats, game.inventory_model, entities.get_runtime(), game.damage_type_catalog)
+	arrow_projectiles.setup(game.inventory_model, game.inventory_loadout_coordinator, combat)
 	enemy_combat_feedback.setup(combat, camera_rig.camera)
 	player.setup(
 		camera_rig,
@@ -466,6 +470,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	)
 	slime_attachments.setup(player, game.player_stats)
 	hud.setup_compass(camera_rig.camera, player)
+	player.setup_projectiles(arrow_projectiles)
 	_expect(game.inventory_loadout_coordinator.select_slot(3), "transition test could not select the starter sword")
 	loot.setup(
 		game.entity_catalog,

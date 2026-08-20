@@ -1,8 +1,9 @@
-[gd_resource type="Resource" script_class="ItemDefinition" load_steps=4 format=3]
+[gd_resource type="Resource" script_class="ArrowItemDefinition" load_steps=5 format=3]
 
-[ext_resource type="Script" path="res://items/item_definition.gd" id="1_definition"]
+[ext_resource type="Script" path="res://items/arrow_item_definition.gd" id="1_definition"]
 [ext_resource type="Texture2D" path="res://assets/textures/tools/bow/stone_arrow.png" id="2_icon"]
 [ext_resource type="PackedScene" path="res://items/held/stone_arrow.tscn" id="3_held"]
+[ext_resource type="Resource" path="res://combat/projectiles/profiles/stone_arrow.tres" id="4_profile"]
 
 [resource]
 script = ExtResource("1_definition")
@@ -12,3 +13,4 @@ description = "A wooden arrow with a chipped stone point."
 icon = ExtResource("2_icon")
 max_stack = 99
 held_scene = ExtResource("3_held")
+projectile_profile = ExtResource("4_profile")

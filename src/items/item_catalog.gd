@@ -165,13 +165,27 @@ func validate(block_catalog: BlockCatalog) -> bool:
 			continue
 		var armor := definition as ArmorDefinition
 		var rune := definition as RuneDefinition
+		var arrow := definition as ArrowItemDefinition
 		var melee := definition.primary_action as MeleeAttackActionDefinition
+		var bow := definition.primary_action as BowDrawActionDefinition
 		if definition.equipment_type != null and not _is_canonical_equipment_type(definition.equipment_type):
 			push_error("[ItemCatalog] Non-canonical equipment type %s for %s" % [definition.equipment_type.id, definition.id])
 			valid = false
 		if melee != null and (weapon_type == null or definition.equipment_type == null or not definition.equipment_type.is_or_inherits(weapon_type)):
 			push_error("[ItemCatalog] Melee item %s has a non-weapon equipment type" % definition.id)
 			valid = false
+		if bow != null:
+			if weapon_type == null or definition.equipment_type == null or not definition.equipment_type.is_or_inherits(weapon_type):
+				push_error("[ItemCatalog] Bow item %s has a non-weapon equipment type" % definition.id)
+				valid = false
+			for ammunition in bow.ammunition:
+				if ammunition == null:
+					continue
+				if not _definitions_by_id.has(ammunition.id) or _definitions_by_id[ammunition.id] != ammunition:
+					push_error("[ItemCatalog] Non-canonical ammunition %s for %s" % [ammunition.id, definition.id])
+					valid = false
+		if arrow != null:
+			valid = arrow.validate(definition.resource_path) and valid
 		if armor != null:
 			if armor_type == null or definition.equipment_type == null or not definition.equipment_type.is_or_inherits(armor_type):
 				push_error("[ItemCatalog] Armor item %s has a non-armor equipment type" % definition.id)

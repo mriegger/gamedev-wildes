@@ -59,10 +59,19 @@ func record_melee_outcome(outcome: MeleeOutcome) -> void:
 		or outcome.target_defeated
 		or outcome.contact.source_runtime_id != MeleeCombatCoordinator.PLAYER_RUNTIME_ID
 		or outcome.contact.source_definition_id != MeleeCombatCoordinator.PLAYER_DEFINITION_ID
-		or outcome.contact.target_definition_id != WATCHER_DEFINITION_ID
 	):
 		return
-	var actor := _runtime.get_actor(outcome.contact.target_runtime_id) as WatcherActorType
+	_record_player_hit(outcome.contact.target_runtime_id, outcome.contact.target_definition_id)
+
+func record_projectile_outcome(outcome: ProjectileOutcome) -> void:
+	if outcome == null or _runtime == null or _voxel_space == null or _runtime.is_suspended() or outcome.target_defeated:
+		return
+	_record_player_hit(outcome.contact.target_runtime_id, outcome.contact.target_definition_id)
+
+func _record_player_hit(target_runtime_id: int, target_definition_id: StringName) -> void:
+	if target_definition_id != WATCHER_DEFINITION_ID:
+		return
+	var actor := _runtime.get_actor(target_runtime_id) as WatcherActorType
 	if actor == null or actor.definition == null or actor.definition.id != WATCHER_DEFINITION_ID:
 		return
 	actor.record_player_attack()

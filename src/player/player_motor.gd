@@ -125,6 +125,15 @@ func setup_consumption(consumption_coordinator: ItemConsumptionCoordinator) -> v
 	interactor.setup_consumption(consumption_coordinator)
 	_action_audio.setup_consumption(consumption_coordinator)
 
+func setup_projectiles(projectile_runtime: ArrowProjectileRuntime) -> void:
+	assert(_is_setup and projectile_runtime != null)
+	interactor.setup_projectiles(projectile_runtime)
+
+func get_facing_direction() -> Vector3:
+	var forward := model_root.global_transform.basis.z
+	forward.y = 0.0
+	return Vector3.BACK if forward.is_zero_approx() else forward.normalized()
+
 func bind_space(p_space: VoxelSpace, presentation_root: Node, spawn_position: Vector3, editable_voxel_world: VoxelWorld = null):
 	assert(_is_setup)
 	assert(p_space != null)

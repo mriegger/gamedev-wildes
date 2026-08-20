@@ -19,7 +19,7 @@ world seed.
 | `Space` | Hop — needed to get up any ledge |
 | `Q` / `E` | Rotate the camera 45° |
 | Mouse wheel / pinch | Zoom |
-| Left-click / hold | Open a targeted chest or crafting station, or use the selected item; hold to mine, or click to attack, till soil, or consume food and potions |
+| Left-click / hold | Open a targeted chest or crafting station, or use the selected item; hold to mine or draw a bow, release to fire an arrow, or click to attack, till soil, or consume food and potions |
 | Right-click | Use the selected item's secondary action, including consuming food or potions and placing blocks |
 | `F` | Enter or leave a nearby dungeon |
 | `1`–`9` | Select hotbar slot; while the backpack is open, assign the hovered item to that slot |
@@ -179,9 +179,14 @@ damage numbers that rise and fade above each affected enemy; the numbers remain 
 default camera zoom, render over health bars and world geometry, and are hidden once the camera is
 zoomed farther out. Weakness damage is
 yellow-gold, resistant damage is dark grey, and neutral damage remains white.
-Holding primary use with the bow quickly raises it in front of the player, nocks a stone arrow, and
-draws the string over 1.5 seconds before holding at maximum draw. A black-and-yellow bar above the
-player shows the draw progress. Arrow firing is not connected yet.
+Holding primary use with the bow quickly raises it in front of the player, nocks the first available
+stone or copper arrow, and draws the string over 1.5 seconds before holding at maximum draw. A
+black-and-yellow bar above the player shows the draw progress. The bow aims at the first
+terrain or object surface under the cursor, solves a reachable ballistic angle dynamically, and caps unreachable shots at
+45 degrees. Releasing consumes the nocked arrow and fires it at a speed proportional to the draw. Arrows follow that gravity-driven arc, turn along
+their flight direction, and stick into the first enemy or solid block they hit for one second before
+fading away. Stone arrows deal 10 base pierce damage and copper arrows deal 15; both apply two
+knockback before player strength, enemy defense, and damage affinities are resolved.
 Held tools use either runtime-extruded pixel art or authored 3D scenes.
 
 **Loot.** Overworld enemies roll deterministic per-species loot pools when defeated. A zombie

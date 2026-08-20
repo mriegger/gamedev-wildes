@@ -723,6 +723,11 @@ func record_melee_outcome(outcome: MeleeOutcome) -> void:
 	if target != null:
 		target.record_melee_contact(outcome.contact.hit_direction)
 
+func record_projectile_outcome(outcome: ProjectileOutcome) -> void:
+	var target := get_actor(outcome.contact.target_runtime_id)
+	if target != null:
+		target.record_melee_contact(outcome.contact.hit_direction)
+
 func _on_actor_melee_contact_reached(source_runtime_id: int, profile: MeleeAttackProfile) -> void:
 	entity_melee_contact_reached.emit(source_runtime_id, profile)
 

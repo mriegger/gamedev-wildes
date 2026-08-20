@@ -13,7 +13,7 @@ actors/                      reusable procedural animation
 app/                         application navigation
 game/                        gameplay composition and session lifecycle
 blocks/                      block domain resources, voxel query contract, and shared presentation
-combat/                      melee profiles, contacts, targeting, and validation
+combat/                      melee and projectile profiles, contacts, targeting, and validation
 crafting/                    recipe definitions, inventory coordination, and presentation
 chests/                      container definitions, storage, transfers, and presentation
 entities/                    content, AI, navigation, populations, and presentation
@@ -108,8 +108,10 @@ active state; despawn and shutdown do not emit defeat. `Game` consumes the playe
 validation, so support, body collision, and centered-feet requirements cannot diverge.
 
 `MeleeCombatCoordinator` validates cursor targeting, range, sweep arc, voxel visibility, target
-existence, and contact timing before changing health. `Game` injects a validated `DamageTypeCatalog`
-that registers the canonical slash, blunt, and pierce definitions accepted by combat.
+existence, and contact timing before changing health. It also commits already-resolved projectile
+contacts through the same player stats, target defense, damage-affinity, and knockback rules. `Game`
+injects a validated `DamageTypeCatalog` that registers the canonical slash, blunt, and pierce
+definitions accepted by combat.
 `MeleeAttackProfile` owns maximum base damage, optional random reduction below that base, radial
 falloff, a damage multiplier, a canonical damage type, an optional
 sweep angle, optional knockback, and whether targets lock at attack start or are acquired at contact.
@@ -126,9 +128,10 @@ aim. The profile calculates
 optionally map canonical damage types to weak or resistant responses; missing entries remain neutral.
 Combat applies the response multiplier after the profile calculation: 1.5 for weak, 0.5 for resistant,
 and 1.0 for neutral. Each successful
-physical hit applies that damage through the target state owner, optionally adds a decaying planar
-knockback velocity, then produces an immutable `MeleeOutcome` containing the contact, exact applied
-damage, source item ID, affinity response, and lethal result. The player interactor separately emits the AoE's ground
+physical hit applies that damage through the target state owner and optionally adds a decaying planar
+knockback velocity. Melee hits produce immutable `MeleeOutcome` values; arrow hits produce parallel
+`ProjectileOutcome` values. Both carry the contact, exact applied damage, source item ID, affinity
+response, and lethal result. The player interactor separately emits the AoE's ground
 origin for presentation; the hammer consumes it with a procedural expanding and fading ring.
 `EnemyCombatFeedback` consumes committed player outcomes through a bounded pool of billboarded
 damage labels, resolves active or retiring actors through `EntityRuntime`, and suppresses labels
@@ -136,8 +139,17 @@ beyond its authored camera-size threshold. Labels bypass depth testing with an e
 priority so they remain above health bars and world geometry. Neutral labels remain white,
 weaknesses render yellow-gold, and resistances render dark grey. Rejected contacts change no health
 and produce no outcome.
-`Game` explicitly connects completed outcomes to entity reactions, progression, and presentation
-without making combat own those policies.
+`ArrowProjectileRuntime` owns a bounded set of live arrow models. It atomically consumes the first
+available ammunition declared by the selected bow, launches from the action-authored bow transform at a
+draw-scaled speed, evaluates its ballistic position under gravity, and sweeps fixed 60 Hz flight segments
+against the entity spatial index and voxel raycast solids. `PlayerInteractor`
+resolves the first voxel surface under the cursor, falling back to the player's ground plane, and owns
+the current aim target; the bow action solves the reachable ballistic angle or raises toward its 45-degree cap, and both presentation and firing consume
+that authoritative transform. The arrow aligns its shaft to current velocity, embeds at the nearest contact,
+holds for one second, then fades and is removed. Projectile profiles own pierce damage, knockback,
+collision radius, gravity, and lifetime limits. `Game` explicitly connects completed melee and
+projectile outcomes to entity reactions, progression, and presentation without making combat own
+those policies.
 
 Enemy attacks use `TimedMeleeContact` to separate an actor-owned action duration from its one contact
 instant. Zombie and Skeleton attacks and the Stone Golem fallback punch emit their configured profile
@@ -160,7 +172,7 @@ live source, one-block horizontal radius, vertical bounds overlap, voxel line of
 player before applying thirty unarmored damage through normal defense. Radial contact has no mob or
 terrain target path.
 
-`CombatHitParticles` subscribes only to committed `MeleeOutcome` values and selects profiles by
+`CombatHitParticles` subscribes to committed melee and projectile outcomes and selects profiles by
 stable source and target definition IDs. Player hits produce bone particles for Skeletons and stone
 particles for Stone Golems; successful attacks from either species produce player blood. The Stone
 Golem's world-space landing dust is a bounded actor-owned one-shot at the actual landing position.

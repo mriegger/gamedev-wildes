@@ -8,9 +8,12 @@ const GEOMETRY_EPSILON: float = 0.000001
 const MeleeAttackProfileType := preload("res://combat/melee_attack_profile.gd")
 const MeleeContactType := preload("res://combat/melee_contact.gd")
 const MeleeOutcomeType := preload("res://combat/melee_outcome.gd")
+const ProjectileContactType := preload("res://combat/projectiles/projectile_contact.gd")
+const ProjectileOutcomeType := preload("res://combat/projectiles/projectile_outcome.gd")
 const VoxelLineOfSightType := preload("res://combat/voxel_line_of_sight.gd")
 
 signal melee_outcome_committed(outcome: MeleeOutcomeType)
+signal projectile_outcome_committed(outcome: ProjectileOutcomeType)
 
 var _voxel_space: VoxelSpace
 var _player: PlayerMotor
@@ -109,6 +112,53 @@ func is_player_attack_source_current(prepared: PreparedPlayerMeleeAttack) -> boo
 		and prepared._is_for(self)
 		and _player_inventory.is_selected_item_source_current(prepared._get_source())
 	)
+
+func try_commit_player_projectile_hit(
+	target_runtime_id: int,
+	profile: ProjectileAttackProfile,
+	source_item_id: StringName,
+	hit_position: Vector3,
+	hit_direction: Vector3,
+) -> bool:
+	assert(_is_setup())
+	if (
+		target_runtime_id <= PLAYER_RUNTIME_ID
+		or profile == null
+		or source_item_id.is_empty()
+		or not hit_position.is_finite()
+		or not hit_direction.is_finite()
+		or hit_direction.is_zero_approx()
+		or not _damage_type_catalog.has_definition(profile.damage_type)
+	):
+		return false
+	var target := _entity_runtime.get_actor(target_runtime_id)
+	if target == null or target.definition == null or not target.definition.combat_targetable:
+		return false
+	var damage_response := target.definition.get_damage_response(profile.damage_type)
+	var damage := profile.calculate_damage(
+		_player_stats.get_value(&"strength"),
+		_entity_runtime.get_stat_value(target_runtime_id, &"defense"),
+	)
+	damage = maxf(1.0, damage * DamageAffinityDefinition.get_multiplier(damage_response))
+	var damage_result := _entity_runtime.try_apply_damage(target_runtime_id, damage)
+	if damage_result == null:
+		return false
+	if not damage_result.defeated and profile.knockback_speed > 0.0:
+		_entity_runtime.try_apply_knockback(target_runtime_id, hit_direction, profile.knockback_speed)
+	var contact := ProjectileContactType.new(
+		target_runtime_id,
+		target.definition.id,
+		hit_position,
+		hit_direction,
+	)
+	projectile_outcome_committed.emit(ProjectileOutcomeType.new(
+		contact,
+		source_item_id,
+		damage_result.applied_damage,
+		damage_result.defeated,
+		damage_response,
+	))
+	return true
 
 func bind_context(p_voxel_space: VoxelSpace, p_entity_runtime: EntityRuntime) -> void:
 	assert(p_voxel_space != null)

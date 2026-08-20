@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="ProjectileAttackProfile" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://combat/projectiles/projectile_attack_profile.gd" id="1_profile"]
+[ext_resource type="Resource" path="res://combat/damage/types/pierce.tres" id="2_pierce"]
+
+[resource]
+script = ExtResource("1_profile")
+damage_type = ExtResource("2_pierce")
+base_damage = 10.0
+knockback_speed = 2.0
+collision_radius = 0.05
+gravity = 78.4
+maximum_flight_seconds = 12.0
+embedded_seconds = 1.0
+fade_seconds = 0.35

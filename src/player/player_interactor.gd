@@ -1,6 +1,8 @@
 extends Node3D
 class_name PlayerInteractor
 
+const BOW_AIM_RAY_DISTANCE: float = 256.0
+
 signal block_placed
 signal crafting_station_open_requested(position: Vector3i, definition: CraftingStationBlockDefinition)
 signal container_open_requested(position: Vector3i, definition: ContainerBlockDefinition)
@@ -21,6 +23,7 @@ var inventory_model: InventoryModel = null
 var inventory_loadout: InventoryLoadoutCoordinator = null
 var action_executors: PlayerActionExecutors = null
 var combat: MeleeCombatCoordinator = null
+var projectile_runtime: ArrowProjectileRuntime = null
 var entity_runtime: EntityRuntime = null
 var harvest: HarvestCoordinator = null
 var item_consumption: ItemConsumptionCoordinator = null
@@ -55,6 +58,10 @@ var melee_chain_input_timer: float = 0.0
 var next_melee_attack_direction: int = -1
 var bow_draw_action: BowDrawActionDefinition
 var bow_draw_elapsed: float = 0.0
+var bow_draw_ammunition: ArrowItemDefinition
+var _bow_source: SelectedItemSource
+var _bow_aim_target: Vector3
+var _bow_aim_target_valid: bool = false
 var secondary_use_timer: float = 0.0
 var _secondary_use_consumed_until_release: bool = false
 var _melee_contact_pending: bool = false
@@ -129,6 +136,12 @@ func setup_consumption(consumption_coordinator: ItemConsumptionCoordinator) -> v
 	assert(consumption_coordinator != null)
 	assert(item_consumption == null)
 	item_consumption = consumption_coordinator
+
+func setup_projectiles(p_projectile_runtime: ArrowProjectileRuntime) -> void:
+	assert(_is_setup)
+	assert(p_projectile_runtime != null)
+	assert(projectile_runtime == null)
+	projectile_runtime = p_projectile_runtime
 
 func bind_space(p_space: VoxelSpace, p_editable_voxel_world: VoxelWorld = null):
 	assert(_is_setup)
@@ -306,14 +319,20 @@ func _handle_item_actions(delta):
 	var selected_melee := selected_primary as MeleeAttackActionDefinition
 	var selected_tilling := selected_primary as TillingActionDefinition
 	var selected_bow := selected_primary as BowDrawActionDefinition
-	if selected_bow == null or bow_draw_action != null and bow_draw_action != selected_bow:
+	if (
+		selected_bow == null
+		or bow_draw_action != null and bow_draw_action != selected_bow
+		or _bow_source != null and not inventory_model.is_selected_item_source_current(_bow_source)
+	):
 		_reset_bow_draw()
 	if primary_use_just and selected_bow != null:
 		_start_bow_draw(selected_bow)
 	if bow_draw_action != null:
+		_update_bow_aim_target()
 		if primary_use_pressed:
 			bow_draw_elapsed = minf(bow_draw_elapsed + delta, bow_draw_action.raise_seconds + bow_draw_action.draw_seconds)
 		else:
+			_release_bow_shot()
 			_reset_bow_draw()
 		primary_use_just = false
 		primary_use_pressed = false
@@ -458,20 +477,37 @@ func _reset_melee_chain():
 
 func _start_bow_draw(action: BowDrawActionDefinition) -> void:
 	assert(action != null)
+	if projectile_runtime == null:
+		return
+	var ammunition := projectile_runtime.get_available_ammunition(action)
+	if ammunition == null:
+		return
 	bow_draw_action = action
 	bow_draw_elapsed = 0.0
+	bow_draw_ammunition = ammunition
+	_bow_source = inventory_model.create_selected_item_source()
+	_bow_aim_target = motor.global_position + motor.get_facing_direction() * 10.0
+	_bow_aim_target_valid = true
 	_reset_mining()
 	_reset_melee_chain()
-	var mouse_position := get_viewport().get_mouse_position()
-	var ray_origin := camera.project_ray_origin(mouse_position)
-	var ray_direction := camera.project_ray_normal(mouse_position).normalized()
-	var cursor_direction := _get_cursor_planar_direction(ray_origin, ray_direction)
-	if not cursor_direction.is_zero_approx():
-		motor.face_direction(cursor_direction)
 
 func _reset_bow_draw() -> void:
 	bow_draw_action = null
 	bow_draw_elapsed = 0.0
+	bow_draw_ammunition = null
+	_bow_source = null
+	_bow_aim_target_valid = false
+
+func _release_bow_shot() -> void:
+	if bow_draw_action == null or bow_draw_ammunition == null or projectile_runtime == null:
+		return
+	projectile_runtime.try_fire(
+		_bow_source,
+		bow_draw_action,
+		bow_draw_ammunition,
+		get_bow_draw_progress(),
+		get_bow_release_transform(),
+	)
 
 func is_drawing_bow() -> bool:
 	return bow_draw_action != null
@@ -485,6 +521,44 @@ func get_bow_draw_progress() -> float:
 	if bow_draw_action == null:
 		return 0.0
 	return clampf((bow_draw_elapsed - bow_draw_action.raise_seconds) / bow_draw_action.draw_seconds, 0.0, 1.0)
+
+func get_bow_ammunition_scene() -> PackedScene:
+	return null if bow_draw_ammunition == null else bow_draw_ammunition.held_scene
+
+func get_bow_release_transform() -> Transform3D:
+	assert(bow_draw_action != null and bow_draw_ammunition != null and _bow_aim_target_valid)
+	return bow_draw_action.get_projectile_release_transform(
+		motor.global_position,
+		motor.get_facing_direction(),
+		_bow_aim_target,
+		get_bow_draw_progress(),
+		bow_draw_ammunition.projectile_profile.gravity,
+	)
+
+func get_bow_launch_direction() -> Vector3:
+	return get_bow_release_transform().basis.y.normalized()
+
+func _update_bow_aim_target() -> void:
+	var mouse_position := get_viewport().get_mouse_position()
+	var ray_origin := camera.project_ray_origin(mouse_position)
+	var ray_direction := camera.project_ray_normal(mouse_position).normalized()
+	var cursor_target: Variant = _get_bow_cursor_target(ray_origin, ray_direction)
+	if not cursor_target is Vector3:
+		return
+	var target := cursor_target as Vector3
+	if not target.is_finite():
+		return
+	_bow_aim_target = target
+	_bow_aim_target_valid = true
+	var cursor_direction := Vector3(target.x - motor.global_position.x, 0.0, target.z - motor.global_position.z).normalized()
+	if not cursor_direction.is_zero_approx():
+		motor.face_direction(cursor_direction)
+
+func _get_bow_cursor_target(ray_origin: Vector3, ray_direction: Vector3) -> Variant:
+	var voxel_hit := VoxelRaycast.cast(voxel_space, ray_origin, ray_direction, BOW_AIM_RAY_DISTANCE)
+	if voxel_hit != null:
+		return ray_origin + ray_direction * voxel_hit.ray_distance
+	return Plane(Vector3.UP, motor.global_position.y).intersects_ray(ray_origin, ray_direction)
 
 func _start_melee_attack():
 	var mouse_position := get_viewport().get_mouse_position()
@@ -539,12 +613,9 @@ func _update_action_facing(delta: float):
 	if selected_primary is BowDrawActionDefinition:
 		if not is_drawing_bow():
 			return
-		var bow_mouse_position := get_viewport().get_mouse_position()
-		var bow_ray_origin := camera.project_ray_origin(bow_mouse_position)
-		var bow_ray_direction := camera.project_ray_normal(bow_mouse_position).normalized()
-		var bow_cursor_direction := _get_cursor_planar_direction(bow_ray_origin, bow_ray_direction)
+		var bow_cursor_direction := Vector3(_bow_aim_target.x - motor.global_position.x, 0.0, _bow_aim_target.z - motor.global_position.z).normalized()
 		if not bow_cursor_direction.is_zero_approx():
-			motor.turn_toward_direction(bow_cursor_direction, delta)
+			motor.face_direction(bow_cursor_direction)
 		return
 	if not selected_primary is MeleeAttackActionDefinition:
 		return

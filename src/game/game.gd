@@ -42,6 +42,7 @@ signal main_menu_requested
 @onready var watcher_screen_effect: WatcherScreenEffect = $WatcherScreenEffect as WatcherScreenEffect
 @onready var overworld_loot: OverworldLootCoordinator = $OverworldLoot as OverworldLootCoordinator
 @onready var melee_combat: MeleeCombatCoordinator = $MeleeCombat as MeleeCombatCoordinator
+@onready var arrow_projectiles: ArrowProjectileRuntime = $ArrowProjectiles as ArrowProjectileRuntime
 @onready var combat_hit_particles: CombatHitParticles = $CombatHitParticles as CombatHitParticles
 @onready var enemy_combat_feedback: EnemyCombatFeedbackType = $EnemyCombatFeedback as EnemyCombatFeedbackType
 @onready var hud: HUD = $HUD as HUD
@@ -377,6 +378,7 @@ func _setup_gameplay() -> bool:
 	var world_entities := world_entity_coordinator.get_runtime()
 	melee_combat.setup(world.voxel_model, player, player_stats, inventory_model, world_entities, damage_type_catalog)
 	melee_combat.melee_outcome_committed.connect(combat_progression_coordinator.record_melee_outcome)
+	melee_combat.projectile_outcome_committed.connect(combat_progression_coordinator.record_projectile_outcome)
 	melee_combat.melee_outcome_committed.connect(_on_melee_outcome_committed)
 	combat_hit_particles.setup(melee_combat, combat_hit_particle_catalog)
 	enemy_combat_feedback.setup(melee_combat, camera_rig.camera)
@@ -408,6 +410,8 @@ func _setup_gameplay() -> bool:
 		_can_break_block,
 	)
 	slime_attachment_coordinator.setup(player, player_stats)
+	arrow_projectiles.setup(inventory_model, inventory_loadout_coordinator, melee_combat)
+	player.setup_projectiles(arrow_projectiles)
 	player.water_step_committed.connect(world.play_water_ripple)
 	world_entities.water_surface_motion_committed.connect(world.play_water_ripple)
 	overworld_loot.setup(
@@ -1166,12 +1170,15 @@ func _bind_entity_context(space: VoxelSpace, runtime: EntityRuntime, position_re
 	player.bind_entity_runtime(runtime)
 	slime_attachment_coordinator.bind_runtime(runtime)
 	melee_combat.bind_context(space, runtime)
+	arrow_projectiles.bind_context(space, runtime)
 	enemy_combat_feedback.bind_runtime(runtime)
 	watcher_encounter.bind_context(space, runtime, position_ready)
 	runtime.entity_melee_contact_reached.connect(melee_combat.try_commit_entity_contact)
 	runtime.entity_radial_contact_reached.connect(melee_combat.try_commit_entity_radial_contact)
 	melee_combat.melee_outcome_committed.connect(runtime.record_melee_outcome)
 	melee_combat.melee_outcome_committed.connect(watcher_encounter.record_melee_outcome)
+	melee_combat.projectile_outcome_committed.connect(runtime.record_projectile_outcome)
+	melee_combat.projectile_outcome_committed.connect(watcher_encounter.record_projectile_outcome)
 	_active_entity_runtime = runtime
 
 func _unbind_entity_context() -> void:
@@ -1179,6 +1186,8 @@ func _unbind_entity_context() -> void:
 		return
 	if melee_combat.melee_outcome_committed.is_connected(watcher_encounter.record_melee_outcome):
 		melee_combat.melee_outcome_committed.disconnect(watcher_encounter.record_melee_outcome)
+	if melee_combat.projectile_outcome_committed.is_connected(watcher_encounter.record_projectile_outcome):
+		melee_combat.projectile_outcome_committed.disconnect(watcher_encounter.record_projectile_outcome)
 	watcher_encounter.unbind_context()
 	slime_attachment_coordinator.unbind_runtime()
 	if _active_entity_runtime.entity_melee_contact_reached.is_connected(melee_combat.try_commit_entity_contact):
@@ -1187,7 +1196,10 @@ func _unbind_entity_context() -> void:
 		_active_entity_runtime.entity_radial_contact_reached.disconnect(melee_combat.try_commit_entity_radial_contact)
 	if melee_combat.melee_outcome_committed.is_connected(_active_entity_runtime.record_melee_outcome):
 		melee_combat.melee_outcome_committed.disconnect(_active_entity_runtime.record_melee_outcome)
+	if melee_combat.projectile_outcome_committed.is_connected(_active_entity_runtime.record_projectile_outcome):
+		melee_combat.projectile_outcome_committed.disconnect(_active_entity_runtime.record_projectile_outcome)
 	enemy_combat_feedback.unbind_runtime()
+	arrow_projectiles.unbind_context()
 	melee_combat.unbind_context()
 	_active_entity_runtime = null
 

@@ -193,9 +193,10 @@ func _apply_bow_draw_pose(action: BowDrawActionDefinition, active: bool) -> void
 		_interactor.get_bow_raise_progress(),
 		_interactor.get_bow_draw_progress(),
 		action.full_draw_distance,
-		action.nocked_arrow_scene,
-		animator.global_transform.basis.z
+		_interactor.get_bow_ammunition_scene(),
+		_interactor.get_bow_launch_direction()
 	)
+	bow_view.set_nocked_arrow_global_transform(_interactor.get_bow_release_transform())
 	animator.track_bow_nock(bow_view.get_nock_global_position())
 
 func _reset_bow_draw_view() -> void:

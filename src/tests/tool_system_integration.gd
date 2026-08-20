@@ -9,6 +9,7 @@ var _input_buffer: InputBuffer
 var _voxel_world: VoxelWorld
 var _world_entity_coordinator: WorldEntityCoordinator
 var _combat: MeleeCombatCoordinator
+var _projectiles: ArrowProjectileRuntime
 var _hotbar: InventoryHotbar
 var _inventory_loadout: InventoryLoadoutCoordinator
 var _stone_pos := Vector3i(1, 0, 0)
@@ -243,23 +244,50 @@ func _run():
 	_expect(bow.max_stack == 1 and stone_arrow.max_stack == 99 and copper_arrow.max_stack == 99, "ranged item stack limits are incorrect")
 	var bow_action := bow.primary_action as BowDrawActionDefinition
 	_expect(bow_action != null and is_equal_approx(bow_action.raise_seconds, 0.18) and is_equal_approx(bow_action.draw_seconds, 1.5) and is_equal_approx(bow_action.full_draw_distance, 0.48), "bow draw timing is misconfigured")
-	_expect(bow_action.nocked_arrow_scene == stone_arrow.held_scene, "bow draw does not nock the canonical stone arrow model")
-	_expect(bow.rarity == null and bow.proficiency == null and not item_catalog.is_combat_item(&"bow"), "draw-only bow was prematurely registered with combat progression")
+	_expect(is_equal_approx(bow_action.minimum_launch_speed, 12.0) and is_equal_approx(bow_action.maximum_launch_speed, 48.0), "bow launch speeds are misconfigured")
+	_expect(is_equal_approx(bow_action.maximum_launch_angle_degrees, 45.0), "bow maximum launch angle is not forty-five degrees")
+	_expect(bow_action.ammunition.size() == 2 and bow_action.ammunition[0] == stone_arrow and bow_action.ammunition[1] == copper_arrow, "bow ammunition priority is incorrect")
+	_expect(is_equal_approx(bow_action.ammunition[0].projectile_profile.base_damage, 10.0) and is_equal_approx(bow_action.ammunition[1].projectile_profile.base_damage, 15.0), "arrow damage values are incorrect")
+	_expect(bow_action.ammunition[0].projectile_profile.damage_type.id == &"pierce" and bow_action.ammunition[1].projectile_profile.damage_type == bow_action.ammunition[0].projectile_profile.damage_type, "arrows do not use canonical pierce damage")
+	_expect(is_equal_approx(bow_action.ammunition[0].projectile_profile.knockback_speed, 2.0) and is_equal_approx(bow_action.ammunition[1].projectile_profile.knockback_speed, 2.0), "arrow knockback values are incorrect")
+	_expect(is_equal_approx(bow_action.ammunition[0].projectile_profile.gravity, 78.4) and is_equal_approx(bow_action.ammunition[1].projectile_profile.gravity, 78.4), "arrow gravity is misconfigured")
+	_expect(bow.rarity != null and bow.proficiency != null and item_catalog.is_combat_item(&"bow"), "bow is not registered with weapon progression")
 	var invalid_arrow_root := Node3D.new()
 	var invalid_arrow_scene := PackedScene.new()
 	_expect(invalid_arrow_scene.pack(invalid_arrow_root) == OK, "invalid bow arrow fixture did not pack")
 	invalid_arrow_root.free()
+	var invalid_arrow_item := ItemDefinition.new()
+	invalid_arrow_item.id = &"invalid_arrow"
+	invalid_arrow_item.held_scene = invalid_arrow_scene
+	var invalid_ammunition := ArrowItemDefinition.new()
+	invalid_ammunition.id = invalid_arrow_item.id
+	invalid_ammunition.held_scene = invalid_arrow_item.held_scene
+	invalid_ammunition.projectile_profile = bow_action.ammunition[0].projectile_profile
 	var invalid_bow_action := BowDrawActionDefinition.new()
-	invalid_bow_action.nocked_arrow_scene = invalid_arrow_scene
+	var invalid_ammunition_list: Array[ArrowItemDefinition] = [invalid_ammunition]
+	invalid_bow_action.ammunition = invalid_ammunition_list
 	var empty_bow_action := BowDrawActionDefinition.new()
-	empty_bow_action.nocked_arrow_scene = PackedScene.new()
 	var print_error_messages := Engine.print_error_messages
 	Engine.print_error_messages = false
 	var invalid_bow_action_valid := invalid_bow_action.validate("test")
 	var empty_bow_action_valid := empty_bow_action.validate("test")
 	Engine.print_error_messages = print_error_messages
 	_expect(not invalid_bow_action_valid, "bow draw accepted an arrow without a nock contract")
-	_expect(not empty_bow_action_valid, "bow draw accepted an empty nocked arrow scene")
+	_expect(not empty_bow_action_valid, "bow draw accepted no ammunition")
+	var reachable_target := Vector3(0.0, 0.0, 10.0)
+	var reachable_transform := bow_action.get_projectile_release_transform(Vector3.ZERO, Vector3.BACK, reachable_target, 0.5, bow_action.ammunition[0].projectile_profile.gravity)
+	var reachable_velocity := reachable_transform.basis.y * bow_action.get_launch_speed(0.5)
+	var reachable_horizontal_distance := Vector2(reachable_target.x - reachable_transform.origin.x, reachable_target.z - reachable_transform.origin.z).length()
+	var reachable_horizontal_speed := Vector2(reachable_velocity.x, reachable_velocity.z).length()
+	var reachable_seconds := reachable_horizontal_distance / reachable_horizontal_speed
+	var reached_position := reachable_transform.origin + reachable_velocity * reachable_seconds + Vector3.DOWN * (0.5 * bow_action.ammunition[0].projectile_profile.gravity * reachable_seconds * reachable_seconds)
+	_expect(reached_position.distance_to(reachable_target) < 0.01, "bow launch angle did not solve a reachable cursor target origin=%s velocity=%s reached=%s distance=%.4f" % [reachable_transform.origin, reachable_velocity, reached_position, reached_position.distance_to(reachable_target)])
+	var far_transform := bow_action.get_projectile_release_transform(Vector3.ZERO, Vector3.BACK, Vector3(0.0, 0.0, 200.0), 1.0, bow_action.ammunition[0].projectile_profile.gravity)
+	_expect(absf(rad_to_deg(asin(far_transform.basis.y.y)) - 45.0) < 0.01, "unreachable cursor target did not clamp the bow to forty-five degrees")
+	var centered_transform := bow_action.get_projectile_release_transform(Vector3.ZERO, Vector3.LEFT, Vector3.ZERO, 1.0, bow_action.ammunition[0].projectile_profile.gravity)
+	var near_transform := bow_action.get_projectile_release_transform(Vector3.ZERO, Vector3.LEFT, Vector3.LEFT * 0.25, 1.0, bow_action.ammunition[0].projectile_profile.gravity)
+	_expect(centered_transform.is_finite() and Vector2(centered_transform.basis.y.x, centered_transform.basis.y.z).normalized().dot(Vector2.LEFT) > 0.999, "centered cursor produced an unstable bow direction")
+	_expect(near_transform.is_finite() and Vector2(near_transform.basis.y.x, near_transform.basis.y.z).normalized().dot(Vector2.LEFT) > 0.999, "cursor inside the bow muzzle offset reversed the shot")
 	_expect_pixel_icon(bow, "res://assets/textures/tools/bow/bow.png", 6)
 	_expect_pixel_icon(stone_arrow, "res://assets/textures/tools/bow/stone_arrow.png", 6)
 	_expect_pixel_icon(copper_arrow, "res://assets/textures/tools/bow/copper_arrow.png", 6)
@@ -329,7 +357,7 @@ func _run():
 	root.add_child(bow_parent)
 	bow_parent.add_child(bow_held)
 	await process_frame
-	bow_held.set_draw_pose(true, 1.0, 0.5, bow_action.full_draw_distance, bow_action.nocked_arrow_scene, Vector3.BACK)
+	bow_held.set_draw_pose(true, 1.0, 0.5, bow_action.full_draw_distance, bow_action.ammunition[0].held_scene, Vector3.BACK)
 	var drawn_string_center := bow_held._string_center
 	var expected_half_draw_center := BowHeldView.REST_STRING_CENTER + Vector3.LEFT * bow_action.full_draw_distance * 0.5
 	var nocked_arrow := bow_held._nocked_arrow
@@ -341,6 +369,9 @@ func _run():
 	var drawn_bow_basis := bow_held.global_transform.basis.orthonormalized() * depth_pivot.basis.orthonormalized() * bow_plane.basis.orthonormalized()
 	_expect((drawn_bow_basis * Vector3.UP).normalized().dot(Vector3.UP) > 0.999, "drawn bow is not vertical")
 	_expect((drawn_bow_basis * Vector3.LEFT).normalized().dot(Vector3.FORWARD) > 0.999, "drawn bow string does not face the player's body")
+	var raised_launch_direction := (Vector3.RIGHT + Vector3.UP).normalized()
+	bow_held.set_draw_pose(true, 1.0, 1.0, bow_action.full_draw_distance, bow_action.ammunition[0].held_scene, raised_launch_direction)
+	_expect(bow_held._nocked_arrow.global_transform.basis.y.normalized().dot(raised_launch_direction) > 0.999, "drawn bow model did not raise along its launch direction")
 	bow_held.reset_draw_pose()
 	_expect(bow_held._nocked_arrow == null and bow_held._string_center.distance_to(Vector3(-0.18, 0.0, 0.0)) < 0.001, "bow draw presentation did not reset")
 	bow_parent.free()
@@ -550,6 +581,10 @@ func _run():
 	_inventory_loadout = InventoryLoadoutCoordinator.new()
 	_expect(_inventory_loadout.setup(_inventory, player_stats, item_proficiency), "inventory stat coordinator setup failed")
 	_combat.setup(_voxel_world, _player, player_stats, _inventory, _world_entity_coordinator.get_runtime(), load("res://combat/damage/damage_type_catalog.tres") as DamageTypeCatalog)
+	_projectiles = ArrowProjectileRuntime.new()
+	root.add_child(_projectiles)
+	_projectiles.setup(_inventory, _inventory_loadout, _combat)
+	_projectiles.bind_context(_voxel_world, _world_entity_coordinator.get_runtime())
 	var movement_camera_rig := (load("res://player/camera/camera_rig.tscn") as PackedScene).instantiate() as CameraRig
 	root.add_child(movement_camera_rig)
 	movement_camera_rig.camera = _camera
@@ -565,7 +600,10 @@ func _run():
 		_combat,
 		_world_entity_coordinator.get_runtime(),
 	)
+	_player.setup_projectiles(_projectiles)
 	_player.bind_space(_voxel_world, root, Vector3.ZERO, _voxel_world)
+	var elevated_cursor_target: Variant = _interactor._get_bow_cursor_target(Vector3(1.5, 10.0, 0.5), Vector3.DOWN)
+	_expect(elevated_cursor_target is Vector3 and (elevated_cursor_target as Vector3).distance_to(Vector3(1.5, 1.0, 0.5)) < 0.001, "bow cursor aim ignored an elevated voxel surface")
 	_interactor.melee_attack_started.connect(_on_melee_attack_started)
 	_interactor.soil_tilled.connect(_on_soil_tilled)
 	_player.set_physics_process(false)
@@ -604,10 +642,22 @@ func _run():
 	_expect(restored_pickaxe_source >= 0 and (restored_pickaxe_source == 0 or _inventory_loadout.assign_slot_to_hotbar(restored_pickaxe_source, 0)), "stone pickaxe could not be moved back to the selected slot")
 	_expect(_inventory.get_slot(0) != null and _inventory.get_slot(0).item_id == &"stone_pickaxe", "stone pickaxe did not return to the selected slot")
 	_expect(_inventory_loadout.discard_stack(0, 1), "stone pickaxe could not be removed before the bow presentation test")
-	_expect(_inventory_loadout.add_stack(InventoryStack.new(&"bow", 1)), "bow could not be added for the presentation test")
+	_expect(_inventory_loadout.add_stack(InventoryStack.new(
+		&"bow",
+		1,
+		_inventory.equipment_instance_factory.create(&"bow"),
+	)), "bow could not be added for the presentation test")
+	_expect(_inventory_loadout.add_stack(InventoryStack.new(&"stone_arrow", 4)), "stone arrows could not be added for the presentation test")
 	var bow_source := _find_inventory_item(&"bow")
 	_expect(bow_source >= 0 and (bow_source == 0 or _inventory_loadout.assign_slot_to_hotbar(bow_source, 0)), "bow could not be moved to the selected slot")
 	_expect(_interactor.get_selected_primary_action() == bow_action and _player.held_item_view.held_node is BowHeldView, "selected bow did not expose its draw action in the right hand")
+	_input_buffer.primary_use_just = true
+	_input_buffer.primary_use_pressed = true
+	_interactor._handle_item_actions(0.0)
+	_input_buffer.primary_use_pressed = false
+	_interactor._handle_item_actions(0.0)
+	_expect(not _interactor.is_drawing_bow() and _projectiles._projectiles.size() == 1 and _inventory.get_inventory_item_count(&"stone_arrow") == 3, "same-tick bow release depended on presentation state")
+	_projectiles.clear()
 	_input_buffer.primary_use_just = true
 	_input_buffer.primary_use_pressed = true
 	_interactor._handle_item_actions(0.0)
@@ -617,10 +667,7 @@ func _run():
 	var bow_progress_bar := _player.bow_draw_progress_bar
 	_expect(bow_progress_bar.visible and is_zero_approx(bow_progress_bar._progress), "bow draw progress bar did not appear empty when drawing began")
 	_expect(is_equal_approx(bow_progress_bar.position.y, _player.player_height + BowDrawProgressBar3D.HEIGHT_OFFSET), "bow draw progress bar is not above the player")
-	var bow_mouse_position := _interactor.get_viewport().get_mouse_position()
-	var bow_ray_origin := _camera.project_ray_origin(bow_mouse_position)
-	var bow_ray_direction := _camera.project_ray_normal(bow_mouse_position).normalized()
-	var bow_aim_direction := _interactor._get_cursor_planar_direction(bow_ray_origin, bow_ray_direction)
+	var bow_aim_direction := Vector3(_interactor._bow_aim_target.x - _player.global_position.x, 0.0, _interactor._bow_aim_target.z - _player.global_position.z).normalized()
 	var bow_aim_yaw := atan2(bow_aim_direction.x, bow_aim_direction.z)
 	var bow_aim_start_yaw := bow_aim_yaw - 1.0
 	_player.model_root.rotation.y = bow_aim_start_yaw
@@ -628,14 +675,13 @@ func _run():
 	_player._turn_toward_movement(-bow_aim_direction, 0.1)
 	_expect(is_equal_approx(_player.model_root.rotation.y, bow_aim_start_yaw), "walking movement overrode active bow aim")
 	_interactor._update_action_facing(0.1)
-	var expected_bow_aim_yaw := lerp_angle(bow_aim_start_yaw, bow_aim_yaw, 1.0 - exp(-10.0 * 0.1))
-	_expect(is_equal_approx(_player.model_root.rotation.y, expected_bow_aim_yaw), "walking bow draw did not track the cursor")
+	_expect(is_equal_approx(_player.model_root.rotation.y, bow_aim_yaw), "walking bow draw did not track the cursor")
 	_player.model_root.rotation.y = bow_aim_start_yaw
 	_player.is_sprinting = true
 	_player._turn_toward_movement(-bow_aim_direction, 0.1)
 	_expect(is_equal_approx(_player.model_root.rotation.y, bow_aim_start_yaw), "sprint movement overrode active bow aim")
 	_interactor._update_action_facing(0.1)
-	_expect(is_equal_approx(_player.model_root.rotation.y, expected_bow_aim_yaw), "sprinting bow draw did not track the cursor")
+	_expect(is_equal_approx(_player.model_root.rotation.y, bow_aim_yaw), "sprinting bow draw did not track the cursor")
 	_player.is_sprinting = false
 	_interactor._handle_item_actions(0.09)
 	_player.animation_driver._process(0.0)
@@ -648,32 +694,66 @@ func _run():
 	_expect(is_equal_approx(bow_progress_bar._progress, 0.5), "bow draw progress bar did not reach halfway with the draw")
 	_expect(absf(bow_fill_sample.r - BowDrawProgressBar3D.FILL_COLOR.r) < 0.01 and absf(bow_fill_sample.g - BowDrawProgressBar3D.FILL_COLOR.g) < 0.01 and absf(bow_fill_sample.b - BowDrawProgressBar3D.FILL_COLOR.b) < 0.01, "bow draw progress bar fill is not yellow")
 	_expect(absf(bow_background_sample.r - BowDrawProgressBar3D.BACKGROUND_COLOR.r) < 0.01 and absf(bow_background_sample.g - BowDrawProgressBar3D.BACKGROUND_COLOR.g) < 0.01 and absf(bow_background_sample.b - BowDrawProgressBar3D.BACKGROUND_COLOR.b) < 0.01, "bow draw progress bar background is not black")
+	var half_draw_release_transform := _interactor.get_bow_release_transform()
+	_expect(active_bow_view._nocked_arrow.global_transform.origin.distance_to(half_draw_release_transform.origin) < 0.005, "rendered arrow diverged from the authoritative launch position")
 	var half_draw_hand_local := active_bow_view.plane_pivot.to_local(_player.animation_driver.animator.get_left_hand_global_position())
 	_expect(active_bow_view._string_center.distance_to(half_draw_hand_local) < 0.001, "draw hand did not track the authored string center")
 	var half_draw_fletching := active_bow_view._nocked_arrow.get_node("FletchingHorizontal") as MeshInstance3D
 	var half_draw_hand_global := _player.animation_driver.animator.get_left_hand_global_position()
-	var half_draw_fletching_global := half_draw_fletching.global_position
 	_expect(half_draw_fletching.global_position.distance_to(half_draw_hand_global) < 0.001, "draw hand did not track the arrow fletching")
+	_expect(active_bow_view._nocked_arrow.global_transform.basis.y.normalized().dot(half_draw_release_transform.basis.y.normalized()) > 0.999, "rendered arrow did not match the authoritative half-draw angle")
 	_interactor._handle_item_actions(0.75)
 	_player.animation_driver._process(0.0)
 	var full_draw_center := active_bow_view._string_center
 	var full_draw_fletching := active_bow_view._nocked_arrow.get_node("FletchingHorizontal") as MeshInstance3D
 	var full_draw_hand_global := _player.animation_driver.animator.get_left_hand_global_position()
-	var draw_travel := full_draw_fletching.global_position - half_draw_fletching_global
-	var actor_forward := _player.animation_driver.animator.global_transform.basis.z.normalized()
+	var bow_launch_direction := _interactor.get_bow_launch_direction()
 	_expect(is_equal_approx(_interactor.get_bow_draw_progress(), 1.0) and full_draw_center.x < BowHeldView.REST_STRING_CENTER.x - 0.2, "bow did not reach its full draw after 1.5 seconds")
 	_expect(full_draw_fletching.global_position.distance_to(full_draw_hand_global) < 0.001, "draw hand did not continue following the arrow fletching")
-	_expect(is_equal_approx(full_draw_center.y, BowHeldView.REST_STRING_CENTER.y) and is_equal_approx(full_draw_center.z, BowHeldView.REST_STRING_CENTER.z), "nocked arrow did not travel straight backward")
-	_expect(draw_travel.normalized().dot(-actor_forward) > 0.999 and absf(draw_travel.y) < 0.001, "nocked arrow did not travel straight backward in actor space")
-	_expect(is_equal_approx(bow_progress_bar._progress, 1.0) and absf(bow_progress_bar._image.get_pixel(BowDrawProgressBar3D.TEXTURE_WIDTH - 2, 3).r - BowDrawProgressBar3D.FILL_COLOR.r) < 0.01, "bow draw progress bar did not fill at maximum draw")
+	_expect(active_bow_view._nocked_arrow.global_transform.basis.y.normalized().dot(bow_launch_direction) > 0.999, "rendered arrow did not match the authoritative full-draw angle")
 	_interactor._handle_item_actions(0.5)
 	_player.animation_driver._process(0.0)
 	_expect(is_equal_approx(_interactor.get_bow_draw_progress(), 1.0) and active_bow_view._string_center.is_equal_approx(full_draw_center), "held bow did not remain at maximum draw")
+	_player.velocity = Vector3(2.0, 1.0, 0.0)
+	_player.on_ground = false
+	_player.animation_driver._process(0.1)
+	var moving_release_transform := _interactor.get_bow_release_transform()
+	_expect(active_bow_view._nocked_arrow.global_transform.origin.distance_to(moving_release_transform.origin) < 0.001, "moving aerial animation displaced the arrow from its authoritative launch position")
+	_expect(active_bow_view._nocked_arrow.global_transform.basis.y.normalized().dot(moving_release_transform.basis.y.normalized()) > 0.999, "moving aerial animation displaced the arrow from its authoritative launch direction")
+	_player.velocity = Vector3.ZERO
+	_player.on_ground = true
+	_expect(is_equal_approx(bow_progress_bar._progress, 1.0) and absf(bow_progress_bar._image.get_pixel(BowDrawProgressBar3D.TEXTURE_WIDTH - 2, 3).r - BowDrawProgressBar3D.FILL_COLOR.r) < 0.01, "bow draw progress bar did not fill at maximum draw")
+	var original_launch_direction := bow_launch_direction
+	_interactor._bow_aim_target = _player.global_position + Vector3(10.0, 0.0, 0.0)
+	_interactor._update_action_facing(0.0)
+	_player.animation_driver._process(0.0)
+	var moved_launch_direction := _interactor.get_bow_launch_direction()
+	_expect(Vector2(moved_launch_direction.x, moved_launch_direction.z).normalized().dot(Vector2.RIGHT) > 0.999, "moving the cursor did not redirect the bow trajectory")
+	_expect(moved_launch_direction.distance_to(original_launch_direction) > 0.1 and active_bow_view._nocked_arrow.global_transform.basis.y.normalized().dot(moved_launch_direction) > 0.999, "moving the cursor did not update the rendered bow angle")
 	_input_buffer.primary_use_pressed = false
 	_interactor._handle_item_actions(0.016)
 	_player.animation_driver._process(0.0)
-	_expect(not _interactor.is_drawing_bow() and active_bow_view._nocked_arrow == null, "releasing primary use did not reset the unfinished bow shot")
+	_expect(not _interactor.is_drawing_bow() and active_bow_view._nocked_arrow == null, "releasing primary use did not reset the fired bow")
+	_expect(_projectiles._projectiles.size() == 1 and _inventory.get_inventory_item_count(&"stone_arrow") == 2, "releasing the bow did not fire and consume one stone arrow")
 	_expect(not bow_progress_bar.visible and is_zero_approx(bow_progress_bar._progress), "bow draw progress bar remained visible after release")
+	_projectiles.set_physics_process(false)
+	var fired_projectile: Variant = _projectiles._projectiles[0]
+	var fired_start: Vector3 = fired_projectile.view.global_position
+	var fired_direction: Vector3 = fired_projectile.velocity.normalized()
+	_expect(is_equal_approx(fired_projectile.velocity.length(), bow_action.maximum_launch_speed), "full-draw arrow did not use maximum launch speed")
+	_expect(is_equal_approx(bow_action.get_launch_speed(0.0), bow_action.minimum_launch_speed) and bow_action.get_launch_speed(0.5) > bow_action.minimum_launch_speed, "arrow launch speed is not proportional to draw progress")
+	_projectiles.advance_projectiles(ArrowProjectileRuntime.TRAJECTORY_STEP_SECONDS)
+	var fired_travel: Vector3 = fired_projectile.view.global_position - fired_start
+	_expect(fired_travel.dot(fired_direction) > 0.5 and fired_projectile.velocity.y < fired_direction.y * bow_action.maximum_launch_speed, "arrow did not fly forward under gravity")
+	_expect(fired_projectile.view.global_basis.y.normalized().dot(fired_projectile.velocity.normalized()) > 0.999, "arrow model did not align with its flight direction")
+	fired_projectile.embedded_elapsed = 0.0
+	_projectiles.advance_projectiles(fired_projectile.ammunition.projectile_profile.embedded_seconds)
+	_expect(_projectiles._projectiles.size() == 1 and is_zero_approx((fired_projectile.view.get_node("Shaft") as GeometryInstance3D).transparency), "embedded arrow did not remain opaque for one second")
+	_projectiles.advance_projectiles(fired_projectile.ammunition.projectile_profile.fade_seconds * 0.5)
+	var half_fade := (fired_projectile.view.get_node("Shaft") as GeometryInstance3D).transparency
+	_expect(half_fade > 0.0 and half_fade < 1.0, "embedded arrow did not fade after its one-second hold")
+	_projectiles.advance_projectiles(fired_projectile.ammunition.projectile_profile.fade_seconds * 0.5)
+	_expect(_projectiles._projectiles.is_empty(), "arrow did not despawn after fading")
 	_input_buffer.primary_use_just = true
 	_input_buffer.primary_use_pressed = true
 	_interactor._handle_item_actions(0.0)
@@ -1201,6 +1281,8 @@ func _run():
 
 	_player.queue_free()
 	_camera.queue_free()
+	_projectiles.unbind_context()
+	_projectiles.queue_free()
 	_combat.queue_free()
 	_world_entity_coordinator.queue_free()
 	_hotbar.queue_free()

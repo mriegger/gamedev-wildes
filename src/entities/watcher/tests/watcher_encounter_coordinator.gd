@@ -3,6 +3,8 @@ extends SceneTree
 const WatcherTeleportSearchType := preload("res://entities/watcher/watcher_teleport_search.gd")
 const MeleeContactType := preload("res://combat/melee_contact.gd")
 const MeleeOutcomeType := preload("res://combat/melee_outcome.gd")
+const ProjectileContactType := preload("res://combat/projectiles/projectile_contact.gd")
+const ProjectileOutcomeType := preload("res://combat/projectiles/projectile_outcome.gd")
 
 const FLOOR_Y: int = 1
 const FEET_Y: float = 2.0
@@ -146,9 +148,9 @@ func _test_removal_lifecycle(
 	effect: TestScreenEffect,
 	runtime_ids: Array[int],
 ) -> void:
-	coordinator.record_melee_outcome(_player_outcome(runtime_ids[0]))
+	coordinator.record_projectile_outcome(_projectile_outcome(runtime_ids[0]))
 	coordinator.record_melee_outcome(_player_outcome(runtime_ids[1]))
-	_expect(coordinator.get_tracked_count() == 2 and effect.active, "lifecycle fixture did not track both watchers")
+	_expect(coordinator.get_tracked_count() == 2 and effect.active, "melee and projectile hits did not track both watchers")
 	_expect(runtime.try_despawn(runtime_ids[0]), "tracked watcher despawn was rejected")
 	_expect(coordinator.get_tracked_count() == 1 and effect.active, "ordinary removal ended a multi-watcher encounter")
 	var damage_result := runtime.try_apply_damage(runtime_ids[1], 1000.0)
@@ -206,6 +208,15 @@ func _lethal_player_outcome(runtime_id: int) -> MeleeOutcome:
 
 func _nonplayer_outcome(runtime_id: int) -> MeleeOutcome:
 	return _outcome(91, &"watcher", runtime_id, &"watcher", false)
+
+func _projectile_outcome(runtime_id: int) -> ProjectileOutcome:
+	var contact := ProjectileContactType.new(
+		runtime_id,
+		&"watcher",
+		PLAYER_POSITION,
+		Vector3.RIGHT,
+	)
+	return ProjectileOutcomeType.new(contact, &"bow", 1.0, false, DamageAffinityDefinition.Response.NEUTRAL)
 
 func _outcome(
 	source_runtime_id: int,

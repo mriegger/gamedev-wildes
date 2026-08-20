@@ -27,6 +27,7 @@ func setup(combat: MeleeCombatCoordinator, camera: Camera3D) -> void:
 		add_child(damage_number)
 		_damage_numbers.append(damage_number)
 	_combat.melee_outcome_committed.connect(_on_melee_outcome_committed)
+	_combat.projectile_outcome_committed.connect(_on_projectile_outcome_committed)
 
 func bind_runtime(runtime: EntityRuntime) -> void:
 	assert(runtime != null)
@@ -42,15 +43,23 @@ func unbind_runtime() -> void:
 func _on_melee_outcome_committed(outcome: MeleeOutcome) -> void:
 	if _runtime == null or outcome.contact.source_runtime_id != MeleeCombatCoordinator.PLAYER_RUNTIME_ID:
 		return
+	_play_damage_number(outcome.contact.target_runtime_id, outcome.applied_damage, outcome.damage_response)
+
+func _on_projectile_outcome_committed(outcome: ProjectileOutcome) -> void:
+	if _runtime == null:
+		return
+	_play_damage_number(outcome.contact.target_runtime_id, outcome.applied_damage, outcome.damage_response)
+
+func _play_damage_number(target_runtime_id: int, damage: float, damage_response: int) -> void:
 	if _camera.size > MAX_DAMAGE_NUMBER_CAMERA_SIZE:
 		return
-	var actor := _runtime.get_presented_actor(outcome.contact.target_runtime_id)
+	var actor := _runtime.get_presented_actor(target_runtime_id)
 	if actor == null or actor.definition == null:
 		return
 	var damage_number := _damage_numbers[_next_damage_number]
 	_next_damage_number = (_next_damage_number + 1) % _damage_numbers.size()
 	var position := actor.global_position + Vector3.UP * (actor.definition.body_height + DAMAGE_NUMBER_HEIGHT_OFFSET)
-	damage_number.play(position, outcome.applied_damage, get_damage_color(outcome.damage_response))
+	damage_number.play(position, damage, get_damage_color(damage_response))
 	set_process(true)
 
 static func get_damage_color(response: int) -> Color:
@@ -75,6 +84,8 @@ func _process(delta: float) -> void:
 func _exit_tree() -> void:
 	if _combat != null and _combat.melee_outcome_committed.is_connected(_on_melee_outcome_committed):
 		_combat.melee_outcome_committed.disconnect(_on_melee_outcome_committed)
+	if _combat != null and _combat.projectile_outcome_committed.is_connected(_on_projectile_outcome_committed):
+		_combat.projectile_outcome_committed.disconnect(_on_projectile_outcome_committed)
 	_combat = null
 	_runtime = null
 	_camera = null

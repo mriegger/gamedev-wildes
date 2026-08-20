@@ -12,6 +12,7 @@ const EnemyDamageNumber3DType := preload("res://combat/presentation/enemy_damage
 var _failures: int = 0
 var _contacts: Array[MeleeContactType] = []
 var _outcomes: Array[MeleeOutcome] = []
+var _projectile_outcomes: Array[ProjectileOutcome] = []
 var _player_defeat_count: int = 0
 var _reentrant_inventory_loadout: InventoryLoadoutCoordinator
 var _reentrant_swap_index: int = -1
@@ -123,6 +124,8 @@ func _make_combat_fixture(world: VoxelWorld, zombie_count: int, sheep_count: int
 	combat.setup(world, player, player_stats, inventory, coordinator.get_runtime(), load("res://combat/damage/damage_type_catalog.tres") as DamageTypeCatalog)
 	combat.melee_outcome_committed.connect(coordinator.get_runtime().record_melee_outcome)
 	combat.melee_outcome_committed.connect(_on_melee_contact)
+	combat.projectile_outcome_committed.connect(coordinator.get_runtime().record_projectile_outcome)
+	combat.projectile_outcome_committed.connect(_on_projectile_contact)
 	for _index in range(sheep_count):
 		coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT), 12.0)
 	for _index in range(zombie_count):
@@ -169,6 +172,9 @@ func _active_ids(actors: Array[EntityActor]) -> Array[int]:
 func _on_melee_contact(outcome: MeleeOutcome) -> void:
 	_outcomes.append(outcome)
 	_contacts.append(outcome.contact)
+
+func _on_projectile_contact(outcome: ProjectileOutcome) -> void:
+	_projectile_outcomes.append(outcome)
 
 func _on_player_defeated() -> void:
 	_player_defeat_count += 1
@@ -239,6 +245,7 @@ func _run() -> void:
 	_expect(is_equal_approx(normalized_contact.hit_direction.length(), 1.0), "melee contact did not normalize its direction")
 
 	var world := _make_flat_world()
+	await _test_projectile_damage(world)
 	await _test_randomized_sword_damage(world, configured_sword_profile)
 	sword_profile.base_damage_random_reduction = 0
 	await _test_damage_affinities(world, sword_profile, hammer_profile, zombie_definition, skeleton_definition)
@@ -848,6 +855,48 @@ func _test_randomized_sword_damage(world: VoxelWorld, sword_profile: MeleeAttack
 		_expect(outcome.applied_damage >= 21.0 and outcome.applied_damage <= 24.0, "slash-weak zombie damage left the expected 21-24 range")
 		_expect(outcome.damage_response == DamageAffinityDefinition.Response.WEAK, "slash-weak zombie outcome lost its damage response")
 		_expect(is_equal_approx(coordinator.get_runtime().get_current_hp(actors[index].runtime_id), 80.0 - expected_damage[index]), "random sword damage changed the wrong enemy HP")
+	await _cleanup(combat, coordinator, player, fixture["camera"] as Camera3D)
+
+func _test_projectile_damage(world: VoxelWorld) -> void:
+	var fixture := _make_combat_fixture(world, 1, 0, 8020)
+	var coordinator := fixture["coordinator"] as WorldEntityCoordinator
+	var combat := fixture["combat"] as MeleeCombatCoordinator
+	var player := fixture["player"] as PlayerMotor
+	var actor := _get_sorted_actors(coordinator)[0] as EntityActor
+	var stone_profile := load("res://combat/projectiles/profiles/stone_arrow.tres") as ProjectileAttackProfile
+	var copper_profile := load("res://combat/projectiles/profiles/copper_arrow.tres") as ProjectileAttackProfile
+	_expect(stone_profile.validate(stone_profile.resource_path) and copper_profile.validate(copper_profile.resource_path), "arrow projectile profiles are invalid")
+	var progression := CombatProgressionCoordinator.new()
+	progression.setup(fixture["player_stats"] as ActorStats, fixture["inventory"] as InventoryModel, fixture["entity_catalog"] as EntityCatalog, fixture["item_proficiency"] as ItemProficiency)
+	combat.projectile_outcome_committed.connect(progression.record_projectile_outcome)
+	var feedback := EnemyCombatFeedbackType.new()
+	root.add_child(feedback)
+	(fixture["camera"] as Camera3D).size = CameraRig.DEFAULT_ORTHO_SIZE
+	feedback.setup(combat, fixture["camera"] as Camera3D)
+	feedback.bind_runtime(coordinator.get_runtime())
+	var outcome_count_before := _projectile_outcomes.size()
+	var hit_position := actor.get_world_bounds().get_center()
+	_expect(combat.try_commit_player_projectile_hit(actor.runtime_id, stone_profile, &"bow", hit_position, Vector3.FORWARD), "stone arrow hit did not commit")
+	_expect(_projectile_outcomes.size() == outcome_count_before + 1, "stone arrow hit did not emit one outcome")
+	var expected_stone_damage := stone_profile.calculate_damage(10.0, coordinator.get_runtime().get_stat_value(actor.runtime_id, &"defense"))
+	var stone_outcome: ProjectileOutcome = _projectile_outcomes.back()
+	_expect(is_equal_approx(stone_outcome.applied_damage, expected_stone_damage) and stone_outcome.source_item_id == &"bow", "stone arrow damage outcome is incorrect")
+	_expect(stone_outcome.damage_response == DamageAffinityDefinition.Response.NEUTRAL, "stone arrow did not use neutral pierce affinity")
+	_expect(is_equal_approx(actor.knockback_velocity.length(), 2.0), "stone arrow did not apply two knockback")
+	_expect(feedback._damage_numbers[0].is_active() and feedback._damage_numbers[0].text == str(roundi(expected_stone_damage)), "stone arrow damage did not reach enemy feedback")
+	_expect(is_equal_approx((fixture["item_proficiency"] as ItemProficiency).get_experience(&"bow"), expected_stone_damage), "stone arrow damage did not award bow proficiency")
+	actor.knockback_velocity = Vector3.ZERO
+	outcome_count_before = _projectile_outcomes.size()
+	_expect(combat.try_commit_player_projectile_hit(actor.runtime_id, copper_profile, &"bow", hit_position, Vector3.FORWARD), "copper arrow hit did not commit")
+	_expect(_projectile_outcomes.size() == outcome_count_before + 1, "copper arrow hit did not emit one outcome")
+	var expected_copper_damage := copper_profile.calculate_damage(10.0, coordinator.get_runtime().get_stat_value(actor.runtime_id, &"defense"))
+	var copper_outcome: ProjectileOutcome = _projectile_outcomes.back()
+	_expect(is_equal_approx(copper_outcome.applied_damage, expected_copper_damage) and copper_outcome.source_item_id == &"bow", "copper arrow damage outcome is incorrect")
+	_expect(copper_outcome.applied_damage > stone_outcome.applied_damage, "copper arrow did not deal more damage than stone arrow")
+	_expect(is_equal_approx((fixture["item_proficiency"] as ItemProficiency).get_experience(&"bow"), expected_stone_damage + expected_copper_damage), "copper arrow damage did not award bow proficiency")
+	feedback.unbind_runtime()
+	feedback.queue_free()
+	await process_frame
 	await _cleanup(combat, coordinator, player, fixture["camera"] as Camera3D)
 
 func _test_damage_affinities(world: VoxelWorld, sword_profile: MeleeAttackProfile, hammer_profile: MeleeAttackProfile, zombie_definition: EntityDefinition, skeleton_definition: EntityDefinition) -> void:
