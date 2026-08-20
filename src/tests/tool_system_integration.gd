@@ -29,6 +29,7 @@ func _position_ready(_position: Vector3) -> bool:
 	return true
 
 func _run():
+	root.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
 	var block_catalog := load("res://blocks/block_catalog.tres") as BlockCatalog
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
 	_expect(block_catalog.validate(), "block catalog invalid")
