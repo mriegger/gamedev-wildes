@@ -251,7 +251,8 @@ func _run():
 	_expect(is_equal_approx(bow_action.ammunition[0].projectile_profile.base_damage, 10.0) and is_equal_approx(bow_action.ammunition[1].projectile_profile.base_damage, 15.0), "arrow damage values are incorrect")
 	_expect(bow_action.ammunition[0].projectile_profile.damage_type.id == &"pierce" and bow_action.ammunition[1].projectile_profile.damage_type == bow_action.ammunition[0].projectile_profile.damage_type, "arrows do not use canonical pierce damage")
 	_expect(is_equal_approx(bow_action.ammunition[0].projectile_profile.knockback_speed, 2.0) and is_equal_approx(bow_action.ammunition[1].projectile_profile.knockback_speed, 2.0), "arrow knockback values are incorrect")
-	_expect(is_equal_approx(bow_action.ammunition[0].projectile_profile.gravity, 78.4) and is_equal_approx(bow_action.ammunition[1].projectile_profile.gravity, 78.4), "arrow gravity is misconfigured")
+	_expect(is_equal_approx(bow_action.ammunition[0].projectile_profile.gravity, 94.08) and is_equal_approx(bow_action.ammunition[1].projectile_profile.gravity, 94.08), "arrow gravity is misconfigured")
+	_expect(is_equal_approx(ProjectileAttackProfile.new().gravity, 78.4), "bow gravity changed the generic projectile default")
 	_expect(bow.rarity != null and bow.proficiency != null and item_catalog.is_combat_item(&"bow"), "bow is not registered with weapon progression")
 	var invalid_arrow_root := Node3D.new()
 	var invalid_arrow_scene := PackedScene.new()
@@ -275,7 +276,7 @@ func _run():
 	Engine.print_error_messages = print_error_messages
 	_expect(not invalid_bow_action_valid, "bow draw accepted an arrow without a nock contract")
 	_expect(not empty_bow_action_valid, "bow draw accepted no ammunition")
-	var reachable_target := Vector3(0.0, 0.0, 10.0)
+	var reachable_target := Vector3(0.0, 0.0, 7.0)
 	var reachable_transform := bow_action.get_projectile_release_transform(Vector3.ZERO, Vector3.BACK, reachable_target, 0.5, bow_action.ammunition[0].projectile_profile.gravity)
 	var reachable_velocity := reachable_transform.basis.y * bow_action.get_launch_speed(0.5)
 	var reachable_horizontal_distance := Vector2(reachable_target.x - reachable_transform.origin.x, reachable_target.z - reachable_transform.origin.z).length()
