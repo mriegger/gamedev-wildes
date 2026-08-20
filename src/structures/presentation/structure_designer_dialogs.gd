@@ -112,7 +112,7 @@ func _on_format_selected(index: int) -> void:
 	if format == StructureDraft.Format.GENERIC_STRUCTURE:
 		_set_dimensions(StructureDefinition.DEFAULT_SIZE, StructureDefinition.MAX_EXTENT)
 	else:
-		_set_dimensions(StructureDraft.DEFAULT_LEVEL_MODULE_SIZE, LevelDefinition.HARD_MAX_EXTENT)
+		_set_dimensions(StructureDraft.DEFAULT_LEVEL_MODULE_SIZE, LevelGeometryLimits.HARD_MAX_EXTENT)
 
 func _show(dialog: Window) -> void:
 	_active = dialog

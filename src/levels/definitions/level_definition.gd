@@ -2,7 +2,6 @@ extends Resource
 class_name LevelDefinition
 
 const FORMAT_VERSION: int = 3
-const HARD_MAX_EXTENT: Vector3i = Vector3i(96, 16, 96)
 const HARD_MAX_EXPLORED_STATES: int = 10000
 const HARD_MAX_MODULE_COUNT: int = 64
 
@@ -12,7 +11,7 @@ const HARD_MAX_MODULE_COUNT: int = 64
 @export var start_module_id: StringName
 @export var hallway_module_ids: Array[StringName] = []
 @export var room_requirements: Array[LevelRoomRequirement] = []
-@export var maximum_extent: Vector3i = HARD_MAX_EXTENT
+@export var maximum_extent: Vector3i = LevelGeometryLimits.HARD_MAX_EXTENT
 @export_range(1, HARD_MAX_EXPLORED_STATES) var maximum_explored_states: int = HARD_MAX_EXPLORED_STATES
 
 func validate() -> bool:
@@ -35,7 +34,7 @@ func validate() -> bool:
 	if room_requirements.is_empty():
 		push_error("[LevelDefinition] Room requirements are required for %s" % source)
 		valid = false
-	if maximum_extent.x <= 0 or maximum_extent.y <= 0 or maximum_extent.z <= 0 or maximum_extent.x > HARD_MAX_EXTENT.x or maximum_extent.y > HARD_MAX_EXTENT.y or maximum_extent.z > HARD_MAX_EXTENT.z:
+	if maximum_extent.x <= 0 or maximum_extent.y <= 0 or maximum_extent.z <= 0 or maximum_extent.x > LevelGeometryLimits.HARD_MAX_EXTENT.x or maximum_extent.y > LevelGeometryLimits.HARD_MAX_EXTENT.y or maximum_extent.z > LevelGeometryLimits.HARD_MAX_EXTENT.z:
 		push_error("[LevelDefinition] Invalid maximum extent for %s" % source)
 		valid = false
 	if maximum_explored_states <= 0 or maximum_explored_states > HARD_MAX_EXPLORED_STATES:

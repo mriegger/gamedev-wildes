@@ -135,7 +135,7 @@ func _init() -> void:
 	missing_hallways.hallway_module_ids.clear()
 	var missing_hallways_catalog := _catalog_with(source_catalog, missing_hallways)
 	var oversized_module := source_catalog.get_module(&"stone_entry_path").duplicate(true) as LevelModuleDefinition
-	oversized_module.size = Vector3i(LevelDefinition.HARD_MAX_EXTENT.x + 1, oversized_module.size.y, oversized_module.size.z)
+	oversized_module.size = Vector3i(LevelGeometryLimits.HARD_MAX_EXTENT.x + 1, oversized_module.size.y, oversized_module.size.z)
 	var one_cell_socket := source_catalog.get_module(&"stone_hallway").duplicate(true) as LevelModuleDefinition
 	var one_cell_upper := one_cell_socket.sockets[0].cell + Vector3i.UP
 	one_cell_socket.cells[StructureCell.index_of(one_cell_upper, one_cell_socket.size)] = BlockId.Type.STONE

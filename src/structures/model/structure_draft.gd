@@ -90,7 +90,7 @@ static func restore_level_module(definition: LevelModuleDefinition, source_path:
 static func is_valid_level_module_size(value: Vector3i) -> bool:
 	if value.x <= 0 or value.y <= 0 or value.z <= 0:
 		return false
-	return value.x <= LevelDefinition.HARD_MAX_EXTENT.x and value.y <= LevelDefinition.HARD_MAX_EXTENT.y and value.z <= LevelDefinition.HARD_MAX_EXTENT.z
+	return value.x <= LevelGeometryLimits.HARD_MAX_EXTENT.x and value.y <= LevelGeometryLimits.HARD_MAX_EXTENT.y and value.z <= LevelGeometryLimits.HARD_MAX_EXTENT.z
 
 func get_format() -> Format:
 	return _format

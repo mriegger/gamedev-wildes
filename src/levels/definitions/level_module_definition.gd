@@ -119,7 +119,7 @@ func validate() -> bool:
 		push_error("[LevelModuleDefinition] Invalid size for %s" % source)
 		valid = false
 		return valid
-	if size.x > LevelDefinition.HARD_MAX_EXTENT.x or size.y > LevelDefinition.HARD_MAX_EXTENT.y or size.z > LevelDefinition.HARD_MAX_EXTENT.z:
+	if size.x > LevelGeometryLimits.HARD_MAX_EXTENT.x or size.y > LevelGeometryLimits.HARD_MAX_EXTENT.y or size.z > LevelGeometryLimits.HARD_MAX_EXTENT.z:
 		push_error("[LevelModuleDefinition] Size exceeds the hard level extent for %s" % source)
 		valid = false
 		return valid

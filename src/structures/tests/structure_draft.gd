@@ -659,7 +659,7 @@ func _test_bounded_enemy_spawn_zone_invalidation() -> void:
 	var definition := LevelModuleDefinition.new()
 	definition.format_version = LevelModuleDefinition.CURRENT_FORMAT_VERSION
 	definition.module_id = &"maximum_spawn_zone_module"
-	definition.size = LevelDefinition.HARD_MAX_EXTENT
+	definition.size = LevelGeometryLimits.HARD_MAX_EXTENT
 	definition.cells.resize(definition.size.x * definition.size.y * definition.size.z)
 	definition.cells.fill(StructureCell.AIR)
 	for z in definition.size.z:
