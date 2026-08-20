@@ -32,12 +32,20 @@ var _blocked_flower_pos := Vector3i(-3, 0, 0)
 var _melee_attack_directions: Array[int] = []
 var _melee_attack_facings: Array[Vector3] = []
 var _soil_tilled_count: int = 0
+var _container_open_count: int = 0
+var _crafting_station_open_count: int = 0
 
 func _init():
 	call_deferred("_run")
 
 func _position_ready(_position: Vector3) -> bool:
 	return true
+
+func _on_container_open_requested(_position: Vector3i, _definition: ContainerBlockDefinition) -> void:
+	_container_open_count += 1
+
+func _on_crafting_station_open_requested(_position: Vector3i, _definition: CraftingStationBlockDefinition) -> void:
+	_crafting_station_open_count += 1
 
 func _run():
 	root.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
@@ -632,6 +640,8 @@ func _run():
 	_arrow_trajectory.setup(_interactor, _projectiles)
 	_arrow_trajectory.set_process(false)
 	_player.bind_space(_voxel_world, root, Vector3.ZERO, _voxel_world)
+	_interactor.container_open_requested.connect(_on_container_open_requested)
+	_interactor.crafting_station_open_requested.connect(_on_crafting_station_open_requested)
 	var actual_entity_runtime := _interactor.entity_runtime
 	var aim_runtime := BowAimEntityRuntime.new()
 	_interactor.bind_entity_runtime(aim_runtime)
@@ -691,6 +701,29 @@ func _run():
 	var bow_source := _find_inventory_item(&"bow")
 	_expect(bow_source >= 0 and (bow_source == 0 or _inventory_loadout.assign_slot_to_hotbar(bow_source, 0)), "bow could not be moved to the selected slot")
 	_expect(_interactor.get_selected_primary_action() == bow_action and _player.held_item_view.held_node is BowHeldView, "selected bow did not expose its draw action in the right hand")
+	var arrows_before_interactions := _inventory.get_inventory_item_count(&"stone_arrow")
+	_interactor.target_has = true
+	_interactor.can_interact_target = true
+	_interactor.target_block = Vector3i(4, 20, 0)
+	_interactor.target_container = block_catalog.get_definition(BlockId.Type.CHEST).container
+	_input_buffer.primary_use_just = true
+	_input_buffer.primary_use_pressed = true
+	_interactor._handle_item_actions(0.0)
+	_expect(_container_open_count == 1 and not _interactor.is_drawing_bow() and _projectiles._projectiles.is_empty(), "bow click did not prioritize the targeted chest")
+	_input_buffer.primary_use_pressed = false
+	_interactor._handle_item_actions(0.0)
+	_interactor.target_container = null
+	_interactor.target_crafting_station = block_catalog.get_definition(BlockId.Type.ANVIL).crafting_station
+	_input_buffer.primary_use_just = true
+	_input_buffer.primary_use_pressed = true
+	_interactor._handle_item_actions(0.0)
+	_expect(_crafting_station_open_count == 1 and not _interactor.is_drawing_bow() and _projectiles._projectiles.is_empty(), "bow click did not prioritize the targeted crafting station")
+	_expect(_inventory.get_inventory_item_count(&"stone_arrow") == arrows_before_interactions, "interacting while holding a bow consumed ammunition")
+	_input_buffer.primary_use_pressed = false
+	_interactor._handle_item_actions(0.0)
+	_interactor.target_has = false
+	_interactor.can_interact_target = false
+	_interactor.target_crafting_station = null
 	_input_buffer.primary_use_just = true
 	_input_buffer.primary_use_pressed = true
 	_interactor._handle_item_actions(0.0)

@@ -328,6 +328,14 @@ func _handle_item_actions(delta):
 	var selected_melee := selected_primary as MeleeAttackActionDefinition
 	var selected_tilling := selected_primary as TillingActionDefinition
 	var selected_bow := selected_primary as BowDrawActionDefinition
+	if primary_use_just and selected_bow != null:
+		var opened_interactable := _try_open_target_container()
+		if not opened_interactable:
+			opened_interactable = _try_open_target_crafting_station()
+		if opened_interactable:
+			primary_use_just = false
+			primary_use_pressed = false
+			_reset_bow_draw()
 	if (
 		selected_bow == null
 		or bow_draw_action != null and bow_draw_action != selected_bow
