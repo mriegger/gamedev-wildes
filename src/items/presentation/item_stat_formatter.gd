@@ -39,7 +39,10 @@ static func get_bow_stat_lines(item_definition: ItemDefinition) -> Array[String]
 	var bow_action := item_definition.primary_action as BowDrawActionDefinition
 	if bow_action == null:
 		return []
-	return ["Draw Time: %s" % highlight("%ss" % format_number(bow_action.draw_seconds))]
+	return [
+		"Draw Time: %s" % highlight("%ss" % format_number(bow_action.draw_seconds)),
+		"Sneak Damage: %s" % highlight("%sx" % format_number(MeleeCombatCoordinator.SNEAK_ATTACK_MULTIPLIER)),
+	]
 
 static func get_arrow_stat_lines(item_definition: ItemDefinition) -> Array[String]:
 	assert(item_definition != null)

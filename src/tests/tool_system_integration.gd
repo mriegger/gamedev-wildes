@@ -256,7 +256,7 @@ func _run():
 	_expect(is_equal_approx(bow_action.get_damage_multiplier(0.0), 0.4) and is_equal_approx(bow_action.get_damage_multiplier(0.5), 0.7) and is_equal_approx(bow_action.get_damage_multiplier(1.0), 1.0), "bow damage does not scale from forty to one hundred percent with draw")
 	_expect(is_equal_approx(bow_action.maximum_launch_angle_degrees, 45.0), "bow maximum launch angle is not forty-five degrees")
 	_expect(bow_action.ammunition.size() == 2 and bow_action.ammunition[0] == stone_arrow and bow_action.ammunition[1] == copper_arrow, "bow ammunition priority is incorrect")
-	_expect(is_equal_approx(bow_action.ammunition[0].projectile_profile.base_damage, 10.0) and is_equal_approx(bow_action.ammunition[1].projectile_profile.base_damage, 15.0), "arrow damage values are incorrect")
+	_expect(is_equal_approx(bow_action.ammunition[0].projectile_profile.base_damage, 8.0) and is_equal_approx(bow_action.ammunition[1].projectile_profile.base_damage, 12.0), "arrow damage values are incorrect")
 	_expect(bow_action.ammunition[0].projectile_profile.damage_type.id == &"pierce" and bow_action.ammunition[1].projectile_profile.damage_type == bow_action.ammunition[0].projectile_profile.damage_type, "arrows do not use canonical pierce damage")
 	_expect(is_equal_approx(bow_action.ammunition[0].projectile_profile.knockback_speed, 2.0) and is_equal_approx(bow_action.ammunition[1].projectile_profile.knockback_speed, 2.0), "arrow knockback values are incorrect")
 	_expect(is_equal_approx(bow_action.ammunition[0].projectile_profile.gravity, 94.08) and is_equal_approx(bow_action.ammunition[1].projectile_profile.gravity, 94.08), "arrow gravity is misconfigured")
@@ -264,13 +264,14 @@ func _run():
 	_expect(bow.rarity != null and bow.proficiency != null and item_catalog.is_combat_item(&"bow"), "bow is not registered with weapon progression")
 	_expect(ItemStatFormatter.get_item_stat_lines(bow) == [
 		"Draw Time: [b][color=#%s]1.5s[/color][/b]" % highlight_color,
+		"Sneak Damage: [b][color=#%s]2x[/color][/b]" % highlight_color,
 	], "bow presentation stats are incorrect")
 	_expect(ItemStatFormatter.get_item_stat_lines(stone_arrow) == [
-		"Pierce: [b][color=#%s]10[/color][/b]" % highlight_color,
+		"Pierce: [b][color=#%s]8[/color][/b]" % highlight_color,
 		"Knockback: [b][color=#%s]2[/color][/b]" % highlight_color,
 	], "stone arrow presentation stats are incorrect")
 	_expect(ItemStatFormatter.get_item_stat_lines(copper_arrow) == [
-		"Pierce: [b][color=#%s]15[/color][/b]" % highlight_color,
+		"Pierce: [b][color=#%s]12[/color][/b]" % highlight_color,
 		"Knockback: [b][color=#%s]2[/color][/b]" % highlight_color,
 	], "copper arrow presentation stats are incorrect")
 	var invalid_arrow_root := Node3D.new()

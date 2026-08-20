@@ -187,9 +187,9 @@ func _check_open_state() -> void:
 	var stats_heading := _hud.crafting_panel.get_node("Margin/Content/Body/Details/StatsHeading") as Label
 	var stats_label := _hud.crafting_panel.get_node("Margin/Content/Body/Details/Stats") as RichTextLabel
 	_hud.crafting_panel.select_recipe(&"bow")
-	_expect(stats_heading.visible and stats_label.visible and stats_label.get_parsed_text().contains("Draw Time: 1.5s"), "bow recipe did not display its draw time")
+	_expect(stats_heading.visible and stats_label.visible and stats_label.get_parsed_text().contains("Draw Time: 1.5s") and stats_label.get_parsed_text().contains("Sneak Damage: 2x"), "bow recipe did not display its draw and sneak stats")
 	_hud.crafting_panel.select_recipe(&"stone_arrow_bundle")
-	_expect(stats_heading.visible and stats_label.visible and stats_label.get_parsed_text().contains("Pierce: 10") and stats_label.get_parsed_text().contains("Knockback: 2"), "stone arrow recipe did not display its combat stats")
+	_expect(stats_heading.visible and stats_label.visible and stats_label.get_parsed_text().contains("Pierce: 8") and stats_label.get_parsed_text().contains("Knockback: 2"), "stone arrow recipe did not display its combat stats")
 	_hud.crafting_panel.select_recipe(&"torch_bundle")
 	var ingredient_list := _hud.crafting_panel.get_node("Margin/Content/Body/Details/IngredientList") as VBoxContainer
 	_expect(ingredient_list.get_child_count() == 2, "selected recipe ingredients were not displayed")
