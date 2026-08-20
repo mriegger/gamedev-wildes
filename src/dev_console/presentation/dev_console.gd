@@ -29,6 +29,7 @@ func setup(
 	exit_structure: Callable,
 	set_ripple_strength: Callable,
 	spawn_birds: Callable,
+	clear_current_dungeon_room: Callable,
 ) -> void:
 	assert(inventory_model != null and inventory_loadout != null and actor_stats != null and pumpkin_patch != null)
 	assert(_command_processor == null)
@@ -44,6 +45,7 @@ func setup(
 		exit_structure,
 		set_ripple_strength,
 		spawn_birds,
+		clear_current_dungeon_room,
 	)
 	set_process_input(true)
 

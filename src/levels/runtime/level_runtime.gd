@@ -189,6 +189,12 @@ func get_entity_runtime() -> EntityRuntime:
 func get_chest_coordinator() -> DungeonChestCoordinator:
 	return _chest_coordinator
 
+func try_request_current_encounter_clear() -> bool:
+	return (
+		_encounter_coordinator != null
+		and _encounter_coordinator.try_request_current_encounter_clear()
+	)
+
 func set_player_context(player: PlayerMotor, camera: Camera3D) -> void:
 	assert(player != null and camera != null)
 	_torch_renderer.set_player_ref(player)

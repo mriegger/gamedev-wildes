@@ -17,6 +17,7 @@ var _level_seed: int
 var _spawn_cells_by_room: Dictionary = {}
 var _capacity_by_room: Dictionary = {}
 var _refill_not_before_physics_frame_by_room: Dictionary = {}
+var _clear_requested_room_id: int = -1
 
 func setup(
 	topology: LevelEncounterTopology,
@@ -61,9 +62,29 @@ func tick() -> void:
 	for active_room_id in _state.get_active_room_ids():
 		if physics_frame >= int(_refill_not_before_physics_frame_by_room.get(active_room_id, 0)):
 			_try_refill(active_room_id)
+	_apply_clear_request()
 	var room_id := _topology.find_room_containing_body(_player.global_position, _player.player_width, _player.player_height)
 	if room_id >= 0 and _state.can_activate(room_id):
 		_try_activate(room_id)
+
+func try_request_current_encounter_clear() -> bool:
+	if (
+		_player == null
+		or _player.is_defeated()
+		or _entity_runtime == null
+		or _entity_runtime.is_suspended()
+		or _clear_requested_room_id >= 0
+	):
+		return false
+	var room_id := _topology.find_room_containing_body(
+		_player.global_position,
+		_player.player_width,
+		_player.player_height,
+	)
+	if not _state.get_active_room_ids().has(room_id):
+		return false
+	_clear_requested_room_id = room_id
+	return true
 
 func shutdown() -> void:
 	if _entity_runtime != null and _entity_runtime.entity_defeated.is_connected(_on_entity_defeated):
@@ -77,6 +98,29 @@ func shutdown() -> void:
 	_spawn_cells_by_room.clear()
 	_capacity_by_room.clear()
 	_refill_not_before_physics_frame_by_room.clear()
+	_clear_requested_room_id = -1
+
+func _apply_clear_request() -> void:
+	if _clear_requested_room_id < 0:
+		return
+	var runtime_ids := _state.get_active_runtime_ids(_clear_requested_room_id)
+	var damage_amounts: Array[float] = []
+	for runtime_id in runtime_ids:
+		var actor := _entity_runtime.get_actor(runtime_id)
+		if actor == null or actor.definition == null or not actor.definition.combat_targetable:
+			_clear_requested_room_id = -1
+			return
+		var current_hp := _entity_runtime.get_current_hp(runtime_id)
+		if not is_finite(current_hp) or current_hp <= 0.0:
+			_clear_requested_room_id = -1
+			return
+		damage_amounts.append(current_hp)
+	for index in runtime_ids.size():
+		var result := _entity_runtime.try_apply_damage(
+			runtime_ids[index],
+			damage_amounts[index],
+		)
+		assert(result != null and result.defeated)
 
 func _try_activate(room_id: int) -> void:
 	var capacity := int(_capacity_by_room[room_id])
@@ -183,6 +227,8 @@ func _apply_transition(transition: LevelEncounterTransition) -> void:
 		seals_opened.emit(opened_seal_ids)
 	if transition.room_cleared:
 		_refill_not_before_physics_frame_by_room.erase(transition.room_id)
+		if transition.room_id == _clear_requested_room_id:
+			_clear_requested_room_id = -1
 		room_cleared.emit(transition.room_id)
 	encounter_summary_changed.emit(transition.summary)
 

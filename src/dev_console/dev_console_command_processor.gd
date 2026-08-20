@@ -24,6 +24,7 @@ var _export_structure: Callable
 var _exit_structure: Callable
 var _set_ripple_strength: Callable
 var _spawn_birds: Callable
+var _clear_current_dungeon_room: Callable
 
 func setup(
 	p_inventory_model: InventoryModel,
@@ -36,6 +37,7 @@ func setup(
 	p_exit_structure: Callable,
 	p_set_ripple_strength: Callable,
 	p_spawn_birds: Callable,
+	p_clear_current_dungeon_room: Callable,
 ) -> void:
 	assert(p_inventory_model != null and p_inventory_loadout != null and p_actor_stats != null and p_pumpkin_patch != null)
 	assert(p_inventory_loadout.inventory_model == p_inventory_model)
@@ -47,6 +49,7 @@ func setup(
 	assert(p_exit_structure.is_valid())
 	assert(p_set_ripple_strength.is_valid())
 	assert(p_spawn_birds.is_valid())
+	assert(p_clear_current_dungeon_room.is_valid())
 	inventory_model = p_inventory_model
 	inventory_loadout = p_inventory_loadout
 	actor_stats = p_actor_stats
@@ -57,6 +60,7 @@ func setup(
 	_exit_structure = p_exit_structure
 	_set_ripple_strength = p_set_ripple_strength
 	_spawn_birds = p_spawn_birds
+	_clear_current_dungeon_room = p_clear_current_dungeon_room
 
 func execute(command_line: String) -> ExecutionResult:
 	if inventory_model == null or inventory_loadout == null or actor_stats == null or pumpkin_patch == null:
@@ -150,20 +154,24 @@ func _execute_set(tokens: PackedStringArray) -> ExecutionResult:
 	return ExecutionResult.KEEP_OPEN if bool(_set_ripple_strength.call(strength)) else ExecutionResult.REJECTED
 
 func _execute_dev(tokens: PackedStringArray) -> ExecutionResult:
-	if tokens.size() != 3 or tokens[1].to_lower() != "structure":
+	if tokens.size() != 3:
 		return ExecutionResult.REJECTED
+	var subject := tokens[1].to_lower()
 	var action := tokens[2].to_lower()
-	if action == "new":
-		return _execute_structure_action(_new_structure)
-	if action == "import":
-		return _execute_structure_action(_import_structure)
-	if action == "export":
-		return _execute_structure_action(_export_structure)
-	if action == "exit":
-		return _execute_structure_action(_exit_structure)
+	if subject == "structure":
+		if action == "new":
+			return _execute_close_action(_new_structure)
+		if action == "import":
+			return _execute_close_action(_import_structure)
+		if action == "export":
+			return _execute_close_action(_export_structure)
+		if action == "exit":
+			return _execute_close_action(_exit_structure)
+	if subject == "dungeon" and action == "clear":
+		return _execute_close_action(_clear_current_dungeon_room)
 	return ExecutionResult.REJECTED
 
-func _execute_structure_action(action: Callable) -> ExecutionResult:
+func _execute_close_action(action: Callable) -> ExecutionResult:
 	return ExecutionResult.CLOSE if bool(action.call()) else ExecutionResult.REJECTED
 
 func _parse_give_xp_amount(token: String) -> int:

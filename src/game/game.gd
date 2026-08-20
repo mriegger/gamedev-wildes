@@ -207,6 +207,7 @@ func _ready():
 		Callable(self, "_request_exit_structure"),
 		Callable(world, "try_set_water_ripple_strength"),
 		Callable(self, "_spawn_debug_birds"),
+		Callable(self, "_request_clear_current_dungeon_room"),
 	)
 	if not _restore_chest_state(chest_block):
 		_fail_session_start("This world could not be loaded because its saved chest state is invalid or references unavailable content. The save was not changed.")
@@ -885,6 +886,15 @@ func _request_exit_structure() -> bool:
 
 func _spawn_debug_birds(variant_id: StringName, count: int) -> bool:
 	return world_entity_coordinator.try_spawn_debug_birds(player.global_position, variant_id, count)
+
+func _request_clear_current_dungeon_room() -> bool:
+	if not _session_active or _level_transitioning or _structure_transitioning or _structure_designer_runtime != null:
+		return false
+	if player.is_defeated() or player.stats.is_dead():
+		return false
+	if _location_state == null or not _location_state.is_in_level() or _level_runtime == null:
+		return false
+	return _level_runtime.try_request_current_encounter_clear()
 
 func _on_structure_designer_entry_requested(draft: StructureDraft) -> void:
 	assert(_structure_designer_runtime == null)

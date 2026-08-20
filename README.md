@@ -228,7 +228,10 @@ normal production source. `sethealth <number>` sets current health to a non-nega
 value, clamping values above the player's current maximum. Item IDs and display names are accepted;
 material-qualified item IDs include `iron_pickaxe`, `copper_pickaxe`, and `copper_sword`. Structure
 construction uses `dev structure new`, `dev structure import`, `dev structure export`, and
-`dev structure exit`. Press `/` again or `Esc` to close the console without opening the pause menu.
+`dev structure exit`. While fully inside an active dungeon encounter, `dev dungeon clear` defeats
+every enemy assigned to that room across all pending waves, opens the room through its normal clear
+transition, and closes the console. Debug clearing awards no combat experience, item proficiency, or
+dungeon enemy loot. Press `/` again or `Esc` to close the console without opening the pause menu.
 `spawn birds [count]` creates a mixed
 batch of crows, redbirds, ducks, and bluebirds near the player, while
 `spawn bird <crow|redbird|duck|bluebird> [count]` creates a specific variant. Bird counts default

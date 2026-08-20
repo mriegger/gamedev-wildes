@@ -4,6 +4,8 @@ var _frame: int = 0
 var _phase: int = 0
 var _errors: Array[String] = []
 var _console: DevConsole
+var _dungeon_clear_accepted: bool = false
+var _dungeon_clear_call_count: int = 0
 var _inventory: InventoryModel
 var _structure_calls: Array[StringName] = []
 var _structure_commands_accepted: bool = false
@@ -36,6 +38,7 @@ func _process(_delta: float) -> bool:
 			Callable(self, "_handle_structure_command").bind(&"exit"),
 			Callable(self, "_handle_ripple_strength"),
 			Callable(self, "_handle_bird_spawn"),
+			Callable(self, "_handle_dungeon_clear"),
 		)
 		_check_closed_layout()
 		_check_scene_ownership()
@@ -163,9 +166,35 @@ func _process(_delta: float) -> bool:
 		for _index in range(DevConsole.MAX_COMMAND_HISTORY_ENTRIES):
 			_send_history_key(KEY_DOWN)
 		_expect(command_input.text == "bounded draft", "bounded history did not restore the current draft")
-		_send_slash()
+		command_input.text = "dev dungeon clear"
+		command_input.text_submitted.emit(command_input.text)
 		_phase = 8
 	elif _phase == 8 and _frame == 18:
+		_expect(_console.is_open(), "rejected dungeon clear command closed the developer console")
+		_expect(_dungeon_clear_call_count == 1, "rejected dungeon clear command did not call its handler")
+		_dungeon_clear_accepted = true
+		var command_input := _console.get_command_input()
+		command_input.text = "dev dungeon clear"
+		command_input.text_submitted.emit(command_input.text)
+		_phase = 9
+	elif _phase == 9 and _frame == 20:
+		_expect(not _console.is_open(), "accepted dungeon clear command kept the developer console open")
+		_expect(_dungeon_clear_call_count == 2, "accepted dungeon clear command did not call its handler")
+		_send_slash()
+		_phase = 10
+	elif _phase == 10 and _frame == 22:
+		_expect(_console.is_open(), "slash did not reopen the developer console after dungeon clear")
+		_send_escape()
+		_phase = 11
+	elif _phase == 11 and _frame == 24:
+		_expect(not _console.is_open(), "escape did not close the developer console")
+		_send_slash()
+		_phase = 12
+	elif _phase == 12 and _frame == 26:
+		_expect(_console.is_open(), "slash did not reopen the developer console after escape")
+		_send_slash()
+		_phase = 13
+	elif _phase == 13 and _frame == 28:
 		_expect(not _console.is_open(), "slash did not close the developer console")
 		_finish()
 	return false
@@ -241,6 +270,10 @@ func _handle_ripple_strength(strength: float) -> bool:
 
 func _handle_bird_spawn(_variant_id: StringName, _count: int) -> bool:
 	return true
+
+func _handle_dungeon_clear() -> bool:
+	_dungeon_clear_call_count += 1
+	return _dungeon_clear_accepted
 
 func _finish() -> void:
 	if _errors.is_empty():

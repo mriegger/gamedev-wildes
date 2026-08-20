@@ -15,6 +15,8 @@ var _structure_calls: Array[StringName] = []
 var _structure_commands_accepted: bool = true
 var _bird_spawn_calls: Array[Dictionary] = []
 var _bird_commands_accepted: bool = true
+var _dungeon_clear_call_count: int = 0
+var _dungeon_clear_accepted: bool = true
 
 func _init() -> void:
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
@@ -107,6 +109,23 @@ func _init() -> void:
 	]:
 		_expect_result(processor.execute(invalid_command), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "invalid structure command was accepted: %s" % invalid_command)
 	_expect(_structure_calls.size() == structure_call_count, "invalid structure command called a handler")
+	_dungeon_clear_call_count = 0
+	_dungeon_clear_accepted = true
+	_expect_result(processor.execute("DeV DuNgEoN ClEaR"), DevConsoleCommandProcessor.ExecutionResult.CLOSE, "dungeon clear command did not close")
+	_expect(_dungeon_clear_call_count == 1, "dungeon clear command did not call its injected handler")
+	_dungeon_clear_accepted = false
+	_expect_result(processor.execute("dev dungeon clear"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "rejected dungeon clear handler closed the console")
+	_expect(_dungeon_clear_call_count == 2, "rejected dungeon clear command did not call its handler")
+	var dungeon_clear_call_count := _dungeon_clear_call_count
+	for invalid_command in [
+		"dev dungeon",
+		"dev dungeon clear extra",
+		"dev dungeons clear",
+		"dev dungeon cleared",
+		"dungeon clear",
+	]:
+		_expect_result(processor.execute(invalid_command), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "invalid dungeon clear command was accepted: %s" % invalid_command)
+	_expect(_dungeon_clear_call_count == dungeon_clear_call_count, "invalid dungeon clear command called its handler")
 
 	_expect_result(processor.execute("give_xp 99"), DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN, "give_xp command failed")
 	_expect(stats.get_level() == 1 and stats.get_experience() == 99, "give_xp did not add raw experience")
@@ -241,6 +260,7 @@ func _setup_processor(processor: DevConsoleCommandProcessor, inventory: Inventor
 		Callable(self, "_handle_structure_command").bind(&"exit"),
 		Callable(self, "_handle_ripple_strength"),
 		Callable(self, "_handle_bird_spawn"),
+		Callable(self, "_handle_dungeon_clear"),
 	)
 
 func _new_stats() -> ActorStats:
@@ -257,6 +277,10 @@ func _handle_ripple_strength(strength: float) -> bool:
 func _handle_bird_spawn(variant_id: StringName, count: int) -> bool:
 	_bird_spawn_calls.append({"variant_id": variant_id, "count": count})
 	return _bird_commands_accepted and (variant_id.is_empty() or BirdActor.color_variant_index_for_id(variant_id) >= 0)
+
+func _handle_dungeon_clear() -> bool:
+	_dungeon_clear_call_count += 1
+	return _dungeon_clear_accepted
 
 func _expect_result(actual: DevConsoleCommandProcessor.ExecutionResult, expected: DevConsoleCommandProcessor.ExecutionResult, message: String) -> void:
 	_expect(actual == expected, message)

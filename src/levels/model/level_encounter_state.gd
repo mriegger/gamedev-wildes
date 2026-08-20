@@ -45,6 +45,16 @@ func get_active_room_ids() -> Array[int]:
 			active_room_ids.append(room_id)
 	return active_room_ids
 
+func get_active_runtime_ids(room_id: int) -> Array[int]:
+	var runtime_ids: Array[int] = []
+	var room := _rooms.get(room_id) as RoomProgress
+	if room == null or room.status != RoomStatus.ACTIVE:
+		return runtime_ids
+	for runtime_id in room.active_entity_ids:
+		runtime_ids.append(int(runtime_id))
+	runtime_ids.sort()
+	return runtime_ids
+
 func get_discovered_room_ids() -> Array[int]:
 	var discovered_room_ids: Array[int] = []
 	for room_id in _discovered_room_ids:

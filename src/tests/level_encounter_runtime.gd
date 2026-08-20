@@ -308,9 +308,11 @@ func _run() -> void:
 	var second_room_id := _find_highest_capacity_ready_root(topology, state, coordinator._capacity_by_room, room_id)
 	_expect(second_room_id >= 0, "generated topology has no second ready root for concurrent waves")
 	var second_progress: LevelEncounterState.RoomProgress
+	var second_room_position: Variant = null
 	if second_room_id >= 0:
 		var second_room := topology.get_room(second_room_id)
-		player.global_position = Vector3(second_room.spawn_cells[0]) + Vector3(0.5, 0.0, 0.5)
+		second_room_position = Vector3(second_room.spawn_cells[0]) + Vector3(0.5, 0.0, 0.5)
+		player.global_position = second_room_position as Vector3
 		coordinator.tick()
 		second_progress = _room_progress(state, second_room_id)
 		var expected_active_rooms: Array[int] = [room_id, second_room_id]
@@ -428,19 +430,60 @@ func _run() -> void:
 		defeat_driver.queue_free()
 		tick_driver.queue_free()
 
-	var defeat_iterations := 0
+	var runtime_api := LevelRuntime.new()
+	_expect(not runtime_api.try_request_current_encounter_clear(), "unconfigured level runtime accepted a room clear")
+	runtime_api._encounter_coordinator = coordinator
+	var passive_room_position: Variant = _find_passive_room_position(
+		topology,
+		player.player_width,
+		player.player_height,
+	)
+	_expect(passive_room_position is Vector3, "generated topology had no passive room position")
+	if passive_room_position is Vector3:
+		player.global_position = passive_room_position as Vector3
+		_expect(not runtime_api.try_request_current_encounter_clear(), "passive room accepted an encounter clear")
+	var active_runtime_ids := state.get_active_runtime_ids(room_id)
+	var sorted_active_runtime_ids := active_runtime_ids.duplicate()
+	sorted_active_runtime_ids.sort()
+	_expect(not active_runtime_ids.is_empty(), "active room query returned no assigned runtime IDs")
+	_expect(active_runtime_ids == sorted_active_runtime_ids, "active room query did not sort assigned runtime IDs")
+	active_runtime_ids.clear()
+	_expect(state.get_active_runtime_ids(room_id) == sorted_active_runtime_ids, "mutating an active runtime ID result changed encounter state")
+	player.global_position = unblocked_player_position as Vector3
+	var second_runtime_ids_before_clear: Array[int] = []
+	var second_spawned_before_clear := 0
+	var second_defeated_before_clear := 0
+	if second_progress != null:
+		second_runtime_ids_before_clear = state.get_active_runtime_ids(second_room_id)
+		second_spawned_before_clear = state.get_spawned_enemy_count(second_room_id)
+		second_defeated_before_clear = second_progress.defeated_count
+	var first_spawned_before_clear := state.get_spawned_enemy_count(room_id)
+	_expect(progress.enemy_ids.size() >= 25, "debug clear fixture did not contain at least twenty-five configured enemies")
+	_expect(progress.next_spawn_index < progress.enemy_ids.size(), "debug clear fixture had no pending enemies")
+	_expect(runtime_api.try_request_current_encounter_clear(), "active player room rejected a debug clear request")
+	_expect(not runtime_api.try_request_current_encounter_clear(), "repeated debug clear request was accepted")
+	_expect(coordinator._clear_requested_room_id == room_id, "debug clear request did not retain its originating room")
+	runtime_api._encounter_coordinator = null
+	runtime_api.free()
+	coordinator.tick()
+	_expect(progress.status == LevelEncounterState.RoomStatus.ACTIVE, "debug clear completed before pending enemies spawned")
+	_expect(progress.active_entity_ids.is_empty(), "debug clear did not defeat the active room snapshot")
+	_expect(state.get_spawned_enemy_count(room_id) == first_spawned_before_clear, "debug clear refilled in the request frame")
+	coordinator.tick()
+	_expect(state.get_spawned_enemy_count(room_id) == first_spawned_before_clear, "debug clear refilled twice in the request frame")
+	_expect(progress.active_entity_ids.is_empty(), "same-frame debug clear tick spawned replacement enemies")
+	await physics_frame
+	coordinator.tick()
+	_expect(state.get_spawned_enemy_count(room_id) > first_spawned_before_clear, "debug clear did not refill on the next physics frame")
+	var clear_tick_count := 1
 	var observed_clear_transition_start := false
-	while state.get_active_room_ids().has(room_id) and defeat_iterations < LevelRoomEncounterDefinition.MAX_ENEMY_COUNT + 2:
+	if progress.status == LevelEncounterState.RoomStatus.CLEARED:
+		observed_clear_transition_start = true
+	while state.get_active_room_ids().has(room_id) and clear_tick_count < LevelRoomEncounterDefinition.MAX_ENEMY_COUNT + 2:
+		await physics_frame
+		coordinator.tick()
 		progress = _room_progress(state, room_id)
-		var runtime_id := _first_runtime_id(progress.active_entity_ids)
-		if runtime_id <= 0:
-			break
-		var clears_room := progress.next_spawn_index == progress.enemy_ids.size() \
-			and progress.defeated_count + 1 == progress.enemy_ids.size() \
-			and progress.active_entity_ids.size() == 1
-		var result := runtime.try_apply_damage(runtime_id, 10000.0)
-		_expect(result != null and result.defeated, "configured encounter enemy defeat failed at iteration %d" % defeat_iterations)
-		if clears_room:
+		if progress.status == LevelEncounterState.RoomStatus.CLEARED:
 			observed_clear_transition_start = true
 			_expect(
 				visible_seal != null \
@@ -450,9 +493,7 @@ func _run() -> void:
 				"opening a visible seal did not disable its shadow before fading",
 			)
 			_expect_room_discovery_start(renderer, topology, state, torch_renderer, revealed_child_room_id)
-		await physics_frame
-		coordinator.tick()
-		defeat_iterations += 1
+		clear_tick_count += 1
 
 	progress = _room_progress(state, room_id)
 	_expect(progress.status == LevelEncounterState.RoomStatus.CLEARED, "room did not clear after every configured enemy died")
@@ -463,6 +504,11 @@ func _run() -> void:
 	_expect(_cleared_room_ids == [room_id], "clear signal did not identify exactly the cleared room")
 	_expect(observed_clear_transition_start, "room clearance did not expose the seal and branch transition start")
 	_expect(second_progress != null and second_progress.status == LevelEncounterState.RoomStatus.ACTIVE, "clearing one room stopped the other wave")
+	if second_progress != null:
+		_expect(state.get_active_runtime_ids(second_room_id) == second_runtime_ids_before_clear, "debug clear defeated an unrelated concurrent room")
+		_expect(state.get_spawned_enemy_count(second_room_id) == second_spawned_before_clear, "debug clear spawned enemies for an unrelated concurrent room")
+		_expect(second_progress.defeated_count == second_defeated_before_clear, "debug clear advanced an unrelated concurrent room")
+	_expect(not coordinator.try_request_current_encounter_clear(), "cleared encounter room accepted another clear request")
 	var remaining_summary := state.get_summary()
 	_expect(remaining_summary.active_wave_count == 1, "clearing one of two waves lost the remaining aggregate")
 	_expect(
@@ -515,6 +561,10 @@ func _run() -> void:
 		var ray_target := Vector3(goal_cell) + Vector3(0.5, player.player_height * 0.5, 0.5)
 		_expect(VoxelLineOfSight.has_clear_path(level_state, ray_origin, ray_target), "line of sight did not reopen through the cleared incoming gate")
 		_expect(not VoxelBodySolver.collides_at(level_state, _aperture_body_position(parent_doorway), player.player_width, player.player_height, false), "player body still collided with the cleared gate")
+	if second_progress != null and second_room_position is Vector3:
+		player.global_position = second_room_position as Vector3
+		_expect(coordinator.try_request_current_encounter_clear(), "second active room rejected a retained shutdown request")
+		_expect(coordinator._clear_requested_room_id == second_room_id, "second room clear request was not retained before shutdown")
 
 	await _cleanup(runtime, coordinator, renderer, torch_renderer, hud, player)
 	_finish()
@@ -540,6 +590,23 @@ func _find_highest_capacity_ready_root(
 				selected_room_id = room_id
 				selected_capacity = capacity
 	return selected_room_id
+
+func _find_passive_room_position(
+	topology: LevelEncounterTopology,
+	body_width: float,
+	body_height: float,
+) -> Variant:
+	for room_id in topology.get_room_ids():
+		var room := topology.get_room(room_id)
+		if room.has_encounter():
+			continue
+		var interior_cells: Array = room._interior_cells.keys()
+		interior_cells.sort_custom(_cell_less)
+		for value in interior_cells:
+			var position := Vector3(value as Vector3i) + Vector3(0.5, 0.0, 0.5)
+			if room.contains_body(position, body_width, body_height, topology.get_doorways()):
+				return position
+	return null
 
 func _move_active_waves_into_room(
 	runtime: EntityRuntime,
@@ -972,6 +1039,7 @@ func _cleanup(
 	player: PlayerMotor,
 ) -> void:
 	coordinator.shutdown()
+	_expect(coordinator._clear_requested_room_id == -1, "encounter shutdown retained a debug clear request")
 	runtime.shutdown()
 	coordinator.queue_free()
 	renderer.queue_free()
