@@ -59,7 +59,7 @@ func apply_result(result: ChunkBuildResult):
 	var terrain_mesh := _mesher.create_mesh_from_data(result.terrain_mesh_data)
 	var water_mesh := _mesher.create_water_mesh_from_data(result.water_mesh_data)
 	var visible_foliage_cells := _voxel_model.get_visible_foliage_cells_for_chunk(result.coord)
-	var foliage_mesh_data := result.foliage_mesh_data
+	var foliage_mesh_data: Variant = result.foliage_mesh_data
 	if visible_foliage_cells != result.foliage_cells:
 		foliage_mesh_data = _foliage_mesher.build_mesh_data(visible_foliage_cells)
 	var foliage_mesh := _foliage_mesher.create_mesh_from_data(foliage_mesh_data)
