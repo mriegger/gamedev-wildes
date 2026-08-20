@@ -27,6 +27,7 @@ func _run() -> void:
 		0: pickaxe,
 		1: InventoryStack.new(&"grass_block", 3),
 		2: hoe,
+		3: InventoryStack.new(&"campfire", 2),
 	}), "action inventory restore failed")
 	var stats := ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
 	var loadout := InventoryTestFixture.create_loadout(inventory, stats)
@@ -51,6 +52,7 @@ func _run() -> void:
 	var placement_position := Vector3i(5, 1, 0)
 	var stale_placement_position := Vector3i(6, 1, 0)
 	var protected_till_position := Vector3i(7, 1, 0)
+	var campfire_anchor := Vector3i(10, 10, 10)
 	world.restore_block_edits({
 		mine_position: BlockId.Type.STONE,
 		stale_mine_position: BlockId.Type.STONE,
@@ -135,6 +137,28 @@ func _run() -> void:
 	_expect(not stale_placement_edit.is_success(), "stale placement source committed")
 	_expect(world.get_block_id_at(stale_placement_position) == BlockId.Type.AIR, "stale placement source changed the world")
 	_expect(inventory.get_inventory_item_count(&"grass_block") == stale_count_before, "stale placement source consumed inventory")
+	var campfire_definition := block_catalog.get_definition(BlockId.Type.CAMPFIRE)
+	for offset in campfire_definition.emplacement.support_offsets:
+		_expect(VoxelWorldTestFixture.commit_place(world, campfire_anchor + offset, BlockId.Type.STONE) != null, "campfire support setup failed")
+	_expect(loadout.select_slot(3), "campfire placement selection failed")
+	var campfire_count_before := inventory.get_inventory_item_count(&"campfire")
+	var campfire_source := inventory.create_selected_item_source()
+	var campfire_edit := placement.try_place(campfire_anchor, Vector3i.ZERO, campfire_source)
+	_expect(campfire_edit.is_success(), "campfire action placement failed")
+	_expect(inventory.get_inventory_item_count(&"campfire") == campfire_count_before - 1, "campfire placement did not consume exactly one item")
+	for offset in campfire_definition.emplacement.occupied_offsets:
+		_expect(world.get_block_id_at(campfire_anchor + offset) == BlockId.Type.CAMPFIRE, "campfire action placement did not commit the full footprint")
+	_expect(loadout.select_slot(0), "campfire mining selection failed")
+	var campfire_mining := mining.try_mine(campfire_anchor + Vector3i(-1, 0, -1), inventory.create_selected_item_source())
+	_expect(campfire_mining.size() == 1 and campfire_mining[0].old_id == BlockId.Type.CAMPFIRE, "campfire outer-cell mining failed")
+	_expect(inventory.get_inventory_item_count(&"campfire") == campfire_count_before, "campfire mining did not return exactly one item")
+	_expect(loadout.select_slot(3), "campfire replacement selection failed")
+	_expect(placement.try_place(campfire_anchor, Vector3i.ZERO, inventory.create_selected_item_source()).is_success(), "campfire replacement failed")
+	_expect(loadout.select_slot(0), "campfire support mining selection failed")
+	var support_mining := mining.try_mine(campfire_anchor + Vector3i.DOWN, inventory.create_selected_item_source())
+	_expect(support_mining.size() == 2 and support_mining[1].old_id == BlockId.Type.CAMPFIRE, "support mining did not cascade through the campfire action transaction")
+	_expect(world.snapshot_emplacements().is_empty(), "support mining retained campfire world state")
+	_expect(inventory.get_inventory_item_count(&"campfire") == campfire_count_before, "support mining did not return the campfire item")
 	executors.unbind_world()
 	if _failures == 0:
 		print("EXACT_ACTION_TRANSACTIONS PASS")

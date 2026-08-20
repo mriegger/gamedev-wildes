@@ -101,7 +101,7 @@ func _process(_delta: float) -> bool:
 		_expect(not _hud.anvil_panel.is_open(), "Tab did not close the anvil")
 		_expect(_hud.crafting_panel.is_open() and _hud.side_panel.is_open(), "Tab did not open general crafting and the backpack")
 		var general_recipe_list := _hud.crafting_panel.get_node("Margin/Content/Body/Recipes/RecipeScroll/RecipeList") as VBoxContainer
-		_expect(general_recipe_list.get_child_count() == 6, "general crafting contains metal recipes or is missing a station recipe")
+		_expect(general_recipe_list.get_child_count() == 7, "general crafting contains metal recipes or is missing a station recipe")
 		_hud.open_crafting_station(_cauldron_position, _cauldron_station)
 		_phase = 4
 	elif _phase == 4 and _frame == 134:

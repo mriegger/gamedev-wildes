@@ -126,6 +126,9 @@ Stone and the other common blocks are hand-minable. Copper requires a stone or c
 while the masonry blocks require a copper pickaxe. Torches are placeable blocks that you can walk
 through — each is an omni light with a 9-block radius. Chests are crafted from wood, placed in the
 overworld, and open a 15-slot storage panel. A chest must be empty before it can be mined.
+Permanent campfires are atomic 3×3 emplacements crafted from twelve stone and two wood. They require
+a clear, fully supported footprint, stay lit without fuel, cast the nearest bounded campfire shadow,
+and return one campfire item when any footprint cell is mined.
 Overworld torch shadows are configurable for the nearest 0, 1, 2, or 4 lights and default to the
 nearest one. Chests are solid 1×1 placeable blocks rendered as separate body and lid meshes with
 dedicated chest textures. They cannot be mined by hand, and only empty chests can be mined with a
@@ -171,7 +174,7 @@ fallback values keep GL Compatibility usable at reduced fidelity, without volume
 to play.
 
 **Crafting.** Opening crafting with `Tab` reveals the general recipe panel alongside the backpack.
-It contains the six recipes that do not require a workstation. A placed anvil opens its own panel
+It contains the seven recipes that do not require a workstation. A placed anvil opens its own panel
 with the eight copper tool, weapon, and armor recipes. A placed cauldron opens a food-and-potion
 panel; its initial recipe combines two pumpkins and two apples into one health potion. All catalogs
 use materials from the backpack and hotbar and craft immediately when the enabled Craft button is
@@ -267,6 +270,7 @@ from Godot primitive meshes. Visual effects use project-authored shaders.
 | `src/assets/fonts/RobotoSlab-{Regular,SemiBold,Bold}.ttf` | [Roboto Slab](https://fonts.google.com/specimen/Roboto+Slab) — Christian Robertson, via Google Fonts | Apache-2.0 |
 | `src/assets/audio/ambient/nri-DawnchorusinAmphitheater.mp3` | National Park Service – Dawn chorus in Amphitheater | Public Domain (U.S. Government work) |
 | `src/assets/audio/ambient/forest_night_avocado.ogg` | Avocado, prompted by Michael Riegger | Project-authored |
+| `src/assets/audio/environment/campfire/fireplace_5_CC0.ogg` | [Fireplace #5](https://bigsoundbank.com/fireplace-5-s2857.html) – Joseph SARDIN, BigSoundBank | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `src/assets/audio/entities/skeleton/vocalizations/*.mp3` (3 files) | [Skeletons bones dry wooden sticks hangers](https://freesound.org/people/ChExi/sounds/848095/) – ChExi | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `src/assets/audio/entities/sheep/vocalizations/real_sheep_*.wav` (7 files) | [Sheep 1 and related sheep recordings](https://bigsoundbank.com/sheep-1-s2343.html) – Joseph SARDIN, BigSoundBank | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `src/assets/audio/entities/zombie/vocalizations/Zombie_*.mp3` (6 files) | [Little Robot Sound Factory](https://web.archive.org/web/20160314071020id_/http://www.littlerobotsoundfactory.com/) – Morten Barfod Søegaard, Little Robot Sound Factory | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -288,6 +292,7 @@ from Godot primitive meshes. Visual effects use project-authored shaders.
 | `src/assets/models/tools/hoe/copper_hoe.glb`, `Textures/colormap.png`, and derived inventory icon | [Survival Kit](https://kenney.nl/assets/survival-kit) – Kenney | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `src/assets/models/farming/pumpkin/*.fbx` (6 files) and derived inventory icon | [Ultimate Crops](https://quaternius.com/packs/ultimatecrops.html) – Quaternius | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `src/assets/textures/items/anvil.png` | Muse, prompted by Codex for Michael Riegger | Project-authored |
+| `src/assets/textures/items/campfire.png` | Codex, prompted by Michael Riegger; authored and nearest-neighbor scaled for Wildes | Project-authored |
 | `src/assets/models/foraging/apple/apple.glb`, `Textures/colormap.png`, and derived inventory icon | [Food Kit](https://kenney.nl/assets/food-kit) – Kenney | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `src/assets/textures/blocks/{bricks,chiseled_marble,cracked_cinder_bricks,deepstone_brick,sedimentary_stone}.png` | Created by Justin Soberano | Project-authored |
 | `src/assets/textures/blocks/farmland_dry.png` | Codex, prompted by Michael Riegger | Project-authored |

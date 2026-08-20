@@ -16,6 +16,7 @@ var contact_shadow: MeshInstance3D
 var anvil_renderer: AnvilRenderer
 var chest_renderer: ChestRenderer
 var cauldron_renderer: CauldronRenderer
+var campfire_renderer: CampfireRenderer
 
 var _selection_edge_mat: StandardMaterial3D = null
 var _contact_shadow_color: Color = Color(-1, -1, -1, -1)
@@ -44,6 +45,7 @@ func bind_space(p_space: VoxelSpace, presentation_root: Node):
 	anvil_renderer = presentation_root.get_node_or_null("Anvils") as AnvilRenderer
 	chest_renderer = presentation_root.get_node_or_null("Chests") as ChestRenderer
 	cauldron_renderer = presentation_root.get_node_or_null("Cauldrons") as CauldronRenderer
+	campfire_renderer = presentation_root.get_node_or_null("Campfires") as CampfireRenderer
 	_hide_targeting_visuals()
 	contact_shadow.visible = false
 	for visual in [selection_box, ghost_block, breaking_block]:
@@ -61,6 +63,7 @@ func unbind_space():
 	anvil_renderer = null
 	chest_renderer = null
 	cauldron_renderer = null
+	campfire_renderer = null
 
 func _hide_targeting_visuals():
 	if selection_box != null:
@@ -225,8 +228,11 @@ func _update_selection_visuals(_delta: float = 0.0):
 		if selection_box == null or not selection_box.is_inside_tree():
 			return
 		selection_box.visible = true
-		var center = Vector3(float(interactor.target_block.x) + 0.5, float(interactor.target_block.y) + 0.5, float(interactor.target_block.z) + 0.5)
+		var target_bounds := _get_mining_target_bounds()
+		var center := target_bounds.get_center()
+		var base_scale := target_bounds.size / 1.025
 		selection_box.global_position = center
+		selection_box.scale = base_scale
 		if breaking_block and breaking_block.is_inside_tree():
 			breaking_block.global_position = center
 
@@ -249,7 +255,7 @@ func _update_selection_visuals(_delta: float = 0.0):
 						bmat.albedo_texture = texture
 				var progress = clamp(interactor.mine_timer / interactor.get_mine_duration(), 0.0, 1.0)
 				var s = 1.0 + 0.12 * sin(progress * PI)
-				var mining_scale = Vector3(s, s, s)
+				var mining_scale = base_scale * s
 				if breaking_block.scale != mining_scale:
 					breaking_block.scale = mining_scale
 				if selection_box.scale != mining_scale:
@@ -259,8 +265,8 @@ func _update_selection_visuals(_delta: float = 0.0):
 				breaking_block.visible = false
 				if breaking_block.scale != Vector3.ONE:
 					breaking_block.scale = Vector3.ONE
-			if selection_box.scale != Vector3.ONE:
-				selection_box.scale = Vector3.ONE
+			if selection_box.scale != base_scale:
+				selection_box.scale = base_scale
 	else:
 		if selection_box and selection_box.is_inside_tree():
 			selection_box.visible = false
@@ -290,6 +296,10 @@ func _update_selection_visuals(_delta: float = 0.0):
 			ghost_block.visible = false
 			_clear_custom_placement_previews()
 			cauldron_renderer.set_placement_preview(interactor.placement_block, interactor.can_place_target)
+		elif block_id == BlockId.Type.CAMPFIRE and campfire_renderer != null:
+			ghost_block.visible = false
+			_clear_custom_placement_previews()
+			campfire_renderer.set_placement_preview(interactor.placement_block, interactor.can_place_target)
 		else:
 			_clear_custom_placement_previews()
 			ghost_block.visible = true
@@ -330,6 +340,15 @@ func _clear_custom_placement_previews() -> void:
 		chest_renderer.set_placement_preview(null, false)
 	if cauldron_renderer != null:
 		cauldron_renderer.set_placement_preview(null, false)
+	if campfire_renderer != null:
+		campfire_renderer.set_placement_preview(null, false)
+
+func _get_mining_target_bounds() -> AABB:
+	if voxel_space is VoxelWorld:
+		var anchor: Variant = (voxel_space as VoxelWorld).get_emplacement_anchor(interactor.target_block)
+		if anchor is Vector3i:
+			return AABB(Vector3(anchor) + Vector3(-1.0, 0.0, -1.0), Vector3(3.0, 1.0, 3.0))
+	return AABB(Vector3(interactor.target_block), Vector3.ONE)
 
 func _should_show_mining_outline(has_target_action: bool) -> bool:
 	if not has_target_action or not interactor.target_has:

@@ -19,10 +19,11 @@ func _init() -> void:
 		&"chest",
 		&"anvil",
 		&"cauldron",
+		&"campfire",
 		&"stone_pickaxe",
 		&"basic_rune",
 	]
-	_expect(recipe_catalog.definitions.size() == expected_recipe_ids.size(), "expected six general recipes")
+	_expect(recipe_catalog.definitions.size() == expected_recipe_ids.size(), "general recipe count differs")
 	for index in range(expected_recipe_ids.size()):
 		_expect(recipe_catalog.definitions[index].id == expected_recipe_ids[index], "recipe order differs at index %d" % index)
 	for recipe in recipe_catalog.definitions:
@@ -53,6 +54,7 @@ func _init() -> void:
 	_expect(recipe_catalog.get_definition(&"basic_rune").get_ingredient_counts() == {&"sand_block": 32}, "basic rune ingredients mismatch")
 	_expect(recipe_catalog.get_definition(&"anvil").get_ingredient_counts() == {&"copper": 10}, "anvil ingredients mismatch")
 	_expect(recipe_catalog.get_definition(&"cauldron").get_ingredient_counts() == {&"log_block": 3, &"stone_block": 2}, "cauldron ingredients mismatch")
+	_expect(recipe_catalog.get_definition(&"campfire").get_ingredient_counts() == {&"stone_block": 12, &"log_block": 2}, "campfire ingredients mismatch")
 	_expect(cauldron_recipe_catalog.definitions.size() == 1 and cauldron_recipe_catalog.has_definition(&"health_potion"), "cauldron catalog does not contain only the health potion")
 	_expect(cauldron_recipe_catalog.get_definition(&"health_potion").get_ingredient_counts() == {&"pumpkin": 2, &"apple": 2}, "health potion ingredients mismatch")
 

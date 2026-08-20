@@ -127,6 +127,7 @@ func _make_saved_world() -> Dictionary:
 		"placed_blocks": {},
 		"removed_blocks": {},
 		"torch_attachments": {},
+		"emplacements": {},
 	}
 
 func _streaming_queue_depth(world: WorldController) -> int:

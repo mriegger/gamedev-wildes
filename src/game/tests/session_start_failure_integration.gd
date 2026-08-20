@@ -40,6 +40,7 @@ func _run() -> void:
 		"placed_blocks": {},
 		"removed_blocks": {},
 		"torch_attachments": {},
+		"emplacements": {},
 		"chests": {},
 		"player_position": null,
 		"player_stats": null,

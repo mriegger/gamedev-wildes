@@ -37,7 +37,11 @@ func try_place(
 	var action := _get_action(source)
 	if action == null:
 		return BlockEdit.fail(position, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_NOT_BREAKABLE)
-	var world_change := _voxel_world.prepare_place_block(position, action.block.id, attach_direction)
+	var world_change := (
+		_voxel_world.prepare_place_emplacement(position, action.block.id)
+		if action.block.emplacement != null
+		else _voxel_world.prepare_place_block(position, action.block.id, attach_direction)
+	)
 	var inventory_change := _inventory_loadout.prepare_inventory_change(
 		_inventory.prepare_consume_selected_source(source)
 	)

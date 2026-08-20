@@ -159,6 +159,7 @@ func _run() -> void:
 			"seed": 1337,
 			"placed_blocks": {},
 			"torch_attachments": {},
+			"emplacements": {},
 			"copper_blocks": {"999,9,999": BlockId.Type.COPPER},
 			"generated_copper_chunks": {"49,49": true},
 			"removed_blocks": SaveManager.serialize_vector3i_dict(saved_edits["removed"]),

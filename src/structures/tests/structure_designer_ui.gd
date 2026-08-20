@@ -22,7 +22,7 @@ func _run() -> void:
 	for definition in item_catalog.definitions:
 		if definition.secondary_action is BlockPlacementActionDefinition:
 			expected_placeables.append(definition.id)
-	_expect(expected_placeables.size() == 20, "item catalog did not expose the expected 20 placeables")
+	_expect(expected_placeables.size() == 21, "item catalog did not expose the expected 21 placeables")
 	var toolbelt := CreativeToolbelt.new()
 	_expect(toolbelt.setup(item_catalog), "creative toolbelt setup failed")
 	_expect(toolbelt.get_placeable_item_ids() == expected_placeables, "toolbelt placeables did not follow catalog placement actions")

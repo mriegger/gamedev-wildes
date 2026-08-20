@@ -8,7 +8,7 @@ func _init() -> void:
 	var chest_block := block_catalog.get_definition(BlockId.Type.CHEST) if block_catalog != null else null
 	var player_stats_definition := load("res://player/player_stats.tres") as CombatStatsDefinition
 	var player_perk_rules := load("res://progression/player_perk_rules.tres") as PlayerPerkRules
-	_expect(SaveManager.CURRENT_SAVE_VERSION == 13, "save version changed")
+	_expect(SaveManager.CURRENT_SAVE_VERSION == 14, "save version changed")
 	_expect(block_catalog != null and block_catalog.validate(), "block catalog invalid")
 	_expect(item_catalog != null and item_catalog.validate(block_catalog), "item catalog invalid")
 	_expect(chest_block != null and chest_block.container != null, "chest container definition invalid")
@@ -22,6 +22,7 @@ func _init() -> void:
 	_expect(version_six.get("player_perks", null) == {"allocations": {}}, "version six perk migration shape changed")
 	_expect(version_six.get("apple_trees", null) == AppleTreeState.new().snapshot(), "version six apple migration shape changed")
 	_expect(version_six.get("chests", null) == {}, "version six chest migration shape changed")
+	_expect(version_six.get("emplacements", null) == {}, "version six emplacement migration shape changed")
 	var migration_factory := EquipmentInstanceFactory.new(item_catalog)
 	var migration_affixes: Array[EquipmentAffixDefinition] = [item_catalog.get_equipment_affix(&"vicious")]
 	var migration_runes: Array[StringName] = [&"basic_rune"]
@@ -126,15 +127,20 @@ func _init() -> void:
 	_expect(fractional_seed == fractional_seed_before, "fractional seed rejection changed save data")
 	_test_fractional_slot_metadata(item_catalog)
 	_expect(SaveManager.decode_chest_state({"chests": {"invalid": []}}) == null, "malformed chest position decoded")
-	_expect(SaveManager.decode_world_state({"seed": 1, "placed_blocks": {"0,1,0": BlockId.Type.COUNT}, "removed_blocks": {}, "torch_attachments": {}, "player_position": null}) == null, "unknown placed block decoded")
-	_expect(SaveManager.decode_world_state({"seed": 1, "placed_blocks": {"0,1,0": BlockId.Type.TORCH}, "removed_blocks": {}, "torch_attachments": {}, "player_position": null}) == null, "torch without attachment decoded")
-	_expect(SaveManager.decode_world_state({"seed": 1, "placed_blocks": {}, "removed_blocks": {"invalid": true}, "torch_attachments": {}, "player_position": null}) == null, "malformed removed block decoded")
-	_expect(BlockId.Type.ANVIL == 16 and BlockId.Type.CHEST == 17 and BlockId.Type.CAULDRON == 18, "main station block IDs changed")
+	_expect(SaveManager.decode_world_state({"seed": 1, "placed_blocks": {"0,1,0": BlockId.Type.COUNT}, "removed_blocks": {}, "torch_attachments": {}, "emplacements": {}, "player_position": null}) == null, "unknown placed block decoded")
+	_expect(SaveManager.decode_world_state({"seed": 1, "placed_blocks": {"0,1,0": BlockId.Type.TORCH}, "removed_blocks": {}, "torch_attachments": {}, "emplacements": {}, "player_position": null}) == null, "torch without attachment decoded")
+	_expect(SaveManager.decode_world_state({"seed": 1, "placed_blocks": {}, "removed_blocks": {"invalid": true}, "torch_attachments": {}, "emplacements": {}, "player_position": null}) == null, "malformed removed block decoded")
+	_expect(BlockId.Type.ANVIL == 16 and BlockId.Type.CHEST == 17 and BlockId.Type.CAULDRON == 18 and BlockId.Type.CAMPFIRE == 19, "main station block IDs changed")
 	_expect(item_catalog != null and item_catalog.has_definition(&"chest"), "main chest item ID changed")
 	if block_catalog == null or item_catalog == null or chest_block == null or chest_block.container == null or player_stats_definition == null or player_perk_rules == null:
 		_finish("")
 		return
 	var voxel_world := VoxelWorld.new(20, 36, 5, 12.0, block_catalog)
+	var campfire_anchor := Vector3i(2, 21, 2)
+	var campfire_definition := block_catalog.get_definition(BlockId.Type.CAMPFIRE)
+	for offset in campfire_definition.emplacement.support_offsets:
+		_expect(VoxelWorldTestFixture.commit_place(voxel_world, campfire_anchor + offset, BlockId.Type.STONE) != null, "campfire save support placement failed")
+	_expect(VoxelWorldTestFixture.commit_place_emplacement(voxel_world, campfire_anchor, BlockId.Type.CAMPFIRE) != null, "campfire save placement failed")
 	var inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	inventory.setup_starter()
 	var item_proficiency := ItemProficiency.new(item_catalog)
@@ -163,6 +169,7 @@ func _init() -> void:
 		"placed_blocks": {},
 		"removed_blocks": {},
 		"torch_attachments": {},
+		"emplacements": {},
 		"chests": {},
 		"world_loot": {"next_entry_id": 1, "entries": []},
 		"playtime_seconds": 0.0,
@@ -182,6 +189,7 @@ func _init() -> void:
 		_expect(current_data.get("pumpkin_patch", {}) == pumpkin_patch, "current_data pumpkin patch differs")
 		_expect(current_data.get("apple_trees", {}) == apple_trees, "current_data apple tree state differs")
 		_expect(current_data.get("world_loot", {}) == world_loot_state.snapshot(), "current_data world loot differs")
+		_expect(current_data.get("emplacements", {}).get("2,21,2", -1) == BlockId.Type.CAMPFIRE, "current_data campfire emplacement differs")
 		var encoded_chests := current_data.get("chests", {}) as Dictionary
 		_expect(encoded_chests.has("3,8,-4") and encoded_chests["3,8,-4"][0]["item_id"] == "dirt_block" and encoded_chests["3,8,-4"][0]["count"] == 4, "current_data chest state differs")
 		_expect(is_equal_approx(float(current_data.get("playtime_seconds", -1.0)), 2.5), "playtime changed")
@@ -196,6 +204,7 @@ func _init() -> void:
 			return
 		_expect(decoded.seed == 1337, "decoded seed changed")
 		_expect(decoded.player_position.is_equal_approx(doorway_anchor), "decoded persisted position differs")
+		_expect(decoded.emplacements.get(campfire_anchor, BlockId.Type.AIR) == BlockId.Type.CAMPFIRE, "decoded campfire emplacement differs")
 		var restored_factory := EquipmentInstanceFactory.new(item_catalog, int(loaded["next_equipment_instance_id"]))
 		var restored_inventory := InventoryModel.new(item_catalog, restored_factory)
 		var loaded_inventory: Variant = loaded.get("inventory", null)

@@ -18,6 +18,16 @@ static func commit_place(
 		return null
 	return prepared
 
+static func commit_place_emplacement(
+	world: VoxelWorld,
+	anchor: Vector3i,
+	block_id: int,
+) -> PreparedVoxelWorldChange:
+	var prepared := world.prepare_place_emplacement(anchor, block_id)
+	if prepared == null or not world._commit_prepared_change(prepared):
+		return null
+	return prepared
+
 static func commit_replace(
 	world: VoxelWorld,
 	position: Vector3i,

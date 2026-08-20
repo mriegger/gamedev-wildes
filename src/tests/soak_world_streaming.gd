@@ -225,6 +225,7 @@ func _make_saved_world() -> Dictionary:
 		"placed_blocks": placed_blocks,
 		"removed_blocks": {},
 		"torch_attachments": torch_attachments,
+		"emplacements": {},
 		"player_stats": null,
 		"item_proficiency": {},
 		"inventory": null,

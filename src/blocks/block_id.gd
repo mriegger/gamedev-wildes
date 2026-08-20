@@ -21,6 +21,7 @@ enum Type {
 	ANVIL = 16,
 	CHEST = 17,
 	CAULDRON = 18,
+	CAMPFIRE = 19,
 	BRICKS = 100,
 	CRACKED_CINDER_BRICKS = 101,
 	DEEPSTONE_BRICK = 102,
@@ -49,6 +50,7 @@ const DISPLAY_NAMES: Dictionary = {
 	Type.ANVIL: "Anvil",
 	Type.CHEST: "Chest",
 	Type.CAULDRON: "Cauldron",
+	Type.CAMPFIRE: "Campfire",
 	Type.BRICKS: "Bricks",
 	Type.CRACKED_CINDER_BRICKS: "Cracked Cinder Bricks",
 	Type.DEEPSTONE_BRICK: "Deepstone Brick",
@@ -63,10 +65,10 @@ static func is_valid(id: int) -> bool:
 	return DISPLAY_NAMES.has(id)
 
 static func is_chunk_cube(id: int) -> bool:
-	return is_valid(id) and id != Type.AIR and id != Type.TORCH and id != Type.WATER and id != Type.ANVIL and id != Type.CHEST and id != Type.CAULDRON
+	return is_valid(id) and id != Type.AIR and id != Type.TORCH and id != Type.WATER and id != Type.ANVIL and id != Type.CHEST and id != Type.CAULDRON and id != Type.CAMPFIRE
 
 static func occludes_chunk_face(id: int) -> bool:
 	return is_chunk_cube(id)
 
 static func is_ao_solid(id: int) -> bool:
-	return is_valid(id) and id != Type.AIR and id != Type.TORCH and id != Type.WATER
+	return is_valid(id) and id != Type.AIR and id != Type.TORCH and id != Type.WATER and id != Type.CAMPFIRE

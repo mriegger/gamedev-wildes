@@ -35,6 +35,10 @@ var _removed_edits_by_chunk: Dictionary = {}
 var cell_revisions: Dictionary = {}
 var _highest_cache: Dictionary = {}
 var torch_attachments: Dictionary = {}
+var _emplacement_block_by_anchor: Dictionary = {}
+var _emplacement_blocks_by_chunk: Dictionary = {}
+var _emplacement_anchor_by_cell: Dictionary = {}
+var _emplacement_anchors_by_support_cell: Dictionary = {}
 var _protected_edit_cells: Dictionary = {}
 var _transaction_sequence: int = 0
 var _transaction_eviction_watermark: int = 0
@@ -60,6 +64,29 @@ func restore_block_edits(p_placed_blocks: Dictionary, p_removed_blocks: Dictiona
 	_rebuild_edit_index(_placed_blocks, _placed_edits_by_chunk)
 	_rebuild_edit_index(_removed_blocks, _removed_edits_by_chunk)
 
+func restore_emplacements(emplacements: Dictionary) -> bool:
+	_invalidate_prepared_transactions()
+	_clear_emplacements()
+	for anchor in emplacements:
+		if not anchor is Vector3i:
+			_clear_emplacements()
+			return false
+		var block_id := int(emplacements[anchor])
+		if not can_place_emplacement(anchor, block_id):
+			_clear_emplacements()
+			return false
+		_index_emplacement(anchor, block_id)
+	return true
+
+func _clear_emplacements() -> void:
+	_emplacement_block_by_anchor.clear()
+	_emplacement_blocks_by_chunk.clear()
+	_emplacement_anchor_by_cell.clear()
+	_emplacement_anchors_by_support_cell.clear()
+
+func snapshot_emplacements() -> Dictionary:
+	return _emplacement_block_by_anchor.duplicate()
+
 func snapshot_block_edits() -> Dictionary:
 	return {
 		"placed": _placed_blocks.duplicate(),
@@ -75,10 +102,10 @@ func get_terrain_height(x: int, z: int) -> int:
 	return int(height_map_dict.get(Vector2i(x, z), -1))
 
 func get_block_edit_count() -> int:
-	return _placed_blocks.size() + _removed_blocks.size()
+	return _placed_blocks.size() + _removed_blocks.size() + _emplacement_block_by_anchor.size()
 
 func has_persisted_edit(position: Vector3i) -> bool:
-	return _placed_blocks.has(position) or _removed_blocks.has(position) or torch_attachments.has(position)
+	return _placed_blocks.has(position) or _removed_blocks.has(position) or torch_attachments.has(position) or _emplacement_anchor_by_cell.has(position)
 
 func protect_edit_cells(cells: Array[Vector3i]) -> void:
 	for cell in cells:
@@ -264,6 +291,8 @@ func apply_copper_chunk_for_coord(coord: Vector2i, copper_data: Dictionary):
 	generated_copper_chunks[coord] = true
 
 func get_block_at(p: Vector3i):
+	if _emplacement_anchor_by_cell.has(p):
+		return _emplacement_block_by_anchor[_emplacement_anchor_by_cell[p]]
 	if _placed_blocks.has(p):
 		return _placed_blocks[p]
 	if _removed_blocks.has(p):
@@ -292,6 +321,10 @@ func get_block_id_at(p: Vector3i) -> int:
 	return bt as int
 
 func is_solid(p: Vector3i) -> bool:
+	if _emplacement_anchor_by_cell.has(p):
+		var anchor := _emplacement_anchor_by_cell[p] as Vector3i
+		var definition := block_catalog.get_definition(int(_emplacement_block_by_anchor[anchor]))
+		return definition.emplacement.is_solid_offset(p - anchor)
 	var bt = get_block_at(p)
 	if bt == null:
 		return false
@@ -337,8 +370,7 @@ func get_highest_solid_y(x: int, z: int) -> int:
 		return _highest_cache[key]
 	for y in range(max_build_y - 1, -1, -1):
 		var p = Vector3i(x, y, z)
-		var bt = get_block_at(p)
-		if bt != null and block_catalog.is_solid(bt):
+		if is_solid(p):
 			_highest_cache[key] = y
 			return y
 	_highest_cache[key] = -1
@@ -376,6 +408,32 @@ func get_attached_torches(support_pos: Vector3i) -> Array[Vector3i]:
 			attached.append(torch_pos)
 	return attached
 
+func get_emplacement_anchor(position: Vector3i) -> Variant:
+	return _emplacement_anchor_by_cell.get(position, null)
+
+func get_emplacement_cells(anchor: Vector3i) -> Array[Vector3i]:
+	var cells: Array[Vector3i] = []
+	if not _emplacement_block_by_anchor.has(anchor):
+		return cells
+	var definition := block_catalog.get_definition(int(_emplacement_block_by_anchor[anchor]))
+	for offset in definition.emplacement.occupied_offsets:
+		cells.append(anchor + offset)
+	return cells
+
+func get_supported_emplacements(support_position: Vector3i) -> Array[Vector3i]:
+	var anchors: Array[Vector3i] = []
+	var indexed := _emplacement_anchors_by_support_cell.get(support_position, {}) as Dictionary
+	for anchor in indexed:
+		anchors.append(anchor as Vector3i)
+	anchors.sort_custom(_vector3i_less)
+	return anchors
+
+func get_emplacements_for_chunk(cx: int, cz: int) -> Dictionary:
+	return (_emplacement_blocks_by_chunk.get(Vector2i(cx, cz), {}) as Dictionary).duplicate()
+
+func can_place_emplacement(anchor: Vector3i, block_id: int) -> bool:
+	return _evaluate_place_emplacement(anchor, block_id) is PreparedVoxelWorldChange
+
 func prepare_mine_block(p: Vector3i) -> PreparedVoxelWorldChange:
 	var evaluated: Variant = _evaluate_mine_block(p)
 	return evaluated as PreparedVoxelWorldChange
@@ -386,6 +444,10 @@ func prepare_place_block(
 	attach_dir: Vector3i = Vector3i.ZERO,
 ) -> PreparedVoxelWorldChange:
 	var evaluated: Variant = _evaluate_place_block(p, block_type, attach_dir)
+	return evaluated as PreparedVoxelWorldChange
+
+func prepare_place_emplacement(anchor: Vector3i, block_id: int) -> PreparedVoxelWorldChange:
+	var evaluated: Variant = _evaluate_place_emplacement(anchor, block_id)
 	return evaluated as PreparedVoxelWorldChange
 
 func prepare_replace_block(
@@ -444,11 +506,19 @@ func _notify_prepared_change(prepared: PreparedVoxelWorldChange) -> bool:
 	return true
 
 func _evaluate_mine_block(p: Vector3i) -> Variant:
+	var emplacement_anchor: Variant = get_emplacement_anchor(p)
+	if emplacement_anchor is Vector3i:
+		return _evaluate_mine_emplacement(emplacement_anchor)
 	if is_edit_protected(p):
 		return BlockEdit.fail(p, BlockEdit.Operation.MINE, BlockEdit.Result.FAIL_PROTECTED)
 	for torch_position in get_attached_torches(p):
 		if is_edit_protected(torch_position):
 			return BlockEdit.fail(p, BlockEdit.Operation.MINE, BlockEdit.Result.FAIL_PROTECTED)
+	var supported_emplacements := get_supported_emplacements(p)
+	for anchor in supported_emplacements:
+		for cell in get_emplacement_cells(anchor):
+			if is_edit_protected(cell):
+				return BlockEdit.fail(p, BlockEdit.Operation.MINE, BlockEdit.Result.FAIL_PROTECTED)
 	if not is_breakable(p):
 		return BlockEdit.fail(p, BlockEdit.Operation.MINE, BlockEdit.Result.FAIL_NOT_BREAKABLE)
 	var attached_torches := get_attached_torches(p)
@@ -458,6 +528,10 @@ func _evaluate_mine_block(p: Vector3i) -> Variant:
 		var candidate_position := p - attach_dir
 		expected_revisions[candidate_position] = get_revision(candidate_position)
 		expected_contents[candidate_position] = _snapshot_transaction_cell(candidate_position)
+	for anchor in supported_emplacements:
+		for cell in get_emplacement_cells(anchor):
+			expected_revisions[cell] = get_revision(cell)
+			expected_contents[cell] = _snapshot_transaction_cell(cell)
 	var edits: Array[BlockEdit] = [BlockEdit.success_mine(p, get_block_id_at(p), get_revision(p) + 1)]
 	for torch_position in attached_torches:
 		edits.append(BlockEdit.success_mine(
@@ -465,6 +539,14 @@ func _evaluate_mine_block(p: Vector3i) -> Variant:
 			int(_placed_blocks.get(torch_position, BlockId.Type.TORCH)),
 			get_revision(torch_position) + 1,
 		))
+	for anchor in supported_emplacements:
+		edits.append(BlockEdit.success_mine(
+			anchor,
+			int(_emplacement_block_by_anchor[anchor]),
+			get_revision(anchor) + 1,
+		))
+	var cascade_positions := attached_torches.duplicate()
+	cascade_positions.append_array(supported_emplacements)
 	return PreparedVoxelWorldChange.new(
 		self,
 		expected_revisions,
@@ -474,8 +556,32 @@ func _evaluate_mine_block(p: Vector3i) -> Variant:
 		p,
 		BlockId.Type.AIR,
 		Vector3i.ZERO,
-		attached_torches,
+		cascade_positions,
 		edits,
+	)
+
+func _evaluate_mine_emplacement(anchor: Vector3i) -> Variant:
+	var expected_revisions: Dictionary = {}
+	var expected_contents: Dictionary = {}
+	for cell in get_emplacement_cells(anchor):
+		if is_edit_protected(cell):
+			return BlockEdit.fail(anchor, BlockEdit.Operation.MINE, BlockEdit.Result.FAIL_PROTECTED)
+		expected_revisions[cell] = get_revision(cell)
+		expected_contents[cell] = _snapshot_transaction_cell(cell)
+	var block_id := int(_emplacement_block_by_anchor[anchor])
+	if not block_catalog.is_breakable(block_id):
+		return BlockEdit.fail(anchor, BlockEdit.Operation.MINE, BlockEdit.Result.FAIL_NOT_BREAKABLE)
+	return PreparedVoxelWorldChange.new(
+		self,
+		expected_revisions,
+		expected_contents,
+		_transaction_sequence,
+		BlockEdit.Operation.MINE,
+		anchor,
+		BlockId.Type.AIR,
+		Vector3i.ZERO,
+		[],
+		[BlockEdit.success_mine(anchor, block_id, get_revision(anchor) + 1)],
 	)
 
 func _evaluate_place_block(p: Vector3i, block_type: int, attach_dir: Vector3i) -> Variant:
@@ -485,6 +591,8 @@ func _evaluate_place_block(p: Vector3i, block_type: int, attach_dir: Vector3i) -
 		return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_INVALID_POS, "AIR not placeable")
 	if not BlockId.is_valid(block_type):
 		return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_INVALID_POS, "Invalid block id")
+	if block_catalog.get_definition(block_type).emplacement != null:
+		return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_INVALID_POS, "Emplacement requires atomic placement")
 	if p.y < 0 or p.y >= max_build_y:
 		return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_Y_OUT_OF_RANGE)
 	if is_occupied(p):
@@ -501,6 +609,9 @@ func _evaluate_place_block(p: Vector3i, block_type: int, attach_dir: Vector3i) -
 		if support_pos.y < 0 or support_pos.y >= max_build_y:
 			return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_NO_TORCH_SUPPORT, "Support Y out of bounds")
 		ensure_region_generated(support_pos.x -1, support_pos.z -1, 3, 3)
+		var support_id := get_block_id_at(support_pos)
+		if support_id != BlockId.Type.AIR and block_catalog.get_definition(support_id).emplacement != null:
+			return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_NO_TORCH_SUPPORT)
 		if not is_opaque(support_pos) and not is_solid(support_pos):
 			return BlockEdit.fail(p, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_NO_TORCH_SUPPORT)
 		expected_revisions[support_pos] = get_revision(support_pos)
@@ -521,11 +632,48 @@ func _evaluate_place_block(p: Vector3i, block_type: int, attach_dir: Vector3i) -
 		[edit],
 	)
 
+func _evaluate_place_emplacement(anchor: Vector3i, block_id: int) -> Variant:
+	if not BlockId.is_valid(block_id):
+		return BlockEdit.fail(anchor, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_INVALID_POS)
+	var definition := block_catalog.get_definition(block_id)
+	if definition.emplacement == null:
+		return BlockEdit.fail(anchor, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_INVALID_POS)
+	var expected_revisions: Dictionary = {}
+	var expected_contents: Dictionary = {}
+	for offset in definition.emplacement.occupied_offsets:
+		var cell := anchor + offset
+		if cell.y < 0 or cell.y >= max_build_y or is_edit_protected(cell) or is_occupied(cell):
+			return BlockEdit.fail(anchor, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_NO_SUPPORT, "Emplacement requires a clear supported footprint")
+		expected_revisions[cell] = get_revision(cell)
+		expected_contents[cell] = _snapshot_transaction_cell(cell)
+	for offset in definition.emplacement.support_offsets:
+		var support_cell := anchor + offset
+		if support_cell.y < 0 or support_cell.y >= max_build_y or not is_solid(support_cell):
+			return BlockEdit.fail(anchor, BlockEdit.Operation.PLACE, BlockEdit.Result.FAIL_NO_SUPPORT, "Emplacement requires a clear supported footprint")
+		expected_revisions[support_cell] = get_revision(support_cell)
+		expected_contents[support_cell] = _snapshot_transaction_cell(support_cell)
+	return PreparedVoxelWorldChange.new(
+		self,
+		expected_revisions,
+		expected_contents,
+		_transaction_sequence,
+		BlockEdit.Operation.PLACE,
+		anchor,
+		block_id,
+		Vector3i.ZERO,
+		[],
+		[BlockEdit.success_place(anchor, block_id, get_revision(anchor) + 1, Vector3i.ZERO)],
+	)
+
 func _evaluate_replace_block(p: Vector3i, expected_old_id: int, new_id: int) -> Variant:
+	if _emplacement_anchor_by_cell.has(p):
+		return BlockEdit.fail(p, BlockEdit.Operation.REPLACE, BlockEdit.Result.FAIL_INVALID_POS, "Emplacement cells cannot be replaced individually")
 	if not BlockId.is_valid(expected_old_id) or expected_old_id == BlockId.Type.AIR:
 		return BlockEdit.fail(p, BlockEdit.Operation.REPLACE, BlockEdit.Result.FAIL_INVALID_POS, "Invalid expected block id")
 	if not BlockId.is_valid(new_id) or new_id == BlockId.Type.AIR:
 		return BlockEdit.fail(p, BlockEdit.Operation.REPLACE, BlockEdit.Result.FAIL_INVALID_POS, "Invalid replacement block id")
+	if block_catalog.get_definition(new_id).emplacement != null:
+		return BlockEdit.fail(p, BlockEdit.Operation.REPLACE, BlockEdit.Result.FAIL_INVALID_POS, "Emplacement requires atomic placement")
 	if p.y < 0 or p.y >= max_build_y:
 		return BlockEdit.fail(p, BlockEdit.Operation.REPLACE, BlockEdit.Result.FAIL_Y_OUT_OF_RANGE)
 	if get_block_id_at(p) != expected_old_id:
@@ -546,6 +694,9 @@ func _evaluate_replace_block(p: Vector3i, expected_old_id: int, new_id: int) -> 
 
 func _apply_prepared_mine(prepared: PreparedVoxelWorldChange) -> void:
 	var p := prepared._get_position()
+	if _emplacement_block_by_anchor.has(p):
+		_remove_emplacement_state(p)
+		return
 	var was_placed = _placed_blocks.has(p)
 	var surviving_after := false
 	if was_placed:
@@ -571,16 +722,26 @@ func _apply_prepared_mine(prepared: PreparedVoxelWorldChange) -> void:
 	else:
 		cell_revisions.erase(p)
 	_record_transaction_mutation(p)
-	for torch_pos in prepared._get_cascade_positions():
-		_erase_indexed_edit(_placed_blocks, _placed_edits_by_chunk, torch_pos)
-		torch_attachments.erase(torch_pos)
-		_invalidate_highest_cache(torch_pos.x, torch_pos.z)
-		cell_revisions.erase(torch_pos)
-		_record_transaction_mutation(torch_pos)
+	for cascade_position in prepared._get_cascade_positions():
+		if _emplacement_block_by_anchor.has(cascade_position):
+			_remove_emplacement_state(cascade_position)
+		else:
+			_erase_indexed_edit(_placed_blocks, _placed_edits_by_chunk, cascade_position)
+			torch_attachments.erase(cascade_position)
+			_invalidate_highest_cache(cascade_position.x, cascade_position.z)
+			cell_revisions.erase(cascade_position)
+			_record_transaction_mutation(cascade_position)
 
 func _apply_prepared_place(prepared: PreparedVoxelWorldChange) -> void:
 	var p := prepared._get_position()
 	var block_type := prepared._get_new_id()
+	if block_catalog.get_definition(block_type).emplacement != null:
+		_index_emplacement(p, block_type)
+		for cell in get_emplacement_cells(p):
+			_invalidate_highest_cache(cell.x, cell.z)
+			_increment_revision(cell)
+			_record_transaction_mutation(cell)
+		return
 	if _removed_blocks.has(p):
 		_erase_indexed_edit(_removed_blocks, _removed_edits_by_chunk, p)
 	_put_indexed_edit(_placed_blocks, _placed_edits_by_chunk, p, block_type)
@@ -589,6 +750,49 @@ func _apply_prepared_place(prepared: PreparedVoxelWorldChange) -> void:
 	_invalidate_highest_cache(p.x, p.z)
 	_increment_revision(p)
 	_record_transaction_mutation(p)
+
+func _remove_emplacement_state(anchor: Vector3i) -> void:
+	var block_id := int(_emplacement_block_by_anchor[anchor])
+	var definition := block_catalog.get_definition(block_id)
+	for offset in definition.emplacement.support_offsets:
+		var support_cell := anchor + offset
+		var indexed := _emplacement_anchors_by_support_cell.get(support_cell, {}) as Dictionary
+		indexed.erase(anchor)
+		if indexed.is_empty():
+			_emplacement_anchors_by_support_cell.erase(support_cell)
+	for cell in get_emplacement_cells(anchor):
+		_emplacement_anchor_by_cell.erase(cell)
+		_invalidate_highest_cache(cell.x, cell.z)
+		_increment_revision(cell)
+		_record_transaction_mutation(cell)
+	var coord := ChunkCoord.world_to_chunk_vec3i(anchor, chunk_size)
+	var chunk_emplacements := _emplacement_blocks_by_chunk.get(coord, {}) as Dictionary
+	chunk_emplacements.erase(anchor)
+	if chunk_emplacements.is_empty():
+		_emplacement_blocks_by_chunk.erase(coord)
+	_emplacement_block_by_anchor.erase(anchor)
+
+func _index_emplacement(anchor: Vector3i, block_id: int) -> void:
+	_emplacement_block_by_anchor[anchor] = block_id
+	var coord := ChunkCoord.world_to_chunk_vec3i(anchor, chunk_size)
+	if not _emplacement_blocks_by_chunk.has(coord):
+		_emplacement_blocks_by_chunk[coord] = {}
+	(_emplacement_blocks_by_chunk[coord] as Dictionary)[anchor] = block_id
+	var definition := block_catalog.get_definition(block_id)
+	for offset in definition.emplacement.occupied_offsets:
+		_emplacement_anchor_by_cell[anchor + offset] = anchor
+	for offset in definition.emplacement.support_offsets:
+		var support_cell := anchor + offset
+		if not _emplacement_anchors_by_support_cell.has(support_cell):
+			_emplacement_anchors_by_support_cell[support_cell] = {}
+		(_emplacement_anchors_by_support_cell[support_cell] as Dictionary)[anchor] = true
+
+func _vector3i_less(left: Vector3i, right: Vector3i) -> bool:
+	if left.x != right.x:
+		return left.x < right.x
+	if left.y != right.y:
+		return left.y < right.y
+	return left.z < right.z
 
 func _apply_prepared_replace(prepared: PreparedVoxelWorldChange) -> void:
 	var p := prepared._get_position()
@@ -627,6 +831,7 @@ func _invalidate_prepared_transactions() -> void:
 
 func _snapshot_transaction_cell(position: Vector3i) -> Dictionary:
 	var column := Vector2i(position.x, position.z)
+	var emplacement_anchor: Variant = _emplacement_anchor_by_cell.get(position, null)
 	return {
 		"block_id": get_block_id_at(position),
 		"has_placed_edit": _placed_blocks.has(position),
@@ -637,6 +842,8 @@ func _snapshot_transaction_cell(position: Vector3i) -> Dictionary:
 		"has_copper_block": copper_block_fast.has(position),
 		"copper_block": copper_block_fast.get(position, null),
 		"torch_attachment": torch_attachments.get(position, Vector3i.ZERO),
+		"emplacement_anchor": emplacement_anchor,
+		"emplacement_block": _emplacement_block_by_anchor.get(emplacement_anchor, null),
 		"protected": is_edit_protected(position),
 		"terrain_height": height_map_dict.get(column, null),
 		"terrain_type": type_map_dict.get(column, null),

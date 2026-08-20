@@ -3,7 +3,7 @@ class_name SaveManager
 
 const SAVE_DIR: String = "user://saves"
 const SLOT_COUNT: int = 3
-const CURRENT_SAVE_VERSION: int = 13
+const CURRENT_SAVE_VERSION: int = 14
 const MINIMUM_MIGRATABLE_SAVE_VERSION: int = 4
 const VERSION_SEVEN_BASE_EXPERIENCE_TO_LEVEL: int = 100
 const VERSION_SEVEN_EXPERIENCE_GROWTH: float = 1.25
@@ -100,6 +100,7 @@ static func create_new_world(slot_id: int, seed_value: int, world_name: String) 
 		"placed_blocks": {},
 		"removed_blocks": {},
 		"torch_attachments": {},
+		"emplacements": {},
 		"chests": {},
 		"player_position": null,
 		"player_stats": null,
@@ -200,18 +201,21 @@ static func decode_world_state(data: Dictionary) -> Variant:
 	var placed_raw = data.get("placed_blocks", null)
 	var removed_raw = data.get("removed_blocks", null)
 	var torch_raw = data.get("torch_attachments", null)
+	var emplacements_raw = data.get("emplacements", null)
 	if (
 		typeof(encoded_seed) != TYPE_INT
 		or int(encoded_seed) < 1
 		or not placed_raw is Dictionary
 		or not removed_raw is Dictionary
 		or not torch_raw is Dictionary
+		or not emplacements_raw is Dictionary
 	):
 		return null
 	var placed = _deserialize_block_ids(placed_raw)
 	var removed = _deserialize_removed_blocks(removed_raw)
 	var torch_attachments = _deserialize_torch_attachments(torch_raw)
-	if placed == null or removed == null or torch_attachments == null:
+	var emplacements = _deserialize_block_ids(emplacements_raw)
+	if placed == null or removed == null or torch_attachments == null or emplacements == null:
 		return null
 	for position in placed:
 		if removed.has(position):
@@ -236,6 +240,7 @@ static func decode_world_state(data: Dictionary) -> Variant:
 		placed,
 		removed,
 		torch_attachments,
+		emplacements,
 		position
 	)
 
@@ -284,6 +289,8 @@ static func load_slot(slot_id: int, item_catalog: ItemCatalog) -> Dictionary:
 		info["removed_blocks"] = {}
 	if not info.has("torch_attachments"):
 		info["torch_attachments"] = {}
+	if not info.has("emplacements"):
+		info["emplacements"] = {}
 	info.erase("copper_blocks")
 	info.erase("generated_copper_chunks")
 	if not info.has("time_of_day"):
@@ -365,6 +372,11 @@ static func _migrate_save_data(data: Dictionary, item_catalog: ItemCatalog) -> b
 					"entries": [],
 				}
 				version = 13
+			13:
+				if migrated.has("emplacements"):
+					return false
+				migrated["emplacements"] = {}
+				version = 14
 			_:
 				return false
 		migrated["version"] = version
@@ -867,6 +879,7 @@ static func save_world_state(
 	updated["placed_blocks"] = serialize_vector3i_dict(block_edits["placed"])
 	updated["removed_blocks"] = serialize_vector3i_dict(block_edits["removed"])
 	updated["torch_attachments"] = serialize_vector3i_dict(voxel_model.torch_attachments)
+	updated["emplacements"] = serialize_vector3i_dict(voxel_model.snapshot_emplacements())
 	updated["chests"] = serialize_vector3i_dict(chest_snapshot)
 	updated.erase("chest_inventories")
 	updated.erase("copper_blocks")
