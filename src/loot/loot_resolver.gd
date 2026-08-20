@@ -55,6 +55,59 @@ static func prepare(
 		drops,
 	)
 
+static func prepare_bundle(
+	bundle: LootBundleDefinition,
+	seed: int,
+	equipment_instance_factory: EquipmentInstanceFactory,
+) -> PreparedLootResolution:
+	assert(bundle != null)
+	assert(equipment_instance_factory != null)
+	var expected_next_instance_id := equipment_instance_factory.get_next_instance_id()
+	var pending_factory := equipment_instance_factory.copy()
+	var minimum_rewards := maxi(1, bundle.fixed_entries.size())
+	var target_reward_count := LootKeyedRandom.integer_inclusive(
+		seed,
+		bundle.id,
+		_path([&"bundle", &"count"]),
+		minimum_rewards,
+		bundle.max_rewards,
+	)
+	var selected: Array[Dictionary] = []
+	for entry in bundle.fixed_entries:
+		selected.append({"id": entry.id, "drop": entry.drop})
+	var remaining: Array[LootWeightedChoiceDefinition] = bundle.weighted_candidates.duplicate()
+	remaining.sort_custom(_definition_id_less)
+	for draw_index in range(target_reward_count - selected.size()):
+		var choice_index := _weighted_index(
+			seed,
+			bundle.id,
+			_path([&"bundle", &"candidate_draw", StringName(str(draw_index))]),
+			_choice_weights(remaining),
+		)
+		var choice := remaining[choice_index]
+		selected.append({"id": choice.id, "drop": choice.drop})
+		remaining.remove_at(choice_index)
+	selected.sort_custom(_bundle_entry_id_less)
+	var drops: Array[InventoryStack] = []
+	for entry in selected:
+		var entry_id := entry["id"] as StringName
+		var stack := _resolve_drop(
+			bundle.id,
+			seed,
+			_path([&"bundle", &"entry", entry_id]),
+			entry["drop"] as LootDropDefinition,
+			pending_factory,
+		)
+		if stack == null:
+			return null
+		drops.append(stack)
+	return PreparedLootResolution.new(
+		equipment_instance_factory,
+		expected_next_instance_id,
+		pending_factory.get_next_instance_id(),
+		drops,
+	)
+
 static func _can_commit(
 	prepared: PreparedLootResolution,
 	equipment_instance_factory: EquipmentInstanceFactory,
@@ -225,6 +278,9 @@ static func _rune_weights(choices: Array[LootRuneChoiceDefinition]) -> Array[flo
 
 static func _definition_id_less(left: Resource, right: Resource) -> bool:
 	return String(left.get("id")) < String(right.get("id"))
+
+static func _bundle_entry_id_less(left: Dictionary, right: Dictionary) -> bool:
+	return String(left["id"]) < String(right["id"])
 
 static func _child_path(path: Array[StringName], child: StringName) -> Array[StringName]:
 	var result := path.duplicate()

@@ -34,6 +34,24 @@ static func validate(pool: LootPoolDefinition, item_catalog: ItemCatalog) -> boo
 			) and valid
 	return valid
 
+static func validate_bundle(bundle: LootBundleDefinition, item_catalog: ItemCatalog) -> bool:
+	if bundle == null or item_catalog == null or not bundle.validate():
+		return false
+	var valid := true
+	for entry in bundle.fixed_entries:
+		valid = _validate_drop(
+			entry.drop,
+			item_catalog,
+			"bundle %s fixed entry %s" % [bundle.id, entry.id],
+		) and valid
+	for candidate in bundle.weighted_candidates:
+		valid = _validate_drop(
+			candidate.drop,
+			item_catalog,
+			"bundle %s weighted candidate %s" % [bundle.id, candidate.id],
+		) and valid
+	return valid
+
 static func _validate_drop(drop: LootDropDefinition, item_catalog: ItemCatalog, source: String) -> bool:
 	if drop == null or drop.item == null:
 		return false
