@@ -69,7 +69,12 @@ func _process(_delta: float) -> bool:
 		_expect(_action_uses_key("toggle_backpack", KEY_P), "toggle_backpack was not mapped to P")
 		_expect(_action_uses_key("toggle_crafting", KEY_TAB), "toggle_crafting was not mapped to Tab")
 		_hud.toggle_crafting()
-	elif _phase == 1 and _frame == 68:
+		_phase = 2
+	elif _phase == 2 and _frame == 68:
+		_expect(not _hud.side_panel.is_open() and not _hud.crafting_panel.is_open(), "first Tab did not close the backpack-only view")
+		_hud.toggle_crafting()
+		_phase = 3
+	elif _phase == 3 and _frame == 101:
 		_check_open_state()
 		var sound_player := _hud.crafting_panel.get_node("CraftingSoundPlayer") as AudioStreamPlayer
 		_expect(sound_player.stream.resource_path == "res://assets/audio/sfx/tools/impactGeneric_light_004.ogg", "crafting used the wrong success sound")
@@ -98,8 +103,8 @@ func _process(_delta: float) -> bool:
 		_expect(not _recipe_catalog.has_definition(&"iron_pickaxe"), "Iron Pickaxe progression reward appeared in general crafting")
 		sound_player.stop()
 		_hud.close_side_panel()
-		_phase = 2
-	elif _phase == 2 and _frame == 70:
+		_phase = 4
+	elif _phase == 4 and _frame == 103:
 		_expect(not _hud.side_panel.is_open() and not _hud.crafting_panel.is_open(), "HUD panels did not close together")
 		_expect(_inventory.get_inventory_item_count(&"basic_rune") == 0, "failed rune craft added output")
 		_expect(_inventory.get_inventory_item_count(&"copper") == 15, "closing backpack consumed copper")
@@ -108,8 +113,8 @@ func _process(_delta: float) -> bool:
 		_camera_rig.free()
 		_camera_follow.free()
 		_unhandled_input_probe.free()
-		_phase = 3
-	elif _phase == 3 and _frame == 80:
+		_phase = 5
+	elif _phase == 5 and _frame == 113:
 		_finish()
 	return false
 

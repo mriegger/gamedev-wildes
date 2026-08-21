@@ -149,13 +149,9 @@ func toggle_backpack():
 func toggle_crafting():
 	if anvil_panel.is_open():
 		close_anvil()
-		side_panel.open()
-		crafting_panel.open()
 		return
 	if cauldron_panel.is_open():
 		close_cauldron()
-		side_panel.open()
-		crafting_panel.open()
 		return
 	if chest_panel.is_open():
 		chest_panel.close()
@@ -164,9 +160,12 @@ func toggle_crafting():
 		return
 	if crafting_panel.is_open():
 		close_side_panel()
-	else:
-		side_panel.open()
-		crafting_panel.open()
+		return
+	if side_panel.is_open():
+		side_panel.close()
+		return
+	side_panel.open()
+	crafting_panel.open()
 
 func close_side_panel():
 	side_panel.close()

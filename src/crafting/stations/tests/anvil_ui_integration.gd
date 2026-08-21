@@ -122,15 +122,20 @@ func _process(_delta: float) -> bool:
 		_phase = 3
 	elif _phase == 3 and _frame == 101:
 		_expect(not _hud.anvil_panel.is_open(), "Tab did not close the anvil")
-		_expect(_hud.crafting_panel.is_open() and _hud.side_panel.is_open(), "Tab did not open general crafting and the backpack")
+		_expect(not _hud.crafting_panel.is_open(), "first Tab opened general crafting while closing the anvil")
+		_expect(not _hud.side_panel.is_open(), "closing the anvil with Tab left the backpack open")
+		_hud.toggle_crafting()
+		_phase = 4
+	elif _phase == 4 and _frame == 134:
+		_expect(_hud.crafting_panel.is_open() and _hud.side_panel.is_open(), "second Tab did not open general crafting and the backpack")
 		var general_recipe_list := _hud.crafting_panel.get_node("Margin/Content/Body/Recipes/RecipeScroll/RecipeList") as VBoxContainer
 		_expect(general_recipe_list.get_child_count() == 8, "general crafting contains metal recipes or is missing a recipe")
 		_hud.crafting_panel.select_recipe(&"stone_pickaxe")
 		var general_stats := _hud.crafting_panel.get_node("Margin/Content/Body/Details/Stats") as RichTextLabel
 		_expect(general_stats.visible and general_stats.get_parsed_text().contains("Mining Power: 1") and general_stats.get_parsed_text().contains("Speed Multiplier: 1.5x"), "stone pickaxe recipe stats are incomplete")
 		_hud.open_crafting_station(_cauldron_position, _cauldron_station)
-		_phase = 4
-	elif _phase == 4 and _frame == 134:
+		_phase = 5
+	elif _phase == 5 and _frame == 167:
 		_expect(_hud.side_panel.is_open(), "opening the cauldron did not keep the backpack open")
 		_expect(_hud.cauldron_panel.is_open() and _hud.cauldron_panel.get_progress() > 0.95, "cauldron panel did not open")
 		_expect(not _hud.anvil_panel.is_open() and not _hud.crafting_panel.is_open(), "another crafting panel remained open with the cauldron")
@@ -152,21 +157,37 @@ func _process(_delta: float) -> bool:
 		_expect(VoxelWorldTestFixture.commit_place(_world, _cauldron_position, BlockId.Type.CAULDRON) != null, "test cauldron could not be restored")
 		_hud.open_crafting_station(_cauldron_position, _cauldron_station)
 		_hud.toggle_backpack()
-		_phase = 5
-	elif _phase == 5 and _frame == 167:
+		_phase = 6
+	elif _phase == 6 and _frame == 200:
 		_expect(not _hud.cauldron_panel.is_open() and not _hud.side_panel.is_open(), "P did not close the cauldron and backpack")
 		_hud.open_crafting_station(_cauldron_position, _cauldron_station)
 		_hud.toggle_crafting()
-		_phase = 6
-	elif _phase == 6 and _frame == 200:
+		_phase = 7
+	elif _phase == 7 and _frame == 233:
 		_expect(not _hud.cauldron_panel.is_open(), "Tab did not close the cauldron")
-		_expect(_hud.crafting_panel.is_open() and _hud.side_panel.is_open(), "Tab did not open general crafting after the cauldron")
+		_expect(not _hud.crafting_panel.is_open(), "first Tab opened general crafting while closing the cauldron")
+		_expect(not _hud.side_panel.is_open(), "closing the cauldron with Tab left the backpack open")
+		_hud.toggle_crafting()
+		_phase = 8
+	elif _phase == 8 and _frame == 266:
+		_expect(_hud.crafting_panel.is_open() and _hud.side_panel.is_open(), "second Tab did not open general crafting after the cauldron")
 		_expect(_camera_rig._left_panel_progress > 0.95, "closing the cauldron cleared the open general panel camera offset")
+		_hud.close_side_panel_immediate()
+		_hud.side_panel.open()
+		_hud.side_panel._process(1.0)
+		_hud.toggle_crafting()
+		_phase = 9
+	elif _phase == 9 and _frame == 299:
+		_expect(not _hud.side_panel.is_open() and not _hud.crafting_panel.is_open(), "first Tab opened crafting while closing an open backpack")
+		_hud.toggle_crafting()
+		_phase = 10
+	elif _phase == 10 and _frame == 332:
+		_expect(_hud.side_panel.is_open() and _hud.crafting_panel.is_open(), "second Tab did not open general crafting after closing the backpack")
 		_hud.free()
 		_camera_rig.free()
 		_camera_follow.free()
-		_phase = 7
-	elif _phase == 7 and _frame == 210:
+		_phase = 11
+	elif _phase == 11 and _frame == 342:
 		_finish()
 	return false
 
