@@ -736,6 +736,27 @@ func _run():
 	var bow_source := _find_inventory_item(&"bow")
 	_expect(bow_source >= 0 and (bow_source == 0 or _inventory_loadout.assign_slot_to_hotbar(bow_source, 0)), "bow could not be moved to the selected slot")
 	_expect(_interactor.get_selected_primary_action() == bow_action and _player.held_item_view.held_node is BowHeldView, "selected bow did not expose its draw action in the right hand")
+	var equipped_bow_mouse_position := _interactor.get_viewport().get_mouse_position()
+	var equipped_bow_ray_origin := _camera.project_ray_origin(equipped_bow_mouse_position)
+	var equipped_bow_ray_direction := _camera.project_ray_normal(equipped_bow_mouse_position).normalized()
+	var equipped_bow_aim := _interactor._get_cursor_planar_direction(equipped_bow_ray_origin, equipped_bow_ray_direction)
+	_expect(not equipped_bow_aim.is_zero_approx(), "equipped bow cursor ray did not reach the player-facing plane")
+	var equipped_bow_target_yaw := atan2(equipped_bow_aim.x, equipped_bow_aim.z)
+	var equipped_bow_start_yaw := equipped_bow_target_yaw - 1.0
+	_player.model_root.rotation.y = equipped_bow_start_yaw
+	_player.is_sprinting = false
+	_interactor._update_action_facing(0.1)
+	_expect(is_equal_approx(
+		_player.model_root.rotation.y,
+		lerp_angle(equipped_bow_start_yaw, equipped_bow_target_yaw, 1.0 - exp(-10.0 * 0.1)),
+	), "equipped bow did not smoothly track the cursor before drawing")
+	_player.model_root.rotation.y = equipped_bow_start_yaw
+	_player._turn_toward_movement(-equipped_bow_aim, 0.1)
+	_expect(is_equal_approx(_player.model_root.rotation.y, equipped_bow_start_yaw), "walking movement overrode equipped bow cursor-facing")
+	_player.is_sprinting = true
+	_player._turn_toward_movement(-equipped_bow_aim, 0.1)
+	_expect(not is_equal_approx(_player.model_root.rotation.y, equipped_bow_start_yaw), "sprinting with an equipped bow did not restore movement-facing")
+	_player.is_sprinting = false
 	var arrows_before_interactions := _inventory.get_inventory_item_count(&"stone_arrow")
 	_interactor.target_has = true
 	_interactor.can_interact_target = true

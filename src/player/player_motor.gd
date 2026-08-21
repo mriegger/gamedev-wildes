@@ -372,4 +372,4 @@ func _selected_action_locks_cursor_facing() -> bool:
 	var action := _inventory_model.item_catalog.get_definition(selected_item_id).primary_action
 	if action is MeleeAttackActionDefinition:
 		return not is_sprinting
-	return action is BowDrawActionDefinition and interactor.is_drawing_bow()
+	return action is BowDrawActionDefinition and (interactor.is_drawing_bow() or not is_sprinting)

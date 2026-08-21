@@ -678,13 +678,12 @@ func _update_action_facing(delta: float):
 		return
 	var selected_primary := get_selected_primary_action()
 	if selected_primary is BowDrawActionDefinition:
-		if not is_drawing_bow():
+		if is_drawing_bow():
+			var bow_cursor_direction := Vector3(_bow_aim_target.x - motor.global_position.x, 0.0, _bow_aim_target.z - motor.global_position.z).normalized()
+			if not bow_cursor_direction.is_zero_approx():
+				motor.face_direction(bow_cursor_direction)
 			return
-		var bow_cursor_direction := Vector3(_bow_aim_target.x - motor.global_position.x, 0.0, _bow_aim_target.z - motor.global_position.z).normalized()
-		if not bow_cursor_direction.is_zero_approx():
-			motor.face_direction(bow_cursor_direction)
-		return
-	if not selected_primary is MeleeAttackActionDefinition:
+	elif not selected_primary is MeleeAttackActionDefinition:
 		return
 	if melee_attack_action != null and melee_attack_timer > 0.0 and melee_attack_elapsed < melee_attack_action.attack_profile.duration:
 		motor.face_direction(_melee_locked_facing_direction)
