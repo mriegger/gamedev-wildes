@@ -1,0 +1,107 @@
+[gd_scene load_steps=12 format=3]
+
+[ext_resource type="Script" path="res://ui/screens/main_menu/menu_experience.gd" id="1_script"]
+[ext_resource type="PackedScene" path="res://world/world.tscn" id="2_world"]
+[ext_resource type="PackedScene" path="res://environment/environment.tscn" id="3_environment"]
+[ext_resource type="Script" path="res://ui/screens/main_menu/menu_cinematic_population.gd" id="4_population"]
+[ext_resource type="AudioStream" path="res://assets/audio/menu/sb_iha_confessions_modified.ogg" id="5_music"]
+[ext_resource type="PackedScene" path="res://ui/screens/main_menu/main_menu.tscn" id="6_menu"]
+[ext_resource type="PackedScene" path="res://ui/screens/settings/settings_screen.tscn" id="7_settings"]
+[ext_resource type="Resource" path="res://ui/screens/main_menu/menu_cinematic_profile.tres" id="8_profile"]
+[ext_resource type="Resource" path="res://blocks/block_catalog.tres" id="9_blocks"]
+[ext_resource type="Resource" path="res://foliage/foliage_catalog.tres" id="10_foliage"]
+[ext_resource type="Resource" path="res://entities/entity_catalog.tres" id="11_entities"]
+
+[node name="MenuExperience" type="Node3D"]
+script = ExtResource("1_script")
+profile = ExtResource("8_profile")
+block_catalog = ExtResource("9_blocks")
+foliage_catalog = ExtResource("10_foliage")
+entity_catalog = ExtResource("11_entities")
+
+[node name="World" parent="." instance=ExtResource("2_world")]
+
+[node name="Environment" parent="." instance=ExtResource("3_environment")]
+
+[node name="Population" type="Node3D" parent="."]
+script = ExtResource("4_population")
+
+[node name="StreamingFocus" type="Node3D" parent="."]
+
+[node name="CameraRig" type="Node3D" parent="."]
+
+[node name="Pitch" type="Node3D" parent="CameraRig"]
+rotation_degrees = Vector3(-42, 0, 0)
+
+[node name="Camera3D" type="Camera3D" parent="CameraRig/Pitch"]
+position = Vector3(0, 0, 70)
+projection = 1
+size = 40.0
+near = 0.1
+far = 1000.0
+current = true
+
+[node name="MusicPlayer" type="AudioStreamPlayer" parent="."]
+stream = ExtResource("5_music")
+bus = &"Music"
+
+[node name="WorldCoverLayer" type="CanvasLayer" parent="."]
+layer = 10
+
+[node name="WorldCover" type="ColorRect" parent="WorldCoverLayer"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0, 0, 0, 1)
+
+[node name="Interface" type="CanvasLayer" parent="."]
+layer = 20
+
+[node name="MainMenu" parent="Interface" instance=ExtResource("6_menu")]
+
+[node name="SettingsLayer" type="Control" parent="Interface"]
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+
+[node name="Dim" type="ColorRect" parent="Interface/SettingsLayer"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 1
+color = Color(0, 0, 0, 0.62)
+
+[node name="Center" type="CenterContainer" parent="Interface/SettingsLayer"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Panel" type="Panel" parent="Interface/SettingsLayer/Center"]
+custom_minimum_size = Vector2(700, 690)
+layout_mode = 2
+
+[node name="SettingsScreen" parent="Interface/SettingsLayer/Center/Panel" instance=ExtResource("7_settings")]
+
+[node name="FullFade" type="ColorRect" parent="Interface"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0, 0, 0, 1)

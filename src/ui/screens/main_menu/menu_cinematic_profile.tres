@@ -1,0 +1,119 @@
+[gd_resource type="Resource" script_class="MenuCinematicProfile" load_steps=14 format=3]
+
+[ext_resource type="Script" path="res://ui/screens/main_menu/menu_cinematic_spawn.gd" id="1_spawn"]
+[ext_resource type="Script" path="res://ui/screens/main_menu/menu_cinematic_shot.gd" id="2_shot"]
+[ext_resource type="Script" path="res://ui/screens/main_menu/menu_cinematic_profile.gd" id="3_profile"]
+
+[sub_resource type="Resource" id="Spawn_meadow_sheep"]
+script = ExtResource("1_spawn")
+entity_id = &"sheep"
+count = 4
+column_offset = Vector2i(-5, 3)
+spread_radius = 5
+behavior_seed = 4101
+
+[sub_resource type="Resource" id="Spawn_meadow_birds"]
+script = ExtResource("1_spawn")
+entity_id = &"bird"
+count = 3
+column_offset = Vector2i(6, -4)
+spread_radius = 6
+behavior_seed = 4201
+
+[sub_resource type="Resource" id="Shot_sunrise_meadow"]
+script = ExtResource("2_shot")
+id = &"sunrise_meadow"
+duration_seconds = 10.0
+time_of_day = 6.75
+anchor = Vector2i(0, 0)
+yaw_degrees = 225.0
+pitch_degrees = -40.0
+orthographic_size = 35.0
+drift = Vector2(4, 2)
+spawns = Array[ExtResource("1_spawn")]([SubResource("Spawn_meadow_sheep"), SubResource("Spawn_meadow_birds")])
+
+[sub_resource type="Resource" id="Shot_forest_water"]
+script = ExtResource("2_shot")
+id = &"forest_water"
+duration_seconds = 10.0
+time_of_day = 12.5
+anchor = Vector2i(32, 22)
+yaw_degrees = 135.0
+pitch_degrees = -43.0
+orthographic_size = 42.0
+drift = Vector2(-5, 3)
+
+[sub_resource type="Resource" id="Spawn_highland_slime"]
+script = ExtResource("1_spawn")
+entity_id = &"slime_large"
+count = 1
+column_offset = Vector2i(-5, 2)
+spread_radius = 4
+behavior_seed = 4301
+
+[sub_resource type="Resource" id="Spawn_highland_golem"]
+script = ExtResource("1_spawn")
+entity_id = &"stone_golem"
+count = 1
+column_offset = Vector2i(6, -2)
+spread_radius = 4
+behavior_seed = 4401
+
+[sub_resource type="Resource" id="Shot_sunset_highland"]
+script = ExtResource("2_shot")
+id = &"sunset_highland"
+duration_seconds = 10.0
+time_of_day = 18.0
+anchor = Vector2i(-34, 30)
+yaw_degrees = 300.0
+pitch_degrees = -38.0
+orthographic_size = 38.0
+drift = Vector2(5, -3)
+spawns = Array[ExtResource("1_spawn")]([SubResource("Spawn_highland_slime"), SubResource("Spawn_highland_golem")])
+
+[sub_resource type="Resource" id="Spawn_moonlit_zombies"]
+script = ExtResource("1_spawn")
+entity_id = &"zombie"
+count = 2
+column_offset = Vector2i(-5, 3)
+spread_radius = 5
+behavior_seed = 4501
+
+[sub_resource type="Resource" id="Spawn_moonlit_skeletons"]
+script = ExtResource("1_spawn")
+entity_id = &"skeleton"
+count = 2
+column_offset = Vector2i(5, 1)
+spread_radius = 5
+behavior_seed = 4601
+
+[sub_resource type="Resource" id="Spawn_moonlit_watcher"]
+script = ExtResource("1_spawn")
+entity_id = &"watcher"
+count = 1
+column_offset = Vector2i(0, -7)
+spread_radius = 4
+behavior_seed = 4701
+
+[sub_resource type="Resource" id="Shot_moonlit_vista"]
+script = ExtResource("2_shot")
+id = &"moonlit_vista"
+duration_seconds = 10.0
+time_of_day = 23.0
+anchor = Vector2i(34, -32)
+yaw_degrees = 45.0
+pitch_degrees = -45.0
+orthographic_size = 44.0
+drift = Vector2(-4, -2)
+spawns = Array[ExtResource("1_spawn")]([SubResource("Spawn_moonlit_zombies"), SubResource("Spawn_moonlit_skeletons"), SubResource("Spawn_moonlit_watcher")])
+
+[resource]
+script = ExtResource("3_profile")
+world_seed = 1337
+maximum_anchor_radius = 72.0
+logo_delay_seconds = 0.5
+logo_fade_seconds = 1.5
+world_fade_seconds = 2.0
+controls_fade_seconds = 2.0
+crossfade_seconds = 1.25
+shots = Array[ExtResource("2_shot")]([SubResource("Shot_sunrise_meadow"), SubResource("Shot_forest_water"), SubResource("Shot_sunset_highland"), SubResource("Shot_moonlit_vista")])

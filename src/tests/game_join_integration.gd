@@ -34,7 +34,7 @@ func _run() -> void:
 	_expect(_world_was_inert_at_generation, "world processing started before player injection")
 	if _session_ready:
 		_expect(_world.is_processing(), "world processing did not start after player injection")
-		_expect(_world._player_ref == _game.player, "world retained the wrong player dependency")
+		_expect(_world._streaming_focus == _game.player, "world retained the wrong streaming dependency")
 		_expect(_game.pumpkin_patch.has_patch(), "new world did not create a pumpkin patch")
 		_validate_pumpkin_footprint()
 		_validate_startup_save()
@@ -55,7 +55,7 @@ func _on_generation_progress(stage: String, _percent: float, _details: String) -
 	if stage != "done":
 		return
 	_world_generation_done = true
-	_world_was_inert_at_generation = not _world.is_processing() and _world._player_ref == null
+	_world_was_inert_at_generation = not _world.is_processing() and _world._streaming_focus == null
 	_world.voxel_model.foliage_visibility_changed.connect(_on_foliage_visibility_changed)
 
 func _on_session_ready() -> void:

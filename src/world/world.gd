@@ -34,7 +34,7 @@ var _settings: GameSettings
 var _water_ripples := WaterRipplePresentation.new()
 
 var _start_state: WorldState
-var _player_ref: Node3D
+var _streaming_focus: Node3D
 var _suspended: bool = false
 
 func _ready():
@@ -153,7 +153,7 @@ func _process(delta: float):
 	if _suspended:
 		return
 	_water_ripples.tick(delta)
-	chunk_manager.tick(_player_ref.global_position)
+	chunk_manager.tick(_streaming_focus.global_position)
 	chunk_manager.poll_completed()
 	voxel_model.prune_terrain_cache(2)
 	torch_renderer.update_shadow_culling(delta)
@@ -233,11 +233,11 @@ func _is_foliage_only_edit(edit: BlockEdit) -> bool:
 	var new_is_foliage := BlockId.is_foliage(edit.new_id)
 	return (old_is_foliage or new_is_foliage) and (old_is_foliage or edit.old_id == BlockId.Type.AIR) and (new_is_foliage or edit.new_id == BlockId.Type.AIR)
 
-func set_player_ref(player: Node3D):
-	assert(player != null and chunk_manager != null)
-	_player_ref = player
-	torch_renderer.set_player_ref(player)
-	campfire_renderer.set_player_ref(player)
+func set_streaming_focus(focus: Node3D):
+	assert(focus != null and chunk_manager != null)
+	_streaming_focus = focus
+	torch_renderer.set_player_ref(focus)
+	campfire_renderer.set_player_ref(focus)
 	set_process(true)
 
 func is_position_streamed(position: Vector3) -> bool:

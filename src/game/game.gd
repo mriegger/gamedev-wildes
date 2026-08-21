@@ -563,7 +563,7 @@ func _setup_gameplay() -> bool:
 	hud.setup_progression(player_stats, player_perk_coordinator)
 	hud.setup_consumption(item_consumption_coordinator)
 	hud.setup_compass(camera_rig.camera, player)
-	world.set_player_ref(player)
+	world.set_streaming_focus(player)
 	camera_rig.snap_to_follow_target()
 	camera_rig.current_yaw_deg = camera_rig.target_yaw_deg
 	camera_rig.camera.current = true

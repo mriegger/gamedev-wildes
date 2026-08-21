@@ -1,94 +1,182 @@
-[gd_scene format=3 uid="uid://dbky24qcjb3wy"]
+[gd_scene load_steps=6 format=3 uid="uid://dbky24qcjb3wy"]
 
-[ext_resource type="Script" uid="uid://w523kj2j4utk" path="res://ui/screens/main_menu/main_menu.gd" id="1_script"]
-[ext_resource type="PackedScene" uid="uid://bwildesbtn01" path="res://ui/components/wildes_button.tscn" id="2_btn"]
-[ext_resource type="Texture2D" uid="uid://7lrpeacnbbgg" path="res://assets/images/logo/wildes_white.png" id="3_logo"]
+[ext_resource type="Script" path="res://ui/screens/main_menu/main_menu.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/images/logo/wildes_logo_white.png" id="2_logo"]
+[ext_resource type="Texture2D" path="res://assets/images/logo/wildes_logo_shadow.png" id="3_shadow"]
+[ext_resource type="Theme" path="res://ui/theme/thin_loading_bar_theme.tres" id="4_loading_theme"]
 
-[node name="MainMenu" type="Control" unique_id=1996100347]
+[sub_resource type="StyleBoxEmpty" id="Style_text_button"]
+
+[node name="MainMenu" type="Control"]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-mouse_filter = 2
+mouse_filter = 1
 script = ExtResource("1_script")
 
-[node name="Background" type="ColorRect" parent="." unique_id=515035912]
+[node name="LogoGroup" type="Control" parent="."]
 layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -220.0
+offset_top = -62.0
+offset_right = 220.0
+offset_bottom = 62.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-color = Color(0.11, 0.13, 0.16, 1)
 
-[node name="DimOverlay" type="ColorRect" parent="." unique_id=273094164]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
+[node name="Shadow" type="TextureRect" parent="LogoGroup"]
+self_modulate = Color(1, 1, 1, 0.62)
+layout_mode = 0
+offset_left = -6.0
+offset_top = -6.0
+offset_right = 446.0
+offset_bottom = 140.0
 mouse_filter = 2
-color = Color(0, 0, 0, 0.22)
-
-[node name="SplitContainer" type="HBoxContainer" parent="." unique_id=1737213607]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-alignment = 1
-
-[node name="LeftSide" type="Control" parent="SplitContainer" unique_id=77122180]
-custom_minimum_size = Vector2(640, 0)
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
-mouse_filter = 2
-
-[node name="CenterContainer" type="CenterContainer" parent="SplitContainer/LeftSide" unique_id=85921638]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-offset_left = 10.0
-offset_top = -20.0
-offset_right = 10.0
-offset_bottom = -20.0
-
-[node name="Logo" type="TextureRect" parent="SplitContainer/LeftSide/CenterContainer" unique_id=1479520348]
-custom_minimum_size = Vector2(520, 203)
-layout_mode = 2
-size_flags_horizontal = 4
-size_flags_vertical = 4
-texture = ExtResource("3_logo")
+texture = ExtResource("3_shadow")
 expand_mode = 1
-stretch_mode = 6
+stretch_mode = 5
 
-[node name="RightSide" type="Control" parent="SplitContainer" unique_id=414487334]
-custom_minimum_size = Vector2(640, 0)
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
+[node name="Logo" type="TextureRect" parent="LogoGroup"]
+layout_mode = 0
+offset_left = 25.0
+offset_top = 20.0
+offset_right = 415.0
+offset_bottom = 104.0
 mouse_filter = 2
+texture = ExtResource("2_logo")
+expand_mode = 1
+stretch_mode = 5
 
-[node name="CenterContainer" type="CenterContainer" parent="SplitContainer/RightSide" unique_id=1291827847]
+[node name="LoadingBar" type="ProgressBar" parent="."]
+custom_minimum_size = Vector2(260, 4)
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -217.5
+offset_top = 78.0
+offset_right = 217.5
+offset_bottom = 82.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme = ExtResource("4_loading_theme")
+show_percentage = false
+accessibility_name = "Loading menu world"
+
+[node name="Controls" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -110.0
+offset_top = 110.0
+offset_right = 110.0
+offset_bottom = 210.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_constants/separation = 12
+
+[node name="PlayButton" type="Button" parent="Controls"]
+custom_minimum_size = Vector2(220, 44)
+layout_mode = 2
+focus_neighbor_bottom = NodePath("../SettingsButton")
+mouse_default_cursor_shape = 2
+theme_override_colors/font_color = Color(1, 1, 1, 0.92)
+theme_override_colors/font_disabled_color = Color(1, 1, 1, 0.92)
+theme_override_colors/font_hover_color = Color(1, 1, 1, 1)
+theme_override_colors/font_focus_color = Color(1, 1, 1, 1)
+theme_override_colors/font_pressed_color = Color(1, 1, 1, 0.78)
+theme_override_font_sizes/font_size = 27
+theme_override_styles/normal = SubResource("Style_text_button")
+theme_override_styles/hover = SubResource("Style_text_button")
+theme_override_styles/pressed = SubResource("Style_text_button")
+theme_override_styles/focus = SubResource("Style_text_button")
+theme_override_styles/disabled = SubResource("Style_text_button")
+text = "PLAY"
+
+[node name="Shadow" type="Label" parent="Controls/PlayButton"]
+show_behind_parent = true
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+offset_left = 2.0
+offset_top = 3.0
+offset_right = 2.0
+offset_bottom = 3.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
+theme_override_colors/font_color = Color(0, 0, 0, 0.58)
+theme_override_font_sizes/font_size = 27
+text = "PLAY"
+horizontal_alignment = 1
+vertical_alignment = 1
 
-[node name="PlayButton" parent="SplitContainer/RightSide/CenterContainer" unique_id=287007183 instance=ExtResource("2_btn")]
-custom_minimum_size = Vector2(250, 70)
+[node name="SettingsButton" type="Button" parent="Controls"]
+custom_minimum_size = Vector2(220, 44)
 layout_mode = 2
+focus_neighbor_top = NodePath("../PlayButton")
+mouse_default_cursor_shape = 2
+theme_override_colors/font_color = Color(1, 1, 1, 0.92)
+theme_override_colors/font_disabled_color = Color(1, 1, 1, 0.92)
+theme_override_colors/font_hover_color = Color(1, 1, 1, 1)
+theme_override_colors/font_focus_color = Color(1, 1, 1, 1)
+theme_override_colors/font_pressed_color = Color(1, 1, 1, 0.78)
+theme_override_font_sizes/font_size = 27
+theme_override_styles/normal = SubResource("Style_text_button")
+theme_override_styles/hover = SubResource("Style_text_button")
+theme_override_styles/pressed = SubResource("Style_text_button")
+theme_override_styles/focus = SubResource("Style_text_button")
+theme_override_styles/disabled = SubResource("Style_text_button")
+text = "SETTINGS"
+
+[node name="Shadow" type="Label" parent="Controls/SettingsButton"]
+show_behind_parent = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 2.0
+offset_top = 3.0
+offset_right = 2.0
+offset_bottom = 3.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0, 0, 0, 0.58)
+theme_override_font_sizes/font_size = 27
+text = "SETTINGS"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Credits" type="Label" parent="."]
+layout_mode = 1
+anchors_preset = 12
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 24.0
+offset_top = -44.0
+offset_right = -24.0
+offset_bottom = -18.0
+grow_horizontal = 2
+grow_vertical = 0
+mouse_filter = 2
+theme_override_colors/font_color = Color(1, 1, 1, 0.72)
+theme_override_font_sizes/font_size = 13
+text = "Justin Soberano-Borbonio     Fatai Fakoya     Michael Riegger     Daniel Dakev     Jason Jahn"
+horizontal_alignment = 1

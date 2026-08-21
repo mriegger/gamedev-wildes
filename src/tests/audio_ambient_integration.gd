@@ -25,6 +25,11 @@ func _run():
 	_expect(AudioServer.get_bus_index("Master") != -1, "Master bus missing")
 	_expect(AudioServer.get_bus_index("SFX") != -1, "SFX bus missing")
 	_expect(AudioServer.get_bus_index("Ambient") != -1, "Ambient bus missing")
+	_expect(AudioServer.get_bus_index("Music") != -1, "Music bus missing")
+	var menu_music := load("res://assets/audio/menu/sb_iha_confessions_modified.ogg") as AudioStreamOggVorbis
+	_expect(menu_music != null, "menu music did not import as streaming Ogg Vorbis")
+	_expect(is_equal_approx(menu_music.get_length(), 96.46447), "menu music duration changed")
+	_expect(not menu_music.loop, "menu music was configured to loop")
 
 	var packed = load("res://environment/ambient/ambient_soundscape.tscn") as PackedScene
 	_expect(packed != null, "ambient_soundscape.tscn load failed")
@@ -51,6 +56,7 @@ func _run():
 	_expect(clock.time_changed.get_connections().size() >= 1, "clock time_changed not connected")
 
 	var settings = GameSettings.new()
+	_expect(is_equal_approx(settings.music_volume, 0.8), "music volume default is not 0.8")
 	settings.ambient_volume = 0.0
 	settings.birds_enabled = true
 	amb.apply_settings(settings)
@@ -58,11 +64,16 @@ func _run():
 	_expect(birds.volume_db <= -79.0, "birds not muted at vol 0: %f" % birds.volume_db)
 
 	settings.ambient_volume = 0.42
+	settings.music_volume = 0.27
 	settings.birds_enabled = false
 	var restored_settings = GameSettings.new()
 	restored_settings._apply_dict(settings.to_dict())
 	_expect(is_equal_approx(restored_settings.ambient_volume, 0.42), "ambient volume did not persist")
+	_expect(is_equal_approx(restored_settings.music_volume, 0.27), "music volume did not persist")
 	_expect(not restored_settings.birds_enabled, "birds setting did not persist")
+	var legacy_settings := GameSettings.new()
+	legacy_settings._apply_dict({})
+	_expect(is_equal_approx(legacy_settings.music_volume, 0.8), "legacy settings did not retain the music volume default")
 
 	var settings_scene = load("res://ui/screens/settings/settings_screen.tscn") as PackedScene
 	var settings_screen = settings_scene.instantiate() as SettingsScreen
@@ -70,11 +81,15 @@ func _run():
 	await process_frame
 	settings_screen.setup(restored_settings)
 	_expect(is_equal_approx(settings_screen.ambient_volume.value, 0.42), "ambient volume control did not sync")
+	_expect(is_equal_approx(settings_screen.music_volume.value, 0.27), "music volume control did not sync")
 	_expect(not settings_screen.birds_enabled.button_pressed, "birds control did not sync")
+	settings_screen.music_volume.set_value_no_signal(0.58)
+	settings_screen.music_volume.value_changed.emit(0.58)
 	settings_screen.ambient_volume.set_value_no_signal(0.65)
 	settings_screen.ambient_volume.value_changed.emit(0.65)
 	settings_screen.birds_enabled.set_pressed_no_signal(true)
 	settings_screen.birds_enabled.toggled.emit(true)
+	_expect(is_equal_approx(restored_settings.music_volume, 0.58), "music volume control did not update settings")
 	_expect(is_equal_approx(restored_settings.ambient_volume, 0.65), "ambient volume control did not update settings")
 	_expect(restored_settings.birds_enabled, "birds control did not update settings")
 
