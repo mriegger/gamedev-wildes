@@ -7,6 +7,7 @@ const INVENTORY_CLOSE_SOUND: AudioStream = preload("res://assets/audio/sfx/ui/in
 const INVENTORY_DRAG_START_SOUND: AudioStream = preload("res://assets/audio/sfx/ui/inventory/drag/drag_start.ogg")
 const INVENTORY_DRAG_STOP_SOUND: AudioStream = preload("res://assets/audio/sfx/ui/inventory/drag/drag_stop.ogg")
 const DEFAULT_UI_CLICK_SOUND: AudioStream = preload("res://assets/audio/sfx/ui/click/default_click.ogg")
+const SECTION_NAVIGATION_SOUND: AudioStream = preload("res://assets/audio/sfx/ui/navigation/bookPlace2.ogg")
 
 @onready var hotbar: InventoryHotbar = $InventoryHotbar as InventoryHotbar
 @onready var health_bar: PlayerHealthBar = $HealthBar as PlayerHealthBar
@@ -28,10 +29,13 @@ var _left_panel_camera_rig: CameraRig
 var _external_menu_open: bool = false
 
 func _ready() -> void:
-	side_panel.ui_action_committed.connect(_on_ui_action_committed)
-	crafting_panel.ui_action_committed.connect(_on_ui_action_committed)
-	anvil_panel.ui_action_committed.connect(_on_ui_action_committed)
-	cauldron_panel.ui_action_committed.connect(_on_ui_action_committed)
+	side_panel.section_changed.connect(_on_section_changed)
+	crafting_panel.section_changed.connect(_on_section_changed)
+	anvil_panel.section_changed.connect(_on_section_changed)
+	cauldron_panel.section_changed.connect(_on_section_changed)
+	crafting_panel.recipe_selected.connect(_on_recipe_selected)
+	anvil_panel.recipe_selected.connect(_on_recipe_selected)
+	cauldron_panel.recipe_selected.connect(_on_recipe_selected)
 	for slot_view in hotbar.slot_nodes:
 		_bind_inventory_drag_slot(slot_view as InventorySlot)
 	for slot in side_panel.get_inventory_slots():
@@ -199,7 +203,10 @@ func _on_inventory_drag_started() -> void:
 func _on_inventory_drag_stopped() -> void:
 	_play_inventory_ui_sound(INVENTORY_DRAG_STOP_SOUND)
 
-func _on_ui_action_committed() -> void:
+func _on_section_changed(_section_id: StringName) -> void:
+	_play_inventory_ui_sound(SECTION_NAVIGATION_SOUND)
+
+func _on_recipe_selected(_recipe_id: StringName) -> void:
 	_play_inventory_ui_sound(DEFAULT_UI_CLICK_SOUND)
 
 func _play_inventory_ui_sound(stream: AudioStream) -> void:

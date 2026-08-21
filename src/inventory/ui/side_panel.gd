@@ -2,7 +2,7 @@ extends Control
 class_name SidePanel
 
 signal progress_changed(progress: float)
-signal ui_action_committed
+signal section_changed(section_id: StringName)
 
 const PANEL_WIDTH: float = 380.0
 const ANIM_DURATION: float = 0.25
@@ -157,7 +157,7 @@ func _on_tab_button_pressed(tab_id: String):
 		_switch_to_tab_id("inventory")
 	else:
 		_switch_to_tab_id(tab_id)
-	ui_action_committed.emit()
+	section_changed.emit(StringName(_current_tab_id))
 
 func _switch_to_tab_id(tab_id: String):
 	_current_tab_id = tab_id

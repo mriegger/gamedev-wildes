@@ -5,7 +5,8 @@ signal progress_changed(progress: float)
 signal opened
 signal closed
 signal interacted
-signal ui_action_committed
+signal section_changed(section_id: StringName)
+signal recipe_selected(recipe_id: StringName)
 
 const PANEL_WIDTH: float = 520.0
 const ANIM_DURATION: float = 0.25
@@ -195,7 +196,7 @@ func _on_workspace_tab_pressed(workspace_id: StringName) -> void:
 	var previous_workspace_id := _current_workspace_id
 	_switch_workspace(workspace_id)
 	if _current_workspace_id != previous_workspace_id:
-		ui_action_committed.emit()
+		section_changed.emit(_current_workspace_id)
 
 func _apply_workspace() -> void:
 	if not is_node_ready():
@@ -301,7 +302,7 @@ func _select_recipe(recipe_id: StringName) -> bool:
 
 func _on_recipe_pressed(recipe_id: StringName) -> void:
 	if _select_recipe(recipe_id):
-		ui_action_committed.emit()
+		recipe_selected.emit(recipe_id)
 
 func _on_recipe_scroll_gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:

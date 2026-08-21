@@ -1009,8 +1009,8 @@ func _start_armor_unequip() -> void:
 	if not equipment_view.visible:
 		_fail("equipment button did not open the equipment tab")
 		return
-	if _hud.inventory_ui_sound_player.stream != HUD.DEFAULT_UI_CLICK_SOUND:
-		_fail("equipment button did not play the default UI click")
+	if _hud.inventory_ui_sound_player.stream != HUD.SECTION_NAVIGATION_SOUND:
+		_fail("equipment button did not play the section navigation sound")
 		return
 	var equipment_slot := _hud.side_panel.get_equipment_slots()[ArmorDefinition.Slot.HEAD]
 	if equipment_slot.item_id != &"copper_helmet":
