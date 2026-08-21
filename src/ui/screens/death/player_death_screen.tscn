@@ -36,7 +36,7 @@ grow_vertical = 2
 mouse_filter = 2
 
 [node name="Panel" type="Panel" parent="ModalRoot/CenterContainer"]
-custom_minimum_size = Vector2(620, 440)
+custom_minimum_size = Vector2(408, 440)
 layout_mode = 2
 size_flags_horizontal = 0
 size_flags_vertical = 0
@@ -48,9 +48,9 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-offset_left = 36.0
+offset_left = 24.0
 offset_top = 36.0
-offset_right = -36.0
+offset_right = -24.0
 offset_bottom = -36.0
 theme_override_constants/separation = 22
 alignment = 1
@@ -71,6 +71,7 @@ mouse_filter = 2
 bbcode_enabled = true
 fit_content = true
 scroll_active = false
+autowrap_mode = 3
 theme_override_colors/default_color = Color(0.96, 0.95, 0.9, 1)
 theme_override_font_sizes/normal_font_size = 16
 

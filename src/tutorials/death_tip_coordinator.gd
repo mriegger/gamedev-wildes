@@ -13,6 +13,7 @@ const CRAFT_CAULDRON_TIP: String = "Tip: Craft a Cauldron to make health potions
 const USE_RECOVERY_ITEM_TIP: String = "Tip: Eat food or drink a health potion to replenish your health."
 const EQUIP_ARMOR_TIP: String = "Tip: Craft armor at the Anvil and equip it to improve your defense."
 const CROWD_TIP: String = "Tip: Use a Hammer to more easily manage crowds of enemies."
+const SLIME_ATTACHMENT_TIP: String = "Tip: Slimes can stick to you and drain your health. Jump to shake them off."
 const PROGRESSION_TIP: String = "Tip: Use Skill points to increase your stats in the Progression tab of the Crafting menu."
 const DAMAGE_TYPE_ORDER: Array[StringName] = [&"slash", &"blunt", &"pierce"]
 
@@ -71,16 +72,18 @@ func reset_entity_context() -> void:
 	_hammer_targets.clear()
 	_last_incoming_contact = null
 
-func choose_tip(nearby_enemy_count: int) -> String:
-	var applicable := get_applicable_tips(nearby_enemy_count)
+func choose_tip(nearby_enemy_count: int, had_attached_slime: bool) -> String:
+	var applicable := get_applicable_tips(nearby_enemy_count, had_attached_slime)
 	return applicable[_rng.randi_range(0, applicable.size() - 1)]
 
-func get_applicable_tips(nearby_enemy_count: int) -> Array[String]:
+func get_applicable_tips(nearby_enemy_count: int, had_attached_slime: bool) -> Array[String]:
 	assert(_inventory != null and _entity_catalog != null)
 	assert(nearby_enemy_count >= 0)
 	if not CombatInventoryRules.has_ready_weapon(_inventory):
 		return [NO_WEAPON_TIP]
 	var applicable: Array[String] = []
+	if had_attached_slime:
+		applicable.append(SLIME_ATTACHMENT_TIP)
 	if not _consumed_recovery_item:
 		var has_food := _has_any_item(FOOD_ITEM_IDS)
 		var has_health_potion := _has_any_item([HEALTH_POTION_ITEM_ID])

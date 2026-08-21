@@ -592,6 +592,7 @@ func _on_player_defeated():
 	if _death_screen != null and is_instance_valid(_death_screen):
 		return
 	var nearby_enemy_count := 0
+	var had_attached_slime := slime_attachment_coordinator.get_attached_count() > 0
 	if _active_entity_runtime != null:
 		nearby_enemy_count = DeathTipCoordinator.count_nearby_hostiles(
 			_active_entity_runtime.get_active_actors(),
@@ -624,12 +625,12 @@ func _on_player_defeated():
 	_death_screen.main_menu_requested.connect(_save_and_request_main_menu)
 	add_child(_death_screen)
 	_sync_compass_external_menu()
-	call_deferred("_setup_death_screen_tip", _death_screen, nearby_enemy_count)
+	call_deferred("_setup_death_screen_tip", _death_screen, nearby_enemy_count, had_attached_slime)
 
-func _setup_death_screen_tip(screen: PlayerDeathScreen, nearby_enemy_count: int) -> void:
+func _setup_death_screen_tip(screen: PlayerDeathScreen, nearby_enemy_count: int, had_attached_slime: bool) -> void:
 	if _death_screen != screen or not is_instance_valid(screen) or death_tip_coordinator == null:
 		return
-	screen.setup_tip(death_tip_coordinator.choose_tip(nearby_enemy_count))
+	screen.setup_tip(death_tip_coordinator.choose_tip(nearby_enemy_count, had_attached_slime))
 
 func _on_respawn_requested():
 	if _death_screen == null or not is_instance_valid(_death_screen):

@@ -751,6 +751,14 @@ func _test_player_death_screen() -> void:
 	_expect(screen.panel.material is ShaderMaterial, "player death screen panel is not frosted")
 	_expect(screen.title_label.text == "YOU DIED!", "player death screen title changed")
 	_expect(screen.tip_label.text == "[center]Tip: Test your defenses before returning to combat.[/center]", "player death screen did not center the configured tip")
+	_expect(is_equal_approx(screen.panel.size.x, 408.0), "player death screen did not wrap its width around the buttons")
+	var button_left_padding := screen.respawn_button.global_position.x - screen.panel.global_position.x
+	var button_right_padding := screen.panel.global_position.x + screen.panel.size.x - screen.respawn_button.global_position.x - screen.respawn_button.size.x
+	_expect(is_equal_approx(button_left_padding, 64.0) and is_equal_approx(button_right_padding, 64.0), "player death screen buttons do not use their authored horizontal padding")
+	var tip_left_padding := screen.tip_label.global_position.x - screen.panel.global_position.x
+	var tip_right_padding := screen.panel.global_position.x + screen.panel.size.x - screen.tip_label.global_position.x - screen.tip_label.size.x
+	_expect(is_equal_approx(tip_left_padding, 24.0) and is_equal_approx(tip_right_padding, 24.0), "player death tip did not use its compact horizontal padding")
+	_expect(screen.tip_label.autowrap_mode == TextServer.AUTOWRAP_WORD_SMART, "player death tip does not wrap by words")
 	var title_to_tip_gap := screen.tip_label.position.y - (screen.title_label.position.y + screen.title_label.size.y)
 	var tip_to_buttons_gap := screen.respawn_button.position.y - (screen.tip_label.position.y + screen.tip_label.size.y)
 	_expect(is_equal_approx(title_to_tip_gap, tip_to_buttons_gap), "player death screen does not space the tip equally between the title and buttons")
