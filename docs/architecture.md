@@ -29,6 +29,7 @@ save/                        save encoding and storage
 settings/                    persistent display and rendering configuration
 stats/                       actor stat ownership and prepared modifier changes
 structures/                  generic definitions, drafts, root-file storage, runtime, and presentation
+tutorials/                   persisted onboarding progress, triggers, targeting, and presentation
 ui/                          app screens, HUD, shared controls, and theme
 world/
   chunks/                    streaming, scheduling, meshing, and rendering
@@ -38,6 +39,17 @@ world/
   settings/                  serialized world configuration
 tests/                       headless verification
 ```
+
+## Tutorials
+
+`TutorialProgress` owns the save-backed completion state for onboarding. `GameSession` snapshots
+completed progress through the normal debounced save path. `MiningTutorialCoordinator` starts its
+delay only after overworld setup and first selects the terrain block with the most camera-facing
+exposed sides within mining reach. If none is visible there, it repeats that ranking across a bounded
+ten-block radius. Both searches reject protected, raycast-inert, and tool-gated blocks. A successful
+player mining action or moving fourteen blocks away from the highlighted target completes the tip
+permanently. Its dedicated view keeps the exact targeting-box outline in world space and projects a
+fixed-size screen-space tooltip from a raised anchor above the selected block. Both fade in and out.
 
 ## Entities and combat
 

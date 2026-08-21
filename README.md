@@ -138,6 +138,9 @@ hallways can use any enclosed opening size supported by the module bounds.
 
 **Blocks.** Grass, dirt, sand, stone, wood, leaves, cobblestone, mossy stone bricks, stone bricks,
 terracotta bricks, and wood planks are minable and placeable. Copper is minable but not placeable.
+Worlds without prior mining progress show a mining tip five seconds after loading. The tip
+highlights a nearby mineable terrain block and disappears permanently after the player mines a
+block or walks away from the highlighted area.
 Using a hoe on the exposed top face of grass or dirt converts it into dry farmland, which drops dirt
 when mined.
 Seeded copper deposits generate after the surrounding terrain as connected 5–30 block blobs. Most

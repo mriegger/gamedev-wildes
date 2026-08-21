@@ -51,6 +51,8 @@ signal main_menu_requested
 @onready var game_session: GameSession = $GameSession as GameSession
 @onready var mining_break_particles: MiningBreakParticles = $MiningBreakParticles as MiningBreakParticles
 @onready var mining_hit_particles: MiningHitParticles = $MiningHitParticles as MiningHitParticles
+@onready var mining_tutorial: MiningTutorialCoordinator = $MiningTutorial as MiningTutorialCoordinator
+@onready var mining_tutorial_view: MiningTutorialView = $MiningTutorialView as MiningTutorialView
 @onready var level_interaction: LevelInteractionCoordinator = $LevelInteractionCoordinator as LevelInteractionCoordinator
 @onready var structure_designer_workflow: StructureDesignerWorkflow = $StructureDesignerWorkflow as StructureDesignerWorkflow
 @onready var structure_designer_dialogs: StructureDesignerDialogs = $StructureDesignerDialogs as StructureDesignerDialogs
@@ -68,6 +70,7 @@ var player_stats: ActorStats
 var player_perks: PlayerPerks
 var player_perk_coordinator: PlayerPerkCoordinator
 var item_proficiency: ItemProficiency
+var tutorial_progress: TutorialProgress
 var inventory_loadout_coordinator: InventoryLoadoutCoordinator
 var player_action_executors: PlayerActionExecutors
 var crafting_coordinator: CraftingCoordinator
@@ -179,6 +182,10 @@ func _ready():
 	if not _restore_item_proficiency():
 		_fail_session_start("This world could not be loaded because its saved item proficiency is invalid or references unavailable content. The save was not changed.")
 		return
+	tutorial_progress = TutorialProgress.new()
+	if not tutorial_progress.restore(_save_data.get("tutorial_progress", null)):
+		_fail_session_start("This world could not be loaded because its tutorial progress is invalid. The save was not changed.")
+		return
 	inventory_loadout_coordinator = InventoryLoadoutCoordinator.new()
 	if not inventory_loadout_coordinator.setup(inventory_model, player_stats, item_proficiency):
 		_fail_session_start("This world could not be loaded because its saved equipment or rune modifiers are invalid. The save was not changed.")
@@ -256,6 +263,7 @@ func _ready():
 		equipment_instance_factory,
 		player_perks,
 		item_proficiency,
+		tutorial_progress,
 		chest_storage,
 		world_loot_state,
 		dungeon_progress,
@@ -265,6 +273,16 @@ func _ready():
 		pumpkin_patch,
 		apple_trees,
 		_get_persisted_position,
+	)
+	mining_tutorial.setup(
+		world.voxel_model,
+		player,
+		func() -> bool: return player.voxel_space == world.voxel_model,
+		camera_rig.camera,
+		player.interactor,
+		mining_tutorial_view,
+		tutorial_progress,
+		world.config.seed_value,
 	)
 	if _recovered_defeated_save and _slot_id != -1 and not game_session.save("defeated_save_recovery"):
 		push_error("[Game] Failed to persist recovered player state")

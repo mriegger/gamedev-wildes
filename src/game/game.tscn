@@ -46,6 +46,8 @@
 [ext_resource type="PackedScene" path="res://entities/watcher/presentation/watcher_screen_effect.tscn" id="44_watcher_effect"]
 [ext_resource type="Script" path="res://combat/projectiles/arrow_projectile_runtime.gd" id="45_arrow_projectiles"]
 [ext_resource type="Script" path="res://combat/presentation/arrow_trajectory_view.gd" id="46_arrow_trajectory"]
+[ext_resource type="Script" path="res://tutorials/mining_tutorial_coordinator.gd" id="45_mining_tutorial"]
+[ext_resource type="Script" path="res://tutorials/presentation/mining_tutorial_view.gd" id="46_mining_tutorial_view"]
 
 [node name="Game" type="Node3D"]
 script = ExtResource("1_game")
@@ -124,6 +126,12 @@ script = ExtResource("7_session")
 [node name="MiningBreakParticles" parent="." instance=ExtResource("12_mining_particles")]
 
 [node name="MiningHitParticles" parent="." instance=ExtResource("13_mining_hit_particles")]
+
+[node name="MiningTutorial" type="Node" parent="."]
+script = ExtResource("45_mining_tutorial")
+
+[node name="MiningTutorialView" type="Node3D" parent="."]
+script = ExtResource("46_mining_tutorial_view")
 
 [node name="LevelInteractionCoordinator" type="Node" parent="."]
 script = ExtResource("25_level_interaction")

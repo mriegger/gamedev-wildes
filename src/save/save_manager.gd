@@ -3,7 +3,7 @@ class_name SaveManager
 
 const SAVE_DIR: String = "user://saves"
 const SLOT_COUNT: int = 3
-const CURRENT_SAVE_VERSION: int = 15
+const CURRENT_SAVE_VERSION: int = 16
 const MINIMUM_MIGRATABLE_SAVE_VERSION: int = 4
 const VERSION_SEVEN_BASE_EXPERIENCE_TO_LEVEL: int = 100
 const VERSION_SEVEN_EXPERIENCE_GROWTH: float = 1.25
@@ -106,6 +106,7 @@ static func create_new_world(slot_id: int, seed_value: int, world_name: String) 
 		"player_stats": null,
 		"player_perks": {"allocations": {}},
 		"item_proficiency": {},
+		"tutorial_progress": TutorialProgress.new().snapshot(),
 		"inventory": null,
 		"next_equipment_instance_id": 1,
 		"world_loot": {
@@ -308,6 +309,11 @@ static func load_slot(slot_id: int, item_catalog: ItemCatalog) -> Dictionary:
 		info["pumpkin_patch"] = {"present": false}
 	if not info.has("apple_trees"):
 		info["apple_trees"] = AppleTreeState.new().snapshot()
+	if not info.has("tutorial_progress"):
+		var removed_blocks = info.get("removed_blocks", {})
+		info["tutorial_progress"] = {
+			"mining_tip_completed": removed_blocks is Dictionary and not (removed_blocks as Dictionary).is_empty(),
+		}
 	return info
 
 static func _migrate_save_data(data: Dictionary, item_catalog: ItemCatalog) -> bool:
@@ -383,6 +389,16 @@ static func _migrate_save_data(data: Dictionary, item_catalog: ItemCatalog) -> b
 					return false
 				migrated["dungeon_progress"] = DungeonProgressState.new().snapshot()
 				version = 15
+			15:
+				if migrated.has("tutorial_progress"):
+					return false
+				var removed_blocks: Variant = migrated.get("removed_blocks", {})
+				if not removed_blocks is Dictionary:
+					return false
+				migrated["tutorial_progress"] = {
+					"mining_tip_completed": not (removed_blocks as Dictionary).is_empty(),
+				}
+				version = 16
 			_:
 				return false
 		migrated["version"] = version

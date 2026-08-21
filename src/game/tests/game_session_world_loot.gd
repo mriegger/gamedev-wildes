@@ -61,6 +61,8 @@ func _run() -> void:
 	var player_perks := PlayerPerks.new(perk_rules)
 	_expect(player_perks.restore({"allocations": {"health": 1}}, player_stats.get_level()), "player perk setup failed")
 	var item_proficiency := ItemProficiency.new(item_catalog)
+	var tutorial_progress := TutorialProgress.new()
+	_expect(tutorial_progress.restore({"mining_tip_completed": false}), "tutorial progress setup failed")
 	var chest_storage := ChestStorage.new(item_catalog, factory, chest_block.container.get_slot_count())
 	var chest_coordinator := ChestCoordinator.new()
 	var overworld_loot := OverworldLootCoordinator.new()
@@ -81,6 +83,7 @@ func _run() -> void:
 		factory,
 		player_perks,
 		item_proficiency,
+		tutorial_progress,
 		chest_storage,
 		world_loot_state,
 		restored_progress,
@@ -98,12 +101,20 @@ func _run() -> void:
 	_expect(save_data.get("world_loot", null) == initial_snapshot, "session did not seed current world loot before its initial write")
 	_expect(save_data.get("dungeon_progress", null) == initial_progress_snapshot, "session did not seed current dungeon progress before its initial write")
 	_expect(save_data.get("player_perks", null) == player_perks.snapshot(), "session did not seed current player perks before its initial write")
+	_expect(save_data.get("tutorial_progress", null) == tutorial_progress.snapshot(), "session did not seed current tutorial progress before its initial write")
 	_expect(save_data.get("apple_trees", null) == apple_trees.snapshot(), "session did not seed current apple trees before its initial write")
 	var initial_disk := SaveManager.load_slot(_slot_id, item_catalog)
 	_expect(_saved_world_loot_matches(initial_disk, initial_snapshot, item_catalog, factory.get_next_instance_id()), "initial session write omitted current world loot")
 	_expect(_saved_dungeon_progress_matches(initial_disk, initial_progress_snapshot), "initial session write omitted current dungeon progress")
 	_expect(_saved_player_perks_match(initial_disk, player_perks.snapshot(), perk_rules, player_stats.get_level()), "initial session write omitted current player perks")
 	_expect(_saved_apple_trees_match(initial_disk, apple_trees.snapshot()), "initial session write omitted current apple trees")
+	_expect(tutorial_progress.complete_mining_tip(), "tutorial progress completion failed")
+	_expect(session._pending_edit_save, "tutorial completion did not queue a debounced save")
+	_expect(save_data.get("tutorial_progress", null) == tutorial_progress.snapshot(), "tutorial completion did not update current save data")
+	session._edit_idle_elapsed = GameSession.EDIT_SAVE_DEBOUNCE - 0.05
+	session._process(0.1)
+	var tutorial_disk := SaveManager.load_slot(_slot_id, item_catalog)
+	_expect(tutorial_disk.get("tutorial_progress", null) == tutorial_progress.snapshot(), "debounced save omitted tutorial completion")
 	_expect(_advance_time(world_loot_state, 13.0), "world loot debounce fixture did not advance")
 	_expect(dungeon_progress.begin_attempt(&"stone_story") == 1, "dungeon progress change did not advance attempt index")
 	_expect(session._pending_edit_save and is_zero_approx(session._edit_idle_elapsed), "dungeon progress change did not queue a debounced save")

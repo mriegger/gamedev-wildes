@@ -8,7 +8,7 @@ func _init() -> void:
 	var chest_block := block_catalog.get_definition(BlockId.Type.CHEST) if block_catalog != null else null
 	var player_stats_definition := load("res://player/player_stats.tres") as CombatStatsDefinition
 	var player_perk_rules := load("res://progression/player_perk_rules.tres") as PlayerPerkRules
-	_expect(SaveManager.CURRENT_SAVE_VERSION == 15, "save version changed")
+	_expect(SaveManager.CURRENT_SAVE_VERSION == 16, "save version changed")
 	_expect(block_catalog != null and block_catalog.validate(), "block catalog invalid")
 	_expect(item_catalog != null and item_catalog.validate(block_catalog), "item catalog invalid")
 	_expect(chest_block != null and chest_block.container != null, "chest container definition invalid")
@@ -24,6 +24,18 @@ func _init() -> void:
 	_expect(version_six.get("chests", null) == {}, "version six chest migration shape changed")
 	_expect(version_six.get("emplacements", null) == {}, "version six emplacement migration shape changed")
 	_expect(version_six.get("dungeon_progress", null) == DungeonProgressState.new().snapshot(), "version six dungeon progress migration shape changed")
+	_expect(version_six.get("tutorial_progress", null) == TutorialProgress.new().snapshot(), "version six tutorial migration shape changed")
+	var version_fourteen := {
+		"version": 14,
+		"inventory": null,
+		"chests": {},
+		"next_equipment_instance_id": 1,
+		"world_loot": {"next_entry_id": 1, "entries": []},
+		"removed_blocks": {"2,3,4": true},
+	}
+	_expect(SaveManager._migrate_save_data(version_fourteen, item_catalog), "version fourteen migration failed")
+	_expect(version_fourteen.get("tutorial_progress", null) == {"mining_tip_completed": true}, "version fourteen mining history did not complete the tutorial")
+	_expect(version_fourteen.get("dungeon_progress", null) == DungeonProgressState.new().snapshot(), "version fourteen dungeon progress migration shape changed")
 	var migration_factory := EquipmentInstanceFactory.new(item_catalog)
 	var migration_affixes: Array[EquipmentAffixDefinition] = [item_catalog.get_equipment_affix(&"vicious")]
 	var migration_runes: Array[StringName] = [&"basic_rune"]
@@ -174,6 +186,7 @@ func _init() -> void:
 		"chests": {},
 		"world_loot": {"next_entry_id": 1, "entries": []},
 		"dungeon_progress": DungeonProgressState.new().snapshot(),
+		"tutorial_progress": {"mining_tip_completed": true},
 		"playtime_seconds": 0.0,
 		"time_of_day": 6.0,
 	}
@@ -190,6 +203,7 @@ func _init() -> void:
 		_expect(current_data.get("item_proficiency", {}) == item_proficiency.snapshot(), "current_data item proficiency differs")
 		_expect(current_data.get("pumpkin_patch", {}) == pumpkin_patch, "current_data pumpkin patch differs")
 		_expect(current_data.get("apple_trees", {}) == apple_trees, "current_data apple tree state differs")
+		_expect(current_data.get("tutorial_progress", {}) == {"mining_tip_completed": true}, "current_data tutorial progress differs")
 		_expect(current_data.get("world_loot", {}) == world_loot_state.snapshot(), "current_data world loot differs")
 		_expect(current_data.get("emplacements", {}).get("2,21,2", -1) == BlockId.Type.CAMPFIRE, "current_data campfire emplacement differs")
 		var encoded_chests := current_data.get("chests", {}) as Dictionary

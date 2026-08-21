@@ -4,6 +4,7 @@ class_name PlayerInteractor
 const BOW_AIM_RAY_DISTANCE: float = 256.0
 
 signal block_placed
+signal block_mined(position: Vector3i)
 signal crafting_station_open_requested(position: Vector3i, definition: CraftingStationBlockDefinition)
 signal container_open_requested(position: Vector3i, definition: ContainerBlockDefinition)
 signal melee_attack_started(action: MeleeAttackActionDefinition, direction: int)
@@ -840,6 +841,7 @@ func _commit_mine(pos: Vector3i, source: SelectedItemSource):
 	if batch is Array and batch.size() > 0 and batch[0] is BlockEdit:
 		if not (batch[0] as BlockEdit).is_success():
 			return
+		block_mined.emit(pos)
 	_handle_raycast()
 
 func _commit_place(pos: Vector3i, action: BlockPlacementActionDefinition):

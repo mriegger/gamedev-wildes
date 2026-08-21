@@ -120,6 +120,7 @@ func _make_saved_world() -> Dictionary:
 		"player_position": null,
 		"player_perks": {"allocations": {}},
 		"item_proficiency": {},
+		"tutorial_progress": {"mining_tip_completed": true},
 		"inventory": null,
 		"next_equipment_instance_id": 1,
 		"chests": {},

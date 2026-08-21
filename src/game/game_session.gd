@@ -15,6 +15,7 @@ var _inventory: InventoryModel
 var _equipment_instance_factory: EquipmentInstanceFactory
 var _player_perks: PlayerPerks
 var _item_proficiency: ItemProficiency
+var _tutorial_progress: TutorialProgress
 var _chest_storage: ChestStorage
 var _world_loot_state: WorldLootState
 var _dungeon_progress: DungeonProgressState
@@ -42,6 +43,7 @@ func setup(
 	p_equipment_instance_factory: EquipmentInstanceFactory,
 	p_player_perks: PlayerPerks,
 	p_item_proficiency: ItemProficiency,
+	p_tutorial_progress: TutorialProgress,
 	p_chest_storage: ChestStorage,
 	p_world_loot_state: WorldLootState,
 	p_dungeon_progress: DungeonProgressState,
@@ -59,6 +61,7 @@ func setup(
 	assert(p_inventory.equipment_instance_factory == p_equipment_instance_factory)
 	assert(p_player_perks != null)
 	assert(p_item_proficiency != null)
+	assert(p_tutorial_progress != null)
 	assert(
 		p_chest_storage != null
 		and p_chest_storage._uses_dependencies(
@@ -83,6 +86,7 @@ func setup(
 	_equipment_instance_factory = p_equipment_instance_factory
 	_player_perks = p_player_perks
 	_item_proficiency = p_item_proficiency
+	_tutorial_progress = p_tutorial_progress
 	_chest_storage = p_chest_storage
 	_world_loot_state = p_world_loot_state
 	_dungeon_progress = p_dungeon_progress
@@ -102,6 +106,7 @@ func setup(
 		save_data["inventory"] = _inventory.to_dict()
 		save_data["next_equipment_instance_id"] = _equipment_instance_factory.get_next_instance_id()
 		save_data["player_perks"] = _player_perks.snapshot()
+		save_data["tutorial_progress"] = _tutorial_progress.snapshot()
 		save_data["world_loot"] = _world_loot_state.snapshot()
 		save_data["dungeon_progress"] = _dungeon_progress.snapshot()
 		save_data["pumpkin_patch"] = _pumpkin_patch.snapshot()
@@ -113,6 +118,7 @@ func setup(
 		_chest_coordinator.contents_changed.connect(_on_chest_contents_changed)
 		_overworld_loot.state_changed.connect(_queue_state_save)
 		_dungeon_progress.state_changed.connect(_queue_state_save)
+		_tutorial_progress.changed.connect(_on_tutorial_progress_changed)
 
 func _process(delta):
 	_playtime_accum += delta
@@ -133,6 +139,10 @@ func _on_world_edit(_edit: BlockEdit):
 	_queue_state_save()
 
 func _on_chest_contents_changed(_position: Vector3i) -> void:
+	_queue_state_save()
+
+func _on_tutorial_progress_changed() -> void:
+	save_data["tutorial_progress"] = _tutorial_progress.snapshot()
 	_queue_state_save()
 
 func _queue_state_save() -> void:
@@ -208,3 +218,5 @@ func shutdown(reason: String):
 		_overworld_loot.state_changed.disconnect(_queue_state_save)
 	if _dungeon_progress != null and _dungeon_progress.state_changed.is_connected(_queue_state_save):
 		_dungeon_progress.state_changed.disconnect(_queue_state_save)
+	if _tutorial_progress != null and _tutorial_progress.changed.is_connected(_on_tutorial_progress_changed):
+		_tutorial_progress.changed.disconnect(_on_tutorial_progress_changed)

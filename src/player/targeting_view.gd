@@ -94,38 +94,12 @@ func _physics_process(delta):
 	_update_contact_shadow()
 
 func _create_selection():
-	var edge_thickness = 0.045
-	var hs = 0.5125
-	selection_box = Node3D.new()
-	selection_box.name = "SelectionBox"
 	_selection_edge_mat = StandardMaterial3D.new()
 	_selection_edge_mat.albedo_color = Color(1.0, 0.92, 0.08, 1.0)
 	_selection_edge_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	_selection_edge_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	_selection_edge_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	var edges_def = [
-		{"size": Vector3(1.025, edge_thickness, edge_thickness), "pos": Vector3(0, hs, hs)},
-		{"size": Vector3(1.025, edge_thickness, edge_thickness), "pos": Vector3(0, hs, -hs)},
-		{"size": Vector3(1.025, edge_thickness, edge_thickness), "pos": Vector3(0, -hs, hs)},
-		{"size": Vector3(1.025, edge_thickness, edge_thickness), "pos": Vector3(0, -hs, -hs)},
-		{"size": Vector3(edge_thickness, 1.025, edge_thickness), "pos": Vector3(hs, 0, hs)},
-		{"size": Vector3(edge_thickness, 1.025, edge_thickness), "pos": Vector3(hs, 0, -hs)},
-		{"size": Vector3(edge_thickness, 1.025, edge_thickness), "pos": Vector3(-hs, 0, hs)},
-		{"size": Vector3(edge_thickness, 1.025, edge_thickness), "pos": Vector3(-hs, 0, -hs)},
-		{"size": Vector3(edge_thickness, edge_thickness, 1.025), "pos": Vector3(hs, hs, 0)},
-		{"size": Vector3(edge_thickness, edge_thickness, 1.025), "pos": Vector3(hs, -hs, 0)},
-		{"size": Vector3(edge_thickness, edge_thickness, 1.025), "pos": Vector3(-hs, hs, 0)},
-		{"size": Vector3(edge_thickness, edge_thickness, 1.025), "pos": Vector3(-hs, -hs, 0)},
-	]
-	for ed in edges_def:
-		var mi = MeshInstance3D.new()
-		var bm = BoxMesh.new()
-		bm.size = ed["size"]
-		mi.mesh = bm
-		mi.position = ed["pos"]
-		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		mi.material_override = _selection_edge_mat
-		selection_box.add_child(mi)
+	selection_box = BlockOutlineBuilder.create_outline("SelectionBox", _selection_edge_mat)
 	selection_box.visible = false
 	add_child(selection_box)
 
