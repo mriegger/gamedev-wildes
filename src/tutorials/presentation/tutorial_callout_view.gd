@@ -120,16 +120,7 @@ func _create_overlay() -> void:
 	_panel.name = "TipPanel"
 	_panel.custom_minimum_size = PANEL_SIZE
 	_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var panel_style := StyleBoxFlat.new()
-	panel_style.bg_color = Color(0.08, 0.09, 0.11, 0.96)
-	panel_style.border_color = Color(0.72, 0.74, 0.78, 0.55)
-	panel_style.set_border_width_all(1)
-	panel_style.set_corner_radius_all(6)
-	panel_style.content_margin_left = 12.0
-	panel_style.content_margin_right = 12.0
-	panel_style.content_margin_top = 8.0
-	panel_style.content_margin_bottom = 8.0
-	_panel.add_theme_stylebox_override("panel", panel_style)
+	_panel.add_theme_stylebox_override("panel", create_panel_style())
 	var text_container := VBoxContainer.new()
 	text_container.name = "Text"
 	text_container.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -172,3 +163,15 @@ func _apply_fade(progress: float) -> void:
 	var fade := clampf(progress, 0.0, 1.0)
 	_overlay.modulate = Color(1.0, 1.0, 1.0, fade)
 	_selection_material.albedo_color = Color(1.0, 1.0, 1.0, OUTLINE_ALPHA * fade)
+
+static func create_panel_style() -> StyleBoxFlat:
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.08, 0.09, 0.11, 0.96)
+	panel_style.border_color = Color(0.72, 0.74, 0.78, 0.55)
+	panel_style.set_border_width_all(1)
+	panel_style.set_corner_radius_all(6)
+	panel_style.content_margin_left = 12.0
+	panel_style.content_margin_right = 12.0
+	panel_style.content_margin_top = 8.0
+	panel_style.content_margin_bottom = 8.0
+	return panel_style

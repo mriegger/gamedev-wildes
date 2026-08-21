@@ -58,6 +58,10 @@ item notification or after the player leaves the highlighted target. Mining and 
 hover suppression, and fade behavior, while retaining separate view instances and persisted
 completion state. Both coordinators acquire one shared `TutorialCalloutArbiter`, which keeps later
 tips queued until the active callout has finished fading out.
+`CraftingTutorialCoordinator` arms on the first committed player mine, then counts five uninterrupted
+seconds while the callout arbiter is free. Any competing tutorial resets that delay. The fixed
+top-left `CraftingTutorialView` acquires the same arbiter and completes permanently when the general
+crafting panel emits its first open event, whether that happens before or after the hint appears.
 
 `InteractionPromptCoordinator` resolves the single HUD prompt with contextual harvest and level
 actions above the fallback placement guidance. `PlacementPromptCoordinator`

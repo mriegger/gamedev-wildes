@@ -21,18 +21,22 @@ func _run() -> void:
 
 func _test_progress_contract() -> void:
 	var progress := TutorialProgress.new()
-	_expect(progress.restore({"mining_tip_completed": false, "food_tip_completed": false}), "valid tutorial progress did not restore")
+	_expect(progress.restore({"mining_tip_completed": false, "food_tip_completed": false, "crafting_tip_completed": false}), "valid tutorial progress did not restore")
 	_expect(not progress.is_mining_tip_completed(), "fresh tutorial progress restored as complete")
 	var change_count := [0]
 	progress.changed.connect(func() -> void: change_count[0] += 1)
 	_expect(progress.complete_mining_tip(), "first tutorial completion was rejected")
 	_expect(not progress.complete_mining_tip(), "duplicate tutorial completion was accepted")
 	_expect(change_count[0] == 1, "tutorial completion emitted more than one change")
-	_expect(progress.snapshot() == {"mining_tip_completed": true, "food_tip_completed": false}, "tutorial snapshot changed")
+	_expect(progress.snapshot() == {"mining_tip_completed": true, "food_tip_completed": false, "crafting_tip_completed": false}, "tutorial snapshot changed")
 	_expect(progress.complete_food_tip(), "first food tutorial completion was rejected")
 	_expect(not progress.complete_food_tip(), "duplicate food tutorial completion was accepted")
 	_expect(change_count[0] == 2, "food tutorial completion emitted the wrong change count")
-	_expect(progress.snapshot() == {"mining_tip_completed": true, "food_tip_completed": true}, "food tutorial snapshot changed")
+	_expect(progress.snapshot() == {"mining_tip_completed": true, "food_tip_completed": true, "crafting_tip_completed": false}, "food tutorial snapshot changed")
+	_expect(progress.complete_crafting_tip(), "first crafting tutorial completion was rejected")
+	_expect(not progress.complete_crafting_tip(), "duplicate crafting tutorial completion was accepted")
+	_expect(change_count[0] == 3, "crafting tutorial completion emitted the wrong change count")
+	_expect(progress.snapshot() == {"mining_tip_completed": true, "food_tip_completed": true, "crafting_tip_completed": true}, "crafting tutorial snapshot changed")
 	_expect(not TutorialProgress.new().restore({}), "missing tutorial completion restored")
 	_expect(not TutorialProgress.new().restore({"mining_tip_completed": 1}), "non-boolean tutorial completion restored")
 
@@ -199,7 +203,7 @@ func _create_fixture(completed: bool) -> Dictionary:
 	var view := MiningTutorialView.new()
 	holder.add_child(view)
 	var progress := TutorialProgress.new()
-	_expect(progress.restore({"mining_tip_completed": completed, "food_tip_completed": false}), "fixture tutorial progress did not restore")
+	_expect(progress.restore({"mining_tip_completed": completed, "food_tip_completed": false, "crafting_tip_completed": false}), "fixture tutorial progress did not restore")
 	var coordinator := MiningTutorialCoordinator.new()
 	holder.add_child(coordinator)
 	var active_space := [true]

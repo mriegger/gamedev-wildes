@@ -15,3 +15,8 @@ func try_acquire(owner: Object) -> bool:
 func release(owner: Object) -> void:
 	if _owner == owner:
 		_owner = null
+
+func is_available(owner: Object) -> bool:
+	if _owner != null and not is_instance_valid(_owner):
+		_owner = null
+	return _owner == null or _owner == owner

@@ -2,6 +2,7 @@ extends Control
 class_name CraftingPanel
 
 signal progress_changed(progress: float)
+signal opened
 
 const PANEL_WIDTH: float = 520.0
 const ANIM_DURATION: float = 0.25
@@ -94,11 +95,14 @@ func setup_progression(actor_stats: ActorStats, perk_coordinator: PlayerPerkCoor
 	_progression_panel.setup(actor_stats, perk_coordinator)
 
 func open() -> void:
+	var was_open := _is_open
 	_is_open = true
 	_target_progress = 1.0
 	_switch_workspace(CRAFTING_WORKSPACE_ID)
 	_refresh_details()
 	set_process(true)
+	if not was_open:
+		opened.emit()
 
 func close() -> void:
 	_is_open = false

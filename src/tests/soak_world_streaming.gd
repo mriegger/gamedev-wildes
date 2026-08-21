@@ -228,7 +228,7 @@ func _make_saved_world() -> Dictionary:
 		"emplacements": {},
 		"player_stats": null,
 		"item_proficiency": {},
-		"tutorial_progress": {"mining_tip_completed": true, "food_tip_completed": true},
+		"tutorial_progress": {"mining_tip_completed": true, "food_tip_completed": true, "crafting_tip_completed": true},
 		"inventory": null,
 		"next_equipment_instance_id": 1,
 		"world_loot": {"next_entry_id": 1, "entries": []},

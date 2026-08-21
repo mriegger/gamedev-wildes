@@ -55,6 +55,8 @@ signal main_menu_requested
 @onready var mining_tutorial_view: MiningTutorialView = $MiningTutorialView as MiningTutorialView
 @onready var food_tutorial: FoodTutorialCoordinator = $FoodTutorial as FoodTutorialCoordinator
 @onready var food_tutorial_view: FoodTutorialView = $FoodTutorialView as FoodTutorialView
+@onready var crafting_tutorial: CraftingTutorialCoordinator = $CraftingTutorial as CraftingTutorialCoordinator
+@onready var crafting_tutorial_view: CraftingTutorialView = $CraftingTutorialView as CraftingTutorialView
 @onready var placement_prompt: PlacementPromptCoordinator = $PlacementPrompt as PlacementPromptCoordinator
 @onready var level_interaction: LevelInteractionCoordinator = $LevelInteractionCoordinator as LevelInteractionCoordinator
 @onready var structure_designer_workflow: StructureDesignerWorkflow = $StructureDesignerWorkflow as StructureDesignerWorkflow
@@ -298,6 +300,15 @@ func _ready():
 		food_tutorial_view,
 		tutorial_progress,
 		tutorial_callout_arbiter,
+	)
+	var removed_blocks = _save_data.get("removed_blocks", {})
+	crafting_tutorial.setup(
+		player.interactor,
+		hud.crafting_panel,
+		crafting_tutorial_view,
+		tutorial_progress,
+		tutorial_callout_arbiter,
+		removed_blocks is Dictionary and not (removed_blocks as Dictionary).is_empty(),
 	)
 	if _recovered_defeated_save and _slot_id != -1 and not game_session.save("defeated_save_recovery"):
 		push_error("[Game] Failed to persist recovered player state")

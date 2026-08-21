@@ -3,7 +3,7 @@ class_name SaveManager
 
 const SAVE_DIR: String = "user://saves"
 const SLOT_COUNT: int = 3
-const CURRENT_SAVE_VERSION: int = 17
+const CURRENT_SAVE_VERSION: int = 18
 const MINIMUM_MIGRATABLE_SAVE_VERSION: int = 4
 const VERSION_SEVEN_BASE_EXPERIENCE_TO_LEVEL: int = 100
 const VERSION_SEVEN_EXPERIENCE_GROWTH: float = 1.25
@@ -314,6 +314,7 @@ static func load_slot(slot_id: int, item_catalog: ItemCatalog) -> Dictionary:
 		info["tutorial_progress"] = {
 			"mining_tip_completed": removed_blocks is Dictionary and not (removed_blocks as Dictionary).is_empty(),
 			"food_tip_completed": _legacy_save_has_collected_food(info),
+			"crafting_tip_completed": false,
 		}
 	return info
 
@@ -408,6 +409,18 @@ static func _migrate_save_data(data: Dictionary, item_catalog: ItemCatalog) -> b
 					return false
 				(tutorial_progress as Dictionary)["food_tip_completed"] = _legacy_save_has_collected_food(migrated)
 				version = 17
+			17:
+				var tutorial_progress = migrated.get("tutorial_progress", null)
+				if not tutorial_progress is Dictionary or (tutorial_progress as Dictionary).has("crafting_tip_completed"):
+					return false
+				if (
+					(tutorial_progress as Dictionary).size() != 2
+					or not (tutorial_progress as Dictionary).get("mining_tip_completed", null) is bool
+					or not (tutorial_progress as Dictionary).get("food_tip_completed", null) is bool
+				):
+					return false
+				(tutorial_progress as Dictionary)["crafting_tip_completed"] = false
+				version = 18
 			_:
 				return false
 		migrated["version"] = version

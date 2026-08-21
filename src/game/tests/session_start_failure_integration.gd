@@ -46,7 +46,7 @@ func _run() -> void:
 		"player_stats": null,
 		"player_perks": {"allocations": {}},
 		"item_proficiency": {},
-		"tutorial_progress": {"mining_tip_completed": false, "food_tip_completed": false},
+		"tutorial_progress": {"mining_tip_completed": false, "food_tip_completed": false, "crafting_tip_completed": false},
 		"inventory": encoded_inventory,
 		"next_equipment_instance_id": 1,
 		"world_loot": {"next_entry_id": 1, "entries": []},
