@@ -82,6 +82,11 @@ func _run() -> void:
 	prompt_coordinator.setup(hud, Callable(self, "_is_interaction_blocked"))
 	prompt_coordinator.set_level_prompt("F  Enter Dungeon")
 	var inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
+	_expect(InventoryTestFixture.restore_slot(inventory, 0, InventoryStack.new(
+		&"bow",
+		1,
+		inventory.equipment_instance_factory.create(&"bow"),
+	)), "pumpkin interaction bow fixture failed")
 	var inventory_loadout := InventoryTestFixture.create_loadout(inventory)
 	var harvest := HarvestCoordinator.new()
 	var harvest_sources: Array[HarvestSource] = [pumpkin_patch]
@@ -102,11 +107,13 @@ func _run() -> void:
 		harvest_interactor.inventory_loadout = inventory_loadout
 		harvest_interactor._input_buffer = harvest_input
 		harvest_interactor.harvest = harvest
+		_expect(harvest_interactor.get_selected_primary_action() is BowDrawActionDefinition, "pumpkin interaction fixture did not equip the bow")
 		harvest_input.primary_use_just = true
 		harvest_input.primary_use_pressed = true
 		harvest_interactor._handle_item_actions(0.0)
 		_expect(not harvest_input.primary_use_just, "harvest click remained available to another primary action")
-		_expect(harvest_interactor._primary_harvest_latched, "harvest did not latch the held mouse press")
+		_expect(harvest_interactor._primary_interaction_latched, "harvest did not latch the held mouse press")
+		_expect(not harvest_interactor.is_drawing_bow(), "harvesting a pumpkin started the equipped bow action")
 		_expect(inventory.get_inventory_item_count(&"pumpkin") == 1, "pumpkin harvest did not add exactly one item")
 		_expect(_state_changed_count == 1, "pumpkin harvest did not announce its persistent state change")
 		_expect(_harvest_completed_count == 1, "pumpkin harvest did not announce its completed transaction")

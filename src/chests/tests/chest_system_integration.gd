@@ -208,10 +208,10 @@ func _run():
 	_expect(interaction_loadout.select_slot(1), "interaction pickaxe selection failed")
 	input.primary_use_just = true
 	interactor._handle_item_actions(0.0)
-	_expect(_open_requests == 1, "pickaxe click opened a non-empty chest instead of attempting to mine it")
+	_expect(_open_requests == 2, "pickaxe click did not open a non-mineable chest")
 	interactor.can_interact_target = false
 	_expect(not interactor._try_open_target_container(), "out-of-range chest opened")
-	_expect(_open_requests == 1, "out-of-range chest emitted an open request")
+	_expect(_open_requests == 2, "out-of-range chest emitted an open request")
 	var targeting := TargetingView.new()
 	targeting.interactor = interactor
 	var chest_renderer := ChestRenderer.new()
@@ -224,12 +224,15 @@ func _run():
 	get_root().add_child(targeting)
 	targeting.set_physics_process(false)
 	await process_frame
-	_expect(targeting._should_show_mining_outline(true), "pickaxe chest target does not show the mining wireframe")
+	_expect(not targeting._should_show_mining_outline(true), "non-mineable chest still requested the mining wireframe")
 	targeting.voxel_space = world
 	targeting.block_catalog = block_catalog
 	interactor.can_primary_target = false
+	interactor.can_interact_target = true
 	targeting._update_selection_visuals()
-	_expect(targeting.selection_box.visible and targeting._selection_edge_mat.albedo_color.r > targeting._selection_edge_mat.albedo_color.g, "non-empty chest does not show the blocked mining outline")
+	_expect(not targeting.selection_box.visible, "non-mineable chest still showed a mining outline")
+	targeting._update_interaction_visuals(1.0)
+	_expect(targeting._should_show_interaction() and targeting._interaction_cursor_active, "non-mineable chest did not expose its interaction hover")
 	interactor.can_primary_target = true
 	targeting._update_selection_visuals()
 	_expect(targeting._selection_edge_mat.albedo_color.g > targeting._selection_edge_mat.albedo_color.r * 0.8, "empty chest does not show the mineable outline")

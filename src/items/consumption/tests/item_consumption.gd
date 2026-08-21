@@ -93,9 +93,12 @@ func _run() -> void:
 	input_buffer.primary_use_pressed = true
 	interactor._handle_item_actions(0.0)
 	_expect(inventory.get_slot(0).count == 2, "full-health left-click removed a pumpkin")
-	_expect(_station_open_count == 0, "selected consumable left-click opened a crafting station")
+	_expect(_station_open_count == 1, "selected consumable did not prioritize the targeted crafting station")
 	input_buffer.primary_use_pressed = false
 	interactor._handle_item_actions(0.0)
+	interactor.target_has = false
+	interactor.can_interact_target = false
+	interactor.target_crafting_station = null
 
 	stats.damage(75.0)
 	input_buffer.primary_use_just = true
@@ -104,7 +107,7 @@ func _run() -> void:
 	_expect(is_equal_approx(stats.current_hp, max_health * 0.35), "pumpkin did not restore ten percent health")
 	_expect(inventory.get_slot(0).count == 1, "pumpkin consumption did not remove exactly one item")
 	_expect(_consumed_item_ids == [&"pumpkin"], "pumpkin consumption did not announce one completed action")
-	_expect(_station_open_count == 0, "consumable left-click also opened a crafting station")
+	_expect(_station_open_count == 1, "consumable without an interaction target changed the station request count")
 	interactor._handle_item_actions(0.0)
 	_expect(is_equal_approx(stats.current_hp, max_health * 0.35), "held left-click repeatedly consumed pumpkins")
 	_expect(inventory.get_slot(0).count == 1, "held left-click removed another pumpkin")

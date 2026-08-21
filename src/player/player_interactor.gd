@@ -71,8 +71,8 @@ var _melee_contact_pending: bool = false
 var _melee_impact_pending: bool = false
 var _melee_attack_command: PreparedPlayerMeleeAttack
 var _primary_consumption_latched: bool = false
-var _primary_harvest_latched: bool = false
 var _primary_world_loot_latched: bool = false
+var _primary_interaction_latched: bool = false
 var _handle_hovered_world_loot_pickup: Callable
 var _melee_locked_facing_direction: Vector3 = Vector3.ZERO
 var _target_block_id: int = BlockId.Type.AIR
@@ -183,8 +183,8 @@ func _clear_active_state():
 	target_container = null
 	can_interact_target = false
 	_primary_consumption_latched = false
-	_primary_harvest_latched = false
 	_primary_world_loot_latched = false
+	_primary_interaction_latched = false
 	_target_cache_position = Vector3i(-999, -999, -999)
 	_target_cache_revision = -1
 	_bow_draw_requires_primary_release = false
@@ -208,7 +208,7 @@ func cancel_actions():
 	target_container = null
 	can_interact_target = false
 	_primary_consumption_latched = false
-	_primary_harvest_latched = false
+	_primary_interaction_latched = false
 	_bow_draw_requires_primary_release = false
 	_primary_world_loot_latched = false
 	if harvest != null:
@@ -332,6 +332,24 @@ func _handle_item_actions(delta):
 			primary_use_pressed = false
 		else:
 			_primary_consumption_latched = false
+	if _primary_interaction_latched:
+		if primary_use_pressed:
+			primary_use_just = false
+			primary_use_pressed = false
+		else:
+			_primary_interaction_latched = false
+	var selected_primary := get_selected_primary_action()
+	var selected_mining := selected_primary as MiningActionDefinition
+	var selected_melee := selected_primary as MeleeAttackActionDefinition
+	var selected_tilling := selected_primary as TillingActionDefinition
+	var selected_bow := selected_primary as BowDrawActionDefinition
+	if primary_use_just and _try_activate_primary_interactable():
+		_primary_interaction_latched = primary_use_pressed
+		primary_use_just = false
+		primary_use_pressed = false
+		_reset_mining()
+		_reset_melee_chain()
+		_reset_bow_draw()
 	if primary_use_just and item_consumption != null and item_consumption.has_consumable_at(inventory_model.get_selected_slot()):
 		item_consumption.try_consume_selected()
 		_primary_consumption_latched = primary_use_pressed
@@ -346,19 +364,6 @@ func _handle_item_actions(delta):
 			primary_use_pressed = false
 		else:
 			_bow_draw_requires_primary_release = false
-	var selected_primary := get_selected_primary_action()
-	var selected_mining := selected_primary as MiningActionDefinition
-	var selected_melee := selected_primary as MeleeAttackActionDefinition
-	var selected_tilling := selected_primary as TillingActionDefinition
-	var selected_bow := selected_primary as BowDrawActionDefinition
-	if primary_use_just and selected_bow != null:
-		var opened_interactable := _try_open_target_container()
-		if not opened_interactable:
-			opened_interactable = _try_open_target_crafting_station()
-		if opened_interactable:
-			primary_use_just = false
-			primary_use_pressed = false
-			_reset_bow_draw()
 	if (
 		selected_bow == null
 		or bow_draw_action != null and bow_draw_action != selected_bow
@@ -385,24 +390,6 @@ func _handle_item_actions(delta):
 		primary_use_pressed = false
 		_reset_mining()
 		_reset_melee_chain()
-	if _primary_harvest_latched:
-		if primary_use_pressed:
-			primary_use_just = false
-			primary_use_pressed = false
-		else:
-			_primary_harvest_latched = false
-	if primary_use_just and harvest != null and harvest.has_target():
-		harvest.try_harvest_target()
-		_primary_harvest_latched = primary_use_pressed
-		primary_use_just = false
-		primary_use_pressed = false
-		_reset_mining()
-		_reset_melee_chain()
-		_reset_bow_draw()
-	if primary_use_just and not is_attempting_container_mining() and _try_open_target_container():
-		primary_use_just = false
-	elif primary_use_just and not is_attempting_crafting_station_mining() and _try_open_target_crafting_station():
-		primary_use_just = false
 	if primary_use_just and target_has and selected_mining != null and _is_mining_blocked_by_tool(target_block, selected_mining):
 		mining_tool_requirement_failed.emit(
 			target_block,
@@ -515,6 +502,15 @@ func _clear_pointer_blocked_state() -> void:
 	_reset_bow_draw()
 	_input_buffer.primary_use_just = false
 	_input_buffer.secondary_use_just = false
+
+func _try_activate_primary_interactable() -> bool:
+	if harvest != null and harvest.has_target():
+		harvest.try_harvest_target()
+		return true
+	var should_mine_target := is_attempting_container_mining() or is_attempting_crafting_station_mining()
+	if not should_mine_target and _try_open_target_container():
+		return true
+	return not should_mine_target and _try_open_target_crafting_station()
 
 func _reset_melee_chain():
 	_melee_contact_pending = false
@@ -945,7 +941,7 @@ func has_crafting_station_target() -> bool:
 
 func is_attempting_crafting_station_mining() -> bool:
 	var action := get_selected_primary_action() as MiningActionDefinition
-	return has_crafting_station_target() and action != null and action.get_tool_stat(&"pickaxe") != null
+	return has_crafting_station_target() and can_primary_target and action != null and action.get_tool_stat(&"pickaxe") != null
 
 func _get_target_crafting_station(block_id: int) -> CraftingStationBlockDefinition:
 	if editable_voxel_world == null:
@@ -963,7 +959,7 @@ func has_container_target() -> bool:
 
 func is_attempting_container_mining() -> bool:
 	var action := get_selected_primary_action() as MiningActionDefinition
-	return editable_voxel_world != null and has_container_target() and action != null and action.get_tool_stat(&"pickaxe") != null
+	return editable_voxel_world != null and has_container_target() and can_primary_target and action != null and action.get_tool_stat(&"pickaxe") != null
 
 func _get_target_container(position: Vector3i) -> ContainerBlockDefinition:
 	if voxel_space == null:
