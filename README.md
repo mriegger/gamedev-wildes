@@ -231,7 +231,8 @@ independently has a 75% chance to drop 1–3 Copper and a 17% chance to select o
 10 plain Copper Sword, 4 Vicious/Nimble-affixed Copper Sword socketed with a Power Rune, and 3 Stout
 Copper Helmet. Each physical weapon or armor copy has its own stable instance ID, rolled affixes,
 and ordered rune slots even when two copies share the same item definition. Material drops merge
-nearby and expire after five minutes; equipment does not time-expire. The bounded world-loot state
+nearby and expire after five minutes; when collected, they fill matching hotbar stacks before using
+backpack capacity. Equipment does not time-expire. The bounded world-loot state
 survives chunk streaming, transitions, and save/load. A full backpack leaves the drop in the world; at the hard
 128-entry cap, admitting a new batch evicts the nearest-expiring material first, then the oldest
 equipment entry only when every retained entry is equipment.

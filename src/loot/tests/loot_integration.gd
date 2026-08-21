@@ -23,6 +23,7 @@ func _run() -> void:
 	_expect(stats_definition != null and stats_definition.validate(), "player stats definition invalid")
 	_test_variant_stats(item_catalog, stats_definition)
 	_test_partial_inventory_preparation(item_catalog)
+	_test_material_pickup_prefers_existing_hotbar_stack(item_catalog)
 	await _test_lootless_skeleton_lifecycle(
 		block_catalog,
 		entity_catalog,
@@ -37,6 +38,7 @@ func _run() -> void:
 		drop_scene,
 		player_scene,
 	)
+	await _test_hotbar_material_pickup(entity_catalog, item_catalog, drop_scene, player_scene)
 	await _test_equipment_exact_pickup(entity_catalog, item_catalog, drop_scene, player_scene)
 	await _test_reentrant_defeat_queue(entity_catalog, item_catalog, drop_scene, player_scene)
 	await _test_suspended_defeat_queue(entity_catalog, item_catalog, drop_scene, player_scene)
@@ -100,6 +102,20 @@ func _test_partial_inventory_preparation(item_catalog: ItemCatalog) -> void:
 	var sword := factory.create(&"copper_sword")
 	_expect(sword != null, "partial equipment fixture allocation failed")
 	_expect(inventory.prepare_add_stack_up_to(InventoryStack.new(&"copper_sword", 1, sword)) == null, "equipment add accepted partial capacity")
+
+func _test_material_pickup_prefers_existing_hotbar_stack(item_catalog: ItemCatalog) -> void:
+	for item_id in [&"copper", &"sand_block"]:
+		var inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
+		inventory.setup_empty()
+		_expect(InventoryTestFixture.restore_slot(inventory, 2, InventoryStack.new(item_id, 3)), "%s hotbar fixture setup failed" % item_id)
+		var prepared := inventory.prepare_add_stack_up_to(InventoryStack.new(item_id, 2))
+		_expect(prepared != null, "%s pickup did not prepare" % item_id)
+		if prepared == null:
+			continue
+		inventory._commit_prepared_change(prepared)
+		var hotbar_stack := inventory.get_slot(2)
+		_expect(hotbar_stack != null and hotbar_stack.item_id == item_id and hotbar_stack.count == 5, "%s pickup did not merge into its existing hotbar stack" % item_id)
+		_expect(inventory.get_backpack_item_count(item_id) == 0, "%s pickup created a backpack stack before filling its hotbar stack" % item_id)
 
 func _test_lootless_skeleton_lifecycle(
 	block_catalog: BlockCatalog,
@@ -436,6 +452,28 @@ func _test_partial_pickup_streaming_and_lifetime(
 	var orphan_count := int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
 	_expect(orphan_count == orphan_baseline, "partial loot cleanup changed orphan count from %d to %d" % [orphan_baseline, orphan_count])
 	_position_is_ready = true
+
+func _test_hotbar_material_pickup(
+	entity_catalog: EntityCatalog,
+	item_catalog: ItemCatalog,
+	drop_scene: PackedScene,
+	player_scene: PackedScene,
+) -> void:
+	var factory := EquipmentInstanceFactory.new(item_catalog)
+	var inventory := InventoryModel.new(item_catalog, factory)
+	inventory.setup_empty()
+	_expect(InventoryTestFixture.restore_slot(inventory, 1, InventoryStack.new(&"copper", 3)), "enemy copper pickup hotbar fixture failed")
+	_expect(InventoryTestFixture.restore_slot(inventory, 2, InventoryStack.new(&"sand_block", 3)), "enemy sand pickup hotbar fixture failed")
+	var state := WorldLootState.new(item_catalog, factory)
+	var drop_position := Vector3(1.5, 4.0, -1.5)
+	_expect(_add_world_stack(state, InventoryStack.new(&"copper", 2), drop_position), "enemy copper pickup world fixture failed")
+	_expect(_add_world_stack(state, InventoryStack.new(&"sand_block", 2), drop_position), "enemy sand pickup world fixture failed")
+	var fixture := _create_runtime_fixture(entity_catalog, item_catalog, drop_scene, player_scene, inventory, state, drop_position)
+	(fixture["coordinator"] as OverworldLootCoordinator).tick()
+	_expect(state.get_entry_count() == 0, "collectible material drops remained after hotbar pickup")
+	_expect(inventory.get_slot(1).count == 5 and inventory.get_slot(2).count == 5, "enemy material pickups did not fill existing hotbar stacks")
+	_expect(inventory.get_backpack_item_count(&"copper") == 0 and inventory.get_backpack_item_count(&"sand_block") == 0, "enemy material pickups created backpack stacks before filling hotbar stacks")
+	await _cleanup_runtime_fixture(fixture)
 
 func _test_equipment_exact_pickup(
 	entity_catalog: EntityCatalog,

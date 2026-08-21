@@ -326,23 +326,32 @@ func _apply_add_stack_up_to(stack: InventoryStack) -> InventoryStack:
 		return null
 	if stack.equipment_instance != null:
 		return stack.copy() if _apply_add_stack(stack) else null
-	var remaining := _grant_item_to_indices(
+	var max_stack := item_catalog.get_definition(stack.item_id).max_stack
+	var remaining := _merge_item_into_indices(
 		_slots,
 		stack.item_id,
 		stack.count,
-		item_catalog.get_definition(stack.item_id).max_stack,
-		_get_backpack_indices(),
-		equipment_instance_factory,
+		max_stack,
+		_get_hotbar_indices(),
 	)
 	if remaining > 0:
 		remaining = _grant_item_to_indices(
 			_slots,
 			stack.item_id,
 			remaining,
-			item_catalog.get_definition(stack.item_id).max_stack,
-			_get_hotbar_indices(),
+			max_stack,
+			_get_backpack_indices(),
 			equipment_instance_factory,
 		)
+	if remaining > 0:
+		remaining = _place_item_in_empty_indices(
+		_slots,
+		stack.item_id,
+		remaining,
+		max_stack,
+		_get_hotbar_indices(),
+		equipment_instance_factory,
+	)
 	var accepted_count := stack.count - remaining
 	return null if accepted_count == 0 else InventoryStack.new(stack.item_id, accepted_count)
 
@@ -745,6 +754,18 @@ func _grant_item_to_indices(
 	indices: Array[int],
 	creation_factory: EquipmentInstanceFactory,
 ) -> int:
+	var remaining := _merge_item_into_indices(simulated, item_id, count, max_stack, indices)
+	if remaining == 0:
+		return 0
+	return _place_item_in_empty_indices(simulated, item_id, remaining, max_stack, indices, creation_factory)
+
+func _merge_item_into_indices(
+	simulated: Array[InventoryStack],
+	item_id: StringName,
+	count: int,
+	max_stack: int,
+	indices: Array[int],
+) -> int:
 	var remaining := count
 	for index in indices:
 		var stack := simulated[index]
@@ -755,6 +776,17 @@ func _grant_item_to_indices(
 		remaining -= added
 		if remaining == 0:
 			return 0
+	return remaining
+
+func _place_item_in_empty_indices(
+	simulated: Array[InventoryStack],
+	item_id: StringName,
+	count: int,
+	max_stack: int,
+	indices: Array[int],
+	creation_factory: EquipmentInstanceFactory,
+) -> int:
+	var remaining := count
 	for index in indices:
 		if simulated[index] != null:
 			continue
