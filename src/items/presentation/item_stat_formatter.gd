@@ -32,6 +32,7 @@ static func get_melee_stat_lines(item_definition: ItemDefinition) -> Array[Strin
 	lines.append("Cooldown: %s" % highlight("%ss" % format_number(profile.cooldown)))
 	lines.append("Sweep: %s" % highlight("%s°" % format_number(profile.sweep_degrees)))
 	lines.append("Knockback: %s" % highlight(format_number(profile.knockback_speed)))
+	lines.append("Sneak Damage: %s" % highlight("%sx" % format_number(profile.sneak_damage_multiplier)))
 	return lines
 
 static func get_bow_stat_lines(item_definition: ItemDefinition) -> Array[String]:
@@ -39,9 +40,12 @@ static func get_bow_stat_lines(item_definition: ItemDefinition) -> Array[String]
 	var bow_action := item_definition.primary_action as BowDrawActionDefinition
 	if bow_action == null:
 		return []
+	var sneak_damage_multiplier := 1.0
+	if not bow_action.ammunition.is_empty():
+		sneak_damage_multiplier = bow_action.ammunition[0].projectile_profile.sneak_damage_multiplier
 	return [
 		"Draw Time: %s" % highlight("%ss" % format_number(bow_action.draw_seconds)),
-		"Sneak Damage: %s" % highlight("%sx" % format_number(MeleeCombatCoordinator.SNEAK_ATTACK_MULTIPLIER)),
+		"Sneak Damage: %s" % highlight("%sx" % format_number(sneak_damage_multiplier)),
 	]
 
 static func get_arrow_stat_lines(item_definition: ItemDefinition) -> Array[String]:

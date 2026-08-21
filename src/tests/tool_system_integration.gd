@@ -194,6 +194,7 @@ func _run():
 	var sword_action := sword.primary_action as MeleeAttackActionDefinition
 	_expect(is_equal_approx(sword_action.attack_profile.duration, 0.48), "sword attack duration changed")
 	_expect(is_equal_approx(sword_action.attack_profile.base_damage, 10.0) and sword_action.attack_profile.base_damage_random_reduction == 2, "sword base damage spread is not 8-10")
+	_expect(is_equal_approx(sword_action.attack_profile.sneak_damage_multiplier, 1.0), "sword sneak damage is not neutral")
 	_expect(is_equal_approx(sword_action.chain_input_window, 0.26), "sword chain input window changed")
 	var hammer := item_catalog.get_definition(&"copper_hammer")
 	_expect(hammer.max_stack == 1, "copper hammer stack limit is not one")
@@ -222,6 +223,7 @@ func _run():
 	_expect(is_equal_approx(hammer_profile.reach, 4.0) and is_equal_approx(hammer_profile.sweep_degrees, 360.0), "copper hammer does not use a four-block radial attack")
 	_expect(is_equal_approx(hammer_action.impact_effect_radius, hammer_profile.reach), "hammer shockwave radius does not match its damage and knockback radius")
 	_expect(is_equal_approx(hammer_profile.base_damage, 15.0) and is_equal_approx(hammer_profile.damage_multiplier, 1.0), "copper hammer base damage is not fifteen")
+	_expect(is_equal_approx(hammer_profile.sneak_damage_multiplier, 1.0), "copper hammer sneak damage is not neutral")
 	_expect(is_equal_approx(hammer_profile.radial_damage_center_multiplier, 1.0) and is_equal_approx(hammer_profile.radial_damage_edge_multiplier, 1.0 / 3.0), "copper hammer radial damage falloff is misconfigured")
 	_expect(hammer_profile.acquire_targets_on_contact and is_equal_approx(hammer_profile.knockback_speed, 8.0) and is_equal_approx(hammer_profile.impact_origin_forward_offset, 1.445), "copper hammer impact behavior is incomplete")
 	_expect(hammer.rarity == sword.rarity and hammer.proficiency == sword.proficiency, "copper hammer does not use canonical weapon progression")
@@ -265,6 +267,7 @@ func _run():
 	_expect(is_equal_approx(bow_action.maximum_launch_angle_degrees, 45.0), "bow maximum launch angle is not forty-five degrees")
 	_expect(bow_action.ammunition.size() == 2 and bow_action.ammunition[0] == stone_arrow and bow_action.ammunition[1] == copper_arrow, "bow ammunition priority is incorrect")
 	_expect(is_equal_approx(bow_action.ammunition[0].projectile_profile.base_damage, 8.0) and is_equal_approx(bow_action.ammunition[1].projectile_profile.base_damage, 12.0), "arrow damage values are incorrect")
+	_expect(is_equal_approx(bow_action.ammunition[0].projectile_profile.sneak_damage_multiplier, 2.0) and is_equal_approx(bow_action.ammunition[1].projectile_profile.sneak_damage_multiplier, 2.0), "arrow sneak damage multipliers are incorrect")
 	_expect(bow_action.ammunition[0].projectile_profile.damage_type.id == &"pierce" and bow_action.ammunition[1].projectile_profile.damage_type == bow_action.ammunition[0].projectile_profile.damage_type, "arrows do not use canonical pierce damage")
 	_expect(is_equal_approx(bow_action.ammunition[0].projectile_profile.knockback_speed, 2.0) and is_equal_approx(bow_action.ammunition[1].projectile_profile.knockback_speed, 2.0), "arrow knockback values are incorrect")
 	_expect(is_equal_approx(bow_action.ammunition[0].projectile_profile.gravity, 94.08) and is_equal_approx(bow_action.ammunition[1].projectile_profile.gravity, 94.08), "arrow gravity is misconfigured")
@@ -299,15 +302,23 @@ func _run():
 	var empty_bow_action := BowDrawActionDefinition.new()
 	var invalid_damage_bow_action := bow_action.duplicate(true) as BowDrawActionDefinition
 	invalid_damage_bow_action.minimum_damage_multiplier = 1.1
+	var invalid_melee_sneak_profile := sword_action.attack_profile.duplicate(true) as MeleeAttackProfile
+	invalid_melee_sneak_profile.sneak_damage_multiplier = 0.5
+	var invalid_projectile_sneak_profile := bow_action.ammunition[0].projectile_profile.duplicate(true) as ProjectileAttackProfile
+	invalid_projectile_sneak_profile.sneak_damage_multiplier = 0.5
 	var print_error_messages := Engine.print_error_messages
 	Engine.print_error_messages = false
 	var invalid_bow_action_valid := invalid_bow_action.validate("test")
 	var empty_bow_action_valid := empty_bow_action.validate("test")
 	var invalid_damage_bow_action_valid := invalid_damage_bow_action.validate("test")
+	var invalid_melee_sneak_profile_valid := invalid_melee_sneak_profile.validate("test")
+	var invalid_projectile_sneak_profile_valid := invalid_projectile_sneak_profile.validate("test")
 	Engine.print_error_messages = print_error_messages
 	_expect(not invalid_bow_action_valid, "bow draw accepted an arrow without a nock contract")
 	_expect(not empty_bow_action_valid, "bow draw accepted no ammunition")
 	_expect(not invalid_damage_bow_action_valid, "bow draw accepted a minimum damage multiplier above one")
+	_expect(not invalid_melee_sneak_profile_valid, "melee profile accepted a sneak damage multiplier below one")
+	_expect(not invalid_projectile_sneak_profile_valid, "projectile profile accepted a sneak damage multiplier below one")
 	var reachable_target := Vector3(0.0, 0.0, 7.0)
 	var reachable_transform := bow_action.get_projectile_release_transform(Vector3.ZERO, Vector3.BACK, reachable_target, 0.5, bow_action.ammunition[0].projectile_profile.gravity)
 	var reachable_velocity := reachable_transform.basis.y * bow_action.get_launch_speed(0.5)

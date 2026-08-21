@@ -897,7 +897,7 @@ func _check_hotbar_gear_tooltips() -> void:
 	if tooltip.proficiency_level_label.text != "Proficiency Level 0 / 1" or tooltip.proficiency_experience_label.text != "Proficiency XP: 0 / 100":
 		_fail("sword tooltip initial proficiency is incorrect")
 	var parsed_stats := tooltip.stats_label.get_parsed_text()
-	for expected_stat in ["Slash: 10 (8–10)", "Reach: 2.5", "Cooldown: 0.48s", "Sweep: 120°", "Knockback: 0"]:
+	for expected_stat in ["Slash: 10 (8–10)", "Reach: 2.5", "Cooldown: 0.48s", "Sweep: 120°", "Knockback: 0", "Sneak Damage: 1x"]:
 		if not parsed_stats.contains(expected_stat):
 			_fail("sword tooltip is missing %s" % expected_stat)
 	if parsed_stats.contains("Base Damage"):

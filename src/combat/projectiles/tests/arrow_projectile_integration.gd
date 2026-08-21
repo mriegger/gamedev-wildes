@@ -107,7 +107,7 @@ func _run() -> void:
 		var expected_damage := stone_ammunition.projectile_profile.calculate_damage(
 			player_stats.get_value(&"strength"),
 			coordinator.get_runtime().get_stat_value(actor.runtime_id, &"defense"),
-		) * MeleeCombatCoordinator.SNEAK_ATTACK_MULTIPLIER
+		) * stone_ammunition.projectile_profile.sneak_damage_multiplier
 		_expect(is_equal_approx(outcome.applied_damage, expected_damage), "stone arrow did not apply its full-draw sneak damage")
 	_expect(actor is ZombieActor and (actor as ZombieActor).brain.is_alerted(), "sneak arrow hit did not immediately aggro the zombie")
 	_expect(is_equal_approx(actor.knockback_velocity.length(), 2.0), "stone arrow did not apply two knockback")

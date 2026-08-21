@@ -128,10 +128,11 @@ aim. The profile calculates
 optionally map canonical damage types to weak or resistant responses; missing entries remain neutral.
 Combat applies the response multiplier after the profile calculation: 1.5 for weak, 0.5 for resistant,
 and 1.0 for neutral. Player hits ask the target actor to begin its player-hit response; an actor that
-was neither aggroed nor fleeing transitions immediately and returns a 2.0 sneak multiplier for that
-hit. Aggressive actors enter their chase state, while sheep enter `FLEE`; later hits during those states
+was neither aggroed nor fleeing transitions immediately and allows the attack profile's sneak
+multiplier for that hit. Arrow profiles use 2.0, while sword and hammer profiles remain neutral at
+1.0. Aggressive actors enter their chase state, while sheep enter `FLEE`; later hits during those states
 receive no bonus. Entity validation requires every combat-targetable actor to implement that response
-contract, so future damageable creatures cannot silently omit sneak behavior. The sneak multiplier is applied before affinity. Each successful
+contract, so future damageable creatures cannot silently omit sneak behavior. The profile-owned sneak multiplier is applied before affinity. Each successful
 physical hit applies that damage through the target state owner and optionally adds a decaying planar
 knockback velocity. Melee hits produce immutable `MeleeOutcome` values; arrow hits produce parallel
 `ProjectileOutcome` values. Both carry the contact, exact applied damage, source item ID, affinity

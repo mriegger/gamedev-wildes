@@ -3,6 +3,7 @@ class_name ProjectileAttackProfile
 
 @export var damage_type: DamageTypeDefinition
 @export_range(0.01, 999999.0, 0.01, "or_greater") var base_damage: float = 1.0
+@export_range(1.0, 10.0, 0.01, "or_greater") var sneak_damage_multiplier: float = 1.0
 @export_range(0.0, 32.0, 0.01, "or_greater") var knockback_speed: float = 0.0
 @export_range(0.001, 1.0, 0.001) var collision_radius: float = 0.05
 @export_range(0.01, 200.0, 0.01, "or_greater") var gravity: float = 78.4
@@ -17,6 +18,9 @@ func validate(source: String) -> bool:
 		valid = false
 	if not is_finite(base_damage) or base_damage <= 0.0:
 		push_error("[ProjectileAttackProfile] Invalid base damage at %s" % source)
+		valid = false
+	if not is_finite(sneak_damage_multiplier) or sneak_damage_multiplier < 1.0:
+		push_error("[ProjectileAttackProfile] Invalid sneak damage multiplier at %s" % source)
 		valid = false
 	if not is_finite(knockback_speed) or knockback_speed < 0.0:
 		push_error("[ProjectileAttackProfile] Invalid knockback speed at %s" % source)

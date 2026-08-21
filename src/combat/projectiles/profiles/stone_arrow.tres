@@ -7,6 +7,7 @@
 script = ExtResource("1_profile")
 damage_type = ExtResource("2_pierce")
 base_damage = 8.0
+sneak_damage_multiplier = 2.0
 knockback_speed = 2.0
 collision_radius = 0.05
 gravity = 94.08

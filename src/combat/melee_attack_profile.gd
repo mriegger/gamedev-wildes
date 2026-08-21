@@ -10,6 +10,7 @@ class_name MeleeAttackProfile
 @export_range(0.01, 999999.0, 0.01, "or_greater") var base_damage: float = 1.0
 @export_range(0, 999999, 1, "or_greater") var base_damage_random_reduction: int = 0
 @export_range(0.01, 10.0, 0.01, "or_greater") var damage_multiplier: float = 1.0
+@export_range(1.0, 10.0, 0.01, "or_greater") var sneak_damage_multiplier: float = 1.0
 @export_range(0.01, 10.0, 0.01, "or_greater") var radial_damage_center_multiplier: float = 1.0
 @export_range(0.01, 10.0, 0.01, "or_greater") var radial_damage_edge_multiplier: float = 1.0
 @export_range(0.0, 360.0, 0.1) var sweep_degrees: float = 0.0
@@ -45,6 +46,9 @@ func validate(source: String) -> bool:
 		valid = false
 	if not is_finite(damage_multiplier) or damage_multiplier <= 0.0:
 		push_error("[MeleeAttackProfile] Invalid damage multiplier at %s" % source)
+		valid = false
+	if not is_finite(sneak_damage_multiplier) or sneak_damage_multiplier < 1.0:
+		push_error("[MeleeAttackProfile] Invalid sneak damage multiplier at %s" % source)
 		valid = false
 	if not is_finite(radial_damage_center_multiplier) or radial_damage_center_multiplier <= 0.0:
 		push_error("[MeleeAttackProfile] Invalid radial center damage multiplier at %s" % source)

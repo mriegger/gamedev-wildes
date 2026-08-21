@@ -4,8 +4,6 @@ class_name MeleeCombatCoordinator
 const PLAYER_RUNTIME_ID: int = 0
 const PLAYER_DEFINITION_ID: StringName = &"player"
 const GEOMETRY_EPSILON: float = 0.000001
-const SNEAK_ATTACK_MULTIPLIER: float = 2.0
-
 const MeleeAttackProfileType := preload("res://combat/melee_attack_profile.gd")
 const MeleeContactType := preload("res://combat/melee_contact.gd")
 const MeleeOutcomeType := preload("res://combat/melee_outcome.gd")
@@ -147,7 +145,7 @@ func try_commit_player_projectile_hit(
 	)
 	damage *= damage_multiplier
 	if sneak_attack:
-		damage *= SNEAK_ATTACK_MULTIPLIER
+		damage *= profile.sneak_damage_multiplier
 	damage *= DamageAffinityDefinition.get_multiplier(damage_response)
 	var damage_result := _entity_runtime.try_apply_damage(target_runtime_id, damage)
 	if damage_result == null:
@@ -386,7 +384,7 @@ func _commit_contact(contact: MeleeContactType, profile: MeleeAttackProfileType,
 			distance_from_attack_center,
 		)
 		if sneak_attack:
-			damage *= SNEAK_ATTACK_MULTIPLIER
+			damage *= profile.sneak_damage_multiplier
 		damage = maxf(1.0, damage * DamageAffinityDefinition.get_multiplier(damage_response))
 		var damage_result := _entity_runtime.try_apply_damage(contact.target_runtime_id, damage)
 		if damage_result == null:

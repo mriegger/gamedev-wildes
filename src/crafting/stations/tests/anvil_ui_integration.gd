@@ -88,14 +88,14 @@ func _process(_delta: float) -> bool:
 		_expect(stats_label.get_parsed_text().contains("Mining Power: 2") and stats_label.get_parsed_text().contains("Speed Multiplier: 2x"), "copper pickaxe recipe stats are incomplete")
 		_hud.anvil_panel.select_recipe(&"copper_sword")
 		_expect(stats_heading.visible and stats_label.visible, "sword recipe did not display weapon stats")
-		for expected_stat in ["Slash: 10 (8–10)", "Reach: 2.5", "Cooldown: 0.48s", "Sweep: 120°", "Knockback: 0"]:
+		for expected_stat in ["Slash: 10 (8–10)", "Reach: 2.5", "Cooldown: 0.48s", "Sweep: 120°", "Knockback: 0", "Sneak Damage: 1x"]:
 			_expect(stats_label.get_parsed_text().contains(expected_stat), "sword recipe stats are missing %s" % expected_stat)
 		_expect(not stats_label.get_parsed_text().contains("Base Damage"), "sword recipe still labels damage as base damage")
 		_expect(stats_label.text.contains(CombatPresentationPalette.WEAK_DAMAGE_COLOR.to_html(false)), "sword recipe numbers are not yellow-gold")
 		_expect(stats_label.text.contains("[b][color=#%s]0.48s[/color][/b]" % CombatPresentationPalette.WEAK_DAMAGE_COLOR.to_html(false)), "sword recipe cooldown number and unit are not highlighted and bold")
 		_expect(stats_label.text.contains("[b][color=#%s]120°[/color][/b]" % CombatPresentationPalette.WEAK_DAMAGE_COLOR.to_html(false)), "sword recipe sweep number and unit are not highlighted and bold")
 		_hud.anvil_panel.select_recipe(&"copper_hammer")
-		for expected_stat in ["Blunt: 15 (5–15)", "Reach: 4", "Cooldown: 1.65s", "Sweep: 360°", "Knockback: 8"]:
+		for expected_stat in ["Blunt: 15 (5–15)", "Reach: 4", "Cooldown: 1.65s", "Sweep: 360°", "Knockback: 8", "Sneak Damage: 1x"]:
 			_expect(stats_label.get_parsed_text().contains(expected_stat), "hammer recipe stats are missing %s" % expected_stat)
 		_hud.anvil_panel.select_recipe(&"copper_arrow_bundle")
 		_expect(stats_heading.visible and stats_label.visible and stats_label.get_parsed_text().contains("Pierce: 12") and stats_label.get_parsed_text().contains("Knockback: 2"), "copper arrow recipe did not display its combat stats")
