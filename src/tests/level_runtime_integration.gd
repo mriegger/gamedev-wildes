@@ -342,6 +342,8 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	var food_tutorial_view := FoodTutorialView.new()
 	var crafting_tutorial := CraftingTutorialCoordinator.new()
 	var crafting_tutorial_view := CraftingTutorialView.new()
+	var crafting_ingredients_tutorial := CraftingIngredientsTutorialCoordinator.new()
+	var crafting_ingredients_tutorial_view := CraftingIngredientsTutorialView.new()
 	var placement_prompt := PlacementPromptCoordinator.new()
 	var pumpkin_patch := (load("res://farming/pumpkin/pumpkin_patch_coordinator.tscn") as PackedScene).instantiate() as PumpkinPatchCoordinator
 	var apple_trees := (load("res://foraging/apple/apple_tree_coordinator.tscn") as PackedScene).instantiate() as AppleTreeCoordinator
@@ -374,6 +376,8 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	food_tutorial_view.name = "FoodTutorialView"
 	crafting_tutorial.name = "CraftingTutorial"
 	crafting_tutorial_view.name = "CraftingTutorialView"
+	crafting_ingredients_tutorial.name = "CraftingIngredientsTutorial"
+	crafting_ingredients_tutorial_view.name = "CraftingIngredientsTutorialView"
 	placement_prompt.name = "PlacementPrompt"
 	pumpkin_patch.name = "PumpkinPatch"
 	apple_trees.name = "AppleTrees"
@@ -406,6 +410,8 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	game.add_child(food_tutorial_view)
 	game.add_child(crafting_tutorial)
 	game.add_child(crafting_tutorial_view)
+	game.add_child(crafting_ingredients_tutorial)
+	game.add_child(crafting_ingredients_tutorial_view)
 	game.add_child(placement_prompt)
 	overworld.add_child(pumpkin_patch)
 	overworld.add_child(apple_trees)

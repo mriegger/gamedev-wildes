@@ -3,6 +3,8 @@ class_name CraftingPanel
 
 signal progress_changed(progress: float)
 signal opened
+signal closed
+signal interacted
 
 const PANEL_WIDTH: float = 520.0
 const ANIM_DURATION: float = 0.25
@@ -31,6 +33,7 @@ const PROGRESSION_WORKSPACE_ID: StringName = &"progression"
 @onready var _output_name: Label = $Margin/Content/Body/Details/Output/Text/Name as Label
 @onready var _output_count: Label = $Margin/Content/Body/Details/Output/Text/Count as Label
 @onready var _output_description: Label = $Margin/Content/Body/Details/Description as Label
+@onready var _ingredients_heading: Label = $Margin/Content/Body/Details/IngredientsHeading as Label
 @onready var _ingredient_list: VBoxContainer = $Margin/Content/Body/Details/IngredientList as VBoxContainer
 @onready var _stats_heading: Label = $Margin/Content/Body/Details/StatsHeading as Label
 @onready var _stats_label: RichTextLabel = $Margin/Content/Body/Details/Stats as RichTextLabel
@@ -51,6 +54,7 @@ var _workspace_tabs_enabled: bool = true
 var _crafting_sound_stream: AudioStream = preload("res://assets/audio/sfx/tools/impactGeneric_light_004.ogg")
 
 func _ready() -> void:
+	set_process_input(true)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	visible = true
 	WildesStyle.apply_frosted_panel(_background, WildesStyle.make_panel(Color(0.14, 0.16, 0.18, 0.32), 0, Color(1, 1, 1, 0.12), 1), 5.0, false)
@@ -65,6 +69,22 @@ func _ready() -> void:
 	_update_size()
 	_apply_state()
 	set_process(false)
+
+func _input(event: InputEvent) -> void:
+	if not _is_open:
+		return
+	if event is InputEventMouseButton:
+		var mouse_event := event as InputEventMouseButton
+		if mouse_event.pressed and get_global_rect().has_point(mouse_event.position):
+			interacted.emit()
+	elif event is InputEventScreenTouch:
+		var touch_event := event as InputEventScreenTouch
+		if touch_event.pressed and get_global_rect().has_point(touch_event.position):
+			interacted.emit()
+	elif event is InputEventPanGesture:
+		var pan_event := event as InputEventPanGesture
+		if get_global_rect().has_point(pan_event.position):
+			interacted.emit()
 
 func setup(
 	p_crafting_coordinator: CraftingCoordinator,
@@ -105,14 +125,18 @@ func open() -> void:
 		opened.emit()
 
 func close() -> void:
+	var was_open := _is_open
 	_is_open = false
 	_target_progress = 0.0
 	_rune_socketing_panel.clear_gear_reference()
 	_crafting_sound_player.stop()
 	_apply_workspace()
 	set_process(true)
+	if was_open:
+		closed.emit()
 
 func close_immediate() -> void:
+	var was_open := _is_open
 	_is_open = false
 	_progress = 0.0
 	_target_progress = 0.0
@@ -122,6 +146,8 @@ func close_immediate() -> void:
 	_update_size()
 	_apply_state()
 	set_process(false)
+	if was_open:
+		closed.emit()
 
 func is_open() -> bool:
 	return _is_open
@@ -137,6 +163,9 @@ func select_recipe(recipe_id: StringName) -> void:
 
 func get_craft_button() -> Control:
 	return _craft_button
+
+func get_ingredients_global_rect() -> Rect2:
+	return _ingredients_heading.get_global_rect().merge(_ingredient_list.get_global_rect())
 
 func get_current_workspace_id() -> StringName:
 	return _current_workspace_id

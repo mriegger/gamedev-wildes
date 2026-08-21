@@ -144,7 +144,9 @@ block or walks away from the highlighted area.
 Approaching a collectible apple or pumpkin shows a food recovery tip until the player picks up food
 or walks away. Tutorial completion is stored per world so completed tips do not reappear.
 Five seconds after the player's first mined block, a top-left hint introduces the `Tab` crafting
-menu unless it has already been opened. Tutorial hints wait for any active hint to finish first.
+menu unless it has already been opened. The first crafting-menu session highlights the selected
+recipe's ingredient requirements until the player interacts with the panel or closes it. Tutorial
+hints wait for any active hint to finish first.
 Using a hoe on the exposed top face of grass or dirt converts it into dry farmland, which drops dirt
 when mined.
 Seeded copper deposits generate after the surrounding terrain as connected 5–30 block blobs. Most

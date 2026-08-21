@@ -1,4 +1,4 @@
-[gd_scene load_steps=52 format=3 uid="uid://b22g4me0x1f3h"]
+[gd_scene load_steps=54 format=3 uid="uid://b22g4me0x1f3h"]
 
 [ext_resource type="Script" path="res://game/game.gd" id="1_game"]
 [ext_resource type="PackedScene" path="res://world/world.tscn" id="2_world"]
@@ -53,6 +53,8 @@
 [ext_resource type="Script" path="res://interactions/placement_prompt_coordinator.gd" id="49_placement_prompt"]
 [ext_resource type="Script" path="res://tutorials/crafting_tutorial_coordinator.gd" id="50_crafting_tutorial"]
 [ext_resource type="Script" path="res://tutorials/presentation/crafting_tutorial_view.gd" id="51_crafting_tutorial_view"]
+[ext_resource type="Script" path="res://tutorials/crafting_ingredients_tutorial_coordinator.gd" id="52_crafting_ingredients_tutorial"]
+[ext_resource type="Script" path="res://tutorials/presentation/crafting_ingredients_tutorial_view.gd" id="53_crafting_ingredients_tutorial_view"]
 
 [node name="Game" type="Node3D"]
 script = ExtResource("1_game")
@@ -149,6 +151,12 @@ script = ExtResource("50_crafting_tutorial")
 
 [node name="CraftingTutorialView" type="CanvasLayer" parent="."]
 script = ExtResource("51_crafting_tutorial_view")
+
+[node name="CraftingIngredientsTutorial" type="Node" parent="."]
+script = ExtResource("52_crafting_ingredients_tutorial")
+
+[node name="CraftingIngredientsTutorialView" type="CanvasLayer" parent="."]
+script = ExtResource("53_crafting_ingredients_tutorial_view")
 
 [node name="PlacementPrompt" type="Node" parent="."]
 script = ExtResource("49_placement_prompt")

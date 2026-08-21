@@ -62,6 +62,10 @@ tips queued until the active callout has finished fading out.
 seconds while the callout arbiter is free. Any competing tutorial resets that delay. The fixed
 top-left `CraftingTutorialView` acquires the same arbiter and completes permanently when the general
 crafting panel emits its first open event, whether that happens before or after the hint appears.
+`CraftingIngredientsTutorialCoordinator` queues a one-time follow-up on the first general crafting
+open, then completes when the player interacts anywhere inside that panel or closes it. Its view
+tracks the selected recipe's ingredient heading/list rectangle every frame so the white UI outline
+and adjacent explanation remain aligned through panel animation and layout changes.
 
 `InteractionPromptCoordinator` resolves the single HUD prompt with contextual harvest and level
 actions above the fallback placement guidance. `PlacementPromptCoordinator`
