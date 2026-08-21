@@ -104,7 +104,7 @@ func _run() -> void:
 	debug_owl.velocity = Vector3.ZERO
 	debug_owl.on_ground = true
 	debug_owl.brain.state = BirdBrain.State.DESCEND
-	debug_owl.tick(FRAME_DELTA, observation, Vector3.ZERO, NavigationSearchBudget.new(1))
+	debug_owl.tick_gameplay(FRAME_DELTA, observation, Vector3.ZERO, NavigationSearchBudget.new(1))
 	owl_animation.advance(FRAME_DELTA)
 	_expect(debug_owl.brain.state == BirdBrain.State.GROUNDED_IDLE and debug_owl.on_ground, "owl rejected a tree-canopy landing")
 	_expect(debug_owl.vocalizations.is_processing(), "owl vocalizations did not activate while perched")
@@ -232,7 +232,7 @@ func _run() -> void:
 	_expect(not VoxelBodySolver.collides_at(world, bird.global_position, definition.body_width, definition.body_height, false), "bird ended inside solid terrain")
 	var owl_runtime := EntityRuntime.new()
 	root.add_child(owl_runtime)
-	owl_runtime.setup(catalog, world, 1, 1, EntityNavigationLimits.new(24, 256, 1))
+	owl_runtime.setup(catalog, world, 1, 1, EntityNavigationLimits.new(24, 256, 1), EntityRuntime.Mode.GAMEPLAY)
 	var owl_ids := owl_runtime.try_spawn_batch([EntitySpawnRequest.new(&"owl", aerial_position, 31415)])
 	var grounded_owl := owl_runtime.get_actor(owl_ids[0]) as BirdActor if not owl_ids.is_empty() else null
 	_expect(grounded_owl != null and not grounded_owl._has_landing_target, "owl selected open ground without a tree")
@@ -241,7 +241,7 @@ func _run() -> void:
 		grounded_owl.velocity = Vector3.ZERO
 		grounded_owl.on_ground = true
 		grounded_owl.brain.state = BirdBrain.State.DESCEND
-		grounded_owl.tick(FRAME_DELTA, observation, Vector3.ZERO, NavigationSearchBudget.new(1))
+		grounded_owl.tick_gameplay(FRAME_DELTA, observation, Vector3.ZERO, NavigationSearchBudget.new(1))
 		_expect(grounded_owl.brain.state == BirdBrain.State.TAKEOFF and not grounded_owl.on_ground, "owl accepted a non-tree landing")
 
 	var canopy_world := _make_world()
@@ -280,7 +280,7 @@ func _run() -> void:
 		_expect(Vector2(canopy_bird._takeoff_target.x - canopy_bird.global_position.x, canopy_bird._takeoff_target.z - canopy_bird.global_position.z).length() >= 2.0, "canopy escape did not select a lateral route")
 		var escaped_canopy := false
 		for _frame in 180:
-			canopy_bird.tick(FRAME_DELTA, observation, Vector3.ZERO, NavigationSearchBudget.new(1))
+			canopy_bird.tick_gameplay(FRAME_DELTA, observation, Vector3.ZERO, NavigationSearchBudget.new(1))
 			if canopy_bird.brain.state == BirdBrain.State.CRUISE:
 				escaped_canopy = true
 				break

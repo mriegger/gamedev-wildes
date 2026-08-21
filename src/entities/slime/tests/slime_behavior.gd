@@ -221,7 +221,7 @@ func _test_attachment_api() -> void:
 	actor.melee_contact_reached.connect(func(_runtime_id: int, _profile: MeleeAttackProfile) -> void: contact_count[0] += 1)
 	_expect(actor.attach(2), "valid attachment was rejected")
 	_expect(actor.is_attached() and not actor.can_attach(), "attached state was not committed")
-	actor.tick(0.0, EntityTargetObservation.create(actor.global_position, actor.global_position, Vector3.FORWARD, Vector3.RIGHT), Vector3.ZERO, NavigationSearchBudget.new(1))
+	actor.tick_gameplay(0.0, EntityTargetObservation.create(actor.global_position, actor.global_position, Vector3.FORWARD, Vector3.RIGHT), Vector3.ZERO, NavigationSearchBudget.new(1))
 	_expect(actor.is_aggroed(), "attached slime did not report aggro")
 	_expect(actor.commit_initial_attachment_contact(), "attachment did not commit its initial contact")
 	_expect(contact_count[0] == 1, "attachment did not damage immediately")

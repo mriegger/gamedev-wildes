@@ -1,9 +1,15 @@
-[gd_scene load_steps=6 format=3 uid="uid://dbky24qcjb3wy"]
+[gd_scene load_steps=7 format=3 uid="uid://dbky24qcjb3wy"]
 
 [ext_resource type="Script" path="res://ui/screens/main_menu/main_menu.gd" id="1_script"]
-[ext_resource type="Texture2D" path="res://assets/images/logo/wildes_logo_white.png" id="2_logo"]
-[ext_resource type="Texture2D" path="res://assets/images/logo/wildes_logo_shadow.png" id="3_shadow"]
+[ext_resource type="Texture2D" path="res://assets/images/logo/wildes_white.png" id="2_logo"]
 [ext_resource type="Theme" path="res://ui/theme/thin_loading_bar_theme.tres" id="4_loading_theme"]
+
+[sub_resource type="Shader" id="Shader_logo_shadow"]
+code = "shader_type canvas_item;\n\nuniform float blur_radius = 14.0;\n\nvoid fragment() {\n\tvec2 offset = TEXTURE_PIXEL_SIZE * blur_radius;\n\tfloat alpha = texture(TEXTURE, UV).a * 0.18;\n\talpha += texture(TEXTURE, UV + vec2(offset.x, 0.0)).a * 0.12;\n\talpha += texture(TEXTURE, UV - vec2(offset.x, 0.0)).a * 0.12;\n\talpha += texture(TEXTURE, UV + vec2(0.0, offset.y)).a * 0.12;\n\talpha += texture(TEXTURE, UV - vec2(0.0, offset.y)).a * 0.12;\n\talpha += texture(TEXTURE, UV + offset).a * 0.065;\n\talpha += texture(TEXTURE, UV - offset).a * 0.065;\n\talpha += texture(TEXTURE, UV + vec2(offset.x, -offset.y)).a * 0.065;\n\talpha += texture(TEXTURE, UV + vec2(-offset.x, offset.y)).a * 0.065;\n\talpha += texture(TEXTURE, UV + vec2(offset.x * 2.0, 0.0)).a * 0.02;\n\talpha += texture(TEXTURE, UV - vec2(offset.x * 2.0, 0.0)).a * 0.02;\n\talpha += texture(TEXTURE, UV + vec2(0.0, offset.y * 2.0)).a * 0.02;\n\talpha += texture(TEXTURE, UV - vec2(0.0, offset.y * 2.0)).a * 0.02;\n\tCOLOR = vec4(0.0, 0.0, 0.0, alpha * COLOR.a);\n}\n"
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_logo_shadow"]
+shader = SubResource("Shader_logo_shadow")
+shader_parameter/blur_radius = 14.0
 
 [sub_resource type="StyleBoxEmpty" id="Style_text_button"]
 
@@ -33,23 +39,23 @@ grow_vertical = 2
 mouse_filter = 2
 
 [node name="Shadow" type="TextureRect" parent="LogoGroup"]
-self_modulate = Color(1, 1, 1, 0.62)
+material = SubResource("ShaderMaterial_logo_shadow")
+self_modulate = Color(0, 0, 0, 0.62)
 layout_mode = 0
-offset_left = -6.0
-offset_top = -6.0
-offset_right = 446.0
-offset_bottom = 140.0
+offset_left = 37.0
+offset_top = 4.0
+offset_right = 409.0
+offset_bottom = 128.0
 mouse_filter = 2
-texture = ExtResource("3_shadow")
+texture = ExtResource("2_logo")
 expand_mode = 1
 stretch_mode = 5
 
 [node name="Logo" type="TextureRect" parent="LogoGroup"]
 layout_mode = 0
-offset_left = 25.0
-offset_top = 20.0
-offset_right = 415.0
-offset_bottom = 104.0
+offset_left = 34.0
+offset_right = 406.0
+offset_bottom = 124.0
 mouse_filter = 2
 texture = ExtResource("2_logo")
 expand_mode = 1
@@ -64,9 +70,9 @@ anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
 offset_left = -217.5
-offset_top = 78.0
+offset_top = 92.0
 offset_right = 217.5
-offset_bottom = 82.0
+offset_bottom = 96.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2

@@ -56,7 +56,7 @@ func _run():
 	_expect(clock.time_changed.get_connections().size() >= 1, "clock time_changed not connected")
 
 	var settings = GameSettings.new()
-	_expect(is_equal_approx(settings.music_volume, 0.8), "music volume default is not 0.8")
+	_expect(is_equal_approx(settings.music_volume, 0.7), "music volume default is not 0.7")
 	settings.ambient_volume = 0.0
 	settings.birds_enabled = true
 	amb.apply_settings(settings)
@@ -73,7 +73,7 @@ func _run():
 	_expect(not restored_settings.birds_enabled, "birds setting did not persist")
 	var legacy_settings := GameSettings.new()
 	legacy_settings._apply_dict({})
-	_expect(is_equal_approx(legacy_settings.music_volume, 0.8), "legacy settings did not retain the music volume default")
+	_expect(is_equal_approx(legacy_settings.music_volume, 0.7), "legacy settings did not retain the music volume default")
 
 	var settings_scene = load("res://ui/screens/settings/settings_screen.tscn") as PackedScene
 	var settings_screen = settings_scene.instantiate() as SettingsScreen

@@ -119,19 +119,6 @@ custom_minimum_size = Vector2(220, 38)
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="MusicVolumeLabel" type="Label" parent="VBox/SettingsGrid"]
-layout_mode = 2
-text = "Music volume"
-
-[node name="MusicVolume" type="HSlider" parent="VBox/SettingsGrid"]
-custom_minimum_size = Vector2(220, 38)
-layout_mode = 2
-size_flags_horizontal = 3
-min_value = 0.0
-max_value = 1.0
-step = 0.01
-value = 0.8
-
 [node name="AmbientVolumeLabel" type="Label" parent="VBox/SettingsGrid"]
 layout_mode = 2
 text = "Ambient volume"

@@ -62,12 +62,12 @@ func _run() -> void:
 	_expect(runtime.get_actor(2).definition.id == &"sheep", "explicit spawn incorrectly used ambient floor restrictions")
 	_expect(runtime.get_hostile_positions_near(Vector3(0.5, FEET_Y, 0.5), 3.0) == PackedVector3Array([Vector3(0.5, FEET_Y, 0.5)]), "nearby hostile query included a passive entity or omitted a hostile entity")
 	_expect(runtime.get_hostile_positions_near(Vector3(0.5, FEET_Y, 0.5), 0.0) == PackedVector3Array([Vector3(0.5, FEET_Y, 0.5)]), "zero-radius hostile query omitted an exact match")
-	runtime.tick(0.2, _observation(Vector3(0.5, FEET_Y, 0.5)))
+	runtime.tick_gameplay(0.2, _observation(Vector3(0.5, FEET_Y, 0.5)))
 	_expect(runtime.is_aggro_active(), "nearby zombie did not activate aggregate aggro")
 	_expect(_aggro_changes == [true], "zombie aggro did not emit exactly one activation")
 	var distant_observation := _observation(Vector3(100.5, FEET_Y, 0.5))
-	runtime.tick(2.0, distant_observation)
-	runtime.tick(0.2, distant_observation)
+	runtime.tick_gameplay(2.0, distant_observation)
+	runtime.tick_gameplay(0.2, distant_observation)
 	_expect(not runtime.is_aggro_active(), "distant zombie retained aggregate aggro")
 	_expect(_aggro_changes == [true, false], "zombie aggro clear did not emit exactly once")
 
@@ -86,7 +86,7 @@ func _run() -> void:
 	_expect(runtime.try_spawn_batch(third_batch) == [3], "rejected batch consumed a runtime ID")
 	var over_capacity: Array[EntitySpawnRequest] = [_request(&"zombie", 6.5, 108)]
 	_expect(runtime.try_spawn_batch(over_capacity).is_empty(), "runtime accepted a batch beyond its active cap")
-	runtime.tick(0.2, _observation(Vector3(4.5, FEET_Y, 0.5)))
+	runtime.tick_gameplay(0.2, _observation(Vector3(4.5, FEET_Y, 0.5)))
 	_expect(runtime.is_aggro_active(), "nearby skeleton did not activate aggregate aggro")
 	_expect(_aggro_changes == [true, false, true], "skeleton aggro did not emit exactly one activation")
 

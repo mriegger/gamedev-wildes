@@ -644,7 +644,8 @@ func _restore_player_from_defeat(respawn_position: Variant = null):
 		if respawn_position is Vector3:
 			target_position = respawn_position as Vector3
 		player.respawn_at(target_position)
-		death_tip_coordinator.reset_life()
+		if death_tip_coordinator != null:
+			death_tip_coordinator.reset_life()
 		camera_rig.snap_to_follow_target()
 	camera_rig.set_gameplay_input_enabled(true)
 	hud.hotbar.set_gameplay_selection_enabled(true)

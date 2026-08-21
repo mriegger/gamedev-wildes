@@ -94,6 +94,7 @@ func _run() -> void:
 	_expect(not _menu.main_menu.loading_bar.visible, "completed startup loading bar remained accessible")
 	_expect(is_equal_approx(_menu.main_menu.controls.modulate.a, 1.0), "menu controls did not finish fading in")
 	_expect(is_equal_approx(_menu.main_menu.logo_shadow.modulate.a, 1.0), "logo shadow did not fade with the logo")
+	_expect(_menu.main_menu.logo_shadow.texture == _menu.main_menu.logo.texture, "logo shadow did not reuse the centered Wildes logo")
 	_expect(not _menu.main_menu.play_button.has_theme_constant_override(&"outline_size"), "Play retained a text outline")
 	_expect(not _menu.main_menu.settings_button.has_theme_constant_override(&"outline_size"), "Settings retained a text outline")
 	_expect(not _menu.main_menu.credits.has_theme_constant_override(&"outline_size"), "team credit retained a text outline")

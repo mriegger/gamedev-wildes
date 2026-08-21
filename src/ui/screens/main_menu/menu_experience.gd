@@ -94,7 +94,7 @@ func _ready() -> void:
 
 func _initialize_world() -> void:
 	var first_shot := profile.shots[0]
-	game_environment.setup(first_shot.time_of_day, _settings.get_shadow_distance())
+	game_environment.setup(first_shot.time_of_day, _settings.get_shadow_distance(), profile.world_seed)
 	game_environment.apply_settings(_settings)
 	world.block_catalog = block_catalog
 	world.foliage_catalog = foliage_catalog

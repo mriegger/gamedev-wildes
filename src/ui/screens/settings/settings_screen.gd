@@ -12,7 +12,6 @@ signal back_requested
 @onready var shadow_range: OptionButton = $VBox/SettingsGrid/ShadowRange
 @onready var torch_shadows: OptionButton = $VBox/SettingsGrid/TorchShadows
 @onready var dungeon_torch_shadows: OptionButton = $VBox/SettingsGrid/DungeonTorchShadows
-@onready var music_volume: HSlider = $VBox/SettingsGrid/MusicVolume
 @onready var ambient_volume: HSlider = $VBox/SettingsGrid/AmbientVolume
 @onready var music_volume: HSlider = $VBox/SettingsGrid/MusicVolume
 @onready var birds_enabled: CheckButton = $VBox/SettingsGrid/BirdsEnabled
@@ -32,7 +31,6 @@ func _ready():
 	shadow_range.item_selected.connect(_on_shadow_range_selected)
 	torch_shadows.item_selected.connect(_on_torch_shadows_selected)
 	dungeon_torch_shadows.item_selected.connect(_on_dungeon_torch_shadows_selected)
-	music_volume.value_changed.connect(_on_music_volume_changed)
 	ambient_volume.value_changed.connect(_on_ambient_volume_changed)
 	music_volume.value_changed.connect(_on_music_volume_changed)
 	birds_enabled.toggled.connect(_on_birds_enabled_toggled)
@@ -89,7 +87,6 @@ func _sync_controls():
 	_select_value(shadow_range, _settings.shadow_range)
 	_select_value(torch_shadows, _settings.torch_shadow_count)
 	_select_value(dungeon_torch_shadows, _settings.dungeon_torch_shadow_count)
-	music_volume.set_value_no_signal(_settings.music_volume)
 	ambient_volume.set_value_no_signal(_settings.ambient_volume)
 	music_volume.set_value_no_signal(_settings.music_volume)
 	birds_enabled.set_pressed_no_signal(_settings.birds_enabled)
@@ -135,10 +132,6 @@ func _on_torch_shadows_selected(index: int):
 
 func _on_dungeon_torch_shadows_selected(index: int):
 	_settings.dungeon_torch_shadow_count = int(dungeon_torch_shadows.get_item_metadata(index))
-	_emit_change()
-
-func _on_music_volume_changed(value: float):
-	_settings.music_volume = value
 	_emit_change()
 
 func _on_ambient_volume_changed(value: float):
