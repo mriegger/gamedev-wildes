@@ -28,6 +28,11 @@ const DEFEAT_SPAWN_ANGLE_OFFSETS: Array[float] = [
 ]
 const DEFEAT_SPAWN_VERTICAL_OFFSETS: Array[float] = [0.0, 0.5, -0.5, 1.0, -1.0]
 
+enum Mode {
+	GAMEPLAY,
+	PRESENTATION,
+}
+
 class Retirement:
 	var actor: EntityActor
 	var sequence: int
@@ -95,6 +100,7 @@ var _next_retirement_sequence: int = 0
 var _suspended: bool = false
 var _aggro_active: bool = false
 var _aggroed_runtime_ids: Dictionary = {}
+var _mode: Mode = Mode.GAMEPLAY
 
 func setup(
 	p_catalog: EntityCatalog,
@@ -102,18 +108,21 @@ func setup(
 	p_max_population_cost: int,
 	p_max_retiring_visuals: int,
 	p_navigation_limits: EntityNavigationLimits,
+	p_mode: Mode,
 ) -> void:
 	assert(p_catalog != null and p_catalog.validate())
 	assert(p_voxel_space != null)
 	assert(p_max_population_cost > 0)
 	assert(p_max_retiring_visuals > 0)
 	assert(p_navigation_limits != null)
+	assert(p_mode == Mode.GAMEPLAY or p_mode == Mode.PRESENTATION)
 	shutdown()
 	_catalog = p_catalog
 	_voxel_space = p_voxel_space
 	_max_population_cost = p_max_population_cost
 	_max_retiring_visuals = p_max_retiring_visuals
 	_navigation_limits = p_navigation_limits
+	_mode = p_mode
 	_navigation_search_budget = NavigationSearchBudget.new(p_navigation_limits.get_max_searches_per_tick())
 	_next_runtime_id = 1
 	_next_lineage_id = 1
@@ -123,19 +132,34 @@ func setup(
 	_next_retirement_sequence = 0
 	_aggro_active = false
 	_aggroed_runtime_ids.clear()
-	_prepare_initial_actors()
+	if _mode == Mode.GAMEPLAY:
+		_prepare_initial_actors()
 	_preparation_needed = false
 	_suspended = false
 	visible = true
 
-func tick(delta: float, observation: EntityTargetObservation) -> void:
+func tick_gameplay(delta: float, observation: EntityTargetObservation) -> void:
 	assert(_catalog != null and _voxel_space != null)
 	assert(not _suspended)
+	assert(_mode == Mode.GAMEPLAY)
 	assert(is_finite(delta) and delta >= 0.0)
 	assert(observation != null and observation.validate())
-	_prepare_one_actor()
-	_advance_retiring(delta)
-	_advance_damage_immunity(delta)
+	_advance_entities(delta, observation)
+
+func tick_ambient(delta: float) -> void:
+	assert(_catalog != null and _voxel_space != null)
+	assert(not _suspended)
+	assert(_mode == Mode.PRESENTATION)
+	assert(is_finite(delta) and delta >= 0.0)
+	_advance_entities(delta, null)
+
+func _advance_entities(delta: float, observation: EntityTargetObservation) -> void:
+	if _preparation_needed:
+		_prepare_one_actor()
+	if not _retiring.is_empty():
+		_advance_retiring(delta)
+	if not _damage_immunity_remaining_by_runtime_id.is_empty():
+		_advance_damage_immunity(delta)
 	_navigation_search_budget.reset()
 	var runtime_ids: Array = _active.keys()
 	runtime_ids.sort()
@@ -154,10 +178,14 @@ func tick(delta: float, observation: EntityTargetObservation) -> void:
 		if actor == null:
 			continue
 		actor.advance_visual_fade(delta)
-		actor.tick(delta, observation, separation_velocities[runtime_id] as Vector3, _navigation_search_budget)
+		if observation == null:
+			actor.tick_ambient(delta, separation_velocities[runtime_id] as Vector3, _navigation_search_budget)
+		else:
+			actor.tick_gameplay(delta, observation, separation_velocities[runtime_id] as Vector3, _navigation_search_budget)
 		if get_actor(runtime_id) == actor:
 			_spatial_index.upsert(actor.runtime_id, actor.global_position, actor.get_world_bounds())
-			_set_actor_aggro(runtime_id, actor.is_aggroed())
+			if _mode == Mode.GAMEPLAY:
+				_set_actor_aggro(runtime_id, actor.is_aggroed())
 
 func try_spawn_batch(requests: Array[EntitySpawnRequest]) -> Array[int]:
 	var rejected: Array[int] = []
@@ -216,11 +244,12 @@ func _activate_prepared_actor(
 	var runtime_id := _next_runtime_id
 	_next_runtime_id += 1
 	_active[runtime_id] = actor
-	var stats := ActorStats.new(definition.stats_definition)
-	_stats_by_runtime_id[runtime_id] = stats
 	actor.visible = true
 	actor.global_position = feet_position
-	actor.bind_stats(stats, definition.body_height)
+	if _mode == Mode.GAMEPLAY:
+		var stats := ActorStats.new(definition.stats_definition)
+		_stats_by_runtime_id[runtime_id] = stats
+		actor.bind_stats(stats, definition.body_height)
 	actor.setup(runtime_id, definition, _voxel_space, behavior_seed, _navigation_limits)
 	actor.melee_contact_reached.connect(_on_actor_melee_contact_reached)
 	actor.water_surface_motion_committed.connect(_on_actor_water_surface_motion_committed)
@@ -291,8 +320,6 @@ func _prepare_initial_actors() -> void:
 		_prepare_actor(definition)
 
 func _prepare_one_actor() -> void:
-	if not _preparation_needed:
-		return
 	if _prepared_actor_count() >= _max_population_cost or _catalog.definitions.is_empty():
 		_preparation_needed = false
 		return
@@ -314,6 +341,7 @@ func _prepare_count(definition_id: StringName, required_count: int) -> bool:
 		if actor == null:
 			return false
 		actor.visible = false
+		actor.configure_audio(_mode == Mode.GAMEPLAY)
 		add_child(actor)
 		actors.append(actor)
 	_prepared_actors[definition_id] = actors
@@ -323,6 +351,7 @@ func _prepare_actor(definition: EntityDefinition) -> void:
 	var actor := definition.actor_scene.instantiate() as EntityActor
 	assert(actor != null)
 	actor.visible = false
+	actor.configure_audio(_mode == Mode.GAMEPLAY)
 	add_child(actor)
 	if not _prepared_actors.has(definition.id):
 		_prepared_actors[definition.id] = []
@@ -335,7 +364,7 @@ func _has_prepared_actor(definition_id: StringName) -> bool:
 func _take_prepared_actor(definition_id: StringName) -> EntityActor:
 	if not _has_prepared_actor(definition_id):
 		return null
-	_preparation_needed = true
+	_preparation_needed = _mode == Mode.GAMEPLAY
 	return (_prepared_actors[definition_id] as Array).pop_back() as EntityActor
 
 func _prepared_actor_count() -> int:
@@ -362,7 +391,7 @@ func _remove_active_actor(runtime_id: int) -> EntityActor:
 	_spatial_index.remove(runtime_id)
 	_aggroed_runtime_ids.erase(runtime_id)
 	_sync_aggro_state()
-	_preparation_needed = true
+	_preparation_needed = _mode == Mode.GAMEPLAY
 	entity_removed.emit(runtime_id)
 	if is_instance_valid(actor):
 		if actor.melee_contact_reached.is_connected(_on_actor_melee_contact_reached):
@@ -597,6 +626,8 @@ func get_stat_value(runtime_id: int, stat_id: StringName) -> float:
 
 func try_apply_damage(runtime_id: int, amount: float) -> EntityDamageResult:
 	assert(is_finite(amount) and amount > 0.0)
+	if _mode != Mode.GAMEPLAY:
+		return null
 	var actor := get_actor(runtime_id)
 	if actor == null or actor.definition == null or not actor.definition.combat_targetable:
 		return null
@@ -729,6 +760,8 @@ func _can_use_defeat_spawn_position(
 	return true
 
 func try_apply_knockback(runtime_id: int, direction: Vector3, speed: float) -> bool:
+	if _mode != Mode.GAMEPLAY:
+		return false
 	var actor := get_actor(runtime_id)
 	return actor != null and actor.apply_knockback(direction, speed)
 
@@ -771,23 +804,29 @@ func get_nearest_combat_target_ray_hit(ray_origin: Vector3, ray_direction: Vecto
 	return nearest_hit
 
 func record_melee_outcome(outcome: MeleeOutcome) -> void:
+	if _mode != Mode.GAMEPLAY:
+		return
 	var target := get_actor(outcome.contact.target_runtime_id)
 	if target != null:
 		target.record_melee_contact(outcome.contact.hit_direction)
 
 func record_projectile_outcome(outcome: ProjectileOutcome) -> void:
+	if _mode != Mode.GAMEPLAY:
+		return
 	var target := get_actor(outcome.contact.target_runtime_id)
 	if target != null:
 		target.record_melee_contact(outcome.contact.hit_direction)
 
 func _on_actor_melee_contact_reached(source_runtime_id: int, profile: MeleeAttackProfile) -> void:
-	entity_melee_contact_reached.emit(source_runtime_id, profile)
+	if _mode == Mode.GAMEPLAY:
+		entity_melee_contact_reached.emit(source_runtime_id, profile)
 
 func _on_actor_water_surface_motion_committed(position: Vector3, planar_velocity: Vector2) -> void:
 	water_surface_motion_committed.emit(position, planar_velocity)
 
 func _on_actor_radial_contact_reached(source_runtime_id: int, profile: MeleeAttackProfile) -> void:
-	entity_radial_contact_reached.emit(source_runtime_id, profile)
+	if _mode == Mode.GAMEPLAY:
+		entity_radial_contact_reached.emit(source_runtime_id, profile)
 
 func _set_actor_aggro(runtime_id: int, active: bool) -> void:
 	if active:
@@ -865,3 +904,4 @@ func shutdown() -> void:
 	_aggro_active = false
 	_aggroed_runtime_ids.clear()
 	_suspended = false
+	_mode = Mode.GAMEPLAY

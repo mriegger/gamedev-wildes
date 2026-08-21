@@ -55,7 +55,7 @@ func setup(
 	_reattach_cooldown_remaining = 0.0
 	_defeat_spawn_launch_active = false
 
-func tick(
+func tick_gameplay(
 	delta: float,
 	observation: EntityTargetObservation,
 	separation_velocity: Vector3,
@@ -81,6 +81,24 @@ func tick(
 
 	var visible := _sample_player_visibility(delta, player_position)
 	brain.advance(delta, global_position, player_position, visible, false, on_ground)
+	_advance_hopping_motion(delta, separation_velocity, navigation_search_budget)
+
+func tick_ambient(
+	delta: float,
+	separation_velocity: Vector3,
+	navigation_search_budget: NavigationSearchBudget,
+) -> void:
+	assert(brain != null and voxel_space != null)
+	if is_attached():
+		_clear_attachment()
+	brain.advance_ambient(delta, global_position, on_ground)
+	_advance_hopping_motion(delta, separation_velocity, navigation_search_budget)
+
+func _advance_hopping_motion(
+	delta: float,
+	separation_velocity: Vector3,
+	navigation_search_budget: NavigationSearchBudget,
+) -> void:
 	if brain.consume_hop_started():
 		_hop_active = true
 		velocity.y = _behavior.jump_velocity

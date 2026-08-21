@@ -109,7 +109,7 @@ func _run() -> void:
 	var runtime := EntityRuntime.new()
 	get_root().add_child(runtime)
 	var catalog := load("res://entities/entity_catalog.tres") as EntityCatalog
-	runtime.setup(catalog, world, 4, 4, EntityNavigationLimits.new(32, 512, 2))
+	runtime.setup(catalog, world, 4, 4, EntityNavigationLimits.new(32, 512, 2), EntityRuntime.Mode.GAMEPLAY)
 	var suspend_requests: Array[EntitySpawnRequest] = [
 		EntitySpawnRequest.new(&"stone_golem", Vector3(6.5, FEET_Y, 0.5), 9300),
 	]
@@ -145,6 +145,7 @@ func _run() -> void:
 	despawning_actor.free()
 	await process_frame
 	await process_frame
+	await create_timer(0.25).timeout
 	var orphan_count := int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
 	_expect(orphan_count == 0, "audio integration ended with %d orphan nodes" % orphan_count)
 	if _failures == 0:

@@ -61,6 +61,17 @@ func advance(
 		state = State.CHASE
 		return
 
+	_advance_wander(delta, self_position)
+
+func advance_ambient(delta: float, self_position: Vector3) -> void:
+	assert(is_finite(delta) and delta >= 0.0)
+	assert(self_position.is_finite())
+	_attack_started = false
+	_attack_remaining = 0.0
+	_target_memory_remaining = 0.0
+	_advance_wander(delta, self_position)
+
+func _advance_wander(delta: float, self_position: Vector3) -> void:
 	state = State.WANDER
 	_wander_goal_remaining -= delta
 	if _wander_goal_remaining <= 0.0:

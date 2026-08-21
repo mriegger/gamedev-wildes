@@ -68,7 +68,7 @@ func _run() -> void:
 	player.voxel_space = world
 	var input_buffer := InputBuffer.new()
 	player._input_buffer = input_buffer
-	runtime.setup(catalog, world, 32, 16, EntityNavigationLimits.new(48, 2048, 2))
+	runtime.setup(catalog, world, 32, 16, EntityNavigationLimits.new(48, 2048, 2), EntityRuntime.Mode.GAMEPLAY)
 	var defeat_count := [0]
 	runtime.entity_defeated.connect(func(_defeat: EntityDefeat) -> void: defeat_count[0] += 1)
 	coordinator.setup(player, player_stats)
@@ -120,10 +120,10 @@ func _run() -> void:
 		_expect(attached_targets.has(runtime_id), "attached slime %d was not melee-targetable" % runtime_id)
 
 	var observation := _make_observation(player.global_position)
-	runtime.tick(0.375, observation)
+	runtime.tick_gameplay(0.375, observation)
 	_expect(_outcomes.size() == 4, "attached slime repeated damage before 0.5 seconds")
 	_expect(is_equal_approx(player_stats.current_hp, hp_before - 8.0), "pre-cadence attachment tick changed player HP")
-	runtime.tick(0.125, observation)
+	runtime.tick_gameplay(0.125, observation)
 	_expect(_outcomes.size() == 8, "first attachment repeat committed %d total contacts instead of eight" % _outcomes.size())
 	_expect(is_equal_approx(player_stats.current_hp, hp_before - 16.0), "attachment repeat damage left %s HP instead of %s" % [player_stats.current_hp, hp_before - 16.0])
 
@@ -150,9 +150,9 @@ func _run() -> void:
 	_expect_multiplier(player_stats, 0.4, "post-large detach cap")
 
 	observation = _make_observation(player.global_position)
-	runtime.tick(3.99, observation)
+	runtime.tick_gameplay(3.99, observation)
 	_expect(large != null and not large.can_attach(), "jump-detached slime cooldown ended before four seconds")
-	runtime.tick(0.01, observation)
+	runtime.tick_gameplay(0.01, observation)
 	_expect(large != null and large.can_attach(), "jump-detached slime cooldown did not end at four seconds")
 
 	player.jump_committed.emit()
@@ -202,7 +202,7 @@ func _run() -> void:
 	for left_index in split_children.size():
 		for right_index in range(left_index + 1, split_children.size()):
 			_expect(not split_children[left_index].get_world_bounds().intersects(split_children[right_index].get_world_bounds()), "attached split children %d and %d overlap" % [left_index, right_index])
-	runtime.tick(0.125, observation)
+	runtime.tick_gameplay(0.125, observation)
 	for child in split_children:
 		_expect(not child.on_ground and not child.can_attach(), "attached split child left controlled launch before the immunity midpoint")
 		_expect(not VoxelBodySolver.collides_at(world, child.global_position, child.definition.body_width, child.definition.body_height, false), "attached split child entered a voxel during controlled launch")
@@ -211,7 +211,7 @@ func _run() -> void:
 		_expect(is_equal_approx(runtime.get_current_hp(child.runtime_id), midpoint_hp), "controlled-launch immunity changed attached split child HP")
 	var split_children_landed := false
 	for _launch_step in 120:
-		runtime.tick(1.0 / 60.0, observation)
+		runtime.tick_gameplay(1.0 / 60.0, observation)
 		split_children_landed = true
 		for child in split_children:
 			_expect(not VoxelBodySolver.collides_at(world, child.global_position, child.definition.body_width, child.definition.body_height, false), "attached split child entered a voxel before landing")
@@ -253,7 +253,7 @@ func _run() -> void:
 	_expect_multiplier(player_stats, 1.0, "runtime unbind")
 
 	coordinator.bind_runtime(runtime)
-	runtime.tick(4.0, observation)
+	runtime.tick_gameplay(4.0, observation)
 	if unbind_target != null:
 		var suspension_id := unbind_target.runtime_id
 		var suspension_target := unbind_target
@@ -276,7 +276,7 @@ func _run() -> void:
 		_expect_multiplier(player_stats, 1.0, "suspended runtime unbind")
 		runtime.resume()
 		coordinator.bind_runtime(runtime)
-		runtime.tick(4.0, observation)
+		runtime.tick_gameplay(4.0, observation)
 		var immediate_defeat_count: Array[int] = [0]
 		var immediate_defeat_callback := func() -> void:
 			immediate_defeat_count[0] += 1
@@ -291,7 +291,7 @@ func _run() -> void:
 		_expect(_outcomes.size() == outcomes_before_lethal_attachment + 1 and _outcomes.back().target_defeated, "lethal initial attachment contact did not commit exactly one outcome")
 		_expect(coordinator.get_attached_count() == 0 and not suspension_target.is_attached(), "lethal initial attachment retained attachment ownership")
 		_expect_multiplier(player_stats, 1.0, "lethal initial attachment")
-		runtime.tick(4.0, observation)
+		runtime.tick_gameplay(4.0, observation)
 		_expect(runtime.try_relocate_actor(suspension_id, player.global_position), "defeated-player target could not be returned to overlap")
 		coordinator._physics_process(0.0)
 		_expect(coordinator.get_attached_count() == 0 and not suspension_target.is_attached(), "defeated player reacquired an overlapping slime")

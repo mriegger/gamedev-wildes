@@ -58,7 +58,7 @@ func _observation(player_position: Vector3) -> EntityTargetObservation:
 
 func _tick(runtime: EntityRuntime, player: PlayerMotor, count: int = 1) -> void:
 	for _tick_index in range(count):
-		runtime.tick(FIXED_DELTA, _observation(player.global_position))
+		runtime.tick_gameplay(FIXED_DELTA, _observation(player.global_position))
 
 func _record_radial_contact(source_runtime_id: int, profile: MeleeAttackProfile) -> void:
 	_radial_source_ids.append(source_runtime_id)
@@ -93,7 +93,7 @@ func _run() -> void:
 	player.set_physics_process(false)
 	player.interactor.set_physics_process(false)
 	player.animation_driver.set_process(false)
-	runtime.setup(_make_catalog(), world, 1, 2, EntityNavigationLimits.new(32, 512, 2))
+	runtime.setup(_make_catalog(), world, 1, 2, EntityNavigationLimits.new(32, 512, 2), EntityRuntime.Mode.GAMEPLAY)
 	var player_stats := ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
 	_expect(player_stats.set_base_value(&"defense", 0.0), "unarmored player defense setup failed")
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog

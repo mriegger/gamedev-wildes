@@ -41,7 +41,7 @@ func _observation(player_position: Vector3) -> EntityTargetObservationType:
 	return observation
 
 func _tick(actor: StoneGolemActorType, delta: float, player_position: Vector3) -> void:
-	actor.tick(delta, _observation(player_position), Vector3.ZERO, NavigationSearchBudget.new(2))
+	actor.tick_gameplay(delta, _observation(player_position), Vector3.ZERO, NavigationSearchBudget.new(2))
 
 func _expect_dormant_eye(material: StandardMaterial3D, context: String) -> void:
 	_expect(material.albedo_color.is_equal_approx(StoneGolemAnimationDriverType.DORMANT_EYE_COLOR), "%s eye was not dark" % context)

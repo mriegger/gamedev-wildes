@@ -17,6 +17,7 @@ var _last_walk_index: int = -1
 var _last_impact_index: int = -1
 var _last_death_index: int = -1
 var _death_started: bool = false
+var _audio_enabled: bool = true
 
 func has_valid_presentation() -> bool:
 	if profile == null or not profile.validate():
@@ -45,12 +46,18 @@ func setup(seed_value: int, gait_cycle_position: float) -> void:
 	_stop_player(impact_player)
 	_stop_player(death_player)
 
+func set_audio_enabled(enabled: bool) -> void:
+	_audio_enabled = enabled
+	if not enabled:
+		stop_audio()
+
 func advance_gait(gait_cycle_position: float, speed_ratio: float, grounded: bool) -> void:
 	assert(is_finite(gait_cycle_position) and gait_cycle_position >= 0.0 and gait_cycle_position < 1.0)
 	assert(is_finite(speed_ratio) and speed_ratio >= 0.0)
-	if _death_started:
-		return
 	var gait_contact_index := _get_gait_contact_index(gait_cycle_position)
+	if _death_started or not _audio_enabled:
+		_gait_contact_index = gait_contact_index
+		return
 	if not grounded or speed_ratio <= MINIMUM_WALK_SPEED_RATIO:
 		_gait_contact_index = gait_contact_index
 		return
@@ -66,7 +73,7 @@ func advance_gait(gait_cycle_position: float, speed_ratio: float, grounded: bool
 	)
 
 func play_impact() -> void:
-	if _death_started:
+	if _death_started or not _audio_enabled:
 		return
 	_last_impact_index = _play_random(
 		impact_player,
@@ -77,7 +84,7 @@ func play_impact() -> void:
 	)
 
 func play_death() -> void:
-	if _death_started:
+	if _death_started or not _audio_enabled:
 		return
 	_death_started = true
 	_stop_player(walk_player)

@@ -169,7 +169,7 @@ func _expect_exact_split_immunity(
 		launch_positions.append(actor.global_position)
 		launch_directions.append(actor.knockback_velocity.normalized())
 	_expect_damage_blocked(runtime, actors, "%s immediate" % context)
-	runtime.tick(SPLIT_DAMAGE_IMMUNITY_SECONDS * 0.5, _make_observation())
+	runtime.tick_gameplay(SPLIT_DAMAGE_IMMUNITY_SECONDS * 0.5, _make_observation())
 	for index in actors.size():
 		var actor := actors[index]
 		var displacement := actor.global_position - launch_positions[index]
@@ -180,7 +180,7 @@ func _expect_exact_split_immunity(
 		_expect(not VoxelBodySolver.collides_at(world, actor.global_position, actor.definition.body_width, actor.definition.body_height, false), "%s child %d entered a voxel during launch" % [context, actor.runtime_id])
 		_expect(not (actor as SlimeActor).can_attach(), "%s child %d allowed attachment before landing" % [context, actor.runtime_id])
 	_expect_damage_blocked(runtime, actors, "%s midpoint" % context)
-	runtime.tick(SPLIT_DAMAGE_IMMUNITY_SECONDS * 0.5, _make_observation())
+	runtime.tick_gameplay(SPLIT_DAMAGE_IMMUNITY_SECONDS * 0.5, _make_observation())
 	for actor in actors:
 		_expect(not actor.on_ground and not (actor as SlimeActor).can_attach(), "%s child %d ended launch before landing" % [context, actor.runtime_id])
 	_expect_damageable(runtime, actors, "%s boundary" % context)
@@ -188,7 +188,7 @@ func _expect_exact_split_immunity(
 func _test_ordinary_spawn_is_damageable(catalog: EntityCatalog) -> void:
 	var runtime := EntityRuntime.new()
 	root.add_child(runtime)
-	runtime.setup(catalog, _make_world(), 32, 16, EntityNavigationLimits.new(48, 2048, 2))
+	runtime.setup(catalog, _make_world(), 32, 16, EntityNavigationLimits.new(48, 2048, 2), EntityRuntime.Mode.GAMEPLAY)
 	var runtime_ids := runtime.try_spawn_batch([
 		EntitySpawnRequest.new(&"slime_small", Vector3(0.5, FEET_Y, 0.5), 9001),
 	])
@@ -206,7 +206,7 @@ func _test_low_ceiling_launch(catalog: EntityCatalog) -> void:
 	world.restore_block_edits({Vector3i(0, int(FEET_Y) + 1, 0): BlockId.Type.STONE}, {})
 	var runtime := EntityRuntime.new()
 	root.add_child(runtime)
-	runtime.setup(catalog, world, 32, 16, EntityNavigationLimits.new(48, 2048, 2))
+	runtime.setup(catalog, world, 32, 16, EntityNavigationLimits.new(48, 2048, 2), EntityRuntime.Mode.GAMEPLAY)
 	var runtime_ids := runtime.try_spawn_batch([
 		EntitySpawnRequest.new(&"slime_small", Vector3(0.5, FEET_Y, 0.5), 9002),
 	])
@@ -217,7 +217,7 @@ func _test_low_ceiling_launch(catalog: EntityCatalog) -> void:
 		var ceiling_stopped_launch := false
 		var landed := false
 		for _frame in 120:
-			runtime.tick(1.0 / 60.0, _make_observation())
+			runtime.tick_gameplay(1.0 / 60.0, _make_observation())
 			_expect(not VoxelBodySolver.collides_at(world, actor.global_position, actor.definition.body_width, actor.definition.body_height, false), "low-ceiling launch entered a voxel")
 			if not actor.on_ground and is_zero_approx(actor.velocity.y) and actor.global_position.y > FEET_Y + 0.1:
 				ceiling_stopped_launch = true
@@ -235,7 +235,7 @@ func _create_blocked_parent_fixture(catalog: EntityCatalog, seed: int) -> Dictio
 	var world := _make_world()
 	var runtime := EntityRuntime.new()
 	root.add_child(runtime)
-	runtime.setup(catalog, world, 32, 16, EntityNavigationLimits.new(48, 2048, 2))
+	runtime.setup(catalog, world, 32, 16, EntityNavigationLimits.new(48, 2048, 2), EntityRuntime.Mode.GAMEPLAY)
 	var parent_position := Vector3(0.5, FEET_Y, 0.5)
 	var runtime_ids := runtime.try_spawn_batch([
 		EntitySpawnRequest.new(&"slime_large", parent_position, seed),
@@ -292,8 +292,8 @@ func _test_blocked_parent_determinism(catalog: EntityCatalog) -> void:
 	var second_world := second["world"] as VoxelWorld
 	var all_landed := false
 	for _frame in 120:
-		first_runtime.tick(1.0 / 60.0, _make_observation())
-		second_runtime.tick(1.0 / 60.0, _make_observation())
+		first_runtime.tick_gameplay(1.0 / 60.0, _make_observation())
+		second_runtime.tick_gameplay(1.0 / 60.0, _make_observation())
 		var first_children := _actors_with_definition(first_runtime, &"slime_medium")
 		var second_children := _actors_with_definition(second_runtime, &"slime_medium")
 		var landed_count := 0
@@ -337,7 +337,7 @@ func _run() -> void:
 	var world := _make_world()
 	_runtime = EntityRuntime.new()
 	root.add_child(_runtime)
-	_runtime.setup(catalog, world, 32, 16, EntityNavigationLimits.new(48, 2048, 2))
+	_runtime.setup(catalog, world, 32, 16, EntityNavigationLimits.new(48, 2048, 2), EntityRuntime.Mode.GAMEPLAY)
 	_runtime.entity_defeated.connect(_on_entity_defeated)
 	var spawn_position := Vector3(0.5, FEET_Y, 0.5)
 	var large_seed := 424242

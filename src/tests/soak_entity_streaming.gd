@@ -211,7 +211,7 @@ func _prepare_full_night_population(coordinator: WorldEntityCoordinator, catalog
 	var runtime := coordinator.get_runtime()
 	for actor in runtime.get_active_actors():
 		runtime.try_despawn(actor.runtime_id)
-	runtime.tick(STREAM_RETIRE_SECONDS, _observation(player_position))
+	runtime.tick_gameplay(STREAM_RETIRE_SECONDS, _observation(player_position))
 	_expect(runtime.get_active_count() == 0 and runtime._retiring.is_empty(), "region %d workload reset retained actors" % region_index)
 	var requests: Array[EntitySpawnRequest] = []
 	for definition_id in [&"zombie", &"skeleton", &"stone_golem", &"sheep", &"slime_large", &"watcher"]:

@@ -52,7 +52,7 @@ func _observation(player_position: Vector3) -> EntityTargetObservation:
 	return observation
 
 func _tick(runtime: EntityRuntime, delta: float, player: PlayerMotor) -> void:
-	runtime.tick(delta, _observation(player.global_position))
+	runtime.tick_gameplay(delta, _observation(player.global_position))
 
 func _record_outcome(outcome: MeleeOutcome) -> void:
 	_outcomes.append(outcome)
@@ -107,7 +107,7 @@ func _run() -> void:
 	player.interactor.set_physics_process(false)
 	player.animation_driver.set_process(false)
 	var catalog := _make_catalog()
-	runtime.setup(catalog, world, 1, 2, EntityNavigationLimits.new(32, 512, 2))
+	runtime.setup(catalog, world, 1, 2, EntityNavigationLimits.new(32, 512, 2), EntityRuntime.Mode.GAMEPLAY)
 	var player_stats := ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
 	_expect(player_stats.set_base_value(&"defense", 0.0), "unarmored player defense setup failed")
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog

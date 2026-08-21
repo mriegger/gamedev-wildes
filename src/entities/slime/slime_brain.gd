@@ -54,11 +54,24 @@ func advance(
 	if detected or _target_memory_remaining > 0.0:
 		state = State.CHASE
 	else:
-		state = State.WANDER
-		_wander_goal_remaining -= delta
-		if _wander_goal_remaining <= 0.0:
-			_sample_wander_goal(self_position)
+		_advance_wander(delta, self_position)
+	_advance_hop(delta, on_ground)
 
+func advance_ambient(delta: float, self_position: Vector3, on_ground: bool) -> void:
+	assert(is_finite(delta) and delta >= 0.0)
+	assert(self_position.is_finite())
+	_hop_started = false
+	_target_memory_remaining = 0.0
+	_advance_wander(delta, self_position)
+	_advance_hop(delta, on_ground)
+
+func _advance_wander(delta: float, self_position: Vector3) -> void:
+	state = State.WANDER
+	_wander_goal_remaining -= delta
+	if _wander_goal_remaining <= 0.0:
+		_sample_wander_goal(self_position)
+
+func _advance_hop(delta: float, on_ground: bool) -> void:
 	if not on_ground:
 		return
 	_hop_remaining -= delta

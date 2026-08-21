@@ -29,6 +29,7 @@ var vocalizations: EntityVocalizations
 var health_bar: EnemyHealthBar3DType
 var _death_retirement: bool = false
 var _death_fade_started: bool = false
+var _audio_enabled: bool = true
 
 func _ready():
 	set_process(false)
@@ -68,10 +69,22 @@ func setup(
 	visual_fader.setup(model_root)
 	if vocalizations != null:
 		vocalizations.setup(behavior_seed)
+		vocalizations.set_audio_enabled(_audio_enabled)
 	set_process(true)
 
-func tick(_delta: float, _observation: EntityTargetObservation, _separation_velocity: Vector3, _navigation_search_budget: NavigationSearchBudget):
+func tick_gameplay(_delta: float, _observation: EntityTargetObservation, _separation_velocity: Vector3, _navigation_search_budget: NavigationSearchBudget) -> void:
 	assert(false)
+
+func tick_ambient(_delta: float, _separation_velocity: Vector3, _navigation_search_budget: NavigationSearchBudget) -> void:
+	assert(false)
+
+func configure_audio(enabled: bool) -> void:
+	_audio_enabled = enabled
+	if vocalizations != null:
+		vocalizations.set_audio_enabled(enabled)
+
+func is_audio_enabled() -> bool:
+	return _audio_enabled
 
 func supports_behavior(_behavior: EntityBehaviorDefinition) -> bool:
 	return false

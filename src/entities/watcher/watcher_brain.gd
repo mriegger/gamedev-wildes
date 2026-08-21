@@ -48,6 +48,21 @@ func advance(
 		return
 	_advance_awareness(delta, self_position, player_position, player_visible)
 
+func advance_ambient(delta: float, self_position: Vector3) -> void:
+	assert(is_finite(delta) and delta >= 0.0)
+	assert(self_position.is_finite())
+	var continuing_wander := state == State.WANDER and not _aggressive and is_zero_approx(_target_memory_remaining)
+	_aggressive = false
+	_attack_started = false
+	_attack_remaining = 0.0
+	_target_memory_remaining = 0.0
+	_stalk_pause_remaining = 0.0
+	_has_stalk_angle = false
+	state = State.WANDER
+	if not continuing_wander:
+		_wander_goal_remaining = 0.0
+	_advance_wander(delta, self_position)
+
 func record_player_attack() -> void:
 	_aggressive = true
 	_attack_started = false

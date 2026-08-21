@@ -80,6 +80,16 @@ func advance(delta: float, self_position: Vector3, player_position: Vector3, cur
 			if self_position.distance_squared_to(player_position) <= profile.reach * profile.reach and is_zero_approx(_attack_cooldown_remaining):
 				_start_attack(self_position)
 
+func advance_ambient(delta: float, self_position: Vector3) -> void:
+	assert(is_finite(delta) and delta >= 0.0)
+	assert(self_position.is_finite())
+	_attack_started = false
+	_attack_remaining = 0.0
+	if state == State.ROAM:
+		_advance_roam(delta, self_position)
+	else:
+		_enter_roam(self_position)
+
 func get_movement_goal() -> Vector3:
 	return _movement_goal
 

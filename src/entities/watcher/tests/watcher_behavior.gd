@@ -186,10 +186,10 @@ func _test_actor_contract() -> void:
 		Vector3.RIGHT,
 	)
 	var budget := NavigationSearchBudget.new(1)
-	actor.tick(0.0, observation, Vector3.ZERO, budget)
-	actor.tick(0.27, observation, Vector3.ZERO, budget)
+	actor.tick_gameplay(0.0, observation, Vector3.ZERO, budget)
+	actor.tick_gameplay(0.27, observation, Vector3.ZERO, budget)
 	_expect(contact_count[0] == 0, "watcher melee contact occurred before 0.28 seconds")
-	actor.tick(0.01, observation, Vector3.ZERO, budget)
+	actor.tick_gameplay(0.01, observation, Vector3.ZERO, budget)
 	_expect(contact_count[0] == 1, "watcher melee contact did not occur at 0.28 seconds")
 	actor._timed_melee_contact.arm((definition.behavior as WatcherBehaviorDefinition).melee_profile)
 	actor.velocity = Vector3(2.0, 1.0, 3.0)

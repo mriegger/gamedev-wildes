@@ -68,10 +68,11 @@ func setup(
 	_stone_golem_animation = animation_driver as StoneGolemAnimationDriver
 	assert(_stone_golem_animation != null)
 	_action_audio.setup(behavior_seed, _stone_golem_animation.animator.get_gait_cycle_position())
+	_action_audio.set_audio_enabled(is_audio_enabled())
 	_stone_golem_animation.bind_action_audio(_action_audio)
 	_visibility_sensor = VoxelPlayerVisibilitySensorType.new(voxel_space, _behavior.detection_range, definition.body_height, runtime_id)
 
-func tick(
+func tick_gameplay(
 	delta: float,
 	observation: EntityTargetObservation,
 	separation_velocity: Vector3,
@@ -114,6 +115,26 @@ func tick(
 			desired_velocity = _get_path_velocity(delta, navigation_search_budget)
 		desired_velocity = limit_planar_velocity(desired_velocity + separation_velocity, _behavior.movement_speed)
 	advance_voxel_motion(delta, desired_velocity, _behavior.gravity)
+
+func tick_ambient(
+	delta: float,
+	_separation_velocity: Vector3,
+	_navigation_search_budget: NavigationSearchBudget,
+) -> void:
+	assert(brain != null and voxel_space != null)
+	_timed_melee_contact.cancel()
+	brain.advance_ambient()
+	_cancel_slam()
+	_stone_golem_animation.set_alerted(false)
+	velocity.x = 0.0
+	velocity.z = 0.0
+	knockback_velocity = Vector3.ZERO
+	advance_voxel_motion(delta, Vector3.ZERO, _behavior.gravity)
+
+func configure_audio(enabled: bool) -> void:
+	super.configure_audio(enabled)
+	if is_instance_valid(_action_audio):
+		_action_audio.set_audio_enabled(enabled)
 
 func _begin_slam_windup() -> void:
 	var target := brain.get_locked_slam_target()

@@ -26,7 +26,12 @@ var _runtime: EntityRuntime
 var _spawn_elapsed: float = 0.0
 var _suspended: bool = false
 
-func setup(p_catalog: EntityCatalog, p_voxel_world: VoxelWorld, world_seed: int, p_position_ready: Callable) -> void:
+func setup(
+	p_catalog: EntityCatalog,
+	p_voxel_world: VoxelWorld,
+	world_seed: int,
+	p_position_ready: Callable,
+) -> void:
 	assert(p_catalog != null and p_catalog.validate())
 	assert(p_voxel_world != null)
 	assert(p_position_ready.is_valid())
@@ -51,16 +56,19 @@ func setup(p_catalog: EntityCatalog, p_voxel_world: VoxelWorld, world_seed: int,
 			MAX_NAVIGATION_SEARCH_NODES,
 			MAX_NAVIGATION_SEARCHES_PER_TICK,
 		),
+		EntityRuntime.Mode.GAMEPLAY,
 	)
 
 func tick(delta: float, observation: EntityTargetObservation, time_of_day: float) -> void:
 	assert(_catalog != null and _voxel_world != null and _runtime != null)
 	assert(not _suspended)
 	assert(observation != null and observation.validate())
+	assert(is_finite(delta) and delta >= 0.0)
+	assert(is_finite(time_of_day))
 	var player_position := observation.player_position
 	_despawn_distant(player_position)
 	_despawn_outside_spawn_window(time_of_day)
-	_runtime.tick(delta, observation)
+	_runtime.tick_gameplay(delta, observation)
 	_spawn_elapsed += delta
 	if _spawn_elapsed < SPAWN_INTERVAL_SECONDS:
 		return

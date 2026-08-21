@@ -89,7 +89,7 @@ func _create_fixture(player_position: Vector3) -> Fixture:
 	fixture.player.set_physics_process(false)
 	fixture.player.interactor.set_physics_process(false)
 	fixture.player.animation_driver.set_process(false)
-	fixture.runtime.setup(_make_catalog(), fixture.world, 1, 2, EntityNavigationLimits.new(32, 512, 2))
+	fixture.runtime.setup(_make_catalog(), fixture.world, 1, 2, EntityNavigationLimits.new(32, 512, 2), EntityRuntime.Mode.GAMEPLAY)
 	fixture.player_stats = ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
 	_expect(fixture.player_stats.set_base_value(&"defense", 0.0), "unarmored player defense setup failed")
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
@@ -115,7 +115,7 @@ func _create_fixture(player_position: Vector3) -> Fixture:
 
 func _tick(fixture: Fixture, count: int = 1) -> void:
 	for _tick_index in range(count):
-		fixture.runtime.tick(FIXED_DELTA, _observation(fixture.player.global_position))
+		fixture.runtime.tick_gameplay(FIXED_DELTA, _observation(fixture.player.global_position))
 
 func _start_slam(fixture: Fixture) -> bool:
 	for _sample_tick in range(MAX_VISIBILITY_TICKS):

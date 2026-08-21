@@ -54,7 +54,9 @@ func setup(
 	assert(animation_driver is BirdAnimationDriver)
 	color_variant = color_variant_for_seed(behavior_seed) if color_variant_override < 0 else color_variant_override as BirdAnimationDriver.ColorVariant
 	_configure_vocalizations(behavior_seed)
-	(animation_driver as BirdAnimationDriver).apply_color_variant(color_variant)
+	var bird_animation := animation_driver as BirdAnimationDriver
+	bird_animation.apply_color_variant(color_variant)
+	bird_animation.set_audio_enabled(is_audio_enabled())
 	on_ground = false
 	max_speed = _behavior.flight_speed
 	_water_ripple_remaining = 0.0
@@ -94,7 +96,31 @@ static func behavior_seed_for_color_variant_index(variant_index: int, seed_start
 	assert(false)
 	return seed_start
 
-func tick(delta: float, _observation: EntityTargetObservation, separation_velocity: Vector3, navigation_search_budget: NavigationSearchBudget):
+func tick_gameplay(
+	delta: float,
+	_observation: EntityTargetObservation,
+	separation_velocity: Vector3,
+	navigation_search_budget: NavigationSearchBudget,
+) -> void:
+	_advance_behavior(delta, separation_velocity, navigation_search_budget)
+
+func tick_ambient(
+	delta: float,
+	separation_velocity: Vector3,
+	navigation_search_budget: NavigationSearchBudget,
+) -> void:
+	_advance_behavior(delta, separation_velocity, navigation_search_budget)
+
+func configure_audio(enabled: bool) -> void:
+	super.configure_audio(enabled)
+	if animation_driver is BirdAnimationDriver:
+		(animation_driver as BirdAnimationDriver).set_audio_enabled(enabled)
+
+func _advance_behavior(
+	delta: float,
+	separation_velocity: Vector3,
+	navigation_search_budget: NavigationSearchBudget,
+) -> void:
 	assert(brain != null and voxel_space != null)
 	var previous_state := brain.state
 	var rejected_ground_contact := on_ground and not _has_approved_ground_contact() and brain.state != BirdBrain.State.CRUISE

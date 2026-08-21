@@ -174,6 +174,7 @@ func _test_slime_lineage_coexistence() -> void:
 		WorldEntityCoordinator.MAX_TOTAL_POPULATION_COST,
 		WorldEntityCoordinator.MAX_RETIRING_VISUALS,
 		EntityNavigationLimits.new(24, 256, 1),
+		EntityRuntime.Mode.GAMEPLAY,
 	)
 	var requests: Array[EntitySpawnRequest] = [
 		EntitySpawnRequest.new(&"watcher", Vector3(-8.5, FEET_Y, 0.5), 171),

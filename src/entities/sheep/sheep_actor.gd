@@ -26,7 +26,26 @@ func setup(
 	_sheep_animation = animation_driver as SheepAnimationDriver
 	assert(_sheep_animation != null)
 
-func tick(delta: float, _observation: EntityTargetObservation, separation_velocity: Vector3, navigation_search_budget: NavigationSearchBudget):
+func tick_gameplay(
+	delta: float,
+	_observation: EntityTargetObservation,
+	separation_velocity: Vector3,
+	navigation_search_budget: NavigationSearchBudget,
+) -> void:
+	_advance_behavior(delta, separation_velocity, navigation_search_budget)
+
+func tick_ambient(
+	delta: float,
+	separation_velocity: Vector3,
+	navigation_search_budget: NavigationSearchBudget,
+) -> void:
+	_advance_behavior(delta, separation_velocity, navigation_search_budget)
+
+func _advance_behavior(
+	delta: float,
+	separation_velocity: Vector3,
+	navigation_search_budget: NavigationSearchBudget,
+) -> void:
 	assert(brain != null and voxel_space != null)
 	var previous_state := brain.state
 	brain.advance(delta, global_position)

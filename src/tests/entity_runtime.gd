@@ -47,7 +47,7 @@ func _run() -> void:
 	root.add_child(runtime)
 	var catalog := load("res://entities/entity_catalog.tres") as EntityCatalog
 	var world := _make_world()
-	runtime.setup(catalog, world, 3, 3, EntityNavigationLimits.new(48, 2048, 2))
+	runtime.setup(catalog, world, 3, 3, EntityNavigationLimits.new(48, 2048, 2), EntityRuntime.Mode.GAMEPLAY)
 	runtime.entity_defeated.connect(_on_entity_defeated)
 	runtime.entity_removed.connect(_on_entity_removed)
 	runtime.aggro_changed.connect(_on_aggro_changed)

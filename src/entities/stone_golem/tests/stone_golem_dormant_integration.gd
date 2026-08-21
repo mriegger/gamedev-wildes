@@ -57,29 +57,29 @@ func _run() -> void:
 	_expect(actor.brain.state == StoneGolemBrainType.State.DORMANT, "Stone Golem did not start dormant")
 	var initial_position := actor.global_position
 	var far_player := actor.global_position + Vector3(17.0, 0.0, 0.0)
-	actor.tick(0.5, _observation(far_player), Vector3(4.0, 0.0, 0.0), NavigationSearchBudget.new(2))
+	actor.tick_gameplay(0.5, _observation(far_player), Vector3(4.0, 0.0, 0.0), NavigationSearchBudget.new(2))
 	_expect(actor.brain.state == StoneGolemBrainType.State.DORMANT and not actor.brain.is_alerted() and not actor.is_aggroed(), "target beyond detection woke the Stone Golem")
 	_expect(actor.global_position.is_equal_approx(initial_position), "dormant Stone Golem moved")
 	var visible_player := actor.global_position + Vector3(8.0, 0.0, 0.0)
-	actor.tick(0.5, _observation(visible_player), Vector3(4.0, 0.0, 0.0), NavigationSearchBudget.new(2))
+	actor.tick_gameplay(0.5, _observation(visible_player), Vector3(4.0, 0.0, 0.0), NavigationSearchBudget.new(2))
 	_expect(actor.brain.state == StoneGolemBrainType.State.CHASE and actor.brain.is_alerted() and actor.is_aggroed(), "clear nearby target did not alert the Stone Golem")
 	_expect(actor.global_position.distance_to(initial_position) > 0.0, "alerted Stone Golem did not begin pursuit")
 	var position_before_memory := actor.global_position
 	world.restore_block_edits({Vector3i(4, 3, 0): BlockId.Type.STONE}, {})
-	actor.tick(0.5, _observation(visible_player), Vector3(4.0, 0.0, 0.0), NavigationSearchBudget.new(2))
+	actor.tick_gameplay(0.5, _observation(visible_player), Vector3(4.0, 0.0, 0.0), NavigationSearchBudget.new(2))
 	_expect(actor.brain.is_alerted(), "occluded target cleared awareness before memory elapsed")
 	_expect(actor.global_position.distance_to(position_before_memory) > 0.0, "remembering Stone Golem stopped pursuing its last-seen target")
 	var behavior := definition.behavior as StoneGolemBehaviorDefinition
 	var position_before_expiry := actor.global_position
-	actor.tick(behavior.target_memory_seconds, _observation(visible_player), Vector3(4.0, 0.0, 0.0), NavigationSearchBudget.new(2))
+	actor.tick_gameplay(behavior.target_memory_seconds, _observation(visible_player), Vector3(4.0, 0.0, 0.0), NavigationSearchBudget.new(2))
 	_expect(actor.brain.state == StoneGolemBrainType.State.DORMANT and not actor.brain.is_alerted(), "occluded target remained alerted after memory elapsed")
 	_expect(actor.global_position.is_equal_approx(position_before_expiry), "Stone Golem moved after target memory elapsed")
 	world.restore_block_edits({}, {})
-	actor.tick(0.5, _observation(visible_player), Vector3(4.0, 0.0, 0.0), NavigationSearchBudget.new(2))
+	actor.tick_gameplay(0.5, _observation(visible_player), Vector3(4.0, 0.0, 0.0), NavigationSearchBudget.new(2))
 	_expect(actor.brain.is_alerted(), "restored line of sight did not alert the Stone Golem")
 	var position_before_forget := actor.global_position
 	var beyond_forget := actor.global_position + Vector3(behavior.forget_range + 0.001, 0.0, 0.0)
-	actor.tick(0.0, _observation(beyond_forget), Vector3(4.0, 0.0, 0.0), NavigationSearchBudget.new(2))
+	actor.tick_gameplay(0.0, _observation(beyond_forget), Vector3(4.0, 0.0, 0.0), NavigationSearchBudget.new(2))
 	_expect(actor.brain.state == StoneGolemBrainType.State.DORMANT and not actor.brain.is_alerted(), "target beyond forget range did not clear awareness immediately")
 	_expect(actor.global_position.is_equal_approx(position_before_forget), "Stone Golem moved after the target crossed the forget range")
 	var animation := actor.animation_driver as StoneGolemAnimationDriverType
@@ -116,7 +116,7 @@ func _run() -> void:
 	var saw_fall := false
 	var saw_land := false
 	for _frame_index in range(120):
-		actor.tick(1.0 / 60.0, _observation(Vector3(32.5, FEET_Y, 0.5)), Vector3.ZERO, NavigationSearchBudget.new(2))
+		actor.tick_gameplay(1.0 / 60.0, _observation(Vector3(32.5, FEET_Y, 0.5)), Vector3.ZERO, NavigationSearchBudget.new(2))
 		animation.advance(1.0 / 60.0)
 		var animation_state := animation.animator.get_current_state()
 		saw_fall = saw_fall or animation_state == BlockyHumanoidAnimator.FALL

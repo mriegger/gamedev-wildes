@@ -184,7 +184,7 @@ func _route_sheep_contact(coordinator: WorldEntityCoordinator, world: VoxelWorld
 	sheep.global_position = Vector3(1.5, FEET_Y, 0.5)
 	sheep.velocity = Vector3.ZERO
 	sheep.on_ground = true
-	coordinator.get_runtime().tick(0.0, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT))
+	coordinator.get_runtime().tick_gameplay(0.0, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT))
 	var combat := MeleeCombatCoordinator.new()
 	get_root().add_child(combat)
 	var player_stats := ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
@@ -208,7 +208,7 @@ func _route_sheep_contact(coordinator: WorldEntityCoordinator, world: VoxelWorld
 	var animation := sheep.animation_driver as SheepAnimationDriver
 	animation.advance(0.01)
 	_expect(animation.get_current_state() == SheepAnimationDriver.HIT, "routed contact did not play sheep hit animation")
-	sheep.tick(0.05, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT), Vector3.ZERO, NavigationSearchBudget.new(1))
+	sheep.tick_gameplay(0.05, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT), Vector3.ZERO, NavigationSearchBudget.new(1))
 	animation.advance(SheepAnimationDriver.HIT_SECONDS)
 	_expect(animation.get_current_state() == SheepAnimationDriver.FLEE, "sheep animation did not transition from hit to flee")
 	return [combat, player]

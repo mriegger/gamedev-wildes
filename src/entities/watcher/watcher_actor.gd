@@ -49,7 +49,7 @@ func setup(
 	_vision_sample_remaining = VISION_SAMPLE_INTERVAL_SECONDS * float(runtime_id % VISION_PHASE_COUNT) / float(VISION_PHASE_COUNT)
 	_teleport_sequence = 0
 
-func tick(
+func tick_gameplay(
 	delta: float,
 	observation: EntityTargetObservation,
 	separation_velocity: Vector3,
@@ -86,6 +86,27 @@ func tick(
 	elif brain.state in [WatcherBrain.State.STARE, WatcherBrain.State.ATTACK]:
 		_face_player(player_position, delta)
 	max_speed = speed
+	desired_velocity = limit_planar_velocity(desired_velocity + separation_velocity, max_speed)
+	advance_voxel_motion(delta, desired_velocity, _behavior.gravity)
+
+func tick_ambient(
+	delta: float,
+	separation_velocity: Vector3,
+	navigation_search_budget: NavigationSearchBudget,
+) -> void:
+	assert(brain != null and voxel_space != null)
+	_timed_melee_contact.cancel()
+	brain.advance_ambient(delta, global_position)
+	_watcher_animation.cancel_attack()
+	_watcher_animation.set_aggressive(false)
+	_watcher_animation.set_stalking(false)
+	max_speed = _behavior.wander_speed
+	var desired_velocity := _get_path_velocity(
+		delta,
+		brain.get_movement_goal(),
+		max_speed,
+		navigation_search_budget,
+	)
 	desired_velocity = limit_planar_velocity(desired_velocity + separation_velocity, max_speed)
 	advance_voxel_motion(delta, desired_velocity, _behavior.gravity)
 

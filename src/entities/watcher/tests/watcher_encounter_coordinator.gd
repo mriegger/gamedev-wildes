@@ -49,6 +49,7 @@ func _run() -> void:
 		8,
 		4,
 		EntityNavigationLimits.new(24, 256, 2),
+		EntityRuntime.Mode.GAMEPLAY,
 	)
 	coordinator.setup(player, effect)
 	coordinator.bind_context(world, runtime, _position_ready)

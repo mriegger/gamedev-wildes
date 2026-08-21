@@ -125,7 +125,7 @@ func _run() -> void:
 	root.add_child(renderer)
 	root.add_child(hud)
 	root.add_child(player)
-	runtime.setup(entity_catalog, level_state, 64, 64, EntityNavigationLimits.new(48, 2048, 2))
+	runtime.setup(entity_catalog, level_state, 64, 64, EntityNavigationLimits.new(48, 2048, 2), EntityRuntime.Mode.GAMEPLAY)
 	_expect(coordinator.setup(topology, state, level_state, runtime, entity_catalog, generation.layout.seed_value), "encounter coordinator setup failed")
 	_expect(int(coordinator._capacity_by_room[room_id]) == 3, "static room capacity did not retain the three valid spawn cells")
 	_expect(
@@ -348,7 +348,7 @@ func _run() -> void:
 		_expect(roaming_actor != null, "second wave had no actor to test cross-room ownership")
 		if roaming_actor != null:
 			roaming_actor.global_position = unblocked_player_position as Vector3
-			runtime.tick(0.0, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT))
+			runtime.tick_gameplay(0.0, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT))
 			var roaming_defeat := runtime.try_apply_damage(roaming_runtime_id, 10000.0)
 			_expect(roaming_defeat != null and roaming_defeat.defeated, "roaming encounter enemy defeat failed")
 			_expect(progress.active_entity_ids.size() == first_wave_active_before, "roaming enemy defeat was charged to its physical room")
@@ -683,7 +683,7 @@ func _test_production_room_cap(
 	var coordinator := LevelEncounterCoordinator.new()
 	root.add_child(runtime)
 	root.add_child(coordinator)
-	runtime.setup(entity_catalog, level_state, 64, 64, EntityNavigationLimits.new(48, 2048, 2))
+	runtime.setup(entity_catalog, level_state, 64, 64, EntityNavigationLimits.new(48, 2048, 2), EntityRuntime.Mode.GAMEPLAY)
 	_expect(coordinator.setup(topology, state, level_state, runtime, entity_catalog, layout.seed_value), "production room-cap coordinator setup failed")
 	var master_room_id := -1
 	for room_id in topology.get_encounter_room_ids():

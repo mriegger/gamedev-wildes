@@ -48,6 +48,7 @@ var _left_leg_origin: Transform3D
 var _right_leg_origin: Transform3D
 var _beak_origin: Transform3D
 var _call_elapsed: float = 0.0
+var _audio_enabled: bool = true
 
 func setup(p_actor: Node3D):
 	super.setup(p_actor)
@@ -107,6 +108,11 @@ func apply_color_variant(variant: ColorVariant) -> void:
 		_right_eye_mesh.scale = Vector3(2.2, 2.2, 1.4)
 		_apply_emissive_color(_left_eye_mesh, Color(1.0, 0.72, 0.08))
 		_apply_emissive_color(_right_eye_mesh, Color(1.0, 0.72, 0.08))
+
+func set_audio_enabled(enabled: bool) -> void:
+	_audio_enabled = enabled
+	if not enabled and is_instance_valid(_wing_flap_audio):
+		_wing_flap_audio.stop()
 
 func advance(delta: float):
 	assert(actor is BirdActor)
@@ -172,6 +178,10 @@ func _apply_folded_wings() -> void:
 	_right_wing_pivot.rotation.y = _right_wing_origin.basis.get_euler().y + deg_to_rad(72.0)
 
 func _update_wing_flap_audio(wings_flapping: bool) -> void:
+	if not _audio_enabled:
+		if _wing_flap_audio.playing:
+			_wing_flap_audio.stop()
+		return
 	if wings_flapping:
 		if not _wing_flap_audio.playing:
 			_wing_flap_audio.play()

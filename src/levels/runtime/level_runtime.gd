@@ -91,6 +91,7 @@ func setup(
 			MAX_NAVIGATION_SEARCH_NODES,
 			MAX_NAVIGATION_SEARCHES_PER_TICK,
 		),
+		EntityRuntime.Mode.GAMEPLAY,
 	)
 	_encounter_coordinator = LevelEncounterCoordinator.new()
 	_encounter_coordinator.name = "EncounterCoordinator"
@@ -142,7 +143,7 @@ func _physics_process(delta: float) -> void:
 		_camera.v_offset,
 	)
 	assert(observation != null)
-	_entity_runtime.tick(delta, observation)
+	_entity_runtime.tick_gameplay(delta, observation)
 
 func activate() -> void:
 	assert(_state != null)

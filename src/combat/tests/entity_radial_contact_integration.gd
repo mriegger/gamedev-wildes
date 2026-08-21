@@ -53,7 +53,7 @@ func _run() -> void:
 	player.set_physics_process(false)
 	player.interactor.set_physics_process(false)
 	player.animation_driver.set_process(false)
-	runtime.setup(_make_catalog(), world, 2, 2, EntityNavigationLimits.new(32, 512, 2))
+	runtime.setup(_make_catalog(), world, 2, 2, EntityNavigationLimits.new(32, 512, 2), EntityRuntime.Mode.GAMEPLAY)
 	var spawn_requests: Array[EntitySpawnRequest] = [
 		EntitySpawnRequest.new(&"stone_golem", Vector3(2.5, FEET_Y, 0.5), 6101),
 		EntitySpawnRequest.new(&"stone_golem", Vector3(5.5, FEET_Y, 0.5), 6102),

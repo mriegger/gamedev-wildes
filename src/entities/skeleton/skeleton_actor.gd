@@ -47,12 +47,12 @@ func setup(
 	_skeleton_animation = animation_driver as SkeletonAnimationDriver
 	assert(_skeleton_animation != null)
 
-func tick(
+func tick_gameplay(
 	delta: float,
 	observation: EntityTargetObservation,
 	separation_velocity: Vector3,
 	navigation_search_budget: NavigationSearchBudget,
-):
+) -> void:
 	assert(brain != null and voxel_space != null and observation != null)
 	_emit_melee_contact(_timed_melee_contact.advance(delta))
 	var current_position_hidden := false
@@ -127,6 +127,24 @@ func tick(
 		brain.record_cover_arrival(_is_hidden(global_position, observation))
 		_apply_state_change(previous_state)
 
+func tick_ambient(
+	delta: float,
+	separation_velocity: Vector3,
+	navigation_search_budget: NavigationSearchBudget,
+) -> void:
+	assert(brain != null and voxel_space != null)
+	_timed_melee_contact.cancel()
+	var previous_state := brain.state
+	brain.advance_ambient(delta, global_position)
+	_apply_state_change(previous_state)
+	var desired_velocity := _follow_movement_goal(
+		delta,
+		separation_velocity,
+		navigation_search_budget,
+		_behavior.roam_speed,
+		false,
+	)
+	advance_voxel_motion(delta, desired_velocity, _behavior.gravity)
 
 func _emit_melee_contact(profile: MeleeAttackProfile) -> void:
 	if profile != null:

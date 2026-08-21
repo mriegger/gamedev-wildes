@@ -37,7 +37,12 @@ func setup(
 	_visibility_sensor = VoxelPlayerVisibilitySensorType.new(voxel_space, _behavior.detection_range, definition.body_height, runtime_id)
 
 
-func tick(delta: float, observation: EntityTargetObservation, separation_velocity: Vector3, navigation_search_budget: NavigationSearchBudget):
+func tick_gameplay(
+	delta: float,
+	observation: EntityTargetObservation,
+	separation_velocity: Vector3,
+	navigation_search_budget: NavigationSearchBudget,
+) -> void:
 	assert(brain != null and voxel_space != null)
 	assert(observation != null and observation.validate())
 	var player_position := observation.player_position
@@ -67,6 +72,25 @@ func tick(delta: float, observation: EntityTargetObservation, separation_velocit
 		if not (chasing and global_position.distance_squared_to(player_position) <= reach_squared):
 			desired_velocity = _get_path_velocity(delta, goal, _behavior.chase_speed if chasing else _behavior.wander_speed, navigation_search_budget)
 	max_speed = _behavior.chase_speed if chasing else _behavior.wander_speed
+	desired_velocity = limit_planar_velocity(desired_velocity + separation_velocity, max_speed)
+	advance_voxel_motion(delta, desired_velocity, _behavior.gravity)
+
+func tick_ambient(
+	delta: float,
+	separation_velocity: Vector3,
+	navigation_search_budget: NavigationSearchBudget,
+) -> void:
+	assert(brain != null and voxel_space != null)
+	_timed_melee_contact.cancel()
+	brain.advance_ambient(delta, global_position)
+	_zombie_animation.set_chasing(false)
+	max_speed = _behavior.wander_speed
+	var desired_velocity := _get_path_velocity(
+		delta,
+		brain.get_movement_goal(),
+		max_speed,
+		navigation_search_budget,
+	)
 	desired_velocity = limit_planar_velocity(desired_velocity + separation_velocity, max_speed)
 	advance_voxel_motion(delta, desired_velocity, _behavior.gravity)
 

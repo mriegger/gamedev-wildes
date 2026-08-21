@@ -134,7 +134,7 @@ func _run() -> void:
 	var water_world := _make_world(BlockId.Type.SAND, WATER_FLOOR_HEIGHT)
 	var water_runtime := EntityRuntime.new()
 	root.add_child(water_runtime)
-	water_runtime.setup(catalog, water_world, 2, 2, EntityNavigationLimits.new(24, 256, 1))
+	water_runtime.setup(catalog, water_world, 2, 2, EntityNavigationLimits.new(24, 256, 1), EntityRuntime.Mode.GAMEPLAY)
 	water_runtime.water_surface_motion_committed.connect(_on_water_surface_motion_committed)
 	var water_ids := water_runtime.try_spawn_batch([
 		EntitySpawnRequest.new(&"bird", Vector3(-0.5, FEET_Y + 10.0, 0.5), crow_seed),
@@ -149,7 +149,7 @@ func _run() -> void:
 		var duck_visited_ground := false
 		var duck_visited_takeoff := false
 		for _frame in SIMULATION_FRAMES:
-			water_runtime.tick(FRAME_DELTA, observation)
+			water_runtime.tick_gameplay(FRAME_DELTA, observation)
 			if water_duck.brain.state in [BirdBrain.State.GROUNDED_IDLE, BirdBrain.State.GROUNDED_WALK]:
 				duck_visited_ground = true
 				_expect(is_equal_approx(water_duck.global_position.y, WATER_SURFACE_Y), "grounded duck sank below the water surface")
@@ -174,7 +174,7 @@ func _run() -> void:
 		water_crow.velocity = Vector3.ZERO
 		water_crow.on_ground = true
 		water_crow.brain.state = BirdBrain.State.DESCEND
-		water_crow.tick(FRAME_DELTA, observation, Vector3.ZERO, NavigationSearchBudget.new(1))
+		water_crow.tick_gameplay(FRAME_DELTA, observation, Vector3.ZERO, NavigationSearchBudget.new(1))
 		_expect(water_crow.brain.state == BirdBrain.State.TAKEOFF and not water_crow.on_ground, "crow did not escape an invalid underwater landing")
 	var world := _make_world()
 	var aerial_position := Vector3(0.5, FEET_Y + 10.0, 0.5)
@@ -184,7 +184,7 @@ func _run() -> void:
 
 	var runtime := EntityRuntime.new()
 	root.add_child(runtime)
-	runtime.setup(catalog, world, WorldEntityCoordinator.MAX_TOTAL_ACTIVE, WorldEntityCoordinator.MAX_RETIRING_VISUALS, EntityNavigationLimits.new(24, 256, 1))
+	runtime.setup(catalog, world, WorldEntityCoordinator.MAX_TOTAL_ACTIVE, WorldEntityCoordinator.MAX_RETIRING_VISUALS, EntityNavigationLimits.new(24, 256, 1), EntityRuntime.Mode.GAMEPLAY)
 	var requests: Array[EntitySpawnRequest] = [EntitySpawnRequest.new(&"bird", aerial_position, 7171)]
 	var runtime_ids := runtime.try_spawn_batch(requests)
 	_expect(runtime_ids == [1], "bird did not spawn through EntityRuntime")
@@ -211,7 +211,7 @@ func _run() -> void:
 		if bird == null:
 			break
 		visited[bird.brain.state] = true
-		runtime.tick(FRAME_DELTA, observation)
+		runtime.tick_gameplay(FRAME_DELTA, observation)
 		bird.animation_driver.advance(FRAME_DELTA)
 		if bird.brain.state in [BirdBrain.State.GROUNDED_IDLE, BirdBrain.State.GROUNDED_WALK]:
 			var animation := bird.animation_driver as BirdAnimationDriver
@@ -249,7 +249,7 @@ func _run() -> void:
 	_expect(canopy_edit != null, "failed to construct the takeoff obstruction")
 	var canopy_runtime := EntityRuntime.new()
 	root.add_child(canopy_runtime)
-	canopy_runtime.setup(catalog, canopy_world, 1, 1, EntityNavigationLimits.new(24, 256, 1))
+	canopy_runtime.setup(catalog, canopy_world, 1, 1, EntityNavigationLimits.new(24, 256, 1), EntityRuntime.Mode.GAMEPLAY)
 	var canopy_ids := canopy_runtime.try_spawn_batch([EntitySpawnRequest.new(&"bird", aerial_position, duck_seed)])
 	var canopy_bird := canopy_runtime.get_actor(canopy_ids[0]) as BirdActor if not canopy_ids.is_empty() else null
 	_expect(canopy_bird != null, "canopy test bird did not spawn")
@@ -265,7 +265,7 @@ func _run() -> void:
 		var canopy_animation := canopy_bird.animation_driver as BirdAnimationDriver
 		canopy_animation.advance(0.05)
 		_expect(canopy_animation._beak_mesh.scale.y > 1.0, "duck call did not animate the beak")
-		canopy_bird.tick(FRAME_DELTA, observation, Vector3.RIGHT, NavigationSearchBudget.new(1))
+		canopy_bird.tick_gameplay(FRAME_DELTA, observation, Vector3.RIGHT, NavigationSearchBudget.new(1))
 		_expect(not canopy_bird.vocalizations.is_processing() and not canopy_bird.vocalizations.playing, "moving idle duck continued its call")
 		canopy_bird.global_position = Vector3(0.5, FEET_Y, 0.5)
 		canopy_bird.velocity = Vector3.ZERO
@@ -289,14 +289,14 @@ func _run() -> void:
 		canopy_bird.on_ground = true
 		canopy_bird.brain.state = BirdBrain.State.DESCEND
 		canopy_bird._update_vocalizations()
-		canopy_bird.tick(FRAME_DELTA, observation, Vector3.ZERO, NavigationSearchBudget.new(1))
+		canopy_bird.tick_gameplay(FRAME_DELTA, observation, Vector3.ZERO, NavigationSearchBudget.new(1))
 		_expect(canopy_bird.brain.state == BirdBrain.State.TAKEOFF, "bird did not escape a landing on leaves")
 		_expect(not canopy_bird.vocalizations.is_processing(), "bird vocalized after landing on leaves")
 
 	var blocked_world := _make_world(BlockId.Type.STONE)
 	var blocked_runtime := EntityRuntime.new()
 	root.add_child(blocked_runtime)
-	blocked_runtime.setup(catalog, blocked_world, 1, 1, EntityNavigationLimits.new(24, 256, 1))
+	blocked_runtime.setup(catalog, blocked_world, 1, 1, EntityNavigationLimits.new(24, 256, 1), EntityRuntime.Mode.GAMEPLAY)
 	var blocked_ids := blocked_runtime.try_spawn_batch([EntitySpawnRequest.new(&"bird", aerial_position, crow_seed)])
 	var blocked_bird := blocked_runtime.get_actor(blocked_ids[0]) as BirdActor if not blocked_ids.is_empty() else null
 	_expect(blocked_bird != null and not blocked_bird._has_landing_target, "bird selected a disallowed landing floor")

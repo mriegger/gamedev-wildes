@@ -90,6 +90,17 @@ func advance(
 	_movement_goal = Vector3.ZERO
 	state = State.DORMANT
 
+func advance_ambient() -> void:
+	state = State.DORMANT
+	_target_memory_remaining = 0.0
+	_movement_goal = Vector3.ZERO
+	_punch_remaining = 0.0
+	_punch_started = false
+	_slam_phase_remaining = 0.0
+	_locked_slam_target = Vector3.ZERO
+	_slam_started = false
+	_slam_launch_requested = false
+
 func _advance_active_action(delta: float) -> bool:
 	if _punch_remaining > 0.0:
 		_punch_remaining = maxf(_punch_remaining - delta, 0.0)

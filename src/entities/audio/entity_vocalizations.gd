@@ -7,6 +7,7 @@ var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 var _remaining_seconds: float = 0.0
 var _last_stream_index: int = -1
 var _vocalizations_enabled: bool = true
+var _audio_enabled: bool = true
 
 
 func _ready():
@@ -21,20 +22,30 @@ func setup(seed_value: int):
 	_vocalizations_enabled = true
 	_rng.seed = seed_value ^ profile.rng_salt
 	_remaining_seconds = _rng.randf_range(profile.initial_delay_min_seconds, profile.initial_delay_max_seconds)
-	set_process(true)
+	set_process(_audio_enabled)
 
 
 func set_vocalizations_enabled(enabled: bool):
 	if _vocalizations_enabled == enabled:
 		return
 	_vocalizations_enabled = enabled
-	set_process(enabled)
+	set_process(enabled and _audio_enabled)
+	if not enabled or not _audio_enabled:
+		stop()
+		stream = null
+
+
+func set_audio_enabled(enabled: bool) -> void:
+	_audio_enabled = enabled
+	set_process(_vocalizations_enabled and enabled)
 	if not enabled:
 		stop()
 		stream = null
 
 
 func _process(delta: float):
+	if not _audio_enabled or not _vocalizations_enabled:
+		return
 	if playing:
 		return
 	_remaining_seconds -= delta
