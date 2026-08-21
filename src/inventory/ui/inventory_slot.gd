@@ -1,6 +1,9 @@
 extends ItemSlotView
 class_name InventorySlot
 
+signal drag_started
+signal drag_stopped
+
 var item_id = null
 var equipment_instance_fingerprint: String = ""
 var inventory_model: InventoryModel = null
@@ -229,6 +232,7 @@ func _get_drag_data(_at_position):
 	refresh_visuals()
 	set_process_input(true)
 	set_drag_preview(Control.new())
+	drag_started.emit()
 	return data
 
 func _set_drag_count(count: int) -> void:
@@ -350,6 +354,8 @@ func _hide_high_layer_preview():
 
 func _notification(what):
 	if what == NOTIFICATION_DRAG_END:
+		if not _active_drag_data.is_empty():
+			drag_stopped.emit()
 		_quick_transfer_pending = false
 		_active_drag_data.clear()
 		_drag_source_item_id = null

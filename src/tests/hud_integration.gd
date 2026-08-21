@@ -105,6 +105,7 @@ func _process(_delta: float) -> bool:
 		print("[hud_integration] health bar ok")
 	elif _phase == 1 and _frame == 8:
 		_original_window_size = root.size
+		_check_inventory_panel_audio()
 		_check_health_bar_panel_transitions()
 		root.size = Vector2i(684, 480)
 	elif _phase == 1 and _frame == 10:
@@ -441,6 +442,30 @@ func _check_health_bar_panel_transitions() -> void:
 	_hud.side_panel.close_immediate()
 	_check_health_bar_panel_clearance(0.0, "immediate close")
 
+func _check_inventory_panel_audio() -> void:
+	var sound_player := _hud.inventory_ui_sound_player
+	if sound_player == null or sound_player.bus != &"SFX":
+		_fail("inventory panel sound player is missing or not routed to SFX")
+		return
+	_hud.close_side_panel_immediate()
+	_hud.toggle_crafting()
+	if not _hud.side_panel.is_open() or not _hud.crafting_panel.is_open():
+		_fail("Tab-equivalent toggle did not open the inventory and crafting panels")
+		return
+	if sound_player.stream != HUD.INVENTORY_OPEN_SOUND or not sound_player.playing:
+		_fail("opening the inventory via Tab did not play the open sound")
+		return
+	sound_player.stop()
+	_hud.toggle_crafting()
+	if _hud.side_panel.is_open() or _hud.crafting_panel.is_open():
+		_fail("Tab-equivalent toggle did not close the inventory and crafting panels")
+		return
+	if sound_player.stream != HUD.INVENTORY_CLOSE_SOUND or not sound_player.playing:
+		_fail("closing the inventory via Tab did not play the close sound")
+		return
+	sound_player.stop()
+	_hud.close_side_panel_immediate()
+
 func _check_health_bar_panel_clearance(progress: float, context: String) -> void:
 	var viewport_size := root.get_visible_rect().size
 	var expected_inset := SidePanel.PANEL_WIDTH * progress
@@ -588,6 +613,9 @@ func _check_mid_drag(label: String, expected: int) -> void:
 		_warn("mid %s drag: expected %d preview(s) while dragging, got %d" % [label, expected, previews.size()])
 		_fail("mid %s drag: expected %d preview(s) while dragging, got %d %s" % [label, expected, previews.size(), str(previews)])
 		return
+	if _hud.inventory_ui_sound_player.stream != HUD.INVENTORY_DRAG_START_SOUND:
+		_fail("mid %s drag: drag-start sound did not play" % label)
+		return
 	if previews.size() == 1:
 		var pl = previews[0] as CanvasLayer
 		if not is_instance_valid(pl) or not pl.visible:
@@ -614,6 +642,7 @@ func _check_mid_drag(label: String, expected: int) -> void:
 	print("[hud_integration] mid %s drag ok (preview %d visible)" % [label, expected])
 
 func _check_left_drag_result() -> void:
+	_check_drag_stop_sound("left")
 	print("[hud_integration] check left drag result frame %d" % _frame)
 	var orphan: int = int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
 	print("[hud_integration] orphan=%d" % orphan)
@@ -656,6 +685,7 @@ func _check_left_drag_result() -> void:
 	print("[hud_integration] left drag ok")
 
 func _check_split_drag_result() -> void:
+	_check_drag_stop_sound("adjustable")
 	print("[hud_integration] check adjustable drag frame %d" % _frame)
 	var orphan: int = int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
 	print("[hud_integration] orphan=%d" % orphan)
@@ -979,6 +1009,9 @@ func _start_armor_unequip() -> void:
 	if not equipment_view.visible:
 		_fail("equipment button did not open the equipment tab")
 		return
+	if _hud.inventory_ui_sound_player.stream != HUD.DEFAULT_UI_CLICK_SOUND:
+		_fail("equipment button did not play the default UI click")
+		return
 	var equipment_slot := _hud.side_panel.get_equipment_slots()[ArmorDefinition.Slot.HEAD]
 	if equipment_slot.item_id != &"copper_helmet":
 		_fail("helmet equipment UI did not refresh")
@@ -1127,6 +1160,7 @@ func _end_trash_drag() -> void:
 	_end_left_drag(trash_target.get_global_rect().get_center())
 
 func _check_trash_drag_result() -> void:
+	_check_drag_stop_sound("trash")
 	if _inv.get_slot(_hotbar_click_destination_index) != null:
 		_fail("trash drop did not delete the backpack stack")
 		return
@@ -1174,6 +1208,7 @@ func _start_equipment_trash_drag() -> void:
 		_fail("equipment trash full-stack source remained visible")
 
 func _check_equipment_trash_drag_result() -> void:
+	_check_drag_stop_sound("equipment trash")
 	if _inv.get_equipped_armor(ArmorDefinition.Slot.HEAD) != null:
 		_fail("trash drop did not delete equipped armor")
 		return
@@ -1193,6 +1228,10 @@ func _check_equipment_trash_drag_result() -> void:
 		_fail("equipment trash drop leaked drag preview")
 		return
 	print("[hud_integration] trash drop deleted equipped armor")
+
+func _check_drag_stop_sound(label: String) -> void:
+	if _hud.inventory_ui_sound_player.stream != HUD.INVENTORY_DRAG_STOP_SOUND:
+		_fail("%s drag did not play the drag-stop sound" % label)
 
 func _check_compass_menu_visibility() -> void:
 	_hud.side_panel.open()

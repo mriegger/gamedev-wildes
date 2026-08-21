@@ -2,6 +2,11 @@ extends CanvasLayer
 class_name HUD
 
 const NavigationCompassType := preload("res://ui/hud/navigation_compass.gd")
+const INVENTORY_OPEN_SOUND: AudioStream = preload("res://assets/audio/sfx/ui/inventory/inventory_open.ogg")
+const INVENTORY_CLOSE_SOUND: AudioStream = preload("res://assets/audio/sfx/ui/inventory/inventory_close.ogg")
+const INVENTORY_DRAG_START_SOUND: AudioStream = preload("res://assets/audio/sfx/ui/inventory/drag/drag_start.ogg")
+const INVENTORY_DRAG_STOP_SOUND: AudioStream = preload("res://assets/audio/sfx/ui/inventory/drag/drag_stop.ogg")
+const DEFAULT_UI_CLICK_SOUND: AudioStream = preload("res://assets/audio/sfx/ui/click/default_click.ogg")
 
 @onready var hotbar: InventoryHotbar = $InventoryHotbar as InventoryHotbar
 @onready var health_bar: PlayerHealthBar = $HealthBar as PlayerHealthBar
@@ -14,12 +19,25 @@ const NavigationCompassType := preload("res://ui/hud/navigation_compass.gd")
 @onready var player_hit_vignette: PlayerHitVignette = $PlayerHitVignette as PlayerHitVignette
 @onready var interaction_prompt: Label = $InteractionPrompt as Label
 @onready var navigation_compass: NavigationCompassType = $NavigationCompass as NavigationCompassType
+@onready var inventory_ui_sound_player: AudioStreamPlayer = $InventoryUiSoundPlayer as AudioStreamPlayer
 
 var anvil_coordinator: AnvilCoordinator
 var chest_coordinator: ChestTransferCoordinator
 var cauldron_coordinator: CauldronCoordinator
 var _left_panel_camera_rig: CameraRig
 var _external_menu_open: bool = false
+
+func _ready() -> void:
+	side_panel.ui_action_committed.connect(_on_ui_action_committed)
+	crafting_panel.ui_action_committed.connect(_on_ui_action_committed)
+	anvil_panel.ui_action_committed.connect(_on_ui_action_committed)
+	cauldron_panel.ui_action_committed.connect(_on_ui_action_committed)
+	for slot_view in hotbar.slot_nodes:
+		_bind_inventory_drag_slot(slot_view as InventorySlot)
+	for slot in side_panel.get_inventory_slots():
+		_bind_inventory_drag_slot(slot)
+	for slot in side_panel.get_equipment_slots():
+		_bind_inventory_drag_slot(slot)
 
 func setup_with_camera(
 	p_inventory: InventoryModel,
@@ -147,25 +165,46 @@ func toggle_backpack():
 		side_panel.open()
 
 func toggle_crafting():
+	var was_open := side_panel.is_open()
 	if anvil_panel.is_open():
 		close_anvil()
-		return
-	if cauldron_panel.is_open():
+	elif cauldron_panel.is_open():
 		close_cauldron()
-		return
-	if chest_panel.is_open():
+	elif chest_panel.is_open():
 		chest_panel.close()
 		side_panel.open_inventory()
 		crafting_panel.open()
-		return
-	if crafting_panel.is_open():
+	elif crafting_panel.is_open():
 		close_side_panel()
-		return
-	if side_panel.is_open():
+	elif side_panel.is_open():
 		side_panel.close()
+	else:
+		side_panel.open()
+		crafting_panel.open()
+	_play_inventory_panel_transition(was_open, side_panel.is_open())
+
+func _play_inventory_panel_transition(was_open: bool, is_open: bool) -> void:
+	if was_open == is_open:
 		return
-	side_panel.open()
-	crafting_panel.open()
+	_play_inventory_ui_sound(INVENTORY_OPEN_SOUND if is_open else INVENTORY_CLOSE_SOUND)
+
+func _bind_inventory_drag_slot(slot: InventorySlot) -> void:
+	assert(slot != null)
+	slot.drag_started.connect(_on_inventory_drag_started)
+	slot.drag_stopped.connect(_on_inventory_drag_stopped)
+
+func _on_inventory_drag_started() -> void:
+	_play_inventory_ui_sound(INVENTORY_DRAG_START_SOUND)
+
+func _on_inventory_drag_stopped() -> void:
+	_play_inventory_ui_sound(INVENTORY_DRAG_STOP_SOUND)
+
+func _on_ui_action_committed() -> void:
+	_play_inventory_ui_sound(DEFAULT_UI_CLICK_SOUND)
+
+func _play_inventory_ui_sound(stream: AudioStream) -> void:
+	inventory_ui_sound_player.stream = stream
+	inventory_ui_sound_player.play()
 
 func close_side_panel():
 	side_panel.close()

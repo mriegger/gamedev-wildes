@@ -30,6 +30,10 @@ layer = 1
 
 [node name="CauldronPanel" parent="." instance=ExtResource("5_crafting_panel")]
 
+[node name="InventoryUiSoundPlayer" type="AudioStreamPlayer" parent="."]
+volume_db = -6.0
+bus = &"SFX"
+
 [node name="PlayerHitVignette" parent="." instance=ExtResource("8_hit_vignette")]
 
 [node name="NavigationCompass" type="Control" parent="."]

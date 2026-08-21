@@ -5,6 +5,7 @@ signal progress_changed(progress: float)
 signal opened
 signal closed
 signal interacted
+signal ui_action_committed
 
 const PANEL_WIDTH: float = 520.0
 const ANIM_DURATION: float = 0.25
@@ -60,9 +61,9 @@ func _ready() -> void:
 	WildesStyle.apply_frosted_panel(_background, WildesStyle.make_panel(Color(0.14, 0.16, 0.18, 0.32), 0, Color(1, 1, 1, 0.12), 1), 5.0, false)
 	_craft_button.pressed.connect(_on_craft_pressed)
 	_recipe_scroll.gui_input.connect(_on_recipe_scroll_gui_input)
-	_crafting_tab.pressed.connect(_switch_workspace.bind(CRAFTING_WORKSPACE_ID))
-	_runes_tab.pressed.connect(_switch_workspace.bind(RUNES_WORKSPACE_ID))
-	_progression_tab.pressed.connect(_switch_workspace.bind(PROGRESSION_WORKSPACE_ID))
+	_crafting_tab.pressed.connect(_on_workspace_tab_pressed.bind(CRAFTING_WORKSPACE_ID))
+	_runes_tab.pressed.connect(_on_workspace_tab_pressed.bind(RUNES_WORKSPACE_ID))
+	_progression_tab.pressed.connect(_on_workspace_tab_pressed.bind(PROGRESSION_WORKSPACE_ID))
 	_style_workspace_tabs()
 	_apply_workspace()
 	_crafting_sound_player.stream = _crafting_sound_stream
@@ -190,6 +191,12 @@ func _switch_workspace(workspace_id: StringName) -> void:
 	_current_workspace_id = workspace_id
 	_apply_workspace()
 
+func _on_workspace_tab_pressed(workspace_id: StringName) -> void:
+	var previous_workspace_id := _current_workspace_id
+	_switch_workspace(workspace_id)
+	if _current_workspace_id != previous_workspace_id:
+		ui_action_committed.emit()
+
 func _apply_workspace() -> void:
 	if not is_node_ready():
 		return
@@ -277,17 +284,24 @@ func _build_recipe_list() -> void:
 		button.add_theme_stylebox_override("normal", WildesStyle.make_panel(Color(0.10, 0.12, 0.14, 0.45), 8, Color(1, 1, 1, 0.10), 1))
 		button.add_theme_stylebox_override("hover", WildesStyle.make_panel(Color(1, 1, 1, 0.08), 8, Color(1, 1, 1, 0.18), 1))
 		button.add_theme_stylebox_override("pressed", WildesStyle.make_panel(Color(0.42, 0.58, 0.48, 0.42), 8, Color(0.72, 0.92, 0.76, 0.58), 1))
-		button.pressed.connect(_select_recipe.bind(recipe.id))
+		button.pressed.connect(_on_recipe_pressed.bind(recipe.id))
 		_recipe_list.add_child(button)
 		_recipe_buttons[recipe.id] = button
 
-func _select_recipe(recipe_id: StringName) -> void:
+func _select_recipe(recipe_id: StringName) -> bool:
 	if recipe_catalog == null or not recipe_catalog.has_definition(recipe_id):
-		return
+		return false
+	if _selected_recipe_id == recipe_id:
+		return false
 	_selected_recipe_id = recipe_id
 	for id in _recipe_buttons:
 		(_recipe_buttons[id] as Button).set_pressed_no_signal(id == recipe_id)
 	_refresh_details()
+	return true
+
+func _on_recipe_pressed(recipe_id: StringName) -> void:
+	if _select_recipe(recipe_id):
+		ui_action_committed.emit()
 
 func _on_recipe_scroll_gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:

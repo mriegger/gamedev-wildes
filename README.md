@@ -25,7 +25,7 @@ world seed.
 | `1`–`9` | Equip a hotbar item and play a short draw sound; press its active hotkey again to unequip it. While the backpack is open, assign the hovered item to that slot |
 | Click hotbar slot | Equip that occupied slot and play a short draw sound |
 | `R` | Unequip the current item, or re-equip the most recently equipped hotbar item |
-| `Tab` | Toggle backpack and crafting |
+| `Tab` | Toggle backpack and crafting with distinct open and close sounds |
 | `P` | Toggle backpack only |
 | `/` | Toggle the developer command console |
 | `F3` | Toggle the world entity population debug panel |
@@ -263,7 +263,7 @@ combat state, and can repeat after randomized gaps throughout a dungeon run. Pre
 tracks grouped by folder.
 
 **Crafting.** Opening crafting with `Tab` reveals the general recipe panel alongside the backpack.
-It contains the eight recipes that do not require a workstation. Iron Pickaxe is initially a
+Selecting a recipe plays a short UI sound. It contains the eight recipes that do not require a workstation. Iron Pickaxe is initially a
 guaranteed stone-dungeon reward and later appears in that dungeon's repeat pool rather than a
 crafting recipe. Basic Rune currently has no normal
 production acquisition. A placed anvil opens its own panel with the eight copper tool, weapon, and
@@ -313,7 +313,7 @@ and restore 10% of maximum health through the same inventory consumption control
 apple-bearing leaf gives each attached apple a 20% chance to fall as a persistent pickup, capped at
 one fallen apple per mined leaf.
 
-**UI & saves.** Backpack and hotbar stacks can be split by scrolling while left-dragging. The side
+**UI & saves.** Backpack and hotbar stacks can be split by scrolling while left-dragging, with audio feedback when a drag starts and stops. The side
 panel includes a trash drop target that accepts backpack, hotbar, and equipped items. A
 frosted-glass front-end provides the main menu, world select over three save slots, create-world
 and hold-3-seconds-to-delete modals, a chunk-progress loading screen, and a pause menu that freezes
