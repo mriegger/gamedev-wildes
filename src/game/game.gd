@@ -2,7 +2,7 @@ extends Node3D
 class_name Game
 
 const EnemyCombatFeedbackType := preload("res://combat/presentation/enemy_combat_feedback.gd")
-const LEVEL_FADE_SECONDS: float = 0.18
+const TRANSITION_FADE_SECONDS: float = 0.18
 
 signal loading_progress(stage: String, percent: float, details: String)
 signal session_ready
@@ -117,6 +117,7 @@ var animation_tuning_panel: AnimationTuningPanel = null
 var player_stats_debug_panel: PlayerStatsDebugPanel = null
 var entity_population_debug_panel: EntityPopulationDebugPanel = null
 var _save_status_timer: float = 0.0
+var _session_prepared: bool = false
 var _session_active: bool = false
 var _recovered_defeated_save: bool = false
 var _level_transitioning: bool = false
@@ -133,6 +134,7 @@ func configure_session(slot_id: int, save_data: Dictionary, p_settings: GameSett
 func _ready():
 	set_physics_process(false)
 	set_process_unhandled_input(false)
+	player.set_physics_process(false)
 	if _world_state == null:
 		_fail_session_start("This world could not be loaded because its saved world state is invalid or references unavailable blocks. The save was not changed.")
 		return
@@ -356,13 +358,18 @@ func _ready():
 	if _recovered_defeated_save and _slot_id != -1 and not game_session.save("defeated_save_recovery"):
 		push_error("[Game] Failed to persist recovered player state")
 	_recovered_defeated_save = false
-	_session_active = true
 	_refresh_save_label()
 	if _level_entrance == null:
 		_show_save_status("Dungeon unavailable")
+	_session_prepared = true
+	session_ready.emit()
+
+func activate_session() -> void:
+	assert(_session_prepared and not _session_active)
+	_session_active = true
 	set_physics_process(true)
 	set_process_unhandled_input(true)
-	session_ready.emit()
+	player.set_physics_process(true)
 
 func _restore_inventory() -> bool:
 	var saved_inventory = _save_data.get("inventory", null)
@@ -572,6 +579,8 @@ func _setup_gameplay() -> bool:
 func _fail_session_start(message: String) -> void:
 	set_physics_process(false)
 	set_process_unhandled_input(false)
+	player.set_physics_process(false)
+	_session_prepared = false
 	session_start_failed.emit(message)
 
 func _on_player_defeated():
@@ -894,12 +903,14 @@ func _reset_camera_position():
 
 func _fade_to(alpha: float):
 	_fade.visible = true
+	_fade.mouse_filter = Control.MOUSE_FILTER_STOP
 	var target_color := Color(0, 0, 0, alpha)
-	var tween := create_tween()
-	tween.tween_property(_fade, "color", target_color, LEVEL_FADE_SECONDS)
+	var tween := create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	tween.tween_property(_fade, "color", target_color, TRANSITION_FADE_SECONDS)
 	await tween.finished
 	if is_zero_approx(alpha):
 		_fade.visible = false
+		_fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 func _get_persisted_position() -> Vector3:
 	if not _location_state.is_in_level():
@@ -1265,10 +1276,13 @@ func _resume_from_pause():
 	_sync_compass_external_menu()
 
 func _save_and_request_main_menu():
+	if not _session_active:
+		return
+	_deactivate_session()
+	input_buffer.clear_gameplay()
+	await _fade_to(1.0)
 	_restore_structure_designer_for_shutdown()
 	_restore_player_from_defeat()
-	_deactivate_session()
-	get_tree().paused = false
 	if _pause_menu and is_instance_valid(_pause_menu):
 		_pause_menu.queue_free()
 	_pause_menu = null
@@ -1282,6 +1296,7 @@ func _save_and_request_main_menu():
 	world_entity_coordinator.shutdown()
 	_teardown_level_runtime()
 	world.shutdown()
+	get_tree().paused = false
 	main_menu_requested.emit()
 
 func _notification(what):
@@ -1300,9 +1315,11 @@ func _notification(what):
 func _deactivate_session():
 	set_physics_process(false)
 	set_process_unhandled_input(false)
+	player.set_physics_process(false)
 	if entity_population_debug_panel != null:
 		entity_population_debug_panel.hide_panel()
 	_session_active = false
+	_session_prepared = false
 	if death_tip_coordinator != null:
 		death_tip_coordinator.shutdown()
 		death_tip_coordinator = null

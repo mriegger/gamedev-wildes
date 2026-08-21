@@ -4,9 +4,14 @@ class_name SaveSlotScreen
 signal back_requested
 signal session_requested(slot_id: int, save_data: Dictionary)
 
+const REGULAR_FONT: FontFile = preload("res://assets/fonts/RobotoSlab-Regular.ttf")
+const BOLD_FONT: FontFile = preload("res://assets/fonts/RobotoSlab-Bold.ttf")
+
 @onready var slots_container: VBoxContainer = $CenterContainer/Panel/VBox/SlotsContainer
-@onready var back_button: WildesButton = $TopBar/BackButton
+@onready var back_button: Button = $TopBar/BackButton
+@onready var main_panel: Panel = $CenterContainer/Panel
 @onready var create_dialog: Control = $CreateDialog
+@onready var create_dialog_panel: Panel = $CreateDialog/CenterContainer/Panel
 @onready var dialog_name_edit: LineEdit = $CreateDialog/CenterContainer/Panel/VBox/NameEdit
 @onready var dialog_seed_edit: LineEdit = $CreateDialog/CenterContainer/Panel/VBox/HBoxSeed/SeedEdit
 @onready var dialog_randomize_button: WildesButton = $CreateDialog/CenterContainer/Panel/VBox/HBoxSeed/RandomizeButton
@@ -29,7 +34,8 @@ func setup(item_catalog: Resource) -> void:
 
 func _ready():
 	assert(_item_catalog != null)
-	_apply_frosted_panel_styles()
+	_apply_panel_styles()
+	_setup_back_button()
 
 	back_button.pressed.connect(_on_back_pressed)
 	create_dialog.visible = false
@@ -40,14 +46,20 @@ func _ready():
 
 	_refresh_slots()
 
-func _apply_frosted_panel_styles():
-	var panel = $CenterContainer/Panel as Panel
-	var dialog = $CreateDialog/CenterContainer/Panel as Panel
+func _apply_panel_styles() -> void:
+	WildesStyle.apply_frosted_panel(main_panel, WildesStyle.make_modal(), 4.5, false)
+	WildesStyle.apply_frosted_panel(create_dialog_panel, WildesStyle.make_modal(), 4.5, false)
 
-	var panel_style = WildesStyle.make_modal()
-	WildesStyle.apply_frosted_panel(panel, panel_style, 4.5, false)
-	var dialog_style = WildesStyle.make_modal()
-	WildesStyle.apply_frosted_panel(dialog, dialog_style, 4.5, false)
+func _setup_back_button() -> void:
+	back_button.add_theme_font_override(&"font", REGULAR_FONT)
+	back_button.mouse_entered.connect(_refresh_back_button_font)
+	back_button.mouse_exited.connect(_refresh_back_button_font)
+	back_button.focus_entered.connect(_refresh_back_button_font)
+	back_button.focus_exited.connect(_refresh_back_button_font)
+
+func _refresh_back_button_font() -> void:
+	var emphasized := back_button.is_hovered() or back_button.has_focus()
+	back_button.add_theme_font_override(&"font", BOLD_FONT if emphasized else REGULAR_FONT)
 
 func _refresh_slots():
 	for child in slots_container.get_children():
@@ -69,6 +81,29 @@ func _refresh_slots():
 		instance.slot_create_requested.connect(_on_slot_create_dialog)
 
 		slot_instances.append(instance)
+	_configure_focus_navigation()
+
+func _configure_focus_navigation() -> void:
+	if slot_instances.is_empty():
+		back_button.call_deferred("grab_focus")
+		return
+	var first_button := slot_instances[0].click_area
+	var last_button := slot_instances[slot_instances.size() - 1].click_area
+	back_button.focus_neighbor_top = back_button.get_path_to(last_button)
+	back_button.focus_neighbor_bottom = back_button.get_path_to(first_button)
+	for index in slot_instances.size():
+		var slot := slot_instances[index]
+		var primary := slot.click_area
+		var previous: Button = back_button if index == 0 else slot_instances[index - 1].click_area
+		var next: Button = back_button if index == slot_instances.size() - 1 else slot_instances[index + 1].click_area
+		primary.focus_neighbor_top = primary.get_path_to(previous)
+		primary.focus_neighbor_bottom = primary.get_path_to(next)
+		if slot.delete_button.visible:
+			primary.focus_neighbor_right = primary.get_path_to(slot.delete_button)
+			slot.delete_button.focus_neighbor_left = slot.delete_button.get_path_to(primary)
+			slot.delete_button.focus_neighbor_top = slot.delete_button.get_path_to(previous)
+			slot.delete_button.focus_neighbor_bottom = slot.delete_button.get_path_to(next)
+	first_button.call_deferred("grab_focus")
 
 func _on_slot_play(slot_id: int):
 	var data = slot_instances[slot_id].slot_data

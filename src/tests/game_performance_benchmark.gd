@@ -359,6 +359,7 @@ func _run() -> void:
 		await _teardown(game)
 		quit(1)
 		return
+	game.activate_session()
 	var world := game.world
 	var player := game.player
 	_expect(world != null and player != null, "game did not expose its world and player")

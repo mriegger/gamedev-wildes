@@ -825,7 +825,7 @@ func _check_final() -> void:
 		return
 	if not _verify_player_defeat_flow():
 		return
-	if not _verify_dead_main_menu_save():
+	if not await _verify_dead_main_menu_save():
 		return
 	var completed_game := _game
 	_game = null
@@ -1118,6 +1118,10 @@ func _verify_dead_main_menu_save() -> bool:
 		_fail("dead Main Menu setup did not retain the death screen")
 		return false
 	death_screen.main_menu_button.pressed.emit()
+	if not _player.is_defeated():
+		_fail("dead Main Menu normalized defeat before reaching black")
+		return false
+	await _game.main_menu_requested
 	var expected_spawn := _world.voxel_model.get_spawn_position() + Vector3(0.0, 0.1, 0.0)
 	if _player.is_defeated() or session.is_saving_suspended():
 		_fail("Main Menu did not normalize defeated save state")
@@ -1160,6 +1164,7 @@ func _verify_dead_window_close_save() -> bool:
 			_fail("window-close save verification timed out during world setup")
 			return false
 		await process_frame
+	close_game.activate_session()
 	var inventory_before := close_game.inventory_model.to_dict()
 	var expected_spawn := close_game.world.voxel_model.get_spawn_position() + Vector3(0.0, 0.1, 0.0)
 	if close_game.player_stats.is_dead() or close_game.player.is_defeated() or close_game.game_session.is_saving_suspended() or close_game._death_screen != null:
@@ -1228,4 +1233,5 @@ func _fail(msg: String) -> void:
 	quit(1)
 
 func _on_session_ready():
+	_game.activate_session()
 	_session_ready = true

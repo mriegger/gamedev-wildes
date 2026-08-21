@@ -1,8 +1,10 @@
-[gd_scene load_steps=4 format=3 uid="uid://saveslot_scn"]
+[gd_scene load_steps=5 format=3 uid="uid://saveslot_scn"]
 
 [ext_resource type="Script" path="res://ui/screens/world_select/save_slot_screen.gd" id="1_script"]
 [ext_resource type="PackedScene" path="res://ui/components/wildes_button.tscn" id="2_btn"]
 [ext_resource type="PackedScene" path="res://ui/screens/world_select/delete_hold_screen.tscn" id="4_del"]
+
+[sub_resource type="StyleBoxEmpty" id="Style_text_button"]
 
 [node name="SaveSlotScreen" type="Control"]
 layout_mode = 3
@@ -22,7 +24,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-color = Color(0.11, 0.13, 0.16, 1)
+color = Color(0, 0, 0, 0)
 
 [node name="DimOverlay" type="ColorRect" parent="."]
 layout_mode = 1
@@ -32,7 +34,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-color = Color(0, 0, 0, 0.22)
+color = Color(0, 0, 0, 0.32)
 
 [node name="TopBar" type="Control" parent="."]
 layout_mode = 1
@@ -41,7 +43,7 @@ anchor_right = 1.0
 grow_horizontal = 2
 custom_minimum_size = Vector2(0, 52)
 
-[node name="BackButton" parent="TopBar" instance=ExtResource("2_btn")]
+[node name="BackButton" type="Button" parent="TopBar"]
 layout_mode = 1
 anchors_preset = 0
 offset_left = 16.0
@@ -49,7 +51,20 @@ offset_top = 10.0
 offset_right = 126.0
 offset_bottom = 44.0
 custom_minimum_size = Vector2(110, 34)
-button_text = "< BACK"
+mouse_default_cursor_shape = 2
+theme_override_colors/font_color = Color(1, 1, 1, 0.86)
+theme_override_colors/font_hover_color = Color(1, 1, 1, 1)
+theme_override_colors/font_focus_color = Color(1, 1, 1, 1)
+theme_override_colors/font_pressed_color = Color(1, 1, 1, 0.72)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.65)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 2
+theme_override_font_sizes/font_size = 18
+theme_override_styles/normal = SubResource("Style_text_button")
+theme_override_styles/hover = SubResource("Style_text_button")
+theme_override_styles/pressed = SubResource("Style_text_button")
+theme_override_styles/focus = SubResource("Style_text_button")
+text = "< BACK"
 
 [node name="CenterContainer" type="CenterContainer" parent="."]
 layout_mode = 1
@@ -66,6 +81,7 @@ layout_mode = 2
 size_flags_horizontal = 0
 size_flags_vertical = 0
 mouse_filter = 2
+theme_override_styles/panel = SubResource("Style_text_button")
 
 [node name="VBox" type="VBoxContainer" parent="CenterContainer/Panel"]
 layout_mode = 1
@@ -89,6 +105,9 @@ text = "SELECT WORLD"
 horizontal_alignment = 1
 theme_override_font_sizes/font_size = 28
 theme_override_colors/font_color = Color(0.96, 0.95, 0.9, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.62)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 2
 
 [node name="SlotsContainer" type="VBoxContainer" parent="CenterContainer/Panel/VBox"]
 layout_mode = 2

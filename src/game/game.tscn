@@ -209,7 +209,7 @@ theme_override_font_sizes/font_size = 14
 
 [node name="TransitionLayer" type="CanvasLayer" parent="."]
 process_mode = 3
-layer = 200
+layer = 400
 
 [node name="Fade" type="ColorRect" parent="TransitionLayer"]
 visible = false

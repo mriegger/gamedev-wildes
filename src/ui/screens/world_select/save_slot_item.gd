@@ -5,13 +5,16 @@ signal slot_play_requested(slot_id: int)
 signal slot_delete_requested(slot_id: int)
 signal slot_create_requested(slot_id: int)
 
+const REGULAR_FONT: FontFile = preload("res://assets/fonts/RobotoSlab-Regular.ttf")
+const BOLD_FONT: FontFile = preload("res://assets/fonts/RobotoSlab-Bold.ttf")
+
 var slot_id: int = 0
 var slot_data: Dictionary = {}
 
 @onready var name_label: Label = $Panel/VBox/NameLabel
 @onready var detail_label: Label = $Panel/VBox/DetailLabel
 @onready var status_label: Label = $Panel/VBox/StatusLabel
-@onready var delete_button: WildesButton = $Panel/VBox/Actions/DeleteButton
+@onready var delete_button: Button = $Panel/VBox/Actions/DeleteButton
 @onready var click_area: Button = $ClickArea
 @onready var panel: Panel = $Panel
 
@@ -20,12 +23,31 @@ func _ready():
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	delete_button.pressed.connect(_on_delete_pressed)
 	click_area.pressed.connect(_on_click_area_pressed)
+	_apply_panel_style()
+	_setup_text_emphasis()
 
-	_apply_borders()
+func _apply_panel_style() -> void:
+	WildesStyle.apply_frosted_panel(panel, WildesStyle.make_modal(), 4.5, false)
 
-func _apply_borders():
-	var style = WildesStyle.make_modal()
-	WildesStyle.apply_frosted_panel(panel, style, 4.5, false)
+func _setup_text_emphasis() -> void:
+	name_label.add_theme_font_override(&"font", REGULAR_FONT)
+	detail_label.add_theme_font_override(&"font", REGULAR_FONT)
+	status_label.add_theme_font_override(&"font", REGULAR_FONT)
+	delete_button.add_theme_font_override(&"font", REGULAR_FONT)
+	click_area.mouse_entered.connect(_refresh_text_emphasis)
+	click_area.mouse_exited.connect(_refresh_text_emphasis)
+	click_area.focus_entered.connect(_refresh_text_emphasis)
+	click_area.focus_exited.connect(_refresh_text_emphasis)
+	delete_button.mouse_entered.connect(_refresh_text_emphasis)
+	delete_button.mouse_exited.connect(_refresh_text_emphasis)
+	delete_button.focus_entered.connect(_refresh_text_emphasis)
+	delete_button.focus_exited.connect(_refresh_text_emphasis)
+
+func _refresh_text_emphasis() -> void:
+	var row_emphasized := click_area.is_hovered() or click_area.has_focus()
+	var delete_emphasized := delete_button.is_hovered() or delete_button.has_focus()
+	name_label.add_theme_font_override(&"font", BOLD_FONT if row_emphasized else REGULAR_FONT)
+	delete_button.add_theme_font_override(&"font", BOLD_FONT if delete_emphasized else REGULAR_FONT)
 
 func setup(p_slot_id: int, data: Dictionary):
 	slot_id = p_slot_id

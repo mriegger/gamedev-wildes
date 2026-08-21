@@ -94,19 +94,80 @@ func _verify_app_recovery(app_scene: PackedScene, loaded: Dictionary, original_t
 	var app := app_scene.instantiate()
 	root.add_child(app)
 	await process_frame
-	app.call("_start_session", _slot_id, loaded)
+	var original_menu := app.get("_menu_experience") as MenuExperience
+	_expect(original_menu != null, "App did not create the menu before session recovery")
+	if original_menu == null:
+		app.queue_free()
+		await process_frame
+		return
+	var logo_deadline := Time.get_ticks_msec() + 3000
+	while original_menu.main_menu.logo.modulate.a <= 0.0 and Time.get_ticks_msec() < logo_deadline:
+		await process_frame
+	var skip_event := InputEventKey.new()
+	skip_event.keycode = KEY_ENTER
+	skip_event.pressed = true
+	root.push_input(skip_event)
+	var ready_deadline := Time.get_ticks_msec() + 20000
+	while not original_menu.is_ready_for_input() and Time.get_ticks_msec() < ready_deadline:
+		await process_frame
+	_expect(original_menu.is_ready_for_input(), "App menu did not become ready for recovery navigation")
+	if not original_menu.is_ready_for_input():
+		app.queue_free()
+		await process_frame
+		return
+	original_menu.main_menu.play_button.pressed.emit()
+	var select_deadline := Time.get_ticks_msec() + 3000
+	while not (app.get("_screen") is SaveSlotScreen) and Time.get_ticks_msec() < select_deadline:
+		await process_frame
+	var selected_screen := app.get("_screen") as SaveSlotScreen
+	_expect(selected_screen != null, "App did not open world selection before session recovery")
+	if selected_screen == null:
+		app.queue_free()
+		await process_frame
+		return
+	var screen_root := app.get_node("ScreenRoot") as CanvasLayer
+	_expect(screen_root != null and screen_root.layer == 15, "App screen root did not own world selection")
+	_expect(selected_screen.get_parent() == screen_root, "world selection was not mounted over the cinematic")
+	var background := selected_screen.get_node("Background") as ColorRect
+	_expect(background != null and is_zero_approx(background.color.a), "world selection obscured the cinematic with an opaque background")
+	var original_menu_id := original_menu.get_instance_id()
+	selected_screen.session_requested.emit(_slot_id, loaded)
 	await process_frame
-	await process_frame
-	var screen = app.get("_screen")
+	_expect(is_instance_valid(original_menu), "App destroyed the menu before the session fade completed")
+	_expect(original_menu.is_session_transitioning(), "world selection did not start the session fade")
+	var recovery_deadline := Time.get_ticks_msec() + 5000
+	while (
+		is_instance_valid(original_menu)
+		or app.get("_game") != null
+		or not (app.get("_screen") is SaveSlotScreen)
+		or not (app.get("_menu_experience") is MenuExperience)
+	) and Time.get_ticks_msec() < recovery_deadline:
+		await process_frame
+	var screen := app.get("_screen") as SaveSlotScreen
+	var recovered_menu := app.get("_menu_experience") as MenuExperience
+	_expect(not is_instance_valid(original_menu), "App retained the original menu after the session fade")
 	_expect(app.get("_game") == null, "App retained a failed Game instance")
-	_expect(screen is SaveSlotScreen, "App did not return to world selection")
-	if screen is SaveSlotScreen:
-		var error_dialog := (screen as SaveSlotScreen).load_error_dialog
+	_expect(screen != null, "App did not return to world selection")
+	_expect(recovered_menu != null, "App did not rebuild a menu experience after startup failure")
+	if recovered_menu != null:
+		_expect(recovered_menu.get_instance_id() != original_menu_id, "App reused the menu destroyed for gameplay startup")
+		_expect(recovered_menu.visible, "recovered menu was not visible behind world selection")
+		_expect(not recovered_menu.main_menu.visible, "recovered main menu obscured world selection")
+		if screen != null:
+			_expect(screen.get_parent() == screen_root, "recovered world selection was mounted outside the App screen root")
+		var music_deadline := Time.get_ticks_msec() + 1000
+		while not recovered_menu.is_music_playing() and Time.get_ticks_msec() < music_deadline:
+			await process_frame
+		_expect(recovered_menu.is_music_playing(), "recovered menu music did not start")
+	if screen != null:
+		var error_dialog := screen.load_error_dialog
 		_expect(error_dialog.visible, "world selection did not show the startup error")
 		_expect(error_dialog.dialog_text.contains("inventory"), "world selection error omitted the failure reason")
 	_expect(FileAccess.get_file_as_string(_save_path) == original_text, "App recovery changed save bytes")
 	app.queue_free()
 	await process_frame
+	await process_frame
+	await create_timer(0.25).timeout
 
 func _expect(condition: bool, message: String) -> void:
 	if not condition:

@@ -1,29 +1,8 @@
-[gd_scene load_steps=5 format=3 uid="uid://slot_item_001"]
+[gd_scene load_steps=3 format=3 uid="uid://slot_item_001"]
 
 [ext_resource type="Script" path="res://ui/screens/world_select/save_slot_item.gd" id="1_script"]
-[ext_resource type="PackedScene" path="res://ui/components/wildes_button.tscn" id="2_btn"]
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_click_normal"]
-bg_color = Color(0, 0, 0, 0.0)
-corner_radius_top_left = 12
-corner_radius_top_right = 12
-corner_radius_bottom_left = 12
-corner_radius_bottom_right = 12
-border_width_left = 0
-border_width_right = 0
-border_width_top = 0
-border_width_bottom = 0
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_click_hover"]
-bg_color = Color(1, 1, 1, 0.06)
-corner_radius_top_left = 12
-corner_radius_top_right = 12
-corner_radius_bottom_left = 12
-corner_radius_bottom_right = 12
-border_width_left = 0
-border_width_right = 0
-border_width_top = 0
-border_width_bottom = 0
+[sub_resource type="StyleBoxEmpty" id="Style_text_button"]
 
 [node name="SaveSlotItem" type="Control"]
 custom_minimum_size = Vector2(420, 140)
@@ -31,10 +10,10 @@ size_flags_vertical = 0
 script = ExtResource("1_script")
 
 [node name="ClickArea" type="Button" parent="."]
-theme_override_styles/normal = SubResource("StyleBoxFlat_click_normal")
-theme_override_styles/hover = SubResource("StyleBoxFlat_click_hover")
-theme_override_styles/pressed = SubResource("StyleBoxFlat_click_normal")
-theme_override_styles/focus = SubResource("StyleBoxFlat_click_normal")
+theme_override_styles/normal = SubResource("Style_text_button")
+theme_override_styles/hover = SubResource("Style_text_button")
+theme_override_styles/pressed = SubResource("Style_text_button")
+theme_override_styles/focus = SubResource("Style_text_button")
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -52,6 +31,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
+theme_override_styles/panel = SubResource("Style_text_button")
 
 [node name="VBox" type="VBoxContainer" parent="Panel"]
 layout_mode = 1
@@ -75,6 +55,9 @@ size_flags_vertical = 0
 mouse_filter = 2
 theme_override_font_sizes/font_size = 20
 theme_override_colors/font_color = Color(0.96, 0.95, 0.9, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.62)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 2
 horizontal_alignment = 1
 text = "WILDES"
 
@@ -85,6 +68,9 @@ size_flags_vertical = 0
 mouse_filter = 2
 theme_override_font_sizes/font_size = 12
 theme_override_colors/font_color = Color(0.72, 0.72, 0.7, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.55)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
 horizontal_alignment = 1
 text = "Seed: 1337"
 
@@ -95,6 +81,9 @@ size_flags_vertical = 0
 mouse_filter = 2
 theme_override_font_sizes/font_size = 11
 theme_override_colors/font_color = Color(0.6, 0.6, 0.58, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.55)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
 horizontal_alignment = 1
 text = "Last: Unknown"
 
@@ -105,9 +94,22 @@ alignment = 2
 theme_override_constants/separation = 10
 mouse_filter = 2
 
-[node name="DeleteButton" parent="Panel/VBox/Actions" instance=ExtResource("2_btn")]
+[node name="DeleteButton" type="Button" parent="Panel/VBox/Actions"]
 custom_minimum_size = Vector2(110, 40)
 layout_mode = 2
 size_flags_horizontal = 0
 size_flags_vertical = 0
-button_text = "Delete"
+mouse_default_cursor_shape = 2
+theme_override_colors/font_color = Color(1, 1, 1, 0.72)
+theme_override_colors/font_hover_color = Color(1, 1, 1, 1)
+theme_override_colors/font_focus_color = Color(1, 1, 1, 1)
+theme_override_colors/font_pressed_color = Color(1, 1, 1, 0.62)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.6)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+theme_override_font_sizes/font_size = 15
+theme_override_styles/normal = SubResource("Style_text_button")
+theme_override_styles/hover = SubResource("Style_text_button")
+theme_override_styles/pressed = SubResource("Style_text_button")
+theme_override_styles/focus = SubResource("Style_text_button")
+text = "DELETE"

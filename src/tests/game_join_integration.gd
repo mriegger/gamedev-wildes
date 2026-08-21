@@ -8,6 +8,7 @@ var _world: WorldController
 var _session_ready: bool = false
 var _world_generation_done: bool = false
 var _world_was_inert_at_generation: bool = false
+var _main_menu_request_count: int = 0
 var _slot_id: int
 var _covered_foliage_count: int = 0
 
@@ -25,6 +26,7 @@ func _run() -> void:
 	_game.configure_session(_slot_id, save_data, GameSettings.new())
 	_world.generation_progress.connect(_on_generation_progress)
 	_game.session_ready.connect(_on_session_ready)
+	_game.main_menu_requested.connect(_on_main_menu_requested)
 	root.add_child(_game)
 	var deadline := Time.get_ticks_msec() + 30000
 	while not _session_ready and Time.get_ticks_msec() < deadline:
@@ -33,12 +35,31 @@ func _run() -> void:
 	_expect(_world_generation_done, "world generation never reached done")
 	_expect(_world_was_inert_at_generation, "world processing started before player injection")
 	if _session_ready:
+		_expect(not _game._session_active, "prepared session activated before the loading reveal")
+		_expect(not _game.is_physics_processing(), "prepared session enabled gameplay physics before activation")
+		_expect(not _game.is_processing_unhandled_input(), "prepared session enabled gameplay input before activation")
+		_expect(not _game.player.is_physics_processing(), "prepared session enabled player movement before activation")
+		_game.activate_session()
+		_expect(_game._session_active, "explicit session activation did not enable gameplay")
+		_expect(_game.player.is_physics_processing(), "explicit session activation did not enable player movement")
 		_expect(_world.is_processing(), "world processing did not start after player injection")
 		_expect(_world._streaming_focus == _game.player, "world retained the wrong streaming dependency")
 		_expect(_game.pumpkin_patch.has_patch(), "new world did not create a pumpkin patch")
 		_validate_pumpkin_footprint()
 		_validate_startup_save()
+		paused = true
 		_game._save_and_request_main_menu()
+		_game._save_and_request_main_menu()
+		_expect(_main_menu_request_count == 0, "gameplay return emitted before its fade began")
+		_expect(_game._fade.visible, "gameplay return did not show the black fade")
+		_expect(paused, "gameplay return unpaused before reaching black")
+		var return_deadline := Time.get_ticks_msec() + 2000
+		while _main_menu_request_count == 0 and Time.get_ticks_msec() < return_deadline:
+			await process_frame
+		_expect(_main_menu_request_count == 1, "gameplay return did not emit exactly one navigation request")
+		_expect(is_equal_approx(_game._fade.color.a, 1.0), "gameplay return emitted before reaching black")
+		_expect((_game.get_node("TransitionLayer") as CanvasLayer).layer > 300, "gameplay return fade did not cover the death screen")
+		_expect(not paused, "gameplay return did not unpause for the rebuilt menu")
 	_game.queue_free()
 	await process_frame
 	await process_frame
@@ -60,6 +81,9 @@ func _on_generation_progress(stage: String, _percent: float, _details: String) -
 
 func _on_session_ready() -> void:
 	_session_ready = true
+
+func _on_main_menu_requested() -> void:
+	_main_menu_request_count += 1
 
 func _on_foliage_visibility_changed(cells: Array[Vector3i]) -> void:
 	for position in cells:
