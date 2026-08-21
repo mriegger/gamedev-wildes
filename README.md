@@ -141,6 +141,9 @@ terracotta bricks, and wood planks are minable and placeable. Copper is minable 
 Worlds without prior mining progress show a mining tip five seconds after loading. The tip
 highlights a nearby mineable terrain block and disappears permanently after the player mines a
 block or walks away from the highlighted area.
+Trying to mine copper by hand shows a one-time warning on that block. The warning dismisses after
+the player walks away or mines copper with a pickaxe, and takes priority over any tutorial already
+on screen.
 Approaching a collectible apple or pumpkin shows a food recovery tip until the player picks up food
 or walks away. Tutorial completion is stored per world so completed tips do not reappear.
 Five seconds after the player's first mined block, a top-left hint introduces the `Tab` crafting

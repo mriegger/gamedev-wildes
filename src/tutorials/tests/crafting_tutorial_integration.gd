@@ -25,7 +25,7 @@ func _test_opening_before_mining_prevents_tip() -> void:
 	var view := fixture["view"] as CraftingTutorialView
 	crafting_panel.open()
 	_expect(progress.is_crafting_tip_completed(), "opening crafting before mining did not complete its tutorial")
-	interactor.block_mined.emit(Vector3i.ZERO)
+	interactor.block_mined.emit(Vector3i.ZERO, BlockId.Type.STONE)
 	coordinator._process(CraftingTutorialCoordinator.SHOW_DELAY_SECONDS + 1.0)
 	_expect(not view.is_showing(), "crafting tutorial appeared after crafting had already opened")
 	await _destroy_fixture(fixture)
@@ -38,7 +38,7 @@ func _test_delay_resets_around_other_callouts() -> void:
 	var progress := fixture["progress"] as TutorialProgress
 	var view := fixture["view"] as CraftingTutorialView
 	var arbiter := fixture["arbiter"] as TutorialCalloutArbiter
-	interactor.block_mined.emit(Vector3i(2, 1, 2))
+	interactor.block_mined.emit(Vector3i(2, 1, 2), BlockId.Type.STONE)
 	coordinator._process(4.0)
 	_expect(not view.is_showing(), "crafting tutorial appeared before five seconds")
 	var other_owner := Node.new()
@@ -95,6 +95,7 @@ func _create_fixture(has_mined_before: bool) -> Dictionary:
 		"food_tip_completed": false,
 		"crafting_tip_completed": false,
 		"crafting_ingredients_tip_completed": false,
+		"copper_mining_tip_completed": false,
 	}), "crafting tutorial progress setup failed")
 	var arbiter := TutorialCalloutArbiter.new()
 	var coordinator := CraftingTutorialCoordinator.new()

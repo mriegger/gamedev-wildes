@@ -221,6 +221,20 @@ jobs:
             30 "MINING_TUTORIAL PASS" /tmp/mining_tutorial.log -- \
             godot --headless --path src --script res://tutorials/tests/mining_tutorial_integration.gd
 
+  copper-mining-tutorial:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run copper mining tutorial integration tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "COPPER_MINING_TUTORIAL PASS" /tmp/copper_mining_tutorial.log -- \
+            godot --headless --path src --script res://tutorials/tests/copper_mining_tutorial_integration.gd
+
   food-tutorial:
     runs-on: ubuntu-latest
     timeout-minutes: 10

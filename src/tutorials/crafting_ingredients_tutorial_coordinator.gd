@@ -43,7 +43,7 @@ func _exit_tree() -> void:
 func _process(_delta: float) -> void:
 	if not _pending or _progress.is_crafting_ingredients_tip_completed() or not _crafting_panel.is_open():
 		return
-	if not _callout_arbiter.try_acquire(self):
+	if not _callout_arbiter.try_acquire(self, dismiss_for_priority_callout):
 		return
 	_pending = false
 	_view.show_tip()
@@ -63,6 +63,9 @@ func _on_crafting_interacted() -> void:
 
 func _on_view_hidden() -> void:
 	_callout_arbiter.release(self)
+
+func dismiss_for_priority_callout() -> void:
+	_complete()
 
 func _complete() -> void:
 	if not _pending and not _view.is_showing():

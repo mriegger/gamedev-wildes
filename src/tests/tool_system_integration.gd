@@ -34,6 +34,7 @@ var _melee_attack_facings: Array[Vector3] = []
 var _soil_tilled_count: int = 0
 var _container_open_count: int = 0
 var _crafting_station_open_count: int = 0
+var _mining_tool_requirement_failures: Array[Dictionary] = []
 
 func _init():
 	call_deferred("_run")
@@ -673,6 +674,7 @@ func _run():
 	aim_runtime.free()
 	_interactor.melee_attack_started.connect(_on_melee_attack_started)
 	_interactor.soil_tilled.connect(_on_soil_tilled)
+	_interactor.mining_tool_requirement_failed.connect(_on_mining_tool_requirement_failed)
 	_player.set_physics_process(false)
 	_interactor.set_physics_process(false)
 	_player.animation_driver.set_process(false)
@@ -1264,6 +1266,21 @@ func _run():
 	_push_primary(false)
 	await process_frame
 	_input_buffer.poll()
+	_prepare_target(_copper_pos, unarmed)
+	_expect(not _interactor.can_primary_target, "unarmed action can target copper")
+	_push_primary(true)
+	await process_frame
+	_input_buffer.poll()
+	_interactor._handle_item_actions(0.0)
+	_interactor._handle_item_actions(0.1)
+	_expect(_mining_tool_requirement_failures.size() == 1, "held bare-hand copper attempt did not emit exactly one tool requirement failure")
+	if _mining_tool_requirement_failures.size() == 1:
+		var failure := _mining_tool_requirement_failures[0]
+		_expect(failure["position"] == _copper_pos and failure["block_id"] == BlockId.Type.COPPER and failure["action"] == unarmed, "bare-hand copper failure reported the wrong mining context")
+	_expect(_voxel_world.get_block_id_at(_copper_pos) == BlockId.Type.COPPER, "bare-hand copper attempt changed the block")
+	_push_primary(false)
+	await process_frame
+	_input_buffer.poll()
 
 	_push_hotbar_key(KEY_1)
 	await process_frame
@@ -1438,6 +1455,13 @@ func _prepare_till_target(pos: Vector3i, action: TillingActionDefinition):
 
 func _on_soil_tilled():
 	_soil_tilled_count += 1
+
+func _on_mining_tool_requirement_failed(position: Vector3i, block_id: int, action: MiningActionDefinition) -> void:
+	_mining_tool_requirement_failures.append({
+		"position": position,
+		"block_id": block_id,
+		"action": action,
+	})
 
 func _push_hotbar_key(keycode: Key):
 	var event := InputEventKey.new()

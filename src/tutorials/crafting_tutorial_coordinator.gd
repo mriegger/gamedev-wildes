@@ -53,11 +53,11 @@ func _process(delta: float) -> void:
 		_elapsed = 0.0
 		return
 	_elapsed += delta
-	if _elapsed < SHOW_DELAY_SECONDS or not _callout_arbiter.try_acquire(self):
+	if _elapsed < SHOW_DELAY_SECONDS or not _callout_arbiter.try_acquire(self, dismiss_for_priority_callout):
 		return
 	_view.show_tip()
 
-func _on_block_mined(_position: Vector3i) -> void:
+func _on_block_mined(_position: Vector3i, _block_id: int) -> void:
 	if _progress.is_crafting_tip_completed() or _armed:
 		return
 	_armed = true
@@ -69,6 +69,9 @@ func _on_crafting_opened() -> void:
 
 func _on_view_hidden() -> void:
 	_callout_arbiter.release(self)
+
+func dismiss_for_priority_callout() -> void:
+	_complete()
 
 func _complete() -> void:
 	if not _progress.complete_crafting_tip():

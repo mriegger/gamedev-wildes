@@ -183,7 +183,7 @@ func _create_fixture(completed: bool, full_inventory: bool = false, item_ids: Ar
 	var view := FoodTutorialView.new()
 	holder.add_child(view)
 	var progress := TutorialProgress.new()
-	_expect(progress.restore({"mining_tip_completed": true, "food_tip_completed": completed, "crafting_tip_completed": false, "crafting_ingredients_tip_completed": false}), "food tutorial progress setup failed")
+	_expect(progress.restore({"mining_tip_completed": true, "food_tip_completed": completed, "crafting_tip_completed": false, "crafting_ingredients_tip_completed": false, "copper_mining_tip_completed": false}), "food tutorial progress setup failed")
 	var coordinator := FoodTutorialCoordinator.new()
 	holder.add_child(coordinator)
 	var arbiter := TutorialCalloutArbiter.new()

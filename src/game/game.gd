@@ -59,6 +59,8 @@ signal main_menu_requested
 @onready var crafting_tutorial_view: CraftingTutorialView = $CraftingTutorialView as CraftingTutorialView
 @onready var crafting_ingredients_tutorial: CraftingIngredientsTutorialCoordinator = $CraftingIngredientsTutorial as CraftingIngredientsTutorialCoordinator
 @onready var crafting_ingredients_tutorial_view: CraftingIngredientsTutorialView = $CraftingIngredientsTutorialView as CraftingIngredientsTutorialView
+@onready var copper_mining_tutorial: CopperMiningTutorialCoordinator = $CopperMiningTutorial as CopperMiningTutorialCoordinator
+@onready var copper_mining_tutorial_view: CopperMiningTutorialView = $CopperMiningTutorialView as CopperMiningTutorialView
 @onready var placement_prompt: PlacementPromptCoordinator = $PlacementPrompt as PlacementPromptCoordinator
 @onready var level_interaction: LevelInteractionCoordinator = $LevelInteractionCoordinator as LevelInteractionCoordinator
 @onready var structure_designer_workflow: StructureDesignerWorkflow = $StructureDesignerWorkflow as StructureDesignerWorkflow
@@ -315,6 +317,16 @@ func _ready():
 	crafting_ingredients_tutorial.setup(
 		hud.crafting_panel,
 		crafting_ingredients_tutorial_view,
+		tutorial_progress,
+		tutorial_callout_arbiter,
+	)
+	copper_mining_tutorial.setup(
+		world.voxel_model,
+		player,
+		func() -> bool: return player.voxel_space == world.voxel_model,
+		camera_rig.camera,
+		player.interactor,
+		copper_mining_tutorial_view,
 		tutorial_progress,
 		tutorial_callout_arbiter,
 	)

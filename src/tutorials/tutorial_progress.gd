@@ -7,13 +7,14 @@ var _mining_tip_completed: bool = false
 var _food_tip_completed: bool = false
 var _crafting_tip_completed: bool = false
 var _crafting_ingredients_tip_completed: bool = false
+var _copper_mining_tip_completed: bool = false
 
 func restore(snapshot: Variant) -> bool:
 	if not snapshot is Dictionary:
 		return false
 	var data := snapshot as Dictionary
 	if (
-		data.size() != 4
+		data.size() != 5
 		or not data.has("mining_tip_completed")
 		or not data["mining_tip_completed"] is bool
 		or not data.has("food_tip_completed")
@@ -22,12 +23,15 @@ func restore(snapshot: Variant) -> bool:
 		or not data["crafting_tip_completed"] is bool
 		or not data.has("crafting_ingredients_tip_completed")
 		or not data["crafting_ingredients_tip_completed"] is bool
+		or not data.has("copper_mining_tip_completed")
+		or not data["copper_mining_tip_completed"] is bool
 	):
 		return false
 	_mining_tip_completed = bool(data["mining_tip_completed"])
 	_food_tip_completed = bool(data["food_tip_completed"])
 	_crafting_tip_completed = bool(data["crafting_tip_completed"])
 	_crafting_ingredients_tip_completed = bool(data["crafting_ingredients_tip_completed"])
+	_copper_mining_tip_completed = bool(data["copper_mining_tip_completed"])
 	return true
 
 func snapshot() -> Dictionary:
@@ -36,6 +40,7 @@ func snapshot() -> Dictionary:
 		"food_tip_completed": _food_tip_completed,
 		"crafting_tip_completed": _crafting_tip_completed,
 		"crafting_ingredients_tip_completed": _crafting_ingredients_tip_completed,
+		"copper_mining_tip_completed": _copper_mining_tip_completed,
 	}
 
 func is_mining_tip_completed() -> bool:
@@ -75,5 +80,15 @@ func complete_crafting_ingredients_tip() -> bool:
 	if _crafting_ingredients_tip_completed:
 		return false
 	_crafting_ingredients_tip_completed = true
+	changed.emit()
+	return true
+
+func is_copper_mining_tip_completed() -> bool:
+	return _copper_mining_tip_completed
+
+func complete_copper_mining_tip() -> bool:
+	if _copper_mining_tip_completed:
+		return false
+	_copper_mining_tip_completed = true
 	changed.emit()
 	return true

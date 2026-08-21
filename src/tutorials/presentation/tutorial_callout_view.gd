@@ -153,7 +153,7 @@ func _update_overlay() -> void:
 	_overlay.visible = true
 	var viewport_rect := get_viewport().get_visible_rect()
 	var target_screen := _camera.unproject_position(_tooltip_anchor_position)
-	var panel_size := _panel.custom_minimum_size
+	var panel_size := _panel.size
 	var panel_position := target_screen - Vector2(panel_size.x * 0.5, panel_size.y + PANEL_GAP)
 	panel_position.x = clampf(panel_position.x, 12.0, maxf(12.0, viewport_rect.size.x - panel_size.x - 12.0))
 	panel_position.y = clampf(panel_position.y, 12.0, maxf(12.0, viewport_rect.size.y - panel_size.y - 12.0))

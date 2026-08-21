@@ -4,7 +4,8 @@ class_name PlayerInteractor
 const BOW_AIM_RAY_DISTANCE: float = 256.0
 
 signal block_placed
-signal block_mined(position: Vector3i)
+signal block_mined(position: Vector3i, block_id: int)
+signal mining_tool_requirement_failed(position: Vector3i, block_id: int, action: MiningActionDefinition)
 signal crafting_station_open_requested(position: Vector3i, definition: CraftingStationBlockDefinition)
 signal container_open_requested(position: Vector3i, definition: ContainerBlockDefinition)
 signal melee_attack_started(action: MeleeAttackActionDefinition, direction: int)
@@ -381,6 +382,12 @@ func _handle_item_actions(delta):
 		primary_use_just = false
 	elif primary_use_just and not is_attempting_crafting_station_mining() and _try_open_target_crafting_station():
 		primary_use_just = false
+	if primary_use_just and target_has and selected_mining != null and _is_mining_blocked_by_tool(target_block, selected_mining):
+		mining_tool_requirement_failed.emit(
+			target_block,
+			voxel_space.get_block_id_at(target_block),
+			selected_mining,
+		)
 	if primary_use_pressed and target_has and can_primary_target and selected_mining != null:
 		var selected_source := inventory_model.create_selected_item_source()
 		if not is_mining:
@@ -727,6 +734,21 @@ func _can_mine_position(pos: Vector3i, action: MiningActionDefinition) -> bool:
 		return false
 	return action.can_mine(voxel_space.block_catalog.get_definition(block_id))
 
+func _is_mining_blocked_by_tool(pos: Vector3i, action: MiningActionDefinition) -> bool:
+	if action == null or voxel_space == null or editable_voxel_world == null or motor == null:
+		return false
+	if editable_voxel_world.is_edit_protected(pos):
+		return false
+	var center := Vector3(pos) + Vector3(0.5, 0.5, 0.5)
+	if motor.global_position.distance_squared_to(center) > reach * reach:
+		return false
+	if _block_break_validator.is_valid() and not bool(_block_break_validator.call(pos)):
+		return false
+	var block_id := voxel_space.get_block_id_at(pos)
+	if block_id == BlockId.Type.AIR:
+		return false
+	return not action.can_mine(voxel_space.block_catalog.get_definition(block_id))
+
 func _can_till_position(pos: Vector3i, face_normal: Vector3i, action: TillingActionDefinition) -> bool:
 	if action == null or voxel_space == null or editable_voxel_world == null or motor == null:
 		return false
@@ -836,12 +858,13 @@ func _commit_mine(pos: Vector3i, source: SelectedItemSource):
 	if not _can_mine_position(pos, action):
 		_reset_mining()
 		return
+	var mined_block_id := voxel_space.get_block_id_at(pos)
 	_reset_mining()
 	var batch := action_executors.mining.try_mine(pos, source)
 	if batch is Array and batch.size() > 0 and batch[0] is BlockEdit:
 		if not (batch[0] as BlockEdit).is_success():
 			return
-		block_mined.emit(pos)
+		block_mined.emit(pos, mined_block_id)
 	_handle_raycast()
 
 func _commit_place(pos: Vector3i, action: BlockPlacementActionDefinition):

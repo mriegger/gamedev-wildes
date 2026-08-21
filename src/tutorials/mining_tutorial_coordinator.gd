@@ -76,7 +76,7 @@ func _process(delta: float) -> void:
 			_target = null
 			_elapsed = SHOW_DELAY_SECONDS - RETRY_DELAY_SECONDS
 			return
-		if not _view.is_showing() and _callout_arbiter.try_acquire(self):
+		if not _view.is_showing() and _callout_arbiter.try_acquire(self, dismiss_for_priority_callout):
 			_view.show_tip(_target as Vector3i)
 		_view.set_outline_suppressed(_is_normal_mining_outline_active(_target as Vector3i))
 		var target_center := Vector3(_target as Vector3i) + Vector3(0.5, 0.5, 0.5)
@@ -87,7 +87,7 @@ func _process(delta: float) -> void:
 	_elapsed += delta
 	if _elapsed < SHOW_DELAY_SECONDS:
 		return
-	if not _callout_arbiter.try_acquire(self):
+	if not _callout_arbiter.try_acquire(self, dismiss_for_priority_callout):
 		return
 	_target = _choose_target()
 	if _target is Vector3i:
@@ -162,11 +162,14 @@ func _is_normal_mining_outline_active(position: Vector3i) -> bool:
 		and _interactor.get_selected_primary_action() is MiningActionDefinition
 	)
 
-func _on_block_mined(_position: Vector3i) -> void:
+func _on_block_mined(_position: Vector3i, _block_id: int) -> void:
 	_complete()
 
 func _on_view_hidden() -> void:
 	_callout_arbiter.release(self)
+
+func dismiss_for_priority_callout() -> void:
+	_complete()
 
 func _complete() -> void:
 	if not _progress.complete_mining_tip():

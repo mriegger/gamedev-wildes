@@ -58,6 +58,14 @@ item notification or after the player leaves the highlighted target. Mining and 
 hover suppression, and fade behavior, while retaining separate view instances and persisted
 completion state. Both coordinators acquire one shared `TutorialCalloutArbiter`, which keeps later
 tips queued until the active callout has finished fading out.
+`CopperMiningTutorialCoordinator` listens to authoritative rejected-tool and committed-mining
+events from `PlayerInteractor`. A reachable bare-hand attempt on copper queues a callout for that
+exact block; showing the warning or successfully mining any copper permanently resolves it. The
+coordinator shares the world-space callout renderer and arbiter, suppresses its white outline under
+normal targeting, and dismisses the active warning when the player leaves the highlighted block.
+Its priority reservation dismisses the current tutorial through that owner's registered callback,
+keeps the arbiter occupied through the old callout's fade, and prevents another tip from reacquiring
+before the copper warning appears.
 `CraftingTutorialCoordinator` arms on the first committed player mine, then counts five uninterrupted
 seconds while the callout arbiter is free. Any competing tutorial resets that delay. The fixed
 top-left `CraftingTutorialView` acquires the same arbiter and completes permanently when the general

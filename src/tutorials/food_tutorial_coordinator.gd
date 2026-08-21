@@ -64,7 +64,7 @@ func _process(delta: float) -> void:
 		return
 	if _target_bounds is AABB:
 		var target_bounds := _target_bounds as AABB
-		if not _view.is_showing() and _callout_arbiter.try_acquire(self):
+		if not _view.is_showing() and _callout_arbiter.try_acquire(self, dismiss_for_priority_callout):
 			_view.show_tip(target_bounds)
 		_view.set_outline_suppressed(_is_normal_harvest_outline_active(target_bounds))
 		var center := target_bounds.get_center()
@@ -82,7 +82,7 @@ func _process(delta: float) -> void:
 		FOOD_ITEM_IDS,
 	)
 	if nearby_bounds is AABB:
-		if not _callout_arbiter.try_acquire(self):
+		if not _callout_arbiter.try_acquire(self, dismiss_for_priority_callout):
 			return
 		_target_bounds = nearby_bounds
 		_view.show_tip(nearby_bounds as AABB)
@@ -98,6 +98,9 @@ func _on_items_harvested(item_ids: Array[StringName]) -> void:
 
 func _on_view_hidden() -> void:
 	_callout_arbiter.release(self)
+
+func dismiss_for_priority_callout() -> void:
+	_complete()
 
 func _complete() -> void:
 	if not _progress.complete_food_tip():

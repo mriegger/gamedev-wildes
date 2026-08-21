@@ -21,26 +21,30 @@ func _run() -> void:
 
 func _test_progress_contract() -> void:
 	var progress := TutorialProgress.new()
-	_expect(progress.restore({"mining_tip_completed": false, "food_tip_completed": false, "crafting_tip_completed": false, "crafting_ingredients_tip_completed": false}), "valid tutorial progress did not restore")
+	_expect(progress.restore({"mining_tip_completed": false, "food_tip_completed": false, "crafting_tip_completed": false, "crafting_ingredients_tip_completed": false, "copper_mining_tip_completed": false}), "valid tutorial progress did not restore")
 	_expect(not progress.is_mining_tip_completed(), "fresh tutorial progress restored as complete")
 	var change_count := [0]
 	progress.changed.connect(func() -> void: change_count[0] += 1)
 	_expect(progress.complete_mining_tip(), "first tutorial completion was rejected")
 	_expect(not progress.complete_mining_tip(), "duplicate tutorial completion was accepted")
 	_expect(change_count[0] == 1, "tutorial completion emitted more than one change")
-	_expect(progress.snapshot() == {"mining_tip_completed": true, "food_tip_completed": false, "crafting_tip_completed": false, "crafting_ingredients_tip_completed": false}, "tutorial snapshot changed")
+	_expect(progress.snapshot() == {"mining_tip_completed": true, "food_tip_completed": false, "crafting_tip_completed": false, "crafting_ingredients_tip_completed": false, "copper_mining_tip_completed": false}, "tutorial snapshot changed")
 	_expect(progress.complete_food_tip(), "first food tutorial completion was rejected")
 	_expect(not progress.complete_food_tip(), "duplicate food tutorial completion was accepted")
 	_expect(change_count[0] == 2, "food tutorial completion emitted the wrong change count")
-	_expect(progress.snapshot() == {"mining_tip_completed": true, "food_tip_completed": true, "crafting_tip_completed": false, "crafting_ingredients_tip_completed": false}, "food tutorial snapshot changed")
+	_expect(progress.snapshot() == {"mining_tip_completed": true, "food_tip_completed": true, "crafting_tip_completed": false, "crafting_ingredients_tip_completed": false, "copper_mining_tip_completed": false}, "food tutorial snapshot changed")
 	_expect(progress.complete_crafting_tip(), "first crafting tutorial completion was rejected")
 	_expect(not progress.complete_crafting_tip(), "duplicate crafting tutorial completion was accepted")
 	_expect(change_count[0] == 3, "crafting tutorial completion emitted the wrong change count")
-	_expect(progress.snapshot() == {"mining_tip_completed": true, "food_tip_completed": true, "crafting_tip_completed": true, "crafting_ingredients_tip_completed": false}, "crafting tutorial snapshot changed")
+	_expect(progress.snapshot() == {"mining_tip_completed": true, "food_tip_completed": true, "crafting_tip_completed": true, "crafting_ingredients_tip_completed": false, "copper_mining_tip_completed": false}, "crafting tutorial snapshot changed")
 	_expect(progress.complete_crafting_ingredients_tip(), "first crafting ingredients tutorial completion was rejected")
 	_expect(not progress.complete_crafting_ingredients_tip(), "duplicate crafting ingredients tutorial completion was accepted")
 	_expect(change_count[0] == 4, "crafting ingredients tutorial completion emitted the wrong change count")
-	_expect(progress.snapshot() == {"mining_tip_completed": true, "food_tip_completed": true, "crafting_tip_completed": true, "crafting_ingredients_tip_completed": true}, "crafting ingredients tutorial snapshot changed")
+	_expect(progress.snapshot() == {"mining_tip_completed": true, "food_tip_completed": true, "crafting_tip_completed": true, "crafting_ingredients_tip_completed": true, "copper_mining_tip_completed": false}, "crafting ingredients tutorial snapshot changed")
+	_expect(progress.complete_copper_mining_tip(), "first copper mining tutorial completion was rejected")
+	_expect(not progress.complete_copper_mining_tip(), "duplicate copper mining tutorial completion was accepted")
+	_expect(change_count[0] == 5, "copper mining tutorial completion emitted the wrong change count")
+	_expect(progress.snapshot() == {"mining_tip_completed": true, "food_tip_completed": true, "crafting_tip_completed": true, "crafting_ingredients_tip_completed": true, "copper_mining_tip_completed": true}, "copper mining tutorial snapshot changed")
 	_expect(not TutorialProgress.new().restore({}), "missing tutorial completion restored")
 	_expect(not TutorialProgress.new().restore({"mining_tip_completed": 1}), "non-boolean tutorial completion restored")
 
@@ -50,7 +54,7 @@ func _test_mining_before_delay_prevents_tip() -> void:
 	var view := fixture["view"] as MiningTutorialView
 	var interactor := fixture["interactor"] as PlayerInteractor
 	var progress := fixture["progress"] as TutorialProgress
-	interactor.block_mined.emit(Vector3i.ZERO)
+	interactor.block_mined.emit(Vector3i.ZERO, BlockId.Type.STONE)
 	coordinator._process(MiningTutorialCoordinator.SHOW_DELAY_SECONDS + 1.0)
 	_expect(progress.is_mining_tip_completed(), "mining before the delay did not complete the tutorial")
 	_expect(not (view.get_node("TutorialSelectionBox") as Node3D).visible, "tip appeared after mining during the delay")
@@ -152,7 +156,7 @@ func _test_delayed_tip_and_mining_completion() -> void:
 	interactor.target_has = false
 	coordinator._process(0.01)
 	_expect(selection.visible, "white tutorial outline did not return after hover ended")
-	interactor.block_mined.emit(Vector3i.ZERO)
+	interactor.block_mined.emit(Vector3i.ZERO, BlockId.Type.STONE)
 	_expect(progress.is_mining_tip_completed(), "mining did not complete the tutorial")
 	view._process(MiningTutorialView.FADE_DURATION * 0.5)
 	_expect(selection.visible and edge_material.albedo_color.a > 0.0 and edge_material.albedo_color.a < MiningTutorialView.OUTLINE_ALPHA, "mining tip outline did not fade out")
@@ -207,7 +211,7 @@ func _create_fixture(completed: bool) -> Dictionary:
 	var view := MiningTutorialView.new()
 	holder.add_child(view)
 	var progress := TutorialProgress.new()
-	_expect(progress.restore({"mining_tip_completed": completed, "food_tip_completed": false, "crafting_tip_completed": false, "crafting_ingredients_tip_completed": false}), "fixture tutorial progress did not restore")
+	_expect(progress.restore({"mining_tip_completed": completed, "food_tip_completed": false, "crafting_tip_completed": false, "crafting_ingredients_tip_completed": false, "copper_mining_tip_completed": false}), "fixture tutorial progress did not restore")
 	var coordinator := MiningTutorialCoordinator.new()
 	holder.add_child(coordinator)
 	var active_space := [true]
