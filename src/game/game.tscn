@@ -1,4 +1,4 @@
-[gd_scene load_steps=49 format=3 uid="uid://b22g4me0x1f3h"]
+[gd_scene load_steps=50 format=3 uid="uid://b22g4me0x1f3h"]
 
 [ext_resource type="Script" path="res://game/game.gd" id="1_game"]
 [ext_resource type="PackedScene" path="res://world/world.tscn" id="2_world"]
@@ -50,6 +50,7 @@
 [ext_resource type="Script" path="res://tutorials/presentation/mining_tutorial_view.gd" id="46_mining_tutorial_view"]
 [ext_resource type="Script" path="res://tutorials/food_tutorial_coordinator.gd" id="47_food_tutorial"]
 [ext_resource type="Script" path="res://tutorials/presentation/food_tutorial_view.gd" id="48_food_tutorial_view"]
+[ext_resource type="Script" path="res://interactions/placement_prompt_coordinator.gd" id="49_placement_prompt"]
 
 [node name="Game" type="Node3D"]
 script = ExtResource("1_game")
@@ -140,6 +141,9 @@ script = ExtResource("47_food_tutorial")
 
 [node name="FoodTutorialView" type="Node3D" parent="."]
 script = ExtResource("48_food_tutorial_view")
+
+[node name="PlacementPrompt" type="Node" parent="."]
+script = ExtResource("49_placement_prompt")
 
 [node name="LevelInteractionCoordinator" type="Node" parent="."]
 script = ExtResource("25_level_interaction")

@@ -55,6 +55,7 @@ signal main_menu_requested
 @onready var mining_tutorial_view: MiningTutorialView = $MiningTutorialView as MiningTutorialView
 @onready var food_tutorial: FoodTutorialCoordinator = $FoodTutorial as FoodTutorialCoordinator
 @onready var food_tutorial_view: FoodTutorialView = $FoodTutorialView as FoodTutorialView
+@onready var placement_prompt: PlacementPromptCoordinator = $PlacementPrompt as PlacementPromptCoordinator
 @onready var level_interaction: LevelInteractionCoordinator = $LevelInteractionCoordinator as LevelInteractionCoordinator
 @onready var structure_designer_workflow: StructureDesignerWorkflow = $StructureDesignerWorkflow as StructureDesignerWorkflow
 @onready var structure_designer_dialogs: StructureDesignerDialogs = $StructureDesignerDialogs as StructureDesignerDialogs
@@ -252,6 +253,7 @@ func _ready():
 		return
 	if not _setup_gameplay():
 		return
+	placement_prompt.setup(player.interactor, interaction_prompt_coordinator)
 	level_interaction.setup(player, interaction_prompt_coordinator)
 	level_interaction.interaction_requested.connect(_on_level_interaction_requested)
 	_setup_level_entrance()

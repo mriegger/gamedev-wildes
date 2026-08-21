@@ -5,6 +5,7 @@ var _hud: HUD
 var _is_gameplay_ui_blocked: Callable
 var _level_prompt: String
 var _harvest_prompt: String
+var _placement_prompt: String
 
 func setup(hud: HUD, is_gameplay_ui_blocked: Callable) -> void:
 	assert(hud != null)
@@ -25,13 +26,23 @@ func set_harvest_prompt(text: String) -> void:
 	_harvest_prompt = text
 	_refresh()
 
+func set_placement_prompt(text: String) -> void:
+	if _placement_prompt == text:
+		return
+	_placement_prompt = text
+	_refresh()
+
 func is_interaction_blocked() -> bool:
 	assert(_hud != null)
 	return bool(_is_gameplay_ui_blocked.call())
 
 func _refresh() -> void:
 	assert(_hud != null)
-	var text := _harvest_prompt if not _harvest_prompt.is_empty() else _level_prompt
+	var text := _harvest_prompt
+	if text.is_empty():
+		text = _level_prompt
+	if text.is_empty():
+		text = _placement_prompt
 	if text.is_empty():
 		_hud.hide_interaction_prompt()
 	else:

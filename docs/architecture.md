@@ -59,6 +59,11 @@ hover suppression, and fade behavior, while retaining separate view instances an
 completion state. Both coordinators acquire one shared `TutorialCalloutArbiter`, which keeps later
 tips queued until the active callout has finished fading out.
 
+`InteractionPromptCoordinator` resolves the single HUD prompt with contextual harvest and level
+actions above the fallback placement guidance. `PlacementPromptCoordinator`
+observes the selected item and editable-world binding, showing the right-click placement hint for
+every item backed by a `BlockPlacementActionDefinition`.
+
 ## Entities and combat
 
 `EntityCatalog` is the authoritative list of stable entity content IDs. Each `EntityDefinition`

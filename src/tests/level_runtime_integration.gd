@@ -336,6 +336,11 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	var enemy_combat_feedback := EnemyCombatFeedbackType.new()
 	var mining_break_particles := (load("res://mining/presentation/mining_break_particles.tscn") as PackedScene).instantiate()
 	var mining_hit_particles := (load("res://mining/presentation/mining_hit_particles.tscn") as PackedScene).instantiate()
+	var mining_tutorial := MiningTutorialCoordinator.new()
+	var mining_tutorial_view := MiningTutorialView.new()
+	var food_tutorial := FoodTutorialCoordinator.new()
+	var food_tutorial_view := FoodTutorialView.new()
+	var placement_prompt := PlacementPromptCoordinator.new()
 	var pumpkin_patch := (load("res://farming/pumpkin/pumpkin_patch_coordinator.tscn") as PackedScene).instantiate() as PumpkinPatchCoordinator
 	var apple_trees := (load("res://foraging/apple/apple_tree_coordinator.tscn") as PackedScene).instantiate() as AppleTreeCoordinator
 	var overworld := Node3D.new()
@@ -361,6 +366,11 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	enemy_combat_feedback.name = "EnemyCombatFeedback"
 	mining_break_particles.name = "MiningBreakParticles"
 	mining_hit_particles.name = "MiningHitParticles"
+	mining_tutorial.name = "MiningTutorial"
+	mining_tutorial_view.name = "MiningTutorialView"
+	food_tutorial.name = "FoodTutorial"
+	food_tutorial_view.name = "FoodTutorialView"
+	placement_prompt.name = "PlacementPrompt"
 	pumpkin_patch.name = "PumpkinPatch"
 	apple_trees.name = "AppleTrees"
 	game.add_child(overworld)
@@ -386,6 +396,11 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	game.add_child(coordinator)
 	game.add_child(mining_break_particles)
 	game.add_child(mining_hit_particles)
+	game.add_child(mining_tutorial)
+	game.add_child(mining_tutorial_view)
+	game.add_child(food_tutorial)
+	game.add_child(food_tutorial_view)
+	game.add_child(placement_prompt)
 	overworld.add_child(pumpkin_patch)
 	overworld.add_child(apple_trees)
 	var save_layer := CanvasLayer.new()

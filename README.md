@@ -149,7 +149,9 @@ Seeded copper deposits generate after the surrounding terrain as connected 5–3
 of each deposit stays underground, while some deposits expose up to three blocks at the surface.
 Stone and the other common blocks are hand-minable. Copper requires a stone, copper, or iron
 pickaxe, while the stronger masonry blocks require a copper or iron pickaxe. Torches are placeable
-blocks that you can walk through — each is an omni light with a 9-block radius. Overworld chests are
+blocks that you can walk through — each is an omni light with a 9-block radius. Selecting any
+placeable item shows a `Right Click to Place Block` interaction prompt while building is available.
+Overworld chests are
 crafted from wood, placed by the player, persist 15 storage slots, and must be empty before they can
 be mined. Generated dungeon chests use the same panel but are take-only and last only for the
 current attempt.
