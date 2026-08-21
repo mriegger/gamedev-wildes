@@ -73,10 +73,17 @@ func _run():
 	_expect(vocalizations.stream == active_stream, "active vocalization was replaced")
 	_expect(is_equal_approx(vocalizations._remaining_seconds, active_interval), "active vocalization consumed its silence interval")
 
-	actor.begin_despawn_fade()
-	_expect(not vocalizations.is_processing(), "vocalizations kept processing during despawn")
-	_expect(not vocalizations.playing, "vocalizations kept playing during despawn")
-	_expect(vocalizations.stream == null, "vocalization stream remained assigned during despawn")
+	actor.begin_death_retirement()
+	_expect(not vocalizations.is_processing(), "death vocalization retained ambient scheduling")
+	_expect(vocalizations.playing, "zombie death did not play a vocalization")
+	_expect(profile.streams.has(vocalizations.stream), "zombie death selected audio outside its vocalization profile")
+	var visual_retirement_seconds := ZombieAnimationDriver.DEATH_SECONDS + maxf(
+		actor.visual_fader.fade_out_seconds,
+		actor.death_poof.lifetime,
+	)
+	_expect(not actor.advance_retirement(visual_retirement_seconds), "zombie retired while its death vocalization was playing")
+	vocalizations.stop()
+	_expect(actor.advance_retirement(0.0), "zombie did not finish retirement after its death vocalization stopped")
 	actor.queue_free()
 	camera_rig.queue_free()
 	for _frame_index in range(10):

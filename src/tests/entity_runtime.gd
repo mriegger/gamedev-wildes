@@ -116,13 +116,19 @@ func _run() -> void:
 	_expect(third_actor.global_position == teleport_position, "successful teleport did not move the actor")
 	_expect(not runtime.get_active_runtime_ids_overlapping(original_bounds).has(3), "successful teleport retained the old spatial entry")
 	_expect(runtime.get_active_runtime_ids_overlapping(third_actor.get_world_bounds()).has(3), "successful teleport omitted the new spatial entry")
+	var sheep_vocalizations := runtime.get_actor(2).vocalizations
+	sheep_vocalizations._remaining_seconds = 0.0
+	sheep_vocalizations._process(0.0)
+	_expect(sheep_vocalizations.playing, "suspension fixture did not start overworld creature audio")
 	runtime.suspend()
 	_expect(not runtime.is_aggro_active(), "suspended runtime retained aggregate aggro")
 	_expect(runtime.get_active_runtime_ids_for_definition(&"zombie") == [1], "suspended definition query lost active zombie runtime IDs")
 	_expect(runtime.get_active_runtime_ids_for_definition(&"skeleton") == [3], "suspended definition query lost active skeleton runtime IDs")
 	_expect(runtime.get_active_runtime_ids_for_definition(&"sheep") == [2], "suspended definition query returned the wrong species")
+	_expect(not sheep_vocalizations.is_processing() and not sheep_vocalizations.playing and sheep_vocalizations.stream == null, "suspended runtime retained overworld creature audio")
 	runtime.resume()
 	_expect(runtime.is_aggro_active(), "resumed runtime did not restore aggregate aggro")
+	_expect(sheep_vocalizations.is_processing(), "resumed runtime did not restore overworld creature audio scheduling")
 
 	_expect(runtime.try_despawn(1), "active actor refused ordinary despawn")
 	_expect(_defeated.is_empty(), "ordinary despawn emitted an entity defeat")

@@ -1049,6 +1049,7 @@ func _cleanup(
 	runtime.queue_free()
 	await process_frame
 	await process_frame
+	await create_timer(0.1).timeout
 	var orphan_count := int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
 	_expect(orphan_count == 0, "runtime test left %d orphan nodes" % orphan_count)
 

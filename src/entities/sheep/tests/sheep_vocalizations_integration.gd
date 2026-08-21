@@ -63,6 +63,10 @@ func _run():
 	_expect(vocalizations.stream == active_stream, "active vocalization was replaced")
 	_expect(is_equal_approx(vocalizations._remaining_seconds, active_interval), "active vocalization consumed its silence interval")
 
+	actor.begin_death_retirement()
+	_expect(not vocalizations.is_processing(), "vocalizations kept processing during death")
+	_expect(vocalizations.playing, "death did not start a vocalization")
+	_expect(profile.streams.has(vocalizations.stream), "death did not select a configured vocalization")
 	actor.begin_despawn_fade()
 	_expect(not vocalizations.is_processing(), "vocalizations kept processing during despawn")
 	_expect(not vocalizations.playing, "vocalizations kept playing during despawn")

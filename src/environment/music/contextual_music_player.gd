@@ -1,7 +1,7 @@
 extends Node
 class_name ContextualMusicPlayer
 
-const BASE_VOLUME: float = 0.18
+const BASE_VOLUME: float = 0.144
 const FADE_IN_SECONDS: float = 1.2
 const FADE_OUT_SECONDS: float = 0.6
 const COMBAT_FADE_OUT_SECONDS: float = 0.45

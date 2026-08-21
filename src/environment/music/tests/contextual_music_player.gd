@@ -32,6 +32,7 @@ func _run() -> void:
 	var player := music.get_node("MusicPlayer") as AudioStreamPlayer
 	_expect(player != null, "MusicPlayer missing")
 	_expect(player.bus == &"Music", "MusicPlayer is not routed to Music bus")
+	_expect(is_equal_approx(music.base_volume, 0.144), "music base volume was not reduced by 20 percent")
 	_expect(music.daytime_tracks.size() == 3, "daytime track catalog does not contain all tracks")
 	_expect(music.dungeon_tracks.size() == 3, "dungeon track catalog does not contain all tracks")
 	for track in music.daytime_tracks:

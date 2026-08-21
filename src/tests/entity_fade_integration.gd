@@ -226,8 +226,11 @@ func _test_species_death_retirement(catalog: EntityCatalog, world: VoxelWorld) -
 		_expect(not actor.death_poof.emitting and not actor.death_poof.has_played(), "%s death poof began before the pose completed" % definition.id)
 		if actor is ZombieActor:
 			_expect(not (actor as ZombieActor)._timed_melee_contact.is_pending(), "zombie retained a pending attack after lethal retirement")
+			_expect(actor.vocalizations.playing and actor.vocalizations.profile.streams.has(actor.vocalizations.stream), "zombie death did not play a configured vocalization")
 		elif actor is SkeletonActor:
 			_expect(not (actor as SkeletonActor)._timed_melee_contact.is_pending(), "Skeleton retained a pending attack after lethal retirement")
+		elif actor is SheepActor:
+			_expect(actor.vocalizations.playing and actor.vocalizations.profile.streams.has(actor.vocalizations.stream), "sheep death did not play a configured vocalization")
 		_expect(not actor.advance_retirement(death_seconds * 0.5), "%s retirement completed during its death pose" % definition.id)
 		_expect(not actor.animation_driver.is_death_complete(), "%s death pose completed before its configured duration" % definition.id)
 		_expect(is_equal_approx(actor.get_visual_opacity(), 1.0), "%s faded before its death pose completed" % definition.id)
@@ -286,7 +289,13 @@ func _test_species_death_retirement(catalog: EntityCatalog, world: VoxelWorld) -
 			_expect(actor.visual_fader._phase == EntityVisualFader.Phase.FADING_OUT and is_equal_approx(actor.visual_fader._elapsed, fade_elapsed) and is_equal_approx(actor.get_visual_opacity(), fade_opacity), "Stone Golem retry changed its fade on the next retirement tick")
 			_expect(actor.death_poof.has_played() and actor.death_poof.emitting and is_equal_approx(actor.death_poof._elapsed, poof_elapsed), "Stone Golem retry changed its death poof on the next retirement tick")
 		_expect(not actor.advance_retirement(0.0) and is_equal_approx(actor.death_poof._elapsed, poof_elapsed), "%s death poof restarted during retirement" % definition.id)
-		_expect(actor.advance_retirement(fade_out_seconds * 0.5), "%s death retirement did not complete" % definition.id)
+		var retirement_complete := actor.advance_retirement(fade_out_seconds * 0.5)
+		if actor is ZombieActor:
+			_expect(not retirement_complete, "zombie retired before its death vocalization completed")
+			actor.vocalizations.stop()
+			_expect(actor.advance_retirement(0.0), "zombie retirement did not complete after its death vocalization stopped")
+		else:
+			_expect(retirement_complete, "%s death retirement did not complete" % definition.id)
 		actor.free()
 
 func _test_slime_death_retirement(catalog: EntityCatalog, world: VoxelWorld) -> void:
@@ -359,8 +368,10 @@ func _test_oversized_death_retirement_delta(catalog: EntityCatalog, world: Voxel
 	actor.advance_visual_fade(actor.visual_fader.fade_in_seconds)
 	actor.begin_death_retirement()
 	var retirement_seconds := ZombieAnimationDriver.DEATH_SECONDS + maxf(actor.visual_fader.fade_out_seconds, actor.death_poof.lifetime)
-	_expect(actor.advance_retirement(retirement_seconds), "oversized death-retirement delta did not complete the lifecycle")
+	_expect(not actor.advance_retirement(retirement_seconds), "zombie retired before its death vocalization completed")
 	_expect(is_zero_approx(actor.get_visual_opacity()), "oversized death-retirement delta did not finish transparent")
+	actor.vocalizations.stop()
+	_expect(actor.advance_retirement(0.0), "zombie retirement did not complete after its death vocalization stopped")
 	actor.free()
 
 func _test_coordinator_retirement(catalog: EntityCatalog, world: VoxelWorld) -> void:

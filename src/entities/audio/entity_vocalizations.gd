@@ -60,6 +60,15 @@ func stop_vocalizations():
 	stop()
 	stream = null
 
+func play_random_once() -> void:
+	assert(profile != null and profile.validate())
+	set_process(false)
+	stop()
+	if not _audio_enabled:
+		stream = null
+		return
+	_play_vocalization()
+
 
 func _play_vocalization():
 	var stream_index := _rng.randi_range(0, profile.streams.size() - 1)

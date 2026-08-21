@@ -22,7 +22,8 @@ world seed.
 | Left-click / hold | Open a targeted chest or crafting station, or use the selected item; hold to mine or draw a bow, release to fire an arrow, or click to attack, till soil, or consume food and potions |
 | Right-click | Use the selected item's secondary action, including consuming food or potions and placing blocks; cancel an active bow draw |
 | `F` | Enter or leave a nearby dungeon |
-| `1`–`9` | Equip a hotbar item; press its active hotkey again to unequip it. While the backpack is open, assign the hovered item to that slot |
+| `1`–`9` | Equip a hotbar item and play a short draw sound; press its active hotkey again to unequip it. While the backpack is open, assign the hovered item to that slot |
+| Click hotbar slot | Equip that occupied slot and play a short draw sound |
 | `R` | Unequip the current item, or re-equip the most recently equipped hotbar item |
 | `Tab` | Toggle backpack and crafting |
 | `P` | Toggle backpack only |
@@ -192,7 +193,9 @@ radial scan tracing its 120-degree attack area in front of the player. Its base 
 to 10 independently for each enemy hit. Sword and hammer targets are evaluated at their contact
 frame, and non-solid foliage does not block their attacks. Combat registers slash, blunt, and pierce
 damage types;
-enemies are neutral by default. Zombies take 1.5 times damage from slash, while Skeletons take half
+enemies are neutral by default. Zombies and sheep play randomized vocalizations when defeated;
+zombie retirement waits for the full vocalization to finish.
+Zombies take 1.5 times damage from slash, while Skeletons take half
 damage from slash and 1.5 times damage from blunt. Stone Golems take half damage from slash and
 pierce while remaining neutral to blunt. The Iron Pickaxe is initially guaranteed by the stone
 dungeon and can later roll from its farm pool. It has mining power 3, a 2.5 speed multiplier, and no

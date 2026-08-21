@@ -99,8 +99,14 @@ func _emit_melee_contact(profile: MeleeAttackProfile) -> void:
 		melee_contact_reached.emit(runtime_id, profile)
 
 func begin_death_retirement():
+	if _death_retirement:
+		return
 	_timed_melee_contact.cancel()
 	super.begin_death_retirement()
+	vocalizations.play_random_once()
+
+func advance_retirement(delta: float) -> bool:
+	return super.advance_retirement(delta) and not vocalizations.playing
 
 func try_begin_player_hit_response(player_position: Vector3) -> bool:
 	if brain == null or brain.is_alerted():

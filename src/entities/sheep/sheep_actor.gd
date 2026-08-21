@@ -66,6 +66,12 @@ func record_melee_contact(world_hit_direction: Vector3):
 	_path_follower.request_repath()
 	super.record_melee_contact(world_hit_direction)
 
+func begin_death_retirement():
+	if _death_retirement:
+		return
+	super.begin_death_retirement()
+	vocalizations.play_random_once()
+
 func try_begin_player_hit_response(player_position: Vector3) -> bool:
 	if brain == null or brain.state == SheepBrain.State.FLEE:
 		return false

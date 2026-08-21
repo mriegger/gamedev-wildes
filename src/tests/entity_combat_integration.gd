@@ -577,6 +577,11 @@ func _run() -> void:
 	_expect(coordinator.get_runtime()._retiring.has(target_id), "zombie retirement ended before fade-out")
 	coordinator.tick(fade_out_seconds + 0.01, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
 	await process_frame
+	_expect(coordinator.get_runtime()._retiring.has(target_id), "zombie retirement did not wait for its death vocalization")
+	_expect(retiring_actor.get_ref() == zombie_actor, "zombie actor was freed while its death vocalization was playing")
+	zombie_actor.vocalizations.stop()
+	coordinator.tick(0.0, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
+	await process_frame
 	_expect(not coordinator.get_runtime()._retiring.has(target_id), "completed zombie fade remained coordinator-owned")
 	_expect(retiring_actor.get_ref() == null, "completed zombie fade did not free its actor")
 	_expect(coordinator.get_runtime().get_active_count() == 1, "replacement did not remain active after zombie retirement")

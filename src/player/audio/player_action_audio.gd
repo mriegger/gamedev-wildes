@@ -16,6 +16,7 @@ var _inventory: InventoryModel
 var _combat: MeleeCombatCoordinator
 var _harvest: HarvestCoordinator
 var _consumption: ItemConsumptionCoordinator
+var _selected_slot: int = -1
 var _selected_item_id: StringName
 var _clunk_streams: Array[AudioStream] = [
 	preload("res://assets/audio/sfx/tools/impactGeneric_light_001.ogg"),
@@ -41,11 +42,17 @@ var _harvest_streams: Array[AudioStream] = [
 	preload("res://assets/audio/sfx/farming/harvesting/pop_generic_02_CC0.wav"),
 	preload("res://assets/audio/sfx/farming/harvesting/pop_generic_03_CC0.wav"),
 ]
+var _toolbar_selection_streams: Array[AudioStream] = [
+	preload("res://assets/audio/combat/weapons/sword/draw/drawKnife1.ogg"),
+	preload("res://assets/audio/combat/weapons/sword/draw/drawKnife2.ogg"),
+	preload("res://assets/audio/combat/weapons/sword/draw/drawKnife3.ogg"),
+]
 var _last_clunk_idx: int = -1
 var _last_creature_hit_idx: int = -1
 var _last_player_hit_idx: int = -1
 var _last_till_idx: int = -1
 var _last_harvest_idx: int = -1
+var _last_toolbar_selection_idx: int = -1
 var _last_equip_indices: Dictionary = {}
 var _last_consume_indices: Dictionary = {}
 
@@ -60,6 +67,7 @@ func setup(
 	_interactor = p_interactor
 	_inventory = p_inventory
 	_combat = p_combat
+	_selected_slot = _inventory.get_selected_slot()
 	_selected_item_id = _get_selected_item_id()
 	_animation_driver.mining_impact.connect(_on_mining_impact)
 	_interactor.melee_terrain_hit.connect(_on_melee_terrain_hit)
@@ -125,7 +133,21 @@ func _on_projectile_outcome_committed(_outcome: ProjectileOutcome) -> void:
 
 
 func _on_inventory_changed():
+	var selected_slot := _inventory.get_selected_slot()
 	var selected_item_id := _get_selected_item_id()
+	if selected_slot != _selected_slot:
+		_selected_slot = selected_slot
+		_selected_item_id = selected_item_id
+		if selected_item_id.is_empty():
+			return
+		_last_toolbar_selection_idx = _play_random(
+			_equip_player,
+			_toolbar_selection_streams,
+			_last_toolbar_selection_idx,
+			0.96,
+			1.04,
+		)
+		return
 	if selected_item_id == _selected_item_id:
 		return
 	_selected_item_id = selected_item_id
@@ -212,6 +234,7 @@ func _exit_tree():
 	_player_hit_streams.clear()
 	_till_streams.clear()
 	_harvest_streams.clear()
+	_toolbar_selection_streams.clear()
 	_last_equip_indices.clear()
 	_last_consume_indices.clear()
 

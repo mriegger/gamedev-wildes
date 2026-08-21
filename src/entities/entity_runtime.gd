@@ -870,6 +870,12 @@ func _set_active_actors_suspended(suspended: bool) -> void:
 		var actor := value as EntityActor
 		if is_instance_valid(actor):
 			actor.set_runtime_suspended(suspended)
+			actor.configure_audio(not suspended and _mode == Mode.GAMEPLAY)
+	if suspended:
+		for value in _retiring.values():
+			var actor := (value as Retirement).actor
+			if is_instance_valid(actor):
+				actor.configure_audio(false)
 
 func is_suspended() -> bool:
 	return _suspended
@@ -880,10 +886,12 @@ func shutdown() -> void:
 	for runtime_id in _active.keys():
 		var actor := _active[runtime_id] as EntityActor
 		if is_instance_valid(actor):
+			actor.configure_audio(false)
 			actor.queue_free()
 	for value in _retiring.values():
 		var actor := (value as Retirement).actor
 		if is_instance_valid(actor):
+			actor.configure_audio(false)
 			actor.queue_free()
 	_active.clear()
 	_stats_by_runtime_id.clear()
