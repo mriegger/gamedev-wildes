@@ -287,8 +287,12 @@ dungeon enemy loot. Press `/` again or `Esc` to close the console without openin
 `spawn birds [count]` creates a mixed
 batch of crows, redbirds, ducks, and bluebirds near the player, while
 `spawn bird <crow|redbird|duck|bluebird|owl> [count]` creates a specific variant. Owls are rare,
-appear naturally only at night, and land only on tree canopies. Bird counts default
-to four for a mixed batch and one for a specific variant, with a maximum of sixteen. Copper can be
+appear naturally only at night, and land only on tree canopies. Birds take flight when the player
+comes within five blocks and can be defeated in one hit. Crows, redbirds, and bluebirds drop their
+matching feather as persistent loot with a 3D model, inventory icon, and pickup sound; ducks and
+owls do not drop feathers. Bird counts default to four for a mixed batch and one for a specific
+variant. Larger requests spawn as many birds as the active population limits allow. The `kill`
+command defeats every currently active non-player entity. Copper can be
 mined from deposits or added directly with `spawn copper <count>`. New worlds contain one seeded 5×4 pumpkin patch 35–45
 blocks from the initial player spawn. Its location, growth states, and rotations persist in the
 save. The
@@ -390,6 +394,7 @@ from Godot primitive meshes. Visual effects use project-authored shaders.
 | `src/assets/audio/sfx/farming/tilling/bookFlip*.ogg` (3 files) | [RPG Audio](https://kenney.nl/assets/rpg-audio) – Kenney | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `src/assets/audio/sfx/farming/harvesting/pop_generic_*_CC0.wav` (3 files) | Generic pop by Muse Spark | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `src/assets/audio/sfx/items/consume/munch_crunchy_fruit_sequence_3x_CC0.wav` | Source recordings by Joseph SARDIN, BigSoundBank; edited by Muse Spark | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
+| `src/assets/audio/sfx/items/pickup/click-b.ogg` | [UI Pack](https://kenney.nl/assets/ui-pack) – Kenney | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `src/assets/audio/sfx/levels/dungeon/door/doorOpen_*.ogg` (2 files) | [RPG Audio](https://kenney.nl/assets/rpg-audio) – Kenney | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `src/assets/audio/music/dungeon/Dungeon Master.mp3` | [Dungeon Master](https://freemusicarchive.org/music/geoff-harvey-purple-planet-music/dungeon-master/dungeon-master-2/) – Geoff Harvey, Purple Planet Music | Creative Commons Attribution (version varies) |
 | `src/assets/audio/music/dungeon/Dark Angel.mp3` | [“Dark Angel”](https://freemusicarchive.org/music/joseph-r-lilore/soundscapes/dark-angel/) – Joseph R. Lilore | Creative Commons Attribution (CC BY; version varies) |

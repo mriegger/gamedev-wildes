@@ -64,6 +64,23 @@ func _rebuild_lookup() -> void:
 		if definition.icon == null:
 			push_error("[ItemCatalog] Missing icon for %s at %s" % [definition.id, source])
 			_is_valid = false
+		if definition.world_model == null and definition.world_material != null:
+			push_error("[ItemCatalog] World material requires a model for %s at %s" % [definition.id, source])
+			_is_valid = false
+		if (
+			not is_finite(definition.world_presentation_scale)
+			or definition.world_presentation_scale < 0.01
+			or definition.world_presentation_scale > 10.0
+		):
+			push_error("[ItemCatalog] Invalid world presentation scale for %s at %s" % [definition.id, source])
+			_is_valid = false
+		if (
+			not is_finite(definition.world_pickup_radius_multiplier)
+			or definition.world_pickup_radius_multiplier < 0.1
+			or definition.world_pickup_radius_multiplier > 4.0
+		):
+			push_error("[ItemCatalog] Invalid world pickup radius multiplier for %s at %s" % [definition.id, source])
+			_is_valid = false
 		if definition.max_stack < 1:
 			push_error("[ItemCatalog] Invalid max stack for %s at %s" % [definition.id, source])
 			_is_valid = false

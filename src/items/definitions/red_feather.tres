@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="ItemDefinition" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://items/item_definition.gd" id="1_definition"]
+[ext_resource type="Texture2D" path="res://assets/textures/items/red_feather.svg" id="2_icon"]
+[ext_resource type="ArrayMesh" path="res://assets/models/items/feather/feather.obj" id="3_model"]
+
+[sub_resource type="StandardMaterial3D" id="Material_feather"]
+albedo_color = Color(0.78, 0.11, 0.09, 1)
+roughness = 0.76
+
+[resource]
+script = ExtResource("1_definition")
+id = &"red_feather"
+display_name = "Red Feather"
+description = "A vivid red feather. It has no known use yet."
+icon = ExtResource("2_icon")
+world_model = ExtResource("3_model")
+world_material = SubResource("Material_feather")
+world_presentation_scale = 1.125
+world_pickup_radius_multiplier = 2.0
+max_stack = 99

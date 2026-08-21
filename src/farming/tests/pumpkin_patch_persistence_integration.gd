@@ -195,6 +195,7 @@ func _run() -> void:
 		Callable(self, "_accept_ripple_strength"),
 		Callable(self, "_accept_bird_spawn"),
 		Callable(self, "_accept_dungeon_clear"),
+		Callable(self, "_accept_defeat_all"),
 	)
 	_expect(processor.execute("spawn pumpkin_patch") == DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN, "pumpkin patch console command failed")
 	_expect(_state_changed_count == 1, "persistent pumpkin patch change was not announced")
@@ -546,6 +547,9 @@ func _accept_bird_spawn(_variant_id: StringName, _count: int) -> bool:
 	return true
 
 func _accept_dungeon_clear() -> bool:
+	return true
+
+func _accept_defeat_all() -> bool:
 	return true
 
 func _is_interaction_blocked() -> bool:

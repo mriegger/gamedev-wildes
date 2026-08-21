@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="LootPoolDefinition" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://loot/loot_pool_definition.gd" id="1_pool"]
+[ext_resource type="Script" path="res://loot/loot_independent_roll_definition.gd" id="2_roll"]
+[ext_resource type="Script" path="res://loot/loot_drop_definition.gd" id="3_drop"]
+[ext_resource type="Resource" path="res://items/definitions/blue_feather.tres" id="4_item"]
+
+[sub_resource type="Resource" id="feather_drop"]
+script = ExtResource("3_drop")
+item = ExtResource("4_item")
+
+[sub_resource type="Resource" id="feather_roll"]
+script = ExtResource("2_roll")
+id = &"blue_feather"
+chance = 1.0
+drop = SubResource("feather_drop")
+
+[resource]
+script = ExtResource("1_pool")
+id = &"bird_blue_feather"
+independent_rolls = Array[ExtResource("2_roll")]([SubResource("feather_roll")])
+exclusive_groups = Array[LootExclusiveGroupDefinition]([])

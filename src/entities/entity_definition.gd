@@ -18,6 +18,7 @@ enum SpawnPlacement {
 @export var damage_affinities: Array[DamageAffinityDefinition]
 @export_range(0, 999999999, 1, "or_greater") var experience_reward: int = 0
 @export var loot_pool: LootPoolDefinition
+@export var loot_drops_to_terrain: bool = false
 @export var defeat_spawn: EntityDefeatSpawnDefinition
 @export_range(0.1, 4.0, 0.01) var body_width: float = 0.6
 @export_range(0.1, 4.0, 0.01) var body_height: float = 1.8
@@ -138,6 +139,15 @@ func is_actor_compatible() -> bool:
 
 func can_spawn_ambiently_on(block_id: int) -> bool:
 	return block_id in ambient_spawn_floor_ids
+
+func resolve_loot_pool(_behavior_seed: int) -> LootPoolDefinition:
+	return loot_pool
+
+func get_loot_pools() -> Array[LootPoolDefinition]:
+	var pools: Array[LootPoolDefinition] = []
+	if loot_pool != null:
+		pools.append(loot_pool)
+	return pools
 
 func get_damage_response(damage_type: DamageTypeDefinition) -> int:
 	assert(damage_type != null)

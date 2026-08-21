@@ -17,6 +17,8 @@ var _bird_spawn_calls: Array[Dictionary] = []
 var _bird_commands_accepted: bool = true
 var _dungeon_clear_call_count: int = 0
 var _dungeon_clear_accepted: bool = true
+var _defeat_all_call_count: int = 0
+var _defeat_all_accepted: bool = true
 
 func _init() -> void:
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
@@ -45,6 +47,12 @@ func _init() -> void:
 	_bird_commands_accepted = false
 	_expect_result(processor.execute("spawn bird duck"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "rejected bird spawn handler was accepted")
 	_bird_commands_accepted = true
+	_expect_result(processor.execute("KiLl"), DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN, "kill command failed")
+	_expect(_defeat_all_call_count == 1, "kill command did not invoke the defeat-all handler")
+	_defeat_all_accepted = false
+	_expect_result(processor.execute("kill"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "rejected kill handler was accepted")
+	_expect(_defeat_all_call_count == 2, "rejected kill command did not invoke the defeat-all handler")
+	_defeat_all_accepted = true
 
 	_expect_result(processor.execute("spawn stone 5"), DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN, "stone spawn command failed")
 	_expect(inventory.get_slot(InventoryModel.HOTBAR_SIZE).count == 15, "spawn did not add to the existing backpack stack")
@@ -204,17 +212,20 @@ func _init() -> void:
 	_expect_result(processor.execute("set ripple strength nan"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "non-finite ripple strength was accepted")
 	_expect_result(processor.execute("set ripple width 0.5"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "unknown ripple property was accepted")
 	_expect_result(processor.execute("set ripple strength 0.5 extra"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "ripple strength command with extra arguments was accepted")
+	_expect_result(processor.execute("kill all"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "kill command with arguments was accepted")
 	_expect_result(processor.execute("give stone 1"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "unknown command was accepted")
 	_expect_result(processor.execute("spawn"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "spawn command without an item was accepted")
 	_expect_result(processor.execute("spawn pumpkin_patch 1"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "pumpkin patch count argument was accepted")
 	_expect_result(processor.execute("spawn birds 0"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "zero-count mixed bird command was accepted")
-	_expect_result(processor.execute("spawn birds 17"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "oversized mixed bird command was accepted")
+	_expect_result(processor.execute("spawn birds 17"), DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN, "large mixed bird request was rejected")
+	_expect(_bird_spawn_calls.back() == {"variant_id": &"", "count": 17}, "large mixed bird request changed before reaching the world coordinator")
 	_expect_result(processor.execute("spawn birds nope"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "non-numeric mixed bird count was accepted")
 	_expect_result(processor.execute("spawn birds 2 extra"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "mixed bird command with extra arguments was accepted")
 	_expect_result(processor.execute("spawn bird"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "bird command without a variant was accepted")
 	_expect_result(processor.execute("spawn bird goose"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "unknown bird variant was accepted")
 	_expect_result(processor.execute("spawn bird duck 0"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "zero-count specific bird command was accepted")
-	_expect_result(processor.execute("spawn bird duck 17"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "oversized specific bird command was accepted")
+	_expect_result(processor.execute("spawn bird duck 17"), DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN, "large specific bird request was rejected")
+	_expect(_bird_spawn_calls.back() == {"variant_id": &"duck", "count": 17}, "large specific bird request changed before reaching the world coordinator")
 	_expect_result(processor.execute("spawn bird duck nope"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "non-numeric specific bird count was accepted")
 	_expect(pumpkin_patch.spawn_count == 1, "invalid pumpkin patch command invoked the coordinator")
 	_expect(inventory.to_dict() == before_invalid, "invalid commands changed the inventory")
@@ -232,6 +243,21 @@ func _init() -> void:
 	_expect_result(full_processor.execute("spawn stone"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "default-count spawn succeeded without backpack capacity")
 	_expect_result(full_processor.execute("spawn copper_pickaxe 1"), DevConsoleCommandProcessor.ExecutionResult.REJECTED, "equipment spawn succeeded without backpack capacity")
 	_expect(full_inventory.to_dict() == full_before, "failed spawns partially changed the backpack")
+	var partial_inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
+	for index in range(InventoryModel.HOTBAR_SIZE, InventoryModel.FILLABLE_SIZE):
+		InventoryTestFixture.restore_slot(partial_inventory, index, InventoryStack.new(&"dirt_block", 99))
+	InventoryTestFixture.restore_slot(partial_inventory, InventoryModel.HOTBAR_SIZE, InventoryStack.new(&"stone_block", 98))
+	var partial_processor := DevConsoleCommandProcessor.new()
+	_setup_processor(partial_processor, partial_inventory, _new_stats(), pumpkin_patch)
+	_expect_result(partial_processor.execute("spawn stone 5"), DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN, "partial-capacity spawn command failed")
+	_expect(partial_inventory.get_backpack_item_count(&"stone_block") == 99, "partial-capacity spawn did not add the maximum allowed amount")
+	var partial_equipment_inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
+	for index in range(InventoryModel.HOTBAR_SIZE + 1, InventoryModel.FILLABLE_SIZE):
+		InventoryTestFixture.restore_slot(partial_equipment_inventory, index, InventoryStack.new(&"dirt_block", 99))
+	var partial_equipment_processor := DevConsoleCommandProcessor.new()
+	_setup_processor(partial_equipment_processor, partial_equipment_inventory, _new_stats(), pumpkin_patch)
+	_expect_result(partial_equipment_processor.execute("spawn copper_pickaxe 3"), DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN, "partial equipment spawn command failed")
+	_expect(partial_equipment_inventory.get_backpack_item_count(&"copper_pickaxe") == 1, "partial equipment spawn did not fill its one available slot")
 	pumpkin_patch.free()
 
 	if _errors.is_empty():
@@ -261,6 +287,7 @@ func _setup_processor(processor: DevConsoleCommandProcessor, inventory: Inventor
 		Callable(self, "_handle_ripple_strength"),
 		Callable(self, "_handle_bird_spawn"),
 		Callable(self, "_handle_dungeon_clear"),
+		Callable(self, "_handle_defeat_all"),
 	)
 
 func _new_stats() -> ActorStats:
@@ -276,11 +303,15 @@ func _handle_ripple_strength(strength: float) -> bool:
 
 func _handle_bird_spawn(variant_id: StringName, count: int) -> bool:
 	_bird_spawn_calls.append({"variant_id": variant_id, "count": count})
-	return _bird_commands_accepted and (variant_id.is_empty() or BirdActor.color_variant_index_for_id(variant_id) >= 0)
+	return _bird_commands_accepted and (variant_id.is_empty() or BirdColorVariant.index_for_id(variant_id) >= 0)
 
 func _handle_dungeon_clear() -> bool:
 	_dungeon_clear_call_count += 1
 	return _dungeon_clear_accepted
+
+func _handle_defeat_all() -> bool:
+	_defeat_all_call_count += 1
+	return _defeat_all_accepted
 
 func _expect_result(actual: DevConsoleCommandProcessor.ExecutionResult, expected: DevConsoleCommandProcessor.ExecutionResult, message: String) -> void:
 	_expect(actual == expected, message)

@@ -1,11 +1,13 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://entities/bird/bird_actor.gd" id="1_actor"]
 [ext_resource type="PackedScene" path="res://entities/bird/bird_visual.tscn" id="2_visual"]
 [ext_resource type="Script" path="res://entities/presentation/entity_visual_fader.gd" id="3_fader"]
-[ext_resource type="PackedScene" path="res://entities/presentation/entity_death_poof.tscn" id="4_poof"]
+[ext_resource type="PackedScene" path="res://entities/bird/bird_death_feathers.tscn" id="4_poof"]
 [ext_resource type="Script" path="res://entities/audio/entity_vocalizations.gd" id="5_vocalizations"]
 [ext_resource type="Resource" path="res://entities/audio/profiles/owl_vocalizations.tres" id="6_vocalization_profile"]
+[ext_resource type="Script" path="res://entities/bird/bird_death_audio.gd" id="7_death_audio"]
+[ext_resource type="AudioStream" path="res://assets/audio/entities/bird/death/bird_death_squawk_CC0.wav" id="8_death_squawk"]
 
 [node name="Owl" type="Node3D"]
 script = ExtResource("1_actor")
@@ -14,7 +16,7 @@ visual_fader_path = NodePath("VisualFader")
 death_poof_path = NodePath("DeathPoof")
 vocalizations_path = NodePath("Vocalizations")
 vocalization_profile_override = ExtResource("6_vocalization_profile")
-color_variant_override = 4
+death_audio_path = NodePath("DeathAudio")
 
 [node name="ModelRoot" type="Node3D" parent="."]
 scale = Vector3(2, 2, 2)
@@ -35,3 +37,15 @@ bus = &"SFX"
 
 [node name="DeathPoof" parent="." instance=ExtResource("4_poof")]
 position = Vector3(0, 0.3, 0)
+
+[node name="DeathAudio" type="AudioStreamPlayer3D" parent="."]
+position = Vector3(0, 0.55, 0)
+script = ExtResource("7_death_audio")
+streams = Array[AudioStream]([ExtResource("8_death_squawk")])
+pitch_min = 0.88
+pitch_max = 0.98
+rng_salt = 14987
+unit_size = 4.0
+max_distance = 28.0
+volume_db = -3.0
+bus = &"SFX"

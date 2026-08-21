@@ -140,10 +140,25 @@ func _run() -> void:
 		_expect(_defeated[0].runtime_id == 2 and _defeated[0].definition_id == &"sheep", "defeat signal identified the wrong actor")
 		_expect(_defeated[0].world_position == Vector3(2.5, FEET_Y, 0.5), "defeat signal lost the actor position")
 		_expect(_defeated[0].loot_seed == 102, "defeat signal lost the actor seed")
+	_expect(runtime.defeat_all_active() == 0, "mass defeat reported entities in an empty runtime")
 
 	runtime.shutdown()
 	_expect(_defeated.size() == 1, "shutdown emitted an entity defeat")
 	_expect(_removed_runtime_ids == [1, 3, 2], "shutdown emitted an entity removal")
+	runtime.setup(catalog, world, 32, 8, EntityNavigationLimits.new(48, 2048, 2), EntityRuntime.Mode.GAMEPLAY)
+	var split_batch: Array[EntitySpawnRequest] = [
+		_request(&"slime_large", 0.5, 201),
+		_request(&"zombie", 4.5, 202),
+	]
+	_expect(runtime.try_spawn_batch(split_batch) == [1, 2], "mass-defeat fixture did not spawn")
+	_expect(runtime.defeat_all_active() == 2, "mass defeat reported the wrong fixture count")
+	_expect(runtime.get_active_count() == 0, "mass defeat allowed defeat-spawn children to survive")
+	_expect(_defeated.size() == 3, "mass defeat did not emit one defeat per fixture entity")
+	_expect(runtime.defeat_all_active() == 0, "mass defeat reported entities after clearing the fixture")
+
+	runtime.shutdown()
+	_expect(_defeated.size() == 3, "shutdown emitted an entity defeat")
+	_expect(_removed_runtime_ids == [1, 3, 2, 1, 2], "shutdown emitted an entity removal")
 	runtime.queue_free()
 	await process_frame
 	await process_frame

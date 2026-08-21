@@ -43,24 +43,34 @@ func _run() -> void:
 	_expect(definition != null and definition.validate(definition.resource_path), "bird definition is invalid")
 	_expect(owl_definition != null and owl_definition.validate(owl_definition.resource_path), "owl definition is invalid")
 	_expect(definition.spawn_placement == EntityDefinition.SpawnPlacement.AERIAL, "bird is not aerially placed")
-	_expect(not definition.combat_targetable and definition.experience_reward == 0, "bird is not purely ambient")
+	_expect(definition.combat_targetable and definition.experience_reward == 0, "bird is not a targetable non-progression creature")
+	_expect(is_equal_approx(definition.stats_definition.maximum_hp, 1.0), "bird is not configured for one-hit defeat")
 	_expect(owl_definition.ambient_spawn_phase == EntityDefinition.SpawnPhase.NIGHT, "owl is not night-only")
 	_expect(owl_definition.ambient_spawn_enabled and owl_definition.ambient_max_active == 1 and is_equal_approx(owl_definition.ambient_spawn_weight, 45.56), "owl is not enabled and rare")
+	_expect(owl_definition.combat_targetable and is_equal_approx(owl_definition.stats_definition.maximum_hp, 1.0), "owl is not configured for one-hit defeat")
 	_expect(is_equal_approx(owl_definition.ambient_spawn_end_hour, 5.0), "owl dawn departure time changed")
 	_expect(owl_definition.ambient_spawn_floor_ids == [BlockId.Type.LEAVES], "owl landing floors are not tree-only")
 	var sampled_variants: Dictionary = {}
 	var variant_seeds: Dictionary = {}
 	for seed_value in 64:
-		var sampled_variant := BirdActor.color_variant_for_seed(seed_value)
-		_expect(sampled_variant == BirdActor.color_variant_for_seed(seed_value), "bird color selection was not deterministic")
+		var sampled_variant := BirdColorVariant.common_for_seed(seed_value)
+		_expect(sampled_variant == BirdColorVariant.common_for_seed(seed_value), "bird color selection was not deterministic")
 		sampled_variants[sampled_variant] = true
 		if not variant_seeds.has(sampled_variant):
 			variant_seeds[sampled_variant] = seed_value
-	_expect(sampled_variants.size() == BirdActor.color_variant_count(), "seeded birds did not cover all four common color variants")
+	_expect(sampled_variants.size() == BirdColorVariant.COMMON_COUNT, "seeded birds did not cover all four common color variants")
 	var catalog := load("res://entities/entity_catalog.tres") as EntityCatalog
 	var observation := EntityTargetObservation.create(Vector3.ZERO, Vector3.ZERO, Vector3.FORWARD, Vector3.RIGHT)
-	var duck_seed := variant_seeds[BirdAnimationDriver.ColorVariant.DUCK] as int
-	var crow_seed := variant_seeds[BirdAnimationDriver.ColorVariant.CROW] as int
+	var distant_observation := EntityTargetObservation.create(Vector3(1000.0, 0.0, 1000.0), Vector3(1000.0, 0.0, 1000.0), Vector3.FORWARD, Vector3.RIGHT)
+	var duck_seed := variant_seeds[BirdColorVariant.Type.DUCK] as int
+	var crow_seed := variant_seeds[BirdColorVariant.Type.CROW] as int
+	var redbird_seed := variant_seeds[BirdColorVariant.Type.REDBIRD] as int
+	var bluebird_seed := variant_seeds[BirdColorVariant.Type.BLUEBIRD] as int
+	_expect(definition.resolve_loot_pool(crow_seed).id == &"bird_black_feather", "crow did not resolve black feather loot")
+	_expect(definition.resolve_loot_pool(redbird_seed).id == &"bird_red_feather", "redbird did not resolve red feather loot")
+	_expect(definition.resolve_loot_pool(bluebird_seed).id == &"bird_blue_feather", "bluebird did not resolve blue feather loot")
+	_expect(definition.resolve_loot_pool(duck_seed) == null, "duck unexpectedly resolved feather loot")
+	_expect(owl_definition.resolve_loot_pool(31415) == null, "owl unexpectedly resolved feather loot")
 	var debug_world := _make_world()
 	var debug_coordinator := WorldEntityCoordinator.new()
 	root.add_child(debug_coordinator)
@@ -70,24 +80,26 @@ func _run() -> void:
 	var debug_variants: Dictionary = {}
 	for actor in debug_coordinator.get_runtime().get_active_actors():
 		debug_variants[(actor as BirdActor).color_variant] = true
-	_expect(debug_variants.size() == BirdActor.color_variant_count(), "mixed debug bird command did not spawn every common variant")
+	_expect(debug_variants.size() == BirdColorVariant.COMMON_COUNT, "mixed debug bird command did not spawn every common variant")
 	_expect(debug_coordinator.try_spawn_debug_birds(debug_player_position, &"redbird", 2), "specific debug bird command did not spawn")
 	var redbird_count := 0
 	for actor in debug_coordinator.get_runtime().get_active_actors():
-		if (actor as BirdActor).color_variant == BirdAnimationDriver.ColorVariant.REDBIRD:
+		if (actor as BirdActor).color_variant == BirdColorVariant.Type.REDBIRD:
 			redbird_count += 1
 	_expect(redbird_count == 3, "specific debug bird command spawned the wrong variants")
 	var debug_count := debug_coordinator.get_runtime().get_active_count()
 	_expect(not debug_coordinator.try_spawn_debug_birds(debug_player_position, &"goose", 1), "unknown debug bird variant was accepted")
-	_expect(not debug_coordinator.try_spawn_debug_birds(debug_player_position, &"", WorldEntityCoordinator.MAX_TOTAL_ACTIVE), "debug bird command exceeded the runtime cap")
-	_expect(debug_coordinator.get_runtime().get_active_count() == debug_count, "rejected debug bird command changed the runtime")
+	_expect(debug_coordinator.try_spawn_debug_birds(debug_player_position, &"", WorldEntityCoordinator.MAX_TOTAL_ACTIVE * 4), "oversized debug bird command did not fill remaining runtime capacity")
+	_expect(debug_coordinator.get_runtime().get_active_count() == WorldEntityCoordinator.MAX_TOTAL_ACTIVE, "debug bird command did not stop at the runtime cap")
+	_expect(not debug_coordinator.try_spawn_debug_birds(debug_player_position, &"", 1), "debug bird command spawned beyond a full runtime")
+	_expect(debug_count == 6, "debug bird capacity fixture changed")
 	var canopy_debug_world := _make_canopy_world()
 	var canopy_debug_coordinator := WorldEntityCoordinator.new()
 	root.add_child(canopy_debug_coordinator)
 	canopy_debug_coordinator.setup(catalog, canopy_debug_world, 45591, Callable(self, "_position_ready"))
 	_expect(canopy_debug_coordinator.try_spawn_debug_birds(debug_player_position, &"owl", 1), "owl debug command did not spawn")
 	var debug_owl := canopy_debug_coordinator.get_runtime().get_active_actors()[0] as BirdActor
-	_expect(debug_owl.definition.id == &"owl" and debug_owl.color_variant == BirdAnimationDriver.ColorVariant.OWL, "owl debug command used the wrong definition or appearance")
+	_expect(debug_owl.definition.id == &"owl" and debug_owl.color_variant == BirdColorVariant.Type.OWL, "owl debug command used the wrong definition or appearance")
 	_expect(debug_owl.vocalizations != null and debug_owl.vocalizations.profile != null, "owl vocalizations were not configured")
 	_expect(debug_owl.vocalizations.profile.streams.size() == 3 and debug_owl.vocalizations.profile.validate(), "owl vocalization profile is invalid")
 	_expect(debug_owl._has_landing_target and not debug_owl._landing_on_water, "owl did not select a canopy landing target")
@@ -104,7 +116,7 @@ func _run() -> void:
 	debug_owl.velocity = Vector3.ZERO
 	debug_owl.on_ground = true
 	debug_owl.brain.state = BirdBrain.State.DESCEND
-	debug_owl.tick_gameplay(FRAME_DELTA, observation, Vector3.ZERO, NavigationSearchBudget.new(1))
+	debug_owl.tick_gameplay(FRAME_DELTA, distant_observation, Vector3.ZERO, NavigationSearchBudget.new(1))
 	owl_animation.advance(FRAME_DELTA)
 	_expect(debug_owl.brain.state == BirdBrain.State.GROUNDED_IDLE and debug_owl.on_ground, "owl rejected a tree-canopy landing")
 	_expect(debug_owl.vocalizations.is_processing(), "owl vocalizations did not activate while perched")
@@ -191,7 +203,7 @@ func _run() -> void:
 	var bird := runtime.get_actor(1) as BirdActor
 	_expect(bird != null and bird.vocalizations != null, "bird scene did not configure vocalizations")
 	var expected_stream_counts: Array[int] = [5, 7, 3, 6]
-	for variant in BirdActor.color_variant_count():
+	for variant in BirdColorVariant.COMMON_COUNT:
 		var profile := bird.vocalization_profiles[variant]
 		_expect(profile != null and profile.validate(), "bird variant %d did not have a valid vocalization profile" % variant)
 		_expect(profile.streams.size() == expected_stream_counts[variant], "bird variant %d had the wrong vocalization stream count" % variant)
@@ -202,7 +214,6 @@ func _run() -> void:
 	var bird_animation := bird.animation_driver as BirdAnimationDriver
 	_expect(bird_animation._body_mesh.material_override is StandardMaterial3D, "bird color variant did not create an instance material")
 	_expect(bird_animation._wing_flap_audio.stream != null and bird_animation._wing_flap_audio.bus == &"SFX", "bird wing audio was not configured")
-	_expect(runtime.try_apply_damage(1, 1.0) == null, "direct damage affected an untargetable bird")
 	var visited: Dictionary = {}
 	var observed_folded_wings := false
 	var observed_flight_audio := false
@@ -230,6 +241,13 @@ func _run() -> void:
 	_expect(observed_flight_audio, "flying bird did not play wing audio")
 	_expect(observed_grounded_silence, "grounded bird did not stop wing audio")
 	_expect(not VoxelBodySolver.collides_at(world, bird.global_position, definition.body_width, definition.body_height, false), "bird ended inside solid terrain")
+	_expect(bird.death_audio != null and bird.death_audio.has_valid_presentation(), "bird death audio was not configured")
+	var damage_result := runtime.try_apply_damage(1, 1.0)
+	_expect(damage_result != null and damage_result.defeated, "one point of damage did not defeat the bird")
+	_expect(runtime.get_actor(1) == null and runtime.get_presented_actor(1) == bird, "defeated bird did not enter visual retirement")
+	_expect(bird.death_audio.playing and bird.death_audio.stream != null, "bird defeat did not play the death squawk")
+	runtime.tick_gameplay(BirdAnimationDriver.DEATH_SECONDS, observation)
+	_expect(bird.death_poof.has_played(), "bird defeat did not emit feather particles")
 	var owl_runtime := EntityRuntime.new()
 	root.add_child(owl_runtime)
 	owl_runtime.setup(catalog, world, 1, 1, EntityNavigationLimits.new(24, 256, 1), EntityRuntime.Mode.GAMEPLAY)
@@ -265,8 +283,16 @@ func _run() -> void:
 		var canopy_animation := canopy_bird.animation_driver as BirdAnimationDriver
 		canopy_animation.advance(0.05)
 		_expect(canopy_animation._beak_mesh.scale.y > 1.0, "duck call did not animate the beak")
-		canopy_bird.tick_gameplay(FRAME_DELTA, observation, Vector3.RIGHT, NavigationSearchBudget.new(1))
+		canopy_bird.tick_gameplay(FRAME_DELTA, distant_observation, Vector3.RIGHT, NavigationSearchBudget.new(1))
 		_expect(not canopy_bird.vocalizations.is_processing() and not canopy_bird.vocalizations.playing, "moving idle duck continued its call")
+		canopy_bird.brain.state = BirdBrain.State.GROUNDED_IDLE
+		var outside_flee_radius := canopy_bird.global_position - Vector3(5.1, 0.0, 0.0)
+		_expect(not canopy_bird._try_startle_from_player(outside_flee_radius) and canopy_bird.brain.state == BirdBrain.State.GROUNDED_IDLE, "bird fled before the player entered five blocks")
+		var nearby_player := canopy_bird.global_position - Vector3(4.9, 0.0, 0.0)
+		canopy_bird.tick_gameplay(FRAME_DELTA, EntityTargetObservation.create(nearby_player, nearby_player, Vector3.FORWARD, Vector3.RIGHT), Vector3.ZERO, NavigationSearchBudget.new(1))
+		_expect(canopy_bird.brain.state == BirdBrain.State.TAKEOFF and not canopy_bird.on_ground, "bird did not take off when the player came within five blocks")
+		_expect((canopy_bird._takeoff_target - canopy_bird.global_position).dot(Vector3.RIGHT) > 0.0, "startled bird did not choose a route away from the player")
+		_expect(not canopy_bird.vocalizations.is_processing() and not canopy_bird.vocalizations.playing, "startled bird continued its call")
 		canopy_bird.global_position = Vector3(0.5, FEET_Y, 0.5)
 		canopy_bird.velocity = Vector3.ZERO
 		canopy_bird.on_ground = true

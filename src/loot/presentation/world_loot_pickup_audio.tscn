@@ -1,0 +1,12 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://loot/presentation/world_loot_pickup_audio.gd" id="1_script"]
+[ext_resource type="AudioStream" path="res://assets/audio/sfx/items/pickup/click-b.ogg" id="2_pickup"]
+
+[node name="WorldLootPickupAudio" type="Node"]
+script = ExtResource("1_script")
+streams = Array[AudioStream]([ExtResource("2_pickup")])
+
+[node name="Player" type="AudioStreamPlayer" parent="."]
+volume_db = -7.0
+bus = &"SFX"

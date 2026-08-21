@@ -12,7 +12,6 @@ const ITEM_ALIASES: Dictionary[StringName, StringName] = {
 }
 const MAXIMUM_GIVE_XP_AMOUNT: int = 999_999_999
 const DEFAULT_MIXED_BIRD_COUNT: int = 4
-const MAXIMUM_BIRD_COUNT: int = WorldEntityCoordinator.MAX_TOTAL_ACTIVE
 
 var inventory_model: InventoryModel
 var actor_stats: ActorStats
@@ -25,6 +24,7 @@ var _exit_structure: Callable
 var _set_ripple_strength: Callable
 var _spawn_birds: Callable
 var _clear_current_dungeon_room: Callable
+var _defeat_all_entities: Callable
 
 func setup(
 	p_inventory_model: InventoryModel,
@@ -38,6 +38,7 @@ func setup(
 	p_set_ripple_strength: Callable,
 	p_spawn_birds: Callable,
 	p_clear_current_dungeon_room: Callable,
+	p_defeat_all_entities: Callable,
 ) -> void:
 	assert(p_inventory_model != null and p_inventory_loadout != null and p_actor_stats != null and p_pumpkin_patch != null)
 	assert(p_inventory_loadout.inventory_model == p_inventory_model)
@@ -50,6 +51,7 @@ func setup(
 	assert(p_set_ripple_strength.is_valid())
 	assert(p_spawn_birds.is_valid())
 	assert(p_clear_current_dungeon_room.is_valid())
+	assert(p_defeat_all_entities.is_valid())
 	inventory_model = p_inventory_model
 	inventory_loadout = p_inventory_loadout
 	actor_stats = p_actor_stats
@@ -61,6 +63,7 @@ func setup(
 	_set_ripple_strength = p_set_ripple_strength
 	_spawn_birds = p_spawn_birds
 	_clear_current_dungeon_room = p_clear_current_dungeon_room
+	_defeat_all_entities = p_defeat_all_entities
 
 func execute(command_line: String) -> ExecutionResult:
 	if inventory_model == null or inventory_loadout == null or actor_stats == null or pumpkin_patch == null:
@@ -75,11 +78,18 @@ func execute(command_line: String) -> ExecutionResult:
 		return _execute_give_xp(tokens)
 	if command == "sethealth":
 		return _execute_sethealth(tokens)
+	if command == "kill":
+		return _execute_kill(tokens)
 	if command == "set":
 		return _execute_set(tokens)
 	if command == "dev":
 		return _execute_dev(tokens)
 	return ExecutionResult.REJECTED
+
+func _execute_kill(tokens: PackedStringArray) -> ExecutionResult:
+	if tokens.size() != 1:
+		return ExecutionResult.REJECTED
+	return ExecutionResult.KEEP_OPEN if bool(_defeat_all_entities.call()) else ExecutionResult.REJECTED
 
 func _execute_spawn(tokens: PackedStringArray) -> ExecutionResult:
 	if tokens.size() >= 2 and tokens[1].to_lower() in ["bird", "birds"]:
@@ -102,7 +112,7 @@ func _execute_spawn(tokens: PackedStringArray) -> ExecutionResult:
 	var item_id := _resolve_item_id(" ".join(item_name_parts))
 	if item_id.is_empty():
 		return ExecutionResult.REJECTED
-	if not inventory_loadout.add_backpack_item(item_id, count):
+	if inventory_loadout.add_backpack_item_up_to(item_id, count) < 1:
 		return ExecutionResult.REJECTED
 	return ExecutionResult.KEEP_OPEN
 
@@ -125,7 +135,7 @@ func _parse_bird_count(token: String) -> int:
 	if not token.is_valid_int():
 		return 0
 	var count := int(token)
-	return count if count >= 1 and count <= MAXIMUM_BIRD_COUNT else 0
+	return count if count >= 1 else 0
 
 func _execute_give_xp(tokens: PackedStringArray) -> ExecutionResult:
 	if tokens.size() != 2:

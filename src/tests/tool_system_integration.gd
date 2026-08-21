@@ -35,6 +35,8 @@ var _soil_tilled_count: int = 0
 var _container_open_count: int = 0
 var _crafting_station_open_count: int = 0
 var _mining_tool_requirement_failures: Array[Dictionary] = []
+var _world_loot_pickup_calls: int = 0
+var _world_loot_pickup_available: bool = false
 
 func _init():
 	call_deferred("_run")
@@ -672,12 +674,26 @@ func _run():
 	_expect(elevated_cursor_target is Vector3 and (elevated_cursor_target as Vector3).distance_to(Vector3(1.5, 1.0, 0.5)) < 0.001, "bow cursor aim ignored an elevated voxel surface")
 	_interactor.bind_entity_runtime(actual_entity_runtime)
 	aim_runtime.free()
+	_player.setup_world_loot_pickup(_try_collect_hovered_world_loot)
 	_interactor.melee_attack_started.connect(_on_melee_attack_started)
 	_interactor.soil_tilled.connect(_on_soil_tilled)
 	_interactor.mining_tool_requirement_failed.connect(_on_mining_tool_requirement_failed)
 	_player.set_physics_process(false)
 	_interactor.set_physics_process(false)
 	_player.animation_driver.set_process(false)
+	_prepare_target(_stone_pos, pickaxe_action)
+	_world_loot_pickup_available = true
+	_input_buffer.primary_use_just = true
+	_input_buffer.primary_use_pressed = true
+	_interactor._handle_item_actions(0.5)
+	_expect(_world_loot_pickup_calls == 1, "primary action did not try highlighted world loot first")
+	_expect(not _interactor.is_mining and _voxel_world.get_block_id_at(_stone_pos) == BlockId.Type.STONE, "world loot pickup click started mining the supporting block")
+	_input_buffer.primary_use_pressed = true
+	_interactor._handle_item_actions(0.5)
+	_expect(not _interactor.is_mining and _voxel_world.get_block_id_at(_stone_pos) == BlockId.Type.STONE, "held world loot pickup click started mining")
+	_input_buffer.primary_use_pressed = false
+	_interactor._handle_item_actions(0.0)
+	_world_loot_pickup_available = false
 	_expect(_inventory_loadout.discard_stack(0, 1), "stone pickaxe could not be replaced for the hammer presentation test")
 	_expect(_inventory_loadout.add_stack(InventoryStack.new(
 		&"copper_hammer",
@@ -1462,6 +1478,11 @@ func _on_mining_tool_requirement_failed(position: Vector3i, block_id: int, actio
 		"block_id": block_id,
 		"action": action,
 	})
+
+func _try_collect_hovered_world_loot(maximum_distance: float) -> bool:
+	_world_loot_pickup_calls += 1
+	_expect(is_equal_approx(maximum_distance, _interactor.reach), "world loot pickup used the wrong interaction range")
+	return _world_loot_pickup_available
 
 func _push_hotbar_key(keycode: Key):
 	var event := InputEventKey.new()

@@ -11,12 +11,14 @@ func _run() -> void:
 	var item_catalog := load("res://items/item_catalog.tres") as ItemCatalog
 	var entity_catalog := load("res://entities/entity_catalog.tres") as EntityCatalog
 	var drop_scene := load("res://loot/presentation/loot_drop_view.tscn") as PackedScene
+	var pickup_audio_scene := load("res://loot/presentation/world_loot_pickup_audio.tscn") as PackedScene
 	var player_scene := load("res://player/player.tscn") as PackedScene
 	var stats_definition := load("res://player/player_stats.tres") as PlayerStatsDefinition
 	_expect(block_catalog != null and block_catalog.validate(), "block catalog invalid")
 	_expect(item_catalog != null and item_catalog.validate(block_catalog), "item catalog invalid")
 	_expect(entity_catalog != null and entity_catalog.validate(), "entity catalog invalid")
 	_expect(drop_scene != null and drop_scene.can_instantiate(), "loot drop view did not load")
+	_expect(pickup_audio_scene != null and pickup_audio_scene.can_instantiate(), "loot pickup audio did not load")
 	_expect(player_scene != null and player_scene.can_instantiate(), "player scene did not load")
 	_expect(stats_definition != null and stats_definition.validate(), "player stats definition invalid")
 	_test_variant_stats(item_catalog, stats_definition)
@@ -28,6 +30,7 @@ func _run() -> void:
 		drop_scene,
 		player_scene,
 	)
+	await _test_bird_feather_drops(entity_catalog, item_catalog, drop_scene, pickup_audio_scene, player_scene)
 	await _test_partial_pickup_streaming_and_lifetime(
 		entity_catalog,
 		item_catalog,
@@ -135,6 +138,7 @@ func _test_lootless_skeleton_lifecycle(
 		loadout,
 		player,
 		runtime,
+		world,
 		_always_ready,
 		drop_scene,
 	)
@@ -199,6 +203,105 @@ func _test_lootless_skeleton_lifecycle(
 	player.queue_free()
 	await process_frame
 	await process_frame
+
+func _test_bird_feather_drops(
+	entity_catalog: EntityCatalog,
+	item_catalog: ItemCatalog,
+	drop_scene: PackedScene,
+	pickup_audio_scene: PackedScene,
+	player_scene: PackedScene,
+) -> void:
+	var factory := EquipmentInstanceFactory.new(item_catalog)
+	var inventory := InventoryModel.new(item_catalog, factory)
+	inventory.setup_empty()
+	var state := WorldLootState.new(item_catalog, factory)
+	var fixture := _create_runtime_fixture(
+		entity_catalog,
+		item_catalog,
+		drop_scene,
+		player_scene,
+		inventory,
+		state,
+		Vector3(1000.0, 0.0, 1000.0),
+	)
+	var entity_runtime := fixture["entity_runtime"] as EntityRuntime
+	var coordinator := fixture["coordinator"] as OverworldLootCoordinator
+	var pickup_audio := pickup_audio_scene.instantiate() as WorldLootPickupAudio
+	root.add_child(pickup_audio)
+	pickup_audio.setup(coordinator)
+	var pickup_player := pickup_audio.get_node("Player") as AudioStreamPlayer
+	var pickup_events: Array[Dictionary] = []
+	coordinator.pickup_committed.connect(func(item_id: StringName, count: int) -> void:
+		pickup_events.append({"item_id": item_id, "count": count})
+	)
+	var expected_item_ids: Array[StringName] = [&"black_feather", &"red_feather", &"blue_feather"]
+	var variants: Array[int] = [BirdColorVariant.Type.CROW, BirdColorVariant.Type.REDBIRD, BirdColorVariant.Type.BLUEBIRD]
+	for item_id in expected_item_ids:
+		var item_definition := item_catalog.get_definition(item_id)
+		_expect(item_definition.world_model != null and item_definition.world_material != null, "%s has incomplete world presentation" % item_id)
+		_expect(is_equal_approx(item_definition.world_presentation_scale, 1.125), "%s world model scale changed" % item_id)
+		_expect(is_equal_approx(item_catalog.get_definition(item_id).world_pickup_radius_multiplier, 2.0), "%s pickup radius multiplier is not doubled" % item_id)
+	for index in variants.size():
+		var seed := BirdColorVariant.behavior_seed_for_common_variant(variants[index], 8000 + index * 100)
+		entity_runtime.entity_defeated.emit(EntityDefeat.new(index + 1, &"bird", Vector3(float(index) * 4.0, 10.0, 0.0), seed))
+	var entries := state.get_entries()
+	_expect(entries.size() == 3, "three feather-dropping birds did not create three world loot entries")
+	var dropped_item_ids: Array[StringName] = []
+	for entry in entries:
+		dropped_item_ids.append(entry.stack.item_id)
+		_expect(is_equal_approx(entry.world_position.y, 2.0), "airborne feather was not stored at terrain height")
+	dropped_item_ids.sort()
+	expected_item_ids.sort()
+	_expect(dropped_item_ids == expected_item_ids, "bird color variants dropped the wrong feather items")
+	_expect(coordinator.get_child_count() == 3, "feather drops did not create three world views")
+	for child in coordinator.get_children():
+		var icon_sprite := child.get_node("Icon") as Sprite3D
+		var model := child.get_node("Model") as MeshInstance3D
+		var hover_box := child.get_node("HoverBox") as Node3D
+		var pickup_area := child.get_node("PickupArea") as Area3D
+		_expect(not icon_sprite.visible and model.visible and model.mesh != null, "feather world view did not use its 3D model")
+		_expect(model.scale.is_equal_approx(Vector3.ONE * 1.125), "feather world model used the wrong scale")
+		pickup_area.mouse_entered.emit()
+		_expect(hover_box.visible, "feather hover did not show its selection box")
+		pickup_area.mouse_exited.emit()
+		_expect(not hover_box.visible, "feather hover selection box did not clear")
+		_expect((child as LootDropView).is_falling(), "airborne feather view did not begin falling")
+	await create_timer(1.1).timeout
+	for child in coordinator.get_children():
+		_expect(not (child as LootDropView).is_falling(), "airborne feather view did not finish falling")
+		_expect(is_equal_approx((child as LootDropView).global_position.y, 2.0), "airborne feather view did not land at terrain height")
+	var player := fixture["player"] as PlayerMotor
+	var black_feather_entry: WorldLootEntry
+	for entry in state.get_entries():
+		if entry.stack.item_id == &"black_feather":
+			black_feather_entry = entry
+			break
+	_expect(black_feather_entry != null, "black feather pickup fixture was missing")
+	if black_feather_entry != null:
+		var black_feather_view: LootDropView
+		for child in coordinator.get_children():
+			if (child as LootDropView).global_position.is_equal_approx(black_feather_entry.world_position):
+				black_feather_view = child as LootDropView
+				break
+		_expect(black_feather_view != null, "black feather pickup view was missing")
+		if black_feather_view != null:
+			(black_feather_view.get_node("PickupArea") as Area3D).mouse_entered.emit()
+			_expect(coordinator.handle_hovered_pickup(6.0), "highlighted distant feather did not consume interaction")
+			_expect(state.has_entry(black_feather_entry.entry_id), "distant highlighted feather was collected outside player reach")
+			_expect(pickup_events.is_empty() and pickup_player.stream == null, "failed feather pickup played feedback")
+			player.global_position = black_feather_entry.world_position + Vector3(0.0, 0.0, 2.5)
+			coordinator.tick()
+		_expect(inventory.get_inventory_item_count(&"black_feather") == 1, "nearby black feather was not collected automatically")
+		_expect(not state.has_entry(black_feather_entry.entry_id), "collected black feather remained in world loot")
+		_expect(pickup_events == [{"item_id": &"black_feather", "count": 1}], "successful feather pickup emitted the wrong feedback event")
+		_expect(pickup_player.stream != null and pickup_player.stream.resource_path.ends_with("click-b.ogg"), "successful feather pickup did not play the configured sound")
+	var count_before_lootless_birds := state.get_entry_count()
+	var duck_seed := BirdColorVariant.behavior_seed_for_common_variant(BirdColorVariant.Type.DUCK, 9000)
+	entity_runtime.entity_defeated.emit(EntityDefeat.new(4, &"bird", Vector3(16.0, 2.0, 0.0), duck_seed))
+	entity_runtime.entity_defeated.emit(EntityDefeat.new(5, &"owl", Vector3(20.0, 2.0, 0.0), 9001))
+	_expect(state.get_entry_count() == count_before_lootless_birds, "duck or owl unexpectedly created feather loot")
+	pickup_audio.queue_free()
+	await _cleanup_runtime_fixture(fixture)
 
 func _test_partial_pickup_streaming_and_lifetime(
 	entity_catalog: EntityCatalog,
@@ -587,6 +690,10 @@ func _create_runtime_fixture(
 	var player := player_scene.instantiate() as PlayerMotor
 	var entity_runtime := EntityRuntime.new()
 	var coordinator := OverworldLootCoordinator.new()
+	var voxel_world := VoxelWorld.new(16, 32, 5, 8.0, load("res://blocks/block_catalog.tres") as BlockCatalog)
+	for x in range(-32, 33):
+		voxel_world.height_map_dict[Vector2i(x, 0)] = 1
+		voxel_world.type_map_dict[Vector2i(x, 0)] = BlockId.Type.GRASS
 	root.add_child(player)
 	root.add_child(entity_runtime)
 	root.add_child(coordinator)
@@ -600,6 +707,7 @@ func _create_runtime_fixture(
 		loadout,
 		player,
 		entity_runtime,
+		voxel_world,
 		_position_ready,
 		drop_scene,
 	)

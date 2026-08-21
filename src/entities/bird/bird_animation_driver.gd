@@ -1,14 +1,6 @@
 extends EntityAnimationDriver
 class_name BirdAnimationDriver
 
-enum ColorVariant {
-	CROW,
-	REDBIRD,
-	DUCK,
-	BLUEBIRD,
-	OWL,
-}
-
 const COLOR_PALETTES: Array[Dictionary] = [
 	{&"body": Color(0.075, 0.09, 0.115), &"head": Color(0.055, 0.065, 0.085), &"wing": Color(0.025, 0.032, 0.045), &"beak": Color(0.16, 0.17, 0.18), &"leg": Color(0.12, 0.12, 0.13)},
 	{&"body": Color(0.72, 0.12, 0.08), &"head": Color(0.78, 0.15, 0.1), &"wing": Color(0.34, 0.055, 0.045), &"beak": Color(0.82, 0.48, 0.12), &"leg": Color(0.4, 0.24, 0.14)},
@@ -17,6 +9,8 @@ const COLOR_PALETTES: Array[Dictionary] = [
 	{&"body": Color(0.48, 0.36, 0.23), &"head": Color(0.7, 0.57, 0.36), &"wing": Color(0.3, 0.2, 0.12), &"beak": Color(0.9, 0.7, 0.2), &"leg": Color(0.45, 0.32, 0.18)},
 ]
 const OWL_EYE_EMISSION_ENERGY: float = 0.675
+const HIT_SECONDS: float = 0.12
+const DEATH_SECONDS: float = 0.28
 
 var _rig_root: Node3D
 var _body_pivot: Node3D
@@ -49,6 +43,10 @@ var _right_leg_origin: Transform3D
 var _beak_origin: Transform3D
 var _call_elapsed: float = 0.0
 var _audio_enabled: bool = true
+var _hit_elapsed: float = HIT_SECONDS
+var _hit_direction: Vector3 = Vector3.BACK
+var _dying: bool = false
+var _death_elapsed: float = 0.0
 
 func setup(p_actor: Node3D):
 	super.setup(p_actor)
@@ -90,8 +88,8 @@ func setup(p_actor: Node3D):
 	_right_leg_origin = _right_leg_pivot.transform
 	_beak_origin = _beak_mesh.transform
 
-func apply_color_variant(variant: ColorVariant) -> void:
-	assert(variant >= ColorVariant.CROW and variant <= ColorVariant.OWL)
+func apply_color_variant(variant: BirdColorVariant.Type) -> void:
+	assert(variant >= BirdColorVariant.Type.CROW and variant <= BirdColorVariant.Type.OWL)
 	var palette := COLOR_PALETTES[variant]
 	_apply_color(_body_mesh, palette[&"body"] as Color)
 	_apply_color(_head_mesh, palette[&"head"] as Color)
@@ -101,7 +99,7 @@ func apply_color_variant(variant: ColorVariant) -> void:
 		_apply_color(wing_mesh, palette[&"wing"] as Color)
 	for leg_mesh in _leg_meshes:
 		_apply_color(leg_mesh, palette[&"leg"] as Color)
-	if variant == ColorVariant.OWL:
+	if variant == BirdColorVariant.Type.OWL:
 		_body_mesh.scale = Vector3(1.12, 1.15, 1.08)
 		_head_mesh.scale = Vector3(1.35, 1.3, 1.08)
 		_left_eye_mesh.scale = Vector3(2.2, 2.2, 1.4)
@@ -118,6 +116,11 @@ func advance(delta: float):
 	assert(actor is BirdActor)
 	_elapsed += delta
 	_reset_pose()
+	if _dying:
+		_death_elapsed = minf(_death_elapsed + delta, DEATH_SECONDS)
+		_apply_death_pose()
+		stop_flight_audio()
+		return
 	var bird := actor as BirdActor
 	var wings_flapping := true
 	match bird.brain.state:
@@ -135,6 +138,44 @@ func advance(delta: float):
 		BirdBrain.State.TAKEOFF:
 			_apply_flight(delta, 0.14, 70.0, -14.0)
 	_update_wing_flap_audio(wings_flapping)
+	_apply_hit_pose(delta)
+
+func play_attack(_duration: float) -> void:
+	pass
+
+func play_hit(local_hit_direction: Vector3 = Vector3.BACK) -> void:
+	if _dying:
+		return
+	_hit_direction = local_hit_direction.normalized() if not local_hit_direction.is_zero_approx() else Vector3.BACK
+	_hit_elapsed = 0.0
+
+func play_death() -> void:
+	_dying = true
+	_death_elapsed = 0.0
+	_hit_elapsed = HIT_SECONDS
+	stop_flight_audio()
+
+func is_death_complete() -> bool:
+	return _dying and _death_elapsed >= DEATH_SECONDS
+
+func get_death_time_remaining() -> float:
+	assert(_dying)
+	return maxf(DEATH_SECONDS - _death_elapsed, 0.0)
+
+func _apply_hit_pose(delta: float) -> void:
+	if _hit_elapsed >= HIT_SECONDS:
+		return
+	_hit_elapsed = minf(_hit_elapsed + delta, HIT_SECONDS)
+	var progress := _hit_elapsed / HIT_SECONDS
+	var impulse := sin(progress * PI) * 0.12
+	_rig_root.position += _hit_direction * impulse
+
+func _apply_death_pose() -> void:
+	var progress := _death_elapsed / DEATH_SECONDS
+	_rig_root.rotation.z = lerpf(_rig_origin.basis.get_euler().z, deg_to_rad(88.0), progress)
+	_rig_root.position.y = _rig_origin.origin.y - progress * 0.16
+	_left_wing_pivot.rotation.z = _left_wing_origin.basis.get_euler().z + deg_to_rad(52.0)
+	_right_wing_pivot.rotation.z = _right_wing_origin.basis.get_euler().z - deg_to_rad(52.0)
 
 func _apply_call(delta: float, calling: bool) -> void:
 	if not calling:

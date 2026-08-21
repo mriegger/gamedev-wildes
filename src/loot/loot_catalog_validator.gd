@@ -7,16 +7,16 @@ static func validate_entity_catalog(entity_catalog: EntityCatalog, item_catalog:
 	var valid := true
 	var pools_by_id: Dictionary = {}
 	for entity in entity_catalog.definitions:
-		if entity == null or entity.loot_pool == null:
+		if entity == null:
 			continue
-		var pool := entity.loot_pool
-		if pools_by_id.has(pool.id):
-			if pools_by_id[pool.id] != pool:
-				push_error("[LootCatalogValidator] Non-canonical loot pool %s for %s" % [pool.id, entity.id])
-				valid = false
-			continue
-		pools_by_id[pool.id] = pool
-		valid = validate(pool, item_catalog) and valid
+		for pool in entity.get_loot_pools():
+			if pools_by_id.has(pool.id):
+				if pools_by_id[pool.id] != pool:
+					push_error("[LootCatalogValidator] Non-canonical loot pool %s for %s" % [pool.id, entity.id])
+					valid = false
+				continue
+			pools_by_id[pool.id] = pool
+			valid = validate(pool, item_catalog) and valid
 	return valid
 
 static func validate(pool: LootPoolDefinition, item_catalog: ItemCatalog) -> bool:

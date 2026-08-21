@@ -20,10 +20,11 @@ const TAKEOFF_ESCAPE_DIRECTIONS: Array[Vector3] = [
 
 @export var vocalization_profiles: Array[EntityVocalizationProfile] = []
 @export var vocalization_profile_override: EntityVocalizationProfile
-@export_range(-1, 4, 1) var color_variant_override: int = -1
+@export_node_path("AudioStreamPlayer3D") var death_audio_path: NodePath
 
 var brain: BirdBrain
-var color_variant: BirdAnimationDriver.ColorVariant
+var color_variant: BirdColorVariant.Type
+var death_audio: BirdDeathAudio
 
 var _behavior: BirdBehaviorDefinition
 var _path_follower: VoxelPathFollower
@@ -35,9 +36,19 @@ var _landing_on_water: bool = false
 var _landing_retry_remaining: float = 0.0
 var _water_ripple_remaining: float = 0.0
 var _ambient_departure_remaining: float = 0.0
+var _preferred_takeoff_direction: Vector3 = Vector3.ZERO
 
 func supports_behavior(behavior: EntityBehaviorDefinition) -> bool:
 	return behavior is BirdBehaviorDefinition
+
+func supports_player_hit_response() -> bool:
+	return true
+
+func has_valid_presentation() -> bool:
+	if not super.has_valid_presentation() or death_audio_path.is_empty():
+		return false
+	var candidate_death_audio := get_node_or_null(death_audio_path) as BirdDeathAudio
+	return candidate_death_audio != null and candidate_death_audio.has_valid_presentation()
 
 func setup(
 	p_runtime_id: int,
@@ -52,7 +63,12 @@ func setup(
 	brain = BirdBrain.new(_behavior, behavior_seed)
 	_path_follower = VoxelPathFollower.new(voxel_space, definition.body_width, definition.body_height, _behavior.repath_seconds, navigation_limits)
 	assert(animation_driver is BirdAnimationDriver)
-	color_variant = color_variant_for_seed(behavior_seed) if color_variant_override < 0 else color_variant_override as BirdAnimationDriver.ColorVariant
+	death_audio = get_node(death_audio_path) as BirdDeathAudio
+	assert(death_audio != null and death_audio.has_valid_presentation())
+	death_audio.setup(behavior_seed)
+	var bird_definition := p_definition as BirdEntityDefinition
+	assert(bird_definition != null)
+	color_variant = bird_definition.get_color_variant(behavior_seed)
 	_configure_vocalizations(behavior_seed)
 	var bird_animation := animation_driver as BirdAnimationDriver
 	bird_animation.apply_color_variant(color_variant)
@@ -63,53 +79,20 @@ func setup(
 	_try_select_landing_target()
 	_update_vocalizations()
 
-static func color_variant_for_seed(seed_value: int) -> BirdAnimationDriver.ColorVariant:
-	var rng := RandomNumberGenerator.new()
-	rng.seed = seed_value ^ 0x4b1d5eed
-	return rng.randi_range(BirdAnimationDriver.ColorVariant.CROW, BirdAnimationDriver.ColorVariant.BLUEBIRD) as BirdAnimationDriver.ColorVariant
-
-static func color_variant_index_for_id(variant_id: StringName) -> int:
-	match variant_id:
-		&"crow":
-			return BirdAnimationDriver.ColorVariant.CROW
-		&"redbird":
-			return BirdAnimationDriver.ColorVariant.REDBIRD
-		&"duck":
-			return BirdAnimationDriver.ColorVariant.DUCK
-		&"bluebird":
-			return BirdAnimationDriver.ColorVariant.BLUEBIRD
-		&"owl":
-			return BirdAnimationDriver.ColorVariant.OWL
-	return -1
-
-static func color_variant_count() -> int:
-	return BirdAnimationDriver.ColorVariant.BLUEBIRD + 1
-
-static func behavior_seed_for_color_variant_index(variant_index: int, seed_start: int) -> int:
-	assert(variant_index >= BirdAnimationDriver.ColorVariant.CROW and variant_index <= BirdAnimationDriver.ColorVariant.BLUEBIRD)
-	var variant := variant_index as BirdAnimationDriver.ColorVariant
-	var candidate := seed_start
-	for _attempt in 256:
-		if color_variant_for_seed(candidate) == variant:
-			return candidate
-		candidate += 1
-	assert(false)
-	return seed_start
-
 func tick_gameplay(
 	delta: float,
-	_observation: EntityTargetObservation,
+	observation: EntityTargetObservation,
 	separation_velocity: Vector3,
 	navigation_search_budget: NavigationSearchBudget,
 ) -> void:
-	_advance_behavior(delta, separation_velocity, navigation_search_budget)
+	_advance_behavior(delta, separation_velocity, navigation_search_budget, true, observation.player_position)
 
 func tick_ambient(
 	delta: float,
 	separation_velocity: Vector3,
 	navigation_search_budget: NavigationSearchBudget,
 ) -> void:
-	_advance_behavior(delta, separation_velocity, navigation_search_budget)
+	_advance_behavior(delta, separation_velocity, navigation_search_budget, false, Vector3.ZERO)
 
 func configure_audio(enabled: bool) -> void:
 	super.configure_audio(enabled)
@@ -120,15 +103,18 @@ func _advance_behavior(
 	delta: float,
 	separation_velocity: Vector3,
 	navigation_search_budget: NavigationSearchBudget,
+	can_startle: bool,
+	player_position: Vector3,
 ) -> void:
 	assert(brain != null and voxel_space != null)
 	var previous_state := brain.state
-	var rejected_ground_contact := on_ground and not _has_approved_ground_contact() and brain.state != BirdBrain.State.CRUISE
-	if rejected_ground_contact:
-		brain.reject_ground_contact()
-	else:
-		var phase_goal_reached := _is_phase_goal_reached()
-		brain.advance(delta, global_position, on_ground, phase_goal_reached)
+	if not can_startle or not _try_startle_from_player(player_position):
+		var rejected_ground_contact := on_ground and not _has_approved_ground_contact() and brain.state != BirdBrain.State.CRUISE
+		if rejected_ground_contact:
+			brain.reject_ground_contact()
+		else:
+			var phase_goal_reached := _is_phase_goal_reached()
+			brain.advance(delta, global_position, on_ground, phase_goal_reached)
 	_handle_state_transition(previous_state, brain.state)
 	if brain.state in [BirdBrain.State.GROUNDED_IDLE, BirdBrain.State.GROUNDED_WALK]:
 		_advance_grounded(delta, separation_velocity, navigation_search_budget)
@@ -137,6 +123,7 @@ func _advance_behavior(
 	_update_vocalizations()
 
 func begin_despawn_fade() -> void:
+	death_audio.stop_audio()
 	if definition.id != &"owl":
 		super.begin_despawn_fade()
 		return
@@ -151,6 +138,10 @@ func begin_despawn_fade() -> void:
 	on_ground = false
 	velocity = Vector3.ZERO
 	_ambient_departure_remaining = AMBIENT_DEPARTURE_SECONDS
+
+func begin_death_retirement() -> void:
+	death_audio.play_death()
+	super.begin_death_retirement()
 
 func advance_retirement(delta: float) -> bool:
 	if _ambient_departure_remaining > 0.0:
@@ -191,7 +182,7 @@ func _configure_vocalizations(behavior_seed: int) -> void:
 		return
 	var selected_profile := vocalization_profile_override
 	if selected_profile == null:
-		assert(vocalization_profiles.size() == color_variant_count())
+		assert(vocalization_profiles.size() == BirdColorVariant.COMMON_COUNT)
 		selected_profile = vocalization_profiles[color_variant]
 	if vocalizations.profile == selected_profile:
 		return
@@ -326,7 +317,9 @@ func _handle_state_transition(previous_state: BirdBrain.State, current_state: Bi
 	elif current_state == BirdBrain.State.GROUNDED_WALK:
 		_path_follower.request_repath()
 	elif current_state == BirdBrain.State.TAKEOFF:
-		if not _try_select_takeoff_target():
+		var preferred_direction := _preferred_takeoff_direction
+		_preferred_takeoff_direction = Vector3.ZERO
+		if not _try_select_takeoff_target(preferred_direction):
 			brain.reject_takeoff()
 			velocity = Vector3.ZERO
 			return
@@ -336,8 +329,12 @@ func _handle_state_transition(previous_state: BirdBrain.State, current_state: Bi
 		_landing_on_water = false
 		_try_select_landing_target()
 
-func _try_select_takeoff_target() -> bool:
+func _try_select_takeoff_target(preferred_direction: Vector3 = Vector3.ZERO) -> bool:
 	var altitude := float(brain.sample_cruise_altitude())
+	if not preferred_direction.is_zero_approx():
+		var flee_distance := maxf(_behavior.player_flee_distance, TAKEOFF_ESCAPE_DISTANCES.back())
+		if _takeoff_route_is_clear(global_position + preferred_direction.normalized() * flee_distance + Vector3.UP * altitude):
+			return true
 	if _takeoff_route_is_clear(global_position + Vector3.UP * altitude):
 		return true
 	for distance in TAKEOFF_ESCAPE_DISTANCES:
@@ -345,6 +342,21 @@ func _try_select_takeoff_target() -> bool:
 			if _takeoff_route_is_clear(global_position + direction * distance + Vector3.UP * altitude):
 				return true
 	return false
+
+func _try_startle_from_player(player_position: Vector3) -> bool:
+	var away := global_position - player_position
+	away.y = 0.0
+	if away.length_squared() > _behavior.player_flee_distance * _behavior.player_flee_distance:
+		return false
+	if not brain.try_startle():
+		return false
+	if away.is_zero_approx():
+		away = model_root.global_transform.basis.z
+		away.y = 0.0
+	_preferred_takeoff_direction = away.normalized()
+	_has_landing_target = false
+	_landing_on_water = false
+	return true
 
 func _takeoff_route_is_clear(candidate: Vector3) -> bool:
 	var motion := candidate - global_position
@@ -393,7 +405,7 @@ func _try_select_landing_target() -> bool:
 	return false
 
 func _can_land_on_water() -> bool:
-	return color_variant == BirdAnimationDriver.ColorVariant.DUCK
+	return color_variant == BirdColorVariant.Type.DUCK
 
 func _is_on_water_surface(position: Vector3) -> bool:
 	var water_surface_y := _get_water_surface_y(floori(position.x), floori(position.z))

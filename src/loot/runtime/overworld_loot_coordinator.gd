@@ -2,6 +2,7 @@ extends Node3D
 class_name OverworldLootCoordinator
 
 signal state_changed()
+signal pickup_committed(item_id: StringName, count: int)
 
 const COLLECTION_RADIUS: float = 1.5
 const STREAMING_CHECKS_PER_TICK: int = 4
@@ -16,16 +17,19 @@ var _inventory_model: InventoryModel
 var _inventory_loadout: InventoryLoadoutCoordinator
 var _player: PlayerMotor
 var _entity_runtime: EntityRuntime
+var _voxel_world: VoxelWorld
 var _position_ready: Callable
 var _drop_scene: PackedScene
 var _views: Dictionary = {}
 var _streaming_entry_ids: Array[int] = []
 var _streaming_cursor: int = 0
 var _lifetime_accumulator: float = 0.0
+var _maximum_collection_radius: float = COLLECTION_RADIUS
 var _suspended: bool = false
 var _transaction_in_progress: bool = false
 var _pending_defeats: Array[EntityDefeat] = []
 var _draining_pending_defeats: bool = false
+var _hovered_entry_id: int = 0
 
 func setup(
 	p_entity_catalog: EntityCatalog,
@@ -36,6 +40,7 @@ func setup(
 	p_inventory_loadout: InventoryLoadoutCoordinator,
 	p_player: PlayerMotor,
 	p_entity_runtime: EntityRuntime,
+	p_voxel_world: VoxelWorld,
 	p_position_ready: Callable,
 	p_drop_scene: PackedScene,
 ) -> void:
@@ -49,6 +54,7 @@ func setup(
 	assert(p_inventory_model.equipment_instance_factory == p_equipment_instance_factory)
 	assert(p_player != null)
 	assert(p_entity_runtime != null)
+	assert(p_voxel_world != null)
 	assert(p_position_ready.is_valid())
 	assert(p_drop_scene != null and p_drop_scene.can_instantiate())
 	shutdown()
@@ -60,8 +66,15 @@ func setup(
 	_inventory_loadout = p_inventory_loadout
 	_player = p_player
 	_entity_runtime = p_entity_runtime
+	_voxel_world = p_voxel_world
 	_position_ready = p_position_ready
 	_drop_scene = p_drop_scene
+	_maximum_collection_radius = COLLECTION_RADIUS
+	for definition in _item_catalog.definitions:
+		_maximum_collection_radius = maxf(
+			_maximum_collection_radius,
+			COLLECTION_RADIUS * definition.world_pickup_radius_multiplier,
+		)
 	_entity_runtime.entity_defeated.connect(_on_entity_defeated)
 	_lifetime_accumulator = 0.0
 	_suspended = false
@@ -101,10 +114,11 @@ func _on_entity_defeated(defeat: EntityDefeat) -> void:
 
 func _resolve_entity_defeat(defeat: EntityDefeat) -> void:
 	var definition := _entity_catalog.get_definition(defeat.definition_id)
-	if definition.loot_pool == null:
+	var loot_pool := definition.resolve_loot_pool(defeat.loot_seed)
+	if loot_pool == null:
 		return
 	var resolution := LootResolver.prepare(
-		definition.loot_pool,
+		loot_pool,
 		defeat.loot_seed,
 		_equipment_instance_factory,
 	)
@@ -113,28 +127,78 @@ func _resolve_entity_defeat(defeat: EntityDefeat) -> void:
 	var drops := resolution.get_drops()
 	if drops.is_empty():
 		return
+	var existing_entry_ids: Dictionary = {}
+	for entry in _world_loot_state.get_entries():
+		existing_entry_ids[entry.entry_id] = true
+	var drop_position := _resolve_drop_position(definition, defeat.world_position)
 	_transaction_in_progress = true
 	if not WorldLootDropTransaction.try_commit(
 		resolution,
 		_world_loot_state,
-		defeat.world_position,
+		drop_position,
 	):
 		_finish_transaction()
 		return
 	_sync_all_views()
+	if not drop_position.is_equal_approx(defeat.world_position):
+		_begin_new_drop_falls(existing_entry_ids, defeat.world_position, drop_position)
 	state_changed.emit()
 	_finish_transaction()
+
+func _resolve_drop_position(definition: EntityDefinition, world_position: Vector3) -> Vector3:
+	if not definition.loot_drops_to_terrain:
+		return world_position
+	var terrain_y := _voxel_world.get_terrain_surface_top(floori(world_position.x), floori(world_position.z))
+	if terrain_y == VoxelSpace.NO_SURFACE_Y or terrain_y >= world_position.y:
+		return world_position
+	return Vector3(world_position.x, terrain_y, world_position.z)
+
+func _begin_new_drop_falls(existing_entry_ids: Dictionary, start_position: Vector3, resting_position: Vector3) -> void:
+	for entry in _world_loot_state.get_entries():
+		if existing_entry_ids.has(entry.entry_id) or not entry.world_position.is_equal_approx(resting_position):
+			continue
+		var view := _views.get(entry.entry_id) as LootDropView
+		if view != null:
+			view.begin_fall(start_position)
 
 func _collect_nearby_drops() -> void:
 	if _player.is_defeated():
 		return
 	var state := _world_loot_state
-	for entry in state.query_nearby(_player.global_position, COLLECTION_RADIUS):
+	for entry in state.query_nearby(_player.global_position, _maximum_collection_radius):
 		if _world_loot_state != state or _suspended:
 			break
-		if not bool(_position_ready.call(entry.world_position)):
-			continue
-		_collect_entry(entry.entry_id)
+		_try_collect_entry(entry.entry_id)
+
+func _try_collect_entry(entry_id: int, maximum_distance: float = -1.0) -> bool:
+	if _transaction_in_progress or _suspended or _player.is_defeated():
+		return false
+	var entry := _world_loot_state.get_entry(entry_id)
+	if entry == null:
+		return false
+	var definition := _item_catalog.get_definition(entry.stack.item_id)
+	var collection_radius := maximum_distance if maximum_distance >= 0.0 else COLLECTION_RADIUS * definition.world_pickup_radius_multiplier
+	if entry.world_position.distance_squared_to(_player.global_position) > collection_radius * collection_radius:
+		return false
+	if not bool(_position_ready.call(entry.world_position)):
+		return false
+	_collect_entry(entry_id)
+	return true
+
+func handle_hovered_pickup(maximum_distance: float) -> bool:
+	if not is_finite(maximum_distance) or maximum_distance < 0.0 or _hovered_entry_id < 1:
+		return false
+	if _world_loot_state.get_entry(_hovered_entry_id) == null:
+		_hovered_entry_id = 0
+		return false
+	_try_collect_entry(_hovered_entry_id, maximum_distance)
+	return true
+
+func _on_view_hover_changed(hovered: bool, entry_id: int) -> void:
+	if hovered:
+		_hovered_entry_id = entry_id
+	elif _hovered_entry_id == entry_id:
+		_hovered_entry_id = 0
 
 func _collect_entry(entry_id: int) -> void:
 	var state := _world_loot_state
@@ -168,6 +232,7 @@ func _collect_entry(entry_id: int) -> void:
 	state_changed.emit()
 	var inventory_notified := loadout._notify_prepared_change(loadout_change)
 	assert(inventory_notified)
+	pickup_committed.emit(accepted.item_id, accepted.count)
 	_finish_transaction()
 
 func _advance_lifetimes(delta: float) -> void:
@@ -250,15 +315,19 @@ func _sync_view(entry: WorldLootEntry) -> void:
 		view = _drop_scene.instantiate() as LootDropView
 		assert(view != null)
 		add_child(view)
-		view.setup(_item_catalog.get_definition(entry.stack.item_id).icon)
+		var item_definition := _item_catalog.get_definition(entry.stack.item_id)
+		view.setup(item_definition)
+		view.hover_changed.connect(_on_view_hover_changed.bind(entry.entry_id))
 		_views[entry.entry_id] = view
-	view.global_position = entry.world_position
+	view.sync_world_position(entry.world_position)
 
 func _remove_view(entry_id: int) -> void:
 	var view := _views.get(entry_id) as LootDropView
 	if view == null:
 		return
 	_views.erase(entry_id)
+	if _hovered_entry_id == entry_id:
+		_hovered_entry_id = 0
 	if is_instance_valid(view):
 		if view.get_parent() == self:
 			remove_child(view)
@@ -303,12 +372,15 @@ func shutdown() -> void:
 	_inventory_loadout = null
 	_player = null
 	_entity_runtime = null
+	_voxel_world = null
 	_position_ready = Callable()
 	_drop_scene = null
 	_streaming_entry_ids.clear()
 	_pending_defeats.clear()
 	_draining_pending_defeats = false
+	_hovered_entry_id = 0
 	_streaming_cursor = 0
 	_lifetime_accumulator = 0.0
+	_maximum_collection_radius = COLLECTION_RADIUS
 	_suspended = false
 	visible = false

@@ -266,6 +266,13 @@ func try_despawn(runtime_id: int) -> bool:
 	actor.begin_despawn_fade()
 	return true
 
+func defeat_all_active() -> int:
+	var runtime_ids: Array = _active.keys()
+	runtime_ids.sort()
+	for runtime_id in runtime_ids:
+		_retire_defeated(runtime_id, null)
+	return runtime_ids.size()
+
 func _retire_defeated(runtime_id: int, spawn_plan: DefeatSpawnPlan) -> void:
 	var actor := _remove_active_actor(runtime_id)
 	if actor == null:

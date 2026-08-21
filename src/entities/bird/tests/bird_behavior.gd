@@ -14,6 +14,7 @@ func _expect(condition: bool, message: String) -> void:
 func _run() -> void:
 	var behavior := load("res://entities/bird/bird_behavior.tres") as BirdBehaviorDefinition
 	_expect(behavior != null and behavior.validate(behavior.resource_path), "bird behavior definition is invalid")
+	_expect(is_equal_approx(behavior.player_flee_distance, 5.0), "bird player flee distance is not five blocks")
 	var first := BirdBrain.new(behavior, 4419)
 	var second := BirdBrain.new(behavior, 4419)
 	var different := BirdBrain.new(behavior, 4420)
@@ -68,6 +69,9 @@ func _run() -> void:
 	_expect(rejection.state == BirdBrain.State.GROUNDED_IDLE, "rejected walk did not return to idle")
 	rejection.reject_flight_goal()
 	_expect(rejection.state == BirdBrain.State.GROUNDED_IDLE, "grounded flight rejection changed state")
+	_expect(rejection.try_startle(), "grounded bird rejected a startle")
+	_expect(rejection.state == BirdBrain.State.TAKEOFF, "startled bird did not take off")
+	_expect(not rejection.try_startle(), "airborne bird restarted its startle transition")
 
 	if _failures == 0:
 		print("BIRD_BEHAVIOR PASS")

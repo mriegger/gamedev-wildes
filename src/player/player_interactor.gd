@@ -72,6 +72,8 @@ var _melee_impact_pending: bool = false
 var _melee_attack_command: PreparedPlayerMeleeAttack
 var _primary_consumption_latched: bool = false
 var _primary_harvest_latched: bool = false
+var _primary_world_loot_latched: bool = false
+var _handle_hovered_world_loot_pickup: Callable
 var _melee_locked_facing_direction: Vector3 = Vector3.ZERO
 var _target_block_id: int = BlockId.Type.AIR
 var _target_block_bounds := AABB()
@@ -146,6 +148,11 @@ func setup_projectiles(p_projectile_runtime: ArrowProjectileRuntime) -> void:
 	assert(projectile_runtime == null)
 	projectile_runtime = p_projectile_runtime
 
+func setup_world_loot_pickup(handle_hovered_world_loot_pickup: Callable) -> void:
+	assert(handle_hovered_world_loot_pickup.is_valid())
+	assert(not _handle_hovered_world_loot_pickup.is_valid())
+	_handle_hovered_world_loot_pickup = handle_hovered_world_loot_pickup
+
 func bind_space(p_space: VoxelSpace, p_editable_voxel_world: VoxelWorld = null):
 	assert(_is_setup)
 	assert(p_space != null)
@@ -177,6 +184,7 @@ func _clear_active_state():
 	can_interact_target = false
 	_primary_consumption_latched = false
 	_primary_harvest_latched = false
+	_primary_world_loot_latched = false
 	_target_cache_position = Vector3i(-999, -999, -999)
 	_target_cache_revision = -1
 	_bow_draw_requires_primary_release = false
@@ -202,6 +210,7 @@ func cancel_actions():
 	_primary_consumption_latched = false
 	_primary_harvest_latched = false
 	_bow_draw_requires_primary_release = false
+	_primary_world_loot_latched = false
 	if harvest != null:
 		harvest.clear_target()
 
@@ -305,6 +314,18 @@ func _handle_item_actions(delta):
 	var primary_use_just := _input_buffer.primary_use_just
 	var primary_use_pressed := _input_buffer.primary_use_pressed
 	_input_buffer.primary_use_just = false
+	if _primary_world_loot_latched:
+		if primary_use_pressed:
+			primary_use_just = false
+			primary_use_pressed = false
+		else:
+			_primary_world_loot_latched = false
+	if primary_use_just and _handle_hovered_world_loot_pickup.is_valid() and bool(_handle_hovered_world_loot_pickup.call(reach)):
+		_primary_world_loot_latched = primary_use_pressed
+		primary_use_just = false
+		primary_use_pressed = false
+		_reset_mining()
+		_reset_melee_chain()
 	if _primary_consumption_latched:
 		if primary_use_pressed:
 			primary_use_just = false

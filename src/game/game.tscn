@@ -1,4 +1,4 @@
-[gd_scene load_steps=61 format=3 uid="uid://b22g4me0x1f3h"]
+[gd_scene load_steps=62 format=3 uid="uid://b22g4me0x1f3h"]
 
 [ext_resource type="Script" path="res://game/game.gd" id="1_game"]
 [ext_resource type="PackedScene" path="res://world/world.tscn" id="2_world"]
@@ -62,6 +62,7 @@
 [ext_resource type="Script" path="res://tutorials/presentation/sundown_weapon_tutorial_view.gd" id="57_sundown_weapon_tutorial_view"]
 [ext_resource type="Script" path="res://tutorials/combat_affinity_tutorial_coordinator.gd" id="58_combat_affinity_tutorial"]
 [ext_resource type="Script" path="res://tutorials/presentation/combat_affinity_tutorial_view.gd" id="59_combat_affinity_tutorial_view"]
+[ext_resource type="PackedScene" path="res://loot/presentation/world_loot_pickup_audio.tscn" id="60_world_loot_pickup_audio"]
 
 [node name="Game" type="Node3D"]
 script = ExtResource("1_game")
@@ -109,6 +110,8 @@ script = ExtResource("43_watcher_encounter")
 
 [node name="OverworldLoot" type="Node3D" parent="."]
 script = ExtResource("38_loot_coordinator")
+
+[node name="WorldLootPickupAudio" parent="." instance=ExtResource("60_world_loot_pickup_audio")]
 
 [node name="MeleeCombat" type="Node" parent="."]
 script = ExtResource("18_melee_combat")

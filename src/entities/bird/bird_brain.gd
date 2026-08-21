@@ -76,6 +76,14 @@ func reject_ground_contact() -> void:
 		_walks_done = 0
 		state = State.TAKEOFF
 
+func try_startle() -> bool:
+	if state not in [State.DESCEND, State.GROUNDED_IDLE, State.GROUNDED_WALK]:
+		return false
+	_walks_done = 0
+	_state_remaining = 0.0
+	state = State.TAKEOFF
+	return true
+
 func _finish_walk() -> void:
 	_walks_done += 1
 	if _walks_done >= _definition.walks_before_takeoff:

@@ -1,6 +1,6 @@
-[gd_resource type="Resource" script_class="EntityDefinition" load_steps=5 format=3]
+[gd_resource type="Resource" script_class="BirdEntityDefinition" load_steps=5 format=3]
 
-[ext_resource type="Script" path="res://entities/entity_definition.gd" id="1_definition"]
+[ext_resource type="Script" path="res://entities/bird/bird_entity_definition.gd" id="1_definition"]
 [ext_resource type="PackedScene" path="res://entities/bird/owl.tscn" id="2_scene"]
 [ext_resource type="Resource" path="res://entities/bird/bird_behavior.tres" id="3_behavior"]
 [ext_resource type="Resource" path="res://entities/bird/bird_stats.tres" id="4_stats"]
@@ -23,4 +23,5 @@ ambient_aerial_altitude_min_blocks = 6
 ambient_aerial_altitude_max_blocks = 10
 ambient_despawn_outside_spawn_phase = true
 ambient_spawn_end_hour = 5.0
-combat_targetable = false
+combat_targetable = true
+color_variant_override = 4

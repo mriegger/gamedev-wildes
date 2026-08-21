@@ -90,8 +90,10 @@ func _test_species_visual_fades(catalog: EntityCatalog, world: VoxelWorld) -> vo
 		actor.global_position = Vector3(float(index) + 0.5, FEET_Y, 0.5)
 		actor.setup(index + 1, definition, world, 100 + index, EntityNavigationLimits.new(24, 256, 1))
 		var poof := actor.death_poof
-		_expect(poof.amount == 12, "%s death poof amount is not twelve" % definition.id)
-		_expect(is_equal_approx(poof.lifetime, 0.35), "%s death poof lifetime is not 0.35 seconds" % definition.id)
+		var expected_poof_amount := 14 if definition.id == &"bird" else 12
+		var expected_poof_lifetime := 0.55 if definition.id == &"bird" else 0.35
+		_expect(poof.amount == expected_poof_amount, "%s death poof amount changed" % definition.id)
+		_expect(is_equal_approx(poof.lifetime, expected_poof_lifetime), "%s death poof lifetime changed" % definition.id)
 		_expect(poof.one_shot and is_equal_approx(poof.explosiveness, 1.0), "%s death poof is not a one-shot burst" % definition.id)
 		if definition.id == &"watcher":
 			_expect(poof.color.b > poof.color.r and poof.color.r > poof.color.g, "watcher death poof is not dark purple")

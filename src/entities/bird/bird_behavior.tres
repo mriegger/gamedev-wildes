@@ -23,3 +23,4 @@ grounded_walk_seconds = 2.5
 walks_before_takeoff = 2
 landing_retry_seconds = 1.0
 water_ripple_interval_seconds = 0.55
+player_flee_distance = 5.0

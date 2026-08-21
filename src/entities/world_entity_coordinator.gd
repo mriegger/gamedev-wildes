@@ -164,20 +164,28 @@ func try_spawn_debug_birds(player_position: Vector3, variant_id: StringName, cou
 		or _suspended
 		or not player_position.is_finite()
 		or count < 1
-		or count > MAX_TOTAL_ACTIVE
 	):
 		return false
-	var requested_variant := -1 if variant_id.is_empty() else BirdActor.color_variant_index_for_id(variant_id)
+	var requested_variant := -1 if variant_id.is_empty() else BirdColorVariant.index_for_id(variant_id)
 	if not variant_id.is_empty() and requested_variant < 0:
 		return false
-	var definition_id := &"owl" if requested_variant == BirdAnimationDriver.ColorVariant.OWL else &"bird"
-	if _runtime.get_active_count() + count > MAX_TOTAL_ACTIVE or not _catalog.has_definition(definition_id):
+	var definition_id := &"owl" if requested_variant == BirdColorVariant.Type.OWL else &"bird"
+	if not _catalog.has_definition(definition_id):
 		return false
 	var definition := _catalog.get_definition(definition_id)
+	var available_active_slots := MAX_TOTAL_ACTIVE - _runtime.get_active_count()
+	var definition_population_cost := _catalog.get_maximum_lineage_capacity(definition_id)
+	var available_population_slots := floori(
+		float(MAX_TOTAL_POPULATION_COST - _runtime.get_population_cost()) / float(definition_population_cost)
+	)
+	var spawn_target := mini(count, mini(available_active_slots, available_population_slots))
+	if spawn_target < 1:
+		return false
+	var spawned_count := 0
 	for _batch_attempt in DEBUG_SPAWN_BATCH_ATTEMPTS:
 		var requests: Array[EntitySpawnRequest] = []
 		var reserved_columns: Dictionary = {}
-		for index in count:
+		for index in spawn_target - spawned_count:
 			var request: EntitySpawnRequest = null
 			for _position_attempt in DEBUG_SPAWN_POSITION_ATTEMPTS:
 				var angle := _debug_rng.randf_range(0.0, TAU)
@@ -195,19 +203,23 @@ func try_spawn_debug_birds(player_position: Vector3, variant_id: StringName, cou
 					continue
 				var behavior_seed := int(_debug_rng.randi())
 				if definition_id == &"bird":
-					var variant_index := requested_variant if requested_variant >= 0 else index % BirdActor.color_variant_count()
-					behavior_seed = BirdActor.behavior_seed_for_color_variant_index(variant_index, behavior_seed)
+					var variant_index := requested_variant if requested_variant >= 0 else (spawned_count + index) % BirdColorVariant.COMMON_COUNT
+					behavior_seed = BirdColorVariant.behavior_seed_for_common_variant(variant_index, behavior_seed)
 				request = EntitySpawnRequest.new(definition.id, spawn_candidate as Vector3, behavior_seed)
 				reserved_columns[column] = true
 				break
 			if request == null:
 				break
 			requests.append(request)
-		if requests.size() != count:
+		if requests.is_empty():
 			continue
-		if _runtime.try_spawn_batch(requests).size() == count:
-			return true
-	return false
+		var spawned_ids := _runtime.try_spawn_batch(requests)
+		if spawned_ids.size() != requests.size():
+			continue
+		spawned_count += spawned_ids.size()
+		if spawned_count == spawn_target:
+			break
+	return spawned_count > 0
 
 func _despawn_outside_spawn_window(time_of_day: float) -> void:
 	var to_remove: Array[int] = []

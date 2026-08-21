@@ -30,6 +30,7 @@ func setup(
 	set_ripple_strength: Callable,
 	spawn_birds: Callable,
 	clear_current_dungeon_room: Callable,
+	defeat_all_entities: Callable,
 ) -> void:
 	assert(inventory_model != null and inventory_loadout != null and actor_stats != null and pumpkin_patch != null)
 	assert(_command_processor == null)
@@ -46,6 +47,7 @@ func setup(
 		set_ripple_strength,
 		spawn_birds,
 		clear_current_dungeon_room,
+		defeat_all_entities,
 	)
 	set_process_input(true)
 

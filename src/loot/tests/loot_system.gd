@@ -29,6 +29,18 @@ func _test_catalog_and_zombie_configuration() -> void:
 	_expect(zombie_pool != null and zombie_pool.validate(), "zombie loot pool invalid")
 	_expect(LootCatalogValidator.validate(zombie_pool, _item_catalog), "zombie loot pool references invalid content")
 	_expect(LootCatalogValidator.validate_entity_catalog(entity_catalog, _item_catalog), "entity loot pools reference invalid content")
+	var feather_pools: Dictionary = {
+		&"black_feather": load("res://loot/pools/bird_black_feather.tres") as LootPoolDefinition,
+		&"red_feather": load("res://loot/pools/bird_red_feather.tres") as LootPoolDefinition,
+		&"blue_feather": load("res://loot/pools/bird_blue_feather.tres") as LootPoolDefinition,
+	}
+	for item_id in feather_pools:
+		var feather_pool := feather_pools[item_id] as LootPoolDefinition
+		_expect(_item_catalog.has_definition(item_id), "feather item %s is missing" % item_id)
+		_expect(feather_pool != null and LootCatalogValidator.validate(feather_pool, _item_catalog), "feather loot pool %s is invalid" % item_id)
+		if feather_pool != null:
+			var feather_drops := _resolve(feather_pool, 1, EquipmentInstanceFactory.new(_item_catalog))
+			_expect(feather_drops.size() == 1 and feather_drops[0].item_id == item_id and feather_drops[0].count == 1, "feather loot pool %s did not guarantee one matching feather" % item_id)
 	if zombie_pool == null:
 		return
 	_expect(zombie_pool.id == &"zombie", "zombie loot pool ID mismatch")

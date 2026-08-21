@@ -39,6 +39,7 @@ func _process(_delta: float) -> bool:
 			Callable(self, "_handle_ripple_strength"),
 			Callable(self, "_handle_bird_spawn"),
 			Callable(self, "_handle_dungeon_clear"),
+			Callable(self, "_handle_defeat_all"),
 		)
 		_check_closed_layout()
 		_check_scene_ownership()
@@ -274,6 +275,9 @@ func _handle_bird_spawn(_variant_id: StringName, _count: int) -> bool:
 func _handle_dungeon_clear() -> bool:
 	_dungeon_clear_call_count += 1
 	return _dungeon_clear_accepted
+
+func _handle_defeat_all() -> bool:
+	return true
 
 func _finish() -> void:
 	if _errors.is_empty():

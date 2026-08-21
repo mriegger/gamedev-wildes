@@ -327,6 +327,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	var watcher_encounter := WatcherEncounterCoordinator.new()
 	var watcher_effect := (load("res://entities/watcher/presentation/watcher_screen_effect.tscn") as PackedScene).instantiate() as WatcherScreenEffect
 	var loot := OverworldLootCoordinator.new()
+	var loot_pickup_audio := (load("res://loot/presentation/world_loot_pickup_audio.tscn") as PackedScene).instantiate() as WorldLootPickupAudio
 	var combat := MeleeCombatCoordinator.new()
 	var arrow_projectiles := ArrowProjectileRuntime.new()
 	arrow_projectiles.name = "ArrowProjectiles"
@@ -371,6 +372,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	watcher_encounter.name = "WatcherEncounter"
 	watcher_effect.name = "WatcherScreenEffect"
 	loot.name = "OverworldLoot"
+	loot_pickup_audio.name = "WorldLootPickupAudio"
 	combat.name = "MeleeCombat"
 	combat_hit_particles.name = "CombatHitParticles"
 	enemy_combat_feedback.name = "EnemyCombatFeedback"
@@ -402,6 +404,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	game.add_child(slime_attachments)
 	game.add_child(watcher_encounter)
 	game.add_child(loot)
+	game.add_child(loot_pickup_audio)
 	game.add_child(combat)
 	game.add_child(arrow_projectiles)
 	game.add_child(arrow_trajectory)
@@ -457,7 +460,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	_expect(game.watcher_encounter == watcher_encounter and game.watcher_screen_effect == watcher_effect, "Game Watcher dependencies were not wired")
 	_expect(watcher_effect.layer == 0 and hud.layer == 1, "Game did not layer the Watcher world effect beneath the HUD")
 	_expect(game.game_environment == environment and game.level_interaction == coordinator and game.dev_console == dev_console and game.pumpkin_patch == pumpkin_patch and game.apple_trees == apple_trees, "Game transition dependencies were not wired")
-	_expect(game.overworld_loot == loot, "Game overworld loot dependency was not wired")
+	_expect(game.overworld_loot == loot and game.world_loot_pickup_audio == loot_pickup_audio, "Game overworld loot dependencies were not wired")
 	_expect(game.mining_break_particles == mining_break_particles and game.mining_hit_particles == mining_hit_particles and mining_break_particles.get_parent() == game and mining_hit_particles.get_parent() == game, "location-neutral mining effects were not wired at the Game root")
 	_expect(game.structure_designer_workflow == structure_workflow and game.structure_designer_dialogs == structure_dialogs, "Game structure designer dependencies were not wired")
 	_expect(game.structure_designer_runtime_scene != null and game.structure_terrain_shader != null, "Game structure designer resources were not wired")
@@ -492,6 +495,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 		Callable(world, "try_set_water_ripple_strength"),
 		Callable(game, "_spawn_debug_birds"),
 		Callable(game, "_request_clear_current_dungeon_room"),
+		Callable(game, "_defeat_all_entities"),
 	)
 	dev_console.open_state_changed.connect(game._on_dev_console_open_state_changed)
 	structure_dialogs.open_state_changed.connect(game._on_structure_dialog_open_state_changed)
@@ -535,6 +539,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 		game.inventory_loadout_coordinator,
 		player,
 		entities.get_runtime(),
+		voxel_world,
 		_position_ready,
 		game.loot_drop_scene,
 	)

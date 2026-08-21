@@ -42,6 +42,7 @@ signal main_menu_requested
 @onready var watcher_encounter: WatcherEncounterCoordinator = $WatcherEncounter as WatcherEncounterCoordinator
 @onready var watcher_screen_effect: WatcherScreenEffect = $WatcherScreenEffect as WatcherScreenEffect
 @onready var overworld_loot: OverworldLootCoordinator = $OverworldLoot as OverworldLootCoordinator
+@onready var world_loot_pickup_audio: WorldLootPickupAudio = $WorldLootPickupAudio as WorldLootPickupAudio
 @onready var melee_combat: MeleeCombatCoordinator = $MeleeCombat as MeleeCombatCoordinator
 @onready var arrow_projectiles: ArrowProjectileRuntime = $ArrowProjectiles as ArrowProjectileRuntime
 @onready var arrow_trajectory: ArrowTrajectoryView = $ArrowTrajectory as ArrowTrajectoryView
@@ -236,6 +237,7 @@ func _ready():
 		Callable(world, "try_set_water_ripple_strength"),
 		Callable(self, "_spawn_debug_birds"),
 		Callable(self, "_request_clear_current_dungeon_room"),
+		Callable(self, "_defeat_all_entities"),
 	)
 	if not _restore_chest_state(chest_block):
 		_fail_session_start("This world could not be loaded because its saved chest state is invalid or references unavailable content. The save was not changed.")
@@ -519,9 +521,12 @@ func _setup_gameplay() -> bool:
 		inventory_loadout_coordinator,
 		player,
 		world_entities,
+		world.voxel_model,
 		world.is_position_streamed,
 		loot_drop_scene,
 	)
+	world_loot_pickup_audio.setup(overworld_loot)
+	player.setup_world_loot_pickup(Callable(overworld_loot, "handle_hovered_pickup"))
 	item_consumption_coordinator = ItemConsumptionCoordinator.new()
 	item_consumption_coordinator.setup(inventory_model, inventory_loadout_coordinator, player_stats)
 	death_tip_coordinator = DeathTipCoordinator.new()
@@ -1052,6 +1057,12 @@ func _request_exit_structure() -> bool:
 
 func _spawn_debug_birds(variant_id: StringName, count: int) -> bool:
 	return world_entity_coordinator.try_spawn_debug_birds(player.global_position, variant_id, count)
+
+func _defeat_all_entities() -> bool:
+	if _active_entity_runtime == null:
+		return false
+	_active_entity_runtime.defeat_all_active()
+	return true
 
 func _request_clear_current_dungeon_room() -> bool:
 	if not _session_active or _level_transitioning or _structure_transitioning or _structure_designer_runtime != null:

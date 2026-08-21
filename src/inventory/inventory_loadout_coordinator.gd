@@ -139,6 +139,26 @@ func migrate_starter_items() -> bool:
 func add_backpack_item(item_id: StringName, count: int) -> bool:
 	return commit_prepared_change(_prepare(inventory_model.prepare_add_backpack_item(item_id, count)))
 
+func add_backpack_item_up_to(item_id: StringName, count: int) -> int:
+	if count < 1:
+		return 0
+	var minimum := 1
+	var maximum := count
+	var accepted_count := 0
+	var accepted_change: PreparedInventoryLoadoutChange
+	while minimum <= maximum:
+		var candidate_count := minimum + floori(float(maximum - minimum) / 2.0)
+		var candidate := _prepare(inventory_model.prepare_add_backpack_item(item_id, candidate_count))
+		if candidate == null:
+			maximum = candidate_count - 1
+		else:
+			accepted_count = candidate_count
+			accepted_change = candidate
+			minimum = candidate_count + 1
+	if accepted_change == null or not commit_prepared_change(accepted_change):
+		return 0
+	return accepted_count
+
 func can_exchange_inventory_items(
 	consumed: Dictionary[StringName, int],
 	granted: Dictionary[StringName, int],

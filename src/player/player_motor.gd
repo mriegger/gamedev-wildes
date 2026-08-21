@@ -134,6 +134,10 @@ func get_facing_direction() -> Vector3:
 	forward.y = 0.0
 	return Vector3.BACK if forward.is_zero_approx() else forward.normalized()
 
+func setup_world_loot_pickup(handle_hovered_world_loot_pickup: Callable) -> void:
+	assert(_is_setup and handle_hovered_world_loot_pickup.is_valid())
+	interactor.setup_world_loot_pickup(handle_hovered_world_loot_pickup)
+
 func bind_space(p_space: VoxelSpace, presentation_root: Node, spawn_position: Vector3, editable_voxel_world: VoxelWorld = null):
 	assert(_is_setup)
 	assert(p_space != null)
