@@ -3,6 +3,7 @@ extends SceneTree
 var _errors: Array[String] = []
 var _state_changed_count: int = 0
 var _harvest_completed_count: int = 0
+var _harvested_item_ids: Array[StringName] = []
 
 func _init() -> void:
 	call_deferred("_run")
@@ -86,6 +87,7 @@ func _run() -> void:
 	var harvest_sources: Array[HarvestSource] = [pumpkin_patch]
 	_expect(harvest.setup(harvest_sources, inventory, inventory_loadout, prompt_coordinator), "pumpkin harvest setup rejected valid content")
 	harvest.harvest_completed.connect(_on_harvest_completed)
+	harvest.items_harvested.connect(_on_items_harvested)
 	var crop_index := _find_state_index(generated_snapshot, &"crop")
 	_expect(crop_index >= 0, "generated patch omitted a mature crop")
 	if crop_index >= 0:
@@ -108,6 +110,7 @@ func _run() -> void:
 		_expect(inventory.get_inventory_item_count(&"pumpkin") == 1, "pumpkin harvest did not add exactly one item")
 		_expect(_state_changed_count == 1, "pumpkin harvest did not announce its persistent state change")
 		_expect(_harvest_completed_count == 1, "pumpkin harvest did not announce its completed transaction")
+		_expect(_harvested_item_ids == [&"pumpkin"], "pumpkin harvest did not identify its harvested item")
 		_expect(not harvest.has_target(), "successful harvest retained a stale target")
 		_expect(hud.interaction_prompt.visible and hud.interaction_prompt.text == "F  Enter Dungeon", "level prompt did not return after harvest")
 		var harvested_snapshot := pumpkin_patch.snapshot()
@@ -550,6 +553,9 @@ func _is_interaction_blocked() -> bool:
 
 func _on_harvest_completed() -> void:
 	_harvest_completed_count += 1
+
+func _on_items_harvested(item_ids: Array[StringName]) -> void:
+	_harvested_item_ids.assign(item_ids)
 
 func _expect(condition: bool, message: String) -> void:
 	if not condition:

@@ -11,6 +11,7 @@ const BUTTON_RADIUS: int = 14
 const BUTTON_BORDER: Color = Color(1, 1, 1, 0.20)
 
 const BOLD_FONT: FontFile = preload("res://assets/fonts/RobotoSlab-Bold.ttf")
+const REGULAR_FONT: FontFile = preload("res://assets/fonts/RobotoSlab-Regular.ttf")
 const FROSTED_PANEL_MAT: ShaderMaterial = preload("res://ui/theme/frosted_panel_material.tres")
 const FROSTED_BUTTON_MAT: ShaderMaterial = preload("res://ui/theme/frosted_button_material.tres")
 

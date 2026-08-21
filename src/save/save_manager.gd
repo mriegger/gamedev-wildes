@@ -3,7 +3,7 @@ class_name SaveManager
 
 const SAVE_DIR: String = "user://saves"
 const SLOT_COUNT: int = 3
-const CURRENT_SAVE_VERSION: int = 16
+const CURRENT_SAVE_VERSION: int = 17
 const MINIMUM_MIGRATABLE_SAVE_VERSION: int = 4
 const VERSION_SEVEN_BASE_EXPERIENCE_TO_LEVEL: int = 100
 const VERSION_SEVEN_EXPERIENCE_GROWTH: float = 1.25
@@ -313,6 +313,7 @@ static func load_slot(slot_id: int, item_catalog: ItemCatalog) -> Dictionary:
 		var removed_blocks = info.get("removed_blocks", {})
 		info["tutorial_progress"] = {
 			"mining_tip_completed": removed_blocks is Dictionary and not (removed_blocks as Dictionary).is_empty(),
+			"food_tip_completed": _legacy_save_has_collected_food(info),
 		}
 	return info
 
@@ -399,6 +400,14 @@ static func _migrate_save_data(data: Dictionary, item_catalog: ItemCatalog) -> b
 					"mining_tip_completed": not (removed_blocks as Dictionary).is_empty(),
 				}
 				version = 16
+			16:
+				var tutorial_progress = migrated.get("tutorial_progress", null)
+				if not tutorial_progress is Dictionary or (tutorial_progress as Dictionary).has("food_tip_completed"):
+					return false
+				if (tutorial_progress as Dictionary).size() != 1 or not (tutorial_progress as Dictionary).get("mining_tip_completed", null) is bool:
+					return false
+				(tutorial_progress as Dictionary)["food_tip_completed"] = _legacy_save_has_collected_food(migrated)
+				version = 17
 			_:
 				return false
 		migrated["version"] = version
@@ -417,6 +426,34 @@ static func _validate_dungeon_progress(data: Dictionary) -> bool:
 		return false
 	var progress := DungeonProgressState.new()
 	return progress.restore(data["dungeon_progress"])
+
+static func _legacy_save_has_collected_food(data: Dictionary) -> bool:
+	var inventory = data.get("inventory", null)
+	if inventory is Dictionary:
+		var regions = (inventory as Dictionary).get("regions", null)
+		if regions is Dictionary:
+			for encoded_region in (regions as Dictionary).values():
+				if not encoded_region is Array:
+					continue
+				for encoded_stack in encoded_region as Array:
+					if not encoded_stack is Dictionary:
+						continue
+					var raw_item_id = (encoded_stack as Dictionary).get("item_id", null)
+					if raw_item_id is String and StringName(raw_item_id) in [&"apple", &"pumpkin"]:
+						return true
+	var apple_trees = data.get("apple_trees", null)
+	if apple_trees is Dictionary:
+		var collected_slots = (apple_trees as Dictionary).get("collected_slots", null)
+		if collected_slots is Array and not (collected_slots as Array).is_empty():
+			return true
+	var pumpkin_patch = data.get("pumpkin_patch", null)
+	if pumpkin_patch is Dictionary:
+		var growth_state_ids = (pumpkin_patch as Dictionary).get("growth_state_ids", null)
+		if growth_state_ids is Array:
+			for raw_state_id in growth_state_ids as Array:
+				if raw_state_id is String and StringName(raw_state_id) in [&"empty", &"harvested"]:
+					return true
+	return false
 
 static func _migrate_player_progression_data(data: Dictionary) -> bool:
 	if data.has("player_perks"):

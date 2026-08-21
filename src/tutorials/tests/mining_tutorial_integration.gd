@@ -9,6 +9,7 @@ func _run() -> void:
 	_test_progress_contract()
 	await _test_mining_before_delay_prevents_tip()
 	await _test_delay_pauses_outside_overworld()
+	await _test_callout_waits_for_active_tip()
 	await _test_delayed_tip_and_mining_completion()
 	await _test_distance_completion()
 	if _failures == 0:
@@ -20,14 +21,18 @@ func _run() -> void:
 
 func _test_progress_contract() -> void:
 	var progress := TutorialProgress.new()
-	_expect(progress.restore({"mining_tip_completed": false}), "valid tutorial progress did not restore")
+	_expect(progress.restore({"mining_tip_completed": false, "food_tip_completed": false}), "valid tutorial progress did not restore")
 	_expect(not progress.is_mining_tip_completed(), "fresh tutorial progress restored as complete")
 	var change_count := [0]
 	progress.changed.connect(func() -> void: change_count[0] += 1)
 	_expect(progress.complete_mining_tip(), "first tutorial completion was rejected")
 	_expect(not progress.complete_mining_tip(), "duplicate tutorial completion was accepted")
 	_expect(change_count[0] == 1, "tutorial completion emitted more than one change")
-	_expect(progress.snapshot() == {"mining_tip_completed": true}, "tutorial snapshot changed")
+	_expect(progress.snapshot() == {"mining_tip_completed": true, "food_tip_completed": false}, "tutorial snapshot changed")
+	_expect(progress.complete_food_tip(), "first food tutorial completion was rejected")
+	_expect(not progress.complete_food_tip(), "duplicate food tutorial completion was accepted")
+	_expect(change_count[0] == 2, "food tutorial completion emitted the wrong change count")
+	_expect(progress.snapshot() == {"mining_tip_completed": true, "food_tip_completed": true}, "food tutorial snapshot changed")
 	_expect(not TutorialProgress.new().restore({}), "missing tutorial completion restored")
 	_expect(not TutorialProgress.new().restore({"mining_tip_completed": 1}), "non-boolean tutorial completion restored")
 
@@ -58,6 +63,21 @@ func _test_delay_pauses_outside_overworld() -> void:
 	_expect((view.get_node("TutorialSelectionBox") as Node3D).visible, "tutorial did not resume after returning to the overworld")
 	await _destroy_fixture(fixture)
 
+func _test_callout_waits_for_active_tip() -> void:
+	var fixture := await _create_fixture(false)
+	var coordinator := fixture["coordinator"] as MiningTutorialCoordinator
+	var view := fixture["view"] as MiningTutorialView
+	var arbiter := fixture["arbiter"] as TutorialCalloutArbiter
+	var other_owner := Node.new()
+	_expect(arbiter.try_acquire(other_owner), "mining tutorial fixture could not reserve another callout")
+	coordinator._process(MiningTutorialCoordinator.SHOW_DELAY_SECONDS)
+	_expect(not view.is_showing(), "mining tutorial displayed while another callout was active")
+	arbiter.release(other_owner)
+	other_owner.free()
+	coordinator._process(0.0)
+	_expect(view.is_showing(), "mining tutorial did not display after the active callout cleared")
+	await _destroy_fixture(fixture)
+
 func _test_delayed_tip_and_mining_completion() -> void:
 	var fixture := await _create_fixture(false)
 	var coordinator := fixture["coordinator"] as MiningTutorialCoordinator
@@ -82,13 +102,15 @@ func _test_delayed_tip_and_mining_completion() -> void:
 	interactor.reach = original_reach
 	var overlay := view.get_node("OverlayLayer/Overlay") as Control
 	var panel := view.get_node("OverlayLayer/Overlay/TipPanel") as PanelContainer
-	var label := view.get_node("OverlayLayer/Overlay/TipPanel/Text") as Label
+	var label := view.get_node("OverlayLayer/Overlay/TipPanel/Text/Title") as Label
+	var subtext := view.get_node("OverlayLayer/Overlay/TipPanel/Text/Subtext") as Label
 	_expect(label.text == "Hold left mouse button to mine blocks", "mining tip text changed")
+	_expect(not subtext.visible, "mining tip displayed an empty subtext row")
 	_expect(not view.has_node("OverlayLayer/Overlay/PointerLine"), "mining tip retained a pointer line")
 	var camera := fixture["camera"] as Camera3D
 	var expected_anchor := camera.unproject_position(Vector3(2.5, 4.1, 2.5))
-	_expect(is_equal_approx(panel.position.x + MiningTutorialView.PANEL_SIZE.x * 0.5, expected_anchor.x), "mining tip tooltip was not centered above the block")
-	_expect(is_equal_approx(panel.position.y + MiningTutorialView.PANEL_SIZE.y + MiningTutorialView.PANEL_GAP, expected_anchor.y), "mining tip tooltip did not use its raised anchor")
+	_expect(is_equal_approx(panel.position.x + TutorialCalloutView.PANEL_SIZE.x * 0.5, expected_anchor.x), "mining tip tooltip was not centered above the block")
+	_expect(is_equal_approx(panel.position.y + TutorialCalloutView.PANEL_SIZE.y + TutorialCalloutView.PANEL_GAP, expected_anchor.y), "mining tip tooltip did not use its raised anchor")
 	var edge := selection.get_child(0) as MeshInstance3D
 	var edge_mesh := edge.mesh as BoxMesh
 	var edge_material := edge.material_override as StandardMaterial3D
@@ -177,11 +199,12 @@ func _create_fixture(completed: bool) -> Dictionary:
 	var view := MiningTutorialView.new()
 	holder.add_child(view)
 	var progress := TutorialProgress.new()
-	_expect(progress.restore({"mining_tip_completed": completed}), "fixture tutorial progress did not restore")
+	_expect(progress.restore({"mining_tip_completed": completed, "food_tip_completed": false}), "fixture tutorial progress did not restore")
 	var coordinator := MiningTutorialCoordinator.new()
 	holder.add_child(coordinator)
 	var active_space := [true]
-	coordinator.setup(world, player, func() -> bool: return bool(active_space[0]), camera, interactor, view, progress, 91234)
+	var arbiter := TutorialCalloutArbiter.new()
+	coordinator.setup(world, player, func() -> bool: return bool(active_space[0]), camera, interactor, view, progress, arbiter, 91234)
 	coordinator.set_process(false)
 	await process_frame
 	return {
@@ -194,6 +217,7 @@ func _create_fixture(completed: bool) -> Dictionary:
 		"view": view,
 		"progress": progress,
 		"coordinator": coordinator,
+		"arbiter": arbiter,
 	}
 
 func _destroy_fixture(fixture: Dictionary) -> void:

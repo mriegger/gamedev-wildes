@@ -53,6 +53,8 @@ signal main_menu_requested
 @onready var mining_hit_particles: MiningHitParticles = $MiningHitParticles as MiningHitParticles
 @onready var mining_tutorial: MiningTutorialCoordinator = $MiningTutorial as MiningTutorialCoordinator
 @onready var mining_tutorial_view: MiningTutorialView = $MiningTutorialView as MiningTutorialView
+@onready var food_tutorial: FoodTutorialCoordinator = $FoodTutorial as FoodTutorialCoordinator
+@onready var food_tutorial_view: FoodTutorialView = $FoodTutorialView as FoodTutorialView
 @onready var level_interaction: LevelInteractionCoordinator = $LevelInteractionCoordinator as LevelInteractionCoordinator
 @onready var structure_designer_workflow: StructureDesignerWorkflow = $StructureDesignerWorkflow as StructureDesignerWorkflow
 @onready var structure_designer_dialogs: StructureDesignerDialogs = $StructureDesignerDialogs as StructureDesignerDialogs
@@ -274,6 +276,7 @@ func _ready():
 		apple_trees,
 		_get_persisted_position,
 	)
+	var tutorial_callout_arbiter := TutorialCalloutArbiter.new()
 	mining_tutorial.setup(
 		world.voxel_model,
 		player,
@@ -282,7 +285,17 @@ func _ready():
 		player.interactor,
 		mining_tutorial_view,
 		tutorial_progress,
+		tutorial_callout_arbiter,
 		world.config.seed_value,
+	)
+	food_tutorial.setup(
+		player,
+		func() -> bool: return player.voxel_space == world.voxel_model,
+		camera_rig.camera,
+		harvest_coordinator,
+		food_tutorial_view,
+		tutorial_progress,
+		tutorial_callout_arbiter,
 	)
 	if _recovered_defeated_save and _slot_id != -1 and not game_session.save("defeated_save_recovery"):
 		push_error("[Game] Failed to persist recovered player state")

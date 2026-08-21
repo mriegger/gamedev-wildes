@@ -2,6 +2,7 @@ extends RefCounted
 class_name HarvestCoordinator
 
 signal harvest_completed
+signal items_harvested(item_ids: Array[StringName])
 
 const NO_TARGET: int = -1
 const INVENTORY_FULL_PROMPT: String = "Inventory Full"
@@ -77,6 +78,35 @@ func get_target_bounds() -> AABB:
 	assert(has_target())
 	return _target_source.get_harvest_target_bounds(_target_id)
 
+func find_nearby_target_bounds(
+	player_position: Vector3,
+	horizontal_radius: float,
+	accepted_item_ids: Array[StringName],
+) -> Variant:
+	assert(horizontal_radius > 0.0 and not accepted_item_ids.is_empty())
+	var nearest_bounds: Variant = null
+	var nearest_distance_squared := horizontal_radius * horizontal_radius
+	for source in _sources:
+		for target_id in source.get_harvest_target_ids():
+			if not source.can_harvest_target(target_id):
+				continue
+			var bounds := source.get_harvest_target_bounds(target_id)
+			var center := bounds.get_center()
+			var distance_squared := Vector2(player_position.x - center.x, player_position.z - center.z).length_squared()
+			if distance_squared > nearest_distance_squared:
+				continue
+			var item_ids := source.get_harvest_item_ids(target_id)
+			var has_accepted_item := false
+			for item_id in item_ids:
+				if accepted_item_ids.has(item_id):
+					has_accepted_item = true
+					break
+			if not has_accepted_item or not _inventory_loadout.can_add_batch(item_ids):
+				continue
+			nearest_distance_squared = distance_squared
+			nearest_bounds = bounds
+	return nearest_bounds
+
 func can_harvest_target() -> bool:
 	return _prepare_target_harvest() != null
 
@@ -98,6 +128,7 @@ func try_harvest_target() -> bool:
 	var inventory_notified := _inventory_loadout._notify_prepared_change(inventory_change)
 	assert(inventory_notified)
 	harvest_completed.emit()
+	items_harvested.emit(source_change.get_harvest_item_ids())
 	return true
 
 func _prepare_target_harvest() -> PreparedHarvestTransaction:

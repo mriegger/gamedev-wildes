@@ -141,6 +141,8 @@ terracotta bricks, and wood planks are minable and placeable. Copper is minable 
 Worlds without prior mining progress show a mining tip five seconds after loading. The tip
 highlights a nearby mineable terrain block and disappears permanently after the player mines a
 block or walks away from the highlighted area.
+Approaching a collectible apple or pumpkin shows a food recovery tip until the player picks up food
+or walks away. Tutorial completion is stored per world so completed tips do not reappear.
 Using a hoe on the exposed top face of grass or dirt converts it into dry farmland, which drops dirt
 when mined.
 Seeded copper deposits generate after the surrounding terrain as connected 5–30 block blobs. Most

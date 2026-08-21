@@ -144,9 +144,12 @@ func _init() -> void:
 			var harvest := HarvestCoordinator.new()
 			var sources: Array[HarvestSource] = [apple_trees]
 			_expect(harvest.setup(sources, inventory, inventory_loadout, prompt), "ground apple harvest setup failed")
+			var harvested_items: Array[StringName] = []
+			harvest.items_harvested.connect(func(item_ids: Array[StringName]) -> void: harvested_items.assign(item_ids))
 			_target_harvest(harvest, harvest_source.get_harvest_target_bounds(target_id))
 			_expect(harvest.try_harvest_target(), "ground apple could not be picked up")
 			_expect(inventory.get_inventory_item_count(&"apple") == 1, "pickup did not add one apple")
+			_expect(harvested_items == [&"apple"], "apple pickup did not identify its harvested item")
 			var maximum_hp := stats.get_value(&"hp")
 			stats.damage(maximum_hp * 0.9)
 			var consumption_coordinator := ItemConsumptionCoordinator.new()

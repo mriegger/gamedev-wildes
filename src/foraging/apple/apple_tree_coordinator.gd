@@ -101,6 +101,12 @@ func get_harvest_target_bounds(target_id: int) -> AABB:
 	assert(_targets.has(target_id))
 	return (_targets[target_id] as Dictionary)["bounds"] as AABB
 
+func get_harvest_target_ids() -> Array[int]:
+	var target_ids: Array[int] = []
+	for target_id in _targets:
+		target_ids.append(int(target_id))
+	return target_ids
+
 func can_harvest_target(target_id: int) -> bool:
 	return _targets.has(target_id)
 

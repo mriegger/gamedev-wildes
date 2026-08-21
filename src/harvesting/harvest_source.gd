@@ -10,6 +10,9 @@ func find_harvest_target(_ray_origin: Vector3, _ray_direction: Vector3, _max_dis
 func get_harvest_target_bounds(_target_id: int) -> AABB:
 	return AABB()
 
+func get_harvest_target_ids() -> Array[int]:
+	return []
+
 func can_harvest_target(_target_id: int) -> bool:
 	return false
 

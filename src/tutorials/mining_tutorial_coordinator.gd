@@ -13,6 +13,7 @@ var _camera: Camera3D
 var _interactor: PlayerInteractor
 var _view: MiningTutorialView
 var _progress: TutorialProgress
+var _callout_arbiter: TutorialCalloutArbiter
 var _rng := RandomNumberGenerator.new()
 var _elapsed: float = 0.0
 var _target: Variant = null
@@ -28,6 +29,7 @@ func setup(
 	interactor: PlayerInteractor,
 	view: MiningTutorialView,
 	progress: TutorialProgress,
+	callout_arbiter: TutorialCalloutArbiter,
 	world_seed: int,
 ) -> void:
 	assert(voxel_world != null)
@@ -37,6 +39,7 @@ func setup(
 	assert(interactor != null)
 	assert(view != null)
 	assert(progress != null)
+	assert(callout_arbiter != null)
 	assert(_voxel_world == null)
 	_voxel_world = voxel_world
 	_player = player
@@ -45,14 +48,20 @@ func setup(
 	_interactor = interactor
 	_view = view
 	_progress = progress
+	_callout_arbiter = callout_arbiter
 	_rng.seed = hash([world_seed, floori(player.global_position.x), floori(player.global_position.z)])
 	_view.setup(camera)
 	_interactor.block_mined.connect(_on_block_mined)
+	_view.callout_hidden.connect(_on_view_hidden)
 	set_process(not _progress.is_mining_tip_completed())
 
 func _exit_tree() -> void:
 	if _interactor != null and _interactor.block_mined.is_connected(_on_block_mined):
 		_interactor.block_mined.disconnect(_on_block_mined)
+	if _view != null and _view.callout_hidden.is_connected(_on_view_hidden):
+		_view.callout_hidden.disconnect(_on_view_hidden)
+	if _callout_arbiter != null:
+		_callout_arbiter.release(self)
 
 func _process(delta: float) -> void:
 	if _progress == null or _progress.is_mining_tip_completed():
@@ -67,7 +76,7 @@ func _process(delta: float) -> void:
 			_target = null
 			_elapsed = SHOW_DELAY_SECONDS - RETRY_DELAY_SECONDS
 			return
-		if not _view.is_showing():
+		if not _view.is_showing() and _callout_arbiter.try_acquire(self):
 			_view.show_tip(_target as Vector3i)
 		_view.set_outline_suppressed(_is_normal_mining_outline_active(_target as Vector3i))
 		var target_center := Vector3(_target as Vector3i) + Vector3(0.5, 0.5, 0.5)
@@ -78,10 +87,13 @@ func _process(delta: float) -> void:
 	_elapsed += delta
 	if _elapsed < SHOW_DELAY_SECONDS:
 		return
+	if not _callout_arbiter.try_acquire(self):
+		return
 	_target = _choose_target()
 	if _target is Vector3i:
 		_view.show_tip(_target as Vector3i)
 	else:
+		_callout_arbiter.release(self)
 		_elapsed = SHOW_DELAY_SECONDS - RETRY_DELAY_SECONDS
 
 func _choose_target() -> Variant:
@@ -152,6 +164,9 @@ func _is_normal_mining_outline_active(position: Vector3i) -> bool:
 
 func _on_block_mined(_position: Vector3i) -> void:
 	_complete()
+
+func _on_view_hidden() -> void:
+	_callout_arbiter.release(self)
 
 func _complete() -> void:
 	if not _progress.complete_mining_tip():

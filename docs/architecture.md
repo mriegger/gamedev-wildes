@@ -50,6 +50,14 @@ ten-block radius. Both searches reject protected, raycast-inert, and tool-gated 
 player mining action or moving fourteen blocks away from the highlighted target completes the tip
 permanently. Its dedicated view keeps the exact targeting-box outline in world space and projects a
 fixed-size screen-space tooltip from a raised anchor above the selected block. Both fade in and out.
+`FoodTutorialCoordinator` queries the bounded harvest-source target lists through
+`HarvestCoordinator`, selecting the nearest apple or pumpkin within ten horizontal blocks only when
+the prepared inventory can accept its complete reward. It completes on the authoritative harvested
+item notification or after the player leaves the highlighted target. Mining and food callouts share
+`TutorialCalloutView`, including matching harvest/targeting outline bounds, screen-space typography,
+hover suppression, and fade behavior, while retaining separate view instances and persisted
+completion state. Both coordinators acquire one shared `TutorialCalloutArbiter`, which keeps later
+tips queued until the active callout has finished fading out.
 
 ## Entities and combat
 

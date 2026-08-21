@@ -178,6 +178,13 @@ func get_tile_world_bounds(tile_index: int) -> AABB:
 func get_harvest_target_bounds(target_id: int) -> AABB:
 	return get_tile_world_bounds(target_id)
 
+func get_harvest_target_ids() -> Array[int]:
+	var target_ids: Array[int] = []
+	for tile_index in range(PumpkinPatchState.TILE_COUNT):
+		if can_harvest_tile(tile_index):
+			target_ids.append(tile_index)
+	return target_ids
+
 func can_harvest_target(target_id: int) -> bool:
 	return can_harvest_tile(target_id)
 
