@@ -62,6 +62,8 @@ signal main_menu_requested
 @onready var crafting_ingredients_tutorial_view: CraftingIngredientsTutorialView = $CraftingIngredientsTutorialView as CraftingIngredientsTutorialView
 @onready var copper_mining_tutorial: CopperMiningTutorialCoordinator = $CopperMiningTutorial as CopperMiningTutorialCoordinator
 @onready var copper_mining_tutorial_view: CopperMiningTutorialView = $CopperMiningTutorialView as CopperMiningTutorialView
+@onready var sundown_weapon_tutorial: SundownWeaponTutorialCoordinator = $SundownWeaponTutorial as SundownWeaponTutorialCoordinator
+@onready var sundown_weapon_tutorial_view: SundownWeaponTutorialView = $SundownWeaponTutorialView as SundownWeaponTutorialView
 @onready var placement_prompt: PlacementPromptCoordinator = $PlacementPrompt as PlacementPromptCoordinator
 @onready var level_interaction: LevelInteractionCoordinator = $LevelInteractionCoordinator as LevelInteractionCoordinator
 @onready var structure_designer_workflow: StructureDesignerWorkflow = $StructureDesignerWorkflow as StructureDesignerWorkflow
@@ -331,6 +333,13 @@ func _ready():
 		copper_mining_tutorial_view,
 		tutorial_progress,
 		tutorial_callout_arbiter,
+	)
+	sundown_weapon_tutorial.setup(
+		inventory_model,
+		sundown_weapon_tutorial_view,
+		tutorial_progress,
+		tutorial_callout_arbiter,
+		Callable(game_environment, "get_time_of_day"),
 	)
 	if _recovered_defeated_save and _slot_id != -1 and not game_session.save("defeated_save_recovery"):
 		push_error("[Game] Failed to persist recovered player state")

@@ -1,4 +1,4 @@
-[gd_scene load_steps=57 format=3 uid="uid://b22g4me0x1f3h"]
+[gd_scene load_steps=59 format=3 uid="uid://b22g4me0x1f3h"]
 
 [ext_resource type="Script" path="res://game/game.gd" id="1_game"]
 [ext_resource type="PackedScene" path="res://world/world.tscn" id="2_world"]
@@ -58,6 +58,8 @@
 [ext_resource type="Script" path="res://tutorials/copper_mining_tutorial_coordinator.gd" id="54_copper_mining_tutorial"]
 [ext_resource type="Script" path="res://tutorials/presentation/copper_mining_tutorial_view.gd" id="55_copper_mining_tutorial_view"]
 [ext_resource type="PackedScene" path="res://entities/debug/entity_population_debug_panel.tscn" id="56_entity_population_debug"]
+[ext_resource type="Script" path="res://tutorials/sundown_weapon_tutorial_coordinator.gd" id="56_sundown_weapon_tutorial"]
+[ext_resource type="Script" path="res://tutorials/presentation/sundown_weapon_tutorial_view.gd" id="57_sundown_weapon_tutorial_view"]
 
 [node name="Game" type="Node3D"]
 script = ExtResource("1_game")
@@ -167,6 +169,12 @@ script = ExtResource("54_copper_mining_tutorial")
 
 [node name="CopperMiningTutorialView" type="Node3D" parent="."]
 script = ExtResource("55_copper_mining_tutorial_view")
+
+[node name="SundownWeaponTutorial" type="Node" parent="."]
+script = ExtResource("56_sundown_weapon_tutorial")
+
+[node name="SundownWeaponTutorialView" type="CanvasLayer" parent="."]
+script = ExtResource("57_sundown_weapon_tutorial_view")
 
 [node name="PlacementPrompt" type="Node" parent="."]
 script = ExtResource("49_placement_prompt")

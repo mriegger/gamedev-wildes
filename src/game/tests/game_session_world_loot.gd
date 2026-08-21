@@ -62,7 +62,7 @@ func _run() -> void:
 	_expect(player_perks.restore({"allocations": {"health": 1}}, player_stats.get_level()), "player perk setup failed")
 	var item_proficiency := ItemProficiency.new(item_catalog)
 	var tutorial_progress := TutorialProgress.new()
-	_expect(tutorial_progress.restore({"mining_tip_completed": false, "food_tip_completed": false, "crafting_tip_completed": false, "crafting_ingredients_tip_completed": false, "copper_mining_tip_completed": false}), "tutorial progress setup failed")
+	_expect(tutorial_progress.restore({"mining_tip_completed": false, "food_tip_completed": false, "crafting_tip_completed": false, "crafting_ingredients_tip_completed": false, "copper_mining_tip_completed": false, "sundown_weapon_tip_completed": false}), "tutorial progress setup failed")
 	var chest_storage := ChestStorage.new(item_catalog, factory, chest_block.container.get_slot_count())
 	var chest_coordinator := ChestCoordinator.new()
 	var overworld_loot := OverworldLootCoordinator.new()

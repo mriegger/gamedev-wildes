@@ -346,6 +346,8 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	var crafting_ingredients_tutorial_view := CraftingIngredientsTutorialView.new()
 	var copper_mining_tutorial := CopperMiningTutorialCoordinator.new()
 	var copper_mining_tutorial_view := CopperMiningTutorialView.new()
+	var sundown_weapon_tutorial := SundownWeaponTutorialCoordinator.new()
+	var sundown_weapon_tutorial_view := SundownWeaponTutorialView.new()
 	var placement_prompt := PlacementPromptCoordinator.new()
 	var pumpkin_patch := (load("res://farming/pumpkin/pumpkin_patch_coordinator.tscn") as PackedScene).instantiate() as PumpkinPatchCoordinator
 	var apple_trees := (load("res://foraging/apple/apple_tree_coordinator.tscn") as PackedScene).instantiate() as AppleTreeCoordinator
@@ -382,6 +384,8 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	crafting_ingredients_tutorial_view.name = "CraftingIngredientsTutorialView"
 	copper_mining_tutorial.name = "CopperMiningTutorial"
 	copper_mining_tutorial_view.name = "CopperMiningTutorialView"
+	sundown_weapon_tutorial.name = "SundownWeaponTutorial"
+	sundown_weapon_tutorial_view.name = "SundownWeaponTutorialView"
 	placement_prompt.name = "PlacementPrompt"
 	pumpkin_patch.name = "PumpkinPatch"
 	apple_trees.name = "AppleTrees"
@@ -418,6 +422,8 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	game.add_child(crafting_ingredients_tutorial_view)
 	game.add_child(copper_mining_tutorial)
 	game.add_child(copper_mining_tutorial_view)
+	game.add_child(sundown_weapon_tutorial)
+	game.add_child(sundown_weapon_tutorial_view)
 	game.add_child(placement_prompt)
 	overworld.add_child(pumpkin_patch)
 	overworld.add_child(apple_trees)

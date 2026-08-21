@@ -74,6 +74,12 @@ crafting panel emits its first open event, whether that happens before or after 
 open, then completes when the player interacts anywhere inside that panel or closes it. Its view
 tracks the selected recipe's ingredient heading/list rectangle every frame so the white UI outline
 and adjacent explanation remain aligned through panel animation and layout changes.
+`SundownWeaponTutorialCoordinator` detects the 17:00 transition through the injected world-clock
+query and scans only hotbar and backpack slots. A melee weapon is immediately usable, while a bow
+counts only when at least one ammunition definition authored by its draw action is also present. An
+armed player resolves the tip without displaying it. Otherwise it waits for the shared callout
+arbiter, persists completion when shown, and holds a compact top-left warning for fifteen seconds
+before its view fades out.
 
 `InteractionPromptCoordinator` resolves the single HUD prompt with contextual harvest and level
 actions above the fallback placement guidance. `PlacementPromptCoordinator`

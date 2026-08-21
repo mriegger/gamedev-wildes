@@ -151,6 +151,9 @@ Five seconds after the player's first mined block, a top-left hint introduces th
 menu unless it has already been opened. The first crafting-menu session highlights the selected
 recipe's ingredient requirements until the player interacts with the panel or closes it. Tutorial
 hints wait for any active hint to finish first.
+At 17:00, a player without a melee weapon or a bow with compatible ammunition receives a one-time
+top-left warning to craft a weapon at the Anvil before night. The warning remains for fifteen
+seconds, fades out, and is persisted per world.
 Using a hoe on the exposed top face of grass or dirt converts it into dry farmland, which drops dirt
 when mined.
 Seeded copper deposits generate after the surrounding terrain as connected 5–30 block blobs. Most
