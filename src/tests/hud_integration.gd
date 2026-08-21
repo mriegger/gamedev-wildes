@@ -995,7 +995,15 @@ func _check_armor_unequipped() -> void:
 	if not is_equal_approx(_stats.get_value(&"defense"), 0.0):
 		_fail("helmet unequip did not remove defense")
 		return
-	_hud.side_panel._switch_to_tab_id("inventory")
+	_hud.side_panel.close_immediate()
+	_hud.side_panel.open()
+	_hud.side_panel._process(1.0)
+	var inventory_view := _hud.side_panel.get_node("Margin/Content/ViewRoot/InventoryView") as Control
+	var equipment_view := _hud.side_panel.get_node("Margin/Content/ViewRoot/EquipmentView") as Control
+	var title := _hud.side_panel.get_node("Margin/Content/Title") as Label
+	if not inventory_view.visible or equipment_view.visible or title.text != "INVENTORY":
+		_fail("reopened backpack did not reset to the inventory tab")
+		return
 	print("[hud_integration] armor double click ok")
 
 func _push_double_click(control: Control) -> void:

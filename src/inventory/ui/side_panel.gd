@@ -274,6 +274,8 @@ func toggle():
 		open()
 
 func open():
+	if not _is_open:
+		_switch_to_tab_id("inventory")
 	if _inventory_dirty:
 		_refresh_inventory()
 	_target_progress = 1.0
