@@ -1,4 +1,4 @@
-[gd_scene format=3 uid="uid://bl1xnl7u48ppo"]
+[gd_scene load_steps=10 format=3 uid="uid://bl1xnl7u48ppo"]
 
 [ext_resource type="Script" path="res://environment/game_environment.gd" id="1_game_environment"]
 [ext_resource type="Environment" path="res://environment/default_environment.tres" id="2_environment"]
@@ -7,6 +7,8 @@
 [ext_resource type="PackedScene" path="res://environment/day_night/debug_clock_panel.tscn" id="5_debug"]
 [ext_resource type="Resource" path="res://environment/day_night/day_night_profile.tres" id="6_profile"]
 [ext_resource type="PackedScene" path="res://environment/ambient/ambient_soundscape.tscn" id="7_ambient"]
+[ext_resource type="PackedScene" path="res://environment/music/contextual_music_player.tscn" id="8_music"]
+[ext_resource type="PackedScene" path="res://environment/music/music_debug_panel.tscn" id="9_music_debug"]
 
 [node name="GameEnvironment" type="Node3D"]
 script = ExtResource("1_game_environment")
@@ -32,3 +34,7 @@ profile = ExtResource("6_profile")
 [node name="DebugClockPanel" parent="." instance=ExtResource("5_debug")]
 
 [node name="AmbientSoundscape" parent="." instance=ExtResource("7_ambient")]
+
+[node name="Music" parent="." instance=ExtResource("8_music")]
+
+[node name="MusicDebugPanel" parent="." instance=ExtResource("9_music_debug")]

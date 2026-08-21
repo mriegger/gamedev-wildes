@@ -15,6 +15,9 @@ var _timed_melee_contact := TimedMeleeContactType.new()
 func supports_behavior(behavior: EntityBehaviorDefinition) -> bool:
 	return behavior is SkeletonBehaviorDefinition
 
+func is_aggroed() -> bool:
+	return brain != null and brain.state != SkeletonBrain.State.ROAM
+
 func setup(
 	p_runtime_id: int,
 	p_definition: EntityDefinition,

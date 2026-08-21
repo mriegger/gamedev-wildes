@@ -8,6 +8,7 @@ signal entity_radial_contact_reached(source_runtime_id: int, profile: MeleeAttac
 signal entity_defeated(defeat: EntityDefeat)
 signal entity_removed(runtime_id: int)
 signal water_surface_motion_committed(position: Vector3, planar_velocity: Vector2)
+signal aggro_changed(active: bool)
 
 const SPATIAL_CELL_SIZE: float = 4.0
 const SEPARATION_RADIUS: float = 1.2
@@ -92,6 +93,8 @@ var _prepared_definition_cursor: int = 0
 var _preparation_needed: bool = false
 var _next_retirement_sequence: int = 0
 var _suspended: bool = false
+var _aggro_active: bool = false
+var _aggroed_runtime_ids: Dictionary = {}
 
 func setup(
 	p_catalog: EntityCatalog,
@@ -118,6 +121,8 @@ func setup(
 	_actor_tick_start_index = 0
 	_prepared_definition_cursor = 0
 	_next_retirement_sequence = 0
+	_aggro_active = false
+	_aggroed_runtime_ids.clear()
 	_prepare_initial_actors()
 	_preparation_needed = false
 	_suspended = false
@@ -152,6 +157,7 @@ func tick(delta: float, observation: EntityTargetObservation) -> void:
 		actor.tick(delta, observation, separation_velocities[runtime_id] as Vector3, _navigation_search_budget)
 		if get_actor(runtime_id) == actor:
 			_spatial_index.upsert(actor.runtime_id, actor.global_position, actor.get_world_bounds())
+			_set_actor_aggro(runtime_id, actor.is_aggroed())
 
 func try_spawn_batch(requests: Array[EntitySpawnRequest]) -> Array[int]:
 	var rejected: Array[int] = []
@@ -354,6 +360,8 @@ func _remove_active_actor(runtime_id: int) -> EntityActor:
 	_stats_by_runtime_id.erase(runtime_id)
 	_damage_immunity_remaining_by_runtime_id.erase(runtime_id)
 	_spatial_index.remove(runtime_id)
+	_aggroed_runtime_ids.erase(runtime_id)
+	_sync_aggro_state()
 	_preparation_needed = true
 	entity_removed.emit(runtime_id)
 	if is_instance_valid(actor):
@@ -501,6 +509,9 @@ func get_active_runtime_ids_for_definition(definition_id: StringName) -> Array[i
 			runtime_ids.append(runtime_id)
 	runtime_ids.sort()
 	return runtime_ids
+
+func is_aggro_active() -> bool:
+	return _aggro_active
 
 func get_active_actors() -> Array[EntityActor]:
 	var actors: Array[EntityActor] = []
@@ -762,12 +773,27 @@ func _on_actor_water_surface_motion_committed(position: Vector3, planar_velocity
 func _on_actor_radial_contact_reached(source_runtime_id: int, profile: MeleeAttackProfile) -> void:
 	entity_radial_contact_reached.emit(source_runtime_id, profile)
 
+func _set_actor_aggro(runtime_id: int, active: bool) -> void:
+	if active:
+		_aggroed_runtime_ids[runtime_id] = true
+	else:
+		_aggroed_runtime_ids.erase(runtime_id)
+	_sync_aggro_state()
+
+func _sync_aggro_state() -> void:
+	var active := not _suspended and not _aggroed_runtime_ids.is_empty()
+	if active == _aggro_active:
+		return
+	_aggro_active = active
+	aggro_changed.emit(active)
+
 func suspend() -> void:
 	if _suspended:
 		return
 	_suspended = true
 	visible = false
 	_set_active_actors_suspended(true)
+	_sync_aggro_state()
 
 func resume() -> void:
 	if not _suspended:
@@ -775,6 +801,7 @@ func resume() -> void:
 	visible = true
 	_suspended = false
 	_set_active_actors_suspended(false)
+	_sync_aggro_state()
 
 func _set_active_actors_suspended(suspended: bool) -> void:
 	for value in _active.values():
@@ -786,6 +813,8 @@ func is_suspended() -> bool:
 	return _suspended
 
 func shutdown() -> void:
+	_aggroed_runtime_ids.clear()
+	_sync_aggro_state()
 	for runtime_id in _active.keys():
 		var actor := _active[runtime_id] as EntityActor
 		if is_instance_valid(actor):
@@ -817,4 +846,6 @@ func shutdown() -> void:
 	_prepared_definition_cursor = 0
 	_preparation_needed = false
 	_next_retirement_sequence = 0
+	_aggro_active = false
+	_aggroed_runtime_ids.clear()
 	_suspended = false

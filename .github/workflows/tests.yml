@@ -998,6 +998,16 @@ jobs:
           bash .github/scripts/run_godot_check.sh \
             30 "AUDIO_AMBIENT PASS" /tmp/audio_ambient.log -- \
             godot --headless --path src --script res://tests/audio_ambient_integration.gd
+      - name: Run contextual music integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "CONTEXTUAL_MUSIC PASS" /tmp/contextual_music.log -- \
+            godot --headless --path src --script res://environment/music/tests/contextual_music_player.gd
+      - name: Run music debug panel integration
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "MUSIC_DEBUG_PANEL PASS" /tmp/music_debug_panel.log -- \
+            godot --headless --path src --script res://environment/music/tests/music_debug_panel.gd
       - name: Run footstep audio integration
         run: |
           bash .github/scripts/run_godot_check.sh \

@@ -111,6 +111,8 @@ branch's authored textured wall-fill seal stays visible until its parent room cl
 opens immediately, the seal fades out over 0.35 seconds, and the branch and its torches fade in over
 the same interval. Opened seals never close. The HUD aggregates wave, active, and pending counts.
 Leaving or dying restores the exact overworld anchor and creates fresh encounter state on re-entry.
+Dungeon music selects non-repeating tracks with randomized gaps, can repeat throughout a run,
+and remains audible during combat before stopping when the player returns outdoors.
 
 **Structure construction workspace.** `dev structure new` opens a document type, length, width, and
 height dialog, then enters an isolated first-person workspace for a generic structure or Level
@@ -219,6 +221,11 @@ into medium, then small, descendants when defeated. Children jump outward from n
 and have brief hit immunity after splitting. Up to four can attach to the player at once, dealing
 immediate defense-aware damage and repeating it every half second while stacking movement slows up
 to a 60% reduction. Each successful grounded jump dislodges one attached slime.
+
+**Music.** The overworld daytime playlist plays at most once per day and fades out quickly while
+enemies are aggressive. Dungeon music uses its own shuffled playlist, ignores the day clock and
+combat state, and can repeat after randomized gaps throughout a dungeon run. Press `M` to preview
+tracks grouped by folder.
 
 **Crafting.** Opening crafting with `Tab` reveals the general recipe panel alongside the backpack.
 It contains the eight recipes that do not require a workstation. Iron Pickaxe is initially a
@@ -356,6 +363,10 @@ from Godot primitive meshes. Visual effects use project-authored shaders.
 | `src/assets/audio/sfx/farming/harvesting/pop_generic_*_CC0.wav` (3 files) | Generic pop by Muse Spark | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `src/assets/audio/sfx/items/consume/munch_crunchy_fruit_sequence_3x_CC0.wav` | Source recordings by Joseph SARDIN, BigSoundBank; edited by Muse Spark | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `src/assets/audio/sfx/levels/dungeon/door/doorOpen_*.ogg` (2 files) | [RPG Audio](https://kenney.nl/assets/rpg-audio) – Kenney | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
+| `src/assets/audio/music/dungeon/Dungeon Master.mp3` | [Dungeon Master](https://freemusicarchive.org/music/geoff-harvey-purple-planet-music/dungeon-master/dungeon-master-2/) – Geoff Harvey, Purple Planet Music | Creative Commons Attribution (version varies) |
+| `src/assets/audio/music/dungeon/Dark Angel.mp3` | [“Dark Angel”](https://freemusicarchive.org/music/joseph-r-lilore/soundscapes/dark-angel/) – Joseph R. Lilore | Creative Commons Attribution (CC BY; version varies) |
+| `src/assets/audio/music/dungeon/Night.mp3` | [“Night”](https://freemusicarchive.org/music/mark-wilson-x/quiet-moods/night-3/) – Mark Wilson X | Creative Commons Attribution (CC BY; version varies) |
+| `src/assets/audio/music/daytime/Sunrise.mp3` | [“Sunrise”](https://freemusicarchive.org/music/luise-frentzel//sunrise-1/) – Luise Frentzel × Fachhochschule Dortmund | Creative Commons Attribution (CC BY; version varies) |
 | `src/assets/models/tools/hoe/copper_hoe.glb`, `Textures/colormap.png`, and derived inventory icon | [Survival Kit](https://kenney.nl/assets/survival-kit) – Kenney | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `src/assets/textures/tools/bow/*.png` and `src/items/held/{bow,stone_arrow,copper_arrow}.tscn` | Project-authored deterministic pixel art and low-poly primitive models | Project-authored |
 | `src/assets/models/farming/pumpkin/*.fbx` (6 files) and derived inventory icon | [Ultimate Crops](https://quaternius.com/packs/ultimatecrops.html) – Quaternius | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) |

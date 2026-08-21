@@ -160,7 +160,7 @@ func _ready():
 	structure_designer_dialogs.open_state_changed.connect(_on_structure_dialog_open_state_changed)
 	dev_console.open_state_changed.connect(_on_dev_console_open_state_changed)
 	settings.apply_display(get_viewport())
-	game_environment.setup(float(_save_data.get("time_of_day", 6.0)), settings.get_shadow_distance())
+	game_environment.setup(float(_save_data.get("time_of_day", 6.0)), settings.get_shadow_distance(), _world_state.seed)
 	game_environment.apply_settings(settings)
 	world.block_catalog = block_catalog
 	world.foliage_catalog = foliage_catalog
@@ -704,6 +704,7 @@ func _enter_level():
 	overworld_loot.suspend()
 	_level_entrance.visible = false
 	game_environment.set_outdoor_presentation_enabled(false)
+	game_environment.set_dungeon_music_active(true)
 	_level_runtime = next_runtime
 	_level_runtime.activate()
 	var level_spawn := _level_runtime.get_spawn_position()
@@ -762,6 +763,7 @@ func _exit_level(restore_from_defeat: bool = false):
 	_location_state.return_to_world()
 	if restore_from_defeat:
 		_restore_player_from_defeat(player.global_position)
+	game_environment.set_dungeon_music_active(false)
 	game_environment.set_outdoor_presentation_enabled(true)
 	overworld.visible = true
 	hud.set_compass_available(true)
@@ -960,6 +962,7 @@ func _enter_structure_designer(draft: StructureDraft) -> void:
 	level_interaction.process_mode = Node.PROCESS_MODE_DISABLED
 	if in_level:
 		_level_runtime.suspend_simulation()
+		game_environment.set_dungeon_music_active(false)
 	await _fade_to(1.0)
 	watcher_encounter.set_presentation_enabled(false)
 	if in_level:
@@ -1003,6 +1006,7 @@ func _restore_structure_lifecycle() -> void:
 	var snapshot := _structure_lifecycle_snapshot
 	if snapshot.in_level:
 		_level_runtime.activate()
+		game_environment.set_dungeon_music_active(true)
 	else:
 		game_environment.set_outdoor_presentation_enabled(true)
 		if not snapshot.world_was_suspended:
@@ -1179,6 +1183,8 @@ func _bind_entity_context(space: VoxelSpace, runtime: EntityRuntime, position_re
 	runtime.entity_radial_contact_reached.connect(melee_combat.try_commit_entity_radial_contact)
 	melee_combat.melee_outcome_committed.connect(runtime.record_melee_outcome)
 	melee_combat.melee_outcome_committed.connect(watcher_encounter.record_melee_outcome)
+	runtime.aggro_changed.connect(game_environment.set_combat_active)
+	game_environment.set_combat_active(runtime.is_aggro_active())
 	melee_combat.projectile_outcome_committed.connect(runtime.record_projectile_outcome)
 	melee_combat.projectile_outcome_committed.connect(watcher_encounter.record_projectile_outcome)
 	_active_entity_runtime = runtime
@@ -1198,6 +1204,9 @@ func _unbind_entity_context() -> void:
 		_active_entity_runtime.entity_radial_contact_reached.disconnect(melee_combat.try_commit_entity_radial_contact)
 	if melee_combat.melee_outcome_committed.is_connected(_active_entity_runtime.record_melee_outcome):
 		melee_combat.melee_outcome_committed.disconnect(_active_entity_runtime.record_melee_outcome)
+	if _active_entity_runtime.aggro_changed.is_connected(game_environment.set_combat_active):
+		_active_entity_runtime.aggro_changed.disconnect(game_environment.set_combat_active)
+	game_environment.set_combat_active(false)
 	if melee_combat.projectile_outcome_committed.is_connected(_active_entity_runtime.record_projectile_outcome):
 		melee_combat.projectile_outcome_committed.disconnect(_active_entity_runtime.record_projectile_outcome)
 	enemy_combat_feedback.unbind_runtime()

@@ -24,6 +24,9 @@ var _slam_contact_pending: bool = false
 func supports_behavior(behavior: EntityBehaviorDefinition) -> bool:
 	return behavior is StoneGolemBehaviorDefinition
 
+func is_aggroed() -> bool:
+	return brain != null and brain.is_alerted()
+
 func has_valid_presentation() -> bool:
 	if landing_dust_path.is_empty() or action_audio_path.is_empty():
 		return false

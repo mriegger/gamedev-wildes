@@ -58,11 +58,11 @@ func _run() -> void:
 	var initial_position := actor.global_position
 	var far_player := actor.global_position + Vector3(17.0, 0.0, 0.0)
 	actor.tick(0.5, _observation(far_player), Vector3(4.0, 0.0, 0.0), NavigationSearchBudget.new(2))
-	_expect(actor.brain.state == StoneGolemBrainType.State.DORMANT and not actor.brain.is_alerted(), "target beyond detection woke the Stone Golem")
+	_expect(actor.brain.state == StoneGolemBrainType.State.DORMANT and not actor.brain.is_alerted() and not actor.is_aggroed(), "target beyond detection woke the Stone Golem")
 	_expect(actor.global_position.is_equal_approx(initial_position), "dormant Stone Golem moved")
 	var visible_player := actor.global_position + Vector3(8.0, 0.0, 0.0)
 	actor.tick(0.5, _observation(visible_player), Vector3(4.0, 0.0, 0.0), NavigationSearchBudget.new(2))
-	_expect(actor.brain.state == StoneGolemBrainType.State.CHASE and actor.brain.is_alerted(), "clear nearby target did not alert the Stone Golem")
+	_expect(actor.brain.state == StoneGolemBrainType.State.CHASE and actor.brain.is_alerted() and actor.is_aggroed(), "clear nearby target did not alert the Stone Golem")
 	_expect(actor.global_position.distance_to(initial_position) > 0.0, "alerted Stone Golem did not begin pursuit")
 	var position_before_memory := actor.global_position
 	world.restore_block_edits({Vector3i(4, 3, 0): BlockId.Type.STONE}, {})

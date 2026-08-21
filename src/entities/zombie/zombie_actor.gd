@@ -15,6 +15,9 @@ var _visibility_sensor: VoxelPlayerVisibilitySensorType
 func supports_behavior(behavior: EntityBehaviorDefinition) -> bool:
 	return behavior is GroundMeleeEnemyBehaviorDefinition
 
+func is_aggroed() -> bool:
+	return brain != null and brain.state != GroundMeleeEnemyBrain.State.WANDER
+
 
 func setup(
 	p_runtime_id: int,

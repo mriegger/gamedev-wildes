@@ -7,6 +7,7 @@ const TEST_RADIUS: int = 8
 var _failures: int = 0
 var _defeated: Array[EntityDefeat] = []
 var _removed_runtime_ids: Array[int] = []
+var _aggro_changes: Array[bool] = []
 
 func _init() -> void:
 	call_deferred("_run")
@@ -35,6 +36,12 @@ func _on_entity_defeated(defeat: EntityDefeat) -> void:
 func _on_entity_removed(runtime_id: int) -> void:
 	_removed_runtime_ids.append(runtime_id)
 
+func _on_aggro_changed(active: bool) -> void:
+	_aggro_changes.append(active)
+
+func _observation(player_position: Vector3) -> EntityTargetObservation:
+	return EntityTargetObservation.create(player_position, player_position + Vector3(0.0, 4.0, 6.0), Vector3.FORWARD, Vector3.RIGHT)
+
 func _run() -> void:
 	var runtime := EntityRuntime.new()
 	root.add_child(runtime)
@@ -43,6 +50,7 @@ func _run() -> void:
 	runtime.setup(catalog, world, 3, 3, EntityNavigationLimits.new(48, 2048, 2))
 	runtime.entity_defeated.connect(_on_entity_defeated)
 	runtime.entity_removed.connect(_on_entity_removed)
+	runtime.aggro_changed.connect(_on_aggro_changed)
 
 	var first_batch: Array[EntitySpawnRequest] = [
 		_request(&"zombie", 0.5, 101),
@@ -54,6 +62,14 @@ func _run() -> void:
 	_expect(runtime.get_actor(2).definition.id == &"sheep", "explicit spawn incorrectly used ambient floor restrictions")
 	_expect(runtime.get_hostile_positions_near(Vector3(0.5, FEET_Y, 0.5), 3.0) == PackedVector3Array([Vector3(0.5, FEET_Y, 0.5)]), "nearby hostile query included a passive entity or omitted a hostile entity")
 	_expect(runtime.get_hostile_positions_near(Vector3(0.5, FEET_Y, 0.5), 0.0) == PackedVector3Array([Vector3(0.5, FEET_Y, 0.5)]), "zero-radius hostile query omitted an exact match")
+	runtime.tick(0.2, _observation(Vector3(0.5, FEET_Y, 0.5)))
+	_expect(runtime.is_aggro_active(), "nearby zombie did not activate aggregate aggro")
+	_expect(_aggro_changes == [true], "zombie aggro did not emit exactly one activation")
+	var distant_observation := _observation(Vector3(100.5, FEET_Y, 0.5))
+	runtime.tick(2.0, distant_observation)
+	runtime.tick(0.2, distant_observation)
+	_expect(not runtime.is_aggro_active(), "distant zombie retained aggregate aggro")
+	_expect(_aggro_changes == [true, false], "zombie aggro clear did not emit exactly once")
 
 	var mixed_invalid: Array[EntitySpawnRequest] = [
 		_request(&"zombie", 4.5, 103),
@@ -66,10 +82,13 @@ func _run() -> void:
 		_request(&"sheep", 4.5, 106),
 	]
 	_expect(runtime.try_spawn_batch(overlapping).is_empty(), "pairwise-overlapping batch was accepted")
-	var third_batch: Array[EntitySpawnRequest] = [_request(&"zombie", 4.5, 107)]
+	var third_batch: Array[EntitySpawnRequest] = [_request(&"skeleton", 4.5, 107)]
 	_expect(runtime.try_spawn_batch(third_batch) == [3], "rejected batch consumed a runtime ID")
 	var over_capacity: Array[EntitySpawnRequest] = [_request(&"zombie", 6.5, 108)]
 	_expect(runtime.try_spawn_batch(over_capacity).is_empty(), "runtime accepted a batch beyond its active cap")
+	runtime.tick(0.2, _observation(Vector3(4.5, FEET_Y, 0.5)))
+	_expect(runtime.is_aggro_active(), "nearby skeleton did not activate aggregate aggro")
+	_expect(_aggro_changes == [true, false, true], "skeleton aggro did not emit exactly one activation")
 
 	var third_actor := runtime.get_actor(3)
 	var original_position := third_actor.global_position
@@ -98,18 +117,25 @@ func _run() -> void:
 	_expect(not runtime.get_active_runtime_ids_overlapping(original_bounds).has(3), "successful teleport retained the old spatial entry")
 	_expect(runtime.get_active_runtime_ids_overlapping(third_actor.get_world_bounds()).has(3), "successful teleport omitted the new spatial entry")
 	runtime.suspend()
-	_expect(runtime.get_active_runtime_ids_for_definition(&"zombie") == [1, 3], "suspended definition query lost active runtime IDs")
+	_expect(not runtime.is_aggro_active(), "suspended runtime retained aggregate aggro")
+	_expect(runtime.get_active_runtime_ids_for_definition(&"zombie") == [1], "suspended definition query lost active zombie runtime IDs")
+	_expect(runtime.get_active_runtime_ids_for_definition(&"skeleton") == [3], "suspended definition query lost active skeleton runtime IDs")
 	_expect(runtime.get_active_runtime_ids_for_definition(&"sheep") == [2], "suspended definition query returned the wrong species")
 	runtime.resume()
+	_expect(runtime.is_aggro_active(), "resumed runtime did not restore aggregate aggro")
 
 	_expect(runtime.try_despawn(1), "active actor refused ordinary despawn")
 	_expect(_defeated.is_empty(), "ordinary despawn emitted an entity defeat")
 	_expect(_removed_runtime_ids == [1], "ordinary despawn did not emit one removal")
+	_expect(runtime.try_despawn(3), "aggroed actor refused ordinary despawn")
+	_expect(not runtime.is_aggro_active(), "despawned skeleton retained aggregate aggro")
+	_expect(_aggro_changes == [true, false, true, false, true, false], "aggregate aggro transition sequence was incorrect")
+	_expect(_removed_runtime_ids == [1, 3], "aggroed despawn did not emit one removal")
 	var lethal := runtime.try_apply_damage(2, 1000.0)
 	_expect(lethal != null and lethal.defeated, "lethal explicit damage was not committed")
 	_expect(runtime.get_actor(2) == null, "defeated actor remained active")
 	_expect(_defeated.size() == 1, "defeat did not emit exactly once")
-	_expect(_removed_runtime_ids == [1, 2], "lethal defeat did not emit one removal")
+	_expect(_removed_runtime_ids == [1, 3, 2], "lethal defeat did not emit one removal")
 	if _defeated.size() == 1:
 		_expect(_defeated[0].runtime_id == 2 and _defeated[0].definition_id == &"sheep", "defeat signal identified the wrong actor")
 		_expect(_defeated[0].world_position == Vector3(2.5, FEET_Y, 0.5), "defeat signal lost the actor position")
@@ -117,7 +143,7 @@ func _run() -> void:
 
 	runtime.shutdown()
 	_expect(_defeated.size() == 1, "shutdown emitted an entity defeat")
-	_expect(_removed_runtime_ids == [1, 2], "shutdown emitted an entity removal")
+	_expect(_removed_runtime_ids == [1, 3, 2], "shutdown emitted an entity removal")
 	runtime.queue_free()
 	await process_frame
 	await process_frame

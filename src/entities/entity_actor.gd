@@ -79,6 +79,9 @@ func supports_behavior(_behavior: EntityBehaviorDefinition) -> bool:
 func can_despawn_ambiently() -> bool:
 	return true
 
+func is_aggroed() -> bool:
+	return false
+
 func has_valid_presentation() -> bool:
 	if animation_driver_path.is_empty() or visual_fader_path.is_empty() or death_poof_path.is_empty():
 		return false

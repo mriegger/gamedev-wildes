@@ -1,0 +1,17 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://environment/music/contextual_music_player.gd" id="1"]
+[ext_resource type="AudioStream" path="res://assets/audio/music/daytime/Morning.mp3" id="2"]
+[ext_resource type="AudioStream" path="res://assets/audio/music/daytime/The Britons.mp3" id="3"]
+[ext_resource type="AudioStream" path="res://assets/audio/music/dungeon/Dungeon Master.mp3" id="4_dungeon_master"]
+[ext_resource type="AudioStream" path="res://assets/audio/music/dungeon/Dark Angel.mp3" id="5_dark_angel"]
+[ext_resource type="AudioStream" path="res://assets/audio/music/dungeon/Night.mp3" id="6_night"]
+[ext_resource type="AudioStream" path="res://assets/audio/music/daytime/Sunrise.mp3" id="7_sunrise"]
+
+[node name="ContextualMusicPlayer" type="Node"]
+script = ExtResource("1")
+daytime_tracks = Array[AudioStream]([ExtResource("2"), ExtResource("3"), ExtResource("7_sunrise")])
+dungeon_tracks = Array[AudioStream]([ExtResource("4_dungeon_master"), ExtResource("5_dark_angel"), ExtResource("6_night")])
+
+[node name="MusicPlayer" type="AudioStreamPlayer" parent="."]
+bus = &"Music"

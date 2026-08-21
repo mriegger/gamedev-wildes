@@ -13,6 +13,7 @@ signal back_requested
 @onready var torch_shadows: OptionButton = $VBox/SettingsGrid/TorchShadows
 @onready var dungeon_torch_shadows: OptionButton = $VBox/SettingsGrid/DungeonTorchShadows
 @onready var ambient_volume: HSlider = $VBox/SettingsGrid/AmbientVolume
+@onready var music_volume: HSlider = $VBox/SettingsGrid/MusicVolume
 @onready var birds_enabled: CheckButton = $VBox/SettingsGrid/BirdsEnabled
 @onready var back_button: WildesButton = $VBox/BackButton
 
@@ -31,6 +32,7 @@ func _ready():
 	torch_shadows.item_selected.connect(_on_torch_shadows_selected)
 	dungeon_torch_shadows.item_selected.connect(_on_dungeon_torch_shadows_selected)
 	ambient_volume.value_changed.connect(_on_ambient_volume_changed)
+	music_volume.value_changed.connect(_on_music_volume_changed)
 	birds_enabled.toggled.connect(_on_birds_enabled_toggled)
 	back_button.pressed.connect(back_requested.emit)
 
@@ -86,6 +88,7 @@ func _sync_controls():
 	_select_value(torch_shadows, _settings.torch_shadow_count)
 	_select_value(dungeon_torch_shadows, _settings.dungeon_torch_shadow_count)
 	ambient_volume.set_value_no_signal(_settings.ambient_volume)
+	music_volume.set_value_no_signal(_settings.music_volume)
 	birds_enabled.set_pressed_no_signal(_settings.birds_enabled)
 	_syncing = false
 
@@ -133,6 +136,10 @@ func _on_dungeon_torch_shadows_selected(index: int):
 
 func _on_ambient_volume_changed(value: float):
 	_settings.ambient_volume = value
+	_emit_change()
+
+func _on_music_volume_changed(value: float):
+	_settings.music_volume = value
 	_emit_change()
 
 func _on_birds_enabled_toggled(enabled: bool):

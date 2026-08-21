@@ -20,6 +20,9 @@ var _defeat_spawn_launch_active: bool = false
 func supports_behavior(behavior: EntityBehaviorDefinition) -> bool:
 	return behavior is SlimeBehaviorDefinition
 
+func is_aggroed() -> bool:
+	return brain != null and brain.state != SlimeBrain.State.WANDER
+
 func setup(
 	p_runtime_id: int,
 	p_definition: EntityDefinition,

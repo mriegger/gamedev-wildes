@@ -19,6 +19,7 @@ var shadow_range: int = SHADOW_RANGE_MEDIUM
 var torch_shadow_count: int = 1
 var dungeon_torch_shadow_count: int = 6
 var ambient_volume: float = 1.0
+var music_volume: float = 0.7
 var birds_enabled: bool = true
 var persist_changes: bool = false
 
@@ -81,6 +82,7 @@ func to_dict() -> Dictionary:
 		"torch_shadow_count": torch_shadow_count,
 		"dungeon_torch_shadow_count": dungeon_torch_shadow_count,
 		"ambient_volume": ambient_volume,
+		"music_volume": music_volume,
 		"birds_enabled": birds_enabled,
 	}
 
@@ -99,4 +101,6 @@ func _apply_dict(data: Dictionary):
 	dungeon_torch_shadow_count = loaded_dungeon_torch_shadows if loaded_dungeon_torch_shadows in [0, 2, 4, 6] else 6
 	var loaded_ambient_vol := float(data.get("ambient_volume", ambient_volume))
 	ambient_volume = clampf(loaded_ambient_vol, 0.0, 1.0)
+	var loaded_music_vol := float(data.get("music_volume", music_volume))
+	music_volume = clampf(loaded_music_vol, 0.0, 1.0)
 	birds_enabled = bool(data.get("birds_enabled", birds_enabled))

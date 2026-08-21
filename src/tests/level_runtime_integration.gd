@@ -424,7 +424,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	settings.birds_enabled = false
 	game.settings = settings
 	world.configure_settings(settings)
-	environment.setup(6.0, settings.get_shadow_distance())
+	environment.setup(6.0, settings.get_shadow_distance(), 1337)
 	environment.apply_settings(settings)
 	environment.start_clock()
 	game.equipment_instance_factory = EquipmentInstanceFactory.new(game.item_catalog)
@@ -622,6 +622,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 		_expect(not hud.navigation_compass._available, "dungeon left the compass available in cycle %d" % cycle)
 		_expect(environment._world_environment.environment == null and not environment._sun.visible and not environment._sun_fill.visible, "outdoor environment remained active in cycle %d" % cycle)
 		_expect(not environment._ambient_soundscape._running, "outdoor ambient audio remained active in cycle %d" % cycle)
+		_expect(environment._music.is_running() and environment._music.is_dungeon_active(), "dungeon music context was not activated in cycle %d" % cycle)
 		_expect(runtime.visible and runtime.is_processing(), "level runtime is inactive in cycle %d" % cycle)
 		_expect(dungeon_entity_runtime != world_entity_runtime and not dungeon_entity_runtime.is_suspended(), "level entry did not activate a dedicated entity runtime in cycle %d" % cycle)
 		_expect(game._active_entity_runtime == dungeon_entity_runtime and player.interactor.entity_runtime == dungeon_entity_runtime, "level entry did not rebind player entity queries in cycle %d" % cycle)
@@ -668,6 +669,7 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 		_expect(hud.navigation_compass._has_target, "overworld compass did not restore the dungeon entrance in cycle %d" % cycle)
 		_expect(hud.navigation_compass._available, "overworld did not restore the compass in cycle %d" % cycle)
 		_expect(environment._world_environment.environment != null and environment._sun.visible and environment._sun_fill.visible, "outdoor environment was not restored after cycle %d" % cycle)
+		_expect(environment._music.is_running() and not environment._music.is_dungeon_active(), "overworld music context was not restored in cycle %d" % cycle)
 		_expect(game._level_runtime == null and not is_instance_valid(runtime), "level runtime survived cycle %d teardown" % cycle)
 		_expect(game.inventory_model == inventory_identity, "level exit replaced inventory identity in cycle %d" % cycle)
 		_expect(game.player_stats == stats_identity and player.stats == stats_identity, "level exit replaced player stats identity in cycle %d" % cycle)

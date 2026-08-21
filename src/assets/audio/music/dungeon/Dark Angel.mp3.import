@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://067oelo203t2"
+path="res://.godot/imported/Dark Angel.mp3-a05d9acc1664a53b11299cba703c164b.mp3str"
+
+[deps]
+
+source_file="res://assets/audio/music/dungeon/Dark Angel.mp3"
+dest_files=["res://.godot/imported/Dark Angel.mp3-a05d9acc1664a53b11299cba703c164b.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

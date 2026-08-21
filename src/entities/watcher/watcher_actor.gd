@@ -119,6 +119,9 @@ func reset_after_player_defeat() -> void:
 func is_aggressive() -> bool:
 	return brain != null and brain.is_aggressive()
 
+func is_aggroed() -> bool:
+	return is_aggressive()
+
 func try_begin_player_hit_response(_player_position: Vector3) -> bool:
 	if brain == null or brain.is_aggressive():
 		return false
