@@ -53,7 +53,12 @@ var _is_open: bool = false
 var _current_workspace_id: StringName = CRAFTING_WORKSPACE_ID
 var _crafting_title: String = "CRAFTING"
 var _workspace_tabs_enabled: bool = true
-var _crafting_sound_stream: AudioStream = preload("res://assets/audio/sfx/crafting/complete/gavel_3_blows_s1590_CC0.ogg")
+var _crafting_sound_streams: Array[AudioStream] = [
+	preload("res://assets/audio/sfx/crafting/complete/gavel_3_blows_s1590_CC0.ogg"),
+	preload("res://assets/audio/sfx/crafting/complete/craft_saw_A_saw_s0016_3s_fade.ogg"),
+	preload("res://assets/audio/sfx/crafting/complete/craft_saw_B_sawwood_s0559_3s_fade.ogg"),
+]
+var _last_crafting_sound_index: int = -1
 
 func _ready() -> void:
 	set_process_input(true)
@@ -67,7 +72,7 @@ func _ready() -> void:
 	_progression_tab.pressed.connect(_on_workspace_tab_pressed.bind(PROGRESSION_WORKSPACE_ID))
 	_style_workspace_tabs()
 	_apply_workspace()
-	_crafting_sound_player.stream = _crafting_sound_stream
+	_crafting_sound_player.stream = _crafting_sound_streams[0]
 	_update_size()
 	_apply_state()
 	set_process(false)
@@ -365,8 +370,18 @@ func _refresh_craft_button() -> void:
 
 func _on_craft_pressed() -> void:
 	if crafting_coordinator.craft(_selected_recipe_id):
-		_crafting_sound_player.play()
+		_play_crafting_completion_sound()
 	_refresh_craft_button()
+
+func _play_crafting_completion_sound() -> void:
+	var stream_index := randi_range(0, _crafting_sound_streams.size() - 1)
+	if _crafting_sound_streams.size() > 1:
+		while stream_index == _last_crafting_sound_index:
+			stream_index = randi_range(0, _crafting_sound_streams.size() - 1)
+	_last_crafting_sound_index = stream_index
+	_crafting_sound_player.stop()
+	_crafting_sound_player.stream = _crafting_sound_streams[stream_index]
+	_crafting_sound_player.play()
 
 func _on_crafting_state_changed() -> void:
 	_refresh_details()
@@ -375,7 +390,6 @@ func _exit_tree() -> void:
 	if _crafting_sound_player != null:
 		_crafting_sound_player.stop()
 		_crafting_sound_player.stream = null
-	_crafting_sound_stream = null
 
 func _update_size() -> void:
 	var viewport_size := Vector2(1280, 720)
