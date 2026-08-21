@@ -74,6 +74,7 @@ func prepare_player_attack(
 		target_runtime_ids,
 		ray_origin,
 		ray_direction.normalized(),
+		_get_player_center(),
 	)
 
 func try_commit_player_attack(
@@ -87,17 +88,20 @@ func try_commit_player_attack(
 		or not prepared._consume(self)
 	):
 		return false
+	var locked_ray_origin := prepared._get_ray_origin()
+	if prepared.get_profile().requires_planar_aim():
+		locked_ray_origin += _get_player_center() - prepared._get_player_origin()
 	var target_runtime_ids := prepared.get_target_runtime_ids()
 	if prepared.get_profile().acquire_targets_on_contact:
 		target_runtime_ids = acquire_player_targets(
-			prepared._get_ray_origin(),
+			locked_ray_origin,
 			prepared._get_ray_direction(),
 			prepared.get_profile(),
 			impact_origin,
 		)
 	return _commit_player_contacts(
 		target_runtime_ids,
-		prepared._get_ray_origin(),
+		locked_ray_origin,
 		prepared._get_ray_direction(),
 		prepared.get_profile(),
 		prepared._get_source().get_item_id(),
@@ -417,7 +421,7 @@ func _is_valid_player_geometry(
 ) -> bool:
 	if player_origin.distance_squared_to(hit_position) > profile.reach * profile.reach:
 		return false
-	return VoxelLineOfSightType.has_clear_path(_voxel_space, ray_origin, hit_position) and VoxelLineOfSightType.has_clear_path(_voxel_space, player_origin, hit_position)
+	return _has_clear_player_melee_path(ray_origin, hit_position) and _has_clear_player_melee_path(player_origin, hit_position)
 
 func _get_valid_player_hit(
 	actor: EntityActor,
@@ -451,7 +455,7 @@ func _get_valid_player_hit(
 	if profile.sweep_degrees > 0.0:
 		if attack_origin.distance_squared_to(hit_position) > profile.reach * profile.reach:
 			return null
-		if not VoxelLineOfSightType.has_clear_path(_voxel_space, attack_origin, hit_position):
+		if not _has_clear_player_melee_path(attack_origin, hit_position):
 			return null
 	elif not _is_valid_player_geometry(attack_origin, ray_origin, hit_position, profile):
 		return null
@@ -470,6 +474,12 @@ func _get_planar_aim(ray_origin: Vector3, ray_direction: Vector3, player_origin:
 	if not planar_aim.is_finite() or planar_aim.is_zero_approx():
 		return Vector3.ZERO
 	return planar_aim.normalized()
+
+func _has_clear_player_melee_path(origin: Vector3, target: Vector3) -> bool:
+	return VoxelLineOfSightType.has_clear_path(_voxel_space, origin, target, _is_foliage)
+
+func _is_foliage(block_id: int) -> bool:
+	return BlockId.is_foliage(block_id)
 
 func _get_player_center() -> Vector3:
 	return _get_bounds_center(_player.get_world_bounds())

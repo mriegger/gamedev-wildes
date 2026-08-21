@@ -7,6 +7,7 @@ var _action: MeleeAttackActionDefinition
 var _target_runtime_ids: Array[int]
 var _ray_origin: Vector3
 var _ray_direction: Vector3
+var _player_origin: Vector3
 var _consumed: bool = false
 
 func _init(
@@ -16,6 +17,7 @@ func _init(
 	p_target_runtime_ids: Array[int],
 	p_ray_origin: Vector3,
 	p_ray_direction: Vector3,
+	p_player_origin: Vector3,
 ) -> void:
 	_owner = p_owner
 	_source = p_source
@@ -23,6 +25,7 @@ func _init(
 	_target_runtime_ids = p_target_runtime_ids.duplicate()
 	_ray_origin = p_ray_origin
 	_ray_direction = p_ray_direction
+	_player_origin = p_player_origin
 
 func get_action() -> MeleeAttackActionDefinition:
 	return _action
@@ -53,3 +56,6 @@ func _get_ray_origin() -> Vector3:
 
 func _get_ray_direction() -> Vector3:
 	return _ray_direction
+
+func _get_player_origin() -> Vector3:
+	return _player_origin

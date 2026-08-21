@@ -187,7 +187,9 @@ replaces the chest with the crafting menu while keeping the backpack open.
 and wood. Item actions are data-driven: the hoe tills exposed grass and dirt, all three pickaxe tiers
 can mine copper, and the sword uses click-triggered, alternating melee swings with a fading
 radial scan tracing its 120-degree attack area in front of the player. Its base damage rolls from 8
-to 10 independently for each enemy hit. Combat registers slash, blunt, and pierce damage types;
+to 10 independently for each enemy hit. Sword and hammer targets are evaluated at their contact
+frame, and non-solid foliage does not block their attacks. Combat registers slash, blunt, and pierce
+damage types;
 enemies are neutral by default. Zombies take 1.5 times damage from slash, while Skeletons take half
 damage from slash and 1.5 times damage from blunt. Stone Golems take half damage from slash and
 pierce while remaining neutral to blunt. The Iron Pickaxe is initially guaranteed by the stone

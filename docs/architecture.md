@@ -171,10 +171,11 @@ sweep angle, optional knockback, and whether targets lock at attack start or are
 Selecting a melee weapon makes the player presentation smoothly
 track the cursor independently of camera-relative movement whenever the player is not sprinting;
 sprinting restores movement-owned facing. Directional player swings snap to the current cursor ray,
-lock that facing for the attack duration even while sprinting, lock sorted spatial-index candidates
-from the same ray, then independently revalidate every locked target at contact. The copper hammer
-instead queries its full-circle four-block area at the slam frame, so enemies are affected according
-to their positions at impact. A zero-degree sweep
+lock that facing for the attack duration even while sprinting, and query sorted spatial-index
+candidates from the same ray at contact. The copper hammer likewise queries its full-circle
+four-block area at the slam frame, so enemies are affected according to their positions at impact.
+Player melee visibility ignores non-solid foliage while retaining solid-terrain occlusion. A
+zero-degree sweep
 retains exact single-target ray selection, while a full-circle sweep is independent of planar cursor
 aim. The profile calculates
 `max(1, (base damage + attacker strength - target defense) × damage multiplier)`. Entity definitions

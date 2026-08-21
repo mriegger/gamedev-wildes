@@ -204,6 +204,7 @@ func _run() -> void:
 	_expect(is_equal_approx(hammer_profile.radial_damage_center_multiplier, 1.0) and is_equal_approx(hammer_profile.radial_damage_edge_multiplier, 1.0 / 3.0), "copper hammer distance scaling changed")
 	_expect(is_equal_approx(hammer_profile.reach, 4.0) and is_equal_approx(hammer_profile.sweep_degrees, 360.0), "copper hammer radius changed")
 	_expect(hammer_profile.acquire_targets_on_contact and hammer_profile.knockback_speed > 0.0, "copper hammer impact behavior changed")
+	_expect(configured_sword_profile.acquire_targets_on_contact, "copper sword does not acquire targets at contact time")
 	_expect(is_equal_approx(zombie_profile.base_damage, 15.0), "zombie base damage changed")
 	_expect(is_equal_approx(skeleton_profile.base_damage, 5.0), "skeleton base damage changed")
 	_expect(is_equal_approx(configured_sword_profile.sweep_degrees, 120.0), "copper sword sweep changed")
@@ -436,7 +437,7 @@ func _run() -> void:
 		timing_ray[0],
 		timing_ray[1],
 	)
-	player.interactor._melee_contact_pending = player.interactor._melee_attack_command.has_targets()
+	player.interactor._melee_contact_pending = sword_profile.acquire_targets_on_contact or player.interactor._melee_attack_command.has_targets()
 	player.interactor._melee_impact_pending = true
 	contact_count_before = _contacts.size()
 	var hp_before_player_swing := coordinator.get_runtime().get_current_hp(target_id)
@@ -589,6 +590,7 @@ func _run() -> void:
 	await _test_untargetable_bird(world, sword_profile)
 	await _test_zero_degree_compatibility(world, sword_profile)
 	await _test_sweep_geometry(world, sword_profile)
+	await _test_player_melee_targeting_consistency(world, sword_profile, hammer_profile)
 	await _test_full_circle_directionless(world, sword_profile)
 	await _test_overlapping_and_vertical_geometry(world, sword_profile)
 	await _test_sweep_reach_and_locking(world, sword_profile)
@@ -1145,6 +1147,92 @@ func _test_sweep_geometry(world: VoxelWorld, sword_profile: MeleeAttackProfile) 
 	_expect(actors[5].runtime_id not in forward_ids, "sweep accepted a target behind the player")
 	await _cleanup(combat, coordinator, player, fixture["camera"] as Camera3D)
 
+func _test_player_melee_targeting_consistency(
+	world: VoxelWorld,
+	sword_profile: MeleeAttackProfile,
+	hammer_profile: MeleeAttackProfile,
+) -> void:
+	var fixture := _make_combat_fixture(world, 1, 0, 8124)
+	var coordinator := fixture["coordinator"] as WorldEntityCoordinator
+	var combat := fixture["combat"] as MeleeCombatCoordinator
+	var player := fixture["player"] as PlayerMotor
+	var actors := _get_sorted_actors(coordinator)
+	_expect(actors.size() == 1, "melee targeting fixture did not spawn one zombie")
+	if actors.size() != 1:
+		await _cleanup(combat, coordinator, player, fixture["camera"] as Camera3D)
+		return
+	var actor := actors[0]
+	var ray := _orthographic_ray(player, Vector2(0.0, -1.0))
+	_place_at_angle(actor, player.global_position, 180.0, 1.5)
+	coordinator.tick(0.0, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
+	var prepared := combat.prepare_player_attack(
+		(fixture["inventory"] as InventoryModel).create_selected_item_source(),
+		ray[0],
+		ray[1],
+	)
+	_expect(prepared != null and not prepared.has_targets(), "contact-time sword attack locked targets during windup")
+	player.global_position += Vector3.RIGHT * 1.9
+	_place_at_angle(actor, player.global_position, 0.0, 1.5)
+	coordinator.tick(0.0, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
+	var hp_before := coordinator.get_runtime().get_current_hp(actor.runtime_id)
+	_expect(combat.try_commit_player_attack(prepared), "sword did not acquire an enemy that entered the moving arc before contact")
+	_expect(coordinator.get_runtime().get_current_hp(actor.runtime_id) < hp_before, "moving contact-time sword acquisition did not damage the enemy")
+
+	var inventory := fixture["inventory"] as InventoryModel
+	var inventory_loadout := fixture["inventory_loadout"] as InventoryLoadoutCoordinator
+	var camera := fixture["camera"] as Camera3D
+	player.interactor.setup(
+		camera,
+		player,
+		inventory,
+		inventory_loadout,
+		InventoryTestFixture.create_player_action_executors(inventory, inventory_loadout, player.interactor.unarmed_primary_action),
+		InputBuffer.new(),
+		combat,
+		coordinator.get_runtime(),
+	)
+	player.interactor.bind_space(world, world)
+	var terrain_hits: Array[Vector3i] = []
+	player.interactor.melee_terrain_hit.connect(func(position: Vector3i): terrain_hits.append(position))
+	player.interactor.target_has = true
+	player.interactor.target_block = Vector3i(floori(player.global_position.x), FLAT_HEIGHT, floori(player.global_position.z))
+	player.interactor._start_melee_attack()
+	_expect(terrain_hits == [player.interactor.target_block], "contact-time sword attack did not retain its terrain-hit signal")
+	player.interactor.cancel_actions()
+	var selected_index := inventory.get_selected_slot()
+	_expect(inventory_loadout.discard_stack(selected_index, 1), "terrain-hit fixture could not remove its sword")
+	var hammer_instance := inventory.equipment_instance_factory.create(&"copper_hammer")
+	_expect(hammer_instance != null and inventory_loadout.add_stack(InventoryStack.new(&"copper_hammer", 1, hammer_instance)), "terrain-hit fixture could not add its hammer")
+	var hammer_index := -1
+	for index in range(InventoryModel.FILLABLE_SIZE):
+		var stack := inventory.get_slot(index)
+		if stack != null and stack.equipment_instance != null and stack.equipment_instance.instance_id == hammer_instance.instance_id:
+			hammer_index = index
+			break
+	_expect(hammer_index >= 0 and (hammer_index == selected_index or inventory_loadout.assign_slot_to_hotbar(hammer_index, selected_index)), "terrain-hit fixture could not select its hammer")
+	player.interactor._start_melee_attack()
+	_expect(terrain_hits.size() == 1, "hammer attack emitted the sword terrain-hit signal")
+	player.interactor.cancel_actions()
+
+	actor.global_position = Vector3(player.global_position.x, FEET_Y, player.global_position.z - 2.5)
+	coordinator.tick(0.0, EntityTargetObservation.create(player.global_position, player.global_position, Vector3.FORWARD, Vector3.RIGHT), 20.0)
+	var foliage_cell := Vector3i(floori(player.global_position.x), int(FEET_Y), floori(player.global_position.z) - 1)
+	world.restore_block_edits({foliage_cell: BlockId.Type.SHORT_GRASS}, {})
+	var player_center := player.get_world_bounds().get_center()
+	var target_center := actor.get_world_bounds().get_center()
+	var current_ray := _orthographic_ray(player, Vector2(0.0, -1.0))
+	_expect(not VoxelLineOfSight.has_clear_path(world, player_center, target_center), "foliage fixture did not block default line of sight")
+	var sword_ids := combat.acquire_player_targets(current_ray[0], current_ray[1], sword_profile)
+	_expect(sword_ids == [actor.runtime_id], "foliage blocked the sword's visible attack area")
+	var hammer_origin := player.global_position + Vector3(0.0, 0.04, -0.8)
+	var hammer_ids := combat.acquire_player_targets(current_ray[0], current_ray[1], hammer_profile, hammer_origin)
+	_expect(hammer_ids == [actor.runtime_id], "foliage blocked the hammer's visible attack area")
+	world.restore_block_edits({foliage_cell: BlockId.Type.STONE}, {})
+	_expect(combat.acquire_player_targets(current_ray[0], current_ray[1], sword_profile).is_empty(), "solid terrain stopped blocking sword line of sight")
+	_expect(combat.acquire_player_targets(current_ray[0], current_ray[1], hammer_profile, hammer_origin).is_empty(), "solid terrain stopped blocking hammer line of sight")
+	world.restore_block_edits({}, {})
+	await _cleanup(combat, coordinator, player, fixture["camera"] as Camera3D)
+
 func _test_full_circle_directionless(world: VoxelWorld, sword_profile: MeleeAttackProfile) -> void:
 	var fixture := _make_combat_fixture(world, 4, 0, 8018)
 	var coordinator := fixture["coordinator"] as WorldEntityCoordinator
@@ -1584,7 +1672,7 @@ func _test_exact_player_attack_identity(world: VoxelWorld, sword_profile: MeleeA
 	var ray := _orthographic_ray(player, Vector2(0.0, -1.0))
 	var source_a := inventory.create_selected_item_source()
 	var attack_a := combat.prepare_player_attack(source_a, ray[0], ray[1])
-	_expect(attack_a != null and attack_a.get_target_runtime_ids() == _active_ids(actors), "exact attack did not derive the canonical sword targets")
+	_expect(attack_a != null and attack_a.get_target_runtime_ids().is_empty(), "contact-time sword attack retained start-time targets")
 	_expect(inventory_loadout.add_backpack_item(&"grass_block", 1), "unrelated backpack mutation failed")
 	_expect(combat.is_player_attack_source_current(attack_a), "unrelated backpack mutation invalidated the selected sword")
 	var affixes: Array[EquipmentAffixDefinition] = [inventory.item_catalog.get_equipment_affix(&"vicious")]

@@ -634,7 +634,7 @@ func _start_melee_attack():
 	var attack_direction := next_melee_attack_direction
 	next_melee_attack_direction = -next_melee_attack_direction
 	melee_attack_started.emit(melee_attack_action, attack_direction)
-	if not profile.acquire_targets_on_contact and target_has and voxel_space != null and voxel_space.is_solid(target_block):
+	if melee_attack_action.animation_style == MeleeAttackActionDefinition.AnimationStyle.SWEEP and target_has and voxel_space != null and voxel_space.is_solid(target_block):
 		melee_terrain_hit.emit(target_block)
 	if is_zero_approx(profile.contact_time):
 		_commit_melee_impact()
