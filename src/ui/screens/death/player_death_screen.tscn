@@ -36,7 +36,7 @@ grow_vertical = 2
 mouse_filter = 2
 
 [node name="Panel" type="Panel" parent="ModalRoot/CenterContainer"]
-custom_minimum_size = Vector2(460, 340)
+custom_minimum_size = Vector2(620, 440)
 layout_mode = 2
 size_flags_horizontal = 0
 size_flags_vertical = 0
@@ -64,6 +64,15 @@ horizontal_alignment = 1
 vertical_alignment = 1
 theme_override_colors/font_color = Color(0.94, 0.32, 0.28, 1)
 theme_override_font_sizes/font_size = 42
+
+[node name="TipLabel" type="RichTextLabel" parent="ModalRoot/CenterContainer/Panel/VBox"]
+layout_mode = 2
+mouse_filter = 2
+bbcode_enabled = true
+fit_content = true
+scroll_active = false
+theme_override_colors/default_color = Color(0.96, 0.95, 0.9, 1)
+theme_override_font_sizes/normal_font_size = 16
 
 [node name="RespawnButton" parent="ModalRoot/CenterContainer/Panel/VBox" instance=ExtResource("2_button")]
 custom_minimum_size = Vector2(280, 72)

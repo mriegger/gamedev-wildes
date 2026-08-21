@@ -97,6 +97,7 @@ var anvil_coordinator: AnvilCoordinator
 var cauldron_coordinator: CauldronCoordinator
 var harvest_coordinator: HarvestCoordinator
 var item_consumption_coordinator: ItemConsumptionCoordinator
+var death_tip_coordinator: DeathTipCoordinator
 var chest_storage: ChestStorage
 var chest_coordinator: ChestCoordinator
 var input_buffer: InputBuffer = InputBuffer.new()
@@ -516,6 +517,8 @@ func _setup_gameplay() -> bool:
 	)
 	item_consumption_coordinator = ItemConsumptionCoordinator.new()
 	item_consumption_coordinator.setup(inventory_model, inventory_loadout_coordinator, player_stats)
+	death_tip_coordinator = DeathTipCoordinator.new()
+	death_tip_coordinator.setup(inventory_model, item_consumption_coordinator, melee_combat, entity_catalog)
 	player.setup_consumption(item_consumption_coordinator)
 	_bind_entity_context(world.voxel_model, world_entities, world.is_position_streamed)
 	anvil_coordinator = AnvilCoordinator.new()
@@ -574,6 +577,12 @@ func _fail_session_start(message: String) -> void:
 func _on_player_defeated():
 	if _death_screen != null and is_instance_valid(_death_screen):
 		return
+	var nearby_enemy_count := 0
+	if _active_entity_runtime != null:
+		nearby_enemy_count = DeathTipCoordinator.count_nearby_hostiles(
+			_active_entity_runtime.get_active_actors(),
+			player.global_position,
+		)
 	game_session.suspend_saving()
 	slime_attachment_coordinator.clear_attachments()
 	var watcher_runtimes: Array[EntityRuntime] = [_active_entity_runtime]
@@ -601,6 +610,12 @@ func _on_player_defeated():
 	_death_screen.main_menu_requested.connect(_save_and_request_main_menu)
 	add_child(_death_screen)
 	_sync_compass_external_menu()
+	call_deferred("_setup_death_screen_tip", _death_screen, nearby_enemy_count)
+
+func _setup_death_screen_tip(screen: PlayerDeathScreen, nearby_enemy_count: int) -> void:
+	if _death_screen != screen or not is_instance_valid(screen) or death_tip_coordinator == null:
+		return
+	screen.setup_tip(death_tip_coordinator.choose_tip(nearby_enemy_count))
 
 func _on_respawn_requested():
 	if _death_screen == null or not is_instance_valid(_death_screen):
@@ -620,6 +635,7 @@ func _restore_player_from_defeat(respawn_position: Variant = null):
 		if respawn_position is Vector3:
 			target_position = respawn_position as Vector3
 		player.respawn_at(target_position)
+		death_tip_coordinator.reset_life()
 		camera_rig.snap_to_follow_target()
 	camera_rig.set_gameplay_input_enabled(true)
 	hud.hotbar.set_gameplay_selection_enabled(true)
@@ -1287,6 +1303,9 @@ func _deactivate_session():
 	if entity_population_debug_panel != null:
 		entity_population_debug_panel.hide_panel()
 	_session_active = false
+	if death_tip_coordinator != null:
+		death_tip_coordinator.shutdown()
+		death_tip_coordinator = null
 
 func _teardown_level_runtime():
 	if _level_runtime == null:
@@ -1314,6 +1333,8 @@ func _bind_entity_context(space: VoxelSpace, runtime: EntityRuntime, position_re
 	melee_combat.projectile_outcome_committed.connect(runtime.record_projectile_outcome)
 	melee_combat.projectile_outcome_committed.connect(watcher_encounter.record_projectile_outcome)
 	_active_entity_runtime = runtime
+	if death_tip_coordinator != null:
+		death_tip_coordinator.reset_entity_context()
 
 func _unbind_entity_context() -> void:
 	if _active_entity_runtime == null:

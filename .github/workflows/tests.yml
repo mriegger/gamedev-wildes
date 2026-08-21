@@ -263,6 +263,20 @@ jobs:
             30 "COMBAT_AFFINITY_TUTORIAL PASS" /tmp/combat_affinity_tutorial.log -- \
             godot --headless --path src --script res://tutorials/tests/combat_affinity_tutorial_integration.gd
 
+  death-tip:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_godot
+        with:
+          version: "4.7"
+      - name: Run death tip integration tests
+        run: |
+          bash .github/scripts/run_godot_check.sh \
+            30 "DEATH_TIP PASS" /tmp/death_tip.log -- \
+            godot --headless --path src --script res://tutorials/tests/death_tip_integration.gd
+
   food-tutorial:
     runs-on: ubuntu-latest
     timeout-minutes: 10

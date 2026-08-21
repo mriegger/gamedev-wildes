@@ -737,11 +737,16 @@ func _test_player_death_screen() -> void:
 	root.add_child(screen)
 	await process_frame
 	await process_frame
+	screen.setup_tip("Tip: Test your defenses before returning to combat.")
 	var modal_root := screen.get_node("ModalRoot") as Control
 	_expect(screen.layer == 300, "player death screen is not on its high presentation layer")
 	_expect(modal_root.mouse_filter == Control.MOUSE_FILTER_STOP, "player death screen does not block full-screen pointer input")
 	_expect(screen.panel.material is ShaderMaterial, "player death screen panel is not frosted")
 	_expect(screen.title_label.text == "YOU DIED!", "player death screen title changed")
+	_expect(screen.tip_label.text == "[center]Tip: Test your defenses before returning to combat.[/center]", "player death screen did not center the configured tip")
+	var title_to_tip_gap := screen.tip_label.position.y - (screen.title_label.position.y + screen.title_label.size.y)
+	var tip_to_buttons_gap := screen.respawn_button.position.y - (screen.tip_label.position.y + screen.tip_label.size.y)
+	_expect(is_equal_approx(title_to_tip_gap, tip_to_buttons_gap), "player death screen does not space the tip equally between the title and buttons")
 	_expect(screen.respawn_button.button_text == "RESPAWN" and screen.main_menu_button.button_text == "MAIN MENU", "player death screen button labels changed")
 	_expect(screen.respawn_button._button.has_focus(), "player death screen did not focus Respawn")
 	var escape := InputEventKey.new()

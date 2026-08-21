@@ -215,6 +215,11 @@ fading away, with a short white trail following behind each arrow in flight. The
 compatible arrow in hotbar order, then backpack order. Stone arrows list 8 base pierce damage and
 copper arrows list 12; draw progress scales the stat-adjusted hit from 40% to 100% before affinity is applied. Both apply two
 knockback before player strength, enemy defense, and damage affinities are resolved.
+The death screen shows one centered contextual tip based on the completed life. Missing weapons take
+priority; otherwise it randomly chooses among applicable recovery-item, armor, resisted-damage, and
+nearby-crowd guidance when the killing enemy was not hit with a hammer, falling back to a
+Progression-tab reminder. Resistance tips name the enemy's authored affinities with the same damage
+colors and recommend a weak or non-resistant weapon type.
 Held tools use either runtime-extruded pixel art or authored 3D scenes.
 
 **Loot.** Overworld enemies roll deterministic per-species loot pools when defeated. A zombie

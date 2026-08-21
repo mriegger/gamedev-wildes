@@ -516,6 +516,11 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 		combat,
 		entities.get_runtime(),
 	)
+	game.item_consumption_coordinator = ItemConsumptionCoordinator.new()
+	game.item_consumption_coordinator.setup(game.inventory_model, game.inventory_loadout_coordinator, game.player_stats)
+	player.setup_consumption(game.item_consumption_coordinator)
+	game.death_tip_coordinator = DeathTipCoordinator.new(1337)
+	game.death_tip_coordinator.setup(game.inventory_model, game.item_consumption_coordinator, combat, game.entity_catalog)
 	slime_attachments.setup(player, game.player_stats)
 	hud.setup_compass(camera_rig.camera, player)
 	player.setup_projectiles(arrow_projectiles)
@@ -740,6 +745,8 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 	_expect(game.dungeon_progress.get_completion_count(game.level_entrance_definition.entrance_id) == 0, "reward pickup completed the dungeon before exit")
 	game.player_stats.damage(game.player_stats.current_hp)
 	game._on_player_defeated()
+	await process_frame
+	_expect(game._death_screen.tip_label.text.begins_with("[center]Tip: "), "deferred death transition did not populate a centered contextual tip")
 	if persistent_watcher != null:
 		_expect(not persistent_watcher.is_aggressive(), "dungeon player defeat did not immediately calm the suspended overworld Watcher")
 	_expect(defeated_runtime.get_entity_runtime().is_suspended() and not defeated_runtime.is_processing() and not defeated_runtime.is_physics_processing(), "dungeon defeat left encounter simulation active")

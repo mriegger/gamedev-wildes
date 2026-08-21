@@ -410,7 +410,16 @@ leaves `WorldLootState` intact for the session owner and save system.
 
 `Game` owns player stats and handles their completed health-depleted transition. Defeat puts
 the player motor into an input-blocking stopped state, closes inventory and debug panels, and
-presents a high-layer death screen. Overworld time and ambient entities continue, while dungeon
+presents a high-layer death screen. `DeathTipCoordinator` observes committed consumption and combat
+outcomes. `Game` snapshots the nearby hostile count and presents the screen immediately, then
+populates its tip on a deferred update after the committed killing outcome has completed. The
+coordinator evaluates inventory, equipped armor, and killer affinity history for that update.
+Weaponless guidance has absolute priority; otherwise one applicable recovery, armor, affinity, or
+crowd tip is selected randomly, with crowd guidance suppressed when the killing enemy was hit with
+a hammer and Progression guidance as the fallback. The death screen owns only centered rich-text
+presentation, while affinity wording and colors reuse the shared combat formatter and palette.
+Life-local observations reset after respawn, and runtime IDs reset whenever the active entity
+context changes. Overworld time and ambient entities continue, while dungeon
 simulation and its presentation timers suspend immediately. The screen emits respawn or main-menu
 intent back to `Game`. Overworld respawn restores full HP at world spawn; dungeon respawn restores
 full HP at the exact overworld return anchor and destroys the failed level runtime. Neither path
