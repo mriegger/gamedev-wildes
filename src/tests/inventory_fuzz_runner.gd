@@ -353,6 +353,8 @@ func _run_edge_cases() -> bool:
 	var tool_batch: Array[StringName] = [&"test_tool"]
 	var general_loadout := InventoryTestFixture.create_loadout(general)
 	_assert(general_loadout.add_batch(tool_batch), "non-placeable item accepted")
+	_assert(general.get_selected_item_id() == null, "newly added item became equipped automatically")
+	_assert(general_loadout.select_slot(0), "non-placeable item could not be equipped")
 	_assert(general.get_selected_item_id() == &"test_tool", "non-placeable item selected")
 	_assert(general_catalog.get_definition(&"test_tool").secondary_action == null, "non-placeable item has no secondary action")
 
@@ -412,6 +414,20 @@ func _run_edge_cases() -> bool:
 	_assert(not restored.from_dict(out_of_range_selected_slot), "out-of-range selected slot accepted")
 	_assert(restored.to_dict() == restored_before_invalid_metadata, "out-of-range selected slot changed restored state")
 	_assert(restored.get_revision() == restored_revision_before_invalid_metadata, "out-of-range selected slot changed revision")
+	var missing_equipped_state := encoded.duplicate(true)
+	missing_equipped_state.erase("item_equipped")
+	_assert(not restored.from_dict(missing_equipped_state), "missing equipped state accepted")
+	var invalid_equipped_state := encoded.duplicate(true)
+	invalid_equipped_state["item_equipped"] = 1
+	_assert(not restored.from_dict(invalid_equipped_state), "non-boolean equipped state accepted")
+	var fractional_last_equipped := encoded.duplicate(true)
+	fractional_last_equipped["last_equipped"] = 1.5
+	_assert(not restored.from_dict(fractional_last_equipped), "fractional last-equipped slot accepted")
+	var out_of_range_last_equipped := encoded.duplicate(true)
+	out_of_range_last_equipped["last_equipped"] = InventoryModel.HOTBAR_SIZE
+	_assert(not restored.from_dict(out_of_range_last_equipped), "out-of-range last-equipped slot accepted")
+	_assert(restored.to_dict() == restored_before_invalid_metadata, "invalid equipped metadata changed restored state")
+	_assert(restored.get_revision() == restored_revision_before_invalid_metadata, "invalid equipped metadata changed revision")
 	_assert(restored_change_count[0] == 0, "invalid inventory metadata emitted inventory changes")
 	restored.inventory_changed.disconnect(restored_observer)
 

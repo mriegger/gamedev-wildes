@@ -9,6 +9,8 @@ var _gameplay_selection_enabled: bool = true
 func _ready() -> void:
 	super._ready()
 	slot_selection_requested.connect(_on_inventory_slot_selection_requested)
+	slot_hotkey_requested.connect(_on_inventory_slot_hotkey_requested)
+	equipped_item_toggle_requested.connect(_on_equipped_item_toggle_requested)
 
 func setup(inventory: InventoryModel, inventory_loadout_coordinator: InventoryLoadoutCoordinator, item_proficiency: ItemProficiency) -> void:
 	_inventory_model = inventory
@@ -36,7 +38,7 @@ func refresh() -> void:
 			slot.set_item(null, 0)
 		else:
 			slot.set_item(stack.item_id, stack.count)
-	set_selected_slot(_inventory_model.get_selected_slot())
+	set_selected_slot(_inventory_model.get_selected_slot() if _inventory_model.is_item_equipped() else -1)
 
 func set_backpack_open(open: bool) -> void:
 	if _backpack_open == open:
@@ -58,6 +60,14 @@ func set_inventory_transfer_context(coordinator: InventoryTransferCoordinator) -
 func _on_inventory_slot_selection_requested(slot_index: int) -> void:
 	if _inventory_loadout_coordinator != null:
 		_inventory_loadout_coordinator.select_slot(slot_index)
+
+func _on_inventory_slot_hotkey_requested(slot_index: int) -> void:
+	if _inventory_loadout_coordinator != null:
+		_inventory_loadout_coordinator.activate_hotbar_slot(slot_index)
+
+func _on_equipped_item_toggle_requested() -> void:
+	if _inventory_loadout_coordinator != null:
+		_inventory_loadout_coordinator.toggle_last_equipped_item()
 
 func _sync_selection_input_enabled() -> void:
 	set_selection_input_enabled(_gameplay_selection_enabled and not _backpack_open)

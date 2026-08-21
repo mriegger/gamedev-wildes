@@ -7,6 +7,8 @@ var _expected_next_instance_id: int
 var _next_instance_id: int
 var _slots: Array[InventoryStack]
 var _selected_slot: int
+var _item_equipped: bool
+var _last_equipped_slot: int
 var _starter_item_migration_version: int
 var _result_stack: InventoryStack
 
@@ -17,6 +19,8 @@ func _init(
 	p_next_instance_id: int,
 	p_slots: Array[InventoryStack],
 	p_selected_slot: int,
+	p_item_equipped: bool,
+	p_last_equipped_slot: int,
 	p_starter_item_migration_version: int,
 	p_result_stack: InventoryStack = null,
 ) -> void:
@@ -26,6 +30,8 @@ func _init(
 	_next_instance_id = p_next_instance_id
 	_slots = _copy_slots(p_slots)
 	_selected_slot = p_selected_slot
+	_item_equipped = p_item_equipped
+	_last_equipped_slot = p_last_equipped_slot
 	_starter_item_migration_version = p_starter_item_migration_version
 	_result_stack = null if p_result_stack == null else p_result_stack.copy()
 
@@ -43,8 +49,14 @@ func get_slot(index: int) -> InventoryStack:
 func get_selected_slot() -> int:
 	return _selected_slot
 
+func is_item_equipped() -> bool:
+	return _item_equipped
+
+func get_last_equipped_slot() -> int:
+	return _last_equipped_slot
+
 func get_selected_data() -> InventoryStack:
-	return get_slot(_selected_slot)
+	return get_slot(_selected_slot) if _item_equipped else null
 
 func get_result_stack() -> InventoryStack:
 	return null if _result_stack == null else _result_stack.copy()

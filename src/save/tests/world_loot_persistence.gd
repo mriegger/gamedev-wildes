@@ -42,6 +42,8 @@ func _test_migration_and_exact_schema() -> void:
 	legacy_instance["current_durability"] = 37
 	legacy_instance["maximum_durability"] = 100
 	var legacy_inventory := _empty_inventory_snapshot()
+	legacy_inventory.erase("item_equipped")
+	legacy_inventory.erase("last_equipped")
 	legacy_inventory["regions"]["hotbar"][0] = {
 		"item_id": "copper_sword",
 		"count": 1,

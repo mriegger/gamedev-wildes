@@ -21,6 +21,10 @@ static func restore_slots(inventory: InventoryModel, replacements: Dictionary) -
 			return false
 		var encoded := regions[location["region"]] as Array
 		encoded[location["offset"]] = null if stack == null else (stack as InventoryStack).to_dict()
+	var selected_slot := int(data["selected"])
+	if replacements.has(selected_slot) and replacements[selected_slot] is InventoryStack:
+		data["item_equipped"] = true
+		data["last_equipped"] = selected_slot
 	return inventory.from_dict(data)
 
 static func get_slots(inventory: InventoryModel) -> Array[InventoryStack]:

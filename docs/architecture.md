@@ -291,7 +291,10 @@ and restored health from their canonical item actions, so presentation does not 
 item state. During
 a left-button drag, the source slot owns the adjustable drag count and consumes wheel input before gameplay camera handling.
 `InventoryModel` remains the authority for partial moves and discards, while the source and
-drag-preview visuals show the pending split without mutating inventory until a drop succeeds.
+drag-preview visuals show the pending split without mutating inventory until a drop succeeds. It
+also owns the equipped-hotbar state and most-recent equipped slot; hotbar number keys and `R`
+request atomic loadout changes so held-item presentation, actions, and selected-item modifiers
+observe the same state.
 
 `ChestStorage` owns slot arrays keyed by chest position. Its slot count comes from the canonical
 chest block's `ContainerBlockDefinition`, so layout, runtime storage, and persistence share one
@@ -454,7 +457,8 @@ migrating to version eleven. The version-eleven-to-twelve migration validates an
 durability fields from equipment instances. Version twelve adds an empty world-loot snapshot when
 migrating to version thirteen, version thirteen adds empty block emplacements when migrating to
 version fourteen, and version fourteen adds empty dungeon progress when migrating to version
-fifteen. The chain operates on a copy and commits only after every region is valid,
+fifteen. Version twenty-two adds equipped-hotbar state when migrating to version twenty-three. The
+chain operates on a copy and commits only after every region is valid,
 preserving the original payload on failure.
 `Game` restores inventory, proficiency, player stats, chest contents, the shared equipment allocator,
 world loot, and dungeon progress before enabling `GameSession`. Save validation requires equipment

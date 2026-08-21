@@ -30,6 +30,8 @@ var equipment_instance_factory: EquipmentInstanceFactory
 
 var _slots: Array[InventoryStack] = []
 var _selected_slot: int = 0
+var _item_equipped: bool = false
+var _last_equipped_slot: int = -1
 var _starter_item_migration_version: int = 0
 var _revision: int = 0
 var _runtime_bound: bool = false
@@ -49,6 +51,8 @@ func _init(
 	_slots.resize(_size)
 	_slots.fill(null)
 	_selected_slot = 0
+	_item_equipped = false
+	_last_equipped_slot = -1
 
 func get_slot(idx: int) -> InventoryStack:
 	if idx < 0 or idx >= _size:
@@ -57,6 +61,12 @@ func get_slot(idx: int) -> InventoryStack:
 
 func get_selected_slot() -> int:
 	return _selected_slot
+
+func get_equipped_slot() -> int:
+	return _selected_slot if is_item_equipped() else -1
+
+func is_item_equipped() -> bool:
+	return _item_equipped and get_slot(_selected_slot) != null
 
 func get_size() -> int:
 	return _size
@@ -116,6 +126,18 @@ func prepare_remove_stack(source_index: int, count: int = -1) -> PreparedInvento
 func prepare_select_slot(index: int) -> PreparedInventoryChange:
 	var simulated := _create_simulation()
 	if not simulated._apply_select_slot(index):
+		return null
+	return _prepare_simulated_change(simulated)
+
+func prepare_activate_hotbar_slot(index: int) -> PreparedInventoryChange:
+	var simulated := _create_simulation()
+	if not simulated._apply_activate_hotbar_slot(index):
+		return null
+	return _prepare_simulated_change(simulated)
+
+func prepare_toggle_last_equipped_item() -> PreparedInventoryChange:
+	var simulated := _create_simulation()
+	if not simulated._apply_toggle_last_equipped_item():
 		return null
 	return _prepare_simulated_change(simulated)
 
@@ -248,6 +270,8 @@ func _commit_prepared_change(prepared: PreparedInventoryChange, emit_signal: boo
 	assert(advanced)
 	_slots = prepared._copy_committed_slots()
 	_selected_slot = prepared.get_selected_slot()
+	_item_equipped = prepared.is_item_equipped()
+	_last_equipped_slot = prepared.get_last_equipped_slot()
 	_starter_item_migration_version = prepared._get_starter_item_migration_version()
 	_revision += 1
 	if emit_signal:
@@ -260,6 +284,8 @@ func _create_simulation() -> InventoryModel:
 	var simulated := InventoryModel.new(item_catalog, equipment_instance_factory.copy(), _size)
 	simulated._slots = _copy_slots()
 	simulated._selected_slot = _selected_slot
+	simulated._item_equipped = _item_equipped
+	simulated._last_equipped_slot = _last_equipped_slot
 	simulated._starter_item_migration_version = _starter_item_migration_version
 	simulated._revision = _revision
 	return simulated
@@ -268,6 +294,7 @@ func _prepare_simulated_change(
 	simulated: InventoryModel,
 	result_stack: InventoryStack = null,
 ) -> PreparedInventoryChange:
+	simulated._normalize_equipped_state()
 	return PreparedInventoryChange.new(
 		self,
 		_revision,
@@ -275,9 +302,17 @@ func _prepare_simulated_change(
 		simulated.equipment_instance_factory.get_next_instance_id(),
 		simulated._slots,
 		simulated._selected_slot,
+		simulated._item_equipped,
+		simulated._last_equipped_slot,
 		simulated._starter_item_migration_version,
 		result_stack,
 	)
+
+func _normalize_equipped_state() -> void:
+	if _slots[_selected_slot] == null:
+		_item_equipped = false
+	if _last_equipped_slot >= 0 and _slots[_last_equipped_slot] == null:
+		_last_equipped_slot = -1
 
 func _apply_add_stack(stack: InventoryStack) -> bool:
 	var simulated := _simulate_stack_add(stack)
@@ -334,7 +369,7 @@ func _apply_remove_stack(source_index: int, count: int = -1) -> InventoryStack:
 	return removed
 
 func get_selected_data() -> InventoryStack:
-	return get_slot(_selected_slot)
+	return get_slot(_selected_slot) if is_item_equipped() else null
 
 func get_selected_item_id():
 	var stack := get_selected_data()
@@ -383,9 +418,31 @@ func get_equipment_instance_copy(idx: int) -> EquipmentInstance:
 func _apply_select_slot(idx: int) -> bool:
 	if not is_hotbar_index(idx):
 		return false
-	if idx == _selected_slot:
+	var equips_item := _slots[idx] != null
+	if idx == _selected_slot and _item_equipped == equips_item:
 		return false
 	_selected_slot = idx
+	_item_equipped = equips_item
+	if equips_item:
+		_last_equipped_slot = idx
+	return true
+
+func _apply_activate_hotbar_slot(idx: int) -> bool:
+	if not is_hotbar_index(idx):
+		return false
+	if _item_equipped and _selected_slot == idx:
+		_item_equipped = false
+		return true
+	return _apply_select_slot(idx)
+
+func _apply_toggle_last_equipped_item() -> bool:
+	if _item_equipped:
+		_item_equipped = false
+		return true
+	if not is_hotbar_index(_last_equipped_slot) or _slots[_last_equipped_slot] == null:
+		return false
+	_selected_slot = _last_equipped_slot
+	_item_equipped = true
 	return true
 
 func _apply_assign_slot_to_hotbar(source_idx: int, hotbar_idx: int) -> bool:
@@ -1098,6 +1155,8 @@ func to_dict() -> Dictionary:
 		regions_dict[region_name] = encoded
 	return {
 		"selected": _selected_slot,
+		"item_equipped": _item_equipped,
+		"last_equipped": _last_equipped_slot,
 		"starter_item_migration_version": _starter_item_migration_version,
 		"regions": regions_dict,
 	}
@@ -1175,9 +1234,27 @@ func from_dict(data: Dictionary) -> bool:
 	var restored_selected_slot := int(raw_selected_slot)
 	if not is_hotbar_index(restored_selected_slot):
 		return false
+	var raw_item_equipped = data.get("item_equipped", null)
+	if not raw_item_equipped is bool:
+		return false
+	var raw_last_equipped_slot = data.get("last_equipped", null)
+	if (
+		(typeof(raw_last_equipped_slot) != TYPE_INT and typeof(raw_last_equipped_slot) != TYPE_FLOAT)
+		or not is_finite(float(raw_last_equipped_slot))
+		or float(raw_last_equipped_slot) != float(int(raw_last_equipped_slot))
+	):
+		return false
+	var restored_last_equipped_slot := int(raw_last_equipped_slot)
+	if restored_last_equipped_slot != -1 and not is_hotbar_index(restored_last_equipped_slot):
+		return false
 	_slots = restored_slots
 	_starter_item_migration_version = restored_migration_version
 	_selected_slot = restored_selected_slot
+	_item_equipped = bool(raw_item_equipped) and _slots[_selected_slot] != null
+	_last_equipped_slot = restored_last_equipped_slot
+	if _item_equipped:
+		_last_equipped_slot = _selected_slot
+	_normalize_equipped_state()
 	_revision += 1
 	inventory_changed.emit()
 	return true
@@ -1193,6 +1270,8 @@ func setup_starter() -> bool:
 	_slots[2] = InventoryStack.new(item_catalog.get_item_for_block(BlockId.Type.STONE).id, 8)
 	_slots[6] = InventoryStack.new(item_catalog.get_item_for_block(BlockId.Type.TORCH).id, 16)
 	_selected_slot = 0
+	_item_equipped = false
+	_last_equipped_slot = -1
 	_starter_item_migration_version = STARTER_ITEM_MIGRATION_VERSION
 	_revision += 1
 	inventory_changed.emit()
@@ -1203,6 +1282,8 @@ func setup_empty() -> bool:
 		return false
 	_slots.fill(null)
 	_selected_slot = 0
+	_item_equipped = false
+	_last_equipped_slot = -1
 	_starter_item_migration_version = STARTER_ITEM_MIGRATION_VERSION
 	_revision += 1
 	inventory_changed.emit()

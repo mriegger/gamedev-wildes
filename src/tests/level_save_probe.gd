@@ -8,7 +8,7 @@ func _init() -> void:
 	var chest_block := block_catalog.get_definition(BlockId.Type.CHEST) if block_catalog != null else null
 	var player_stats_definition := load("res://player/player_stats.tres") as CombatStatsDefinition
 	var player_perk_rules := load("res://progression/player_perk_rules.tres") as PlayerPerkRules
-	_expect(SaveManager.CURRENT_SAVE_VERSION == 22, "save version changed")
+	_expect(SaveManager.CURRENT_SAVE_VERSION == 23, "save version changed")
 	_expect(block_catalog != null and block_catalog.validate(), "block catalog invalid")
 	_expect(item_catalog != null and item_catalog.validate(block_catalog), "item catalog invalid")
 	_expect(chest_block != null and chest_block.container != null, "chest container definition invalid")
@@ -78,6 +78,18 @@ func _init() -> void:
 	(version_twenty_one["tutorial_progress"] as Dictionary).erase("damage_affinity_tip_completed")
 	_expect(SaveManager._migrate_save_data(version_twenty_one, item_catalog), "version twenty-one migration failed")
 	_expect(version_twenty_one.get("tutorial_progress", null) == {"mining_tip_completed": true, "food_tip_completed": true, "crafting_tip_completed": true, "crafting_ingredients_tip_completed": true, "copper_mining_tip_completed": true, "sundown_weapon_tip_completed": false, "damage_affinity_tip_completed": false}, "version twenty-one damage affinity tutorial migration changed")
+	var version_twenty_two := version_twenty_one.duplicate(true)
+	version_twenty_two["version"] = 22
+	var version_twenty_two_inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
+	version_twenty_two_inventory.setup_empty()
+	var legacy_selection := version_twenty_two_inventory.to_dict()
+	legacy_selection.erase("item_equipped")
+	legacy_selection.erase("last_equipped")
+	legacy_selection["selected"] = 4
+	version_twenty_two["inventory"] = legacy_selection
+	_expect(SaveManager._migrate_save_data(version_twenty_two, item_catalog), "version twenty-two equipped-item migration failed")
+	_expect(version_twenty_two["inventory"].get("item_equipped", null) == true, "version twenty-two migration did not preserve the equipped state")
+	_expect(version_twenty_two["inventory"].get("last_equipped", null) == 4, "version twenty-two migration did not preserve the selected hotbar slot")
 	var migration_factory := EquipmentInstanceFactory.new(item_catalog)
 	var migration_affixes: Array[EquipmentAffixDefinition] = [item_catalog.get_equipment_affix(&"vicious")]
 	var migration_runes: Array[StringName] = [&"basic_rune"]
@@ -91,6 +103,8 @@ func _init() -> void:
 		var legacy_inventory_model := InventoryModel.new(item_catalog, migration_factory)
 		legacy_inventory_model.setup_empty()
 		var legacy_inventory := legacy_inventory_model.to_dict()
+		legacy_inventory.erase("item_equipped")
+		legacy_inventory.erase("last_equipped")
 		legacy_inventory["regions"]["hotbar"][0] = {
 			"item_id": "copper_sword",
 			"count": 1,

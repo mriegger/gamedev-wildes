@@ -2,6 +2,8 @@ extends SceneTree
 
 var _failures: Array[String] = []
 var _selections: Array[int] = []
+var _hotkey_requests: Array[int] = []
+var _toggle_requests: int = 0
 
 func _init() -> void:
 	call_deferred("_run")
@@ -13,6 +15,8 @@ func _run() -> void:
 	_expect(hotbar != null, "hotbar view scene did not instantiate")
 	root.add_child(hotbar)
 	hotbar.slot_selection_requested.connect(_on_slot_selection_requested)
+	hotbar.slot_hotkey_requested.connect(_on_slot_hotkey_requested)
+	hotbar.equipped_item_toggle_requested.connect(_on_equipped_item_toggle_requested)
 	await process_frame
 	_expect(hotbar.slot_nodes.size() == 9, "hotbar view did not build nine slots")
 	for index in range(hotbar.slot_nodes.size()):
@@ -37,22 +41,28 @@ func _run() -> void:
 	keyboard_selection.pressed = true
 	keyboard_selection.keycode = KEY_4
 	hotbar._unhandled_key_input(keyboard_selection)
-	_expect(_selections == [3], "number key did not request slot 3")
+	_expect(_hotkey_requests == [3], "number key did not request slot 3")
 	var physical_selection := InputEventKey.new()
 	physical_selection.pressed = true
 	physical_selection.physical_keycode = KEY_2
 	hotbar._unhandled_key_input(physical_selection)
-	_expect(_selections == [3, 1], "physical number key did not request slot 1")
+	_expect(_hotkey_requests == [3, 1], "physical number key did not request slot 1")
 	var echo_selection := InputEventKey.new()
 	echo_selection.pressed = true
 	echo_selection.echo = true
 	echo_selection.keycode = KEY_1
 	hotbar._unhandled_key_input(echo_selection)
-	_expect(_selections == [3, 1], "echo key requested a slot")
+	_expect(_hotkey_requests == [3, 1], "echo key requested a slot")
+	var toggle_equipped := InputEventKey.new()
+	toggle_equipped.pressed = true
+	toggle_equipped.physical_keycode = KEY_R
+	hotbar._unhandled_key_input(toggle_equipped)
+	_expect(_toggle_requests == 1, "R did not request an equipped-item toggle")
 	hotbar.set_selection_input_enabled(false)
 	hotbar._unhandled_key_input(keyboard_selection)
+	hotbar._unhandled_key_input(toggle_equipped)
 	hotbar.slot_nodes[5].request_selection()
-	_expect(_selections == [3, 1], "disabled selection input requested a slot")
+	_expect(_hotkey_requests == [3, 1] and _toggle_requests == 1 and _selections.is_empty(), "disabled selection input requested a slot or toggle")
 	hotbar.set_selection_input_enabled(true)
 	var press := InputEventMouseButton.new()
 	press.button_index = MOUSE_BUTTON_LEFT
@@ -62,7 +72,7 @@ func _run() -> void:
 	release.pressed = false
 	hotbar.slot_nodes[5]._gui_input(press)
 	hotbar.slot_nodes[5]._gui_input(release)
-	_expect(_selections == [3, 1, 5], "slot click did not request selection")
+	_expect(_selections == [5], "slot click did not request selection")
 	hotbar.queue_free()
 	await process_frame
 	if _failures.is_empty():
@@ -74,6 +84,12 @@ func _run() -> void:
 
 func _on_slot_selection_requested(slot_index: int) -> void:
 	_selections.append(slot_index)
+
+func _on_slot_hotkey_requested(slot_index: int) -> void:
+	_hotkey_requests.append(slot_index)
+
+func _on_equipped_item_toggle_requested() -> void:
+	_toggle_requests += 1
 
 func _expect(condition: bool, message: String) -> void:
 	if condition:

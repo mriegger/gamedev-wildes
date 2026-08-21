@@ -13,6 +13,7 @@ func _init() -> void:
 	_test_prepared_guards()
 	_test_exact_multi_stack_preparation()
 	_test_constrained_inventory_bounds()
+	_test_equipped_item_toggle()
 	_test_owner_bindings()
 	_test_reserved_stat_sources()
 	_test_deep_copy_isolation()
@@ -143,6 +144,27 @@ func _test_constrained_inventory_bounds() -> void:
 	_expect(inventory.prepare_select_slot(InventoryModel.HOTBAR_SIZE - 1) != null, "constrained inventory rejected its last hotbar slot")
 	_expect(inventory.prepare_select_slot(InventoryModel.HOTBAR_SIZE) == null, "constrained inventory selected a backpack slot")
 
+func _test_equipped_item_toggle() -> void:
+	var inventory := _empty_inventory()
+	_expect(not inventory.is_item_equipped() and inventory.get_selected_data() == null, "empty inventory did not start unequipped")
+	InventoryTestFixture.restore_slot(inventory, 0, InventoryStack.new(&"test_totem", 1))
+	InventoryTestFixture.restore_slot(inventory, 2, InventoryStack.new(&"sand_block", 1))
+	var stats := ActorStats.new(_stats_definition)
+	var loadout := _bind(inventory, stats)
+	_expect(inventory.is_item_equipped() and stats.has_modifier(&"selected_item_0"), "selected fixture item was not equipped")
+	_expect(loadout.activate_hotbar_slot(0), "active hotbar key did not unequip its item")
+	_expect(not inventory.is_item_equipped() and inventory.get_selected_data() == null, "active hotbar key retained the equipped item")
+	_expect(not stats.has_modifier(&"selected_item_0"), "unequipped hotbar item retained its stat modifier")
+	_expect(loadout.activate_hotbar_slot(0), "repeated hotbar key did not re-equip its item")
+	_expect(inventory.is_item_equipped() and inventory.get_selected_item_id() == &"test_totem", "repeated hotbar key restored the wrong item")
+	_expect(loadout.toggle_last_equipped_item(), "R-style toggle did not unequip the current item")
+	_expect(not inventory.is_item_equipped(), "R-style toggle retained the current item")
+	_expect(loadout.activate_hotbar_slot(2), "different hotbar key did not equip its item")
+	_expect(inventory.is_item_equipped() and inventory.get_selected_slot() == 2 and inventory.get_selected_item_id() == &"sand_block", "different hotbar key equipped the wrong item")
+	_expect(loadout.toggle_last_equipped_item(), "R-style toggle did not unequip the replacement item")
+	_expect(loadout.toggle_last_equipped_item(), "second R-style toggle did not restore the most recent item")
+	_expect(inventory.is_item_equipped() and inventory.get_selected_slot() == 2 and inventory.get_selected_item_id() == &"sand_block", "R-style toggle restored an older hotbar item")
+
 func _test_owner_bindings() -> void:
 	var shared_stats := ActorStats.new(_stats_definition)
 	var first_inventory := _empty_inventory()
@@ -213,6 +235,7 @@ func _test_reserved_stat_sources() -> void:
 		loadout.assign_slot_to_hotbar(_find_item(loadout.inventory_model, &"test_totem"), 0),
 		"loadout-owned modifier fixture could not select its item",
 	)
+	_expect(loadout.select_slot(0), "loadout-owned modifier fixture could not equip its item")
 	_expect(stats.has_modifier(&"selected_item_0"), "loadout coordinator did not populate its reserved source")
 	_expect(not stats.remove_modifier(&"selected_item_0"), "public removal erased a loadout-owned modifier")
 	_expect(
@@ -354,9 +377,10 @@ func _test_invalid_combined_affixes() -> void:
 	instance.affixes[1].stat_rolls[0].amount = -6.0
 	_expect(loadout.add_stack(InventoryStack.new(&"copper_sword", 1, instance)), "combined affix fixture could not enter the backpack")
 	var source := _find_item(inventory, &"copper_sword")
+	_expect(loadout.assign_slot_to_hotbar(source, 0), "invalid combined affix fixture could not enter the hotbar while unequipped")
 	var before := inventory.to_dict()
 	var stat_revision := stats.get_revision()
-	_expect(not loadout.assign_slot_to_hotbar(source, 0), "invalid combined affixes became selected")
+	_expect(not loadout.select_slot(0), "invalid combined affixes became selected")
 	_expect(inventory.to_dict() == before, "invalid combined affixes changed inventory")
 	_expect(stats.get_revision() == stat_revision, "invalid combined affixes changed stats")
 

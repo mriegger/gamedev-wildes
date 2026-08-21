@@ -3,7 +3,7 @@ class_name SaveManager
 
 const SAVE_DIR: String = "user://saves"
 const SLOT_COUNT: int = 3
-const CURRENT_SAVE_VERSION: int = 22
+const CURRENT_SAVE_VERSION: int = 23
 const MINIMUM_MIGRATABLE_SAVE_VERSION: int = 4
 const VERSION_SEVEN_BASE_EXPERIENCE_TO_LEVEL: int = 100
 const VERSION_SEVEN_EXPERIENCE_GROWTH: float = 1.25
@@ -483,6 +483,10 @@ static func _migrate_save_data(data: Dictionary, item_catalog: ItemCatalog) -> b
 					return false
 				(tutorial_progress as Dictionary)["damage_affinity_tip_completed"] = false
 				version = 22
+			22:
+				if not _migrate_inventory_equipped_state(migrated):
+					return false
+				version = 23
 			_:
 				return false
 		migrated["version"] = version
@@ -494,6 +498,25 @@ static func _migrate_save_data(data: Dictionary, item_catalog: ItemCatalog) -> b
 		return false
 	data.clear()
 	data.merge(migrated, true)
+	return true
+
+static func _migrate_inventory_equipped_state(data: Dictionary) -> bool:
+	var inventory = data.get("inventory", null)
+	if inventory == null:
+		return true
+	if not inventory is Dictionary:
+		return false
+	var encoded := inventory as Dictionary
+	if encoded.has("item_equipped") or encoded.has("last_equipped"):
+		return false
+	var raw_selected = encoded.get("selected", null)
+	if not _is_integer_number(raw_selected):
+		return false
+	var selected_slot := int(raw_selected)
+	if selected_slot < 0 or selected_slot >= InventoryModel.HOTBAR_SIZE:
+		return false
+	encoded["item_equipped"] = true
+	encoded["last_equipped"] = selected_slot
 	return true
 
 static func _validate_dungeon_progress(data: Dictionary) -> bool:

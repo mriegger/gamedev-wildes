@@ -22,7 +22,8 @@ world seed.
 | Left-click / hold | Open a targeted chest or crafting station, or use the selected item; hold to mine or draw a bow, release to fire an arrow, or click to attack, till soil, or consume food and potions |
 | Right-click | Use the selected item's secondary action, including consuming food or potions and placing blocks; cancel an active bow draw |
 | `F` | Enter or leave a nearby dungeon |
-| `1`–`9` | Select hotbar slot; while the backpack is open, assign the hovered item to that slot |
+| `1`–`9` | Equip a hotbar item; press its active hotkey again to unequip it. While the backpack is open, assign the hovered item to that slot |
+| `R` | Unequip the current item, or re-equip the most recently equipped hotbar item |
 | `Tab` | Toggle backpack and crafting |
 | `P` | Toggle backpack only |
 | `/` | Toggle the developer command console |
@@ -33,6 +34,7 @@ world seed.
 Reach is 6 blocks. Mineable targets under the cursor are outlined, while chests open without a
 mining outline. A translucent preview shows where a placement would land, using the chest's split
 body-and-lid model when appropriate; placements that would overlap you are rejected.
+New worlds start with no hotbar item equipped.
 
 The Structure Designer uses first-person `WASD` movement, mouse look, `Space`/`Ctrl` to
 ascend/descend, and `Shift` acceleration. Left-click removes, right-click places, `Tab` opens the

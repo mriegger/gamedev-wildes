@@ -2,12 +2,14 @@ extends Control
 class_name HotbarView
 
 signal slot_selection_requested(slot_index: int)
+signal slot_hotkey_requested(slot_index: int)
+signal equipped_item_toggle_requested
 
 @export var slot_scene: PackedScene
 @export_range(1, 9) var slot_count: int = 9
 
 var slot_nodes: Array[ItemSlotView] = []
-var selected_slot: int = 0
+var selected_slot: int = -1
 var _selection_input_enabled: bool = true
 var _slot_normal_style: StyleBoxFlat
 var _slot_selected_style: StyleBoxFlat
@@ -57,10 +59,14 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	var key_event := event as InputEventKey
 	if not key_event.pressed or key_event.echo:
 		return
+	if key_event.is_action_pressed("toggle_equipped_item"):
+		equipped_item_toggle_requested.emit()
+		get_viewport().set_input_as_handled()
+		return
 	var slot_index := _get_slot_index(key_event)
 	if slot_index < 0 or slot_index >= slot_nodes.size():
 		return
-	slot_selection_requested.emit(slot_index)
+	slot_hotkey_requested.emit(slot_index)
 	get_viewport().set_input_as_handled()
 
 func _get_slot_index(event: InputEventKey) -> int:

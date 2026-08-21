@@ -350,7 +350,7 @@ func _handle_item_actions(delta):
 		_reset_mining()
 		_reset_melee_chain()
 		_reset_bow_draw()
-	if primary_use_just and item_consumption != null and item_consumption.has_consumable_at(inventory_model.get_selected_slot()):
+	if primary_use_just and item_consumption != null and item_consumption.has_consumable_at(inventory_model.get_equipped_slot()):
 		item_consumption.try_consume_selected()
 		_primary_consumption_latched = primary_use_pressed
 		primary_use_just = false
@@ -456,7 +456,7 @@ func _handle_item_actions(delta):
 		if _input_buffer.secondary_use_physical_pressed:
 			return
 		_secondary_use_consumed_until_release = false
-	if _input_buffer.secondary_use_just and item_consumption != null and item_consumption.has_consumable_at(inventory_model.get_selected_slot()):
+	if _input_buffer.secondary_use_just and item_consumption != null and item_consumption.has_consumable_at(inventory_model.get_equipped_slot()):
 		_input_buffer.secondary_use_just = false
 		item_consumption.try_consume_selected()
 		_secondary_use_consumed_until_release = _input_buffer.secondary_use_physical_pressed

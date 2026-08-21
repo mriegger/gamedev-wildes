@@ -99,8 +99,16 @@ func _run() -> void:
 	interactor.target_has = false
 	interactor.can_interact_target = false
 	interactor.target_crafting_station = null
-
+	_expect(inventory_loadout.toggle_last_equipped_item(), "pumpkin could not be unequipped")
 	stats.damage(75.0)
+	input_buffer.primary_use_just = true
+	input_buffer.primary_use_pressed = true
+	interactor._handle_item_actions(0.0)
+	_expect(is_equal_approx(stats.current_hp, max_health * 0.25) and inventory.get_slot(0).count == 2, "unequipped pumpkin responded to primary use")
+	input_buffer.primary_use_pressed = false
+	interactor._handle_item_actions(0.0)
+	_expect(inventory_loadout.toggle_last_equipped_item(), "pumpkin could not be re-equipped")
+
 	input_buffer.primary_use_just = true
 	input_buffer.primary_use_pressed = true
 	interactor._handle_item_actions(0.0)

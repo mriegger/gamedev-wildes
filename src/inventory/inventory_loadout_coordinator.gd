@@ -110,9 +110,15 @@ func add_stack(stack: InventoryStack) -> bool:
 	return commit_prepared_change(_prepare(inventory_model.prepare_add_stack(stack)))
 
 func select_slot(index: int) -> bool:
-	if inventory_model.is_hotbar_index(index) and inventory_model.get_selected_slot() == index:
+	if inventory_model.is_hotbar_index(index) and inventory_model.get_selected_slot() == index and inventory_model.is_item_equipped():
 		return true
 	return commit_prepared_change(_prepare(inventory_model.prepare_select_slot(index)))
+
+func activate_hotbar_slot(index: int) -> bool:
+	return commit_prepared_change(_prepare(inventory_model.prepare_activate_hotbar_slot(index)))
+
+func toggle_last_equipped_item() -> bool:
+	return commit_prepared_change(_prepare(inventory_model.prepare_toggle_last_equipped_item()))
 
 func assign_slot_to_hotbar(source_index: int, hotbar_index: int) -> bool:
 	return commit_prepared_change(_prepare(inventory_model.prepare_assign_slot_to_hotbar(source_index, hotbar_index)))

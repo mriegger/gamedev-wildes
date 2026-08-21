@@ -137,6 +137,9 @@ func _process(_delta: float) -> bool:
 		if _hud.side_panel == null:
 			_fail("side_panel null")
 			return false
+		if _inv.is_item_equipped() or _hud.hotbar.selected_slot != -1:
+			_fail("new inventory did not start with every hotbar item unequipped")
+			return false
 		var grass_item := _item_catalog.get_item_for_block(BlockId.Type.GRASS)
 		var hotbar_grass := _hud.hotbar.slot_nodes[1] as InventoryHotbarSlot
 		if hotbar_grass.icon.texture != grass_item.icon:
@@ -1070,6 +1073,28 @@ func _check_closed_hotbar_click_result() -> void:
 	var stone_id := _item_catalog.get_item_for_block(BlockId.Type.STONE).id
 	if hotbar_stack == null or hotbar_stack.item_id != stone_id or hotbar_stack.count != 8:
 		_fail("closed hotbar click: hotbar item moved")
+		return
+	var repeat_hotkey := InputEventKey.new()
+	repeat_hotkey.physical_keycode = KEY_3
+	repeat_hotkey.pressed = true
+	_hud.hotbar._unhandled_key_input(repeat_hotkey)
+	if _inv.is_item_equipped() or _hud.hotbar.selected_slot != -1:
+		_fail("repeating the active hotbar key did not unequip the item")
+		return
+	var toggle_equipped := InputEventKey.new()
+	toggle_equipped.physical_keycode = KEY_R
+	toggle_equipped.pressed = true
+	_hud.hotbar._unhandled_key_input(toggle_equipped)
+	if not _inv.is_item_equipped() or _inv.get_selected_slot() != 2 or _hud.hotbar.selected_slot != 2:
+		_fail("R did not restore the most recently equipped hotbar item")
+		return
+	_hud.hotbar._unhandled_key_input(toggle_equipped)
+	if _inv.is_item_equipped() or _hud.hotbar.selected_slot != -1:
+		_fail("R did not unequip the current hotbar item")
+		return
+	_hud.hotbar._unhandled_key_input(toggle_equipped)
+	if not _inv.is_item_equipped() or _inv.get_selected_slot() != 2:
+		_fail("second R press did not restore the hotbar item")
 		return
 	print("[hud_integration] closed hotbar click activated slot")
 

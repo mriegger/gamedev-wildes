@@ -94,11 +94,15 @@ func _run() -> void:
 	cursor_interactor.target_crafting_station = anvil_block.crafting_station
 	targeting_view.interactor = cursor_interactor
 	_expect(targeting_view._should_show_interaction(), "empty-hand anvil interaction did not enable the pointing cursor")
-	InventoryTestFixture.restore_slot(cursor_inventory, 0, InventoryStack.new(
+	_expect(InventoryTestFixture.restore_slot(cursor_inventory, 0, InventoryStack.new(
 		&"stone_pickaxe",
 		1,
 		cursor_inventory.equipment_instance_factory.create(&"stone_pickaxe"),
-	))
+	)), "cursor pickaxe setup failed")
+	var cursor_loadout := InventoryTestFixture.create_loadout(cursor_inventory)
+	_expect(cursor_loadout != null, "cursor inventory loadout setup failed")
+	_expect(cursor_loadout != null and cursor_loadout.select_slot(0), "cursor pickaxe selection failed")
+	cursor_interactor.can_primary_target = true
 	_expect(cursor_interactor.is_attempting_crafting_station_mining(), "pickaxe did not select anvil mining mode")
 	_expect(not targeting_view._should_show_interaction(), "pickaxe mining mode enabled the anvil interaction cursor")
 	renderer.set_placement_preview(Vector3i(6, 7, 8), true)

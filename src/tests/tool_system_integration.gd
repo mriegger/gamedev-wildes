@@ -702,6 +702,7 @@ func _run():
 	)), "hammer could not be added for the presentation test")
 	var hammer_source := _find_inventory_item(&"copper_hammer")
 	_expect(hammer_source >= 0 and (hammer_source == 0 or _inventory_loadout.assign_slot_to_hotbar(hammer_source, 0)), "hammer could not be moved to the selected slot")
+	_expect(_inventory_loadout.select_slot(0), "hammer could not be equipped for the presentation test")
 	_expect(_inventory.get_slot(0) != null and _inventory.get_slot(0).item_id == &"copper_hammer", "hammer did not occupy the selected slot")
 	_player.animation_driver.animator._placing = true
 	_player.animation_driver.animator._place_elapsed = 0.05
@@ -725,6 +726,7 @@ func _run():
 	)), "stone pickaxe could not be restored after the hammer presentation test")
 	var restored_pickaxe_source := _find_inventory_item(&"stone_pickaxe")
 	_expect(restored_pickaxe_source >= 0 and (restored_pickaxe_source == 0 or _inventory_loadout.assign_slot_to_hotbar(restored_pickaxe_source, 0)), "stone pickaxe could not be moved back to the selected slot")
+	_expect(_inventory_loadout.select_slot(0), "restored pickaxe could not be equipped before the bow presentation test")
 	_expect(_inventory.get_slot(0) != null and _inventory.get_slot(0).item_id == &"stone_pickaxe", "stone pickaxe did not return to the selected slot")
 	_expect(_inventory_loadout.discard_stack(0, 1), "stone pickaxe could not be removed before the bow presentation test")
 	_expect(_inventory_loadout.add_stack(InventoryStack.new(
@@ -735,6 +737,7 @@ func _run():
 	_expect(_inventory_loadout.add_stack(InventoryStack.new(&"stone_arrow", 4)), "stone arrows could not be added for the presentation test")
 	var bow_source := _find_inventory_item(&"bow")
 	_expect(bow_source >= 0 and (bow_source == 0 or _inventory_loadout.assign_slot_to_hotbar(bow_source, 0)), "bow could not be moved to the selected slot")
+	_expect(_inventory_loadout.select_slot(0), "bow could not be equipped for the presentation test")
 	_expect(_interactor.get_selected_primary_action() == bow_action and _player.held_item_view.held_node is BowHeldView, "selected bow did not expose its draw action in the right hand")
 	var equipped_bow_mouse_position := _interactor.get_viewport().get_mouse_position()
 	var equipped_bow_ray_origin := _camera.project_ray_origin(equipped_bow_mouse_position)
@@ -956,6 +959,7 @@ func _run():
 	)), "stone pickaxe could not be restored after the bow presentation test")
 	restored_pickaxe_source = _find_inventory_item(&"stone_pickaxe")
 	_expect(restored_pickaxe_source >= 0 and (restored_pickaxe_source == 0 or _inventory_loadout.assign_slot_to_hotbar(restored_pickaxe_source, 0)), "stone pickaxe could not return to the selected slot after drawing the bow")
+	_expect(_inventory_loadout.select_slot(0), "stone pickaxe could not be re-equipped after drawing the bow")
 	_interactor._handle_item_actions(0.0)
 	_player.animation_driver._process(0.0)
 	_expect(not _interactor.is_drawing_bow() and _player.held_item_view.held_node is PixelExtrudedItem, "selection change retained the bow draw presentation")

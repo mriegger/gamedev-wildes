@@ -1548,6 +1548,7 @@ func _test_hammer_slam(world: VoxelWorld, hammer_profile: MeleeAttackProfile) ->
 			hammer_a_index = index
 			break
 	_expect(hammer_a_index >= 0 and (hammer_a_index == selected_index or inventory_loadout.assign_slot_to_hotbar(hammer_a_index, selected_index)), "hammer fixture could not move its first hammer to the selected slot")
+	_expect(inventory_loadout.select_slot(selected_index), "hammer fixture could not equip its first hammer")
 	hammer_a_index = selected_index
 	var input_buffer := InputBuffer.new()
 	player.interactor.setup(

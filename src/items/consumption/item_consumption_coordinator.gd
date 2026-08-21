@@ -21,7 +21,7 @@ func setup(
 
 func can_consume_selected() -> bool:
 	assert(_inventory != null)
-	return can_consume_at(_inventory.get_selected_slot())
+	return can_consume_at(_inventory.get_equipped_slot())
 
 func can_consume_at(slot_index: int) -> bool:
 	assert(_inventory != null and _loadout != null and _stats != null)
@@ -32,7 +32,7 @@ func can_consume_at(slot_index: int) -> bool:
 
 func try_consume_selected() -> bool:
 	assert(_inventory != null)
-	return try_consume_at(_inventory.get_selected_slot())
+	return try_consume_at(_inventory.get_equipped_slot())
 
 func try_consume_at(slot_index: int) -> bool:
 	var action := _get_action_at(slot_index)
