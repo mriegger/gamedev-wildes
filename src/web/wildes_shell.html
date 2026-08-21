@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>$GODOT_PROJECT_NAME</title>
+		<style>
+html,
+body,
+#canvas {
+	width: 100%;
+	height: 100%;
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+
+html,
+body {
+	background: #000;
+	overflow: hidden;
+}
+
+body {
+	color: #fff;
+	touch-action: manipulation;
+}
+
+#canvas {
+	display: block;
+	background: #000;
+}
+
+#canvas:focus {
+	outline: none;
+}
+
+#status {
+	position: fixed;
+	inset: 0;
+	z-index: 1;
+	display: grid;
+	place-items: center;
+	background: #000;
+	opacity: 1;
+	transition: opacity 150ms ease;
+}
+
+#status.is-leaving {
+	pointer-events: none;
+	opacity: 0;
+}
+
+#status-progress {
+	width: min(clamp(260px, 34vw, 460px), calc(100vw - 32px));
+	height: 4px;
+	overflow: hidden;
+	background: rgba(255, 255, 255, 0.18);
+}
+
+#status-progress-fill {
+	width: 100%;
+	height: 100%;
+	background: rgba(255, 255, 255, 0.94);
+	transform: scaleX(0);
+	transform-origin: left center;
+	transition: transform 80ms linear;
+}
+
+#status-progress.is-indeterminate #status-progress-fill {
+	width: 32%;
+	animation: wildes-progress 1.1s ease-in-out infinite;
+	transform: translateX(-120%);
+	transition: none;
+}
+
+#status-notice {
+	display: none;
+	max-width: min(36rem, calc(100vw - 3rem));
+	padding: 1rem 1.25rem;
+	border: 1px solid rgba(255, 255, 255, 0.3);
+	border-radius: 0.5rem;
+	background: rgba(24, 8, 12, 0.96);
+	color: #fff;
+	font: 1rem/1.45 system-ui, sans-serif;
+	text-align: center;
+}
+
+#status.has-error #status-progress {
+	display: none;
+}
+
+#status.has-error #status-notice {
+	display: block;
+}
+
+.visually-hidden {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
+}
+
+noscript {
+	position: fixed;
+	inset: 0;
+	z-index: 2;
+	display: grid;
+	place-items: center;
+	padding: 2rem;
+	background: #000;
+	color: #fff;
+	font: 1rem/1.45 system-ui, sans-serif;
+	text-align: center;
+}
+
+@keyframes wildes-progress {
+	0% {
+		transform: translateX(-120%);
+	}
+	100% {
+		transform: translateX(412.5%);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	#status,
+	#status-progress-fill {
+		animation: none;
+		transition: none;
+	}
+
+	#status-progress.is-indeterminate #status-progress-fill {
+		transform: translateX(106.25%);
+	}
+}
+		</style>
+		$GODOT_HEAD_INCLUDE
+	</head>
+	<body>
+		<canvas id="canvas">
+			Your browser does not support the canvas element.
+		</canvas>
+		<noscript>JavaScript is required to play $GODOT_PROJECT_NAME.</noscript>
+		<div id="status" role="status" aria-live="polite" aria-busy="true">
+			<div
+				id="status-progress"
+				class="is-indeterminate"
+				role="progressbar"
+				aria-label="Loading $GODOT_PROJECT_NAME"
+				aria-valuemin="0"
+				aria-valuemax="100"
+			>
+				<div id="status-progress-fill"></div>
+			</div>
+			<span id="status-text" class="visually-hidden">Loading $GODOT_PROJECT_NAME</span>
+			<div id="status-notice" role="alert"></div>
+		</div>
+		<script src="$GODOT_URL"></script>
+		<script>
+const GODOT_CONFIG = $GODOT_CONFIG;
+const GODOT_THREADS_ENABLED = $GODOT_THREADS_ENABLED;
+const engine = new Engine(GODOT_CONFIG);
+
+(function () {
+	const canvas = document.getElementById('canvas');
+	const statusOverlay = document.getElementById('status');
+	const statusProgress = document.getElementById('status-progress');
+	const statusProgressFill = document.getElementById('status-progress-fill');
+	const statusText = document.getElementById('status-text');
+	const statusNotice = document.getElementById('status-notice');
+	let initializing = true;
+	let engineResolved = false;
+	let bootstrapReady = false;
+	let fallbackTimer = 0;
+	let highestProgressRatio = 0;
+
+	function removeStatusOverlay() {
+		if (!statusOverlay.isConnected) {
+			return;
+		}
+		statusOverlay.remove();
+	}
+
+	function finishLoading() {
+		if (!initializing) {
+			return;
+		}
+		initializing = false;
+		if (fallbackTimer !== 0) {
+			window.clearTimeout(fallbackTimer);
+			fallbackTimer = 0;
+		}
+		statusOverlay.setAttribute('aria-busy', 'false');
+		statusOverlay.classList.add('is-leaving');
+		window.setTimeout(removeStatusOverlay, 150);
+	}
+
+	function finishWhenReady() {
+		if (engineResolved && bootstrapReady) {
+			finishLoading();
+		}
+	}
+
+	function updateProgress(current, total) {
+		if (!initializing) {
+			return;
+		}
+		if (total > 0) {
+			const reportedRatio = Math.min(Math.max(current / total, 0), 1);
+			highestProgressRatio = Math.max(highestProgressRatio, reportedRatio);
+			const ratio = highestProgressRatio;
+			const percent = Math.round(ratio * 100);
+			statusProgress.classList.remove('is-indeterminate');
+			statusProgressFill.style.transform = `scaleX(${ratio})`;
+			statusProgress.setAttribute('aria-valuenow', String(percent));
+			statusProgress.setAttribute('aria-valuetext', `${percent}%`);
+			statusText.textContent = `Loading $GODOT_PROJECT_NAME: ${percent}%`;
+		} else {
+			statusProgress.classList.add('is-indeterminate');
+			statusProgressFill.style.removeProperty('transform');
+			statusProgress.removeAttribute('aria-valuenow');
+			statusProgress.setAttribute('aria-valuetext', 'Loading');
+			statusText.textContent = 'Loading $GODOT_PROJECT_NAME';
+		}
+	}
+
+	function setStatusNotice(text) {
+		while (statusNotice.lastChild) {
+			statusNotice.removeChild(statusNotice.lastChild);
+		}
+		const lines = text.split('\n');
+		lines.forEach((line) => {
+			statusNotice.appendChild(document.createTextNode(line));
+			statusNotice.appendChild(document.createElement('br'));
+		});
+	}
+
+	function displayFailureNotice(error) {
+		console.error(error);
+		let message = 'An unknown error occurred.';
+		if (error instanceof Error) {
+			message = error.message;
+		} else if (typeof error === 'string') {
+			message = error;
+		}
+		if (fallbackTimer !== 0) {
+			window.clearTimeout(fallbackTimer);
+			fallbackTimer = 0;
+		}
+		initializing = false;
+		statusOverlay.setAttribute('aria-busy', 'false');
+		statusOverlay.classList.add('has-error');
+		setStatusNotice(message);
+	}
+
+	window.wildesBootstrapReady = function () {
+		bootstrapReady = true;
+		finishWhenReady();
+	};
+
+	const missing = Engine.getMissingFeatures({
+		threads: GODOT_THREADS_ENABLED,
+	});
+
+	if (missing.length !== 0) {
+		if (GODOT_CONFIG.serviceWorker && GODOT_CONFIG.ensureCrossOriginIsolationHeaders && 'serviceWorker' in navigator) {
+			let serviceWorkerRegistrationPromise;
+			try {
+				serviceWorkerRegistrationPromise = navigator.serviceWorker.getRegistration();
+			} catch (error) {
+				serviceWorkerRegistrationPromise = Promise.reject(new Error('Service worker registration failed.'));
+			}
+			Promise.race([
+				serviceWorkerRegistrationPromise.then((registration) => {
+					if (registration != null) {
+						return Promise.reject(new Error('Service worker already exists.'));
+					}
+					return registration;
+				}).then(() => engine.installServiceWorker()),
+				new Promise((resolve) => {
+					window.setTimeout(resolve, 2000);
+				}),
+			]).then(() => {
+				window.location.reload();
+			}).catch((error) => {
+				displayFailureNotice(`Service worker recovery failed.\n${error}`);
+			});
+		} else {
+			const message = 'Error\nThe following features required to run Godot projects on the Web are missing:\n';
+			displayFailureNotice(message + missing.join('\n'));
+		}
+	} else {
+		engine.startGame({
+			canvas: canvas,
+			onProgress: updateProgress,
+		}).then(() => {
+			engineResolved = true;
+			fallbackTimer = window.setTimeout(finishLoading, 5000);
+			finishWhenReady();
+		}, displayFailureNotice);
+	}
+}());
+		</script>
+	</body>
+</html>

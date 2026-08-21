@@ -21,6 +21,15 @@ func _ready() -> void:
 	get_viewport().size_changed.connect(_update_3d_render_scale)
 	_update_3d_render_scale()
 	_create_menu_experience(MenuExperience.EntryMode.FIRST_LAUNCH)
+	_notify_web_bootstrap_ready()
+
+func _notify_web_bootstrap_ready() -> void:
+	if not OS.has_feature("web"):
+		return
+	await RenderingServer.frame_post_draw
+	var bridge := Engine.get_singleton("JavaScriptBridge")
+	if bridge != null:
+		bridge.eval("window.wildesBootstrapReady?.()", true)
 
 func _update_3d_render_scale() -> void:
 	_settings.apply_display(get_viewport())
