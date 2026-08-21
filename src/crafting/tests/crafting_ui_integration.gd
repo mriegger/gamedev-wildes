@@ -77,7 +77,7 @@ func _process(_delta: float) -> bool:
 	elif _phase == 3 and _frame == 101:
 		_check_open_state()
 		var sound_player := _hud.crafting_panel.get_node("CraftingSoundPlayer") as AudioStreamPlayer
-		_expect(sound_player.stream.resource_path == "res://assets/audio/sfx/tools/impactGeneric_light_004.ogg", "crafting used the wrong success sound")
+		_expect(sound_player.stream.resource_path == "res://assets/audio/sfx/crafting/complete/craft_08_oga100_hit_metal.ogg", "crafting used the wrong success sound")
 		_expect(sound_player.bus == &"SFX", "crafting success sound did not use the SFX bus")
 		_expect(not sound_player.playing, "crafting sound played before a successful press")
 		_expect(_hud.crafting_panel.get_node_or_null("CraftingImpactPlayer") == null, "repeating crafting sound player still exists")
