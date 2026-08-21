@@ -52,7 +52,7 @@ var _is_open: bool = false
 var _current_workspace_id: StringName = CRAFTING_WORKSPACE_ID
 var _crafting_title: String = "CRAFTING"
 var _workspace_tabs_enabled: bool = true
-var _crafting_sound_stream: AudioStream = preload("res://assets/audio/sfx/crafting/complete/craft_08_oga100_hit_metal.ogg")
+var _crafting_sound_stream: AudioStream = preload("res://assets/audio/sfx/crafting/complete/gavel_3_blows_s1590_CC0.ogg")
 
 func _ready() -> void:
 	set_process_input(true)
