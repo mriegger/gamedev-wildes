@@ -121,12 +121,15 @@ func _run() -> void:
 
 	actor.global_position = Vector3(8.5, FEET_Y, 8.5)
 	coordinator.get_runtime()._spatial_index.upsert(actor.runtime_id, actor.global_position, actor.get_world_bounds())
+	var foliage_position := Vector3i(0, FLAT_HEIGHT + 1, -1)
 	var block_position := Vector3i(0, FLAT_HEIGHT + 1, -2)
+	_expect(VoxelWorldTestFixture.commit_place(world, foliage_position, BlockId.Type.GRASS_FOLIAGE) != null, "projectile pass-through foliage could not be placed")
 	_expect(VoxelWorldTestFixture.commit_place(world, block_position, BlockId.Type.STONE) != null, "projectile collision block could not be placed")
 	var copper_ammunition := projectiles.get_available_ammunition(bow_action)
 	_expect(copper_ammunition != null and copper_ammunition.id == &"copper_arrow", "copper arrow was not selected after stone ammunition ran out")
 	var copper_trajectory := projectiles.predict_trajectory(bow_action, copper_ammunition, 0.5, launch_transform)
 	_expect(copper_trajectory.size() >= 2, "voxel-bound trajectory was not predicted")
+	_expect(copper_trajectory[copper_trajectory.size() - 1].z <= float(foliage_position.z), "projectile trajectory ended on foliage at %s" % copper_trajectory[copper_trajectory.size() - 1])
 	bow_source = inventory.create_selected_item_source()
 	_expect(projectiles.try_fire(bow_source, bow_action, copper_ammunition, 0.5, launch_transform), "half-draw copper arrow did not fire")
 	projectiles.set_physics_process(false)
@@ -138,6 +141,7 @@ func _run() -> void:
 			break
 		projectiles.advance_projectiles(uneven_deltas[step_index % uneven_deltas.size()])
 	_expect(projectile.embedded_elapsed >= 0.0 and projectile.view.global_position.z > -2.01, "arrow did not embed at the first solid voxel")
+	_expect(projectile.view.global_position.z <= float(foliage_position.z), "arrow embedded in foliage at %s" % projectile.view.global_position)
 	_expect(projectile.view.global_position.is_equal_approx(copper_trajectory[copper_trajectory.size() - 1]), "voxel impact did not match the predicted trajectory endpoint")
 	_expect(_outcomes.size() == 1, "voxel impact incorrectly damaged an enemy")
 	_expect(inventory.get_inventory_item_count(&"copper_arrow") == 0 and projectiles.get_available_ammunition(bow_action) == null, "copper arrow was not consumed or empty ammunition was still available")

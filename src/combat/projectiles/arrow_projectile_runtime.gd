@@ -273,7 +273,7 @@ func _get_first_hit(start: Vector3, destination: Vector3, radius: float) -> Dict
 		if entity_distance < nearest_distance:
 			nearest_distance = entity_distance
 			nearest_runtime_id = runtime_id
-	var voxel_hit := VoxelRaycast.cast(_voxel_space, start, direction, distance)
+	var voxel_hit := VoxelRaycast.cast(_voxel_space, start, direction, distance, _is_foliage)
 	if voxel_hit != null and voxel_hit.ray_distance <= distance + 0.000001 and voxel_hit.ray_distance <= nearest_distance:
 		return {"position": start + direction * voxel_hit.ray_distance}
 	if nearest_runtime_id > 0:
@@ -282,6 +282,9 @@ func _get_first_hit(start: Vector3, destination: Vector3, radius: float) -> Dict
 			"target_runtime_id": nearest_runtime_id,
 		}
 	return {}
+
+func _is_foliage(block_id: int) -> bool:
+	return BlockId.is_foliage(block_id)
 
 func _orient_projectile(projectile: ActiveProjectile) -> void:
 	if projectile.velocity.is_zero_approx():

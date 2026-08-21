@@ -579,7 +579,7 @@ func _update_bow_aim_target() -> void:
 		motor.face_direction(cursor_direction)
 
 func _get_bow_cursor_target(ray_origin: Vector3, ray_direction: Vector3) -> Variant:
-	var voxel_hit := VoxelRaycast.cast(voxel_space, ray_origin, ray_direction, BOW_AIM_RAY_DISTANCE)
+	var voxel_hit := VoxelRaycast.cast(voxel_space, ray_origin, ray_direction, BOW_AIM_RAY_DISTANCE, _is_foliage)
 	var ground_hit: Variant = Plane(Vector3.UP, motor.global_position.y).intersects_ray(ray_origin, ray_direction)
 	var nearest_surface_distance := BOW_AIM_RAY_DISTANCE
 	if voxel_hit != null:
@@ -594,6 +594,9 @@ func _get_bow_cursor_target(ray_origin: Vector3, ray_direction: Vector3) -> Vari
 	if voxel_hit != null:
 		return ray_origin + ray_direction * voxel_hit.ray_distance
 	return ground_hit
+
+func _is_foliage(block_id: int) -> bool:
+	return BlockId.is_foliage(block_id)
 
 func _start_melee_attack():
 	var mouse_position := get_viewport().get_mouse_position()

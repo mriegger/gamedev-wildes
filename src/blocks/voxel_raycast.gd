@@ -3,12 +3,19 @@ class_name VoxelRaycast
 
 const UNREACHABLE_DISTANCE: float = 999999.0
 
-static func cast(voxel_space: VoxelSpace, origin: Vector3, direction: Vector3, max_distance: float) -> VoxelRaycastHit:
+static func cast(
+	voxel_space: VoxelSpace,
+	origin: Vector3,
+	direction: Vector3,
+	max_distance: float,
+	ignored_block: Callable = Callable(),
+) -> VoxelRaycastHit:
 	direction = direction.normalized()
 	if direction.length_squared() < 0.0001:
 		return null
 	var current := Vector3i(floor(origin.x), floor(origin.y), floor(origin.z))
-	var can_hit := not voxel_space.is_raycast_solid(current)
+	var current_is_solid := voxel_space.is_raycast_solid(current) and not _is_ignored(voxel_space, current, ignored_block)
+	var can_hit := not current_is_solid
 	if not can_hit:
 		can_hit = not voxel_space.get_interaction_bounds(current).has_point(origin)
 
@@ -52,7 +59,7 @@ static func cast(voxel_space: VoxelSpace, origin: Vector3, direction: Vector3, m
 	var entry_normal := Vector3i.ZERO
 
 	for _index in range(int(max_distance * 2 + 10)):
-		var current_is_solid := voxel_space.is_raycast_solid(current)
+		current_is_solid = voxel_space.is_raycast_solid(current) and not _is_ignored(voxel_space, current, ignored_block)
 		if current_is_solid and can_hit:
 			var bounds := voxel_space.get_interaction_bounds(current)
 			var is_full_cell := bounds.position == Vector3(current) and bounds.size == Vector3.ONE
@@ -96,6 +103,9 @@ static func cast(voxel_space: VoxelSpace, origin: Vector3, direction: Vector3, m
 		if traveled > max_distance:
 			break
 	return null
+
+static func _is_ignored(voxel_space: VoxelSpace, position: Vector3i, ignored_block: Callable) -> bool:
+	return ignored_block.is_valid() and bool(ignored_block.call(voxel_space.get_block_id_at(position)))
 
 static func _intersect_bounds(bounds: AABB, origin: Vector3, direction: Vector3, max_distance: float) -> Vector4:
 	var near_distance := -INF
