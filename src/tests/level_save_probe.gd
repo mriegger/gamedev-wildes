@@ -8,7 +8,7 @@ func _init() -> void:
 	var chest_block := block_catalog.get_definition(BlockId.Type.CHEST) if block_catalog != null else null
 	var player_stats_definition := load("res://player/player_stats.tres") as CombatStatsDefinition
 	var player_perk_rules := load("res://progression/player_perk_rules.tres") as PlayerPerkRules
-	_expect(SaveManager.CURRENT_SAVE_VERSION == 21, "save version changed")
+	_expect(SaveManager.CURRENT_SAVE_VERSION == 22, "save version changed")
 	_expect(block_catalog != null and block_catalog.validate(), "block catalog invalid")
 	_expect(item_catalog != null and item_catalog.validate(block_catalog), "item catalog invalid")
 	_expect(chest_block != null and chest_block.container != null, "chest container definition invalid")
@@ -24,7 +24,7 @@ func _init() -> void:
 	_expect(version_six.get("chests", null) == {}, "version six chest migration shape changed")
 	_expect(version_six.get("emplacements", null) == {}, "version six emplacement migration shape changed")
 	_expect(version_six.get("dungeon_progress", null) == DungeonProgressState.new().snapshot(), "version six dungeon progress migration shape changed")
-	_expect(version_six.get("tutorial_progress", null) == {"mining_tip_completed": false, "food_tip_completed": false, "crafting_tip_completed": false, "crafting_ingredients_tip_completed": false, "copper_mining_tip_completed": true, "sundown_weapon_tip_completed": false}, "version six tutorial migration shape changed")
+	_expect(version_six.get("tutorial_progress", null) == {"mining_tip_completed": false, "food_tip_completed": false, "crafting_tip_completed": false, "crafting_ingredients_tip_completed": false, "copper_mining_tip_completed": true, "sundown_weapon_tip_completed": false, "damage_affinity_tip_completed": false}, "version six tutorial migration shape changed")
 	var version_fourteen := {
 		"version": 14,
 		"inventory": null,
@@ -34,7 +34,7 @@ func _init() -> void:
 		"removed_blocks": {"2,3,4": true},
 	}
 	_expect(SaveManager._migrate_save_data(version_fourteen, item_catalog), "version fourteen migration failed")
-	_expect(version_fourteen.get("tutorial_progress", null) == {"mining_tip_completed": true, "food_tip_completed": false, "crafting_tip_completed": false, "crafting_ingredients_tip_completed": false, "copper_mining_tip_completed": true, "sundown_weapon_tip_completed": false}, "version fourteen tutorial migration changed")
+	_expect(version_fourteen.get("tutorial_progress", null) == {"mining_tip_completed": true, "food_tip_completed": false, "crafting_tip_completed": false, "crafting_ingredients_tip_completed": false, "copper_mining_tip_completed": true, "sundown_weapon_tip_completed": false, "damage_affinity_tip_completed": false}, "version fourteen tutorial migration changed")
 	_expect(version_fourteen.get("dungeon_progress", null) == DungeonProgressState.new().snapshot(), "version fourteen dungeon progress migration shape changed")
 	var version_fifteen := {
 		"version": 15,
@@ -46,33 +46,38 @@ func _init() -> void:
 		"removed_blocks": {},
 	}
 	_expect(SaveManager._migrate_save_data(version_fifteen, item_catalog), "version fifteen migration failed")
-	_expect(version_fifteen.get("tutorial_progress", null) == {"mining_tip_completed": false, "food_tip_completed": false, "crafting_tip_completed": false, "crafting_ingredients_tip_completed": false, "copper_mining_tip_completed": true, "sundown_weapon_tip_completed": false}, "version fifteen tutorial migration changed")
+	_expect(version_fifteen.get("tutorial_progress", null) == {"mining_tip_completed": false, "food_tip_completed": false, "crafting_tip_completed": false, "crafting_ingredients_tip_completed": false, "copper_mining_tip_completed": true, "sundown_weapon_tip_completed": false, "damage_affinity_tip_completed": false}, "version fifteen tutorial migration changed")
 	var version_sixteen_with_food := version_fifteen.duplicate(true)
 	version_sixteen_with_food["version"] = 16
 	version_sixteen_with_food["tutorial_progress"] = {"mining_tip_completed": false}
 	version_sixteen_with_food["apple_trees"] = {"version": 2, "collected_slots": [[0, 1, 0, 0]], "fallen_apples": []}
 	_expect(SaveManager._migrate_save_data(version_sixteen_with_food, item_catalog), "version sixteen food-history migration failed")
-	_expect(version_sixteen_with_food.get("tutorial_progress", null) == {"mining_tip_completed": false, "food_tip_completed": true, "crafting_tip_completed": false, "crafting_ingredients_tip_completed": false, "copper_mining_tip_completed": true, "sundown_weapon_tip_completed": false}, "version sixteen food history did not complete the tutorial")
+	_expect(version_sixteen_with_food.get("tutorial_progress", null) == {"mining_tip_completed": false, "food_tip_completed": true, "crafting_tip_completed": false, "crafting_ingredients_tip_completed": false, "copper_mining_tip_completed": true, "sundown_weapon_tip_completed": false, "damage_affinity_tip_completed": false}, "version sixteen food history did not complete the tutorial")
 	var version_seventeen := version_fifteen.duplicate(true)
 	version_seventeen["version"] = 17
 	version_seventeen["tutorial_progress"] = {"mining_tip_completed": true, "food_tip_completed": true}
 	_expect(SaveManager._migrate_save_data(version_seventeen, item_catalog), "version seventeen migration failed")
-	_expect(version_seventeen.get("tutorial_progress", null) == {"mining_tip_completed": true, "food_tip_completed": true, "crafting_tip_completed": false, "crafting_ingredients_tip_completed": false, "copper_mining_tip_completed": true, "sundown_weapon_tip_completed": false}, "version seventeen crafting tutorial migration changed")
+	_expect(version_seventeen.get("tutorial_progress", null) == {"mining_tip_completed": true, "food_tip_completed": true, "crafting_tip_completed": false, "crafting_ingredients_tip_completed": false, "copper_mining_tip_completed": true, "sundown_weapon_tip_completed": false, "damage_affinity_tip_completed": false}, "version seventeen crafting tutorial migration changed")
 	var version_eighteen := version_fifteen.duplicate(true)
 	version_eighteen["version"] = 18
 	version_eighteen["tutorial_progress"] = {"mining_tip_completed": true, "food_tip_completed": true, "crafting_tip_completed": true}
 	_expect(SaveManager._migrate_save_data(version_eighteen, item_catalog), "version eighteen migration failed")
-	_expect(version_eighteen.get("tutorial_progress", null) == {"mining_tip_completed": true, "food_tip_completed": true, "crafting_tip_completed": true, "crafting_ingredients_tip_completed": false, "copper_mining_tip_completed": true, "sundown_weapon_tip_completed": false}, "version eighteen crafting ingredients tutorial migration changed")
+	_expect(version_eighteen.get("tutorial_progress", null) == {"mining_tip_completed": true, "food_tip_completed": true, "crafting_tip_completed": true, "crafting_ingredients_tip_completed": false, "copper_mining_tip_completed": true, "sundown_weapon_tip_completed": false, "damage_affinity_tip_completed": false}, "version eighteen crafting ingredients tutorial migration changed")
 	var version_nineteen := version_eighteen.duplicate(true)
 	version_nineteen["version"] = 19
 	version_nineteen["tutorial_progress"] = {"mining_tip_completed": true, "food_tip_completed": true, "crafting_tip_completed": true, "crafting_ingredients_tip_completed": true}
 	_expect(SaveManager._migrate_save_data(version_nineteen, item_catalog), "version nineteen migration failed")
-	_expect(version_nineteen.get("tutorial_progress", null) == {"mining_tip_completed": true, "food_tip_completed": true, "crafting_tip_completed": true, "crafting_ingredients_tip_completed": true, "copper_mining_tip_completed": true, "sundown_weapon_tip_completed": false}, "version nineteen copper mining tutorial migration changed")
+	_expect(version_nineteen.get("tutorial_progress", null) == {"mining_tip_completed": true, "food_tip_completed": true, "crafting_tip_completed": true, "crafting_ingredients_tip_completed": true, "copper_mining_tip_completed": true, "sundown_weapon_tip_completed": false, "damage_affinity_tip_completed": false}, "version nineteen copper mining tutorial migration changed")
 	var version_twenty := version_nineteen.duplicate(true)
 	version_twenty["version"] = 20
 	version_twenty["tutorial_progress"] = {"mining_tip_completed": true, "food_tip_completed": true, "crafting_tip_completed": true, "crafting_ingredients_tip_completed": true, "copper_mining_tip_completed": true}
 	_expect(SaveManager._migrate_save_data(version_twenty, item_catalog), "version twenty migration failed")
-	_expect(version_twenty.get("tutorial_progress", null) == {"mining_tip_completed": true, "food_tip_completed": true, "crafting_tip_completed": true, "crafting_ingredients_tip_completed": true, "copper_mining_tip_completed": true, "sundown_weapon_tip_completed": false}, "version twenty sundown weapon tutorial migration changed")
+	_expect(version_twenty.get("tutorial_progress", null) == {"mining_tip_completed": true, "food_tip_completed": true, "crafting_tip_completed": true, "crafting_ingredients_tip_completed": true, "copper_mining_tip_completed": true, "sundown_weapon_tip_completed": false, "damage_affinity_tip_completed": false}, "version twenty sundown weapon tutorial migration changed")
+	var version_twenty_one := version_twenty.duplicate(true)
+	version_twenty_one["version"] = 21
+	(version_twenty_one["tutorial_progress"] as Dictionary).erase("damage_affinity_tip_completed")
+	_expect(SaveManager._migrate_save_data(version_twenty_one, item_catalog), "version twenty-one migration failed")
+	_expect(version_twenty_one.get("tutorial_progress", null) == {"mining_tip_completed": true, "food_tip_completed": true, "crafting_tip_completed": true, "crafting_ingredients_tip_completed": true, "copper_mining_tip_completed": true, "sundown_weapon_tip_completed": false, "damage_affinity_tip_completed": false}, "version twenty-one damage affinity tutorial migration changed")
 	var migration_factory := EquipmentInstanceFactory.new(item_catalog)
 	var migration_affixes: Array[EquipmentAffixDefinition] = [item_catalog.get_equipment_affix(&"vicious")]
 	var migration_runes: Array[StringName] = [&"basic_rune"]
@@ -223,7 +228,7 @@ func _init() -> void:
 		"chests": {},
 		"world_loot": {"next_entry_id": 1, "entries": []},
 		"dungeon_progress": DungeonProgressState.new().snapshot(),
-		"tutorial_progress": {"mining_tip_completed": true, "food_tip_completed": true, "crafting_tip_completed": true, "crafting_ingredients_tip_completed": true, "copper_mining_tip_completed": true, "sundown_weapon_tip_completed": true},
+		"tutorial_progress": {"mining_tip_completed": true, "food_tip_completed": true, "crafting_tip_completed": true, "crafting_ingredients_tip_completed": true, "copper_mining_tip_completed": true, "sundown_weapon_tip_completed": true, "damage_affinity_tip_completed": false},
 		"playtime_seconds": 0.0,
 		"time_of_day": 6.0,
 	}
@@ -240,7 +245,7 @@ func _init() -> void:
 		_expect(current_data.get("item_proficiency", {}) == item_proficiency.snapshot(), "current_data item proficiency differs")
 		_expect(current_data.get("pumpkin_patch", {}) == pumpkin_patch, "current_data pumpkin patch differs")
 		_expect(current_data.get("apple_trees", {}) == apple_trees, "current_data apple tree state differs")
-		_expect(current_data.get("tutorial_progress", {}) == {"mining_tip_completed": true, "food_tip_completed": true, "crafting_tip_completed": true, "crafting_ingredients_tip_completed": true, "copper_mining_tip_completed": true, "sundown_weapon_tip_completed": true}, "current_data tutorial progress differs")
+		_expect(current_data.get("tutorial_progress", {}) == {"mining_tip_completed": true, "food_tip_completed": true, "crafting_tip_completed": true, "crafting_ingredients_tip_completed": true, "copper_mining_tip_completed": true, "sundown_weapon_tip_completed": true, "damage_affinity_tip_completed": false}, "current_data tutorial progress differs")
 		_expect(current_data.get("world_loot", {}) == world_loot_state.snapshot(), "current_data world loot differs")
 		_expect(current_data.get("emplacements", {}).get("2,21,2", -1) == BlockId.Type.CAMPFIRE, "current_data campfire emplacement differs")
 		var encoded_chests := current_data.get("chests", {}) as Dictionary

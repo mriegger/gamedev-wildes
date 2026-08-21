@@ -153,7 +153,9 @@ recipe's ingredient requirements until the player interacts with the panel or cl
 hints wait for any active hint to finish first.
 At 17:00, a player without a melee weapon or a bow with compatible ammunition receives a one-time
 top-left warning to craft a weapon at the Anvil before night. The warning remains for fifteen
-seconds, fades out, and is persisted per world.
+seconds, fades out, and is persisted per world. The first player attack resisted by an enemy pauses gameplay and
+shows a one-time damage-affinity dialog. It explains damage-number colors and lists that enemy's
+authored weaknesses and resistances before gameplay resumes through the dialog's OK button.
 Using a hoe on the exposed top face of grass or dirt converts it into dry farmland, which drops dirt
 when mined.
 Seeded copper deposits generate after the surrounding terrain as connected 5–30 block blobs. Most

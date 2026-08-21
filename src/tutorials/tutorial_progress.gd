@@ -9,13 +9,14 @@ var _crafting_tip_completed: bool = false
 var _crafting_ingredients_tip_completed: bool = false
 var _copper_mining_tip_completed: bool = false
 var _sundown_weapon_tip_completed: bool = false
+var _damage_affinity_tip_completed: bool = false
 
 func restore(snapshot: Variant) -> bool:
 	if not snapshot is Dictionary:
 		return false
 	var data := snapshot as Dictionary
 	if (
-		data.size() != 6
+		data.size() != 7
 		or not data.has("mining_tip_completed")
 		or not data["mining_tip_completed"] is bool
 		or not data.has("food_tip_completed")
@@ -28,6 +29,8 @@ func restore(snapshot: Variant) -> bool:
 		or not data["copper_mining_tip_completed"] is bool
 		or not data.has("sundown_weapon_tip_completed")
 		or not data["sundown_weapon_tip_completed"] is bool
+		or not data.has("damage_affinity_tip_completed")
+		or not data["damage_affinity_tip_completed"] is bool
 	):
 		return false
 	_mining_tip_completed = bool(data["mining_tip_completed"])
@@ -36,6 +39,7 @@ func restore(snapshot: Variant) -> bool:
 	_crafting_ingredients_tip_completed = bool(data["crafting_ingredients_tip_completed"])
 	_copper_mining_tip_completed = bool(data["copper_mining_tip_completed"])
 	_sundown_weapon_tip_completed = bool(data["sundown_weapon_tip_completed"])
+	_damage_affinity_tip_completed = bool(data["damage_affinity_tip_completed"])
 	return true
 
 func snapshot() -> Dictionary:
@@ -46,6 +50,7 @@ func snapshot() -> Dictionary:
 		"crafting_ingredients_tip_completed": _crafting_ingredients_tip_completed,
 		"copper_mining_tip_completed": _copper_mining_tip_completed,
 		"sundown_weapon_tip_completed": _sundown_weapon_tip_completed,
+		"damage_affinity_tip_completed": _damage_affinity_tip_completed,
 	}
 
 func is_mining_tip_completed() -> bool:
@@ -105,5 +110,15 @@ func complete_sundown_weapon_tip() -> bool:
 	if _sundown_weapon_tip_completed:
 		return false
 	_sundown_weapon_tip_completed = true
+	changed.emit()
+	return true
+
+func is_damage_affinity_tip_completed() -> bool:
+	return _damage_affinity_tip_completed
+
+func complete_damage_affinity_tip() -> bool:
+	if _damage_affinity_tip_completed:
+		return false
+	_damage_affinity_tip_completed = true
 	changed.emit()
 	return true

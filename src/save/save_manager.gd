@@ -3,7 +3,7 @@ class_name SaveManager
 
 const SAVE_DIR: String = "user://saves"
 const SLOT_COUNT: int = 3
-const CURRENT_SAVE_VERSION: int = 21
+const CURRENT_SAVE_VERSION: int = 22
 const MINIMUM_MIGRATABLE_SAVE_VERSION: int = 4
 const VERSION_SEVEN_BASE_EXPERIENCE_TO_LEVEL: int = 100
 const VERSION_SEVEN_EXPERIENCE_GROWTH: float = 1.25
@@ -318,6 +318,7 @@ static func load_slot(slot_id: int, item_catalog: ItemCatalog) -> Dictionary:
 			"crafting_ingredients_tip_completed": false,
 			"copper_mining_tip_completed": true,
 			"sundown_weapon_tip_completed": false,
+			"damage_affinity_tip_completed": false,
 		}
 	return info
 
@@ -466,6 +467,22 @@ static func _migrate_save_data(data: Dictionary, item_catalog: ItemCatalog) -> b
 					return false
 				(tutorial_progress as Dictionary)["sundown_weapon_tip_completed"] = false
 				version = 21
+			21:
+				var tutorial_progress = migrated.get("tutorial_progress", null)
+				if not tutorial_progress is Dictionary or (tutorial_progress as Dictionary).has("damage_affinity_tip_completed"):
+					return false
+				if (
+					(tutorial_progress as Dictionary).size() != 6
+					or not (tutorial_progress as Dictionary).get("mining_tip_completed", null) is bool
+					or not (tutorial_progress as Dictionary).get("food_tip_completed", null) is bool
+					or not (tutorial_progress as Dictionary).get("crafting_tip_completed", null) is bool
+					or not (tutorial_progress as Dictionary).get("crafting_ingredients_tip_completed", null) is bool
+					or not (tutorial_progress as Dictionary).get("copper_mining_tip_completed", null) is bool
+					or not (tutorial_progress as Dictionary).get("sundown_weapon_tip_completed", null) is bool
+				):
+					return false
+				(tutorial_progress as Dictionary)["damage_affinity_tip_completed"] = false
+				version = 22
 			_:
 				return false
 		migrated["version"] = version

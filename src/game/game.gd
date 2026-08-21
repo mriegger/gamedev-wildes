@@ -64,6 +64,8 @@ signal main_menu_requested
 @onready var copper_mining_tutorial_view: CopperMiningTutorialView = $CopperMiningTutorialView as CopperMiningTutorialView
 @onready var sundown_weapon_tutorial: SundownWeaponTutorialCoordinator = $SundownWeaponTutorial as SundownWeaponTutorialCoordinator
 @onready var sundown_weapon_tutorial_view: SundownWeaponTutorialView = $SundownWeaponTutorialView as SundownWeaponTutorialView
+@onready var combat_affinity_tutorial: CombatAffinityTutorialCoordinator = $CombatAffinityTutorial as CombatAffinityTutorialCoordinator
+@onready var combat_affinity_tutorial_view: CombatAffinityTutorialView = $CombatAffinityTutorialView as CombatAffinityTutorialView
 @onready var placement_prompt: PlacementPromptCoordinator = $PlacementPrompt as PlacementPromptCoordinator
 @onready var level_interaction: LevelInteractionCoordinator = $LevelInteractionCoordinator as LevelInteractionCoordinator
 @onready var structure_designer_workflow: StructureDesignerWorkflow = $StructureDesignerWorkflow as StructureDesignerWorkflow
@@ -340,6 +342,15 @@ func _ready():
 		tutorial_progress,
 		tutorial_callout_arbiter,
 		Callable(game_environment, "get_time_of_day"),
+	)
+	combat_affinity_tutorial.setup(
+		melee_combat,
+		entity_catalog,
+		combat_affinity_tutorial_view,
+		tutorial_progress,
+		tutorial_callout_arbiter,
+		Callable(self, "_pause_for_combat_affinity_tutorial"),
+		Callable(self, "_resume_from_combat_affinity_tutorial"),
 	)
 	if _recovered_defeated_save and _slot_id != -1 and not game_session.save("defeated_save_recovery"):
 		push_error("[Game] Failed to persist recovered player state")
@@ -1174,6 +1185,7 @@ func _sync_compass_external_menu() -> void:
 		or game_environment.is_debug_panel_open()
 		or (_pause_menu != null and is_instance_valid(_pause_menu))
 		or (_death_screen != null and is_instance_valid(_death_screen))
+		or combat_affinity_tutorial_view.is_showing()
 	)
 
 func _sync_structure_designer_ui_blocking() -> void:
@@ -1208,6 +1220,15 @@ func _show_pause_menu():
 	_refresh_save_label()
 	_sync_compass_external_menu()
 	get_tree().paused = true
+
+func _pause_for_combat_affinity_tutorial() -> void:
+	input_buffer.clear_gameplay()
+	get_tree().paused = true
+	_sync_compass_external_menu()
+
+func _resume_from_combat_affinity_tutorial() -> void:
+	get_tree().paused = false
+	_sync_compass_external_menu()
 
 func _on_settings_changed(updated_settings: GameSettings):
 	settings = updated_settings

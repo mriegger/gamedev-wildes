@@ -96,7 +96,7 @@ func _create_fixture(has_mined_before: bool) -> Dictionary:
 		"crafting_tip_completed": false,
 		"crafting_ingredients_tip_completed": false,
 		"copper_mining_tip_completed": false,
-		"sundown_weapon_tip_completed": false,
+		"sundown_weapon_tip_completed": false, "damage_affinity_tip_completed": false,
 	}), "crafting tutorial progress setup failed")
 	var arbiter := TutorialCalloutArbiter.new()
 	var coordinator := CraftingTutorialCoordinator.new()

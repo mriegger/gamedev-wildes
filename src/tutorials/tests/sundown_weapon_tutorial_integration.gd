@@ -124,7 +124,7 @@ func _create_fixture(initial_time: float, weapon_id: StringName = &"", ammunitio
 		"crafting_tip_completed": true,
 		"crafting_ingredients_tip_completed": true,
 		"copper_mining_tip_completed": true,
-		"sundown_weapon_tip_completed": false,
+		"sundown_weapon_tip_completed": false, "damage_affinity_tip_completed": false,
 	}), "sundown tutorial progress setup failed")
 	var arbiter := TutorialCalloutArbiter.new()
 	var time := [initial_time]

@@ -80,6 +80,12 @@ counts only when at least one ammunition definition authored by its draw action 
 armed player resolves the tip without displaying it. Otherwise it waits for the shared callout
 arbiter, persists completion when shown, and holds a compact top-left warning for fifteen seconds
 before its view fades out.
+`CombatAffinityTutorialCoordinator` listens to committed player melee and projectile outcomes and
+reserves the shared tutorial arbiter when the target reports a resistant damage response. Once any active
+callout finishes dismissing, it builds the dialog from the target's canonical entity affinities,
+persists the one-time completion, and asks `Game` to pause. Its always-processing modal view colors
+weakness and resistance terms with the combat feedback palette; the OK action releases the arbiter
+and asks `Game` to resume.
 
 `InteractionPromptCoordinator` resolves the single HUD prompt with contextual harvest and level
 actions above the fallback placement guidance. `PlacementPromptCoordinator`
