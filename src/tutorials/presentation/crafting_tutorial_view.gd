@@ -54,14 +54,14 @@ func _create_panel() -> void:
 	_panel.position = SCREEN_MARGIN
 	_panel.custom_minimum_size = PANEL_SIZE
 	_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_panel.add_theme_stylebox_override("panel", TutorialCalloutView.create_panel_style())
+	TutorialCalloutView.apply_panel_style(_panel)
 	var label := Label.new()
 	label.name = "Text"
 	label.text = "Press Tab to open Crafting menu"
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	label.add_theme_color_override("font_color", Color(0.96, 0.95, 0.9, 1.0))
-	label.add_theme_font_override("font", WildesStyle.BOLD_FONT)
+	label.add_theme_font_override("font", WildesStyle.REGULAR_FONT)
 	label.add_theme_font_size_override("font_size", 16)
 	_panel.add_child(label)
 	add_child(_panel)
@@ -76,4 +76,6 @@ func _hide_immediately() -> void:
 	set_process(false)
 
 func _apply_fade(progress: float) -> void:
-	_panel.modulate = Color(1.0, 1.0, 1.0, clampf(progress, 0.0, 1.0))
+	var fade := clampf(progress, 0.0, 1.0)
+	_panel.modulate = Color(1.0, 1.0, 1.0, fade)
+	TutorialCalloutView.set_panel_fade(_panel, fade)

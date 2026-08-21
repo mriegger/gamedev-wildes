@@ -41,6 +41,8 @@ func _test_first_open_waits_and_highlights_ingredients() -> void:
 	_expect(outline.position.is_equal_approx(expected_rect.position) and outline.size.is_equal_approx(expected_rect.size), "ingredients tutorial outline did not match the selected recipe ingredients")
 	_expect(tip_panel.position.x >= expected_rect.end.x + CraftingIngredientsTutorialView.TOOLTIP_GAP - 0.01, "ingredients tutorial tooltip was not placed to the right")
 	_expect(label.text == "Collect resources to craft items", "ingredients tutorial text changed")
+	_expect(label.get_theme_font("font") == WildesStyle.REGULAR_FONT, "ingredients tutorial does not use the menu font")
+	_expect(tip_panel.material is ShaderMaterial and (tip_panel.material as ShaderMaterial).shader.resource_path == "res://ui/theme/frosted_glass.gdshader", "ingredients tutorial does not use the frosted menu background")
 	view._process(CraftingIngredientsTutorialView.FADE_DURATION)
 	var click := InputEventMouseButton.new()
 	click.button_index = MOUSE_BUTTON_LEFT

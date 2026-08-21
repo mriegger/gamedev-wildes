@@ -78,6 +78,8 @@ func _test_nearby_food_tip_and_pickup_completion() -> void:
 	_expect(title.text == "Consume food to recover health", "food tutorial title changed")
 	_expect(subtext.text == "Tip: Craft a Hoe at the Anvil to grow your own food", "food tutorial subtext changed")
 	_expect(title.get_theme_font_size("font_size") == 16 and subtext.get_theme_font_size("font_size") == 12, "food tutorial text hierarchy changed")
+	_expect(title.get_theme_font("font") == WildesStyle.REGULAR_FONT and subtext.get_theme_font("font") == WildesStyle.REGULAR_FONT, "food tutorial does not use the menu font")
+	_expect(panel.material is ShaderMaterial and (panel.material as ShaderMaterial).shader.resource_path == "res://ui/theme/frosted_glass.gdshader", "food tutorial does not use the frosted menu background")
 	_expect(panel.custom_minimum_size == TutorialCalloutView.PANEL_WITH_SUBTEXT_SIZE, "food tutorial did not use the subtext panel size")
 	var camera := fixture["camera"] as Camera3D
 	var expected_anchor := camera.unproject_position(Vector3(source.target_bounds.get_center().x, source.target_bounds.end.y + TutorialCalloutView.TOOLTIP_HEIGHT, source.target_bounds.get_center().z))

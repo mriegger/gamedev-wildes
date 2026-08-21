@@ -35,6 +35,8 @@ func _test_unarmed_sundown_warning() -> void:
 	_expect(panel.custom_minimum_size == SundownWeaponTutorialView.PANEL_SIZE, "sundown warning panel size changed")
 	_expect(panel.size.x < 580.0, "sundown warning retained its oversized horizontal padding")
 	_expect(label.text == "Night approaching! Craft a weapon at the\nAnvil to defend yourself against enemy threats.", "sundown warning text changed")
+	_expect(label.get_theme_font("font") == WildesStyle.REGULAR_FONT, "sundown warning does not use the menu font")
+	_expect(panel.material is ShaderMaterial and (panel.material as ShaderMaterial).shader.resource_path == "res://ui/theme/frosted_glass.gdshader", "sundown warning does not use the frosted menu background")
 	view._process(SundownWeaponTutorialView.FADE_DURATION)
 	view._process(SundownWeaponTutorialView.DISPLAY_DURATION_SECONDS - 0.01)
 	_expect(view.is_showing() and panel.visible, "sundown warning ended before fifteen seconds")

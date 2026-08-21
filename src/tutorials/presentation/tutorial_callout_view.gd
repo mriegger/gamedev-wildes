@@ -9,6 +9,7 @@ const PANEL_GAP: float = 20.0
 const TOOLTIP_HEIGHT: float = 2.1
 const FADE_DURATION: float = 0.35
 const OUTLINE_ALPHA: float = 0.48
+const PANEL_BLUR_LOD: float = 4.5
 
 var _camera: Camera3D
 var _selection_box: Node3D
@@ -120,7 +121,7 @@ func _create_overlay() -> void:
 	_panel.name = "TipPanel"
 	_panel.custom_minimum_size = PANEL_SIZE
 	_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_panel.add_theme_stylebox_override("panel", create_panel_style())
+	apply_panel_style(_panel)
 	var text_container := VBoxContainer.new()
 	text_container.name = "Text"
 	text_container.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -131,7 +132,7 @@ func _create_overlay() -> void:
 	_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_title_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_title_label.add_theme_color_override("font_color", Color(0.96, 0.95, 0.9, 1.0))
-	_title_label.add_theme_font_override("font", WildesStyle.BOLD_FONT)
+	_title_label.add_theme_font_override("font", WildesStyle.REGULAR_FONT)
 	_title_label.add_theme_font_size_override("font_size", 16)
 	text_container.add_child(_title_label)
 	_subtext_label = Label.new()
@@ -162,14 +163,21 @@ func _update_overlay() -> void:
 func _apply_fade(progress: float) -> void:
 	var fade := clampf(progress, 0.0, 1.0)
 	_overlay.modulate = Color(1.0, 1.0, 1.0, fade)
+	set_panel_fade(_panel, fade)
 	_selection_material.albedo_color = Color(1.0, 1.0, 1.0, OUTLINE_ALPHA * fade)
 
+static func apply_panel_style(panel: PanelContainer) -> void:
+	assert(panel != null)
+	panel.material = WildesStyle.make_frosted_panel_material(PANEL_BLUR_LOD)
+	panel.add_theme_stylebox_override("panel", create_panel_style())
+
+static func set_panel_fade(panel: PanelContainer, fade: float) -> void:
+	if panel == null or not panel.material is ShaderMaterial:
+		return
+	(panel.material as ShaderMaterial).set_shader_parameter("fade", clampf(fade, 0.0, 1.0))
+
 static func create_panel_style() -> StyleBoxFlat:
-	var panel_style := StyleBoxFlat.new()
-	panel_style.bg_color = Color(0.08, 0.09, 0.11, 0.96)
-	panel_style.border_color = Color(0.72, 0.74, 0.78, 0.55)
-	panel_style.set_border_width_all(1)
-	panel_style.set_corner_radius_all(6)
+	var panel_style := WildesStyle.make_modal()
 	panel_style.content_margin_left = 12.0
 	panel_style.content_margin_right = 12.0
 	panel_style.content_margin_top = 8.0

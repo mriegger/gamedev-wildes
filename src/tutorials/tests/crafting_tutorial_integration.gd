@@ -57,6 +57,8 @@ func _test_delay_resets_around_other_callouts() -> void:
 	_expect(panel.custom_minimum_size == CraftingTutorialView.PANEL_SIZE, "crafting tutorial panel size changed")
 	_expect(label.text == "Press Tab to open Crafting menu", "crafting tutorial text changed")
 	_expect(label.get_theme_font_size("font_size") == 16, "crafting tutorial font size changed")
+	_expect(label.get_theme_font("font") == WildesStyle.REGULAR_FONT, "crafting tutorial does not use the menu font")
+	_expect(panel.material is ShaderMaterial and (panel.material as ShaderMaterial).shader.resource_path == "res://ui/theme/frosted_glass.gdshader", "crafting tutorial does not use the frosted menu background")
 	view._process(CraftingTutorialView.FADE_DURATION)
 	_expect(is_equal_approx(panel.modulate.a, 1.0), "crafting tutorial did not finish fading in")
 	crafting_panel.open()

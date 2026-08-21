@@ -126,6 +126,8 @@ func _test_delayed_tip_and_mining_completion() -> void:
 	var subtext := view.get_node("OverlayLayer/Overlay/TipPanel/Text/Subtext") as Label
 	_expect(label.text == "Hold left mouse button to mine blocks", "mining tip text changed")
 	_expect(not subtext.visible, "mining tip displayed an empty subtext row")
+	_expect(label.get_theme_font("font") == WildesStyle.REGULAR_FONT, "mining tip does not use the menu font")
+	_expect(_has_frosted_panel(panel), "mining tip does not use the frosted menu background")
 	_expect(not view.has_node("OverlayLayer/Overlay/PointerLine"), "mining tip retained a pointer line")
 	var camera := fixture["camera"] as Camera3D
 	var expected_anchor := camera.unproject_position(Vector3(2.5, 4.1, 2.5))
@@ -141,6 +143,7 @@ func _test_delayed_tip_and_mining_completion() -> void:
 	view._process(MiningTutorialView.FADE_DURATION * 0.5)
 	_expect(edge_material.albedo_color.a > 0.0 and edge_material.albedo_color.a < MiningTutorialView.OUTLINE_ALPHA, "mining tip outline did not fade in")
 	_expect(overlay.modulate.a > 0.0 and overlay.modulate.a < 1.0, "mining tip tooltip did not fade in")
+	_expect(_get_panel_fade(panel) > 0.0 and _get_panel_fade(panel) < 1.0, "mining tip frosted background did not fade in")
 	view._process(MiningTutorialView.FADE_DURATION * 0.5)
 	_expect(is_equal_approx(edge_material.albedo_color.a, MiningTutorialView.OUTLINE_ALPHA), "mining tip outline did not reach its authored alpha")
 	_expect(is_equal_approx(overlay.modulate.a, 1.0), "mining tip tooltip did not finish fading in")
@@ -243,6 +246,15 @@ func _create_fixture(completed: bool) -> Dictionary:
 func _destroy_fixture(fixture: Dictionary) -> void:
 	(fixture["holder"] as Node).free()
 	await process_frame
+
+func _has_frosted_panel(panel: PanelContainer) -> bool:
+	if panel == null or not panel.material is ShaderMaterial:
+		return false
+	var material := panel.material as ShaderMaterial
+	return material.shader != null and material.shader.resource_path == "res://ui/theme/frosted_glass.gdshader" and is_equal_approx(float(material.get_shader_parameter("blur_lod")), TutorialCalloutView.PANEL_BLUR_LOD)
+
+func _get_panel_fade(panel: PanelContainer) -> float:
+	return float((panel.material as ShaderMaterial).get_shader_parameter("fade"))
 
 func _expect(condition: bool, message: String) -> void:
 	if condition:
