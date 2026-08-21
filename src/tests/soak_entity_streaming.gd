@@ -2,7 +2,6 @@ extends SceneTree
 
 const StoneGolemActorType := preload("res://entities/stone_golem/stone_golem_actor.gd")
 const StoneGolemBrainType := preload("res://entities/stone_golem/stone_golem_brain.gd")
-
 const FLAT_HEIGHT: int = 6
 const FEET_Y: int = FLAT_HEIGHT + 1
 const STREAM_REGION_SIZE: int = 128
@@ -124,6 +123,7 @@ func _eligible_definitions(catalog: EntityCatalog, time_of_day: float) -> Array[
 
 func _assert_path_budget(world: VoxelWorld, catalog: EntityCatalog, region: Vector2i, time_of_day: float, cycle: int, context: String) -> void:
 	var definitions := _eligible_definitions(catalog, time_of_day)
+	definitions.assign(definitions.filter(func(definition: EntityDefinition) -> bool: return definition.spawn_placement == EntityDefinition.SpawnPlacement.GROUNDED))
 	_expect(not definitions.is_empty(), "%s had no eligible ambient definitions" % context)
 	if not DayNightProfile.is_day_time(time_of_day):
 		_expect(definitions.size() == 5, "%s did not exercise all five night species" % context)
@@ -183,6 +183,10 @@ func _assert_population(coordinator: WorldEntityCoordinator, catalog: EntityCata
 	for definition in catalog.definitions:
 		if definition != null and definition.ambient_max_active > 0:
 			_expect(int(species_counts[definition.id]) <= definition.ambient_max_active, "%s exceeded the %d-%s cap" % [context, definition.ambient_max_active, definition.id])
+	if not DayNightProfile.is_day_time(time_of_day):
+		_expect(int(species_counts[&"bird"]) == 0, "%s retained birds at night" % context)
+	else:
+		_expect(int(species_counts[&"owl"]) == 0, "%s retained owls during daytime" % context)
 	_assert_runtime_ids(actors, context)
 	var spatial_index := coordinator.get_runtime()._spatial_index as EntitySpatialIndex
 	var entry_count := spatial_index.get_entry_count()
@@ -194,6 +198,7 @@ func _assert_population(coordinator: WorldEntityCoordinator, catalog: EntityCata
 
 func _assert_mixed_night_population(coordinator: WorldEntityCoordinator, catalog: EntityCatalog, context: String) -> void:
 	var night_definitions := _eligible_definitions(catalog, NIGHT_TIME)
+	night_definitions.assign(night_definitions.filter(func(definition: EntityDefinition) -> bool: return definition.spawn_placement == EntityDefinition.SpawnPlacement.GROUNDED))
 	_expect(night_definitions.size() == 5, "%s catalog did not contain exactly five night species" % context)
 	var night_ids: Dictionary = {}
 	for definition in night_definitions:

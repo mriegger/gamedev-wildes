@@ -26,6 +26,7 @@ world seed.
 | `Tab` | Toggle backpack and crafting |
 | `P` | Toggle backpack only |
 | `/` | Toggle the developer command console |
+| `F3` | Toggle the world entity population debug panel |
 | `F10` | Toggle player animation tuner |
 | `Esc` | Pause |
 
@@ -273,7 +274,8 @@ transition, and closes the console. Debug clearing awards no combat experience, 
 dungeon enemy loot. Press `/` again or `Esc` to close the console without opening the pause menu.
 `spawn birds [count]` creates a mixed
 batch of crows, redbirds, ducks, and bluebirds near the player, while
-`spawn bird <crow|redbird|duck|bluebird> [count]` creates a specific variant. Bird counts default
+`spawn bird <crow|redbird|duck|bluebird|owl> [count]` creates a specific variant. Owls are rare,
+appear naturally only at night, and land only on tree canopies. Bird counts default
 to four for a mixed batch and one for a specific variant, with a maximum of sixteen. Copper can be
 mined from deposits or added directly with `spawn copper <count>`. New worlds contain one seeded 5×4 pumpkin patch 35–45
 blocks from the initial player spawn. Its location, growth states, and rotations persist in the

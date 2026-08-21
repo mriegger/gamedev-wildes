@@ -1,6 +1,9 @@
 extends Resource
 class_name DayNightProfile
 
+const DAY_START_HOUR: float = 6.0
+const NIGHT_START_HOUR: float = 19.0
+
 class ProfileKey extends Resource:
 	@export var time: float = 0.0
 	@export var sky: Color = Color(0, 0, 0)
@@ -85,4 +88,4 @@ static func is_day_time(t: float) -> bool:
 	t = fmod(t, GameClock.HOURS_PER_DAY)
 	if t < 0:
 		t += GameClock.HOURS_PER_DAY
-	return t >= 6.0 and t < 19.0
+	return t >= DAY_START_HOUR and t < NIGHT_START_HOUR

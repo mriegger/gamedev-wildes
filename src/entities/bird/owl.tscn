@@ -1,0 +1,37 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://entities/bird/bird_actor.gd" id="1_actor"]
+[ext_resource type="PackedScene" path="res://entities/bird/bird_visual.tscn" id="2_visual"]
+[ext_resource type="Script" path="res://entities/presentation/entity_visual_fader.gd" id="3_fader"]
+[ext_resource type="PackedScene" path="res://entities/presentation/entity_death_poof.tscn" id="4_poof"]
+[ext_resource type="Script" path="res://entities/audio/entity_vocalizations.gd" id="5_vocalizations"]
+[ext_resource type="Resource" path="res://entities/audio/profiles/owl_vocalizations.tres" id="6_vocalization_profile"]
+
+[node name="Owl" type="Node3D"]
+script = ExtResource("1_actor")
+animation_driver_path = NodePath("ModelRoot/BirdVisual/AnimationDriver")
+visual_fader_path = NodePath("VisualFader")
+death_poof_path = NodePath("DeathPoof")
+vocalizations_path = NodePath("Vocalizations")
+vocalization_profile_override = ExtResource("6_vocalization_profile")
+color_variant_override = 4
+
+[node name="ModelRoot" type="Node3D" parent="."]
+scale = Vector3(2, 2, 2)
+
+[node name="BirdVisual" parent="ModelRoot" instance=ExtResource("2_visual")]
+
+[node name="VisualFader" type="Node" parent="."]
+script = ExtResource("3_fader")
+
+[node name="Vocalizations" type="AudioStreamPlayer3D" parent="."]
+position = Vector3(0, 0.55, 0)
+script = ExtResource("5_vocalizations")
+profile = ExtResource("6_vocalization_profile")
+unit_size = 10.0
+max_distance = 32.0
+volume_db = -4.0
+bus = &"SFX"
+
+[node name="DeathPoof" parent="." instance=ExtResource("4_poof")]
+position = Vector3(0, 0.3, 0)

@@ -1,0 +1,56 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://entities/debug/entity_population_debug_panel.gd" id="1_panel"]
+
+[node name="EntityPopulationDebugPanel" type="CanvasLayer"]
+layer = 202
+visible = false
+script = ExtResource("1_panel")
+
+[node name="Panel" type="Panel" parent="."]
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -332.0
+offset_top = 12.0
+offset_right = -12.0
+offset_bottom = 300.0
+grow_horizontal = 0
+
+[node name="VBox" type="VBoxContainer" parent="Panel"]
+offset_left = 14.0
+offset_top = 12.0
+offset_right = 306.0
+offset_bottom = 276.0
+theme_override_constants/separation = 10
+
+[node name="Header" type="HBoxContainer" parent="Panel/VBox"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="Panel/VBox/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 18
+text = "World Entities"
+
+[node name="CloseButton" type="Button" parent="Panel/VBox/Header"]
+custom_minimum_size = Vector2(86, 30)
+layout_mode = 2
+text = "Close F3"
+
+[node name="ScopeLabel" type="Label" parent="Panel/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.72, 0.8, 0.9, 1)
+text = "Overworld"
+
+[node name="TotalLabel" type="Label" parent="Panel/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "Active: 0    Cost: 0 / 0"
+
+[node name="Separator" type="HSeparator" parent="Panel/VBox"]
+layout_mode = 2
+
+[node name="PopulationLabel" type="Label" parent="Panel/VBox"]
+layout_mode = 2
+text = ""

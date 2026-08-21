@@ -32,12 +32,13 @@ func _run():
 	_expect(catalog.has_definition(&"zombie"), "zombie definition is missing")
 	_expect(catalog.has_definition(&"sheep"), "sheep definition is missing")
 	_expect(catalog.has_definition(&"bird"), "bird definition is missing")
+	_expect(catalog.has_definition(&"owl"), "owl definition is missing")
 	_expect(catalog.has_definition(&"skeleton"), "Skeleton definition is missing")
 	_expect(catalog.has_definition(&"watcher"), "Watcher definition is missing")
 	_expect(catalog.has_definition(&"stone_golem"), "Stone Golem definition is missing")
 	var zombie := catalog.get_definition(&"zombie")
 	_expect(zombie.id == &"zombie", "zombie ID changed")
-	_expect(zombie.ambient_spawn_phase == EntityDefinition.SpawnPhase.NIGHT, "zombie is not night-spawned")
+	_expect(zombie.ambient_spawn_enabled and zombie.ambient_spawn_phase == EntityDefinition.SpawnPhase.NIGHT, "zombie is not night-spawned")
 	_expect(zombie.ambient_max_active == 6, "zombie population cap is not six")
 	_expect(zombie.stats_definition != null and zombie.stats_definition.validate(), "zombie combat stats are invalid")
 	_expect(is_equal_approx(zombie.stats_definition.maximum_hp, 80.0), "zombie maximum HP is not 80")
@@ -63,7 +64,7 @@ func _run():
 	_expect(is_equal_approx(sheep.stats_definition.strength, 0.0), "sheep strength is not 0")
 	var skeleton := catalog.get_definition(&"skeleton")
 	_expect(skeleton.id == &"skeleton", "Skeleton ID changed")
-	_expect(skeleton.ambient_spawn_phase == EntityDefinition.SpawnPhase.NIGHT, "Skeleton is not night-spawned")
+	_expect(skeleton.ambient_spawn_enabled and skeleton.ambient_spawn_phase == EntityDefinition.SpawnPhase.NIGHT, "Skeleton is not night-spawned")
 	_expect(skeleton.ambient_max_active == 3, "Skeleton population cap is not three")
 	_expect(skeleton.ambient_spawn_floor_ids == zombie.ambient_spawn_floor_ids, "Skeleton spawn floors differ from Zombie spawn floors")
 	_expect(skeleton.stats_definition != null and skeleton.stats_definition.validate(), "Skeleton combat stats are invalid")
@@ -111,6 +112,14 @@ func _run():
 	_expect(bird.spawn_placement == EntityDefinition.SpawnPlacement.AERIAL, "bird is not aerially placed")
 	_expect(bird.ambient_despawn_outside_spawn_phase, "bird does not retire at night")
 	_expect(not bird.combat_targetable and bird.experience_reward == 0, "bird participates in combat progression")
+	var owl := catalog.get_definition(&"owl")
+	_expect(owl.is_actor_compatible(), "owl actor rejected its behavior definition")
+	_expect(owl.ambient_spawn_phase == EntityDefinition.SpawnPhase.NIGHT and owl.ambient_despawn_outside_spawn_phase, "owl is not restricted to nighttime")
+	_expect(owl.ambient_max_active == 1 and is_equal_approx(owl.ambient_spawn_weight, 45.56), "owl rarity settings changed")
+	_expect(is_equal_approx(owl.ambient_spawn_end_hour, 5.0), "owl dawn departure time changed")
+	_expect(owl.ambient_spawn_floor_ids == [BlockId.Type.LEAVES], "owl is not restricted to tree landings")
+	_expect(owl.spawn_placement == EntityDefinition.SpawnPlacement.AERIAL, "owl is not aerially placed")
+	_expect(not owl.combat_targetable and owl.experience_reward == 0, "owl participates in combat progression")
 	_expect(skeleton.is_actor_compatible(), "Skeleton actor rejected its behavior definition")
 	_expect(stone_golem.is_actor_compatible(), "Stone Golem actor rejected its behavior definition")
 	var mismatched_definition := zombie.duplicate(true) as EntityDefinition
@@ -153,17 +162,27 @@ func _run():
 	var coordinator := WorldEntityCoordinator.new()
 	get_root().add_child(coordinator)
 	coordinator.setup(catalog, _make_world(), 1337, _always_ready)
-	coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, EntityTargetObservation.create(Vector3.ZERO, Vector3.ZERO, Vector3.FORWARD, Vector3.RIGHT), 20.0)
-	_expect(coordinator.get_runtime().get_active_count() == 1, "night tick did not spawn one entity")
+	var observation := EntityTargetObservation.create(Vector3.ZERO, Vector3.ZERO, Vector3.FORWARD, Vector3.RIGHT)
+	for _attempt in 32:
+		if coordinator.get_runtime().get_active_count() == 1:
+			break
+		coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, observation, 20.0)
+	_expect(coordinator.get_runtime().get_active_count() == 1, "night tick did not spawn one enabled enemy")
 	var ray_target := coordinator.get_runtime().get_active_actors()[0]
 	var ray_target_bounds := ray_target.get_world_bounds()
 	var ray_target_center := ray_target_bounds.get_center()
 	var ray_origin := ray_target_center + Vector3(0.0, 0.0, 10.0)
 	var ray_hit: Variant = coordinator.get_runtime().get_nearest_combat_target_ray_hit(ray_origin, ray_target_center - ray_origin, 20.0)
 	_expect(ray_hit is Vector3 and ray_target_bounds.grow(0.0001).has_point(ray_hit as Vector3), "combat-target ray query missed the creature under the cursor")
-	coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, EntityTargetObservation.create(Vector3.ZERO, Vector3.ZERO, Vector3.FORWARD, Vector3.RIGHT), 12.0)
-	_expect(coordinator.get_runtime().get_active_count() == 2, "day tick did not retain the zombie and spawn one sheep")
-	coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, EntityTargetObservation.create(Vector3.ZERO, Vector3.ZERO, Vector3.FORWARD, Vector3.RIGHT), 20.0)
+	for _attempt in 32:
+		if coordinator.get_runtime().get_active_count() == 2:
+			break
+		coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, observation, 12.0)
+	_expect(coordinator.get_runtime().get_active_count() == 2, "day tick did not retain the enemy and spawn one sheep")
+	for _attempt in 32:
+		if coordinator.get_runtime().get_active_count() == 3:
+			break
+		coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, observation, 20.0)
 	_expect(coordinator.get_runtime().get_active_count() == 3, "second night tick did not retain existing entities and spawn one entity")
 	var night_count := (
 		coordinator.get_runtime().get_definition_count(&"zombie")
@@ -174,7 +193,7 @@ func _run():
 	)
 	_expect(night_count == 2, "seeded weighted night selection produced the wrong phase mix")
 	coordinator.tick(0.0, EntityTargetObservation.create(Vector3(1000.0, 0.0, 1000.0), Vector3(1000.0, 0.0, 1000.0), Vector3.FORWARD, Vector3.RIGHT), 12.0)
-	_expect(coordinator.get_runtime().get_active_count() == 0, "distant zombie did not despawn")
+	_expect(coordinator.get_runtime().get_active_count() == 0, "distant entities did not despawn")
 	coordinator.shutdown()
 	coordinator.queue_free()
 	await process_frame

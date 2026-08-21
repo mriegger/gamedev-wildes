@@ -6,6 +6,7 @@ enum ColorVariant {
 	REDBIRD,
 	DUCK,
 	BLUEBIRD,
+	OWL,
 }
 
 const COLOR_PALETTES: Array[Dictionary] = [
@@ -13,7 +14,9 @@ const COLOR_PALETTES: Array[Dictionary] = [
 	{&"body": Color(0.72, 0.12, 0.08), &"head": Color(0.78, 0.15, 0.1), &"wing": Color(0.34, 0.055, 0.045), &"beak": Color(0.82, 0.48, 0.12), &"leg": Color(0.4, 0.24, 0.14)},
 	{&"body": Color(0.48, 0.31, 0.18), &"head": Color(0.08, 0.3, 0.2), &"wing": Color(0.27, 0.18, 0.12), &"beak": Color(0.86, 0.58, 0.12), &"leg": Color(0.75, 0.39, 0.1)},
 	{&"body": Color(0.18, 0.43, 0.72), &"head": Color(0.22, 0.5, 0.8), &"wing": Color(0.08, 0.22, 0.45), &"beak": Color(0.25, 0.22, 0.18), &"leg": Color(0.34, 0.25, 0.18)},
+	{&"body": Color(0.48, 0.36, 0.23), &"head": Color(0.7, 0.57, 0.36), &"wing": Color(0.3, 0.2, 0.12), &"beak": Color(0.9, 0.7, 0.2), &"leg": Color(0.45, 0.32, 0.18)},
 ]
+const OWL_EYE_EMISSION_ENERGY: float = 0.675
 
 var _rig_root: Node3D
 var _body_pivot: Node3D
@@ -26,6 +29,8 @@ var _right_leg_pivot: Node3D
 var _body_mesh: MeshInstance3D
 var _head_mesh: MeshInstance3D
 var _beak_mesh: MeshInstance3D
+var _left_eye_mesh: MeshInstance3D
+var _right_eye_mesh: MeshInstance3D
 var _tail_mesh: MeshInstance3D
 var _wing_meshes: Array[MeshInstance3D] = []
 var _leg_meshes: Array[MeshInstance3D] = []
@@ -59,6 +64,8 @@ func setup(p_actor: Node3D):
 	_body_mesh = _body_pivot.get_node(^"Body") as MeshInstance3D
 	_head_mesh = _head_pivot.get_node(^"Head") as MeshInstance3D
 	_beak_mesh = _head_pivot.get_node(^"Beak") as MeshInstance3D
+	_left_eye_mesh = _head_pivot.get_node(^"LeftEye") as MeshInstance3D
+	_right_eye_mesh = _head_pivot.get_node(^"RightEye") as MeshInstance3D
 	_tail_mesh = _tail_pivot.get_node(^"Tail") as MeshInstance3D
 	_wing_meshes.assign([
 		_left_wing_pivot.get_node(^"LeftWing") as MeshInstance3D,
@@ -83,7 +90,7 @@ func setup(p_actor: Node3D):
 	_beak_origin = _beak_mesh.transform
 
 func apply_color_variant(variant: ColorVariant) -> void:
-	assert(variant >= ColorVariant.CROW and variant <= ColorVariant.BLUEBIRD)
+	assert(variant >= ColorVariant.CROW and variant <= ColorVariant.OWL)
 	var palette := COLOR_PALETTES[variant]
 	_apply_color(_body_mesh, palette[&"body"] as Color)
 	_apply_color(_head_mesh, palette[&"head"] as Color)
@@ -93,6 +100,13 @@ func apply_color_variant(variant: ColorVariant) -> void:
 		_apply_color(wing_mesh, palette[&"wing"] as Color)
 	for leg_mesh in _leg_meshes:
 		_apply_color(leg_mesh, palette[&"leg"] as Color)
+	if variant == ColorVariant.OWL:
+		_body_mesh.scale = Vector3(1.12, 1.15, 1.08)
+		_head_mesh.scale = Vector3(1.35, 1.3, 1.08)
+		_left_eye_mesh.scale = Vector3(2.2, 2.2, 1.4)
+		_right_eye_mesh.scale = Vector3(2.2, 2.2, 1.4)
+		_apply_emissive_color(_left_eye_mesh, Color(1.0, 0.72, 0.08))
+		_apply_emissive_color(_right_eye_mesh, Color(1.0, 0.72, 0.08))
 
 func advance(delta: float):
 	assert(actor is BirdActor)
@@ -108,7 +122,7 @@ func advance(delta: float):
 		BirdBrain.State.GROUNDED_IDLE:
 			wings_flapping = false
 			_apply_idle()
-			_apply_call(delta, bird.vocalizations.playing)
+			_apply_call(delta, bird.vocalizations != null and bird.vocalizations.playing)
 		BirdBrain.State.GROUNDED_WALK:
 			wings_flapping = false
 			_apply_walk(delta)
@@ -161,7 +175,11 @@ func _update_wing_flap_audio(wings_flapping: bool) -> void:
 	if wings_flapping:
 		if not _wing_flap_audio.playing:
 			_wing_flap_audio.play()
-	elif _wing_flap_audio.playing:
+	else:
+		stop_flight_audio()
+
+func stop_flight_audio() -> void:
+	if _wing_flap_audio.playing:
 		_wing_flap_audio.stop()
 
 func _apply_color(mesh_instance: MeshInstance3D, color: Color) -> void:
@@ -171,6 +189,13 @@ func _apply_color(mesh_instance: MeshInstance3D, color: Color) -> void:
 	var material := source.duplicate() as StandardMaterial3D
 	material.albedo_color = color
 	mesh_instance.material_override = material
+
+func _apply_emissive_color(mesh_instance: MeshInstance3D, color: Color) -> void:
+	_apply_color(mesh_instance, color)
+	var material := mesh_instance.material_override as StandardMaterial3D
+	material.emission_enabled = true
+	material.emission = color
+	material.emission_energy_multiplier = OWL_EYE_EMISSION_ENERGY
 
 func _reset_pose() -> void:
 	_rig_root.transform = _rig_origin

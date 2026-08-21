@@ -493,6 +493,22 @@ func _get_separation_velocity(actor: EntityActor) -> Vector3:
 func get_active_count() -> int:
 	return _active.size()
 
+func get_population_snapshot() -> Dictionary:
+	var rows: Array[Dictionary] = []
+	for definition in _catalog.definitions:
+		rows.append({
+			"id": definition.id,
+			"active": get_definition_count(definition.id),
+			"ambient_enabled": definition.ambient_spawn_enabled,
+			"ambient_cap": definition.ambient_max_active,
+		})
+	return {
+		"active": _active.size(),
+		"population_cost": _population_cost,
+		"population_capacity": _max_population_cost,
+		"rows": rows,
+	}
+
 func get_population_cost() -> int:
 	return _population_cost
 

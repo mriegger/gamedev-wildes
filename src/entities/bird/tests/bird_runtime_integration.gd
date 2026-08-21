@@ -30,11 +30,24 @@ func _make_world(floor_id: int = BlockId.Type.GRASS, terrain_height: int = FLAT_
 			world.type_map_dict[Vector2i(x, z)] = floor_id
 	return world
 
+func _make_canopy_world() -> VoxelWorld:
+	var world := _make_world()
+	for x in range(-WORLD_RADIUS, WORLD_RADIUS + 1):
+		for z in range(-WORLD_RADIUS, WORLD_RADIUS + 1):
+			world.tree_block_fast[Vector3i(x, FLAT_HEIGHT + 3, z)] = BlockId.Type.LEAVES
+	return world
+
 func _run() -> void:
 	var definition := load("res://entities/definitions/bird.tres") as EntityDefinition
+	var owl_definition := load("res://entities/definitions/owl.tres") as EntityDefinition
 	_expect(definition != null and definition.validate(definition.resource_path), "bird definition is invalid")
+	_expect(owl_definition != null and owl_definition.validate(owl_definition.resource_path), "owl definition is invalid")
 	_expect(definition.spawn_placement == EntityDefinition.SpawnPlacement.AERIAL, "bird is not aerially placed")
 	_expect(not definition.combat_targetable and definition.experience_reward == 0, "bird is not purely ambient")
+	_expect(owl_definition.ambient_spawn_phase == EntityDefinition.SpawnPhase.NIGHT, "owl is not night-only")
+	_expect(owl_definition.ambient_spawn_enabled and owl_definition.ambient_max_active == 1 and is_equal_approx(owl_definition.ambient_spawn_weight, 45.56), "owl is not enabled and rare")
+	_expect(is_equal_approx(owl_definition.ambient_spawn_end_hour, 5.0), "owl dawn departure time changed")
+	_expect(owl_definition.ambient_spawn_floor_ids == [BlockId.Type.LEAVES], "owl landing floors are not tree-only")
 	var sampled_variants: Dictionary = {}
 	var variant_seeds: Dictionary = {}
 	for seed_value in 64:
@@ -43,7 +56,7 @@ func _run() -> void:
 		sampled_variants[sampled_variant] = true
 		if not variant_seeds.has(sampled_variant):
 			variant_seeds[sampled_variant] = seed_value
-	_expect(sampled_variants.size() == BirdAnimationDriver.ColorVariant.size(), "seeded birds did not cover all four color variants")
+	_expect(sampled_variants.size() == BirdActor.color_variant_count(), "seeded birds did not cover all four common color variants")
 	var catalog := load("res://entities/entity_catalog.tres") as EntityCatalog
 	var observation := EntityTargetObservation.create(Vector3.ZERO, Vector3.ZERO, Vector3.FORWARD, Vector3.RIGHT)
 	var duck_seed := variant_seeds[BirdAnimationDriver.ColorVariant.DUCK] as int
@@ -57,7 +70,7 @@ func _run() -> void:
 	var debug_variants: Dictionary = {}
 	for actor in debug_coordinator.get_runtime().get_active_actors():
 		debug_variants[(actor as BirdActor).color_variant] = true
-	_expect(debug_variants.size() == BirdAnimationDriver.ColorVariant.size(), "mixed debug bird command did not spawn every variant")
+	_expect(debug_variants.size() == BirdActor.color_variant_count(), "mixed debug bird command did not spawn every common variant")
 	_expect(debug_coordinator.try_spawn_debug_birds(debug_player_position, &"redbird", 2), "specific debug bird command did not spawn")
 	var redbird_count := 0
 	for actor in debug_coordinator.get_runtime().get_active_actors():
@@ -68,6 +81,56 @@ func _run() -> void:
 	_expect(not debug_coordinator.try_spawn_debug_birds(debug_player_position, &"goose", 1), "unknown debug bird variant was accepted")
 	_expect(not debug_coordinator.try_spawn_debug_birds(debug_player_position, &"", WorldEntityCoordinator.MAX_TOTAL_ACTIVE), "debug bird command exceeded the runtime cap")
 	_expect(debug_coordinator.get_runtime().get_active_count() == debug_count, "rejected debug bird command changed the runtime")
+	var canopy_debug_world := _make_canopy_world()
+	var canopy_debug_coordinator := WorldEntityCoordinator.new()
+	root.add_child(canopy_debug_coordinator)
+	canopy_debug_coordinator.setup(catalog, canopy_debug_world, 45591, Callable(self, "_position_ready"))
+	_expect(canopy_debug_coordinator.try_spawn_debug_birds(debug_player_position, &"owl", 1), "owl debug command did not spawn")
+	var debug_owl := canopy_debug_coordinator.get_runtime().get_active_actors()[0] as BirdActor
+	_expect(debug_owl.definition.id == &"owl" and debug_owl.color_variant == BirdAnimationDriver.ColorVariant.OWL, "owl debug command used the wrong definition or appearance")
+	_expect(debug_owl.vocalizations != null and debug_owl.vocalizations.profile != null, "owl vocalizations were not configured")
+	_expect(debug_owl.vocalizations.profile.streams.size() == 3 and debug_owl.vocalizations.profile.validate(), "owl vocalization profile is invalid")
+	_expect(debug_owl._has_landing_target and not debug_owl._landing_on_water, "owl did not select a canopy landing target")
+	var debug_owl_floor_y := floori(debug_owl._landing_target.y - 0.001)
+	_expect(canopy_debug_world.get_block_id_at(Vector3i(floori(debug_owl._landing_target.x), debug_owl_floor_y, floori(debug_owl._landing_target.z))) == BlockId.Type.LEAVES, "owl selected a non-tree landing target")
+	var owl_animation := debug_owl.animation_driver as BirdAnimationDriver
+	_expect(debug_owl.model_root.scale == Vector3.ONE * 2.0, "owl was not scaled for gameplay readability")
+	_expect(owl_animation._head_mesh.scale.x > 1.0 and owl_animation._left_eye_mesh.scale.x > 2.0, "owl silhouette was not applied")
+	var owl_eye_material := owl_animation._left_eye_mesh.material_override as StandardMaterial3D
+	_expect(owl_eye_material != null and owl_eye_material.emission_enabled, "owl eyes were not made visible at night")
+	_expect(is_equal_approx(owl_eye_material.emission_energy_multiplier, BirdAnimationDriver.OWL_EYE_EMISSION_ENERGY), "owl eye glow strength changed")
+	_expect(is_equal_approx(debug_owl.vocalizations.max_distance, 32.0), "owl vocalization range exceeds its readable visual range")
+	debug_owl.global_position = debug_owl._landing_target
+	debug_owl.velocity = Vector3.ZERO
+	debug_owl.on_ground = true
+	debug_owl.brain.state = BirdBrain.State.DESCEND
+	debug_owl.tick(FRAME_DELTA, observation, Vector3.ZERO, NavigationSearchBudget.new(1))
+	owl_animation.advance(FRAME_DELTA)
+	_expect(debug_owl.brain.state == BirdBrain.State.GROUNDED_IDLE and debug_owl.on_ground, "owl rejected a tree-canopy landing")
+	_expect(debug_owl.vocalizations.is_processing(), "owl vocalizations did not activate while perched")
+	var common_owl_definition := owl_definition.duplicate(true) as EntityDefinition
+	common_owl_definition.ambient_spawn_weight = 100.0
+	var owl_catalog := EntityCatalog.new()
+	owl_catalog.definitions = [common_owl_definition]
+	var phase_coordinator := WorldEntityCoordinator.new()
+	root.add_child(phase_coordinator)
+	phase_coordinator.setup(owl_catalog, canopy_debug_world, 7331, Callable(self, "_position_ready"))
+	phase_coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, observation, 12.0)
+	_expect(phase_coordinator.get_runtime().get_active_count() == 0, "owl spawned during daytime")
+	phase_coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, observation, 22.0)
+	_expect(phase_coordinator.get_runtime().get_definition_count(&"owl") == 1, "owl did not spawn at night over a tree canopy")
+	var retiring_owl := phase_coordinator.get_runtime().get_active_actors()[0] as BirdActor
+	var retiring_owl_id := retiring_owl.runtime_id
+	phase_coordinator.tick(0.0, observation, 4.99)
+	_expect(phase_coordinator.get_runtime().get_actor(retiring_owl_id) == retiring_owl, "owl retired before 05:00")
+	phase_coordinator.tick(0.0, observation, 5.0)
+	_expect(phase_coordinator.get_runtime().get_actor(retiring_owl_id) == null, "owl remained active at 05:00")
+	_expect(phase_coordinator.get_runtime()._retiring.has(retiring_owl_id) and retiring_owl.brain.state == BirdBrain.State.TAKEOFF, "retiring owl did not begin its departure flight")
+	var departure_start_y := retiring_owl.global_position.y
+	phase_coordinator.tick(0.5, observation, 5.0)
+	_expect(retiring_owl.global_position.y > departure_start_y, "retiring owl did not fly upward")
+	phase_coordinator.tick(WorldEntityCoordinator.SPAWN_INTERVAL_SECONDS, observation, 5.5)
+	_expect(phase_coordinator.get_runtime().get_definition_count(&"owl") == 0, "owl respawned after its 05:00 cutoff")
 	var water_world := _make_world(BlockId.Type.SAND, WATER_FLOOR_HEIGHT)
 	var water_runtime := EntityRuntime.new()
 	root.add_child(water_runtime)
@@ -128,7 +191,7 @@ func _run() -> void:
 	var bird := runtime.get_actor(1) as BirdActor
 	_expect(bird != null and bird.vocalizations != null, "bird scene did not configure vocalizations")
 	var expected_stream_counts: Array[int] = [5, 7, 3, 6]
-	for variant in BirdAnimationDriver.ColorVariant.size():
+	for variant in BirdActor.color_variant_count():
 		var profile := bird.vocalization_profiles[variant]
 		_expect(profile != null and profile.validate(), "bird variant %d did not have a valid vocalization profile" % variant)
 		_expect(profile.streams.size() == expected_stream_counts[variant], "bird variant %d had the wrong vocalization stream count" % variant)
@@ -167,6 +230,19 @@ func _run() -> void:
 	_expect(observed_flight_audio, "flying bird did not play wing audio")
 	_expect(observed_grounded_silence, "grounded bird did not stop wing audio")
 	_expect(not VoxelBodySolver.collides_at(world, bird.global_position, definition.body_width, definition.body_height, false), "bird ended inside solid terrain")
+	var owl_runtime := EntityRuntime.new()
+	root.add_child(owl_runtime)
+	owl_runtime.setup(catalog, world, 1, 1, EntityNavigationLimits.new(24, 256, 1))
+	var owl_ids := owl_runtime.try_spawn_batch([EntitySpawnRequest.new(&"owl", aerial_position, 31415)])
+	var grounded_owl := owl_runtime.get_actor(owl_ids[0]) as BirdActor if not owl_ids.is_empty() else null
+	_expect(grounded_owl != null and not grounded_owl._has_landing_target, "owl selected open ground without a tree")
+	if grounded_owl != null:
+		grounded_owl.global_position = Vector3(0.5, FEET_Y, 0.5)
+		grounded_owl.velocity = Vector3.ZERO
+		grounded_owl.on_ground = true
+		grounded_owl.brain.state = BirdBrain.State.DESCEND
+		grounded_owl.tick(FRAME_DELTA, observation, Vector3.ZERO, NavigationSearchBudget.new(1))
+		_expect(grounded_owl.brain.state == BirdBrain.State.TAKEOFF and not grounded_owl.on_ground, "owl accepted a non-tree landing")
 
 	var canopy_world := _make_world()
 	var canopy_edit := VoxelWorldTestFixture.commit_place(canopy_world, Vector3i(0, FLAT_HEIGHT + 2, 0), BlockId.Type.LEAVES)
@@ -199,9 +275,16 @@ func _run() -> void:
 		_expect(not canopy_bird.vocalizations.is_processing() and not canopy_bird.vocalizations.playing, "walking duck continued its idle call")
 		canopy_bird.brain.state = BirdBrain.State.TAKEOFF
 		canopy_bird._handle_state_transition(BirdBrain.State.GROUNDED_WALK, BirdBrain.State.TAKEOFF)
-		_expect(canopy_bird.brain.state == BirdBrain.State.GROUNDED_IDLE, "bird attempted takeoff through an overhead obstruction")
-		_expect(canopy_bird.on_ground, "blocked takeoff removed grounded state")
-		_expect(canopy_bird.global_position.is_equal_approx(Vector3(0.5, FEET_Y, 0.5)), "blocked takeoff moved the bird")
+		_expect(canopy_bird.brain.state == BirdBrain.State.TAKEOFF, "bird abandoned takeoff below an overhead obstruction")
+		_expect(not canopy_bird.on_ground, "canopy escape did not leave grounded state")
+		_expect(Vector2(canopy_bird._takeoff_target.x - canopy_bird.global_position.x, canopy_bird._takeoff_target.z - canopy_bird.global_position.z).length() >= 2.0, "canopy escape did not select a lateral route")
+		var escaped_canopy := false
+		for _frame in 180:
+			canopy_bird.tick(FRAME_DELTA, observation, Vector3.ZERO, NavigationSearchBudget.new(1))
+			if canopy_bird.brain.state == BirdBrain.State.CRUISE:
+				escaped_canopy = true
+				break
+		_expect(escaped_canopy, "bird remained trapped below an overhead obstruction")
 		canopy_bird.global_position = Vector3(0.5, float(FLAT_HEIGHT + 3), 0.5)
 		canopy_bird.on_ground = true
 		canopy_bird.brain.state = BirdBrain.State.DESCEND
@@ -236,13 +319,19 @@ func _run() -> void:
 			_expect(not is_same(canopy_material, blocked_material), "bird instances shared a mutable color material")
 	blocked_runtime.shutdown()
 	canopy_runtime.shutdown()
+	owl_runtime.shutdown()
 	runtime.shutdown()
 	water_runtime.shutdown()
+	phase_coordinator.shutdown()
+	canopy_debug_coordinator.shutdown()
 	debug_coordinator.shutdown()
 	blocked_runtime.queue_free()
 	canopy_runtime.queue_free()
+	owl_runtime.queue_free()
 	runtime.queue_free()
 	water_runtime.queue_free()
+	phase_coordinator.queue_free()
+	canopy_debug_coordinator.queue_free()
 	debug_coordinator.queue_free()
 	await process_frame
 	await process_frame

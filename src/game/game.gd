@@ -12,6 +12,7 @@ signal main_menu_requested
 @export var pause_menu_scene: PackedScene
 @export var animation_tuning_panel_scene: PackedScene
 @export var player_stats_debug_panel_scene: PackedScene
+@export var entity_population_debug_panel_scene: PackedScene
 @export var player_death_screen_scene: PackedScene
 @export var block_catalog: BlockCatalog
 @export var foliage_catalog: FoliageCatalog
@@ -109,6 +110,7 @@ var _active_entity_runtime: EntityRuntime
 var _entrance_coordinate: Vector3i
 var animation_tuning_panel: AnimationTuningPanel = null
 var player_stats_debug_panel: PlayerStatsDebugPanel = null
+var entity_population_debug_panel: EntityPopulationDebugPanel = null
 var _save_status_timer: float = 0.0
 var _session_active: bool = false
 var _recovered_defeated_save: bool = false
@@ -571,6 +573,8 @@ func _on_player_defeated():
 		animation_tuning_panel.hide_panel()
 	if player_stats_debug_panel != null and player_stats_debug_panel.is_open():
 		player_stats_debug_panel.hide_panel()
+	if entity_population_debug_panel != null and entity_population_debug_panel.is_open():
+		entity_population_debug_panel.hide_panel()
 	_death_screen = player_death_screen_scene.instantiate() as PlayerDeathScreen
 	assert(_death_screen != null)
 	_death_screen.respawn_requested.connect(_on_respawn_requested)
@@ -885,6 +889,10 @@ func _unhandled_input(event):
 		return
 	if event is InputEventKey and event.pressed and not event.echo:
 		var key_event = event as InputEventKey
+		if OS.is_debug_build() and (key_event.keycode == KEY_F3 or key_event.physical_keycode == KEY_F3):
+			_toggle_entity_population_debug_panel()
+			get_viewport().set_input_as_handled()
+			return
 		if OS.is_debug_build() and (key_event.keycode == KEY_F9 or key_event.physical_keycode == KEY_F9):
 			_toggle_player_stats_debug_panel()
 			get_viewport().set_input_as_handled()
@@ -892,6 +900,11 @@ func _unhandled_input(event):
 		if player_stats_debug_panel != null and player_stats_debug_panel.is_open():
 			if key_event.keycode == KEY_ESCAPE or key_event.physical_keycode == KEY_ESCAPE:
 				player_stats_debug_panel.hide_panel()
+				get_viewport().set_input_as_handled()
+				return
+		if entity_population_debug_panel != null and entity_population_debug_panel.is_open():
+			if key_event.keycode == KEY_ESCAPE or key_event.physical_keycode == KEY_ESCAPE:
+				entity_population_debug_panel.hide_panel()
 				get_viewport().set_input_as_handled()
 				return
 		if animation_tuning_panel != null and animation_tuning_panel.is_open():
@@ -929,6 +942,20 @@ func _toggle_player_stats_debug_panel():
 		player_stats_debug_panel.setup(player_stats)
 	player_stats_debug_panel.toggle_panel()
 
+func _toggle_entity_population_debug_panel() -> void:
+	if entity_population_debug_panel == null:
+		entity_population_debug_panel = entity_population_debug_panel_scene.instantiate() as EntityPopulationDebugPanel
+		add_child(entity_population_debug_panel)
+		entity_population_debug_panel.setup(Callable(self, "_get_entity_population_debug_snapshot"))
+	entity_population_debug_panel.toggle_panel()
+
+func _get_entity_population_debug_snapshot() -> Dictionary:
+	if _active_entity_runtime == null:
+		return {}
+	var snapshot := _active_entity_runtime.get_population_snapshot()
+	snapshot["scope"] = "Dungeon" if _location_state != null and _location_state.is_in_level() else "Overworld"
+	return snapshot
+
 func _handle_cancel():
 	if dev_console.is_open():
 		dev_console.close()
@@ -937,6 +964,9 @@ func _handle_cancel():
 		return
 	if player_stats_debug_panel != null and player_stats_debug_panel.is_open():
 		player_stats_debug_panel.hide_panel()
+		return
+	if entity_population_debug_panel != null and entity_population_debug_panel.is_open():
+		entity_population_debug_panel.hide_panel()
 		return
 	if animation_tuning_panel != null and animation_tuning_panel.is_open():
 		animation_tuning_panel.hide_panel()
@@ -1224,6 +1254,8 @@ func _notification(what):
 func _deactivate_session():
 	set_physics_process(false)
 	set_process_unhandled_input(false)
+	if entity_population_debug_panel != null:
+		entity_population_debug_panel.hide_panel()
 	_session_active = false
 
 func _teardown_level_runtime():

@@ -86,8 +86,8 @@ func _test_weighted_selection_and_floors() -> void:
 		&"watcher": 0,
 	}
 	for _sample in WEIGHT_SAMPLE_COUNT:
-		var first_choice := first._select_ambient_definition(false)
-		var second_choice := second._select_ambient_definition(false)
+		var first_choice := first._select_ambient_definition(NIGHT_TIME)
+		var second_choice := second._select_ambient_definition(NIGHT_TIME)
 		_expect(first_choice != null and second_choice != null, "night selection returned no ambient definition")
 		if first_choice == null or second_choice == null:
 			continue
@@ -96,7 +96,7 @@ func _test_weighted_selection_and_floors() -> void:
 	_expect(int(counts[&"watcher"]) > 0, "seeded weighted selection never selected Watcher")
 	for common_id in [&"zombie", &"skeleton", &"slime_large"]:
 		_expect(int(counts[common_id]) > int(counts[&"watcher"]) * 4, "Watcher was not materially less common than %s" % common_id)
-	_expect(first._select_ambient_definition(true) == null, "night-only catalog selected an ambient entity during the day")
+	_expect(first._select_ambient_definition(DAY_TIME) == null, "night-only catalog selected an ambient entity during the day")
 	first.free()
 	second.free()
 	var allowed_floors: Array[int] = [

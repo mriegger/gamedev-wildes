@@ -2,7 +2,6 @@ extends SceneTree
 
 const PerformanceSampleStats = preload("res://tests/performance_sample_stats.gd")
 const PerformanceEntityTarget = preload("res://tests/performance_entity_target.gd")
-
 const WORLD_SEED: int = 1337
 const FLAT_HEIGHT: int = 6
 const FEET_Y: float = float(FLAT_HEIGHT + 1)

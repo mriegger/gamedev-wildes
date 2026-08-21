@@ -58,9 +58,8 @@ func tick(delta: float, observation: EntityTargetObservation, time_of_day: float
 	assert(not _suspended)
 	assert(observation != null and observation.validate())
 	var player_position := observation.player_position
-	var is_day := DayNightProfile.is_day_time(time_of_day)
 	_despawn_distant(player_position)
-	_despawn_outside_phase(is_day)
+	_despawn_outside_spawn_window(time_of_day)
 	_runtime.tick(delta, observation)
 	_spawn_elapsed += delta
 	if _spawn_elapsed < SPAWN_INTERVAL_SECONDS:
@@ -68,20 +67,20 @@ func tick(delta: float, observation: EntityTargetObservation, time_of_day: float
 	_spawn_elapsed = fmod(_spawn_elapsed, SPAWN_INTERVAL_SECONDS)
 	if _runtime.get_active_count() >= MAX_TOTAL_ACTIVE:
 		return
-	var definition := _select_ambient_definition(is_day)
+	var definition := _select_ambient_definition(time_of_day)
 	if definition == null:
 		return
 	if definition.ambient_max_active > 0 and _runtime.get_active_lineage_count(definition.id) >= definition.ambient_max_active:
 		return
 	_try_spawn(definition, player_position)
 
-func _select_ambient_definition(is_day: bool) -> EntityDefinition:
+func _select_ambient_definition(time_of_day: float) -> EntityDefinition:
 	var candidates: Array[EntityDefinition] = []
 	var total_weight := 0.0
 	for definition in _catalog.definitions:
 		if definition == null or not definition.ambient_spawn_enabled:
 			continue
-		if is_day != (definition.ambient_spawn_phase == EntityDefinition.SpawnPhase.DAY):
+		if not _is_in_ambient_spawn_window(definition, time_of_day):
 			continue
 		candidates.append(definition)
 		total_weight += definition.ambient_spawn_weight
@@ -93,6 +92,15 @@ func _select_ambient_definition(is_day: bool) -> EntityDefinition:
 		if selection < 0.0:
 			return definition
 	return candidates.back()
+
+func _is_in_ambient_spawn_window(definition: EntityDefinition, time_of_day: float) -> bool:
+	var start_hour := DayNightProfile.DAY_START_HOUR if definition.ambient_spawn_phase == EntityDefinition.SpawnPhase.DAY else DayNightProfile.NIGHT_START_HOUR
+	var default_end_hour := DayNightProfile.NIGHT_START_HOUR if definition.ambient_spawn_phase == EntityDefinition.SpawnPhase.DAY else DayNightProfile.DAY_START_HOUR
+	var end_hour := definition.ambient_spawn_end_hour if definition.ambient_spawn_end_hour >= 0.0 else default_end_hour
+	var normalized_time := fposmod(time_of_day, GameClock.HOURS_PER_DAY)
+	if start_hour < end_hour:
+		return normalized_time >= start_hour and normalized_time < end_hour
+	return normalized_time >= start_hour or normalized_time < end_hour
 
 func _try_spawn(definition: EntityDefinition, player_position: Vector3) -> bool:
 	for _attempt in range(SPAWN_ATTEMPTS):
@@ -118,18 +126,26 @@ func _try_spawn(definition: EntityDefinition, player_position: Vector3) -> bool:
 	return false
 
 func _find_spawn_position(definition: EntityDefinition, x: int, z: int, rng: RandomNumberGenerator) -> Variant:
-	var surface_y := _voxel_world.get_terrain_surface_y(x, z)
-	if surface_y == VoxelSpace.NO_SURFACE_Y:
-		return null
-	var floor_y := int(surface_y)
-	var floor_id := _voxel_world.get_block_id_at(Vector3i(x, floor_y, z))
-	if not definition.can_spawn_ambiently_on(floor_id):
+	var floor_y := _find_spawn_floor_y(definition, x, z)
+	if floor_y < 0:
 		return null
 	var feet_y := floor_y + 1
 	if definition.spawn_placement == EntityDefinition.SpawnPlacement.AERIAL:
 		feet_y += rng.randi_range(definition.ambient_aerial_altitude_min_blocks, definition.ambient_aerial_altitude_max_blocks)
 	var candidate := Vector3(float(x) + 0.5, float(feet_y), float(z) + 0.5)
 	return candidate if EntitySpawnGeometry.can_spawn(_voxel_world, definition, candidate) else null
+
+func _find_spawn_floor_y(definition: EntityDefinition, x: int, z: int) -> int:
+	var highest_top := _voxel_world.get_highest_top(x, z)
+	if highest_top != VoxelSpace.NO_SURFACE_Y:
+		var highest_y := floori(highest_top - 0.001)
+		if definition.can_spawn_ambiently_on(_voxel_world.get_block_id_at(Vector3i(x, highest_y, z))):
+			return highest_y
+	var terrain_y := _voxel_world.get_terrain_surface_y(x, z)
+	if terrain_y == VoxelSpace.NO_SURFACE_Y:
+		return -1
+	var floor_y := int(terrain_y)
+	return floor_y if definition.can_spawn_ambiently_on(_voxel_world.get_block_id_at(Vector3i(x, floor_y, z))) else -1
 
 func try_spawn_debug_birds(player_position: Vector3, variant_id: StringName, count: int) -> bool:
 	if (
@@ -143,12 +159,13 @@ func try_spawn_debug_birds(player_position: Vector3, variant_id: StringName, cou
 		or count > MAX_TOTAL_ACTIVE
 	):
 		return false
-	if _runtime.get_active_count() + count > MAX_TOTAL_ACTIVE or not _catalog.has_definition(&"bird"):
-		return false
 	var requested_variant := -1 if variant_id.is_empty() else BirdActor.color_variant_index_for_id(variant_id)
 	if not variant_id.is_empty() and requested_variant < 0:
 		return false
-	var definition := _catalog.get_definition(&"bird")
+	var definition_id := &"owl" if requested_variant == BirdAnimationDriver.ColorVariant.OWL else &"bird"
+	if _runtime.get_active_count() + count > MAX_TOTAL_ACTIVE or not _catalog.has_definition(definition_id):
+		return false
+	var definition := _catalog.get_definition(definition_id)
 	for _batch_attempt in DEBUG_SPAWN_BATCH_ATTEMPTS:
 		var requests: Array[EntitySpawnRequest] = []
 		var reserved_columns: Dictionary = {}
@@ -168,8 +185,10 @@ func try_spawn_debug_birds(player_position: Vector3, variant_id: StringName, cou
 				var spawn_candidate: Variant = _find_spawn_position(definition, x, z, _debug_rng)
 				if not spawn_candidate is Vector3:
 					continue
-				var variant_index := requested_variant if requested_variant >= 0 else index % BirdActor.color_variant_count()
-				var behavior_seed := BirdActor.behavior_seed_for_color_variant_index(variant_index, int(_debug_rng.randi()))
+				var behavior_seed := int(_debug_rng.randi())
+				if definition_id == &"bird":
+					var variant_index := requested_variant if requested_variant >= 0 else index % BirdActor.color_variant_count()
+					behavior_seed = BirdActor.behavior_seed_for_color_variant_index(variant_index, behavior_seed)
 				request = EntitySpawnRequest.new(definition.id, spawn_candidate as Vector3, behavior_seed)
 				reserved_columns[column] = true
 				break
@@ -182,11 +201,11 @@ func try_spawn_debug_birds(player_position: Vector3, variant_id: StringName, cou
 			return true
 	return false
 
-func _despawn_outside_phase(is_day: bool) -> void:
+func _despawn_outside_spawn_window(time_of_day: float) -> void:
 	var to_remove: Array[int] = []
 	for actor in _runtime.get_active_actors():
 		var definition := actor.definition
-		if actor.can_despawn_ambiently() and definition.ambient_despawn_outside_spawn_phase and is_day != (definition.ambient_spawn_phase == EntityDefinition.SpawnPhase.DAY):
+		if actor.can_despawn_ambiently() and definition.ambient_despawn_outside_spawn_phase and not _is_in_ambient_spawn_window(definition, time_of_day):
 			to_remove.append(actor.runtime_id)
 	for runtime_id in to_remove:
 		_runtime.try_despawn(runtime_id)

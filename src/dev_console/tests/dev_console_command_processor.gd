@@ -39,7 +39,7 @@ func _init() -> void:
 	_expect(_bird_spawn_calls.back() == {"variant_id": &"", "count": 4}, "default mixed bird command passed the wrong request")
 	_expect_result(processor.execute("SPAWN BIRDS 12"), DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN, "counted mixed bird spawn command failed")
 	_expect(_bird_spawn_calls.back() == {"variant_id": &"", "count": 12}, "counted mixed bird command passed the wrong request")
-	for variant_id in [&"crow", &"redbird", &"duck", &"bluebird"]:
+	for variant_id in [&"crow", &"redbird", &"duck", &"bluebird", &"owl"]:
 		_expect_result(processor.execute("spawn bird %s 2" % variant_id), DevConsoleCommandProcessor.ExecutionResult.KEEP_OPEN, "specific bird spawn command failed for %s" % variant_id)
 		_expect(_bird_spawn_calls.back() == {"variant_id": variant_id, "count": 2}, "specific bird command passed the wrong request for %s" % variant_id)
 	_bird_commands_accepted = false

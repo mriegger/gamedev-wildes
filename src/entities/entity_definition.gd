@@ -30,6 +30,7 @@ enum SpawnPlacement {
 @export_range(1, 32, 1) var ambient_aerial_altitude_min_blocks: int = 8
 @export_range(1, 32, 1) var ambient_aerial_altitude_max_blocks: int = 14
 @export var ambient_despawn_outside_spawn_phase: bool = false
+@export_range(-1.0, 24.0, 0.25) var ambient_spawn_end_hour: float = -1.0
 @export var combat_targetable: bool = true
 @export var hostile_to_player: bool = false
 
@@ -96,6 +97,9 @@ func validate(source: String) -> bool:
 	if spawn_placement == SpawnPlacement.AERIAL and (ambient_aerial_altitude_min_blocks < 1 or ambient_aerial_altitude_min_blocks > ambient_aerial_altitude_max_blocks):
 		push_error("[EntityDefinition] Invalid aerial altitude range for %s at %s" % [id, source])
 		valid = false
+	if not _has_valid_ambient_spawn_end_hour():
+		push_error("[EntityDefinition] Invalid ambient spawn end hour for %s at %s" % [id, source])
+		valid = false
 	if not combat_targetable and experience_reward != 0:
 		push_error("[EntityDefinition] Non-targetable entity %s rewards experience at %s" % [id, source])
 		valid = false
@@ -107,6 +111,15 @@ func validate(source: String) -> bool:
 			push_error("[EntityDefinition] Invalid spawn floor %d for %s at %s" % [block_id, id, source])
 			valid = false
 	return valid
+
+func _has_valid_ambient_spawn_end_hour() -> bool:
+	if ambient_spawn_end_hour < 0.0:
+		return is_equal_approx(ambient_spawn_end_hour, -1.0)
+	if not is_finite(ambient_spawn_end_hour) or ambient_spawn_end_hour >= GameClock.HOURS_PER_DAY:
+		return false
+	if ambient_spawn_phase == SpawnPhase.DAY:
+		return ambient_spawn_end_hour > DayNightProfile.DAY_START_HOUR and ambient_spawn_end_hour <= DayNightProfile.NIGHT_START_HOUR
+	return ambient_spawn_end_hour > DayNightProfile.NIGHT_START_HOUR or ambient_spawn_end_hour <= DayNightProfile.DAY_START_HOUR
 
 func is_actor_compatible() -> bool:
 	if actor_scene == null or behavior == null:

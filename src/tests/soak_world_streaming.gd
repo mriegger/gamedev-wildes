@@ -918,10 +918,15 @@ func _verify_player_defeat_flow() -> bool:
 	_game.hud.side_panel._process(1.0)
 	_game.animation_tuning_panel.show_panel()
 	_game._toggle_player_stats_debug_panel()
+	_game._toggle_entity_population_debug_panel()
 	var debug_clock_panel := _game.game_environment._debug_clock_panel
 	debug_clock_panel.show_panel()
-	if not _game.hud.is_side_panel_open() or not _game.animation_tuning_panel.is_open() or not _game.player_stats_debug_panel.is_open() or not _game.game_environment.is_debug_panel_open():
+	if not _game.hud.is_side_panel_open() or not _game.animation_tuning_panel.is_open() or not _game.player_stats_debug_panel.is_open() or not _game.entity_population_debug_panel.is_open() or not _game.game_environment.is_debug_panel_open():
 		_fail("player defeat panel setup did not open every gameplay panel")
+		return false
+	_game.entity_population_debug_panel.refresh_population()
+	if not _game.entity_population_debug_panel.total_label.text.begins_with("Active:"):
+		_fail("entity population debug panel did not report the active runtime")
 		return false
 	_player.velocity = Vector3(2.0, 3.0, 4.0)
 	_player.is_sprinting = true
@@ -973,7 +978,7 @@ func _verify_player_defeat_flow() -> bool:
 	if _player.interactor.is_mining or _player.interactor.melee_attack_queue != 0 or _player.interactor.target_has:
 		_fail("player defeat did not cancel interactions")
 		return false
-	if _game.hud.is_side_panel_open() or _game.animation_tuning_panel.is_open() or _game.player_stats_debug_panel.is_open() or _game.game_environment.is_debug_panel_open():
+	if _game.hud.is_side_panel_open() or _game.animation_tuning_panel.is_open() or _game.player_stats_debug_panel.is_open() or _game.entity_population_debug_panel.is_open() or _game.game_environment.is_debug_panel_open():
 		_fail("player defeat left a gameplay or debug panel open")
 		return false
 	if debug_clock_panel.clock.time_changed.is_connected(debug_clock_panel._on_clock_time_changed):
