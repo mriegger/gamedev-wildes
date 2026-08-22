@@ -228,6 +228,13 @@ func _physics_process(delta):
 	_update_action_facing(delta)
 
 func _handle_raycast():
+	var mouse_pos = get_viewport().get_mouse_position()
+	var ray_origin = camera.project_ray_origin(mouse_pos)
+	var ray_dir = camera.project_ray_normal(mouse_pos)
+	var max_dist = ray_origin.distance_to(motor.global_position) + reach + 1.0
+	_update_raycast(ray_origin, ray_dir, max_dist)
+
+func _update_raycast(ray_origin: Vector3, ray_dir: Vector3, max_dist: float) -> void:
 	target_has = false
 	placement_has = false
 	can_primary_target = false
@@ -236,12 +243,9 @@ func _handle_raycast():
 	target_container = null
 	can_interact_target = false
 
-	var mouse_pos = get_viewport().get_mouse_position()
-	var ray_origin = camera.project_ray_origin(mouse_pos)
-	var ray_dir = camera.project_ray_normal(mouse_pos)
-
-	var max_dist = ray_origin.distance_to(motor.global_position) + reach + 1.0
-	var hit := VoxelRaycast.cast(voxel_space, ray_origin, ray_dir, max_dist)
+	var selected_primary := get_selected_primary_action()
+	var ignored_block := Callable(self, "_should_ignore_primary_target_block").bind(selected_primary)
+	var hit := VoxelRaycast.cast(voxel_space, ray_origin, ray_dir, max_dist, ignored_block)
 	if harvest != null and is_editing_enabled():
 		harvest.update_target(ray_origin, ray_dir, max_dist, motor.global_position, reach)
 		if harvest.has_target() and (hit == null or harvest.get_target_ray_distance() < hit.ray_distance):
@@ -267,7 +271,6 @@ func _handle_raycast():
 
 	var motor_pos = motor.global_position
 	var reach_squared = reach * reach
-	var selected_primary := get_selected_primary_action()
 	target_crafting_station = _get_target_crafting_station(targeted_block_id)
 	target_container = _get_target_container(best_hit)
 	can_interact_target = (target_crafting_station != null or target_container != null) and motor_pos.distance_squared_to(Vector3(best_hit) + Vector3(0.5, 0.5, 0.5)) <= reach_squared
@@ -619,6 +622,12 @@ func _get_bow_cursor_target(ray_origin: Vector3, ray_direction: Vector3) -> Vari
 	if voxel_hit != null:
 		return ray_origin + ray_direction * voxel_hit.ray_distance
 	return ground_hit
+
+func _should_ignore_primary_target_block(block_id: int, selected_primary: ItemActionDefinition) -> bool:
+	if not BlockId.is_foliage(block_id):
+		return false
+	var mining_action := selected_primary as MiningActionDefinition
+	return mining_action == null or not mining_action.can_mine(voxel_space.block_catalog.get_definition(block_id))
 
 func _is_foliage(block_id: int) -> bool:
 	return BlockId.is_foliage(block_id)

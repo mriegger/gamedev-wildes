@@ -174,7 +174,10 @@ sprinting restores movement-owned facing. Directional player swings snap to the 
 lock that facing for the attack duration even while sprinting, and query sorted spatial-index
 candidates from the same ray at contact. The copper hammer likewise queries its full-circle
 four-block area at the slam frame, so enemies are affected according to their positions at impact.
-Player melee visibility ignores non-solid foliage while retaining solid-terrain occlusion. A
+Canonical foliage remains directly mineable. Player targeting includes it only when the selected
+primary action can mine that foliage definition; other cursor interactions, projectiles, and melee
+visibility pass through it while retaining solid-terrain occlusion. Removing a foliage support block
+atomically removes the whole plant. A
 zero-degree sweep
 retains exact single-target ray selection, while a full-circle sweep is independent of planar cursor
 aim. The profile calculates

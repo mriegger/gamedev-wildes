@@ -6,6 +6,22 @@ class BowAimEntityRuntime extends EntityRuntime:
 	func get_nearest_combat_target_ray_hit(_ray_origin: Vector3, _ray_direction: Vector3, _maximum_distance: float) -> Variant:
 		return ray_hit
 
+class HarvestRayStub extends HarvestCoordinator:
+	var target_distance: float
+	var target_active: bool = false
+
+	func update_target(_ray_origin: Vector3, _ray_direction: Vector3, _ray_max_distance: float, _player_position: Vector3, _player_reach: float) -> void:
+		target_active = true
+
+	func clear_target() -> void:
+		target_active = false
+
+	func has_target() -> bool:
+		return target_active
+
+	func get_target_ray_distance() -> float:
+		return target_distance
+
 var _errors: Array[String] = []
 var _player: PlayerMotor
 var _camera: Camera3D
@@ -584,6 +600,7 @@ func _run():
 		1,
 		_inventory.equipment_instance_factory.create(&"stone_pickaxe"),
 	))
+	InventoryTestFixture.restore_slot(_inventory, 4, InventoryStack.new(&"apple", 1))
 
 	_voxel_world = VoxelWorld.new(20, 36, 5, 12.0, block_catalog)
 	_voxel_world.restore_block_edits({
@@ -665,6 +682,17 @@ func _run():
 	_expect(creature_cursor_target is Vector3 and (creature_cursor_target as Vector3).is_equal_approx(aim_runtime.ray_hit as Vector3), "bow cursor aim ignored a creature in front of terrain")
 	var cursor_foliage_position := Vector3i(1, 1, 0)
 	_expect(VoxelWorldTestFixture.commit_place(_voxel_world, cursor_foliage_position, BlockId.Type.GRASS_FOLIAGE) != null, "bow cursor foliage fixture could not be placed")
+	var harvest_stub := HarvestRayStub.new()
+	harvest_stub.target_distance = 8.5
+	_interactor.harvest = harvest_stub
+	_interactor._update_raycast(cursor_test_ray_origin, Vector3.DOWN, 12.0)
+	_expect(_interactor.target_has and _interactor.target_block == cursor_foliage_position, "mining tool did not target foliage")
+	_expect(not harvest_stub.has_target(), "targetable foliage did not take priority over a harvest target behind it")
+	_expect(_inventory_loadout.select_slot(4), "apple could not be selected for conditional foliage targeting")
+	_interactor._update_raycast(cursor_test_ray_origin, Vector3.DOWN, 12.0)
+	_expect(harvest_stub.has_target() and not _interactor.target_has, "foliage blocked a harvest target while holding a non-mining item")
+	_expect(_inventory_loadout.select_slot(0), "pickaxe could not be restored after conditional foliage targeting")
+	_interactor.harvest = null
 	aim_runtime.ray_hit = Vector3(1.5, 1.2, 0.5)
 	var foliage_creature_cursor_target: Variant = _interactor._get_bow_cursor_target(cursor_test_ray_origin, Vector3.DOWN)
 	_expect(foliage_creature_cursor_target is Vector3 and (foliage_creature_cursor_target as Vector3).is_equal_approx(aim_runtime.ray_hit as Vector3), "bow cursor foliage blocked a creature behind it")

@@ -167,6 +167,9 @@ func _test_authoritative_state(coord: Vector2i, position: Vector3i, payload: Dic
 	_expect(world.get_foliage_blocks_for_chunk(coord).has(position), "foliage chunk index omitted a plant")
 	_expect(not world.is_solid(position), "foliage blocked movement")
 	_expect(world.is_raycast_solid(position), "foliage could not be targeted")
+	var ray_origin := Vector3(position) + Vector3(0.5, 2.0, 0.5)
+	var ignored_foliage_hit := VoxelRaycast.cast(world, ray_origin, Vector3.DOWN, 3.0, _is_foliage)
+	_expect(ignored_foliage_hit != null and ignored_foliage_hit.target_cell == position + Vector3i.DOWN, "ignored foliage blocked targeting of its supporting terrain")
 	var mined := VoxelWorldTestFixture.commit_mine(world, position)
 	_expect(mined != null and mined.get_edits().size() == 1 and mined.get_primary_edit().is_success(), "foliage could not be mined")
 	_expect(world.get_block_id_at(position) == BlockId.Type.AIR, "mined foliage remained in the world")
@@ -359,3 +362,6 @@ func _record_foliage_visibility_changes(cells: Array[Vector3i]) -> void:
 func _expect(condition: bool, message: String) -> void:
 	if not condition:
 		_errors.append(message)
+
+func _is_foliage(block_id: int) -> bool:
+	return BlockId.is_foliage(block_id)

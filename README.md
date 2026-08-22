@@ -191,7 +191,9 @@ and wood. Item actions are data-driven: the hoe tills exposed grass and dirt, al
 can mine copper, and the sword uses click-triggered, alternating melee swings with a fading
 radial scan tracing its 120-degree attack area in front of the player. Its base damage rolls from 8
 to 10 independently for each enemy hit. Sword and hammer targets are evaluated at their contact
-frame, and non-solid foliage does not block their attacks. Combat registers slash, blunt, and pierce
+frame. Foliage can be mined and collected when the selected action supports mining it; otherwise
+cursor interactions, projectiles, and melee attacks pass through it. Removing its supporting terrain
+also removes the whole plant. Combat registers slash, blunt, and pierce
 damage types;
 enemies are neutral by default. Zombies and sheep play randomized vocalizations when defeated;
 zombie retirement waits for the full vocalization to finish.
