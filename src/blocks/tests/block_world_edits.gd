@@ -76,6 +76,29 @@ func _init() -> void:
 	var support_mining_edits := support_mining.get_edits() if support_mining != null else []
 	_expect(support_mining_edits.size() == 2 and support_mining_edits[1].old_id == BlockId.Type.CAMPFIRE, "support mining did not atomically remove campfire")
 	_expect(world.snapshot_emplacements().is_empty(), "support mining retained campfire state")
+	var cauldron := block_catalog.get_definition(BlockId.Type.CAULDRON)
+	var cauldron_anchor := Vector3i(6, 1, 8)
+	for offset in cauldron.emplacement.support_offsets:
+		_expect(VoxelWorldTestFixture.commit_place(world, cauldron_anchor + offset, BlockId.Type.STONE) != null, "cauldron support placement failed")
+	_expect(VoxelWorldTestFixture.commit_place_emplacement(world, cauldron_anchor, BlockId.Type.CAULDRON) != null, "cauldron 2x2 placement failed")
+	for offset in cauldron.emplacement.occupied_offsets:
+		var cauldron_cell := cauldron_anchor + offset
+		_expect(world.get_block_id_at(cauldron_cell) == BlockId.Type.CAULDRON and world.is_raycast_solid(cauldron_cell), "cauldron footprint was not reserved")
+	_expect(world.is_solid(cauldron_anchor) and world.is_solid(cauldron_anchor + Vector3i(1, 0, 1)), "cauldron ground footprint is not solid")
+	_expect(not world.is_solid(cauldron_anchor + Vector3i.UP), "cauldron upper volume unexpectedly blocks movement")
+	_expect(world.prepare_place_block(cauldron_anchor + Vector3i(1, 1, 1), BlockId.Type.STONE) == null, "block overlapped cauldron upper volume")
+	var cauldron_mining := VoxelWorldTestFixture.commit_mine(world, cauldron_anchor + Vector3i(1, 1, 1))
+	var cauldron_mining_edits := cauldron_mining.get_edits() if cauldron_mining != null else []
+	_expect(cauldron_mining_edits.size() == 1 and cauldron_mining_edits[0].old_id == BlockId.Type.CAULDRON and cauldron_mining_edits[0].pos == cauldron_anchor, "upper-cell mining did not remove one anchored cauldron")
+	var distant_config := (load("res://world/settings/world_config.tres") as WorldConfig).runtime_copy_for_seed(174672561)
+	var foliage_catalog := load("res://foliage/foliage_catalog.tres") as FoliageCatalog
+	var distant_generator := TerrainGenerator.new(distant_config, FoliageGenerator.new(foliage_catalog, distant_config.seed_value))
+	distant_generator.setup_noises()
+	var distant_world := VoxelWorld.new(distant_config.chunk_size, distant_config.max_build_y, distant_config.water_level, distant_config.meadow_radius, block_catalog)
+	distant_world.set_generator_ref(distant_generator)
+	var saved_cauldron_anchor := Vector3i(6, 13, -70)
+	_expect(distant_world.restore_emplacements({saved_cauldron_anchor: BlockId.Type.CAULDRON}), "distant saved cauldron did not generate its terrain before restoration")
+	_expect(distant_world.get_emplacement_anchor(saved_cauldron_anchor + Vector3i(1, 1, 1)) == saved_cauldron_anchor, "distant saved cauldron did not restore its full footprint")
 	if _errors.is_empty():
 		print("BLOCK_WORLD_EDITS PASS")
 		quit(0)

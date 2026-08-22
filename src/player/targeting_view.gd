@@ -324,7 +324,7 @@ func _get_mining_target_bounds() -> AABB:
 	if voxel_space is VoxelWorld:
 		var anchor: Variant = (voxel_space as VoxelWorld).get_emplacement_anchor(interactor.target_block)
 		if anchor is Vector3i:
-			return AABB(Vector3(anchor) + Vector3(-1.0, 0.0, -1.0), Vector3(3.0, 1.0, 3.0))
+			return (voxel_space as VoxelWorld).get_emplacement_bounds(anchor)
 	return interactor.get_target_block_bounds()
 
 func _should_show_mining_outline(has_target_action: bool) -> bool:
@@ -337,10 +337,15 @@ func _should_show_mining_outline(has_target_action: bool) -> bool:
 func _update_interaction_visuals(_delta: float = 0.0) -> void:
 	var station_interaction_available := _should_show_station_interaction()
 	var chest_interaction_available := _should_show_chest_interaction()
+	var station_position := interactor.target_block
+	if station_interaction_available and voxel_space is VoxelWorld:
+		var emplacement_anchor: Variant = (voxel_space as VoxelWorld).get_emplacement_anchor(station_position)
+		if emplacement_anchor is Vector3i:
+			station_position = emplacement_anchor
 	if anvil_renderer != null:
-		anvil_renderer.set_hovered_anvil(interactor.target_block if station_interaction_available else null)
+		anvil_renderer.set_hovered_anvil(station_position if station_interaction_available else null)
 	if cauldron_renderer != null:
-		cauldron_renderer.set_hovered_cauldron(interactor.target_block if station_interaction_available else null)
+		cauldron_renderer.set_hovered_cauldron(station_position if station_interaction_available else null)
 	if chest_renderer != null:
 		chest_renderer.set_hovered_chest(interactor.target_block if chest_interaction_available else null)
 	_set_interaction_cursor(station_interaction_available or chest_interaction_available)

@@ -6,7 +6,8 @@ signal generation_progress(stage: String, percent: float, details: String)
 @export var config: WorldConfig
 @export var water_profile: WaterProfile
 @export var block_catalog: BlockCatalog
-@export var campfire_audio_profile: CampfireAudioProfile
+@export var campfire_audio_profile: PositionalLoopAudioProfile
+@export var cauldron_audio_profile: PositionalLoopAudioProfile
 @export var foliage_catalog: FoliageCatalog
 @export var terrain_shader: Shader
 @export var foliage_shader: Shader
@@ -99,7 +100,7 @@ func _setup_systems():
 	torch_renderer.setup(block_catalog, _settings.torch_shadow_count, 0.0)
 	anvil_renderer.setup()
 	chest_renderer.setup(block_catalog)
-	cauldron_renderer.setup()
+	cauldron_renderer.setup(cauldron_audio_profile)
 	campfire_renderer.setup(block_catalog, campfire_audio_profile)
 	chunk_manager = ChunkManager.new()
 	chunk_manager.setup(config, voxel_model, chunk_scheduler, chunk_renderer)
@@ -195,11 +196,10 @@ func _on_block_edit_committed(edit: BlockEdit):
 		chunk_manager.queue_rebuild_for_world_pos(edit.pos)
 	elif edit.is_mine() and edit.old_id == BlockId.Type.CAULDRON:
 		cauldron_renderer.remove_cauldron(edit.pos)
-		chunk_manager.queue_rebuild_for_world_pos(edit.pos)
+		_refresh_emplacement_foliage(edit.pos, edit.old_id)
 	elif edit.new_id == BlockId.Type.CAULDRON:
-		if chunk_manager.visible_chunks.has(edit_chunk):
-			cauldron_renderer.spawn_cauldron(edit.pos)
-		chunk_manager.queue_rebuild_for_world_pos(edit.pos)
+		cauldron_renderer.spawn_cauldron(edit.pos)
+		_refresh_emplacement_foliage(edit.pos, edit.new_id)
 	elif edit.is_mine() and edit.old_id == BlockId.Type.CAMPFIRE:
 		campfire_renderer.remove_campfire(edit.pos)
 		_refresh_emplacement_foliage(edit.pos, edit.old_id)
@@ -211,7 +211,7 @@ func _on_block_edit_committed(edit: BlockEdit):
 		chunk_manager.refresh_foliage(edit_chunk, voxel_model.get_visible_foliage_cells_for_chunk(edit_chunk))
 	else:
 		chunk_manager.queue_rebuild_for_world_pos(edit.pos)
-	if BlockId.is_foliage(edit.old_id) and edit.new_id != BlockId.Type.AIR and not BlockId.is_foliage(edit.new_id) and edit.new_id != BlockId.Type.CAMPFIRE:
+	if BlockId.is_foliage(edit.old_id) and edit.new_id != BlockId.Type.AIR and not BlockId.is_foliage(edit.new_id) and edit.new_id not in [BlockId.Type.CAMPFIRE, BlockId.Type.CAULDRON]:
 		chunk_manager.refresh_foliage(edit_chunk, voxel_model.get_visible_foliage_cells_for_chunk(edit_chunk))
 
 func _refresh_emplacement_foliage(anchor: Vector3i, block_id: int) -> void:

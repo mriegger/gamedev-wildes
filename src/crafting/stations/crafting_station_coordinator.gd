@@ -22,12 +22,14 @@ func setup_station(p_voxel_world: VoxelWorld, p_station_id: StringName, p_block_
 func try_open(position: Vector3i, definition: CraftingStationBlockDefinition) -> bool:
 	if voxel_world == null or definition == null or definition.id != station_id:
 		return false
-	var current_block_id := voxel_world.get_block_id_at(position)
+	var emplacement_anchor: Variant = voxel_world.get_emplacement_anchor(position)
+	var station_position := emplacement_anchor as Vector3i if emplacement_anchor is Vector3i else position
+	var current_block_id := voxel_world.get_block_id_at(station_position)
 	if current_block_id != block_id:
 		return false
 	if voxel_world.block_catalog.get_definition(current_block_id).crafting_station != definition:
 		return false
-	active_position = position
+	active_position = station_position
 	active_definition = definition
 	return true
 

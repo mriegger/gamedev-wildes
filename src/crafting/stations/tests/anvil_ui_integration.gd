@@ -49,7 +49,10 @@ func _init() -> void:
 	_cauldron_crafting.setup(_inventory, _inventory_loadout, _cauldron_catalog)
 	_world = VoxelWorld.new(20, 36, 5, 12.0, block_catalog)
 	_expect(VoxelWorldTestFixture.commit_place(_world, _position, BlockId.Type.ANVIL) != null, "test anvil could not be placed")
-	_expect(VoxelWorldTestFixture.commit_place(_world, _cauldron_position, BlockId.Type.CAULDRON) != null, "test cauldron could not be placed")
+	var cauldron_block := block_catalog.get_definition(BlockId.Type.CAULDRON)
+	for offset in cauldron_block.emplacement.support_offsets:
+		_expect(VoxelWorldTestFixture.commit_place(_world, _cauldron_position + offset, BlockId.Type.STONE) != null, "test cauldron support could not be placed")
+	_expect(VoxelWorldTestFixture.commit_place_emplacement(_world, _cauldron_position, BlockId.Type.CAULDRON) != null, "test cauldron could not be placed")
 	_anvil_coordinator = AnvilCoordinator.new()
 	_anvil_coordinator.setup(_world)
 	_cauldron_coordinator = CauldronCoordinator.new()
@@ -133,7 +136,7 @@ func _process(_delta: float) -> bool:
 		_hud.crafting_panel.select_recipe(&"stone_pickaxe")
 		var general_stats := _hud.crafting_panel.get_node("Margin/Content/Body/Details/Stats") as RichTextLabel
 		_expect(general_stats.visible and general_stats.get_parsed_text().contains("Mining Power: 1") and general_stats.get_parsed_text().contains("Speed Multiplier: 1.5x"), "stone pickaxe recipe stats are incomplete")
-		_hud.open_crafting_station(_cauldron_position, _cauldron_station)
+		_hud.open_crafting_station(_cauldron_position + Vector3i.RIGHT, _cauldron_station)
 		_phase = 5
 	elif _phase == 5 and _frame == 167:
 		_expect(_hud.side_panel.is_open(), "opening the cauldron did not keep the backpack open")
@@ -154,7 +157,7 @@ func _process(_delta: float) -> bool:
 		_expect(cauldron_mined != null and not cauldron_mined.get_edits().is_empty(), "open test cauldron could not be mined")
 		_expect(not _hud.cauldron_panel.is_open(), "mining the active cauldron left its crafting panel usable")
 		_expect(_hud.side_panel.is_open(), "mining the active cauldron unexpectedly closed the backpack")
-		_expect(VoxelWorldTestFixture.commit_place(_world, _cauldron_position, BlockId.Type.CAULDRON) != null, "test cauldron could not be restored")
+		_expect(VoxelWorldTestFixture.commit_place_emplacement(_world, _cauldron_position, BlockId.Type.CAULDRON) != null, "test cauldron could not be restored")
 		_hud.open_crafting_station(_cauldron_position, _cauldron_station)
 		_hud.toggle_backpack()
 		_phase = 6

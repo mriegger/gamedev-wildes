@@ -1,4 +1,4 @@
-[gd_scene load_steps=14 format=3 uid="uid://c9w0rld0x2m4p"]
+[gd_scene load_steps=15 format=3 uid="uid://c9w0rld0x2m4p"]
 
 [ext_resource type="Script" path="res://world/world.gd" id="1_world"]
 [ext_resource type="Resource" path="res://world/settings/world_config.tres" id="2_config"]
@@ -14,12 +14,14 @@
 [ext_resource type="Script" path="res://crafting/stations/presentation/cauldron_renderer.gd" id="12_cauldron_renderer"]
 [ext_resource type="Script" path="res://campfires/presentation/campfire_renderer.gd" id="13_campfire_renderer"]
 [ext_resource type="Resource" path="res://campfires/campfire_audio_profile.tres" id="14_campfire_audio"]
+[ext_resource type="Resource" path="res://crafting/stations/cauldron_audio_profile.tres" id="15_cauldron_audio"]
 
 [node name="World" type="Node3D"]
 script = ExtResource("1_world")
 config = ExtResource("2_config")
 water_profile = ExtResource("4_water_profile")
 campfire_audio_profile = ExtResource("14_campfire_audio")
+cauldron_audio_profile = ExtResource("15_cauldron_audio")
 terrain_shader = ExtResource("5_terrain_shader")
 foliage_shader = ExtResource("7_foliage_shader")
 water_shader = ExtResource("6_water_shader")

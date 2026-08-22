@@ -8,7 +8,7 @@ func _init() -> void:
 	var chest_block := block_catalog.get_definition(BlockId.Type.CHEST) if block_catalog != null else null
 	var player_stats_definition := load("res://player/player_stats.tres") as CombatStatsDefinition
 	var player_perk_rules := load("res://progression/player_perk_rules.tres") as PlayerPerkRules
-	_expect(SaveManager.CURRENT_SAVE_VERSION == 23, "save version changed")
+	_expect(SaveManager.CURRENT_SAVE_VERSION == 24, "save version changed")
 	_expect(block_catalog != null and block_catalog.validate(), "block catalog invalid")
 	_expect(item_catalog != null and item_catalog.validate(block_catalog), "item catalog invalid")
 	_expect(chest_block != null and chest_block.container != null, "chest container definition invalid")
@@ -90,6 +90,13 @@ func _init() -> void:
 	_expect(SaveManager._migrate_save_data(version_twenty_two, item_catalog), "version twenty-two equipped-item migration failed")
 	_expect(version_twenty_two["inventory"].get("item_equipped", null) == true, "version twenty-two migration did not preserve the equipped state")
 	_expect(version_twenty_two["inventory"].get("last_equipped", null) == 4, "version twenty-two migration did not preserve the selected hotbar slot")
+	var version_twenty_three := version_twenty_two.duplicate(true)
+	version_twenty_three["version"] = 23
+	version_twenty_three["placed_blocks"] = {"3,4,5": BlockId.Type.CAULDRON, "8,9,10": BlockId.Type.STONE}
+	version_twenty_three["emplacements"] = {"12,13,14": BlockId.Type.CAMPFIRE}
+	_expect(SaveManager._migrate_save_data(version_twenty_three, item_catalog), "version twenty-three cauldron migration failed")
+	_expect(version_twenty_three["placed_blocks"] == {"8,9,10": BlockId.Type.STONE}, "version twenty-three migration retained a single-cell cauldron")
+	_expect(version_twenty_three["emplacements"] == {"3,4,5": BlockId.Type.CAULDRON, "12,13,14": BlockId.Type.CAMPFIRE}, "version twenty-three migration did not preserve emplacement anchors")
 	var migration_factory := EquipmentInstanceFactory.new(item_catalog)
 	var migration_affixes: Array[EquipmentAffixDefinition] = [item_catalog.get_equipment_affix(&"vicious")]
 	var migration_runes: Array[StringName] = [&"basic_rune"]
@@ -198,6 +205,7 @@ func _init() -> void:
 	_expect(SaveManager.decode_chest_state({"chests": {"invalid": []}}) == null, "malformed chest position decoded")
 	_expect(SaveManager.decode_world_state({"seed": 1, "placed_blocks": {"0,1,0": BlockId.Type.COUNT}, "removed_blocks": {}, "torch_attachments": {}, "emplacements": {}, "player_position": null}) == null, "unknown placed block decoded")
 	_expect(SaveManager.decode_world_state({"seed": 1, "placed_blocks": {"0,1,0": BlockId.Type.TORCH}, "removed_blocks": {}, "torch_attachments": {}, "emplacements": {}, "player_position": null}) == null, "torch without attachment decoded")
+	_expect(SaveManager.decode_world_state({"seed": 1, "placed_blocks": {"0,1,0": BlockId.Type.CAULDRON}, "removed_blocks": {}, "torch_attachments": {}, "emplacements": {}, "player_position": null}) == null, "single-cell cauldron decoded in the current save format")
 	_expect(SaveManager.decode_world_state({"seed": 1, "placed_blocks": {}, "removed_blocks": {"invalid": true}, "torch_attachments": {}, "emplacements": {}, "player_position": null}) == null, "malformed removed block decoded")
 	_expect(BlockId.Type.ANVIL == 16 and BlockId.Type.CHEST == 17 and BlockId.Type.CAULDRON == 18 and BlockId.Type.CAMPFIRE == 19, "main station block IDs changed")
 	_expect(item_catalog != null and item_catalog.has_definition(&"chest"), "main chest item ID changed")
@@ -210,6 +218,11 @@ func _init() -> void:
 	for offset in campfire_definition.emplacement.support_offsets:
 		_expect(VoxelWorldTestFixture.commit_place(voxel_world, campfire_anchor + offset, BlockId.Type.STONE) != null, "campfire save support placement failed")
 	_expect(VoxelWorldTestFixture.commit_place_emplacement(voxel_world, campfire_anchor, BlockId.Type.CAMPFIRE) != null, "campfire save placement failed")
+	var cauldron_anchor := Vector3i(7, 21, 7)
+	var cauldron_definition := block_catalog.get_definition(BlockId.Type.CAULDRON)
+	for offset in cauldron_definition.emplacement.support_offsets:
+		_expect(VoxelWorldTestFixture.commit_place(voxel_world, cauldron_anchor + offset, BlockId.Type.STONE) != null, "cauldron save support placement failed")
+	_expect(VoxelWorldTestFixture.commit_place_emplacement(voxel_world, cauldron_anchor, BlockId.Type.CAULDRON) != null, "cauldron save placement failed")
 	var inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	inventory.setup_starter()
 	var item_proficiency := ItemProficiency.new(item_catalog)
@@ -262,6 +275,7 @@ func _init() -> void:
 		_expect(current_data.get("tutorial_progress", {}) == {"mining_tip_completed": true, "food_tip_completed": true, "crafting_tip_completed": true, "crafting_ingredients_tip_completed": true, "copper_mining_tip_completed": true, "sundown_weapon_tip_completed": true, "damage_affinity_tip_completed": false}, "current_data tutorial progress differs")
 		_expect(current_data.get("world_loot", {}) == world_loot_state.snapshot(), "current_data world loot differs")
 		_expect(current_data.get("emplacements", {}).get("2,21,2", -1) == BlockId.Type.CAMPFIRE, "current_data campfire emplacement differs")
+		_expect(current_data.get("emplacements", {}).get("7,21,7", -1) == BlockId.Type.CAULDRON, "current_data cauldron emplacement differs")
 		var encoded_chests := current_data.get("chests", {}) as Dictionary
 		_expect(encoded_chests.has("3,8,-4") and encoded_chests["3,8,-4"][0]["item_id"] == "dirt_block" and encoded_chests["3,8,-4"][0]["count"] == 4, "current_data chest state differs")
 		_expect(is_equal_approx(float(current_data.get("playtime_seconds", -1.0)), 2.5), "playtime changed")
@@ -277,6 +291,7 @@ func _init() -> void:
 		_expect(decoded.seed == 1337, "decoded seed changed")
 		_expect(decoded.player_position.is_equal_approx(doorway_anchor), "decoded persisted position differs")
 		_expect(decoded.emplacements.get(campfire_anchor, BlockId.Type.AIR) == BlockId.Type.CAMPFIRE, "decoded campfire emplacement differs")
+		_expect(decoded.emplacements.get(cauldron_anchor, BlockId.Type.AIR) == BlockId.Type.CAULDRON, "decoded cauldron emplacement differs")
 		var restored_factory := EquipmentInstanceFactory.new(item_catalog, int(loaded["next_equipment_instance_id"]))
 		var restored_inventory := InventoryModel.new(item_catalog, restored_factory)
 		var loaded_inventory: Variant = loaded.get("inventory", null)

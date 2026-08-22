@@ -3,7 +3,7 @@ class_name SaveManager
 
 const SAVE_DIR: String = "user://saves"
 const SLOT_COUNT: int = 3
-const CURRENT_SAVE_VERSION: int = 23
+const CURRENT_SAVE_VERSION: int = 24
 const MINIMUM_MIGRATABLE_SAVE_VERSION: int = 4
 const VERSION_SEVEN_BASE_EXPERIENCE_TO_LEVEL: int = 100
 const VERSION_SEVEN_EXPERIENCE_GROWTH: float = 1.25
@@ -221,6 +221,8 @@ static func decode_world_state(data: Dictionary) -> Variant:
 		return null
 	for position in placed:
 		if removed.has(position):
+			return null
+		if int(placed[position]) in [BlockId.Type.CAULDRON, BlockId.Type.CAMPFIRE]:
 			return null
 	for position in torch_attachments:
 		if int(placed.get(position, BlockId.Type.AIR)) != BlockId.Type.TORCH:
@@ -487,6 +489,10 @@ static func _migrate_save_data(data: Dictionary, item_catalog: ItemCatalog) -> b
 				if not _migrate_inventory_equipped_state(migrated):
 					return false
 				version = 23
+			23:
+				if not _migrate_cauldron_emplacement(migrated):
+					return false
+				version = 24
 			_:
 				return false
 		migrated["version"] = version
@@ -498,6 +504,23 @@ static func _migrate_save_data(data: Dictionary, item_catalog: ItemCatalog) -> b
 		return false
 	data.clear()
 	data.merge(migrated, true)
+	return true
+
+static func _migrate_cauldron_emplacement(data: Dictionary) -> bool:
+	var placed = data.get("placed_blocks", {})
+	var emplacements = data.get("emplacements", {})
+	if not placed is Dictionary or not emplacements is Dictionary:
+		return false
+	data["placed_blocks"] = placed
+	data["emplacements"] = emplacements
+	for encoded_position in (placed as Dictionary).keys():
+		var encoded_block_id = (placed as Dictionary)[encoded_position]
+		if not _is_integer_number(encoded_block_id) or int(encoded_block_id) != BlockId.Type.CAULDRON:
+			continue
+		if (emplacements as Dictionary).has(encoded_position):
+			return false
+		(emplacements as Dictionary)[encoded_position] = BlockId.Type.CAULDRON
+		(placed as Dictionary).erase(encoded_position)
 	return true
 
 static func _migrate_inventory_equipped_state(data: Dictionary) -> bool:

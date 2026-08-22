@@ -1,5 +1,5 @@
 extends Resource
-class_name CampfireAudioProfile
+class_name PositionalLoopAudioProfile
 
 @export var loop_stream: AudioStream
 @export_range(-80.0, 24.0, 0.1) var volume_db: float = -10.0

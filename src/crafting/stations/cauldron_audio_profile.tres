@@ -1,11 +1,11 @@
 [gd_resource type="Resource" script_class="PositionalLoopAudioProfile" load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://audio/positional_loop_audio_profile.gd" id="1_profile"]
-[ext_resource type="AudioStream" path="res://assets/audio/environment/campfire/fireplace_5_CC0.ogg" id="2_loop"]
+[ext_resource type="AudioStream" path="res://assets/audio/environment/cauldron/small_broth_in_a_pot_s0492_CC0.ogg" id="2_loop"]
 
 [resource]
 script = ExtResource("1_profile")
 loop_stream = ExtResource("2_loop")
-volume_db = -10.0
-unit_size = 7.0
-max_distance = 32.0
+volume_db = -14.5
+unit_size = 4.0
+max_distance = 18.0

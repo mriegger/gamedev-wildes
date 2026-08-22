@@ -267,8 +267,9 @@ Selecting a recipe plays a short UI sound. It contains the eight recipes that do
 guaranteed stone-dungeon reward and later appears in that dungeon's repeat pool rather than a
 crafting recipe. Basic Rune currently has no normal
 production acquisition. A placed anvil opens its own panel with the eight copper tool, weapon, and
-armor recipes plus copper arrows. A placed cauldron opens a food-and-potion panel; its initial recipe combines two
-pumpkins and two apples into one health potion. All catalogs
+armor recipes plus copper arrows. A placed 2×2 cauldron emits localized simmering audio and opens
+a food-and-potion panel; its initial recipe combines two pumpkins and two apples into one health
+potion. All catalogs
 show a short description of the selected output above its ingredients. Stat-bearing recipes show
 their item stats below the ingredients, with numeric values in the same yellow-gold used
 for weakness damage. Weapon stats include damage type, maximum damage and its authored range,

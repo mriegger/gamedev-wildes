@@ -4,6 +4,7 @@
 - `ambient/forest_night_avocado.ogg` provides continuous nighttime forest ambience.
 - `menu/sb_iha_confessions_modified.ogg` provides the main-menu music.
 - `environment/campfire/fireplace_5_CC0.ogg` provides looping positional campfire crackle.
+- `environment/cauldron/small_broth_in_a_pot_s0492_CC0.ogg` provides looping positional cauldron bubbling.
 - `combat/weapons/sword/draw/*.ogg` provides three sword-draw variations.
 - `combat/weapons/pickaxe/draw/*.ogg` provides three copper-pickaxe and copper-hoe equip variations.
 - `combat/impacts/creature/*.wav` provides three creature-impact variations.
@@ -43,6 +44,7 @@
 | `ambient/forest_night_avocado.ogg` | Avocado, prompted by Michael Riegger | Project-authored | Converted from the generated WAV source to looping Ogg Vorbis for streaming. |
 | `menu/sb_iha_confessions_modified.ogg` | [Confessions](https://www.scottbuckley.com.au/library/confessions/) – Scott Buckley | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | Modified for the game and converted from WAV to streaming Ogg Vorbis. Attribution: 'Confessions' by Scott Buckley - released under CC-BY 4.0. www.scottbuckley.com.au |
 | `environment/campfire/fireplace_5_CC0.ogg` | [Fireplace #5](https://bigsoundbank.com/fireplace-5-s2857.html) – Joseph SARDIN, BigSoundBank | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) | Unmodified 48 kHz stereo Ogg Vorbis source used as a looping positional campfire bed. Attribution is not required; documented here for provenance. |
+| `environment/cauldron/small_broth_in_a_pot_s0492_CC0.ogg` | [Small Broth in a Pot](https://bigsoundbank.com/small-broth-in-a-pot-s0492.html) – Joseph SARDIN, BigSoundBank | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) | Unmodified 48 kHz mono Ogg Vorbis source used as a looping positional cauldron bed. Retrieved 2026-08-22. Attribution is not required; documented here for provenance. |
 | `combat/weapons/sword/draw/*.ogg`, `combat/weapons/pickaxe/draw/*.ogg`, and `combat/impacts/creature/*.wav` (9 files) | [Voiceover Pack](https://kenney.nl/assets/voiceover-pack) – Kenney | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) | Attribution, license notice, and source credit are not required under CC0; documented here for provenance. The pickaxe files are copies of the three knife-draw sounds. |
 | `combat/impacts/player/player_hit.wav` | Muse, prompted by Michael Riegger | Project-authored | Player-hit impact feedback. |
 | `combat/weapons/hammer/impacts/low_thump_332670_CC0.ogg` | [low thump.wav](https://freesound.org/people/Reitanna/sounds/332670/) – Reitanna, Freesound sound 332670 | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) | Unmodified Freesound high-quality Ogg preview transcode of the original WAV, used for the copper hammer's ground impact. Attribution is not legally required under CC0; documented here for provenance. |

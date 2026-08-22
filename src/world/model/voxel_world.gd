@@ -77,11 +77,32 @@ func restore_emplacements(emplacements: Dictionary) -> bool:
 			_clear_emplacements()
 			return false
 		var block_id := int(emplacements[anchor])
+		if not BlockId.is_valid(block_id):
+			_clear_emplacements()
+			return false
+		var definition := block_catalog.get_definition(block_id)
+		if definition.emplacement == null:
+			_clear_emplacements()
+			return false
+		_ensure_emplacement_columns_generated(anchor, definition.emplacement)
 		if not can_place_emplacement(anchor, block_id):
 			_clear_emplacements()
 			return false
 		_index_emplacement(anchor, block_id)
 	return true
+
+func _ensure_emplacement_columns_generated(anchor: Vector3i, emplacement: BlockEmplacementDefinition) -> void:
+	var minimum := Vector2i.ZERO
+	var maximum := Vector2i.ZERO
+	for offset in emplacement.occupied_offsets + emplacement.support_offsets:
+		minimum = Vector2i(mini(minimum.x, offset.x), mini(minimum.y, offset.z))
+		maximum = Vector2i(maxi(maximum.x, offset.x), maxi(maximum.y, offset.z))
+	ensure_region_generated(
+		anchor.x + minimum.x,
+		anchor.z + minimum.y,
+		maximum.x - minimum.x + 1,
+		maximum.y - minimum.y + 1,
+	)
 
 func _clear_emplacements() -> void:
 	_emplacement_block_by_anchor.clear()
@@ -498,6 +519,17 @@ func get_emplacement_cells(anchor: Vector3i) -> Array[Vector3i]:
 	for offset in definition.emplacement.occupied_offsets:
 		cells.append(anchor + offset)
 	return cells
+
+func get_emplacement_bounds(anchor: Vector3i) -> AABB:
+	var cells := get_emplacement_cells(anchor)
+	if cells.is_empty():
+		return AABB(Vector3(anchor), Vector3.ONE)
+	var minimum := cells[0]
+	var maximum := cells[0]
+	for cell in cells:
+		minimum = Vector3i(mini(minimum.x, cell.x), mini(minimum.y, cell.y), mini(minimum.z, cell.z))
+		maximum = Vector3i(maxi(maximum.x, cell.x), maxi(maximum.y, cell.y), maxi(maximum.z, cell.z))
+	return AABB(Vector3(minimum), Vector3(maximum - minimum + Vector3i.ONE))
 
 func get_supported_emplacements(support_position: Vector3i) -> Array[Vector3i]:
 	var anchors: Array[Vector3i] = []

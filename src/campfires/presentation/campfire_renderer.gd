@@ -7,7 +7,7 @@ const MAX_SHADOW_CAMPFIRES: int = 1
 var campfire_instances: Dictionary[Vector3i, Node3D] = {}
 var campfire_lights: Dictionary[Vector3i, OmniLight3D] = {}
 var block_catalog: BlockCatalog
-var audio_profile: CampfireAudioProfile
+var audio_profile: PositionalLoopAudioProfile
 var player_ref: Node3D
 var _stone_material: StandardMaterial3D
 var _wood_material: StandardMaterial3D
@@ -15,7 +15,7 @@ var _ember_material: StandardMaterial3D
 var _placement_preview: Node3D
 var _shadow_update_timer: float = 0.0
 
-func setup(p_block_catalog: BlockCatalog, p_audio_profile: CampfireAudioProfile) -> void:
+func setup(p_block_catalog: BlockCatalog, p_audio_profile: PositionalLoopAudioProfile) -> void:
 	assert(p_block_catalog != null)
 	assert(p_audio_profile != null and p_audio_profile.validate())
 	block_catalog = p_block_catalog

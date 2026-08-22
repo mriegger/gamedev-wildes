@@ -199,7 +199,7 @@ func _run() -> void:
 	_finish()
 
 func _test_campfire(block_catalog: BlockCatalog, item_catalog: ItemCatalog, general_catalog: CraftingRecipeCatalog) -> void:
-	var audio_profile := load("res://campfires/campfire_audio_profile.tres") as CampfireAudioProfile
+	var audio_profile := load("res://campfires/campfire_audio_profile.tres") as PositionalLoopAudioProfile
 	_expect(audio_profile != null and audio_profile.validate(), "campfire audio profile is invalid")
 	var item := item_catalog.get_definition(&"campfire")
 	var placement := item.secondary_action as BlockPlacementActionDefinition
@@ -242,6 +242,7 @@ func _test_campfire(block_catalog: BlockCatalog, item_catalog: ItemCatalog, gene
 	await process_frame
 
 func _test_cauldron(block_catalog: BlockCatalog, item_catalog: ItemCatalog, general_catalog: CraftingRecipeCatalog, cauldron_catalog: CraftingRecipeCatalog) -> void:
+	var audio_profile := load("res://crafting/stations/cauldron_audio_profile.tres") as PositionalLoopAudioProfile
 	var cauldron_block := block_catalog.get_definition(BlockId.Type.CAULDRON)
 	var cauldron_item := item_catalog.get_definition(&"cauldron")
 	var placement := cauldron_item.secondary_action as BlockPlacementActionDefinition
@@ -249,6 +250,7 @@ func _test_cauldron(block_catalog: BlockCatalog, item_catalog: ItemCatalog, gene
 	_expect(not BlockId.is_chunk_cube(BlockId.Type.CAULDRON), "cauldron is still baked into the cube mesh")
 	_expect(BlockId.is_ao_solid(BlockId.Type.CAULDRON), "cauldron does not occlude ambient light")
 	_expect(cauldron_block.crafting_station != null and cauldron_block.crafting_station.id == &"cauldron", "cauldron station metadata is invalid")
+	_expect(cauldron_block.emplacement != null and cauldron_block.emplacement.occupied_offsets.size() == 8 and cauldron_block.emplacement.solid_offsets.size() == 4 and cauldron_block.emplacement.support_offsets.size() == 4, "cauldron does not reserve a supported 2x2 footprint")
 	_expect(cauldron_block.is_solid and not cauldron_block.is_opaque and cauldron_block.is_raycast_solid, "cauldron physical properties are invalid")
 	_expect(cauldron_block.is_breakable and cauldron_block.mining_tool_tag == &"pickaxe" and cauldron_block.minimum_mining_power == 1, "cauldron does not use normal pickaxe mining")
 	_expect(cauldron_block.drop_item_id == &"cauldron", "mined cauldron does not use the normal block drop")
@@ -275,6 +277,7 @@ func _test_cauldron(block_catalog: BlockCatalog, item_catalog: ItemCatalog, gene
 	_expect(not general_catalog.has_definition(&"health_potion"), "health potion leaked into general crafting")
 	_expect(cauldron_catalog.has_definition(&"health_potion"), "health potion is missing from cauldron crafting")
 	_expect(cauldron_catalog.get_definition(&"health_potion").get_ingredient_counts() == {&"pumpkin": 2, &"apple": 2}, "health potion recipe uses the wrong ingredients")
+	_expect(audio_profile != null and audio_profile.validate(), "cauldron audio profile is invalid")
 	var health_potion := item_catalog.get_definition(&"health_potion")
 	var potion_icon := health_potion.icon.get_image()
 	_expect(health_potion.max_stack == 20, "health potion stack limit is incorrect")
@@ -285,11 +288,12 @@ func _test_cauldron(block_catalog: BlockCatalog, item_catalog: ItemCatalog, gene
 
 	var renderer := CauldronRenderer.new()
 	root.add_child(renderer)
-	renderer.setup()
+	renderer.setup(audio_profile)
 	var position := Vector3i(3, 4, 5)
 	var rendered := renderer.spawn_cauldron(position)
 	_expect(rendered != null and rendered.position == Vector3(position), "cauldron renderer placed the model incorrectly")
-	_expect(rendered.get_child_count() == 14, "cauldron model does not contain the expected tripod and fire parts")
+	_expect(rendered.scale == Vector3.ONE * CauldronRenderer.MODEL_SCALE, "cauldron model was not scaled to its 2x2 footprint")
+	_expect(rendered.get_child_count() == 15, "cauldron model does not contain the expected tripod, fire, and audio parts")
 	var body := rendered.get_node_or_null("Body") as MeshInstance3D
 	var liquid := rendered.get_node_or_null("Liquid") as MeshInstance3D
 	var support_left := rendered.get_node_or_null("SupportLeft") as MeshInstance3D
@@ -298,6 +302,7 @@ func _test_cauldron(block_catalog: BlockCatalog, item_catalog: ItemCatalog, gene
 	var fire := rendered.get_node_or_null("FireEffect/Fire") as GPUParticles3D
 	var smoke := rendered.get_node_or_null("FireEffect/Smoke") as GPUParticles3D
 	var fire_light := rendered.get_node_or_null("FireLight") as OmniLight3D
+	var broth_audio := rendered.get_node_or_null("BrothAudio") as AudioStreamPlayer3D
 	_expect(body != null and body.mesh is CylinderMesh and (body.mesh as CylinderMesh).radial_segments == 8, "cauldron body is not low-poly")
 	_expect(liquid != null and liquid.mesh is CylinderMesh, "cauldron liquid surface is missing")
 	_expect(support_left != null and support_left.mesh is CylinderMesh and support_left.position.y > 0.4, "cauldron tripod support is missing")
@@ -308,17 +313,19 @@ func _test_cauldron(block_catalog: BlockCatalog, item_catalog: ItemCatalog, gene
 		if not child is MeshInstance3D:
 			continue
 		var model_mesh := child as MeshInstance3D
-		var child_bounds: AABB = model_mesh.transform * model_mesh.get_aabb()
+		var child_bounds: AABB = Transform3D(Basis.from_scale(rendered.scale), Vector3.ZERO) * model_mesh.transform * model_mesh.get_aabb()
 		model_bounds = model_bounds.merge(child_bounds) if found_model_mesh else child_bounds
 		found_model_mesh = true
-	_expect(found_model_mesh and model_bounds.position.x >= 0.0 and model_bounds.position.y >= 0.0 and model_bounds.position.z >= 0.0, "cauldron model extends below or beside its occupied voxel")
-	_expect(model_bounds.end.x <= 1.0 and model_bounds.end.y <= 1.0 and model_bounds.end.z <= 1.0, "cauldron model extends into a neighboring voxel")
+	_expect(found_model_mesh and model_bounds.position.x >= 0.0 and model_bounds.position.y >= 0.0 and model_bounds.position.z >= 0.0, "cauldron model extends outside its occupied footprint")
+	_expect(model_bounds.end.x <= 2.0 and model_bounds.end.y <= 2.0 and model_bounds.end.z <= 2.0, "cauldron model extends beyond its 2x2 volume")
 	_expect(fire != null and fire.emitting and fire.amount == 12, "cauldron fire effect is missing")
 	_expect(smoke != null and smoke.emitting and smoke.amount == 8, "cauldron smoke effect is missing")
 	var smoke_mesh := smoke.draw_pass_1 as SphereMesh if smoke != null else null
 	var smoke_material := smoke_mesh.material as StandardMaterial3D if smoke_mesh != null else null
 	_expect(smoke_material != null and smoke_material.vertex_color_use_as_albedo and smoke_material.transparency == BaseMaterial3D.TRANSPARENCY_ALPHA, "cauldron smoke does not use its fading particle colors")
 	_expect(fire_light != null and fire_light.light_energy > 0.0 and fire_light.light_energy < 1.2 and fire_light.omni_range < 9.0, "cauldron fire light is not dimmer than a torch")
+	_expect(broth_audio != null and broth_audio.bus == &"Ambient" and broth_audio.stream is AudioStreamOggVorbis and (broth_audio.stream as AudioStreamOggVorbis).loop, "cauldron positional broth loop is invalid")
+	_expect(broth_audio != null and is_equal_approx(broth_audio.volume_db, audio_profile.volume_db) and is_equal_approx(broth_audio.unit_size, audio_profile.unit_size) and is_equal_approx(broth_audio.max_distance, audio_profile.max_distance), "cauldron broth audio does not use its proximity profile")
 	renderer.set_hovered_cauldron(position)
 	_expect(body.material_overlay != null and liquid.material_overlay != null, "hover highlight did not cover the full cauldron")
 	renderer.set_hovered_cauldron(null)
@@ -349,7 +356,10 @@ func _test_cauldron(block_catalog: BlockCatalog, item_catalog: ItemCatalog, gene
 
 	var world := VoxelWorld.new(20, 36, 5, 12.0, block_catalog)
 	var pickup_position := Vector3i(2, 20, 2)
-	_expect(VoxelWorldTestFixture.commit_place(world, pickup_position, BlockId.Type.CAULDRON) != null, "test cauldron could not be placed")
+	for offset in cauldron_block.emplacement.support_offsets:
+		_expect(VoxelWorldTestFixture.commit_place(world, pickup_position + offset, BlockId.Type.STONE) != null, "test cauldron support could not be placed")
+	_expect(VoxelWorldTestFixture.commit_place_emplacement(world, pickup_position, BlockId.Type.CAULDRON) != null, "test cauldron could not be placed")
+	_expect(world.get_emplacement_bounds(pickup_position) == AABB(Vector3(pickup_position), Vector3(2.0, 2.0, 2.0)), "cauldron emplacement bounds are not 2x2x2")
 	var unarmed_action := load("res://items/actions/definitions/unarmed_mining.tres") as MiningActionDefinition
 	var pickaxe_action := item_catalog.get_definition(&"stone_pickaxe").primary_action as MiningActionDefinition
 	_expect(not unarmed_action.can_mine(cauldron_block), "bare hands can mine a cauldron")
@@ -360,11 +370,13 @@ func _test_cauldron(block_catalog: BlockCatalog, item_catalog: ItemCatalog, gene
 	_expect(block_catalog.get_definition((mine_batch[0] as BlockEdit).old_id).drop_item_id == &"cauldron", "mined cauldron returned the wrong item")
 
 	var other_chunk_position := Vector3i(45, 20, 2)
-	_expect(VoxelWorldTestFixture.commit_place(world, pickup_position, BlockId.Type.CAULDRON) != null, "indexed-load cauldron could not be placed")
-	_expect(VoxelWorldTestFixture.commit_place(world, other_chunk_position, BlockId.Type.CAULDRON) != null, "other-chunk cauldron could not be placed")
+	_expect(VoxelWorldTestFixture.commit_place_emplacement(world, pickup_position, BlockId.Type.CAULDRON) != null, "indexed-load cauldron could not be placed")
+	for offset in cauldron_block.emplacement.support_offsets:
+		_expect(VoxelWorldTestFixture.commit_place(world, other_chunk_position + offset, BlockId.Type.STONE) != null, "other-chunk cauldron support could not be placed")
+	_expect(VoxelWorldTestFixture.commit_place_emplacement(world, other_chunk_position, BlockId.Type.CAULDRON) != null, "other-chunk cauldron could not be placed")
 	var chunk_renderer := CauldronRenderer.new()
 	root.add_child(chunk_renderer)
-	chunk_renderer.setup()
+	chunk_renderer.setup(audio_profile)
 	_expect(chunk_renderer.load_cauldrons_for_chunk(0, 0, 20, world) == 1, "indexed chunk load did not load the local cauldron")
 	_expect(not chunk_renderer.cauldron_instances.has(other_chunk_position), "indexed chunk load scanned a cauldron from another chunk")
 	renderer.queue_free()

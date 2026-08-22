@@ -2,8 +2,10 @@ extends Node3D
 class_name CauldronRenderer
 
 const HIGHLIGHT_ALPHA: float = 0.06
+const MODEL_SCALE: float = 2.0
 
 var cauldron_instances: Dictionary[Vector3i, Node3D] = {}
+var audio_profile: PositionalLoopAudioProfile
 var _hovered_position: Variant = null
 var _iron_material: StandardMaterial3D
 var _liquid_material: StandardMaterial3D
@@ -13,7 +15,9 @@ var _ember_material: StandardMaterial3D
 var _highlight_material: StandardMaterial3D
 var _placement_preview: Node3D
 
-func setup() -> void:
+func setup(p_audio_profile: PositionalLoopAudioProfile) -> void:
+	assert(p_audio_profile != null and p_audio_profile.validate())
+	audio_profile = p_audio_profile
 	_iron_material = _make_iron_material()
 	_liquid_material = _make_liquid_material()
 	_wood_material = _make_wood_material()
@@ -40,15 +44,11 @@ func remove_cauldron(position: Vector3i) -> bool:
 		_hovered_position = null
 	return true
 
-func load_cauldrons_for_chunk(cx: int, cz: int, chunk_size: int, voxel_world: VoxelWorld) -> int:
+func load_cauldrons_for_chunk(cx: int, cz: int, _chunk_size: int, voxel_world: VoxelWorld) -> int:
 	var loaded := 0
-	var origin_x := cx * chunk_size
-	var origin_z := cz * chunk_size
-	var placed := voxel_world.snapshot_edits_for_chunk(origin_x, origin_z)["placed"] as Dictionary
-	for position in placed:
-		if placed[position] != BlockId.Type.CAULDRON:
-			continue
-		if position.x < origin_x or position.x >= origin_x + chunk_size or position.z < origin_z or position.z >= origin_z + chunk_size:
+	var emplacements := voxel_world.get_emplacements_for_chunk(cx, cz)
+	for position in emplacements:
+		if emplacements[position] != BlockId.Type.CAULDRON:
 			continue
 		if not cauldron_instances.has(position):
 			spawn_cauldron(position)
@@ -87,6 +87,7 @@ func set_placement_preview(position: Variant, can_place: bool) -> void:
 func _create_cauldron_visual(name_value: String, include_effects: bool = true) -> Node3D:
 	var root := Node3D.new()
 	root.name = name_value
+	root.scale = Vector3.ONE * MODEL_SCALE
 	var apex := Vector3(0.5, 0.96, 0.5)
 	_add_cylinder_between(root, "SupportLeft", Vector3(0.12, 0.04, 0.28), apex, 0.035, 6, _wood_material)
 	_add_cylinder_between(root, "SupportRight", Vector3(0.88, 0.04, 0.28), apex, 0.035, 6, _wood_material)
@@ -103,6 +104,7 @@ func _create_cauldron_visual(name_value: String, include_effects: bool = true) -
 	if include_effects:
 		_add_fire_effect(root)
 		_add_fire_light(root)
+		_add_audio(root)
 	return root
 
 func _add_fire_effect(root: Node3D) -> void:
@@ -122,6 +124,20 @@ func _add_fire_light(root: Node3D) -> void:
 	light.omni_attenuation = 1.15
 	light.shadow_enabled = false
 	root.add_child(light)
+
+func _add_audio(root: Node3D) -> void:
+	var player := AudioStreamPlayer3D.new()
+	player.name = "BrothAudio"
+	player.position = Vector3(0.5, 0.44, 0.5)
+	player.stream = audio_profile.loop_stream.duplicate()
+	if player.stream is AudioStreamOggVorbis:
+		(player.stream as AudioStreamOggVorbis).loop = true
+	player.volume_db = audio_profile.volume_db
+	player.unit_size = audio_profile.unit_size
+	player.max_distance = audio_profile.max_distance
+	player.bus = &"Ambient"
+	player.autoplay = true
+	root.add_child(player)
 
 func _add_cylinder_between(root: Node3D, name_value: String, start: Vector3, end: Vector3, radius: float, radial_segments: int, material: Material) -> void:
 	var direction := end - start
