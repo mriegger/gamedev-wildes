@@ -231,16 +231,16 @@ back to a Progression-tab reminder. Resistance tips name the enemy's authored af
 colors and recommend a weak or non-resistant weapon type.
 Held tools use either runtime-extruded pixel art or authored 3D scenes.
 
-**Loot.** Overworld enemies roll deterministic per-species loot pools when defeated. A zombie
-independently has a 75% chance to drop 1–3 Copper and a 17% chance to select one gear reward weighted
-10 plain Copper Sword, 4 Vicious/Nimble-affixed Copper Sword socketed with a Power Rune, and 3 Stout
-Copper Helmet. Each physical weapon or armor copy has its own stable instance ID, rolled affixes,
-and ordered rune slots even when two copies share the same item definition. Material drops merge
-nearby and expire after five minutes; when collected, they fill matching hotbar stacks before using
-backpack capacity. Equipment does not time-expire. The bounded world-loot state
-survives chunk streaming, transitions, and save/load. A full backpack leaves the drop in the world; at the hard
-128-entry cap, admitting a new batch evicts the nearest-expiring material first, then the oldest
-equipment entry only when every retained entry is equipment.
+**Loot.** Overworld enemies roll deterministic per-species loot pools when defeated. A zombie has a
+4% chance to select one gear reward weighted 5 plain Copper Sword, 2 Vicious/Nimble-affixed Copper
+Sword socketed with a Power Rune, and 21 Stout Copper Helmet. This yields a combined 1% sword chance
+and 3% helmet chance; zombies no longer drop Copper. Each physical weapon or armor copy has its own
+stable instance ID, rolled affixes, and ordered rune slots even when two copies share the same item
+definition. Material drops merge nearby and expire after five minutes; when collected, they fill
+matching hotbar stacks before using backpack capacity. Equipment does not time-expire. The bounded
+world-loot state survives chunk streaming, transitions, and save/load. A full backpack leaves the
+drop in the world; at the hard 128-entry cap, admitting a new batch evicts the nearest-expiring
+material first, then the oldest equipment entry only when every retained entry is equipment.
 
 **Lighting.** Per-vertex ambient occlusion is baked into chunk meshes. A directional sun plus a
 fill light drive real-time shadows, and a keyframed day/night profile interpolates sky, ambient,
@@ -328,6 +328,12 @@ recreated on entry. Dungeon attempt indices, completion counts, and claimed firs
 are saved independently from
 the transient layout and chest contents. Dungeon progress changes use the same debounced save path,
 and a successful completion requests an immediate save.
+
+## PR Index
+
+| PR | Change |
+| --- | --- |
+| [#163](https://github.com/codimango/gamedev-wildes/pull/163) | Replace flat enemy-loot markers with animated item miniatures and rebalance zombie drops. |
 
 ## Project Structure
 

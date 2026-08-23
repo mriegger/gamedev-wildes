@@ -21,6 +21,7 @@ var _voxel_world: VoxelWorld
 var _position_ready: Callable
 var _drop_scene: PackedScene
 var _views: Dictionary = {}
+var _drop_meshes: Dictionary = {}
 var _streaming_entry_ids: Array[int] = []
 var _streaming_cursor: int = 0
 var _lifetime_accumulator: float = 0.0
@@ -316,10 +317,21 @@ func _sync_view(entry: WorldLootEntry) -> void:
 		assert(view != null)
 		add_child(view)
 		var item_definition := _item_catalog.get_definition(entry.stack.item_id)
-		view.setup(item_definition)
+		view.setup(item_definition, _get_drop_mesh(entry.stack.item_id), entry.entry_id)
 		view.hover_changed.connect(_on_view_hover_changed.bind(entry.entry_id))
 		_views[entry.entry_id] = view
 	view.sync_world_position(entry.world_position)
+
+func _get_drop_mesh(item_id: StringName) -> ArrayMesh:
+	var definition := _item_catalog.get_definition(item_id)
+	if definition.world_model != null:
+		return null
+	var mesh := _drop_meshes.get(item_id) as ArrayMesh
+	if mesh != null:
+		return mesh
+	mesh = LootDropView.build_item_mesh(definition.icon)
+	_drop_meshes[item_id] = mesh
+	return mesh
 
 func _remove_view(entry_id: int) -> void:
 	var view := _views.get(entry_id) as LootDropView
@@ -375,6 +387,7 @@ func shutdown() -> void:
 	_voxel_world = null
 	_position_ready = Callable()
 	_drop_scene = null
+	_drop_meshes.clear()
 	_streaming_entry_ids.clear()
 	_pending_defeats.clear()
 	_draining_pending_defeats = false

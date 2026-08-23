@@ -21,6 +21,7 @@ func _run() -> void:
 	_expect(pickup_audio_scene != null and pickup_audio_scene.can_instantiate(), "loot pickup audio did not load")
 	_expect(player_scene != null and player_scene.can_instantiate(), "player scene did not load")
 	_expect(stats_definition != null and stats_definition.validate(), "player stats definition invalid")
+	_test_drop_view_presentation(item_catalog, drop_scene)
 	_test_variant_stats(item_catalog, stats_definition)
 	_test_partial_inventory_preparation(item_catalog)
 	_test_material_pickup_prefers_existing_hotbar_stack(item_catalog)
@@ -49,6 +50,61 @@ func _run() -> void:
 		player_scene,
 	)
 	_finish()
+
+func _test_drop_view_presentation(item_catalog: ItemCatalog, drop_scene: PackedScene) -> void:
+	var copper := item_catalog.get_definition(&"copper")
+	var helmet := item_catalog.get_definition(&"copper_helmet")
+	var apple := item_catalog.get_definition(&"apple")
+	var copper_mesh := LootDropView.build_item_mesh(copper.icon)
+	var helmet_mesh := LootDropView.build_item_mesh(helmet.icon)
+	var apple_mesh := LootDropView.build_item_mesh(apple.icon)
+	var copper_bounds := copper_mesh.get_aabb()
+	var helmet_bounds := helmet_mesh.get_aabb()
+	_expect(
+		is_equal_approx(maxf(copper_bounds.size.x, copper_bounds.size.y), LootDropView.ITEM_MAX_DIMENSION),
+		"copper drop visual did not normalize its icon size",
+	)
+	_expect(
+		is_equal_approx(maxf(helmet_bounds.size.x, helmet_bounds.size.y), LootDropView.ITEM_MAX_DIMENSION),
+		"helmet drop visual did not normalize its icon size",
+	)
+	_expect(copper_bounds.size.z > 0.0 and helmet_bounds.size.z > 0.0, "loot drop visuals remained flat")
+	var apple_vertices := apple_mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX] as PackedVector3Array
+	var maximum_bounded_vertex_count := PixelItemMeshBuilder.MAX_CENTERED_SOURCE_DIMENSION * PixelItemMeshBuilder.MAX_CENTERED_SOURCE_DIMENSION * 36
+	_expect(apple_vertices.size() <= maximum_bounded_vertex_count, "high-resolution loot icon exceeded the bounded mesh budget")
+	_expect(
+		Vector2(copper_bounds.get_center().x, copper_bounds.get_center().y).is_zero_approx()
+		and Vector2(helmet_bounds.get_center().x, helmet_bounds.get_center().y).is_zero_approx(),
+		"loot drop visuals were not centered around their opaque pixels",
+	)
+	var material := copper_mesh.surface_get_material(0) as StandardMaterial3D
+	_expect(material != null and material.albedo_texture == copper.icon, "loot drop visual lost the canonical item icon")
+	_expect(
+		material != null and material.texture_filter == BaseMaterial3D.TEXTURE_FILTER_NEAREST,
+		"loot drop visual blurred the pixel-art icon",
+	)
+	_expect(
+		material != null and material.transparency == BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR,
+		"loot drop visual did not preserve transparent icon edges",
+	)
+	var view := drop_scene.instantiate() as LootDropView
+	_expect(view != null, "loot drop presentation scene did not instantiate as LootDropView")
+	if view == null:
+		return
+	root.add_child(view)
+	view.position = Vector3(3.0, 2.0, -4.0)
+	view.setup(copper, copper_mesh, 7)
+	var item := view.get_node("VisualRoot/Item") as MeshInstance3D
+	var shadow := view.get_node("Shadow") as MeshInstance3D
+	var visual_root := view.get_node("VisualRoot") as Node3D
+	_expect(item != null and item.mesh == copper_mesh, "loot drop view did not present the generated item mesh")
+	_expect(shadow != null and shadow.mesh is CylinderMesh, "loot drop view lost its low-poly contact shadow")
+	var root_position := view.position
+	var visual_transform := visual_root.transform
+	view._process(0.5)
+	_expect(view.position.is_equal_approx(root_position), "loot drop animation moved the authoritative view root")
+	_expect(not visual_root.transform.is_equal_approx(visual_transform), "loot drop visual did not hover and rotate")
+	view.queue_free()
 
 func _test_variant_stats(item_catalog: ItemCatalog, stats_definition: PlayerStatsDefinition) -> void:
 	var inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
@@ -271,11 +327,11 @@ func _test_bird_feather_drops(
 	_expect(dropped_item_ids == expected_item_ids, "bird color variants dropped the wrong feather items")
 	_expect(coordinator.get_child_count() == 3, "feather drops did not create three world views")
 	for child in coordinator.get_children():
-		var icon_sprite := child.get_node("Icon") as Sprite3D
-		var model := child.get_node("Model") as MeshInstance3D
+		var item := child.get_node("VisualRoot/Item") as MeshInstance3D
+		var model := child.get_node("VisualRoot/Model") as MeshInstance3D
 		var hover_box := child.get_node("HoverBox") as Node3D
 		var pickup_area := child.get_node("PickupArea") as Area3D
-		_expect(not icon_sprite.visible and model.visible and model.mesh != null, "feather world view did not use its 3D model")
+		_expect(not item.visible and model.visible and model.mesh != null, "feather world view did not use its 3D model")
 		_expect(model.scale.is_equal_approx(Vector3.ONE * 1.125), "feather world model used the wrong scale")
 		pickup_area.mouse_entered.emit()
 		_expect(hover_box.visible, "feather hover did not show its selection box")
@@ -354,6 +410,7 @@ func _test_partial_pickup_streaming_and_lifetime(
 	)
 	var coordinator := fixture["coordinator"] as OverworldLootCoordinator
 	var entity_runtime := fixture["entity_runtime"] as EntityRuntime
+	_expect(coordinator._get_drop_mesh(&"copper") == coordinator._get_drop_mesh(&"copper"), "loot drop meshes were not cached by item ID")
 	_expect(state.get_entry_count() == 2, "persistent materials were not active after setup")
 	_expect(coordinator.get_child_count() == 2, "ready persistent materials did not create views")
 	var state_observations: Array[Dictionary] = []

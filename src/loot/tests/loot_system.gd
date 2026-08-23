@@ -44,20 +44,20 @@ func _test_catalog_and_zombie_configuration() -> void:
 	if zombie_pool == null:
 		return
 	_expect(zombie_pool.id == &"zombie", "zombie loot pool ID mismatch")
-	_expect(zombie_pool.independent_rolls.size() == 1, "zombie independent roll count mismatch")
+	_expect(zombie_pool.independent_rolls.is_empty(), "zombie retained an independent material roll")
 	_expect(zombie_pool.exclusive_groups.size() == 1, "zombie exclusive group count mismatch")
-	if zombie_pool.independent_rolls.size() == 1:
-		var copper := zombie_pool.independent_rolls[0]
-		_expect(copper.id == &"copper" and is_equal_approx(copper.chance, 0.75), "zombie copper chance mismatch")
-		_expect(copper.drop.item == _item_catalog.get_definition(&"copper"), "zombie copper item is not canonical")
-		_expect(copper.drop.minimum_count == 1 and copper.drop.maximum_count == 3, "zombie copper count mismatch")
 	if zombie_pool.exclusive_groups.size() == 1:
 		var gear := zombie_pool.exclusive_groups[0]
-		_expect(gear.id == &"gear" and is_equal_approx(gear.chance, 0.17), "zombie gear group chance mismatch")
+		_expect(gear.id == &"gear" and is_equal_approx(gear.chance, 0.04), "zombie gear group chance mismatch")
 		var weights: Dictionary = {}
+		var total_weight := 0.0
 		for choice in gear.choices:
 			weights[choice.id] = choice.weight
-		_expect(weights == {&"plain_copper_sword": 10.0, &"rolled_runed_copper_sword": 4.0, &"stout_copper_helmet": 3.0}, "zombie gear weights mismatch")
+			total_weight += choice.weight
+		_expect(weights == {&"plain_copper_sword": 5.0, &"rolled_runed_copper_sword": 2.0, &"stout_copper_helmet": 21.0}, "zombie gear weights mismatch")
+		var sword_weight := float(weights.get(&"plain_copper_sword", 0.0)) + float(weights.get(&"rolled_runed_copper_sword", 0.0))
+		_expect(is_equal_approx(gear.chance * sword_weight / total_weight, 0.01), "zombie combined sword chance mismatch")
+		_expect(is_equal_approx(gear.chance * float(weights.get(&"stout_copper_helmet", 0.0)) / total_weight, 0.03), "zombie helmet chance mismatch")
 		var rolled := _choice_by_id(gear, &"rolled_runed_copper_sword")
 		if rolled != null:
 			var equipment_roll := rolled.drop.equipment_roll
@@ -311,30 +311,31 @@ func _test_malformed_definitions() -> void:
 
 func _test_zombie_distribution() -> void:
 	var pool := load("res://loot/pools/zombie.tres") as LootPoolDefinition
-	var copper_count := 0
 	var gear_count := 0
+	var sword_count := 0
+	var helmet_count := 0
 	var categories: Dictionary = {}
 	var rolled_runes: Dictionary = {}
 	var rolled_affixes: Dictionary = {}
 	var nimble_amounts: Dictionary = {}
-	for seed in range(1000):
+	for seed in range(10000):
 		var drops := _resolve(pool, seed, EquipmentInstanceFactory.new(_item_catalog))
-		_expect(drops.size() <= 2, "zombie emitted more than copper plus one gear choice")
+		_expect(drops.size() <= 1, "zombie emitted more than one exclusive gear choice")
 		var seed_gear_count := 0
 		for stack in drops:
-			if stack.item_id == &"copper":
-				copper_count += 1
-				_expect(stack.count >= 1 and stack.count <= 3, "zombie copper count left configured range")
-				continue
+			_expect(stack.item_id != &"copper", "zombie still dropped copper")
 			seed_gear_count += 1
 			gear_count += 1
 			if stack.item_id == &"copper_helmet":
+				helmet_count += 1
 				categories[&"helmet"] = true
 				_expect(stack.equipment_instance.affixes.size() == 1 and stack.equipment_instance.affixes[0].affix_id == &"stout", "zombie special helmet lost Stout")
 			elif stack.item_id == &"copper_sword" and stack.equipment_instance.affixes.is_empty():
+				sword_count += 1
 				categories[&"plain"] = true
 				_expect(stack.equipment_instance.socketed_rune_ids.is_empty(), "plain zombie sword gained runes")
 			elif stack.item_id == &"copper_sword":
+				sword_count += 1
 				categories[&"rolled"] = true
 				_expect(stack.equipment_instance.socketed_rune_ids.size() == 1, "rolled zombie sword rune slot mismatch")
 				for rune_id in stack.equipment_instance.socketed_rune_ids:
@@ -344,8 +345,9 @@ func _test_zombie_distribution() -> void:
 					if affix.affix_id == &"nimble":
 						nimble_amounts[snappedf(affix.stat_rolls[0].amount, 0.000001)] = true
 		_expect(seed_gear_count <= 1, "zombie exclusive gear group emitted multiple items")
-	_expect(copper_count >= 680 and copper_count <= 820, "zombie copper frequency left expected tolerance: %d" % copper_count)
-	_expect(gear_count >= 115 and gear_count <= 225, "zombie gear frequency left expected tolerance: %d" % gear_count)
+	_expect(sword_count >= 60 and sword_count <= 140, "zombie sword frequency left expected tolerance: %d" % sword_count)
+	_expect(helmet_count >= 230 and helmet_count <= 370, "zombie helmet frequency left expected tolerance: %d" % helmet_count)
+	_expect(gear_count >= 320 and gear_count <= 480, "zombie gear frequency left expected tolerance: %d" % gear_count)
 	_expect(categories.size() == 3, "zombie gear choices were not all reachable")
 	_expect(rolled_runes.size() == 1 and rolled_runes.has(&"power_rune"), "zombie gear exposed a rune outside the Power Rune pool")
 	_expect(rolled_affixes.has(&"vicious") and rolled_affixes.has(&"nimble"), "zombie random affixes were not both reachable")

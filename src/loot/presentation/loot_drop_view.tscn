@@ -1,6 +1,19 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://loot/presentation/loot_drop_view.gd" id="1_view"]
+
+[sub_resource type="StandardMaterial3D" id="Material_shadow"]
+transparency = 1
+shading_mode = 0
+albedo_color = Color(0.025, 0.03, 0.035, 0.28)
+
+[sub_resource type="CylinderMesh" id="Cylinder_shadow"]
+material = SubResource("Material_shadow")
+top_radius = 0.3
+bottom_radius = 0.3
+height = 0.015
+radial_segments = 8
+rings = 1
 
 [sub_resource type="BoxShape3D" id="BoxShape_pickup"]
 size = Vector3(0.7, 0.5, 1.45)
@@ -8,16 +21,19 @@ size = Vector3(0.7, 0.5, 1.45)
 [node name="LootDropView" type="Node3D"]
 script = ExtResource("1_view")
 
-[node name="Icon" type="Sprite3D" parent="."]
-position = Vector3(0, 0.5, 0)
-pixel_size = 0.015
-billboard = 1
-texture_filter = 0
-shaded = false
+[node name="Shadow" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.012, 0)
+cast_shadow = 0
+mesh = SubResource("Cylinder_shadow")
 
-[node name="Model" type="MeshInstance3D" parent="."]
+[node name="VisualRoot" type="Node3D" parent="."]
+position = Vector3(0, 0.58, 0)
+
+[node name="Item" type="MeshInstance3D" parent="VisualRoot"]
+
+[node name="Model" type="MeshInstance3D" parent="VisualRoot"]
 visible = false
-position = Vector3(0, 0.08, 0)
+position = Vector3(0, -0.5, 0)
 
 [node name="PickupArea" type="Area3D" parent="."]
 position = Vector3(0, 0.25, 0)

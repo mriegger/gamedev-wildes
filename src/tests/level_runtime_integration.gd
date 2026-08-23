@@ -11,6 +11,7 @@ const CATALOG_PATH: String = "res://levels/content/dungeons/stone/level_catalog.
 const BLOCK_CATALOG_PATH: String = "res://blocks/block_catalog.tres"
 const LIFECYCLE_ITERATIONS: int = 12
 const GAME_TRANSITION_CYCLES: int = 3
+const ZOMBIE_DROP_SEED: int = 38
 
 class TransitionGame:
 	extends Game
@@ -543,15 +544,14 @@ func _test_game_transitions(catalog: LevelCatalog, block_catalog: BlockCatalog, 
 		_position_ready,
 		game.loot_drop_scene,
 	)
-	for loot_seed in range(10):
-		entities.get_runtime().entity_defeated.emit(
-			EntityDefeat.new(
-				loot_seed + 1,
-				&"zombie",
-				Vector3(200.0 + float(loot_seed), 0.0, 200.0),
-				loot_seed,
-			),
-		)
+	entities.get_runtime().entity_defeated.emit(
+		EntityDefeat.new(
+			1,
+			&"zombie",
+			Vector3(200.0, 0.0, 200.0),
+			ZOMBIE_DROP_SEED,
+		),
+	)
 	_expect(game.world_loot_state.get_entry_count() > 0, "Game-owned loot state did not receive composed entity defeats")
 	_expect(loot.get_child_count() == game.world_loot_state.get_entry_count(), "Game-composed loot views did not follow state")
 	game._bind_entity_context(voxel_world, entities.get_runtime(), _position_ready)

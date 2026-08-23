@@ -123,20 +123,19 @@ produce the same result, and reordering arrays does not change it.
 
 The current `src/loot/pools/zombie.tres` contains:
 
-- an independent 75% roll for 1–3 Copper
-- a separate 17% exclusive-group gate with weights 10 plain Copper Sword, 4 rolled-and-runed
-  Copper Sword, and 3 Stout Copper Helmet
+- a 4% exclusive-group gate with weights 5 plain Copper Sword, 2 rolled-and-runed Copper Sword,
+  and 21 Stout Copper Helmet, yielding a combined 1% sword chance and 3% helmet chance
 - one or two equal-weight Vicious/Nimble affixes on the rolled sword, selected without replacement
 - one rune slot on that sword containing Power Rune
 
-The gear weights apply only after the 17% group gate succeeds. Copper and gear rolls are independent,
-so a defeat may produce neither, either one, or both.
+The gear weights apply only after the 4% group gate succeeds. Zombies do not drop Copper, and the
+exclusive group emits at most one item.
 
 To add one guaranteed Sand to every zombie defeat, add a `LootDropDefinition` referencing
 `src/items/definitions/sand_block.tres` with minimum and maximum count one. Wrap it in a
 `LootIndependentRollDefinition` with a new stable ID such as `sand` and `chance = 1.0`, then append
-that roll to the pool's `independent_rolls`. This does not replace or perturb the keyed Copper and
-gear decisions. To make Sand the only possible result, keep only that independent roll and clear the
+that roll to the pool's `independent_rolls`. This does not replace or perturb the keyed gear
+decision. To make Sand the only possible result, keep only that independent roll and clear the
 pool's exclusive groups.
 
 For random affixes, set the minimum and maximum random-affix counts and add weighted

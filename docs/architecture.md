@@ -381,11 +381,11 @@ an affix stat uses one exact value when its minimum and maximum are equal.
 Catalog validation rejects non-canonical or incompatible item, affix, and rune resources before
 gameplay starts.
 
-The current zombie pool independently rolls a 75% chance for 1–3 Copper. It separately has a 17%
-chance to choose exactly one gear result with weights 10 plain Copper Sword, 4 Copper Sword with
-one or two random Vicious/Nimble affixes plus one Power Rune, and 3 Copper Helmet with
-the fixed Stout affix. The rolled sword is not a separate variant or item ID: it is another
-`copper_sword` instance whose per-copy data records the result.
+The current zombie pool has a 4% chance to choose exactly one gear result with weights 5 plain
+Copper Sword, 2 Copper Sword with one or two random Vicious/Nimble affixes plus one Power Rune, and
+21 Copper Helmet with the fixed Stout affix. This produces a combined 1% sword chance and 3% helmet
+chance, and zombies do not drop Copper. The rolled sword is not a separate variant or item ID: it is
+another `copper_sword` instance whose per-copy data records the result.
 
 Affixes and runes currently contribute numeric stat modifiers; they are not a generic behavior-trait
 framework. A future effect such as flame or knockback must introduce its concrete typed definition,
@@ -410,10 +410,13 @@ while their batch is being admitted, so an all-equipment state cannot permanentl
 Pickup is another prepared cross-owner transaction. Materials may move partially into available
 inventory capacity while the remainder keeps its world entry ID and lifetime; equipment moves only
 as one complete instance. Inventory, active loadout stats, and world loot commit before observers are
-notified. Chunk readiness controls `LootDropView` nodes only: streaming a position out removes its
-view but not its state, and streaming it back recreates the view. Dungeon and structure-designer
-transitions suspend views, pickup, and lifetime advancement without clearing entries. Shutdown also
-leaves `WorldLootState` intact for the session owner and save system.
+notified. Each `LootDropView` uses an authored world model when one exists and otherwise presents a
+bounded voxel mesh cached by canonical item ID. Its visual child owns bobbing and rotation while its
+root owns terrain fall and the authoritative world position. Chunk readiness controls views only:
+streaming a position out removes its view but not its state, and streaming it back recreates the
+view. Dungeon and structure-designer transitions suspend views, pickup, and lifetime advancement
+without clearing entries. Shutdown also leaves `WorldLootState` intact for the session owner and
+save system.
 
 `Game` owns player stats and handles their completed health-depleted transition. Defeat puts
 the player motor into an input-blocking stopped state, closes inventory and debug panels, and
