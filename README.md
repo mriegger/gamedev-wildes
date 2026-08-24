@@ -333,6 +333,7 @@ and a successful completion requests an immediate save.
 
 | PR | Change |
 | --- | --- |
+| [#192](https://github.com/codimango/gamedev-wildes/pull/192) | Let apples produce plantable seeds that grow into apple trees over twelve game hours. |
 | [#163](https://github.com/codimango/gamedev-wildes/pull/163) | Replace flat enemy-loot markers with animated item miniatures and rebalance zombie drops. |
 
 ## Project Structure

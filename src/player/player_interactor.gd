@@ -29,6 +29,7 @@ var projectile_runtime: ArrowProjectileRuntime = null
 var entity_runtime: EntityRuntime = null
 var harvest: HarvestCoordinator = null
 var item_consumption: ItemConsumptionCoordinator = null
+var apple_planting: ApplePlantingCoordinator = null
 var _input_buffer: InputBuffer = null
 var _block_interaction_handler: Callable
 var _block_break_validator: Callable
@@ -141,6 +142,12 @@ func setup_consumption(consumption_coordinator: ItemConsumptionCoordinator) -> v
 	assert(consumption_coordinator != null)
 	assert(item_consumption == null)
 	item_consumption = consumption_coordinator
+
+func setup_apple_planting(planting_coordinator: ApplePlantingCoordinator) -> void:
+	assert(_is_setup)
+	assert(planting_coordinator != null)
+	assert(apple_planting == null)
+	apple_planting = planting_coordinator
 
 func setup_projectiles(p_projectile_runtime: ArrowProjectileRuntime) -> void:
 	assert(_is_setup)
@@ -464,6 +471,13 @@ func _handle_item_actions(delta):
 		item_consumption.try_consume_selected()
 		_secondary_use_consumed_until_release = _input_buffer.secondary_use_physical_pressed
 		return
+	var selected_planting := get_selected_planting_action()
+	if _input_buffer.secondary_use_just and secondary_use_timer <= 0.0 and selected_planting != null:
+		var soil_position := _get_planting_soil_position()
+		if apple_planting != null and soil_position.y >= 0 and apple_planting.try_plant(editable_voxel_world, soil_position, inventory_model.create_selected_item_source()):
+			_input_buffer.secondary_use_just = false
+			secondary_use_timer = place_cooldown
+			return
 	if (
 		_input_buffer.secondary_use_just
 		and secondary_use_timer <= 0.0
@@ -944,6 +958,20 @@ func get_selected_placement_action() -> BlockPlacementActionDefinition:
 		return null
 	var action := inventory_model.item_catalog.get_definition(item_id).secondary_action
 	return action as BlockPlacementActionDefinition
+
+func get_selected_planting_action() -> PlantingActionDefinition:
+	if inventory_model == null:
+		return null
+	var item_id = inventory_model.get_selected_item_id()
+	if item_id == null:
+		return null
+	return inventory_model.item_catalog.get_definition(item_id).secondary_action as PlantingActionDefinition
+
+func _get_planting_soil_position() -> Vector3i:
+	if not target_has or voxel_space == null or editable_voxel_world == null or motor == null or last_ray_normal != Vector3i.UP:
+		return Vector3i(-1, -1, -1)
+	var center := Vector3(target_block) + Vector3(0.5, 1.0, 0.5)
+	return target_block if motor.global_position.distance_squared_to(center) <= reach * reach else Vector3i(-1, -1, -1)
 
 func has_crafting_station_target() -> bool:
 	return target_has and target_crafting_station != null

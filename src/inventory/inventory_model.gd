@@ -159,6 +159,15 @@ func prepare_discard_stack(source_index: int, count: int) -> PreparedInventoryCh
 		return null
 	return _prepare_simulated_change(simulated)
 
+func prepare_consume_item(
+	source_index: int,
+	output_stack: InventoryStack = null,
+) -> PreparedInventoryChange:
+	var simulated := _create_simulation()
+	if not simulated._apply_consume_item(source_index, output_stack):
+		return null
+	return _prepare_simulated_change(simulated)
+
 func prepare_ensure_item(item_id: StringName) -> PreparedInventoryChange:
 	if has_item(item_id):
 		return null
@@ -526,6 +535,11 @@ func _apply_discard_stack(source_index: int, count: int) -> bool:
 	if stack.count == 0:
 		_slots[source_index] = null
 	return true
+
+func _apply_consume_item(source_index: int, output_stack: InventoryStack) -> bool:
+	if not _apply_discard_stack(source_index, 1):
+		return false
+	return output_stack == null or _apply_add_stack(output_stack)
 
 func _apply_ensure_item(item_id: StringName) -> bool:
 	if not item_catalog.has_definition(item_id):

@@ -480,6 +480,12 @@ func _run():
 	_expect(pumpkin.primary_action == null and pumpkin.secondary_action is ConsumableActionDefinition, "pumpkin action configuration is incorrect")
 	_expect(is_equal_approx((pumpkin.secondary_action as ConsumableActionDefinition).health_restore_fraction, 0.1), "pumpkin does not restore ten percent health")
 	_expect(pumpkin.consume_audio != null and pumpkin.consume_audio.streams.size() == 1, "pumpkin consume audio is not configured")
+	var apple := item_catalog.get_definition(&"apple")
+	var apple_seeds := item_catalog.get_definition(&"apple_seeds")
+	var apple_consumption := apple.secondary_action as ConsumableActionDefinition
+	_expect(apple_consumption != null and apple_consumption.can_consume_at_full_health, "apple cannot be consumed at full health")
+	_expect(apple_consumption != null and apple_consumption.output_item_id == apple_seeds.id and apple_consumption.output_count == 1, "apple consumption does not return one seed")
+	_expect(apple_seeds.secondary_action is PlantingActionDefinition and (apple_seeds.secondary_action as PlantingActionDefinition).crop_id == AppleTreeCoordinator.APPLE_TREE_CROP_ID, "apple seeds do not target apple tree planting")
 	var health_potion := item_catalog.get_definition(&"health_potion")
 	_expect(health_potion.primary_action == null and health_potion.secondary_action is ConsumableActionDefinition, "health potion action configuration is incorrect")
 	_expect(is_equal_approx((health_potion.secondary_action as ConsumableActionDefinition).health_restore_fraction, 1.0), "health potion does not restore full health")

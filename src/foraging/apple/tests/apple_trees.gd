@@ -13,6 +13,7 @@ func _init() -> void:
 	var world := VoxelWorld.new(20, 36, 5, 12.0, block_catalog)
 	var chunk_manager := ChunkManager.new()
 	chunk_manager.visible_chunks[Vector2i.ZERO] = true
+	var clock := GameClock.new()
 	var apple_trees := (load("res://foraging/apple/apple_tree_coordinator.tscn") as PackedScene).instantiate() as AppleTreeCoordinator
 	root.add_child(apple_trees)
 	_expect(apple_trees.definition.apple_scene.resource_path == "res://assets/models/foraging/apple/apple.glb", "apple trees did not use the Kenney Food Kit model")
@@ -23,7 +24,7 @@ func _init() -> void:
 		_expect(apple_trees.definition.fall_impact_streams[index].resource_path == expected_path, "fallen apple configured the wrong light impact sound")
 	var apple_position := _find_apple_tree_position(apple_trees.definition, 872341)
 	_populate_tree(world, apple_position)
-	_expect(apple_trees.setup(world, chunk_manager, 872341, null, item_catalog), "apple tree setup rejected valid content")
+	_expect(apple_trees.setup(world, chunk_manager, 872341, null, item_catalog, clock), "apple tree setup rejected valid content")
 	_expect(apple_trees.validate_harvest_items(item_catalog), "apple harvest item was not catalogued")
 	var apple_tree_count := _count_apple_trees(apple_trees, 10000)
 	_expect(apple_tree_count >= 400 and apple_tree_count <= 600, "apple tree rate was not approximately five percent: %d" % apple_tree_count)
@@ -112,19 +113,21 @@ func _init() -> void:
 			_expect(restored_fallen.snapshot() == fallen_snapshot, "fallen apple state changed during save round trip")
 			var legacy_state := AppleTreeState.new()
 			_expect(legacy_state.restore({"version": 1, "collected_slots": []}), "version one apple state did not migrate")
-			_expect(legacy_state.snapshot() == {"version": 3, "collected_slots": [], "fallen_apples": [], "retained_trees": []}, "version one apple state migration was incorrect")
+			_expect(legacy_state.snapshot() == {"version": 4, "collected_slots": [], "fallen_apples": [], "retained_trees": [], "planted_trees": []}, "version one apple state migration was incorrect")
 			var version_two_state := AppleTreeState.new()
 			_expect(version_two_state.restore({"version": 2, "collected_slots": [], "fallen_apples": []}), "version two apple state did not migrate")
 			_expect(version_two_state.snapshot() == legacy_state.snapshot(), "version two apple state migration was incorrect")
 			var empty_world := VoxelWorld.new(20, 36, 5, 12.0, block_catalog)
 			var restored_chunks := ChunkManager.new()
 			restored_chunks.visible_chunks[Vector2i.ZERO] = true
+			var restored_clock := GameClock.new()
 			var restored_trees := (load("res://foraging/apple/apple_tree_coordinator.tscn") as PackedScene).instantiate() as AppleTreeCoordinator
 			root.add_child(restored_trees)
-			_expect(restored_trees.setup(empty_world, restored_chunks, 872341, fallen_snapshot, item_catalog), "fallen apple coordinator state did not restore")
+			_expect(restored_trees.setup(empty_world, restored_chunks, 872341, fallen_snapshot, item_catalog, restored_clock), "fallen apple coordinator state did not restore")
 			var restored_root := restored_trees._chunk_roots.get(Vector2i.ZERO) as Node3D
 			_expect(_count_children(restored_root, "FallenApple_") == 1, "fallen apple did not render without its original tree blocks")
 			restored_trees.free()
+			restored_clock.free()
 		if not apple_trees._targets.is_empty():
 			var harvest_source := apple_trees as HarvestSource
 			var first_bounds := harvest_source.get_harvest_target_bounds(int(apple_trees._targets.keys()[0]))
@@ -225,7 +228,9 @@ func _init() -> void:
 	_expect(apple.consume_audio != null and apple.consume_audio.streams.size() == 1, "apple munch audio was not configured")
 	_test_tree_chunk_query_filters_mined_cross_chunk_blocks(block_catalog)
 	await _test_retained_tree_identity(block_catalog, item_catalog, apple_position)
+	await _test_apple_planting_and_growth(block_catalog, item_catalog)
 	apple_trees.free()
+	clock.free()
 	await process_frame
 	if _failures == 0:
 		print("APPLE_TREES PASS")
@@ -373,8 +378,9 @@ func _test_retained_tree_identity(block_catalog: BlockCatalog, item_catalog: Ite
 	chunk_manager.visible_chunks[Vector2i.ZERO] = true
 	_populate_tree(world, tree_position)
 	var trees := (load("res://foraging/apple/apple_tree_coordinator.tscn") as PackedScene).instantiate() as AppleTreeCoordinator
+	var clock := GameClock.new()
 	root.add_child(trees)
-	_expect(trees.setup(world, chunk_manager, 872341, null, item_catalog), "retained apple tree setup failed")
+	_expect(trees.setup(world, chunk_manager, 872341, null, item_catalog, clock), "retained apple tree setup failed")
 	for y in range(tree_position.y, tree_position.y + 4):
 		_expect(VoxelWorldTestFixture.commit_mine(world, Vector3i(tree_position.x, y, tree_position.z)) != null, "retained apple tree trunk block could not be mined")
 	var leaves: Array[Vector3i] = []
@@ -393,12 +399,71 @@ func _test_retained_tree_identity(block_catalog: BlockCatalog, item_catalog: Ite
 	await process_frame
 	var restored_chunks := ChunkManager.new()
 	restored_chunks.visible_chunks[Vector2i.ZERO] = true
+	var restored_clock := GameClock.new()
 	var restored := (load("res://foraging/apple/apple_tree_coordinator.tscn") as PackedScene).instantiate() as AppleTreeCoordinator
 	root.add_child(restored)
-	_expect(restored.setup(world, restored_chunks, 872341, snapshot, item_catalog), "retained apple tree state did not restore")
+	_expect(restored.setup(world, restored_chunks, 872341, snapshot, item_catalog, restored_clock), "retained apple tree state did not restore")
 	var restored_root := restored._chunk_roots.get(Vector2i.ZERO) as Node3D
 	_expect(_count_children(restored_root, "AppleFoliage_") == 6, "restored damaged apple tree surviving leaves lost their foliage tint")
 	restored.free()
+	clock.free()
+	restored_clock.free()
+
+func _test_apple_planting_and_growth(block_catalog: BlockCatalog, item_catalog: ItemCatalog) -> void:
+	var world := VoxelWorld.new(20, 36, 5, 12.0, block_catalog)
+	var soil_position := Vector3i(8, 5, 8)
+	world.height_map_dict[Vector2i(soil_position.x, soil_position.z)] = soil_position.y
+	world.type_map_dict[Vector2i(soil_position.x, soil_position.z)] = BlockId.Type.GRASS
+	var chunk_manager := ChunkManager.new()
+	chunk_manager.visible_chunks[Vector2i.ZERO] = true
+	var clock := GameClock.new()
+	var trees := (load("res://foraging/apple/apple_tree_coordinator.tscn") as PackedScene).instantiate() as AppleTreeCoordinator
+	root.add_child(trees)
+	_expect(trees.setup(world, chunk_manager, 9127, null, item_catalog, clock), "planted apple tree setup failed")
+	var inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
+	_expect(inventory.setup_empty(), "apple planting inventory setup failed")
+	_expect(InventoryTestFixture.restore_slots(inventory, {0: InventoryStack.new(&"apple", 1)}), "apple planting inventory could not restore")
+	var stats := ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
+	var loadout := InventoryTestFixture.create_loadout(inventory, stats)
+	var consumption := ItemConsumptionCoordinator.new()
+	consumption.setup(inventory, loadout, stats)
+	var maximum_hp := stats.get_value(&"hp")
+	_expect(consumption.try_consume_at(0), "apple could not be eaten at full health")
+	_expect(is_equal_approx(stats.current_hp, maximum_hp), "full-health apple consumption changed health")
+	_expect(inventory.get_inventory_item_count(&"apple") == 0 and inventory.get_inventory_item_count(&"apple_seeds") == 1, "apple consumption did not exchange the apple for one seed")
+	var seed_slot := _find_item_slot(inventory, &"apple_seeds")
+	_expect(seed_slot >= InventoryModel.HOTBAR_SIZE and loadout.assign_slot_to_hotbar(seed_slot, 0), "apple seed could not be moved to the hotbar")
+	_expect(loadout.select_slot(0), "apple seed could not be selected")
+	var planting := ApplePlantingCoordinator.new()
+	_expect(planting.setup(trees, inventory, loadout), "apple planting coordinator setup failed")
+	_expect(not planting.try_plant(world, soil_position, inventory.create_selected_item_source()), "apple seed planted on untilled grass")
+	_expect(inventory.get_inventory_item_count(&"apple_seeds") == 1, "failed apple planting consumed its seed")
+	_expect(VoxelWorldTestFixture.commit_replace(world, soil_position, BlockId.Type.GRASS, BlockId.Type.FARMLAND_DRY) != null, "apple planting soil could not be tilled")
+	_expect(planting.try_plant(world, soil_position, inventory.create_selected_item_source()), "apple seed could not be planted in tilled soil")
+	_expect(inventory.get_inventory_item_count(&"apple_seeds") == 0 and trees._state.has_planted_seed(soil_position), "successful apple planting did not commit seed and tree state")
+	var chunk_root := trees._chunk_roots.get(Vector2i.ZERO) as Node3D
+	_expect(_count_children(chunk_root, "AppleSapling_") == 1, "planted apple seed presentation was not created")
+	for expected_stage in range(1, 4):
+		clock.time_advanced.emit(AppleTreeCoordinator.GROWTH_STAGE_DURATION_HOURS)
+		_expect(trees._get_growth_stage(trees._state.get_growth_hours(soil_position)) == expected_stage, "apple tree did not advance to growth stage %d" % expected_stage)
+		_expect(not trees._state.is_tree_mature(soil_position), "apple tree matured before twelve game hours")
+	var growing_snapshot := trees.snapshot()
+	var restored_growth := AppleTreeState.new()
+	_expect(restored_growth.restore(JSON.parse_string(JSON.stringify(growing_snapshot))), "growing apple tree state did not restore")
+	_expect(is_equal_approx(restored_growth.get_growth_hours(soil_position), 9.0) and not restored_growth.is_tree_mature(soil_position), "growing apple tree progress changed during save round trip")
+	clock.time_advanced.emit(AppleTreeCoordinator.GROWTH_STAGE_DURATION_HOURS)
+	var tree_position := soil_position + Vector3i.UP
+	_expect(trees._state.is_tree_mature(soil_position), "apple tree did not mature after twelve game hours")
+	_expect(world.get_block_id_at(tree_position) == BlockId.Type.LOG, "mature apple tree did not create its trunk")
+	_expect(world.get_block_id_at(tree_position + Vector3i(0, AppleTreeCoordinator.TREE_TRUNK_HEIGHT, 0)) == BlockId.Type.LEAVES, "mature apple tree did not create its canopy")
+	_expect(not trees.get_harvest_target_ids().is_empty(), "mature planted apple tree did not join apple harvesting")
+	var snapshot := trees.snapshot()
+	var restored := AppleTreeState.new()
+	_expect(restored.restore(JSON.parse_string(JSON.stringify(snapshot))), "planted apple tree state did not restore")
+	_expect(restored.is_tree_mature(soil_position) and restored.snapshot() == snapshot, "planted apple tree changed during save round trip")
+	trees.free()
+	clock.free()
+	await process_frame
 
 func _expect(condition: bool, message: String) -> void:
 	if not condition:

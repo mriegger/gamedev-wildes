@@ -5,3 +5,6 @@
 [resource]
 script = ExtResource("1_action")
 health_restore_fraction = 0.1
+can_consume_at_full_health = true
+output_item_id = &"apple_seeds"
+output_count = 1

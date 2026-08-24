@@ -4,6 +4,9 @@ class_name AppleTreeCoordinator
 signal state_changed
 
 const DECORATIVE_DROP_PERCENT: int = 50
+const APPLE_TREE_CROP_ID: StringName = &"apple_tree"
+const GROWTH_STAGE_DURATION_HOURS: float = AppleTreeState.GROWTH_DURATION_HOURS / 4.0
+const TREE_TRUNK_HEIGHT: int = 4
 const GROUND_OFFSETS: Array[Vector2] = [
 	Vector2(0.78, 0.18),
 	Vector2(-0.72, 0.28),
@@ -39,6 +42,7 @@ const DECORATIVE_OFFSETS: Array[Vector3] = [
 
 var _voxel_world: VoxelWorld
 var _chunk_manager: ChunkManager
+var _clock: GameClock
 var _world_seed: int
 var _state := AppleTreeState.new()
 var _model_bounds: AABB
@@ -49,32 +53,89 @@ var _decorations_by_leaf: Dictionary = {}
 var _new_fallen_sources: Dictionary = {}
 var _fallen_by_chunk: Dictionary = {}
 var _retained_by_chunk: Dictionary = {}
+var _planted_by_chunk: Dictionary = {}
 var _rendered_tree_records_by_chunk: Dictionary = {}
 var _next_target_id: int = 1
 var _revision: int = 0
+var _committing_growth_tree: bool = false
 
-func setup(voxel_world: VoxelWorld, chunk_manager: ChunkManager, world_seed: int, saved_state: Variant, item_catalog: ItemCatalog) -> bool:
-	assert(voxel_world != null and chunk_manager != null and item_catalog != null)
-	assert(_voxel_world == null and _chunk_manager == null)
+func setup(
+	voxel_world: VoxelWorld,
+	chunk_manager: ChunkManager,
+	world_seed: int,
+	saved_state: Variant,
+	item_catalog: ItemCatalog,
+	clock: GameClock,
+) -> bool:
+	assert(voxel_world != null and chunk_manager != null and item_catalog != null and clock != null)
+	assert(_voxel_world == null and _chunk_manager == null and _clock == null)
 	_voxel_world = voxel_world
 	_chunk_manager = chunk_manager
+	_clock = clock
 	_world_seed = world_seed
-	if definition == null or not definition.validate(item_catalog) or not _state.restore(saved_state) or not _prepare_model_bounds() or not _prepare_foliage_mesh():
+	if definition == null or not definition.validate(item_catalog) or not _state.restore(saved_state) or not _prepare_model_bounds() or not _prepare_foliage_mesh() or not _validate_planted_world_state():
 		return false
 	for tree_position in _state.get_retained_trees():
 		if not _is_apple_tree(tree_position):
 			return false
 	_rebuild_fallen_index()
 	_rebuild_retained_index()
+	_rebuild_planted_index()
 	_chunk_manager.chunk_loaded.connect(_on_chunk_loaded)
 	_chunk_manager.chunk_unloaded.connect(_on_chunk_unloaded)
 	_voxel_world.block_edit_committed.connect(_on_block_edit_committed)
+	_clock.time_advanced.connect(_on_time_advanced)
+	if _try_mature_ready_trees():
+		_revision += 1
+		_rebuild_planted_index()
 	for coord in _chunk_manager.visible_chunks:
 		_render_chunk(coord)
 	return true
 
 func snapshot() -> Dictionary:
 	return _state.snapshot()
+
+func supports_crop(crop_id: StringName) -> bool:
+	return crop_id == APPLE_TREE_CROP_ID
+
+func uses_world(voxel_world: VoxelWorld) -> bool:
+	return _voxel_world == voxel_world
+
+func prepare_plant(soil_position: Vector3i, crop_id: StringName) -> PreparedApplePlantChange:
+	if not supports_crop(crop_id) or not _can_plant_at(soil_position):
+		return null
+	var expected_block_revisions: Dictionary = {soil_position: _voxel_world.get_revision(soil_position)}
+	for position in _get_tree_cells(soil_position):
+		expected_block_revisions[position] = _voxel_world.get_revision(position)
+	return PreparedApplePlantChange.new(self, _revision, soil_position, expected_block_revisions)
+
+func can_commit_prepared_plant(prepared: PreparedApplePlantChange) -> bool:
+	if prepared == null or not prepared._is_for(self) or not prepared._is_prepared() or prepared._get_expected_revision() != _revision:
+		return false
+	var expected_block_revisions := prepared._get_expected_block_revisions()
+	for position in expected_block_revisions:
+		if _voxel_world.get_revision(position) != int(expected_block_revisions[position]):
+			return false
+	return _can_plant_at(prepared._get_soil_position())
+
+func _commit_prepared_plant(prepared: PreparedApplePlantChange, emit_signal: bool = true) -> bool:
+	if not can_commit_prepared_plant(prepared) or not _state.add_planted_seed(prepared._get_soil_position()):
+		return false
+	_revision += 1
+	var marked := prepared._mark_committed(self)
+	assert(marked)
+	if emit_signal:
+		var notified := _notify_prepared_plant(prepared)
+		assert(notified)
+	return true
+
+func _notify_prepared_plant(prepared: PreparedApplePlantChange) -> bool:
+	if prepared == null or not prepared._mark_notified(self):
+		return false
+	_rebuild_planted_index()
+	_render_visible_chunk(ChunkCoord.world_to_chunk_vec3i(prepared._get_soil_position(), _voxel_world.chunk_size))
+	state_changed.emit()
+	return true
 
 func validate_harvest_items(item_catalog: ItemCatalog) -> bool:
 	return definition != null and definition.validate(item_catalog)
@@ -238,6 +299,15 @@ func _on_chunk_unloaded(coord: Vector2i) -> void:
 	_unload_chunk(coord)
 
 func _on_block_edit_committed(edit: BlockEdit) -> void:
+	if _committing_growth_tree:
+		return
+	var planted_state_changed := false
+	for soil_position in _state.get_planted_soil_positions():
+		if _state.is_tree_mature(soil_position) or edit.pos not in [soil_position, soil_position + Vector3i.UP]:
+			continue
+		if _voxel_world.get_block_id_at(soil_position) == BlockId.Type.FARMLAND_DRY and _voxel_world.get_block_id_at(soil_position + Vector3i.UP) == BlockId.Type.AIR:
+			continue
+		planted_state_changed = _state.remove_planted_seed(soil_position) or planted_state_changed
 	var coord := ChunkCoord.world_to_chunk_vec3i(edit.pos, _voxel_world.chunk_size)
 	var rerender_coords: Dictionary = {coord: true}
 	if edit.is_mine() and edit.old_id in [BlockId.Type.LOG, BlockId.Type.LEAVES]:
@@ -245,30 +315,42 @@ func _on_block_edit_committed(edit: BlockEdit) -> void:
 	if edit.is_mine() and edit.old_id == BlockId.Type.LEAVES:
 		for affected_coord in _try_drop_decorative_apple(edit.pos):
 			rerender_coords[affected_coord] = true
+	var matured := _try_mature_ready_trees()
+	if planted_state_changed or matured:
+		_revision += 1
+		_rebuild_planted_index()
+		for planted_coord in _planted_by_chunk:
+			rerender_coords[planted_coord] = true
+		state_changed.emit()
 	for affected_coord in rerender_coords:
-		if _chunk_manager.visible_chunks.has(affected_coord):
-			_render_chunk(affected_coord)
+		_render_visible_chunk(affected_coord)
 
 func _render_chunk(coord: Vector2i) -> void:
 	_unload_chunk(coord)
+	var generated_tree_blocks := _get_nearby_generated_tree_blocks(coord)
 	var tree_blocks := _get_nearby_tree_blocks(coord)
-	if tree_blocks.is_empty() and not _fallen_by_chunk.has(coord) and not _retained_by_chunk.has(coord):
+	if tree_blocks.is_empty() and not _fallen_by_chunk.has(coord) and not _retained_by_chunk.has(coord) and not _planted_by_chunk.has(coord):
 		return
 	var root := Node3D.new()
 	root.name = "AppleTrees_%d_%d" % [coord.x, coord.y]
 	add_child(root)
 	_chunk_roots[coord] = root
 	var tree_positions: Dictionary = {}
-	for tree_position in _find_tree_positions(tree_blocks):
+	for tree_position in _find_tree_positions(generated_tree_blocks):
 		if ChunkCoord.world_to_chunk_vec3i(tree_position, _voxel_world.chunk_size) == coord:
 			tree_positions[tree_position] = true
 	for tree_position in _retained_by_chunk.get(coord, []) as Array:
 		tree_positions[tree_position] = true
+	for soil_position in _planted_by_chunk.get(coord, []) as Array:
+		if _state.is_tree_mature(soil_position):
+			tree_positions[soil_position + Vector3i.UP] = true
+		else:
+			_render_growing_tree(root, soil_position)
 	var sorted_tree_positions: Array = tree_positions.keys()
 	sorted_tree_positions.sort()
 	var rendered_records: Array = []
 	for tree_position in sorted_tree_positions:
-		if _is_apple_tree(tree_position):
+		if _is_apple_tree(tree_position) or _state.has_planted_tree(tree_position):
 			var top_log_y := _get_top_log_y(tree_position, tree_blocks)
 			_render_apple_tree(root, coord, tree_position, top_log_y, tree_blocks)
 			rendered_records.append({"tree_position": tree_position, "top_log_y": top_log_y})
@@ -425,6 +507,138 @@ func _rebuild_retained_index() -> void:
 	for tree_position in _state.get_retained_trees():
 		_add_retained_to_index(tree_position)
 
+func _rebuild_planted_index() -> void:
+	_planted_by_chunk.clear()
+	for soil_position in _state.get_planted_soil_positions():
+		var coord := ChunkCoord.world_to_chunk_vec3i(soil_position, _voxel_world.chunk_size)
+		if not _planted_by_chunk.has(coord):
+			_planted_by_chunk[coord] = []
+		(_planted_by_chunk[coord] as Array).append(soil_position)
+
+func _on_time_advanced(hours: float) -> void:
+	var previous_stages: Dictionary = {}
+	for soil_position in _state.get_planted_soil_positions():
+		if not _state.is_tree_mature(soil_position):
+			previous_stages[soil_position] = _get_growth_stage(_state.get_growth_hours(soil_position))
+	var advanced := _state.advance_planted_trees(hours)
+	var matured := _try_mature_ready_trees()
+	if not advanced and not matured:
+		return
+	var affected_coords: Dictionary = {}
+	for soil_position in _state.get_planted_soil_positions():
+		if _state.is_tree_mature(soil_position):
+			if matured:
+				affected_coords[ChunkCoord.world_to_chunk_vec3i(soil_position, _voxel_world.chunk_size)] = true
+			continue
+		var previous_stage := int(previous_stages.get(soil_position, -1))
+		if previous_stage != _get_growth_stage(_state.get_growth_hours(soil_position)):
+			affected_coords[ChunkCoord.world_to_chunk_vec3i(soil_position, _voxel_world.chunk_size)] = true
+	if affected_coords.is_empty():
+		return
+	_revision += 1
+	for coord in affected_coords:
+		_render_visible_chunk(coord)
+	state_changed.emit()
+
+func _try_mature_ready_trees() -> bool:
+	var matured := false
+	for soil_position in _state.get_planted_soil_positions():
+		if _state.is_tree_mature(soil_position) or not is_equal_approx(_state.get_growth_hours(soil_position), AppleTreeState.GROWTH_DURATION_HOURS):
+			continue
+		if not _try_place_mature_tree(soil_position):
+			continue
+		var marked := _state.mark_tree_mature(soil_position)
+		assert(marked)
+		matured = true
+	return matured
+
+func _try_place_mature_tree(soil_position: Vector3i) -> bool:
+	var prepared_changes: Array[PreparedVoxelWorldChange] = []
+	var cells := _get_tree_cells(soil_position)
+	for position in cells:
+		var prepared := _voxel_world.prepare_place_block(position, int(cells[position]))
+		if prepared == null:
+			return false
+		prepared_changes.append(prepared)
+	_committing_growth_tree = true
+	var committed := _voxel_world.commit_prepared_changes(prepared_changes)
+	_committing_growth_tree = false
+	return committed
+
+func _can_plant_at(soil_position: Vector3i) -> bool:
+	if _voxel_world == null or _state.has_planted_seed(soil_position) or _voxel_world.is_edit_protected(soil_position):
+		return false
+	if _voxel_world.get_block_id_at(soil_position) != BlockId.Type.FARMLAND_DRY:
+		return false
+	var cells := _get_tree_cells(soil_position)
+	if cells.is_empty():
+		return false
+	for position in cells:
+		if _voxel_world.is_edit_protected(position) or _voxel_world.get_block_id_at(position) != BlockId.Type.AIR:
+			return false
+	for planted_soil_position in _state.get_planted_soil_positions():
+		for position in _get_tree_cells(planted_soil_position):
+			if cells.has(position):
+				return false
+	return true
+
+func _get_tree_cells(soil_position: Vector3i) -> Dictionary:
+	var root_position := soil_position + Vector3i.UP
+	if root_position.y + TREE_TRUNK_HEIGHT + 2 >= _voxel_world.max_build_y:
+		return {}
+	var cells: Dictionary = {}
+	for y_offset in range(TREE_TRUNK_HEIGHT):
+		cells[root_position + Vector3i(0, y_offset, 0)] = BlockId.Type.LOG
+	var leaves_y := root_position.y + TREE_TRUNK_HEIGHT
+	for y_offset in range(2):
+		for x_offset in range(-1, 2):
+			for z_offset in range(-1, 2):
+				cells[Vector3i(root_position.x + x_offset, leaves_y + y_offset, root_position.z + z_offset)] = BlockId.Type.LEAVES
+	cells[Vector3i(root_position.x, leaves_y + 2, root_position.z)] = BlockId.Type.LEAVES
+	return cells
+
+func _get_growth_stage(growth_hours: float) -> int:
+	return mini(floori(growth_hours / GROWTH_STAGE_DURATION_HOURS), 3)
+
+func _render_growing_tree(root: Node3D, soil_position: Vector3i) -> void:
+	var stage := _get_growth_stage(_state.get_growth_hours(soil_position))
+	var holder := Node3D.new()
+	holder.name = "AppleSapling_%d_%d_%d" % [soil_position.x, soil_position.y, soil_position.z]
+	holder.position = Vector3(soil_position) + Vector3(0.5, 1.0, 0.5)
+	root.add_child(holder)
+	if stage == 0:
+		_add_growth_box(holder, "Seed", Vector3(0.12, 0.06, 0.08), Vector3(0.0, 0.03, 0.0), Color(0.34, 0.20, 0.10))
+		return
+	var heights: Array[float] = [0.0, 0.28, 0.62, 1.18]
+	var crown_sizes: Array[float] = [0.0, 0.22, 0.48, 0.82]
+	var height := heights[stage]
+	_add_growth_box(holder, "Trunk", Vector3(0.10 + stage * 0.035, height, 0.10 + stage * 0.035), Vector3(0.0, height * 0.5, 0.0), Color(0.42, 0.25, 0.12))
+	var crown_size := crown_sizes[stage]
+	_add_growth_box(holder, "Leaves", Vector3(crown_size, crown_size * 0.72, crown_size), Vector3(0.0, height, 0.0), Color(0.33, 0.68, 0.25))
+
+func _add_growth_box(parent: Node3D, node_name: String, size: Vector3, position: Vector3, color: Color) -> void:
+	var mesh := BoxMesh.new()
+	mesh.size = size
+	var material := StandardMaterial3D.new()
+	material.albedo_color = color
+	material.roughness = 1.0
+	mesh.material = material
+	var instance := MeshInstance3D.new()
+	instance.name = node_name
+	instance.mesh = mesh
+	instance.position = position
+	parent.add_child(instance)
+
+func _validate_planted_world_state() -> bool:
+	for soil_position in _state.get_planted_soil_positions():
+		if not _state.is_tree_mature(soil_position) and _voxel_world.get_block_id_at(soil_position) != BlockId.Type.FARMLAND_DRY:
+			return false
+	return true
+
+func _render_visible_chunk(coord: Vector2i) -> void:
+	if _chunk_manager.visible_chunks.has(coord):
+		_render_chunk(coord)
+
 func _add_retained_to_index(tree_position: Vector3i) -> void:
 	var coord := ChunkCoord.world_to_chunk_vec3i(tree_position, _voxel_world.chunk_size)
 	if not _retained_by_chunk.has(coord):
@@ -438,7 +652,7 @@ func _retain_edited_trees(position: Vector3i, coord: Vector2i) -> void:
 			for record in _rendered_tree_records_by_chunk.get(coord + Vector2i(x_offset, z_offset), []) as Array:
 				var tree_position := (record as Dictionary)["tree_position"] as Vector3i
 				var top_log_y := int((record as Dictionary)["top_log_y"])
-				if not _tree_contains_block(tree_position, top_log_y, position) or not _state.retain_tree(tree_position):
+				if _state.has_planted_tree(tree_position) or not _tree_contains_block(tree_position, top_log_y, position) or not _state.retain_tree(tree_position):
 					continue
 				_add_retained_to_index(tree_position)
 				retained = true
@@ -481,6 +695,21 @@ func _get_drop_position(tree_position: Vector3i, source_position: Vector3) -> Ve
 	return Vector3(source_position.x, ground_y, source_position.z)
 
 func _get_nearby_tree_blocks(coord: Vector2i) -> Dictionary:
+	var tree_blocks := _get_nearby_generated_tree_blocks(coord)
+	for x_offset in range(-1, 2):
+		for z_offset in range(-1, 2):
+			var nearby_coord := coord + Vector2i(x_offset, z_offset)
+			for soil_position in _planted_by_chunk.get(nearby_coord, []) as Array:
+				if not _state.is_tree_mature(soil_position):
+					continue
+				var planted_cells := _get_tree_cells(soil_position)
+				for position in planted_cells:
+					var block_id := int(planted_cells[position])
+					if _voxel_world.get_block_id_at(position) == block_id:
+						tree_blocks[position] = block_id
+	return tree_blocks
+
+func _get_nearby_generated_tree_blocks(coord: Vector2i) -> Dictionary:
 	var tree_blocks: Dictionary = {}
 	for x_offset in range(-1, 2):
 		for z_offset in range(-1, 2):
@@ -590,6 +819,8 @@ func _shuffle(values: Array, random: RandomNumberGenerator) -> void:
 		values[swap_index] = value
 
 func _exit_tree() -> void:
+	if _clock != null and _clock.time_advanced.is_connected(_on_time_advanced):
+		_clock.time_advanced.disconnect(_on_time_advanced)
 	if _chunk_manager != null:
 		if _chunk_manager.chunk_loaded.is_connected(_on_chunk_loaded):
 			_chunk_manager.chunk_loaded.disconnect(_on_chunk_loaded)

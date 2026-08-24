@@ -125,6 +125,10 @@ func setup_consumption(consumption_coordinator: ItemConsumptionCoordinator) -> v
 	interactor.setup_consumption(consumption_coordinator)
 	_action_audio.setup_consumption(consumption_coordinator)
 
+func setup_apple_planting(planting_coordinator: ApplePlantingCoordinator) -> void:
+	assert(_is_setup and planting_coordinator != null)
+	interactor.setup_apple_planting(planting_coordinator)
+
 func setup_projectiles(projectile_runtime: ArrowProjectileRuntime) -> void:
 	assert(_is_setup and projectile_runtime != null)
 	interactor.setup_projectiles(projectile_runtime)

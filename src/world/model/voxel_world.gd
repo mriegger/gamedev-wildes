@@ -661,6 +661,29 @@ func can_commit_prepared_change(prepared: PreparedVoxelWorldChange) -> bool:
 			return false
 	return true
 
+func commit_prepared_changes(prepared_changes: Array[PreparedVoxelWorldChange]) -> bool:
+	if prepared_changes.is_empty():
+		return false
+	var edited_by_change: Dictionary = {}
+	for prepared in prepared_changes:
+		if not can_commit_prepared_change(prepared):
+			return false
+		for edit in prepared.get_edits():
+			if edited_by_change.has(edit.pos):
+				return false
+			edited_by_change[edit.pos] = prepared
+	for prepared in prepared_changes:
+		for position in prepared._get_expected_revisions():
+			if edited_by_change.has(position) and edited_by_change[position] != prepared:
+				return false
+	for prepared in prepared_changes:
+		var committed := _commit_prepared_change(prepared, false)
+		assert(committed)
+	for prepared in prepared_changes:
+		var notified := _notify_prepared_change(prepared)
+		assert(notified)
+	return true
+
 func _commit_prepared_change(
 	prepared: PreparedVoxelWorldChange,
 	emit_signals: bool = true,

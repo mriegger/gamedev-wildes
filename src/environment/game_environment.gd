@@ -58,6 +58,9 @@ func apply_settings(settings: GameSettings):
 func get_time_of_day() -> float:
 	return _clock.get_time_of_day()
 
+func get_clock() -> GameClock:
+	return _clock
+
 func set_time_of_day(time_of_day: float) -> void:
 	_clock.set_time_of_day(time_of_day)
 

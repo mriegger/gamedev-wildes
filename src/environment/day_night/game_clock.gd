@@ -16,8 +16,10 @@ var _paused: bool = false
 var _dragging: bool = false
 var _running: bool = false
 var _visual_update_elapsed: float = 0.0
+var _advanced_hours_pending: float = 0.0
 
 signal time_changed(new_time: float)
+signal time_advanced(hours: float)
 
 func setup(initial_time: float):
 	set_time_of_day(initial_time)
@@ -27,15 +29,19 @@ func start():
 
 func _process(delta):
 	if _running and enable_cycle and not _paused and not _dragging and not get_tree().paused:
-		var hours_per_sec = HOURS_PER_DAY / cycle_duration_seconds
-		time_of_day += delta * hours_per_sec
+		var hours_per_sec: float = HOURS_PER_DAY / cycle_duration_seconds
+		var advanced_hours: float = delta * hours_per_sec
+		time_of_day += advanced_hours
 		if time_of_day >= HOURS_PER_DAY:
 			time_of_day -= HOURS_PER_DAY
 		elif time_of_day < 0.0:
 			time_of_day += HOURS_PER_DAY
+		_advanced_hours_pending += advanced_hours
 		_visual_update_elapsed += delta
 		if _visual_update_elapsed >= VISUAL_UPDATE_INTERVAL:
 			_visual_update_elapsed = fmod(_visual_update_elapsed, VISUAL_UPDATE_INTERVAL)
+			time_advanced.emit(_advanced_hours_pending)
+			_advanced_hours_pending = 0.0
 			time_changed.emit(time_of_day)
 
 func get_time_of_day() -> float:
@@ -46,6 +52,7 @@ func set_time_of_day(h: float):
 	if time_of_day < 0:
 		time_of_day += HOURS_PER_DAY
 	_visual_update_elapsed = 0.0
+	_advanced_hours_pending = 0.0
 	time_changed.emit(time_of_day)
 
 func get_normalized() -> float:

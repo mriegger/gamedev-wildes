@@ -13,12 +13,16 @@ func _run() -> void:
 	_expect(item_catalog.validate(block_catalog), "item catalog rejected consumption content")
 	var pumpkin := item_catalog.get_definition(&"pumpkin")
 	var apple := item_catalog.get_definition(&"apple")
+	var apple_seeds := item_catalog.get_definition(&"apple_seeds")
 	var health_potion := item_catalog.get_definition(&"health_potion")
 	var pumpkin_action := pumpkin.secondary_action as ConsumableActionDefinition
 	var apple_action := apple.secondary_action as ConsumableActionDefinition
 	var potion_action := health_potion.secondary_action as ConsumableActionDefinition
 	_expect(pumpkin_action != null and is_equal_approx(pumpkin_action.health_restore_fraction, 0.1), "pumpkin does not restore ten percent health")
 	_expect(apple_action != null and is_equal_approx(apple_action.health_restore_fraction, 0.1), "apple does not restore ten percent health")
+	_expect(apple_action != null and apple_action.can_consume_at_full_health, "apple cannot be consumed at full health")
+	_expect(apple_action != null and apple_action.output_item_id == apple_seeds.id and apple_action.output_count == 1, "apple does not return one apple seed")
+	_expect(apple_seeds.secondary_action is PlantingActionDefinition and (apple_seeds.secondary_action as PlantingActionDefinition).crop_id == &"apple_tree", "apple seeds do not expose apple-tree planting")
 	_expect(potion_action != null and is_equal_approx(potion_action.health_restore_fraction, 1.0), "health potion is not a full-health consumable")
 	var highlight_color := CombatPresentationPalette.WEAK_DAMAGE_COLOR.to_html(false)
 	_expect(ItemStatFormatter.get_item_stat_lines(pumpkin) == ["Health: [b][color=#%s]+10[/color][/b]" % highlight_color], "pumpkin health stat is incorrect")
@@ -27,6 +31,27 @@ func _run() -> void:
 	_expect(pumpkin.consume_audio != null and pumpkin.consume_audio.streams.size() == 1, "pumpkin munch audio is not configured")
 	_expect(pumpkin.consume_audio.streams[0].resource_path == "res://assets/audio/sfx/items/consume/munch_crunchy_fruit_sequence_3x_CC0.wav", "pumpkin uses the wrong consume sound")
 	_expect(health_potion.consume_audio != null and health_potion.consume_audio.streams.size() == 1, "health potion consume audio is not configured")
+	var full_health_inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
+	_expect(full_health_inventory.setup_empty(), "full-health apple inventory setup failed")
+	_expect(InventoryTestFixture.restore_slots(full_health_inventory, {0: InventoryStack.new(&"apple", 1)}), "full-health apple inventory could not restore")
+	var full_health_stats := ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
+	var full_health_loadout := InventoryTestFixture.create_loadout(full_health_inventory, full_health_stats)
+	var full_health_consumption := ItemConsumptionCoordinator.new()
+	full_health_consumption.setup(full_health_inventory, full_health_loadout, full_health_stats)
+	_expect(full_health_consumption.try_consume_at(0), "apple could not be consumed at full health")
+	_expect(full_health_inventory.get_inventory_item_count(&"apple") == 0 and full_health_inventory.get_inventory_item_count(&"apple_seeds") == 1, "full-health apple consumption did not return one seed")
+	var full_inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog), InventoryModel.FILLABLE_SIZE)
+	_expect(full_inventory.setup_empty(), "full apple-output inventory setup failed")
+	var full_slots: Dictionary = {0: InventoryStack.new(&"apple", 2)}
+	for slot_index in range(1, InventoryModel.FILLABLE_SIZE):
+		full_slots[slot_index] = InventoryStack.new(&"grass_block", item_catalog.get_definition(&"grass_block").max_stack)
+	_expect(InventoryTestFixture.restore_slots(full_inventory, full_slots), "full apple-output inventory could not restore")
+	var full_inventory_stats := ActorStats.new(load("res://player/player_stats.tres") as ActorStatsDefinition)
+	var full_inventory_loadout := InventoryTestFixture.create_loadout(full_inventory, full_inventory_stats)
+	var blocked_consumption := ItemConsumptionCoordinator.new()
+	blocked_consumption.setup(full_inventory, full_inventory_loadout, full_inventory_stats)
+	_expect(not blocked_consumption.try_consume_at(0), "apple consumption succeeded without room for its seed")
+	_expect(full_inventory.get_inventory_item_count(&"apple") == 2 and full_inventory.get_inventory_item_count(&"apple_seeds") == 0, "failed apple-seed output changed inventory")
 
 	var inventory := InventoryModel.new(item_catalog, EquipmentInstanceFactory.new(item_catalog))
 	var backpack_index := InventoryModel.HOTBAR_SIZE
@@ -138,6 +163,7 @@ func _run() -> void:
 	interactor._handle_item_actions(0.0)
 	_expect(is_equal_approx(stats.current_hp, max_health * 0.55), "apple did not restore ten percent health")
 	_expect(inventory.get_slot(1) == null, "consumed apple left an empty stack")
+	_expect(inventory.get_inventory_item_count(&"apple_seeds") == 1, "apple consumption did not add one seed")
 	_expect(_consumed_item_ids == [&"pumpkin", &"pumpkin", &"apple"], "apple consumption did not announce completion")
 	input_buffer.primary_use_pressed = false
 	interactor._handle_item_actions(0.0)

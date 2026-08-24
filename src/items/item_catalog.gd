@@ -152,7 +152,7 @@ func _is_supported_primary_action(action: ItemActionDefinition) -> bool:
 	return action == null or action is MiningActionDefinition or action is MeleeAttackActionDefinition or action is TillingActionDefinition or action is BowDrawActionDefinition
 
 func _is_supported_secondary_action(action: ItemActionDefinition) -> bool:
-	return action == null or action is BlockPlacementActionDefinition or action is ConsumableActionDefinition
+	return action == null or action is BlockPlacementActionDefinition or action is ConsumableActionDefinition or action is PlantingActionDefinition
 
 func _ensure_lookup() -> void:
 	if (
@@ -256,6 +256,14 @@ func validate(block_catalog: BlockCatalog) -> bool:
 				if source_block != null and BlockId.is_valid(source_block.id) and block_catalog.get_definition(source_block.id) != source_block:
 					push_error("[ItemCatalog] Non-canonical tilling source for %s" % definition.id)
 					valid = false
+		var consumption := definition.secondary_action as ConsumableActionDefinition
+		if consumption != null and not consumption.output_item_id.is_empty():
+			if not _definitions_by_id.has(consumption.output_item_id):
+				push_error("[ItemCatalog] Unknown consumption output %s for %s" % [consumption.output_item_id, definition.id])
+				valid = false
+			elif consumption.output_item_id == definition.id:
+				push_error("[ItemCatalog] Consumable %s cannot return itself" % definition.id)
+				valid = false
 		var mining := definition.primary_action as MiningActionDefinition
 		for affix in equipment_affixes:
 			if affix != null and affix.is_compatible_with(definition):

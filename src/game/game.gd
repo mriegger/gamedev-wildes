@@ -98,6 +98,7 @@ var anvil_coordinator: AnvilCoordinator
 var cauldron_coordinator: CauldronCoordinator
 var harvest_coordinator: HarvestCoordinator
 var item_consumption_coordinator: ItemConsumptionCoordinator
+var apple_planting_coordinator: ApplePlantingCoordinator
 var death_tip_coordinator: DeathTipCoordinator
 var chest_storage: ChestStorage
 var chest_coordinator: ChestCoordinator
@@ -554,9 +555,14 @@ func _setup_gameplay() -> bool:
 	if not pumpkin_patch.setup(world.voxel_model, player, world.config.seed_value, _save_data.get("pumpkin_patch", null)):
 		_fail_session_start("This world could not be loaded because its saved pumpkin patch is invalid, or a new patch could not be placed. The save was not changed.")
 		return false
-	if not apple_trees.setup(world.voxel_model, world.chunk_manager, world.config.seed_value, _save_data.get("apple_trees", null), item_catalog):
+	if not apple_trees.setup(world.voxel_model, world.chunk_manager, world.config.seed_value, _save_data.get("apple_trees", null), item_catalog, game_environment.get_clock()):
 		_fail_session_start("This world could not be loaded because its saved apple tree state or harvest content is invalid. The save was not changed.")
 		return false
+	apple_planting_coordinator = ApplePlantingCoordinator.new()
+	if not apple_planting_coordinator.setup(apple_trees, inventory_model, inventory_loadout_coordinator):
+		_fail_session_start("Apple planting setup failed. The save was not changed.")
+		return false
+	player.setup_apple_planting(apple_planting_coordinator)
 	harvest_coordinator = HarvestCoordinator.new()
 	var harvest_sources: Array[HarvestSource] = [pumpkin_patch, apple_trees]
 	if not harvest_coordinator.setup(harvest_sources, inventory_model, inventory_loadout_coordinator, interaction_prompt_coordinator):

@@ -8,6 +8,7 @@ func _init() -> void:
 	_test_content_guards(catalog)
 	_test_bounded_transaction_history(catalog)
 	_test_silent_commit_and_notification(catalog)
+	_test_batch_commit(catalog)
 	_test_mine_and_replace_preparation(catalog)
 	if _errors.is_empty():
 		print("VOXEL_WORLD_TRANSACTIONS PASS")
@@ -116,6 +117,34 @@ func _test_silent_commit_and_notification(catalog: BlockCatalog) -> void:
 		_expect(observed[0].pos == position, "prepared edit query exposed mutable notification state")
 	_expect(not world._notify_prepared_change(prepared), "prepared change notified twice")
 	_expect(observed.size() == 1, "duplicate notification emitted another block edit")
+
+func _test_batch_commit(catalog: BlockCatalog) -> void:
+	var world := VoxelWorld.new(16, 32, 5, 8.0, catalog)
+	var first_position := Vector3i(2, 8, 2)
+	var second_position := Vector3i(3, 8, 2)
+	var first := world.prepare_place_block(first_position, BlockId.Type.LOG)
+	var second := world.prepare_place_block(second_position, BlockId.Type.LEAVES)
+	var notifications_observed_after_commit: Array[bool] = []
+	var observer := func(_edit: BlockEdit) -> void:
+		notifications_observed_after_commit.append(
+			world.get_block_id_at(first_position) == BlockId.Type.LOG
+			and world.get_block_id_at(second_position) == BlockId.Type.LEAVES
+		)
+	world.block_edit_committed.connect(observer)
+	_expect(world.commit_prepared_changes([first, second]), "valid prepared batch did not commit")
+	world.block_edit_committed.disconnect(observer)
+	_expect(notifications_observed_after_commit == [true, true], "prepared batch notified before all edits committed")
+	var duplicate_position := Vector3i(5, 8, 5)
+	var duplicate_first := world.prepare_place_block(duplicate_position, BlockId.Type.DIRT)
+	var duplicate_second := world.prepare_place_block(duplicate_position, BlockId.Type.STONE)
+	_expect(not world.commit_prepared_changes([duplicate_first, duplicate_second]), "overlapping prepared batch committed")
+	_expect(world.get_block_id_at(duplicate_position) == BlockId.Type.AIR, "rejected overlapping batch changed world state")
+	var support_position := Vector3i(7, 8, 7)
+	_expect(VoxelWorldTestFixture.commit_place(world, support_position, BlockId.Type.STONE) != null, "batch dependency support fixture failed")
+	var torch := world.prepare_place_block(support_position + Vector3i.RIGHT, BlockId.Type.TORCH, Vector3i.LEFT)
+	var mine_support := world.prepare_mine_block(support_position)
+	_expect(not world.commit_prepared_changes([torch, mine_support]), "dependent prepared batch committed")
+	_expect(world.get_block_id_at(support_position) == BlockId.Type.STONE, "rejected dependent batch mined its support")
 
 func _test_mine_and_replace_preparation(catalog: BlockCatalog) -> void:
 	var world := VoxelWorld.new(16, 32, 5, 8.0, catalog)

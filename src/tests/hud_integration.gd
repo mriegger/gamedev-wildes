@@ -60,6 +60,9 @@ func _init() -> void:
 
 func _process(_delta: float) -> bool:
 	_frame += 1
+	if _phase == -1:
+		quit(0)
+		return false
 	if _phase == 0 and _frame == 2:
 		var packed: PackedScene = load("res://ui/hud/hud.tscn") as PackedScene
 		if packed == null:
@@ -1277,7 +1280,18 @@ func _check_final_and_quit() -> void:
 		return
 	if _errors.is_empty():
 		print("HUD_INTEGRATION PASS orphan=%d previews=0" % orphan)
-		quit(0)
+		_hud.free()
+		_hud = null
+		_unhandled_wheel_probe.free()
+		_unhandled_wheel_probe = null
+		_crafting_coordinator = null
+		_crafting_recipe_catalog = null
+		_inventory_loadout_coordinator = null
+		_item_proficiency = null
+		_stats = null
+		_inv = null
+		_item_catalog = null
+		_phase = -1
 	else:
 		print("HUD_INTEGRATION FAIL %s" % str(_errors))
 		quit(1)

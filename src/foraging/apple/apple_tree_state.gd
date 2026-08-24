@@ -1,13 +1,16 @@
 extends RefCounted
 class_name AppleTreeState
 
-const SNAPSHOT_VERSION: int = 3
+const SNAPSHOT_VERSION: int = 4
 const MAXIMUM_GROUND_APPLES: int = 6
 const MAXIMUM_DECORATIVE_APPLES: int = 20
+const MAXIMUM_PLANTED_TREES: int = 256
+const GROWTH_DURATION_HOURS: float = 12.0
 
 var _collected_slots: Dictionary = {}
 var _fallen_apples: Dictionary = {}
 var _retained_trees: Dictionary = {}
+var _planted_trees: Dictionary = {}
 
 func is_collected(tree_position: Vector3i, slot_index: int) -> bool:
 	return _collected_slots.has(_slot_key(tree_position, slot_index))
@@ -57,6 +60,62 @@ func get_retained_trees() -> Array[Vector3i]:
 		trees.append(Vector3i(int(values[0]), int(values[1]), int(values[2])))
 	return trees
 
+func has_planted_seed(soil_position: Vector3i) -> bool:
+	return _planted_trees.has(_tree_key(soil_position))
+
+func add_planted_seed(soil_position: Vector3i) -> bool:
+	var key := _tree_key(soil_position)
+	if soil_position.y < 0 or _planted_trees.size() >= MAXIMUM_PLANTED_TREES or _planted_trees.has(key):
+		return false
+	_planted_trees[key] = [soil_position.x, soil_position.y, soil_position.z, 0.0, false]
+	return true
+
+func remove_planted_seed(soil_position: Vector3i) -> bool:
+	return _planted_trees.erase(_tree_key(soil_position))
+
+func get_planted_soil_positions() -> Array[Vector3i]:
+	var keys := _planted_trees.keys()
+	keys.sort()
+	var positions: Array[Vector3i] = []
+	for key in keys:
+		var values := _planted_trees[key] as Array
+		positions.append(Vector3i(int(values[0]), int(values[1]), int(values[2])))
+	return positions
+
+func get_growth_hours(soil_position: Vector3i) -> float:
+	assert(has_planted_seed(soil_position))
+	return float((_planted_trees[_tree_key(soil_position)] as Array)[3])
+
+func advance_planted_trees(hours: float) -> bool:
+	if not is_finite(hours) or hours <= 0.0:
+		return false
+	var advanced := false
+	for key in _planted_trees:
+		var values := _planted_trees[key] as Array
+		var previous_hours := float(values[3])
+		var next_hours := minf(previous_hours + hours, GROWTH_DURATION_HOURS)
+		if is_equal_approx(previous_hours, next_hours):
+			continue
+		values[3] = next_hours
+		advanced = true
+	return advanced
+
+func mark_tree_mature(soil_position: Vector3i) -> bool:
+	if not has_planted_seed(soil_position):
+		return false
+	var values := _planted_trees[_tree_key(soil_position)] as Array
+	if bool(values[4]) or not is_equal_approx(float(values[3]), GROWTH_DURATION_HOURS):
+		return false
+	values[4] = true
+	return true
+
+func is_tree_mature(soil_position: Vector3i) -> bool:
+	return has_planted_seed(soil_position) and bool((_planted_trees[_tree_key(soil_position)] as Array)[4])
+
+func has_planted_tree(tree_position: Vector3i) -> bool:
+	var soil_position := tree_position + Vector3i.DOWN
+	return is_tree_mature(soil_position)
+
 func get_fallen_apples() -> Array[Dictionary]:
 	var keys := _fallen_apples.keys()
 	keys.sort()
@@ -75,6 +134,7 @@ func restore(encoded: Variant) -> bool:
 		_collected_slots.clear()
 		_fallen_apples.clear()
 		_retained_trees.clear()
+		_planted_trees.clear()
 		return true
 	if not encoded is Dictionary:
 		return false
@@ -82,7 +142,7 @@ func restore(encoded: Variant) -> bool:
 	if (not raw_version is int and not raw_version is float) or not is_finite(float(raw_version)) or raw_version != int(raw_version):
 		return false
 	var version := int(raw_version)
-	if version not in [1, 2, SNAPSHOT_VERSION] or encoded.size() != version + 1:
+	if version not in [1, 2, 3, SNAPSHOT_VERSION] or encoded.size() != version + 1:
 		return false
 	var raw_slots = encoded.get("collected_slots", null)
 	if not raw_slots is Array:
@@ -129,7 +189,7 @@ func restore(encoded: Variant) -> bool:
 				return false
 			decoded_fallen[key] = [tree_position.x, tree_position.y, tree_position.z, decorative_index, position.x, position.y, position.z]
 	var decoded_retained: Dictionary = {}
-	if version == SNAPSHOT_VERSION:
+	if version >= 3:
 		var raw_retained = encoded.get("retained_trees", null)
 		if not raw_retained is Array:
 			return false
@@ -151,9 +211,32 @@ func restore(encoded: Variant) -> bool:
 			if decoded_retained.has(key):
 				return false
 			decoded_retained[key] = values
+	var decoded_planted: Dictionary = {}
+	if version == SNAPSHOT_VERSION:
+		var raw_planted = encoded.get("planted_trees", null)
+		if not raw_planted is Array or raw_planted.size() > MAXIMUM_PLANTED_TREES:
+			return false
+		for raw_tree in raw_planted:
+			if not raw_tree is Array or raw_tree.size() != 5 or not raw_tree[4] is bool:
+				return false
+			for raw_value in raw_tree.slice(0, 4):
+				if (not raw_value is int and not raw_value is float) or not is_finite(float(raw_value)):
+					return false
+			var soil_position := Vector3i(int(raw_tree[0]), int(raw_tree[1]), int(raw_tree[2]))
+			var growth_hours := float(raw_tree[3])
+			if raw_tree[0] != soil_position.x or raw_tree[1] != soil_position.y or raw_tree[2] != soil_position.z or soil_position.y < 0 or growth_hours < 0.0 or growth_hours > GROWTH_DURATION_HOURS:
+				return false
+			var key := _tree_key(soil_position)
+			if decoded_planted.has(key):
+				return false
+			var mature := bool(raw_tree[4])
+			if mature and not is_equal_approx(growth_hours, GROWTH_DURATION_HOURS):
+				return false
+			decoded_planted[key] = [soil_position.x, soil_position.y, soil_position.z, growth_hours, mature]
 	_collected_slots = decoded_slots
 	_fallen_apples = decoded_fallen
 	_retained_trees = decoded_retained
+	_planted_trees = decoded_planted
 	return true
 
 func snapshot() -> Dictionary:
@@ -172,7 +255,12 @@ func snapshot() -> Dictionary:
 	var encoded_retained: Array = []
 	for key in retained_keys:
 		encoded_retained.append((_retained_trees[key] as Array).duplicate())
-	return {"version": SNAPSHOT_VERSION, "collected_slots": encoded_slots, "fallen_apples": encoded_fallen, "retained_trees": encoded_retained}
+	var planted_keys := _planted_trees.keys()
+	planted_keys.sort()
+	var encoded_planted: Array = []
+	for key in planted_keys:
+		encoded_planted.append((_planted_trees[key] as Array).duplicate())
+	return {"version": SNAPSHOT_VERSION, "collected_slots": encoded_slots, "fallen_apples": encoded_fallen, "retained_trees": encoded_retained, "planted_trees": encoded_planted}
 
 func _tree_key(tree_position: Vector3i) -> String:
 	return "%d,%d,%d" % [tree_position.x, tree_position.y, tree_position.z]

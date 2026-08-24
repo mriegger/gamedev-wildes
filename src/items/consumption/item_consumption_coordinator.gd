@@ -59,9 +59,14 @@ func _prepare_consumption(
 	slot_index: int,
 	action: ConsumableActionDefinition,
 ) -> PreparedInventoryLoadoutChange:
-	var inventory_change := _inventory.prepare_discard_stack(slot_index, 1)
+	var output_stack: InventoryStack
+	if not action.output_item_id.is_empty():
+		output_stack = InventoryStack.new(action.output_item_id, action.output_count)
+	var inventory_change := _inventory.prepare_consume_item(slot_index, output_stack)
 	if inventory_change == null:
 		return null
+	if action.can_consume_at_full_health and _stats.current_hp >= _stats.get_value(&"hp"):
+		return _loadout.prepare_inventory_change(inventory_change)
 	return _loadout.prepare_inventory_change_with_health_restore(
 		inventory_change,
 		action.health_restore_fraction,
